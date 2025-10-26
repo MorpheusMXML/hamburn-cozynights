@@ -1,23 +1,78 @@
-node_modules
+# ========================================
+# 📦 Node & Build
+# ========================================
+node_modules/
+build/
+.svelte-kit/
+dist/
+.vercel/
+.netlify/
+.firebase/
+functions/lib/
+functions/node_modules/
 
-# Output
-.output
-.vercel
-.netlify
-.wrangler
-/.svelte-kit
-/build
+# ========================================
+# ⚙️ Environment Variables
+# ========================================
+.env
+.env.*
+!.env.example     # Keep an example env file for reference
+.env.local        # contains firebase credentials and project id
 
-# OS
+# ========================================
+# 🧠 IDE & Editor
+# ========================================
+.vscode/
+.idea/
+*.swp
+*.swo
 .DS_Store
 Thumbs.db
 
-# Env
-.env
-.env.*
-!.env.example
-!.env.test
+# ========================================
+# 🧰 Logs & Temp Files
+# ========================================
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+*.log
+*.tmp
+*.temp
+*.bak
 
-# Vite
-vite.config.js.timestamp-*
-vite.config.ts.timestamp-*
+# ========================================
+# 🔥 Firebase
+# ========================================
+.firebase/
+.firebaserc
+firebase-debug.log
+firebase-debug.*.log
+firebase.json
+storage-debug.log
+firestore-debug.log
+
+# If you use Firebase Emulator data
+firebase-data/
+
+# ========================================
+# 💻 OS-specific
+# ========================================
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# ========================================
+# 📄 Misc (optional)
+# ========================================
+*.local
+*.env.local
+coverage/
+*.zip
+*.tar.gz
+*.tgz
