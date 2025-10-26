@@ -11,7 +11,11 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"format": "prettier --write .",
-		"lint": "prettier --check . && eslint ."
+		"lint": "prettier --check . && eslint .",
+		"db:push": "drizzle-kit push",
+		"db:generate": "drizzle-kit generate",
+		"db:migrate": "drizzle-kit migrate",
+		"db:studio": "drizzle-kit studio"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.4.0",
@@ -23,6 +27,8 @@
 		"@tailwindcss/typography": "^0.5.18",
 		"@tailwindcss/vite": "^4.1.13",
 		"@types/node": "^22",
+		"drizzle-kit": "^0.31.4",
+		"drizzle-orm": "^0.44.5",
 		"eslint": "^9.36.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.12.4",
@@ -38,9 +44,6 @@
 		"vite": "^7.1.7"
 	},
 	"dependencies": {
-		"bcryptjs": "^3.0.2",
-		"firebase-admin": "^13.5.0",
-		"jose": "^6.1.0",
-		"zod": "^4.1.12"
+		"postgres": "^3.4.7"
 	}
 }
