@@ -1,123 +1,132 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  let bookingCode: string = '';
+
+  let bookingCode = '';
 
   function handleStart() {
-    if (bookingCode.length > 3) {
-      goto('/uebersicht');
+    if (bookingCode.trim()) {
+      goto('/map');
     } else {
-      alert("Bitte gib einen gültigen Code ein.");
+      alert('Bitte geben Sie einen Buchungscode ein.');
     }
   }
 </script>
 
 <section class="hero">
+  <video class="background-video" autoplay muted loop playsinline poster="/background.jpg">
+    <source src="/background.mp4" type="video/mp4" />
+  </video>
   <div class="content-wrapper">
-    <h1 class="main-title">Hamburn - Cozynights</h1>
-    
     <div class="logo-container">
-      <img src="/logo.png" alt="Event Logo" class="title-image" />
+      <h1>Hamburn Cozynights</h1>
     </div>
     
-    <div class="login-box">
-      <h2>Secure your Bed by entering your Booking Number:</h2>
+    <div class="input-group">
       <input 
         type="text" 
+        placeholder="enter your booking code" 
         bind:value={bookingCode} 
-        placeholder="Enter Booking Code" 
+        on:keydown={(e) => e.key === 'Enter' && handleStart()}
       />
       <button on:click={handleStart}>Start</button>
     </div>
   </div>
+
+  <button class="admin-btn" on:click={() => goto('/admin')}>Admin</button>
 </section>
 
 <style>
-  /* Hero Sektion mit Hintergrund */
   .hero {
-    height: 100vh;
+    position: relative;
+    min-height: 100vh;
     width: 100%;
-    background: url('/background.jpg') no-repeat center center/cover;
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+    background: #222 url('/background.jpg') no-repeat center center / cover;
   }
 
-  /* Wrapper für alle Inhalte */
+  .background-video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
   .content-wrapper {
     display: flex;
     flex-direction: column;
-    align-items: center; /* Zentriert alles horizontal */
+    align-items: center;
     text-align: center;
     width: 100%;
-    max-width: 600px;
+    max-width: 800px;
     padding: 20px;
+    z-index: 1;
   }
 
-  /* Der neue große Titel */
-  .main-title {
-    font-size: 3.5rem;
+  h1 {
+    font-size: 3rem;
     font-weight: bold;
     color: white;
-    margin-bottom: 1rem;
-    text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.7); /* Bessere Lesbarkeit */
-  }
-
-  /* Logo Container zur Zentrierung */
-  .logo-container {
     margin-bottom: 2rem;
+    text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.7);
+    white-space: nowrap;
   }
 
-  .title-image {
-    width: 200px; /* Etwas größer */
-    height: auto;
-    filter: drop-shadow(0 0 10px rgba(0,0,0,0.5));
+  .input-group {
+    display: flex;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    border-radius: 10px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
   }
 
-  /* Login Box Anpassungen */
-  .login-box {
-    background: rgba(0, 0, 0, 0.85); /* Weniger transparent (höherer Alpha-Wert) */
-    padding: 2.5rem;
-    border-radius: 15px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    width: 100%;
-    max-width: 400px;
-  }
-
-  .login-box h2 {
-    color: white;
-    margin-top: 0;
-    margin-bottom: 1.5rem;
-  }
-
-  /* Text in der Box weiß machen */
   input {
-    width: 100%;
-    padding: 1rem;
-    margin-bottom: 1rem;
-    border-radius: 8px;
-    border: 1px solid #444;
-    background: #222; /* Dunklerer Hintergrund für das Input */
-    color: white;     /* TEXT FARBE WEISS */
+    padding: 10px 15px;
     font-size: 1rem;
-    box-sizing: border-box;
+    border: none;
+    border-radius: 5px;
+    outline: none;
+    width: 250px;
   }
-
 
   button {
-    width: 100%;
-    padding: 1rem;
-    background: #ff3e00;
-    color: white;
+    padding: 10px 20px;
+    font-size: 1rem;
     font-weight: bold;
-    font-size: 1.1rem;
+    color: white;
+    background: #ff3e00;
     border: none;
-    border-radius: 8px;
+    border-radius: 5px;
     cursor: pointer;
-    transition: background 0.3s ease;
+    transition: background 0.3s;
   }
 
   button:hover {
     background: #ff5e2b;
+  }
+
+  .admin-btn {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    width: auto;
+    padding: 0.5rem 1rem;
+    background: rgba(0, 0, 0, 0.5);
+    font-size: 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: normal;
+    z-index: 1;
+  }
+
+  .admin-btn:hover {
+    background: rgba(0, 0, 0, 0.7);
   }
 </style>
