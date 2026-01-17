@@ -2,8 +2,12 @@
   import type { House } from '$lib/types';
   import HouseMarker from './HouseMarker.svelte';
   import MapPopup from './MapPopup.svelte';
+  import HouseEditor from './HouseEditor.svelte';
 
   export let houses: House[] = [];
+
+  let isEditorMode = true; // You can toggle this with a button
+  let pendingCoords: { x: number, y: number } | null = null;
   
   let selectedHouse: House | null = null;
   let selectedBedId: number | null = null;
@@ -22,21 +26,28 @@
     selectedBedId = bedId;
   }
 
-  function handleMapClick(event: MouseEvent) {
-    // Koordinaten-Finder für Entwickler
-    // Klicke auf die Karte und schaue in die Konsole, um x/y zu sehen
-    const svg = event.currentTarget as SVGSVGElement;
-    const pt = svg.createSVGPoint();
-    pt.x = event.clientX;
-    pt.y = event.clientY;
+function handleMapClick(event: MouseEvent) {
+  const svg = event.currentTarget as SVGSVGElement;
+  const pt = svg.createSVGPoint();
+  pt.x = event.clientX;
+  pt.y = event.clientY;
+  const screenCTM = svg.getScreenCTM();
+  
+  if (screenCTM) {
+    const cursorPt = pt.matrixTransform(screenCTM.inverse());
+    const x = Math.round(cursorPt.x);
+    const y = Math.round(cursorPt.y);
     
-    // Umrechnung in SVG-Koordinaten
-    const screenCTM = svg.getScreenCTM();
-    if (screenCTM) {
-      const cursorPt = pt.matrixTransform(screenCTM.inverse());
-      console.log(`Map Position: x: ${Math.round(cursorPt.x)}, y: ${Math.round(cursorPt.y)}`);
+    if (isEditorMode) {
+      pendingCoords = { x, y }; // Open the editor at these coords
     }
   }
+}
+
+function addNewHouse(event: CustomEvent<House>) {
+  houses = [...houses, event.detail];
+  pendingCoords = null;
+}
 </script>
 
 <div class="map-wrapper">
@@ -52,6 +63,15 @@
       />
     {/each}
   </svg>
+
+{#if pendingCoords}
+  <HouseEditor 
+    x={pendingCoords.x} 
+    y={pendingCoords.y} 
+    on:save={addNewHouse}
+    on:cancel={() => pendingCoords = null}
+  />
+{/if}
 
   {#if selectedHouse}
     <MapPopup 
