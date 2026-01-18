@@ -3,12 +3,24 @@ services:
     image: ghcr.io/muchobien/pocketbase:latest
     container_name: pocketbase
     restart: unless-stopped
+    # Expliziter Befehl: Bindet an 0.0.0.0, damit Docker Ports weiterleiten kann
+    command: --http=0.0.0.0:8090
     ports:
       - "8090:8090"
     volumes:
+      # Hier werden deine Daten (Häuser, Betten, User) gespeichert
       - ./pb_data:/pb_data
+    # Gesundheitsprüfung: Startet Container neu, falls PB abstürzt
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8090/api/health"]
       interval: 5s
       timeout: 5s
       retries: 5
+    # Ein eigenes Netzwerk ist sauberer und sicherer für die Zukunft
+    networks:
+      - cozynights_net
+
+# Definition des Netzwerks
+networks:
+  cozynights_net:
+    driver: bridge
