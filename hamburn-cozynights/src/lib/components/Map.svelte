@@ -1,108 +1,143 @@
 <script lang="ts">
-  import type { House } from '$lib/types';
-  import HouseMarker from './HouseMarker.svelte';
-  import MapPopup from './MapPopup.svelte';
+  import { createEventDispatcher } from 'svelte';
+  import type { HousesResponse } from '$lib/pocketbase-types';
+  
+  // WICHTIG: Wir importieren den neuen User-Marker
+  import UserHouseMarker from './UserHouseMarker.svelte';
   import HouseEditor from './HouseEditor.svelte';
 
-  export let houses: House[] = [];
+  export let houses: HousesResponse[] = [];
+  export let isEditorMode = false;
 
-  let isEditorMode = true; // You can toggle this with a button
+  const dispatch = createEventDispatcher();
   let pendingCoords: { x: number, y: number } | null = null;
-  
-  let selectedHouse: House | null = null;
-  let selectedBedId: number | null = null;
 
-  function openPopup(house: House) {
-    if (house.status === 'voll') return;
-    selectedHouse = house;
-    selectedBedId = null; // Reset
-  }
+  function handleMapClick(event: MouseEvent) {
+    if (!isEditorMode) return;
 
-  function closePopup() {
-    selectedHouse = null;
-  }
-
-  function selectBed(bedId: number) {
-    selectedBedId = bedId;
-  }
-
-function handleMapClick(event: MouseEvent) {
-  const svg = event.currentTarget as SVGSVGElement;
-  const pt = svg.createSVGPoint();
-  pt.x = event.clientX;
-  pt.y = event.clientY;
-  const screenCTM = svg.getScreenCTM();
-  
-  if (screenCTM) {
-    const cursorPt = pt.matrixTransform(screenCTM.inverse());
-    const x = Math.round(cursorPt.x);
-    const y = Math.round(cursorPt.y);
+    const svg = event.currentTarget as SVGSVGElement;
+    const pt = svg.createSVGPoint();
+    pt.x = event.clientX;
+    pt.y = event.clientY;
     
-    if (isEditorMode) {
-      pendingCoords = { x, y }; // Open the editor at these coords
+    const screenCTM = svg.getScreenCTM();
+    
+    if (screenCTM) {
+      const cursorPt = pt.matrixTransform(screenCTM.inverse());
+      // Runden für saubere Integer-Werte in der DB
+      const x = Math.round(cursorPt.x);
+      const y = Math.round(cursorPt.y);
+      
+      pendingCoords = { x, y };
     }
   }
-}
 
-function addNewHouse(event: CustomEvent<House>) {
-  houses = [...houses, event.detail];
-  pendingCoords = null;
-}
+  function handleSave(event: CustomEvent) {
+    if (pendingCoords) {
+        // Event mit Koordinaten anreichern und weiterleiten
+        dispatch('save', { ...event.detail, x: pendingCoords.x, y: pendingCoords.y });
+        pendingCoords = null;
+    }
+  }
 </script>
 
 <div class="map-wrapper">
-  <!-- svelte-ignore a11y-click-events-have-key-events -->
-  <svg viewBox="0 0 1000 700" on:click={handleMapClick} role="presentation">
+  <svg 
+    viewBox="0 0 1000 700" 
+    on:click={handleMapClick} 
+    role="presentation" 
+    class:cursor-crosshair={isEditorMode}
+  >
     <image href="/lageplan-brahmsee.jpg" width="1000" height="700" />
     
-    {#each houses as house}
-      <HouseMarker 
-        {house} 
-        on:click={(e) => { e.stopPropagation(); openPopup(house); }}
-        on:keydown={(e) => (e.key === 'Enter' || e.code === 'Space') && openPopup(house)}
-      />
+    {#each houses as house (house.id)}
+      <foreignObject 
+        x={house.x} 
+        y={house.y} 
+        width="1" 
+        height="1" 
+        style="overflow: visible;"
+      >
+        <div class="marker-wrapper">
+            {#if isEditorMode}
+                <div class="disabled-link">
+                    <UserHouseMarker 
+                      name={house.name} 
+                      status={house.occupied ? 'voll' : 'frei'} 
+                    />
+                </div>
+            {:else}
+                <a href="/house/{house.id}" class="marker-link">
+                    <UserHouseMarker 
+                      name={house.name} 
+                      status={house.occupied ? 'voll' : 'frei'} 
+                    />
+                </a>
+            {/if}
+        </div>
+      </foreignObject>
     {/each}
+
+    {#if pendingCoords}
+      <foreignObject x={pendingCoords.x} y={pendingCoords.y} width="1" height="1" style="overflow: visible;">
+        <div class="marker-wrapper">
+            <HouseEditor 
+                x={pendingCoords.x}
+                y={pendingCoords.y}
+                on:save={handleSave}
+                on:cancel={() => pendingCoords = null}
+            />
+        </div>
+      </foreignObject>
+    {/if}
   </svg>
-
-{#if pendingCoords}
-  <HouseEditor 
-    x={pendingCoords.x} 
-    y={pendingCoords.y} 
-    on:save={addNewHouse}
-    on:cancel={() => pendingCoords = null}
-  />
-{/if}
-
-  {#if selectedHouse}
-    <MapPopup 
-      house={selectedHouse}
-      {selectedBedId}
-      onClose={closePopup}
-      onSelectBed={selectBed}
-      onBook={() => alert('Bett gebucht!')}
-    />
-  {/if}
 </div>
 
 <style>
   .map-wrapper {
     position: relative;
-    width: 100vw; /* Volle Bildschirmbreite  */
-    height: 100vh; /* Volle Bildschirmhöhe [cite: 36] */
+    width: 100vw; 
+    height: 100vh;
     display: flex;
     justify-content: center;
-    align-items: center; /* Zentriert die Karte vertikal */
-    background: #000; /* Schwarzer Hintergrund  */
-    overflow: hidden; /* Verhindert Scrollbalken  */
+    align-items: center;
+    background: #050505; 
+    overflow: hidden;
   }
 
   svg {
     width: 100%;
     height: 100%;
-    /* Sorgt dafür, dass das Bild proportional skaliert und den Platz füllt  */
     max-width: 100vw;
     max-height: 100vh;
     display: block;
-    object-fit: contain; /* Behält Seitenverhältnis bei und füllt den Container [cite: 38] */
+    object-fit: contain; 
+  }
+
+  .cursor-crosshair { cursor: crosshair; }
+
+  /* Zentriert den Inhalt exakt auf dem Punkt */
+  .marker-wrapper {
+    position: absolute;
+    top: 0; 
+    left: 0;
+    /* Kein Display Flex nötig, UserHouseMarker kümmert sich um Zentrierung via transform */
+  }
+
+  .marker-link {
+    text-decoration: none;
+    display: block;
+    transition: transform 0.2s;
+    cursor: pointer;
+  }
+
+  .marker-link:hover {
+    transform: scale(1.15);
+    z-index: 100; /* Holt den hoverten Marker nach vorne */
+  }
+
+  .disabled-link {
+    opacity: 0.6;
+    pointer-events: none;
   }
 </style>
