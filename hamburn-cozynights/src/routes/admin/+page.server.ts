@@ -1,35 +1,54 @@
-// src/routes/admin/+page.server.ts
+import { InventoryService } from '$lib/server/inventory';
 import { pb } from '$lib/pocketbase';
 import type { Actions, PageServerLoad } from './$types';
 
+// 1. DATEN LADEN
 export const load: PageServerLoad = async () => {
-  try {
-    // Versuch, die Daten zu laden
-    const houses = await pb.collection('houses').getFullList({ sort: 'name' });
+    // Der Service liefert uns die fertige Baumstruktur
+    const houses = await InventoryService.getFullTree();
     return { houses };
-  } catch (err) {
-    console.error("PocketBase Fehler:", err);
-    // Gib ein leeres Array zurück, damit die Seite trotzdem lädt
-    return { houses: [], error: 'Datenbank nicht erreichbar oder leer.' };
-  }
-}
+};
 
+// 2. DATEN SCHREIBEN (ACTIONS)
 export const actions: Actions = {
-  create: async ({ request }) => {
-    const data = await request.formData();
-    const name = data.get('name');
-    
-    // Neues Haus erstellen (Default x/y Koordinaten)
-    await pb.collection('houses').create({
-      name,
-      occupied: false,
-      x: 100, 
-      y: 100
-    });
-  },
-  delete: async ({ request }) => {
-    const data = await request.formData();
-    const id = data.get('id') as string;
-    await pb.collection('houses').delete(id);
-  }
+    // Haus Aktionen
+    createHouse: async ({ request }) => {
+        const data = await request.formData();
+        const name = data.get('name') as string;
+        await pb.collection('houses').create({ name, occupied: false });
+    },
+    deleteHouse: async ({ request }) => {
+        const data = await request.formData();
+        await pb.collection('houses').delete(data.get('id') as string);
+    },
+
+    // Zimmer Aktionen
+    createRoom: async ({ request }) => {
+        const data = await request.formData();
+        await pb.collection('rooms').create({
+            name: data.get('name') || '',
+            room_number: data.get('room_number'),
+            house: data.get('house_id'),
+            amount_beds: 0,
+            occupied: false
+        });
+    },
+    deleteRoom: async ({ request }) => {
+        const data = await request.formData();
+        await pb.collection('rooms').delete(data.get('id') as string);
+    },
+
+    // Bett Aktionen
+    createBed: async ({ request }) => {
+        const data = await request.formData();
+        await pb.collection('beds').create({
+            label: data.get('label'),
+            room: data.get('room_id'),
+            occupied: false
+        });
+    },
+    deleteBed: async ({ request }) => {
+        const data = await request.formData();
+        await pb.collection('beds').delete(data.get('id') as string);
+    }
 };
