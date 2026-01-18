@@ -1,98 +1,186 @@
 <script lang="ts">
-    import type { PageData } from './$types';
-    
-    // Die Daten kommen typisiert vom Server
-    export let data: PageData;
+  import type { PageData } from './$types';
+  
+  export let data: PageData;
+  $: ({ houses } = data);
+
+  // Hilfsfunktion für Status-Farben
+  function getStatusColor(free: number, total: number) {
+    if (total === 0) return 'gray';
+    if (free === 0) return 'red';      // Voll
+    if (free < 3) return 'orange';     // Fast voll
+    return 'green';                    // Verfügbar
+  }
+
+  function getStatusText(free: number, total: number) {
+      if (total === 0) return 'Nicht eingerichtet';
+      if (free === 0) return 'Ausgebucht';
+      return `${free} Betten frei`;
+  }
 </script>
 
-<div class="container mx-auto p-8 max-w-5xl">
-    <h1 class="text-3xl font-bold mb-8 text-gray-800">Verwaltung: Häuser & Betten</h1>
+<div class="dashboard-container">
+  <header class="dashboard-header">
+    <h1>Hamburn Übersicht</h1>
+    <p class="subtitle">Verwaltung und Belegung in Echtzeit</p>
+  </header>
 
-    {#if data.houses.length === 0}
-        <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-8 text-blue-700">
-            <p class="font-bold">Die Datenbank ist leer.</p>
-            <p>Erstelle unten dein erstes Haus, um zu beginnen.</p>
+  <div class="grid">
+    {#each houses as house}
+      <a href="/admin/house/{house.id}" class="card">
+        
+        <div class="card-header">
+          <h2>{house.name}</h2>
+          <span class="status-badge {getStatusColor(house.freeBeds, house.totalBeds)}">
+             {getStatusText(house.freeBeds, house.totalBeds)}
+          </span>
         </div>
-    {/if}
 
-    <div class="grid gap-10">
-        {#each data.houses as house}
-            <div class="bg-white border shadow-sm rounded-lg overflow-hidden">
-                <div class="bg-gray-800 text-white p-4 flex justify-between items-center">
-                    <h2 class="text-xl font-bold">🏠 {house.name}</h2>
-                    <form action="?/deleteHouse" method="POST">
-                        <input type="hidden" name="id" value={house.id}>
-                        <button class="text-xs bg-red-600 hover:bg-red-700 px-3 py-1 rounded transition">
-                            Haus Löschen
-                        </button>
-                    </form>
-                </div>
-
-                <div class="p-6">
-                    {#if house.items.length === 0}
-                        <p class="text-gray-400 italic mb-4">Noch keine Zimmer in diesem Haus.</p>
-                    {/if}
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
-                        {#each house.items as room}
-                            <div class="border rounded-md p-4 bg-gray-50 relative group">
-                                <div class="flex justify-between items-start mb-3 border-b pb-2">
-                                    <div>
-                                        <span class="font-bold text-lg">Zimmer {room.room_number}</span>
-                                        <span class="block text-xs text-gray-500">{room.name}</span>
-                                    </div>
-                                    <form action="?/deleteRoom" method="POST">
-                                        <input type="hidden" name="id" value={room.id}>
-                                        <button class="text-gray-400 hover:text-red-500 text-xl font-bold px-2">×</button>
-                                    </form>
-                                </div>
-
-                                <div class="space-y-2 mb-4">
-                                    {#each room.items as bed}
-                                        <div class="flex justify-between items-center bg-white border px-3 py-2 rounded text-sm shadow-sm">
-                                            <div class="flex items-center gap-2">
-                                                <span class="text-lg">🛏️</span>
-                                                <span class="font-medium">{bed.label}</span>
-                                            </div>
-                                            <form action="?/deleteBed" method="POST">
-                                                <input type="hidden" name="id" value={bed.id}>
-                                                <button class="text-red-200 hover:text-red-500 transition">×</button>
-                                            </form>
-                                        </div>
-                                    {/each}
-                                </div>
-
-                                <form action="?/createBed" method="POST" class="flex gap-2 mt-auto">
-                                    <input type="hidden" name="room_id" value={room.id}>
-                                    <input type="text" name="label" placeholder="Bett Bez." required 
-                                           class="w-full text-xs p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
-                                    <button class="bg-blue-600 text-white px-3 rounded text-lg hover:bg-blue-700">+</button>
-                                </form>
-                            </div>
-                        {/each}
-                    </div>
-
-                    <div class="border-t pt-4 bg-gray-50 -mx-6 -mb-6 p-6">
-                        <h4 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wide">Neues Zimmer anlegen</h4>
-                        <form action="?/createRoom" method="POST" class="flex gap-3">
-                            <input type="hidden" name="house_id" value={house.id}>
-                            <input type="text" name="room_number" placeholder="Nr. (z.B. 101)" required class="border p-2 rounded w-32">
-                            <input type="text" name="name" placeholder="Name (Optional)" class="border p-2 rounded flex-1">
-                            <button class="bg-gray-800 text-white px-6 py-2 rounded font-medium hover:bg-black transition">Speichern</button>
-                        </form>
-                    </div>
-                </div>
+        <div class="card-body">
+            <div class="stat-row">
+                <span class="label">Belegung</span>
+                <span class="value">{house.occupiedBeds} / {house.totalBeds}</span>
             </div>
-        {/each}
 
-        <div class="mt-8 border-t-2 border-dashed border-gray-300 pt-8">
-            <h2 class="text-xl font-bold mb-4 text-gray-700">Neues Gebäude hinzufügen</h2>
-            <form action="?/createHouse" method="POST" class="flex gap-4 max-w-lg bg-white p-6 rounded-lg shadow-sm border">
-                <input type="text" name="name" placeholder="Name des Hauses (z.B. Waldhütte)" required class="border p-3 rounded flex-1 text-lg">
-                <button class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded font-bold text-lg transition">
-                    Erstellen
-                </button>
-            </form>
+            <div class="progress-track">
+                <div 
+                    class="progress-fill" 
+                    style="width: {house.occupancyRate}%;"
+                    class:full={house.occupancyRate === 100}
+                ></div>
+            </div>
+            
+            <div class="coordinates">
+                📍 {house.x || 0} / {house.y || 0}
+            </div>
         </div>
-    </div>
+
+      </a>
+    {/each}
+  </div>
 </div>
+
+<style>
+  :global(body) {
+    background-color: #050505; /* Sehr dunkler Hintergrund */
+    color: #e5e5e5;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+  }
+
+  .dashboard-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem;
+  }
+
+  .dashboard-header {
+    margin-bottom: 3rem;
+    border-bottom: 1px solid #333;
+    padding-bottom: 1rem;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.02em;
+    color: #fff;
+  }
+
+  .subtitle {
+    color: #888;
+    margin-top: 0.5rem;
+    font-size: 1rem;
+  }
+
+  /* Grid Layout */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+  }
+
+  /* Card Design */
+  .card {
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 12px;
+    padding: 1.5rem;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+  }
+
+  .card:hover {
+    transform: translateY(-4px);
+    background: #161616;
+    border-color: #333;
+    box-shadow: 0 10px 15px rgba(0,0,0,0.4);
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .card-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+
+  /* Status Badges */
+  .status-badge {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 99px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .status-badge.green { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .status-badge.orange { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .status-badge.red { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+  .status-badge.gray { background: rgba(255, 255, 255, 0.1); color: #aaa; }
+
+  /* Stats & Progress */
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    color: #ccc;
+  }
+
+  .progress-track {
+    height: 6px;
+    background: #333;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: #34d399; /* Green default */
+    border-radius: 3px;
+    transition: width 0.5s ease-out;
+  }
+
+  .progress-fill.full {
+    background: #ef4444; /* Red when full */
+  }
+
+  .coordinates {
+    font-size: 0.8rem;
+    color: #555;
+    font-family: monospace;
+  }
+</style>
