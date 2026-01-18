@@ -3,7 +3,11 @@
 declare global {
 	namespace App {
 		// interface Error {}
-		// interface Locals {}
+		 interface Locals {
+			// Das hier definiert, dass locals.pb existiert!
+			pb: PocketBase;
+			user?: PocketBase['authStore']['model'];
+		 }
 		// interface PageData {}
 		// interface PageState {}
 		// interface Platform {}
