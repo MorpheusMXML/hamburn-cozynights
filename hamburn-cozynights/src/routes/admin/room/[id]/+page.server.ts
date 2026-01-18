@@ -1,17 +1,20 @@
-// src/routes/admin/room/[id]/+page.server.ts
-import { pb } from '$lib/pocketbase';
-import { error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit'; // "pb" Import entfernen!
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
+  // Sicherheitscheck
+  if (!locals.pb.authStore.isValid) throw error(403, 'Unauthorized');
+
   const roomId = params.id;
 
   try {
-    // 1. Zimmer-Infos laden
-    const room = await pb.collection('rooms').getOne(roomId);
+    // 1. Zimmer-Infos laden (locals.pb nutzen!)
+    const room = await locals.pb.collection('rooms').getOne(roomId, {
+        expand: 'house' // Nützlich für Breadcrumbs
+    });
 
     // 2. Betten laden
-    const beds = await pb.collection('beds').getFullList({
+    const beds = await locals.pb.collection('beds').getFullList({
       filter: `room = "${roomId}"`, 
       sort: 'label'
     });
@@ -25,21 +28,19 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
-  // WICHTIG: Muss 'createBed' heißen, passend zu action="?/createBed" im Formular
-  createBed: async ({ request, params }) => {
+  createBed: async ({ request, params, locals }) => {
     const data = await request.formData();
     
-    // guest_name entfernt, da nicht im Schema vorhanden
-    await pb.collection('beds').create({
+    await locals.pb.collection('beds').create({
       label: data.get('label'),
-      room: params.id, // ID aus der URL
+      room: params.id, 
       occupied: false
     });
   },
 
-  // Wir nennen das hier auch spezifisch 'deleteBed'
-  deleteBed: async ({ request }) => {
+  deleteBed: async ({ request, locals }) => {
     const data = await request.formData();
-    await pb.collection('beds').delete(data.get('id') as string);
+    const id = data.get('id') as string;
+    if (id) await locals.pb.collection('beds').delete(id);
   }
 };

@@ -58,6 +58,10 @@
       </a>
     {/each}
   </div>
+
+  <form action="?/logout" method="POST">
+    <button type="submit">Abmelden</button>
+</form>
 </div>
 
 <style>

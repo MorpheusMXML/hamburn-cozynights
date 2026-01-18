@@ -23,7 +23,7 @@
     <div class="info-panel">
         <div class="status-card">
             <h3>Status</h3>
-            <p class="big-number">{beds.filter(b => b.occupied).length} / {beds.length}</p>
+            <p class="big-number">{beds.filter((b: typeof beds[0]) => b.occupied).length} / {beds.length}</p>
             <p class="label">Betten belegt</p>
         </div>
 
