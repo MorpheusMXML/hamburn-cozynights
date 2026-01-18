@@ -16,10 +16,13 @@
   <video class="background-video" autoplay muted loop playsinline poster="/background.jpg">
     <source src="/background.mp4" type="video/mp4" />
   </video>
+  
   <div class="content-wrapper">
     <div class="logo-container">
-      <h1>Hamburn Cozynights</h1>
+      <h1 class="burning-text">Hamburn Cozynights</h1>
     </div>
+    
+    <img src="/logo.png" alt="Vereinslogo" class="club-logo" />
     
     <div class="input-group">
       <input 
@@ -33,6 +36,16 @@
   </div>
 
   <button class="admin-btn" on:click={() => goto('/admin')}>Admin</button>
+
+  <svg style="width: 0; height: 0; position: absolute;">
+    <defs>
+      <filter id="fire-filter" x="-20%" y="-20%" width="140%" height="140%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="3" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="6" />
+      </filter>
+    </defs>
+  </svg>
+
 </section>
 
 <style>
@@ -68,13 +81,77 @@
     z-index: 1;
   }
 
-  h1 {
-    font-size: 3rem;
-    font-weight: bold;
-    color: white;
-    margin-bottom: 2rem;
-    text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.7);
+  /* --- DER BRENNENDE TEXT STIL --- */
+  .burning-text {
+    font-size: 4rem; /* Groß und mächtig */
+    font-weight: 900;
+    margin-bottom: 1rem;
     white-space: nowrap;
+    
+    /* Farbe als Farbverlauf (Unten heiß/weiß, oben rot/dunkel) */
+    background: linear-gradient(0deg, #ffff00 0%, #ff6600 40%, #ff0000 80%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    
+    /* Der Filter aus dem SVG */
+    filter: url(#fire-filter);
+    
+    /* Glühen um den Text herum */
+    text-shadow: 0 0 20px rgba(255, 69, 0, 0.6);
+
+    /* Animation für das Flackern */
+    animation: flicker-fire 3s infinite alternate;
+  }
+
+  /* Lässt das Feuer "atmen" */
+  @keyframes flicker-fire {
+    0% {
+      opacity: 1;
+      filter: url(#fire-filter) drop-shadow(0 0 10px rgba(255, 100, 0, 0.5));
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.95;
+      filter: url(#fire-filter) drop-shadow(0 0 25px rgba(255, 50, 0, 0.8));
+    }
+    100% {
+      opacity: 1;
+      filter: url(#fire-filter) drop-shadow(0 0 15px rgba(255, 120, 0, 0.6));
+      transform: scale(1.02); /* Leichtes Pulsieren */
+    }
+  }
+
+  /* Responsive Anpassung für Mobile */
+  @media (max-width: 600px) {
+    .burning-text {
+      font-size: 2.5rem; /* Kleiner auf Handy */
+      white-space: normal; /* Umbruch erlauben */
+    }
+  }
+  /* ------------------------------- */
+
+  .club-logo {
+    width: 150px;
+    height: auto;
+    object-fit: contain;
+    margin-bottom: 2rem;
+    /* Dein Logo Glühen (habe ich beibehalten) */
+    animation: intense-glow 2s ease-in-out infinite alternate;
+  }
+
+  @keyframes intense-glow {
+    from {
+      filter: 
+        drop-shadow(0 0 10px rgba(255, 255, 200, 0.8))
+        drop-shadow(0 0 30px rgba(255, 140, 0, 0.8))
+        drop-shadow(0 0 80px rgba(255, 60, 0, 0.6));
+    }
+    to {
+      filter: 
+        drop-shadow(0 0 20px rgba(255, 255, 255, 1))
+        drop-shadow(0 0 60px rgba(255, 200, 0, 0.9))
+        drop-shadow(0 0 120px rgba(255, 100, 0, 0.8));
+    }
   }
 
   .input-group {
