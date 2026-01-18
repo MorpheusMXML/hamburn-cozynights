@@ -7,11 +7,10 @@ export const load: PageServerLoad = async ({ params }) => {
   const roomId = params.id;
 
   try {
-    // 1. Zimmer-Infos laden (für Überschrift/Zurück-Button)
+    // 1. Zimmer-Infos laden
     const room = await pb.collection('rooms').getOne(roomId);
 
-    // 2. Betten laden, die zu diesem Zimmer gehören
-    // Wir filtern nach dem Feld "room" (das wir oben in Schritt 1 angelegt haben)
+    // 2. Betten laden
     const beds = await pb.collection('beds').getFullList({
       filter: `room = "${roomId}"`, 
       sort: 'label'
@@ -25,18 +24,21 @@ export const load: PageServerLoad = async ({ params }) => {
   }
 };
 
-// Aktionen zum Erstellen/Löschen von Betten
 export const actions: Actions = {
-  create: async ({ request, params }) => {
+  // WICHTIG: Muss 'createBed' heißen, passend zu action="?/createBed" im Formular
+  createBed: async ({ request, params }) => {
     const data = await request.formData();
+    
+    // guest_name entfernt, da nicht im Schema vorhanden
     await pb.collection('beds').create({
       label: data.get('label'),
-      room: params.id, // Verknüpfung zum aktuellen Zimmer
-      occupied: false,
-      guest_name: ''
+      room: params.id, // ID aus der URL
+      occupied: false
     });
   },
-  delete: async ({ request }) => {
+
+  // Wir nennen das hier auch spezifisch 'deleteBed'
+  deleteBed: async ({ request }) => {
     const data = await request.formData();
     await pb.collection('beds').delete(data.get('id') as string);
   }
