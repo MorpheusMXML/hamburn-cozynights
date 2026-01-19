@@ -1,37 +1,32 @@
 <script lang="ts">
-    // HIER ist der Import erlaubt und nötig, da Client-Side Code
-    import { pb } from '$lib/pocketbase'; 
-    import { goto } from '$app/navigation';
+    import type { PageData } from './$types';
+    // WICHTIG: Wir importieren den page store, um sicher auf die URL zuzugreifen
+    import { page } from '$app/stores';
 
-    async function loginWith(provider: string) {
-        try {
-            // 1. Popup öffnen
-            const authData = await pb.collection('users').authWithOAuth2({ provider });
-
-            // 2. Cookie für den Server setzen (WICHTIG!)
-            document.cookie = pb.authStore.exportToCookie({ httpOnly: false });
-
-            // 3. Seite neu laden, damit der "Türsteher" (Schritt 1) uns reinlässt
-            window.location.href = '/admin'; 
-            
-        } catch (err) {
-            console.error(err);
-            alert('Login fehlgeschlagen');
-        }
-    }
+    export let data: PageData;
 </script>
 
-<div style="max-width: 400px; margin: 50px auto; text-align: center;">
-    <h1>Admin Login</h1>
-    <p>Bitte authentifizieren, um fortzufahren.</p>
-    
-    <button on:click={() => loginWith('google')} style="padding: 10px 20px; cursor: pointer;">
-        Mit Google anmelden
-    </button>
-    
-    <br><br>
-    
-    <button on:click={() => loginWith('github')} style="padding: 10px 20px; cursor: pointer;">
-        Mit GitHub anmelden
-    </button>
+<div style="max-width: 400px; margin: 50px auto; text-align: center; font-family: sans-serif;">
+    <h1 style="margin-bottom: 20px;">Admin Login</h1>
+
+    {#if $page.url.searchParams.get('fail')}
+        <div style="background: #fee; color: #c00; padding: 10px; margin-bottom: 20px; border-radius: 4px;">
+            Login fehlgeschlagen. Bitte erneut versuchen.
+        </div>
+    {/if}
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+        {#if data.providers && data.providers.length > 0}
+            {#each data.providers as provider}
+                <form action="?/oauth2" method="POST">
+                    <input type="hidden" name="provider" value={provider.name} />
+                    <button type="submit" style="padding: 12px; cursor: pointer; width: 100%; font-size: 16px;">
+                        Login mit {provider.displayName}
+                    </button>
+                </form>
+            {/each}
+        {:else}
+            <p style="color: gray;">Keine Login-Methoden verfügbar.</p>
+        {/if}
+    </div>
 </div>
