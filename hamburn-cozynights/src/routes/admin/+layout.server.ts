@@ -4,28 +4,27 @@ import type { LayoutServerLoad } from './$types';
 export const load: LayoutServerLoad = async ({ locals, url }) => {
     // 1. Prüfen: Ist ein User eingeloggt?
     if (!locals.pb.authStore.isValid) {
-        // Wenn nicht eingeloggt und nicht schon auf der Login-Seite -> Redirect
         if (url.pathname !== '/admin/login') {
             throw redirect(303, '/admin/login');
         }
     } else {
         // 2. User ist eingeloggt:
-        // Wenn er versucht, die Login-Seite aufzurufen -> direkt ins Dashboard schicken
         if (url.pathname === '/admin/login') {
             throw redirect(303, '/admin');
         }
 
         // 3. Rollen-Check (Sicherheit)
         const user = locals.pb.authStore.model;
-        // Erlaube nur reader oder superadmin
+        // Hinweis: Stellen Sie sicher, dass Ihr User-Schema in PocketBase ein Feld 'role' hat
         if (!['reader', 'superadmin'].includes(user?.role)) {
-             locals.pb.authStore.clear(); // Rauswerfen
+             locals.pb.authStore.clear();
              throw redirect(303, '/admin/login');
         }
     }
 
-    // User-Daten an die Pages weitergeben
+    // KORREKTUR: Das User-Objekt muss serialisiert werden, da es eine Klasseninstanz ist.
+    // structuredClone oder JSON.parse(JSON.stringify(...)) beheben den 500er Fehler.
     return {
-        user: locals.pb.authStore.model
+        user: locals.pb.authStore.model ? structuredClone(locals.pb.authStore.model) : null
     };
 };
