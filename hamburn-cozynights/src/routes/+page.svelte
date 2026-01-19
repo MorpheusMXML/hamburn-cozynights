@@ -35,7 +35,7 @@
     </div>
   </div>
 
-  <button class="admin-btn" on:click={() => goto('/admin')}>Admin</button>
+  <button class="admin-btn" on:click={() => goto('/admin/login')}>Admin</button>
 
   <svg style="width: 0; height: 0; position: absolute;">
     <defs>

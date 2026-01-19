@@ -5,7 +5,7 @@ declare global {
 		// interface Error {}
 		 interface Locals {
 			// Das hier definiert, dass locals.pb existiert!
-			pb: PocketBase;
+			pb: import('pocketbase').default;
 			user?: PocketBase['authStore']['model'];
 		 }
 		// interface PageData {}
