@@ -1,20 +1,23 @@
-import { error } from '@sveltejs/kit'; // "pb" Import entfernen!
+import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import type { RoomsResponse, BedsResponse, HousesResponse } from '$lib/pocketbase-types';
+
+// 1. Definiere den Typ inkl. "expand"
+type RoomWithHouse = RoomsResponse<{ house: HousesResponse }>;
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-  // Sicherheitscheck
   if (!locals.pb.authStore.isValid) throw error(403, 'Unauthorized');
 
   const roomId = params.id;
 
   try {
-    // 1. Zimmer-Infos laden (locals.pb nutzen!)
-    const room = await locals.pb.collection('rooms').getOne(roomId, {
-        expand: 'house' // Nützlich für Breadcrumbs
+    // 2. Nutze den Typ beim Laden: getOne<RoomWithHouse>
+    const room = await locals.pb.collection('rooms').getOne<RoomWithHouse>(roomId, {
+        expand: 'house' 
     });
 
-    // 2. Betten laden
-    const beds = await locals.pb.collection('beds').getFullList({
+    // Betten laden
+    const beds = await locals.pb.collection('beds').getFullList<BedsResponse>({
       filter: `room = "${roomId}"`, 
       sort: 'label'
     });
@@ -23,24 +26,47 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
   } catch (err) {
     console.error("Fehler beim Laden der Betten:", err);
-    throw error(404, 'Zimmer nicht gefunden oder Datenbank-Fehler');
+    throw error(404, 'Zimmer nicht gefunden');
   }
 };
 
 export const actions: Actions = {
   createBed: async ({ request, params, locals }) => {
+    // SICHERHEITS-CHECK
+    if (!locals.pb.authStore.model?.verified) {
+        return fail(403, { message: 'Nur verifizierte Nutzer dürfen Betten hinzufügen.' });
+    }
+
     const data = await request.formData();
     
-    await locals.pb.collection('beds').create({
-      label: data.get('label'),
-      room: params.id, 
-      occupied: false
-    });
+    try {
+        await locals.pb.collection('beds').create({
+            label: data.get('label'),
+            room: params.id, 
+            occupied: false
+        });
+    } catch {
+        return fail(500, { error: true });
+    }
   },
 
   deleteBed: async ({ request, locals }) => {
+    // SICHERHEITS-CHECK
+    if (!locals.pb.authStore.model?.verified) {
+        return fail(403, { message: 'Nur verifizierte Nutzer dürfen Betten löschen.' });
+    }
+
     const data = await request.formData();
     const id = data.get('id') as string;
+    
     if (id) await locals.pb.collection('beds').delete(id);
+  },
+  
+  toggleOccupied: async ({ request, locals }) => {
+      const data = await request.formData();
+      const id = data.get('id') as string;
+      const occupied = data.get('occupied') === 'true';
+      
+      await locals.pb.collection('beds').update(id, { occupied: !occupied });
   }
 };

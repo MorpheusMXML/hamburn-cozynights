@@ -2,7 +2,10 @@
   import type { PageData } from './$types';
   
   export let data: PageData;
-  $: ({ houses } = data);
+  
+  // Wir holen uns 'houses' UND 'isVerified' aus den Daten
+  // isVerified kommt automatisch aus dem Layout (+layout.server.ts)
+  $: ({ houses, isVerified } = data);
 
   // Hilfsfunktion für Status-Farben
   function getStatusColor(free: number, total: number) {
@@ -21,8 +24,18 @@
 
 <div class="dashboard-container">
   <header class="dashboard-header">
-    <h1>Hamburn Übersicht</h1>
-    <p class="subtitle">Verwaltung und Belegung in Echtzeit</p>
+    <div class="header-content">
+        <div>
+            <h1>Hamburn Übersicht</h1>
+            <p class="subtitle">Verwaltung und Belegung in Echtzeit</p>
+        </div>
+        
+        {#if isVerified}
+            <a href="/admin/house/new" class="btn-add">
+                <span class="plus-icon">+</span> Haus hinzufügen
+            </a>
+        {/if}
+    </div>
   </header>
 
   <div class="grid">
@@ -59,9 +72,9 @@
     {/each}
   </div>
 
-  <form action="?/logout" method="POST">
-    <button type="submit">Abmelden</button>
-</form>
+  <form action="?/logout" method="POST" style="margin-top: 3rem; text-align: center;">
+    <button type="submit" class="btn-logout">Abmelden</button>
+  </form>
 </div>
 
 <style>
@@ -84,6 +97,12 @@
     padding-bottom: 1rem;
   }
 
+  .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+  }
+
   h1 {
     font-size: 2rem;
     font-weight: 700;
@@ -96,6 +115,7 @@
     color: #888;
     margin-top: 0.5rem;
     font-size: 1rem;
+    margin-bottom: 0;
   }
 
   /* Grid Layout */
@@ -186,5 +206,46 @@
     font-size: 0.8rem;
     color: #555;
     font-family: monospace;
+  }
+
+  /* NEUE BUTTON STYLES */
+  .btn-add {
+      background: #eee;
+      color: #000;
+      text-decoration: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+  }
+  
+  .btn-add:hover {
+      background: #fff;
+  }
+
+  .plus-icon {
+      font-size: 1.2rem;
+      line-height: 1;
+      font-weight: bold;
+  }
+
+  .btn-logout {
+      background: transparent;
+      border: 1px solid #333;
+      color: #888;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+  }
+
+  .btn-logout:hover {
+      border-color: #555;
+      color: #fff;
   }
 </style>
