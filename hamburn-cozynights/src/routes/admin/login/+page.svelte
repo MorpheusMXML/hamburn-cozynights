@@ -3,54 +3,59 @@
     import { page } from '$app/stores';
 
     export let data: PageData;
-    export let form: ActionData; // Für Fehlermeldungen vom Server
+    export let form: ActionData;
+
+    // UI-State: Soll das Registrieren-Formular angezeigt werden?
+    let showRegister = false;
 </script>
 
-<pre style="background: #eee; padding: 10px; font-size: 10px;">
-    DEBUG DATA: {JSON.stringify(data, null, 2)}
-</pre>
-
-<div style="max-width: 400px; margin: 50px auto; padding: 20px; font-family: sans-serif; border: 1px solid #ddd; border-radius: 8px;">
-    <h1 style="text-align: center;">Admin Login</h1>
+<div style="max-width: 400px; margin: 50px auto; font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+    <h1 style="text-align: center;">{showRegister ? 'Account erstellen' : 'Admin Login'}</h1>
 
     {#if form?.message || $page.url.searchParams.get('fail')}
         <div style="background: #fee; color: #c00; padding: 10px; margin-bottom: 20px; border-radius: 4px; text-align: center;">
-            {form?.message || 'Login fehlgeschlagen. Bitte erneut versuchen.'}
+            {#if $page.url.searchParams.get('reason') === 'not_verified'}
+                <strong>Account noch nicht freigeschaltet!</strong><br>
+                Bitte warten Sie, bis ein Admin Ihren Account verifiziert hat.
+            {:else}
+                {form?.message || 'Aktion fehlgeschlagen.'}
+            {/if}
         </div>
     {/if}
 
-    {#if data.enableEmail}
-        <form action="?/login" method="POST" style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 30px;">
-            <div>
-                <label for="email" style="display: block; margin-bottom: 5px;">Email</label>
-                <input name="email" type="email" placeholder="admin@example.com" required style="width: 100%; padding: 8px; box-sizing: border-box;" />
-            </div>
-            
-            <div>
-                <label for="password" style="display: block; margin-bottom: 5px;">Passwort</label>
-                <input name="password" type="password" placeholder="******" required style="width: 100%; padding: 8px; box-sizing: border-box;" />
-            </div>
-
-            <button type="submit" style="padding: 10px; background: #333; color: white; border: none; cursor: pointer; border-radius: 4px;">
-                Anmelden
-            </button>
+    {#if showRegister}
+        <form action="?/register" method="POST" style="display: flex; flex-direction: column; gap: 10px;">
+            <input name="email" type="email" placeholder="Email Adresse" required style="padding: 10px;">
+            <input name="password" type="password" placeholder="Passwort" required style="padding: 10px;">
+            <input name="passwordConfirm" type="password" placeholder="Passwort wiederholen" required style="padding: 10px;">
+            <button type="submit" style="padding: 10px; background: #222; color: #fff; cursor: pointer;">Registrieren</button>
         </form>
-        
-        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+        <p style="text-align: center; font-size: 0.9em;">
+            Bereits einen Account? <button on:click={() => showRegister = false} style="border:none; background:none; color:blue; cursor:pointer; text-decoration:underline;">Anmelden</button>
+        </p>
+    {:else}
+        <form action="?/login" method="POST" style="display: flex; flex-direction: column; gap: 10px;">
+            <input name="email" type="email" placeholder="Email Adresse" required style="padding: 10px;">
+            <input name="password" type="password" placeholder="Passwort" required style="padding: 10px;">
+            <button type="submit" style="padding: 10px; background: #222; color: #fff; cursor: pointer;">Anmelden</button>
+        </form>
+        <p style="text-align: center; font-size: 0.9em;">
+            Neu hier? <button on:click={() => showRegister = true} style="border:none; background:none; color:blue; cursor:pointer; text-decoration:underline;">Account erstellen</button>
+        </p>
     {/if}
 
+    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+
     <div style="display: flex; flex-direction: column; gap: 10px;">
-        {#if data.providers && data.providers.length > 0}
+        {#if data.providers}
             {#each data.providers as provider}
                 <form action="?/oauth2" method="POST">
                     <input type="hidden" name="provider" value={provider.name} />
-                    <button type="submit" style="padding: 10px; width: 100%; cursor: pointer; border: 1px solid #ccc; background: #fff; border-radius: 4px; display: flex; align-items: center; justify-content: center; gap: 10px;">
-                        <strong>{provider.displayName}</strong>
+                    <button type="submit" style="padding: 10px; width: 100%; cursor: pointer; border: 1px solid #ccc; background: #fff;">
+                        {showRegister ? 'Registrieren' : 'Login'} mit {provider.displayName}
                     </button>
                 </form>
             {/each}
-        {:else if !data.enableEmail}
-            <p style="text-align: center; color: gray;">Keine Login-Methoden im Backend aktiviert.</p>
         {/if}
     </div>
 </div>
