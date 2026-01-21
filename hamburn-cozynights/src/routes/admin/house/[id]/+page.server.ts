@@ -1,4 +1,4 @@
-import { error } from '@sveltejs/kit'; 
+import { error, fail } from '@sveltejs/kit'; 
 import type { Actions, PageServerLoad } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
 
@@ -24,12 +24,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       });
 
       // 4. Statistik mappen
-      // HIER war der Fehler: Wir müssen (room: RoomsResponse) explizit angeben
-      const roomsWithStats = rooms.map((room: RoomsResponse) => {
-        
-        // Und hier auch (b: BedsResponse)
-        const roomBeds = beds.filter((b: BedsResponse) => b.room === room.id);
-        const occupied = roomBeds.filter((b: BedsResponse) => b.occupied).length;
+      const roomsWithStats = rooms.map((room) => {
+        const roomBeds = beds.filter((b) => b.room === room.id);
+        const occupied = roomBeds.filter((b) => b.occupied).length;
         
         return {
           ...room,
@@ -50,6 +47,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
   createRoom: async ({ request, locals, params }) => {
+    // SICHERHEITS-CHECK
+    if (!locals.pb.authStore.model?.verified) {
+        return fail(403, { message: 'Nur verifizierte Nutzer dürfen Räume erstellen.' });
+    }
+
     const data = await request.formData();
     const houseId = params.id; 
 
@@ -62,13 +64,24 @@ export const actions: Actions = {
         });
     } catch (err) {
         console.error(err);
-        return { error: true };
+        return fail(500, { error: true });
     }
   },
 
   deleteRoom: async ({ request, locals }) => {
-      const data = await request.formData();
-      const id = data.get('id') as string;
-      if(id) await locals.pb.collection('rooms').delete(id);
+    // SICHERHEITS-CHECK
+    if (!locals.pb.authStore.model?.verified) {
+        return fail(403, { message: 'Nur verifizierte Nutzer dürfen Räume löschen.' });
+    }
+
+    const data = await request.formData();
+    const id = data.get('id') as string;
+    
+    try {
+        if (id) await locals.pb.collection('rooms').delete(id);
+    } catch (err) {
+        console.error(err);
+        return fail(500, { error: true });
+    }
   }
 };

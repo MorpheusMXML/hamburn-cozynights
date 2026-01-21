@@ -3,94 +3,112 @@
   import AddRoomForm from '$lib/components/admin/AddRoomForm.svelte';
 
   export let data: PageData;
-  $: ({ house, rooms } = data);
+  // isVerified kommt automatisch aus dem Layout
+  $: ({ house, rooms, isVerified } = data);
 </script>
 
-<div class="admin-container">
+<div class="dashboard-container">
   <div class="header-row">
-    <a href="/admin" class="back-link">← Zurück zur Übersicht</a>
-    <h1>Haus: {house.name}</h1>
+    <div class="breadcrumbs">
+        <a href="/admin">Übersicht</a> <span class="sep">/</span> <span>{house.name}</span>
+    </div>
+    <h1>{house.name} <span class="subtitle">Verwaltung</span></h1>
   </div>
 
-  <AddRoomForm houseId={house.id} />
+  {#if isVerified}
+      <div class="form-section">
+          <h3>Neuen Raum hinzufügen</h3>
+          <AddRoomForm houseId={house.id} />
+      </div>
+  {/if}
 
-  <hr />
-
-  <h2>Zimmerliste & Auslastung</h2>
+  <h2 class="section-title">Zimmer & Belegung</h2>
   
-  <div class="rooms-grid">
+  <div class="grid">
     {#each rooms as room (room.id)}
-      <a href="/admin/room/{room.id}" class="room-card">
+      <a href="/admin/room/{room.id}" class="card">
         
-        <div class="room-header">
-          <span class="room-number">#{room.room_number}</span>
+        <div class="card-header">
+          <div class="room-badges">
+            <span class="room-number">#{room.room_number}</span>
+          </div>
           <span class="room-name">{room.name}</span>
         </div>
 
-        <div class="room-stats">
-          <div class="stat-bar">
-            <div class="fill" style="width: {(room.stats.occupied / (room.stats.total || 1)) * 100}%"></div>
-          </div>
-          <span class="stat-text">
-            {room.stats.occupied} / {room.stats.total} Betten belegt
-          </span>
+        <div class="card-body">
+            <div class="progress-track">
+                <div 
+                    class="progress-fill" 
+                    style="width: {(room.stats.occupied / (room.stats.total || 1)) * 100}%"
+                    class:full={room.stats.occupied === room.stats.total && room.stats.total > 0}
+                ></div>
+            </div>
+            
+            <div class="stat-row">
+                <span class="label">Belegung</span>
+                <span class="value">{room.stats.occupied} / {room.stats.total} Betten</span>
+            </div>
         </div>
         
-        <div class="card-actions">
-            <object> <form action="?/deleteRoom" method="POST" on:click|stopPropagation>
-                    <input type="hidden" name="id" value={room.id}>
-                    <button class="btn-delete-link">Zimmer löschen</button>
+        {#if isVerified}
+            <div class="card-actions">
+                <form action="?/deleteRoom" method="POST" on:click|stopPropagation>
+                    <input type="hidden" name="id" value={room.id} />
+                    <button type="submit" class="btn-delete" title="Raum löschen">
+                        🗑 Löschen
+                    </button>
                 </form>
-            </object>
-        </div>
+            </div>
+        {/if}
       </a>
     {/each}
   </div>
 </div>
 
 <style>
-  .admin-container { max-width: 1000px; margin: 0 auto; padding: 2rem; color: #eee; }
-  .header-row { margin-bottom: 2rem; }
-  .back-link { color: #888; text-decoration: none; font-size: 0.9rem; }
-  .back-link:hover { color: #fff; }
+  :global(body) { background-color: #050505; color: #e5e5e5; font-family: sans-serif; margin: 0; }
 
-  hr { border: 0; border-top: 1px solid #333; margin: 2rem 0; }
+  .dashboard-container { max-width: 1200px; margin: 0 auto; padding: 3rem 1.5rem; }
 
-  .rooms-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 1.5rem;
+  /* Header & Breadcrumbs */
+  .header-row { margin-bottom: 3rem; border-bottom: 1px solid #333; padding-bottom: 1rem; }
+  .breadcrumbs { font-size: 0.9rem; color: #888; margin-bottom: 0.5rem; }
+  .breadcrumbs a { color: #aaa; text-decoration: none; transition: color 0.2s; }
+  .breadcrumbs a:hover { color: #fff; }
+  .sep { margin: 0 0.5rem; color: #444; }
+  
+  h1 { font-size: 2rem; margin: 0; color: #fff; }
+  .subtitle { color: #666; font-size: 1rem; font-weight: normal; margin-left: 10px; }
+  .section-title { margin: 2rem 0 1rem; font-size: 1.2rem; color: #ccc; border-bottom: 1px solid #222; padding-bottom: 0.5rem; }
+
+  /* Form Section */
+  .form-section { background: #111; border: 1px solid #222; padding: 1.5rem; border-radius: 8px; margin-bottom: 3rem; }
+  .form-section h3 { margin-top: 0; color: #ddd; font-size: 1.1rem; }
+
+  /* Grid Layout */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+
+  /* Card Styles */
+  .card {
+    background: #111; border: 1px solid #222; border-radius: 12px; padding: 1.5rem;
+    text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 1rem;
+    transition: all 0.2s ease; position: relative;
   }
+  .card:hover { transform: translateY(-4px); background: #161616; border-color: #333; }
 
-  .room-card {
-    background: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 8px;
-    padding: 1.5rem;
-    text-decoration: none;
-    color: inherit;
-    transition: transform 0.2s, border-color 0.2s;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
+  .card-header { display: flex; justify-content: space-between; align-items: center; }
+  .room-number { background: #333; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.9rem; }
+  .room-name { font-weight: 600; font-size: 1.1rem; }
 
-  .room-card:hover {
-    transform: translateY(-3px);
-    border-color: #555;
-    background: #222;
-  }
+  /* Stats & Progress */
+  .progress-track { height: 6px; background: #333; border-radius: 3px; overflow: hidden; margin-top: 0.5rem; }
+  .progress-fill { height: 100%; background: #34d399; border-radius: 3px; }
+  .progress-fill.full { background: #ef4444; }
+  
+  .stat-row { display: flex; justify-content: space-between; font-size: 0.85rem; color: #888; margin-top: 0.5rem; }
 
-  .room-header { display: flex; justify-content: space-between; align-items: center; }
-  .room-number { font-weight: bold; font-size: 1.2rem; color: #fff; }
-  .room-name { color: #aaa; }
-
-  .room-stats { margin-top: auto; }
-  .stat-bar { height: 4px; background: #333; border-radius: 2px; overflow: hidden; margin-bottom: 0.5rem; }
-  .fill { height: 100%; background: #4CAF50; }
-  .stat-text { font-size: 0.85rem; color: #888; }
-
-  .card-actions { margin-top: 1rem; border-top: 1px solid #333; padding-top: 0.5rem; text-align: right; }
-  .btn-delete-link { background: none; border: none; color: #ff4444; cursor: pointer; font-size: 0.8rem; padding: 0; text-decoration: underline; }
-  .btn-delete-link:hover { color: #ff6666; }
+  /* Actions */
+  .card-actions { margin-top: auto; padding-top: 1rem; border-top: 1px dashed #333; display: flex; justify-content: flex-end; }
+  .btn-delete { background: none; border: none; color: #666; cursor: pointer; font-size: 0.8rem; transition: color 0.2s; padding: 0; }
+  .btn-delete:hover { color: #ef4444; }
 </style>
