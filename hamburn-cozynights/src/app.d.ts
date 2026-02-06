@@ -10,6 +10,7 @@ declare global {
 			// Hier nutzen wir TypedPocketBase statt dem Standard-PocketBase
 			// Damit funktionieren Dinge wie .getFullList<HousesResponse>()
 			pb: TypedPocketBase;
+			orderNumber: string | null;
 			
 			// Hier nutzen wir den importierten PocketBase Typ
 			user?: PocketBase['authStore']['model'];

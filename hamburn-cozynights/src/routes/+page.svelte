@@ -1,15 +1,8 @@
 <script lang="ts">
+  import { enhance } from '$app/forms';
   import { goto } from '$app/navigation';
-
-  let bookingCode = '';
-
-  function handleStart() {
-    if (bookingCode.trim()) {
-      goto('/map');
-    } else {
-      alert('Bitte geben Sie einen Buchungscode ein.');
-    }
-  }
+  
+  export let form; // Access server-side validation errors
 </script>
 
 <section class="hero">
@@ -24,16 +17,26 @@
     
     <img src="/logo.png" alt="Vereinslogo" class="club-logo" />
     
-    <div class="input-group">
-      <input 
-        type="text" 
-        placeholder="enter your booking code" 
-        bind:value={bookingCode} 
-        on:keydown={(e) => e.key === 'Enter' && handleStart()}
-      />
-      <button on:click={handleStart}>Start</button>
-    </div>
-  </div>
+  <form method="POST" action="?/login" use:enhance={() => {
+    return async ({ result }) => {
+      if (result.type === 'redirect') {
+        goto(result.location);
+      }
+    };
+  }} class="input-group">
+    <input 
+      type="text" 
+      name="bookingCode"
+      placeholder="enter your booking code" 
+      required
+    />
+    <button type="submit">Start</button>
+  </form>
+  
+  {#if form?.error}
+    <p class="error-message">{form.error}</p>
+  {/if}
+</div>
 
   <button class="admin-btn" on:click={() => goto('/admin/login')}>Admin</button>
 
@@ -59,6 +62,13 @@
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     overflow: hidden;
     background: #222 url('/background.jpg') no-repeat center center / cover;
+  }
+
+  .error-message {
+    color: #ff4500;
+    margin-top: 10px;
+    font-weight: bold;
+    text-shadow: 0 0 5px black;
   }
 
   .background-video {
