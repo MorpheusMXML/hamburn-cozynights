@@ -57,7 +57,7 @@
   <div class="modal-backdrop" role="button" tabindex="0" on:click={closeModal} on:keydown={(e) => e.key === 'Escape' && closeModal()}>
     <div class="modal" role="dialog" tabindex="-1" on:click|stopPropagation on:keydown={(e) => e.key === 'Escape' && closeModal()}>
       <h2>Book Bed</h2>
-      <p>Please enter your Burner name (optional) to book this bed.</p>
+      <p>Please enter your Burner name to book this bed.</p>
       
       <form method="POST" action="?/bookBed" use:enhance={() => {
           return async ({ result, update }) => {
@@ -68,7 +68,7 @@
         <input type="hidden" name="bedId" value={selectedBedId} />
         
         <div class="form-group">
-            <label for="guestName">optional Burner Name...</label>
+            <label for="guestName">Burner Name...</label>
             <input type="text" name="guestName" id="guestName" placeholder="Max Mustermann" required />
         </div>
 

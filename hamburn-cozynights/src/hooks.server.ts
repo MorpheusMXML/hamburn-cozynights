@@ -1,17 +1,17 @@
 // src/hooks.server.ts
 import PocketBase from 'pocketbase';
 import { type Handle } from '@sveltejs/kit';
-import type { TypedPocketBase } from '$lib/pocketbase-types'; // <--- Import hinzufügen
+import type { TypedPocketBase } from '$lib/pocketbase-types';
 
 const PB_URL = 'http://127.0.0.1:8090'; 
 
 export const handle: Handle = async ({ event, resolve }) => {
-    // Füge 'as TypedPocketBase' hinzu, damit die Typen übereinstimmen
     event.locals.pb = new PocketBase(PB_URL) as TypedPocketBase;
+    
+    // 1. Load the Booking Code from cookies
+    event.locals.orderNumber = event.cookies.get('bookingCode') || null;
 
-    // Lade Auth-Store aus dem Cookie
     event.locals.pb.authStore.loadFromCookie(event.request.headers.get('cookie') || '');
-
     try {
         if (event.locals.pb.authStore.isValid) {
             await event.locals.pb.collection('users').authRefresh();
@@ -21,8 +21,6 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
 
     const response = await resolve(event);
-
     response.headers.append('set-cookie', event.locals.pb.authStore.exportToCookie({ httpOnly: false }));
-
     return response;
 };
