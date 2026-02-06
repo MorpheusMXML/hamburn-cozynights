@@ -17,15 +17,19 @@
     align-items: center;
     position: relative;
     transform: translate(-50%, -50%);
+    /* Ermöglicht Hover-Effekte */
+    pointer-events: none; 
   }
 
   .hit-area {
     position: absolute;
-    width: 60px; /* Vergrößert den Interaktionsradius massiv */
+    width: 60px;
     height: 60px;
     border-radius: 50%;
     background: transparent;
     z-index: 1;
+    /* Die Hit-Area soll Klicks empfangen, damit der Link triggert */
+    pointer-events: auto; 
     cursor: pointer;
   }
 
@@ -40,8 +44,8 @@
     transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   }
 
-  /* Der Hover-Effekt triggert jetzt dank hit-area viel früher */
-  .marker-wrapper:hover .pin {
+  /* Hover wird über den Link oder die hit-area ausgelöst */
+  :global(.marker-link:hover) .pin {
     transform: scale(1.3);
     background-color: #4ade80;
   }
@@ -56,7 +60,7 @@
     border-radius: 4px;
     font-size: 0.75rem;
     font-weight: 700;
-    pointer-events: none;
     z-index: 3;
+    white-space: nowrap;
   }
 </style>

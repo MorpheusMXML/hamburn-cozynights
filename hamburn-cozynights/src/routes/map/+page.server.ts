@@ -1,12 +1,15 @@
-// src/routes/map/+page.server.ts
+import { pb } from '$lib/pocketbase';
 import type { PageServerLoad } from './$types';
-// Entferne diesen Import: import { pb } from '$lib/pocketbase'; 
 
-export const load: PageServerLoad = async ({ locals }) => { // Füge 'locals' hier hinzu
-  // Nutze locals.pb statt der globalen pb Variable
-  const houses = await locals.pb.collection('houses').getFullList({
-    sort: 'name',
-  });
+export const load: PageServerLoad = async () => {
+    // Wir holen die Liste ohne Cache-Verzögerung
+    const records = await pb.collection('houses').getFullList({
+        sort: 'name',
+    });
 
-  return { houses };
+    return {
+        // Das JSON.parse(JSON.stringify()) ist ESSENZIELL für SvelteKit Navigation,
+        // da Pocketbase-Klassen-Objekte beim clientseitigen Routing oft "sterben".
+        houses: JSON.parse(JSON.stringify(records))
+    };
 };
