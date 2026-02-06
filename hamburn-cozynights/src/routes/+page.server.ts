@@ -1,3 +1,4 @@
+// src/routes/+page.server.ts
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions } from './$types';
 import { pb } from '$lib/pocketbase';
@@ -5,32 +6,39 @@ import { pb } from '$lib/pocketbase';
 export const actions: Actions = {
     login: async ({ request, cookies }) => {
         const data = await request.formData();
-        const bookingCode = data.get('bookingCode') as string;
+        const bookingCode = data.get('bookingCode')?.toString().trim();
+
+        console.log('Attempting login with code:', bookingCode);
 
         if (!bookingCode) {
             return fail(400, { error: 'Please enter a booking code.' });
         }
 
         try {
-            // Check if the order exists in the 'orders' collection
-            // We search for a record where 'order_number' matches the user input
-            await pb.collection('orders').getFirstListItem(`order_number = "${bookingCode}"`);
+            // 1. Verify the order exists in the 'orders' collection. 
+            // Ensure your PocketBase field name is exactly 'order_number'
+            const order = await pb.collection('orders').getFirstListItem(`order_number = "${bookingCode}"`);
             
-            // If found, save the code in a cookie so the user stays "logged in"
+            console.log('Order found:', order.id);
+
+            // 2. Persist the code in a cookie for 30 days
             cookies.set('bookingCode', bookingCode, {
                 path: '/',
-                httpOnly: false, // Allows client-side reading if needed
-                maxAge: 60 * 60 * 24 * 30 // Valid for 30 days
+                httpOnly: false,
+                sameSite: 'lax',
+                maxAge: 60 * 60 * 24 * 30
             });
 
-            // Redirect the user to the map page
+            // 3. Redirect to map
             throw redirect(303, '/map');
         } catch (err) {
-            // SvelteKit redirects are technically errors, so we must let them through
-            if (err instanceof Response && err.status === 303) throw err;
+            // Handle the redirect throw (which is technically an "error" in SvelteKit)
+            if (err && typeof err === 'object' && 'status' in err && err.status === 303) {
+                throw err;
+            }
             
-            console.error('Login error:', err);
-            return fail(404, { error: 'Invalid Booking Code. Please check your confirmation email.' });
+            console.error('Login error details:', err);
+            return fail(404, { error: `Order code "${bookingCode}" not found in database.` });
         }
     }
 };

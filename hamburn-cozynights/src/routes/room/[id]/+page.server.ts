@@ -1,31 +1,22 @@
+// src/routes/room/[id]/+page.server.ts
 import { pb } from '$lib/pocketbase';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { RoomsResponse, BedsResponse, OrdersResponse } from '$lib/pocketbase-types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-  // Security check: Redirect to home if no booking code is present in cookies
-  if (!locals.orderNumber) {
-    throw redirect(303, '/');
-  }
+  // If the user isn't logged in with a code, send them back to home
+  if (!locals.orderNumber) throw redirect(303, '/');
 
   try {
-    // 1. Fetch the room details
     const room = await pb.collection('rooms').getOne<RoomsResponse>(params.id);
-    
-    // 2. Fetch all beds in this room and expand their associated orders
     const beds = await pb.collection('beds').getFullList<BedsResponse<{ order?: OrdersResponse }>>({
       filter: `room = "${params.id}"`,
       sort: 'label',
       expand: 'order' 
     });
 
-    // These values populate the 'data' prop in your +page.svelte
-    return { 
-      room, 
-      beds, 
-      currentOrderCode: locals.orderNumber 
-    };
+    return { room, beds };
   } catch {
     throw error(404, 'Room not found');
   }
@@ -37,14 +28,13 @@ export const actions: Actions = {
     const bedId = formData.get('bedId') as string;
     const guestName = formData.get('guestName') as string;
 
-    if (!locals.orderNumber) {
-        return fail(401, { error: 'No booking code found.' });
-    }
+    if (!locals.orderNumber) return fail(401, { error: 'Session expired' });
 
     try {
+        // 1. Get the existing Order ID using the persistent booking code
         const order = await pb.collection('orders').getFirstListItem(`order_number = "${locals.orderNumber}"`);
 
-        // Clear any previous bed linked to this specific order ID
+        // 2. Clear any existing bed linked to this Order (to allow moving beds)
         const previousBeds = await pb.collection('beds').getFullList({
             filter: `order = "${order.id}"`
         });
@@ -53,12 +43,12 @@ export const actions: Actions = {
             await pb.collection('beds').update(prevBed.id, { occupied: false, order: null });
         }
 
-        // Update the name on the existing order
+        // 3. Update the customer name on the existing order
         if (guestName) {
             await pb.collection('orders').update(order.id, { customer_name: guestName });
         }
 
-        // Link the new bed to the existing order
+        // 4. Link the new bed to the existing order
         await pb.collection('beds').update(bedId, {
             occupied: true,
             order: order.id
