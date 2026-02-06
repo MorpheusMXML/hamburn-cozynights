@@ -1,14 +1,15 @@
+// src/lib/types.ts
 export interface Bed {
-  id: number;
+  id: string;
   label: string;
   occupied: boolean;
 }
 
 export interface House {
-  id: number;
+  id: string;
   name: string;
-  x: number;
-  y: number;
-  status: 'frei' | 'voll';
-  beds: Bed[]; // Neue Liste der Betten pro Haus
+  x: number; // Logische X-Koordinate (0-1000)
+  y: number; // Logische Y-Koordinate (0-700)
+  status: 'available' | 'full';
+  beds: Bed[];
 }
