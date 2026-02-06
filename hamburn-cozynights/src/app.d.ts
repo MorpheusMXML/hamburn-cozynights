@@ -11,6 +11,7 @@ declare global {
 			// Damit funktionieren Dinge wie .getFullList<HousesResponse>()
 			pb: TypedPocketBase;
 			orderNumber: string | null;
+			burner_Name?: string; // Optional, falls du den Namen des Gastes irgendwo speichern möchtest
 			
 			// Hier nutzen wir den importierten PocketBase Typ
 			user?: PocketBase['authStore']['model'];
