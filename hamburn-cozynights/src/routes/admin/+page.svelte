@@ -1,24 +1,32 @@
 <script lang="ts">
   import type { PageData } from './$types';
+  import Map from '$lib/components/Map.svelte';
+  import { goto } from '$app/navigation';
   
   export let data: PageData;
   
-  // Wir holen uns 'houses' UND 'isVerified' aus den Daten
-  // isVerified kommt automatisch aus dem Layout (+layout.server.ts)
   $: ({ houses, isVerified } = data);
 
-  // Hilfsfunktion für Status-Farben
+  let showMap = false; // Steuert die Sichtbarkeit der Karte
+
   function getStatusColor(free: number, total: number) {
     if (total === 0) return 'gray';
-    if (free === 0) return 'red';      // Voll
-    if (free < 3) return 'orange';     // Fast voll
-    return 'green';                    // Verfügbar
+    if (free === 0) return 'red';
+    if (free < 3) return 'orange';
+    return 'green';
   }
 
   function getStatusText(free: number, total: number) {
-      if (total === 0) return 'Nicht eingerichtet';
-      if (free === 0) return 'Ausgebucht';
-      return `${free} Betten frei`;
+      if (total === 0) return 'Not setup';
+      if (free === 0) return 'Fully booked';
+      return `${free} beds free`;
+  }
+
+  // Wenn auf der Karte im Editor-Modus geklickt wird
+  function handleLocationSelected(event: CustomEvent) {
+    const { x, y } = event.detail;
+    // Weiterleitung zum "New House" Formular mit Koordinaten in der URL
+    goto(`/admin/house/new?x=${x}&y=${y}`);
   }
 </script>
 
@@ -26,62 +34,80 @@
   <header class="dashboard-header">
     <div class="header-content">
         <div>
-            <h1>Hamburn Übersicht</h1>
-            <p class="subtitle">Verwaltung und Belegung in Echtzeit</p>
+            <h1>Hamburn Dashboard</h1>
+            <p class="subtitle">Real-time management and occupancy</p>
         </div>
         
-        {#if isVerified}
-            <a href="/admin/house/new" class="btn-add">
-                <span class="plus-icon">+</span> Haus hinzufügen
-            </a>
-        {/if}
+        <div class="header-actions">
+            <button class="btn-secondary" on:click={() => showMap = !showMap}>
+                {showMap ? 'Show List' : 'Show Map'}
+            </button>
+
+            {#if isVerified}
+                <a href="/admin/house/new" class="btn-add">
+                    <span class="plus-icon">+</span> Add House
+                </a>
+            {/if}
+        </div>
     </div>
   </header>
 
-  <div class="grid">
-    {#each houses as house}
-      <a href="/admin/house/{house.id}" class="card">
-        
-        <div class="card-header">
-          <h2>{house.name}</h2>
-          <span class="status-badge {getStatusColor(house.freeBeds, house.totalBeds)}">
-             {getStatusText(house.freeBeds, house.totalBeds)}
-          </span>
+  {#if showMap}
+    <div class="map-section">
+        <div class="map-info">
+            <p><strong>Editor Mode:</strong> Click anywhere on the map to place a new house at that location.</p>
         </div>
-
-        <div class="card-body">
-            <div class="stat-row">
-                <span class="label">Belegung</span>
-                <span class="value">{house.occupiedBeds} / {house.totalBeds}</span>
+        <Map 
+            {houses} 
+            isEditorMode={true} 
+            on:locationSelected={handleLocationSelected} 
+        />
+    </div>
+  {:else}
+    <div class="grid">
+        {#each houses as house}
+          <a href="/admin/house/{house.id}" class="card">
+            <div class="card-header">
+              <h2>{house.name}</h2>
+              <span class="status-badge {getStatusColor(house.freeBeds, house.totalBeds)}">
+                 {getStatusText(house.freeBeds, house.totalBeds)}
+              </span>
             </div>
 
-            <div class="progress-track">
-                <div 
-                    class="progress-fill" 
-                    style="width: {house.occupancyRate}%;"
-                    class:full={house.occupancyRate === 100}
-                ></div>
-            </div>
-            
-            <div class="coordinates">
-                📍 {house.x || 0} / {house.y || 0}
-            </div>
-        </div>
+            <div class="card-body">
+                <div class="stat-row">
+                    <span class="label">Occupancy</span>
+                    <span class="value">{house.occupiedBeds} / {house.totalBeds}</span>
+                </div>
 
-      </a>
-    {/each}
-  </div>
+                <div class="progress-track">
+                    <div 
+                        class="progress-fill" 
+                        style="width: {house.occupancyRate}%;"
+                        class:full={house.occupancyRate === 100}
+                    ></div>
+                </div>
+                
+                <div class="coordinates">
+                    📍 X: {house.x || 0} / Y: {house.y || 0}
+                </div>
+            </div>
+          </a>
+        {/each}
+    </div>
+  {/if}
 
   <form action="?/logout" method="POST" style="margin-top: 3rem; text-align: center;">
-    <button type="submit" class="btn-logout">Abmelden</button>
+    <button type="submit" class="btn-logout">Sign out</button>
   </form>
 </div>
 
 <style>
+  /* Bestehende Styles bleiben erhalten */
   :global(body) {
-    background-color: #050505; /* Sehr dunkler Hintergrund */
+    background-color: #050505;
     color: #e5e5e5;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Inter', sans-serif;
     margin: 0;
   }
 
@@ -103,29 +129,20 @@
       align-items: flex-end;
   }
 
-  h1 {
-    font-size: 2rem;
-    font-weight: 700;
-    margin: 0;
-    letter-spacing: -0.02em;
-    color: #fff;
+  .header-actions {
+      display: flex;
+      gap: 1rem;
   }
 
-  .subtitle {
-    color: #888;
-    margin-top: 0.5rem;
-    font-size: 1rem;
-    margin-bottom: 0;
-  }
+  h1 { font-size: 2rem; color: #fff; margin: 0; }
+  .subtitle { color: #888; margin-top: 0.5rem; }
 
-  /* Grid Layout */
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 1.5rem;
   }
 
-  /* Card Design */
   .card {
     background: #111;
     border: 1px solid #222;
@@ -133,82 +150,36 @@
     padding: 1.5rem;
     text-decoration: none;
     color: inherit;
-    transition: all 0.2s ease;
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
   }
 
-  .card:hover {
-    transform: translateY(-4px);
-    background: #161616;
-    border-color: #333;
-    box-shadow: 0 10px 15px rgba(0,0,0,0.4);
+  .card:hover { transform: translateY(-4px); border-color: #444; }
+
+  /* Map Section Styles */
+  .map-section {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      animation: fadeIn 0.3s ease-out;
   }
 
-  .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  .map-info {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      padding: 1rem;
+      border-radius: 8px;
+      color: #4ade80;
+      font-size: 0.9rem;
   }
 
-  .card-header h2 {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 600;
+  @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
   }
 
-  /* Status Badges */
-  .status-badge {
-    font-size: 0.75rem;
-    padding: 4px 10px;
-    border-radius: 99px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .status-badge.green { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-  .status-badge.orange { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
-  .status-badge.red { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
-  .status-badge.gray { background: rgba(255, 255, 255, 0.1); color: #aaa; }
-
-  /* Stats & Progress */
-  .stat-row {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.9rem;
-    margin-bottom: 0.5rem;
-    color: #ccc;
-  }
-
-  .progress-track {
-    height: 6px;
-    background: #333;
-    border-radius: 3px;
-    overflow: hidden;
-    margin-bottom: 1rem;
-  }
-
-  .progress-fill {
-    height: 100%;
-    background: #34d399; /* Green default */
-    border-radius: 3px;
-    transition: width 0.5s ease-out;
-  }
-
-  .progress-fill.full {
-    background: #ef4444; /* Red when full */
-  }
-
-  .coordinates {
-    font-size: 0.8rem;
-    color: #555;
-    font-family: monospace;
-  }
-
-  /* NEUE BUTTON STYLES */
+  /* Buttons */
   .btn-add {
       background: #eee;
       color: #000;
@@ -216,36 +187,37 @@
       padding: 10px 20px;
       border-radius: 8px;
       font-weight: 600;
-      font-size: 0.9rem;
-      transition: background 0.2s;
       display: inline-flex;
       align-items: center;
       gap: 8px;
   }
-  
-  .btn-add:hover {
-      background: #fff;
-  }
 
-  .plus-icon {
-      font-size: 1.2rem;
-      line-height: 1;
-      font-weight: bold;
-  }
-
-  .btn-logout {
-      background: transparent;
-      border: 1px solid #333;
-      color: #888;
-      padding: 8px 16px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.9rem;
-      transition: all 0.2s;
-  }
-
-  .btn-logout:hover {
-      border-color: #555;
+  .btn-secondary {
+      background: #222;
       color: #fff;
+      border: 1px solid #444;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
   }
+
+  .btn-secondary:hover { background: #333; }
+
+  .status-badge {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 99px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .status-badge.green { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+  .status-badge.red { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+
+  .progress-track { height: 6px; background: #333; border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: #34d399; transition: width 0.5s; }
+  .progress-fill.full { background: #ef4444; }
+  .coordinates { font-size: 0.8rem; color: #555; font-family: monospace; }
+  .btn-logout { background: transparent; border: 1px solid #333; color: #888; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
 </style>
