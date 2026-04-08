@@ -18,7 +18,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
     // Betten laden
     const beds = await locals.pb.collection('beds').getFullList<BedsResponse>({
-      filter: `room = "${roomId}"`, 
+      filter: locals.pb.filter('room = {:roomId}', { roomId: roomId }), 
       sort: 'label'
     });
 

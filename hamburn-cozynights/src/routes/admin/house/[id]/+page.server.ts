@@ -14,13 +14,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
       // 2. Räume laden
       const rooms = await locals.pb.collection('rooms').getFullList<RoomsResponse>({
-        filter: `house = "${houseId}"`,
+        filter: locals.pb.filter('house = {:id}', { id: houseId }),
         sort: 'room_number',
       });
 
       // 3. Betten laden (für alle Räume dieses Hauses)
       const beds = await locals.pb.collection('beds').getFullList<BedsResponse>({
-        filter: `room.house = "${houseId}"`,
+        filter: locals.pb.filter('room.house = {:id}', { id: houseId }),
       });
 
       // 4. Statistik mappen
