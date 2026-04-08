@@ -10,12 +10,17 @@
   
   $: ({ houses, isVerified, isBookingActive, bookingUnlockAt } = data);
 
+  // Main View state
   let showMap = true;
   let showGuide = false;
+  let selectedHouseId: string | null = null;
   let unlockDateInput = bookingUnlockAt ? new Date(bookingUnlockAt).toISOString().slice(0, 16) : "";
 
-  // Editor Modal State
+  // Editor Sidebar State
   let editingHouse: { id?: string, x: number, y: number, name: string } | null = null;
+
+  // Compute the currently active house for the sidebar
+  $: activeHouse = houses.find(h => h.id === selectedHouseId) || (editingHouse?.id ? null : editingHouse);
 
   function getStatusColor(free: number, total: number) {
     if (total === 0) return 'gray';
@@ -30,19 +35,23 @@
       return `${free} spots free`;
   }
 
+  // When clicking empty space on the map in editor mode
   function handleLocationSelected(event: CustomEvent) {
     const { x, y } = event.detail;
+    selectedHouseId = null; // Deselect existing
     editingHouse = { x, y, name: "" };
+    console.log(`[Dashboard] Preparing new house deployment at (${x}, ${y})`);
   }
 
   async function handleHouseMoved(event: CustomEvent) {
     const { id, x, y } = event.detail;
+    selectedHouseId = id; // Select the house being moved
     
     // 1. Find the house object to get its current name
     const house = houses.find(h => h.id === id);
     if (!house) return;
 
-    // 2. Open the editor modal immediately so the user can see/confirm the move
+    // 2. Update local state for sidebar
     editingHouse = { id: house.id, x, y, name: house.name };
 
     // 3. Save coordinates to background
@@ -58,15 +67,17 @@
 
     if (!response.ok) {
       alert("🔥 THE PLAYA PROTECTS! 🛡️ This house has active bookings and cannot be moved.");
-      editingHouse = null; // Close editor if move was illegal
+      editingHouse = null;
+      selectedHouseId = null;
       invalidateAll();
     }
   }
 
-  function handleRenameHouse(event: CustomEvent) {
+  function handleSelectHouse(event: CustomEvent) {
     const house = event.detail;
-    // Ensure all data is correctly passed to pre-fill the modal
+    selectedHouseId = house.id;
     editingHouse = { id: house.id, x: house.x, y: house.y, name: house.name };
+    console.log(`[Dashboard] House selected: ${house.name}`);
   }
 
   async function handleSaveHouse(event: CustomEvent) {
@@ -81,10 +92,12 @@
     formData.append('name', newHouseData.name);
     
     if (editingHouse?.id) {
+      // RENAME / UPDATE
       formData.append('id', editingHouse.id);
       const response = await fetch('?/renameHouse', { method: 'POST', body: formData });
       if (!response.ok) alert("❌ RENAME FAILED! The desert winds are too strong.");
     } else {
+      // CREATE NEW
       formData.append('x', editingHouse?.x.toString() || "0");
       formData.append('y', editingHouse?.y.toString() || "0");
       const response = await fetch('/admin/house/new?/create', { method: 'POST', body: formData });
@@ -92,14 +105,16 @@
     }
     
     editingHouse = null;
+    selectedHouseId = null;
     invalidateAll();
   }
 
-  async function handleDeleteHouse(event: CustomEvent) {
-    const house = event.detail;
-    if (confirm(`⚠️ DANGER! ⚠️ Are you sure you want to vanish "${house.name}"? All rooms and beds inside will be lost to the dust forever! 🌪️`)) {
+  async function handleDeleteActiveHouse() {
+    if (!activeHouse || !activeHouse.id) return;
+    
+    if (confirm(`⚠️ DANGER! ⚠️ Are you sure you want to vanish "${activeHouse.name}"? This will evaporate all modules and spots! 🌪️`)) {
       const formData = new FormData();
-      formData.append('id', house.id);
+      formData.append('id', activeHouse.id);
       
       const response = await fetch('?/deleteHouse', {
         method: 'POST',
@@ -107,10 +122,20 @@
       });
       
       if (!response.ok) {
-        alert("🛑 ACTION BLOCKED! This house is already inhabited by burners.");
+        alert("🛑 ACTION BLOCKED! Burners are currently inhabiting this sanctuary.");
+      } else {
+        selectedHouseId = null;
+        editingHouse = null;
+        invalidateAll();
       }
-      invalidateAll();
     }
+  }
+
+  async function handleDeleteHouse(event: CustomEvent) {
+      // Fallback for events from Map.svelte
+      const house = event.detail;
+      selectedHouseId = house.id;
+      handleDeleteActiveHouse();
   }
 </script>
 
@@ -160,7 +185,7 @@
         {#if isVerified}
           <form method="POST" action="?/togglePhase" use:enhance>
             <button type="submit" class="btn-laser" class:live={isBookingActive}>
-              {isBookingActive ? '🎪 LIVE BOOKING ACTIVE' : '🛠 STAGING MODE PHASE'}
+              {isBookingActive ? '🎪 LIVE BOOKING ACTIVE' : '🛠 STAGING MODE'}
               <div class="laser-glow"></div>
             </button>
           </form>
@@ -184,12 +209,12 @@
             <div class="intel-card pink">
                 <span class="icon">🖱️</span>
                 <h3>Drag & Drop</h3>
-                <p>Grab a house and drag it across the dust. (Only allowed in 🛠 STAGING MODE phase)</p>
+                <p>Grab a house and drag it across the dust. (Only allowed in 🛠 STAGING MODE)</p>
             </div>
             <div class="intel-card orange">
                 <span class="icon">⚙️</span>
                 <h3>Management</h3>
-                <p>Click a house to rename it, manage rooms, or vanish it from existence.</p>
+                <p>Click a house to see details in the sidebar. Move, rename, or vanish it.</p>
             </div>
             <div class="intel-card green">
                 <span class="icon">🎪</span>
@@ -208,19 +233,52 @@
               {#if isBookingActive}
                 <span class="status-msg">🔒 MAP LOCKED: Bookings are active on the playa!</span>
               {:else}
-                <span class="status-msg">🛠 EDITOR ACTIVE: Drag houses to reposition them.</span>
+                <span class="status-msg">🛠 EDITOR ACTIVE: Drag houses to reposition. Click house or space to manage.</span>
               {/if}
           </div>
-          <div class="map-frame">
-              <Map 
-                  {houses} 
-                  isEditorMode={true} 
-                  {isBookingActive}
-                  on:locationSelected={handleLocationSelected} 
-                  on:houseMoved={handleHouseMoved}
-                  on:renameHouse={handleRenameHouse}
-                  on:deleteHouse={handleDeleteHouse}
-              />
+          <div class="map-layout-split">
+              <div class="map-frame">
+                  <Map 
+                      {houses} 
+                      isEditorMode={true} 
+                      {isBookingActive}
+                      on:locationSelected={handleLocationSelected} 
+                      on:houseMoved={handleHouseMoved}
+                      on:renameHouse={handleSelectHouse}
+                      on:deleteHouse={handleDeleteHouse}
+                  />
+              </div>
+
+              {#if activeHouse}
+                <aside class="details-sidebar" in:fly={{ x: 100, duration: 400 }}>
+                    <div class="sidebar-header">
+                        <span class="laser-dot turquoise"></span>
+                        <h3>{selectedHouseId ? 'UNIT INTEL' : 'NEW DEPLOYMENT'}</h3>
+                        <button class="btn-close-sidebar" on:click={() => { selectedHouseId = null; editingHouse = null; }}>&times;</button>
+                    </div>
+
+                    <div class="sidebar-content">
+                        <HouseEditor 
+                            x={activeHouse.x} 
+                            y={activeHouse.y} 
+                            name={activeHouse.name} 
+                            houseId={selectedHouseId || undefined}
+                            on:save={handleSaveHouse} 
+                            on:cancel={() => { selectedHouseId = null; editingHouse = null; }} 
+                        />
+
+                        {#if selectedHouseId}
+                            <div class="danger-zone" in:fade>
+                                <span class="zone-label">CRITICAL ACTIONS</span>
+                                <a href="/admin/house/{selectedHouseId}" class="btn-manage-link">MANAGE MODULES ⚙️</a>
+                                <button class="btn-vanish-big" on:click={handleDeleteActiveHouse}>
+                                    VANISH FROM PLAYA 🌪️
+                                </button>
+                            </div>
+                        {/if}
+                    </div>
+                </aside>
+              {/if}
           </div>
       </div>
     {:else}
@@ -267,30 +325,6 @@
     {/if}
   </main>
 </div>
-
-<!-- Editor Modal -->
-{#if editingHouse}
-  <!-- svelte-ignore a11y-click-events-have-key-events -->
-  <!-- svelte-ignore a11y-no-static-element-interactions -->
-  <div class="modal-overlay" transition:fade={{ duration: 200 }} on:mousedown={() => {
-      console.log('[Dashboard] Closing editor modal (backdrop click)');
-      editingHouse = null;
-  }}>
-    <div class="modal-content" on:mousedown|stopPropagation in:fly={{ y: 50, duration: 400 }}>
-      <HouseEditor 
-        x={editingHouse.x} 
-        y={editingHouse.y} 
-        name={editingHouse.name} 
-        houseId={editingHouse.id}
-        on:save={handleSaveHouse} 
-        on:cancel={() => {
-            console.log('[Dashboard] Closing editor modal (cancel button)');
-            editingHouse = null;
-        }} 
-      />
-    </div>
-  </div>
-{/if}
 
 <style>
   .dashboard-wrapper {
@@ -423,7 +457,15 @@
     text-align: center;
   }
   .map-status-bar.live { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: #f87171; }
+  
+  .map-layout-split {
+      display: flex;
+      gap: 2rem;
+      align-items: flex-start;
+  }
+
   .map-frame {
+    flex: 1;
     height: 70vh;
     border: 2px solid #222;
     border-radius: 16px;
@@ -431,6 +473,82 @@
     position: relative;
     box-shadow: 0 20px 50px rgba(0,0,0,0.5);
   }
+
+  .details-sidebar {
+      width: 400px;
+      background: #0a0a0a;
+      border: 1px solid #222;
+      border-top: 2px solid #f472b6;
+      border-radius: 16px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+      animation: sidebarSlide 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  @keyframes sidebarSlide {
+      from { transform: translateX(50px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+  }
+
+  .sidebar-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid #222;
+      padding-bottom: 1rem;
+  }
+  .sidebar-header h3 { margin: 0; font-size: 0.8rem; font-weight: 900; letter-spacing: 2px; color: #fff; flex: 1; }
+  .btn-close-sidebar {
+      background: none; border: none; color: #444; font-size: 1.5rem; cursor: pointer; line-height: 1;
+  }
+  .btn-close-sidebar:hover { color: #fff; }
+
+  .sidebar-content {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+  }
+
+  .danger-zone {
+      margin-top: 1rem;
+      padding-top: 2rem;
+      border-top: 1px solid #222;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+  }
+  .zone-label { font-size: 0.6rem; font-weight: 900; color: #ef4444; letter-spacing: 2px; }
+  
+  .btn-manage-link {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #2dd4bf;
+      padding: 0.75rem;
+      border-radius: 8px;
+      font-weight: 900;
+      text-decoration: none;
+      text-align: center;
+      font-size: 0.8rem;
+      letter-spacing: 1px;
+      transition: all 0.2s;
+  }
+  .btn-manage-link:hover { background: #222; border-color: #2dd4bf; box-shadow: 0 0 15px rgba(45, 212, 191, 0.2); }
+
+  .btn-vanish-big {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid #ef4444;
+      color: #f87171;
+      padding: 1rem;
+      border-radius: 8px;
+      font-weight: 900;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 1px;
+  }
+  .btn-vanish-big:hover { background: #ef4444; color: #fff; box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
 
   /* Grid View */
   .grid-view { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 2rem; }
@@ -483,10 +601,6 @@
   .badge.red { color: #f87171; background: rgba(248, 113, 113, 0.1); }
   .badge.gray { color: #666; background: rgba(102, 102, 102, 0.1); }
 
-  /* Modal */
-  .modal-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
-    display: flex; align-items: center; justify-content: center; z-index: 2000;
-  }
+  .laser-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .laser-dot.turquoise { background: #2dd4bf; box-shadow: 0 0 10px #2dd4bf; }
 </style>
