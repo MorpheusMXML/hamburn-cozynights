@@ -28,6 +28,30 @@
     <h1>{data.room.name} <small>#{data.room.room_number}</small></h1>
   </header>
 
+  {#if data.userBedId}
+    {@const myBed = data.beds.find(b => b.id === data.userBedId)}
+    {#if !myBed}
+      <div class="booking-warning-banner">
+        <div class="warning-icon">⚠️</div>
+        <div class="warning-content">
+          <h3>Du hast bereits eine Buchung!</h3>
+          <p>Du hast bereits ein Bett in einem anderen Zimmer gebucht. Um hier ein neues Bett zu wählen, musst du deine bestehende Buchung zuerst freigeben.</p>
+          <form method="POST" action="?/unbookBed" use:enhance>
+            <button type="submit" class="btn-unbook-banner">Bestehende Buchung jetzt freigeben</button>
+          </form>
+        </div>
+      </div>
+    {:else}
+      <div class="booking-success-banner">
+        <div class="success-icon">✨</div>
+        <div class="success-content">
+          <h3>Dein Zuhause für heute!</h3>
+          <p>Du hast das Bett <strong>{myBed.label}</strong> in diesem Zimmer erfolgreich reserviert.</p>
+        </div>
+      </div>
+    {/if}
+  {/if}
+
   <div class="beds-grid">
     {#each data.beds as bed}
       {@const isMyBed = bed.id === data.userBedId}
@@ -120,6 +144,24 @@
   .back-link:hover { color: white; }
   h1 { margin: 0; font-size: 2rem; }
   h1 small { font-weight: normal; color: #666; font-size: 0.6em; margin-left: 10px; }
+
+  .booking-warning-banner, .booking-success-banner {
+      display: flex; gap: 1.5rem; padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem;
+      align-items: flex-start; animation: fadeIn 0.4s ease-out;
+  }
+  
+  .booking-warning-banner { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; }
+  .booking-success-banner { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; }
+  
+  .warning-icon, .success-icon { font-size: 2rem; }
+  .warning-content h3, .success-content h3 { margin: 0 0 0.5rem 0; font-size: 1.25rem; }
+  .warning-content p, .success-content p { margin: 0 0 1rem 0; font-size: 0.95rem; line-height: 1.5; color: rgba(255,255,255,0.8); }
+  
+  .btn-unbook-banner {
+      background: #ef4444; color: white; border: none; padding: 0.6rem 1.2rem; 
+      border-radius: 6px; font-weight: bold; cursor: pointer; transition: transform 0.1s;
+  }
+  .btn-unbook-banner:hover { transform: scale(1.02); background: #dc2626; }
 
   .beds-grid { 
       display: grid; 

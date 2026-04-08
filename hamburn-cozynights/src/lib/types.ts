@@ -1,15 +1,19 @@
-// src/lib/types.ts
-export interface Bed {
-  id: string;
-  label: string;
-  occupied: boolean;
-}
+import type { BedsResponse, RoomsResponse, HousesResponse } from './pocketbase-types';
 
-export interface House {
-  id: string;
-  name: string;
-  x: number; // Logische X-Koordinate (0-1000)
-  y: number; // Logische Y-Koordinate (0-700)
-  status: 'available' | 'full' | 'frei' | 'besetzt';
-  beds: Bed[];
-}
+// Extended types for tree structure (Plain objects for SvelteKit compatibility)
+export type BedData = BedsResponse;
+
+export type RoomData = RoomsResponse & { 
+    beds: BedData[] 
+};
+
+export type HouseData = HousesResponse & { 
+    rooms: RoomData[];
+    totalBeds: number;
+    occupiedBeds: number;
+};
+
+/**
+ * @deprecated Use HouseData instead to align with the database and server logic.
+ */
+export type House = HouseData;

@@ -1,4 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import type { Actions, PageServerLoad } from './$types';
 import type { ClientResponseError } from 'pocketbase';
 
@@ -107,7 +108,7 @@ export const actions: Actions = {
         const redirectUrl = `${url.origin}/auth/callback/${provider.name}`;
         
         cookies.set('provider', JSON.stringify(provider), {
-            path: '/', httpOnly: true, secure: false, maxAge: 60 * 5
+            path: '/', httpOnly: true, secure: !dev, maxAge: 60 * 5
         });
 
         const targetUrl = provider.authURL || provider.authUrl || '';

@@ -1,6 +1,7 @@
 // src/hooks.server.ts
 import PocketBase from 'pocketbase';
 import { type Handle } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import type { TypedPocketBase } from '$lib/pocketbase-types';
 import { env } from '$env/dynamic/public';
 
@@ -33,10 +34,9 @@ export const handle: Handle = async ({ event, resolve }) => {
     const response = await resolve(event);
 
     // 4. Export updated auth state back to cookie
-    const isDev = process.env.NODE_ENV === 'development';
     response.headers.append('set-cookie', event.locals.pb.authStore.exportToCookie({ 
         httpOnly: false, // Must be false if client-side PocketBase needs to read it
-        secure: !isDev,
+        secure: !dev,
         sameSite: 'lax',
         path: '/'
     }));
