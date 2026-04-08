@@ -13,7 +13,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         locals.pb.collection('beds').getFullList<BedsResponse>({
             filter: locals.pb.filter('room.house = {:id}', { id: params.id })
         }),
-        locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }))
+        locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false, booking_unlock_at: "" }))
     ]);
     
     // Calculate occupancy 👥
@@ -27,7 +27,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         house, 
         rooms: roomsWithStats,
         isBookingActive: settings.is_booking_active,
-        bookingUnlockAt: settings.booking_unlock_at
+        bookingUnlockAt: settings.booking_unlock_at || ""
     };
   } catch {
     throw error(404, 'House not found in the dust.');
