@@ -21,6 +21,7 @@
       created: now,
       updated: now,
       name,
+      occupied: false,
       x,
       y,
       rooms: [{
@@ -33,6 +34,7 @@
           room_number: 1,
           house: '',
           amount_beds: bedCount,
+          occupied: false,
           beds: Array.from({ length: bedCount }, (_, i) => ({
             id: String(Date.now() + i),
             collectionId: '',

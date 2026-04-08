@@ -28,6 +28,16 @@
     <h1>{data.room.name} <small>#{data.room.room_number}</small></h1>
   </header>
 
+  {#if !data.isBookingActive}
+    <div class="booking-locked-banner">
+      <div class="locked-icon">🎪</div>
+      <div class="locked-content">
+        <h3>Bookings open soon!</h3>
+        <p>The Hamburn sanctuary is currently in the Pre-Orga phase. Come back when the playa ignites! 🔥</p>
+      </div>
+    </div>
+  {/if}
+
   {#if data.userBedId}
     {@const myBed = data.beds.find(b => b.id === data.userBedId)}
     {#if !myBed}
@@ -57,6 +67,7 @@
       {@const isMyBed = bed.id === data.userBedId}
       {@const someoneElseBooked = bed.occupied && !isMyBed}
       {@const iHaveAnotherBooking = !!data.userBedId && !isMyBed}
+      {@const isLocked = !data.isBookingActive}
       
       {#if someoneElseBooked}
         <div class="bed-card occupied">
@@ -71,27 +82,27 @@
         </div>
 
       {:else if isMyBed}
-        <button class="bed-card mine" on:click={() => openBookingModal(bed.id, bed.expand?.order?.burner_name)}>
+        <button class="bed-card mine {isLocked ? 'locked' : ''}" on:click={() => !isLocked && openBookingModal(bed.id, bed.expand?.order?.burner_name)} disabled={isLocked}>
            <div class="icon">🛏️</div>
            <span class="label">{bed.label}</span>
            <div class="status-box my-status">
               <span class="status-text">Your Spot</span>
               <span class="guest-name">{bed.expand?.order?.burner_name}</span>
            </div>
-           <small class="edit-hint">Click to modify</small>
+           <small class="edit-hint">{isLocked ? 'Bookings Locked' : 'Click to modify'}</small>
         </button>
 
       {:else}
         <button 
-          class="bed-card free {iHaveAnotherBooking ? 'disabled' : ''}" 
-          on:click={() => !iHaveAnotherBooking && openBookingModal(bed.id)}
-          disabled={iHaveAnotherBooking}
+          class="bed-card free {iHaveAnotherBooking || isLocked ? 'disabled' : ''}" 
+          on:click={() => !iHaveAnotherBooking && !isLocked && openBookingModal(bed.id)}
+          disabled={iHaveAnotherBooking || isLocked}
         >
            <div class="icon">🛏️</div>
            <span class="label">{bed.label}</span>
            <div class="status-box free">
-              <span>{iHaveAnotherBooking ? 'Locked' : 'Available'}</span>
-              <small>{iHaveAnotherBooking ? 'Release other spot first' : 'Grab it now!'}</small>
+              <span>{isLocked ? 'Locked' : (iHaveAnotherBooking ? 'Locked' : 'Available')}</span>
+              <small>{isLocked ? 'Phase: Pre-Orga' : (iHaveAnotherBooking ? 'Release other spot first' : 'Grab it now!')}</small>
            </div>
         </button>
       {/if}
@@ -152,10 +163,12 @@
   
   .booking-warning-banner { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; }
   .booking-success-banner { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; }
+  .booking-locked-banner { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: #93c5fd; display: flex; gap: 1.5rem; padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; align-items: flex-start; }
   
-  .warning-icon, .success-icon { font-size: 2rem; }
-  .warning-content h3, .success-content h3 { margin: 0 0 0.5rem 0; font-size: 1.25rem; }
-  .warning-content p, .success-content p { margin: 0 0 1rem 0; font-size: 0.95rem; line-height: 1.5; color: rgba(255,255,255,0.8); }
+  .warning-icon, .success-icon, .locked-icon { font-size: 2rem; }
+  .warning-content h3, .success-content h3, .locked-content h3 { margin: 0 0 0.5rem 0; font-size: 1.25rem; }
+  .warning-content p, .success-content p, .locked-content p { margin: 0 0 1rem 0; font-size: 0.95rem; line-height: 1.5; color: rgba(255,255,255,0.8); }
+  .locked-content p { margin-bottom: 0; }
   
   .btn-unbook-banner {
       background: #ef4444; color: white; border: none; padding: 0.6rem 1.2rem; 
@@ -198,6 +211,13 @@
   }
   .status-box.free { color: #4ade80; font-weight: bold; display: flex; flex-direction: column; gap: 2px; }
   .status-box.free small { font-weight: normal; font-size: 0.75rem; color: #888; }
+
+  .bed-card.mine.locked {
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
+  }
+  .bed-card.mine.locked:hover { transform: none; }
 
   button.bed-card.free.disabled {
       opacity: 0.4;
