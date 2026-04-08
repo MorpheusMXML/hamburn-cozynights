@@ -36,9 +36,12 @@ We take privacy seriously. Our database files (`pb_data`) are **ignored by Git**
 
 ## 🗺 Features
 - **Interactive Map**: Visualize houses across the camp. 🛰️
-- **Real-time Booking**: Grab a spot using your unique booking code (e.g., `ORD-1770327903423`). 🎫
-- **Admin Dashboard**: Manage houses, rooms, and beds with a powerful editor mode. 🛠️
-- **Auto-Names**: Get a cool random Burner Name if you're feeling adventurous! 🦎⚡️
+- **Real-time Booking**: Grab a spot using your unique booking code. 🎫
+- **Admin Dashboard**:
+  - **🛠 Pre-Orga Phase**: Full freedom to add, rename, and drag-and-drop houses on the map.
+  - **🎪 Live Booking Phase**: Global switch to enable public bookings and lock the map layout for consistency.
+  - **Safeguards**: Prevention of house/room deletion if active bookings exist. 🛡️
+- **Auto-Names**: Get a cool random Burner Name! 🦎⚡️
 
 ## 📜 Principles
 - **Leave No Trace**: Keep the code clean and well-documented. 🧹

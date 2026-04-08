@@ -1,13 +1,14 @@
 <script lang="ts">
   import type { PageData } from './$types';
   import Map from '$lib/components/Map.svelte';
-  import { goto } from '$app/navigation';
+  import { goto, invalidateAll } from '$app/navigation';
+  import { enhance } from '$app/forms';
   
   export let data: PageData;
   
-  $: ({ houses, isVerified } = data);
+  $: ({ houses, isVerified, isBookingActive } = data);
 
-  let showMap = false; // Steuert die Sichtbarkeit der Karte
+  let showMap = true; // Default to map for easier management
 
   function getStatusColor(free: number, total: number) {
     if (total === 0) return 'gray';
@@ -22,11 +23,58 @@
       return `${free} beds free`;
   }
 
-  // Wenn auf der Karte im Editor-Modus geklickt wird
+  // When clicking empty space on the map in editor mode
   function handleLocationSelected(event: CustomEvent) {
     const { x, y } = event.detail;
-    // Weiterleitung zum "New House" Formular mit Koordinaten in der URL
+    // Redirect to "New House" form with coordinates
     goto(`/admin/house/new?x=${x}&y=${y}`);
+  }
+
+  async function handleHouseMoved(event: CustomEvent) {
+    const { id, x, y } = event.detail;
+    const formData = new FormData();
+    formData.append('id', id);
+    formData.append('x', x.toString());
+    formData.append('y', y.toString());
+    
+    await fetch('?/updateHouseCoords', {
+      method: 'POST',
+      body: formData
+    });
+  }
+
+  async function handleRenameHouse(event: CustomEvent) {
+    const house = event.detail;
+    const newName = prompt(`Rename house "${house.name}":`, house.name);
+    if (newName && newName !== house.name) {
+      const formData = new FormData();
+      formData.append('id', house.id);
+      formData.append('name', newName);
+      
+      await fetch('?/renameHouse', {
+        method: 'POST',
+        body: formData
+      });
+      invalidateAll();
+    }
+  }
+
+  async function handleDeleteHouse(event: CustomEvent) {
+    const house = event.detail;
+    if (confirm(`Are you sure you want to delete "${house.name}"? This will delete all rooms and beds inside!`)) {
+      const formData = new FormData();
+      formData.append('id', house.id);
+      
+      const response = await fetch('?/deleteHouse', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        alert("Cannot delete house: It might have active bookings!");
+      }
+      invalidateAll();
+    }
   }
 </script>
 
@@ -39,6 +87,14 @@
         </div>
         
         <div class="header-actions">
+            {#if isVerified}
+              <form method="POST" action="?/togglePhase" use:enhance>
+                <button type="submit" class="btn-phase" class:live={isBookingActive}>
+                  {isBookingActive ? '🎪 Live Booking Active' : '🛠 Pre-Orga Phase'}
+                </button>
+              </form>
+            {/if}
+
             <button class="btn-secondary" on:click={() => showMap = !showMap}>
                 {showMap ? '🗺️ Show List' : '🛰️ Show Map'}
             </button>
@@ -54,13 +110,21 @@
 
   {#if showMap}
     <div class="map-section">
-        <div class="map-info">
-            <p><strong>🛠 Editor Mode:</strong> Click anywhere on the map to place a new house at that location. 📍</p>
+        <div class="map-info" class:warning={isBookingActive}>
+            {#if isBookingActive}
+              <p><strong>🔒 Live Mode:</strong> Map interactions are locked while bookings are active. Switch to Pre-Orga to move houses. 🎪</p>
+            {:else}
+              <p><strong>🛠 Editor Mode:</strong> Drag houses to reposition them. Click a house for options. Click empty space to add a house. 📍</p>
+            {/if}
         </div>
         <Map 
             {houses} 
             isEditorMode={true} 
+            {isBookingActive}
             on:locationSelected={handleLocationSelected} 
+            on:houseMoved={handleHouseMoved}
+            on:renameHouse={handleRenameHouse}
+            on:deleteHouse={handleDeleteHouse}
         />
     </div>
   {:else}
@@ -132,6 +196,24 @@
   .header-actions {
       display: flex;
       gap: 1rem;
+      align-items: center;
+  }
+
+  .btn-phase {
+    background: #333;
+    color: #aaa;
+    border: 1px solid #444;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s;
+  }
+  .btn-phase.live {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+    border-color: #ef4444;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
   }
 
   h1 { font-size: 2rem; color: #fff; margin: 0; }
@@ -172,6 +254,12 @@
       border-radius: 8px;
       color: #4ade80;
       font-size: 0.9rem;
+  }
+
+  .map-info.warning {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
   }
 
   @keyframes fadeIn {

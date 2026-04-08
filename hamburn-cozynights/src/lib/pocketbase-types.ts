@@ -16,6 +16,7 @@ export enum Collections {
 	Orders = "orders",
 	Rooms = "rooms",
 	Users = "users",
+	AppSettings = "app_settings",
 }
 
 // Alias types for improved usability
@@ -151,6 +152,13 @@ export type UsersRecord = {
 	verified?: boolean
 }
 
+export type AppSettingsRecord = {
+	created: IsoAutoDateString
+	id: string
+	is_booking_active?: boolean
+	updated: IsoAutoDateString
+}
+
 // Response types include system fields and match responses from the PocketBase API
 export type AuthoriginsResponse<Texpand = unknown> = Required<AuthoriginsRecord> & BaseSystemFields<Texpand>
 export type ExternalauthsResponse<Texpand = unknown> = Required<ExternalauthsRecord> & BaseSystemFields<Texpand>
@@ -162,6 +170,7 @@ export type HousesResponse<Texpand = unknown> = Required<HousesRecord> & BaseSys
 export type OrdersResponse<Texpand = unknown> = Required<OrdersRecord> & BaseSystemFields<Texpand>
 export type RoomsResponse<Texpand = unknown> = Required<RoomsRecord> & BaseSystemFields<Texpand>
 export type UsersResponse<Texpand = unknown> = Required<UsersRecord> & AuthSystemFields<Texpand>
+export type AppSettingsResponse<Texpand = unknown> = Required<AppSettingsRecord> & BaseSystemFields<Texpand>
 
 // Types containing all Records and Responses, useful for creating typing helper functions
 
@@ -176,6 +185,7 @@ export type CollectionRecords = {
 	orders: OrdersRecord
 	rooms: RoomsRecord
 	users: UsersRecord
+	app_settings: AppSettingsRecord
 }
 
 export type CollectionResponses = {
@@ -189,6 +199,7 @@ export type CollectionResponses = {
 	orders: OrdersResponse
 	rooms: RoomsResponse
 	users: UsersResponse
+	app_settings: AppSettingsResponse
 }
 
 // Utility types for create/update operations
