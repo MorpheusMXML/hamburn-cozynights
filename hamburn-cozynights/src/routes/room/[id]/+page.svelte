@@ -1,18 +1,19 @@
 <script lang="ts">
   import type { PageData, ActionData } from './$types';
   import { enhance } from '$app/forms';
+  import CountdownTimer from '$lib/components/CountdownTimer.svelte';
 
   export let data: PageData;
   export let form: ActionData;
 
   // Modal State
-  let selectedBedId: string | null = null;
   let showModal = false;
+  let selectedBedId: string | null = null;
   let currentNameInput = "";
 
-  function openBookingModal(bedId: string, name = "") {
+  function openBookingModal(bedId: string, existingName?: string) {
     selectedBedId = bedId;
-    currentNameInput = name || "";
+    currentNameInput = existingName || "";
     showModal = true;
   }
 
@@ -24,7 +25,14 @@
 
 <div class="container">
   <header>
-    <a href="/house/{data.room.house}" class="back-link">← Back to House</a>
+    <div class="header-nav">
+        <a href="/house/{data.room.house}" class="back-link">← Back to House</a>
+        {#if !data.isBookingActive && data.bookingUnlockAt}
+            <div class="timer-mini">
+                <CountdownTimer targetDate={data.bookingUnlockAt} />
+            </div>
+        {/if}
+    </div>
     <h1>{data.room.name} <small>#{data.room.room_number}</small></h1>
   </header>
 
@@ -33,7 +41,7 @@
       <div class="locked-icon">🎪</div>
       <div class="locked-content">
         <h3>Bookings open soon!</h3>
-        <p>The Hamburn sanctuary is currently in the Pre-Orga phase. Come back when the playa ignites! 🔥</p>
+        <p>The Hamburn house is currently in the Pre-Orga phase. Come back when the playa ignites! 🔥</p>
       </div>
     </div>
   {/if}
@@ -148,12 +156,24 @@
 {/if}
 
 <style>
-  :global(body) { background: #050505; color: #eee; font-family: 'Segoe UI', sans-serif; }
-  .container { max-width: 800px; margin: 0 auto; padding: 2rem; }
+  :global(body) { background: #050505; color: #eee; font-family: 'Segoe UI', sans-serif; margin: 0; }
+  .container { max-width: 1000px; margin: 0 auto; padding: 2rem; }
+  
   header { margin-bottom: 2rem; border-bottom: 1px solid #333; padding-bottom: 1rem; }
-  .back-link { color: #888; text-decoration: none; font-size: 0.9rem; margin-bottom: 0.5rem; display: block; }
+  
+  .header-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+  }
+
+  .back-link { color: #888; text-decoration: none; font-size: 0.9rem; }
   .back-link:hover { color: white; }
-  h1 { margin: 0; font-size: 2rem; }
+
+  .timer-mini { transform: scale(0.7); transform-origin: right center; }
+
+  h1 { margin: 0; font-size: 2.5rem; font-weight: 900; letter-spacing: -1px; }
   h1 small { font-weight: normal; color: #666; font-size: 0.6em; margin-left: 10px; }
 
   .booking-warning-banner, .booking-success-banner {
@@ -202,7 +222,7 @@
   .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
   .label { font-size: 1.2rem; font-weight: bold; display: block; }
 
-  button.bed-card.free { cursor: pointer; }
+  button.bed-card.free { cursor: pointer; border: 2px solid #333; }
   button.bed-card.free:hover:not(.disabled) {
       background: #222;
       border-color: #4ade80;

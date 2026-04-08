@@ -8,10 +8,11 @@
   
   export let data: PageData;
   
-  $: ({ houses, isVerified, isBookingActive } = data);
+  $: ({ houses, isVerified, isBookingActive, bookingUnlockAt } = data);
 
   let showMap = true;
   let showGuide = false;
+  let unlockDateInput = bookingUnlockAt ? new Date(bookingUnlockAt).toISOString().slice(0, 16) : "";
 
   // Editor Modal State
   let editingHouse: { id?: string, x: number, y: number, name: string } | null = null;
@@ -121,8 +122,20 @@
         <p class="subtitle">Orchestrating the chaos of the playa 🏜️</p>
     </div>
     
-    <div class="header-right">
-        <button class="btn-guide" on:click={() => showGuide = !showGuide}>
+        <div class="header-right">
+            {#if isVerified && !isBookingActive}
+              <div class="timer-config" in:fade>
+                <form method="POST" action="?/setUnlockTimer" use:enhance>
+                  <label for="unlockAt">AUTO-UNLOCK ⏳</label>
+                  <div class="input-row">
+                    <input type="datetime-local" id="unlockAt" name="unlockAt" bind:value={unlockDateInput} />
+                    <button type="submit" class="btn-save-timer">Set</button>
+                  </div>
+                </form>
+              </div>
+            {/if}
+
+            <button class="btn-guide" on:click={() => showGuide = !showGuide}>
             {showGuide ? 'Close Intel 📖' : 'Show Intel ❓'}
         </button>
 
@@ -272,6 +285,26 @@
   .subtitle { color: #666; margin: 0.5rem 0 0 0; font-size: 1rem; }
 
   .header-right { display: flex; gap: 1rem; align-items: center; }
+
+  .timer-config {
+    background: #0a0a0a;
+    border: 1px solid #333;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .timer-config label { font-size: 0.6rem; font-weight: 900; color: #666; letter-spacing: 1px; }
+  .timer-config .input-row { display: flex; gap: 8px; }
+  .timer-config input { 
+    background: transparent; border: none; color: #fb923c; font-family: monospace; font-size: 0.8rem; 
+    outline: none; width: 160px;
+  }
+  .btn-save-timer {
+    background: #fb923c; color: #000; border: none; padding: 2px 8px; border-radius: 4px;
+    font-size: 0.7rem; font-weight: 900; cursor: pointer;
+  }
 
   /* Buttons */
   .btn-laser {

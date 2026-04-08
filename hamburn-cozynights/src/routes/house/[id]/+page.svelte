@@ -1,11 +1,19 @@
 <script lang="ts">
   import type { PageData } from './$types';
+  import CountdownTimer from '$lib/components/CountdownTimer.svelte';
   export let data: PageData;
 </script>
 
 <div class="container">
   <header>
-    <a href="/map" class="back-link">← Map</a>
+    <div class="header-nav">
+        <a href="/map" class="back-link">← Map</a>
+        {#if !data.isBookingActive && data.bookingUnlockAt}
+            <div class="timer-mini">
+                <CountdownTimer targetDate={data.bookingUnlockAt} />
+            </div>
+        {/if}
+    </div>
     <h1>{data.house.name}</h1>
     <p class="subtitle">Choose a house for your night</p>
   </header>
@@ -33,8 +41,20 @@
   .container { max-width: 800px; margin: 0 auto; padding: 2rem; }
   
   header { margin-bottom: 2rem; border-bottom: 1px solid #333; padding-bottom: 1rem; }
-  .back-link { color: #888; text-decoration: none; display: block; margin-bottom: 0.5rem; }
-  h1 { margin: 0; font-size: 2rem; }
+  
+  .header-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+  }
+
+  .back-link { color: #888; text-decoration: none; }
+  .back-link:hover { color: #fff; }
+
+  .timer-mini { transform: scale(0.7); transform-origin: right center; }
+
+  h1 { margin: 0; font-size: 2.5rem; font-weight: 900; letter-spacing: -1px; }
   .subtitle { color: #666; margin: 0; }
 
   .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
@@ -44,7 +64,7 @@
     text-decoration: none; color: white; display: block; transition: all 0.2s;
   }
   .card:hover { border-color: #555; background: #222; transform: translateY(-2px); }
-  .card.full { opacity: 0.6; pointer-events: none; } /* Optional: Voll nicht klickbar machen */
+  .card.full { opacity: 0.6; }
 
   .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
   .badge { background: #333; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
