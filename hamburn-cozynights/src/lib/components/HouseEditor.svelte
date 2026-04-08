@@ -1,30 +1,33 @@
 <script lang="ts">
   import type { HouseData } from '$lib/types';
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import { fade, fly } from 'svelte/transition';
 
   export let x: number;
   export let y: number;
   export let name = "";
+  export let houseId: string | undefined = undefined;
 
   const dispatch = createEventDispatcher();
   
   let bedCount = 4;
   let showValidationError = false;
+  
+  $: isEditing = !!houseId;
 
   function handleSave() {
     if (!name || name.trim() === "") {
         showValidationError = true;
+        console.error(`[HouseEditor] Validation failed: Empty name for ${isEditing ? 'existing' : 'new'} house at (${x}, ${y})`);
         return;
     }
     
     showValidationError = false;
+    console.log(`[HouseEditor] Saving house: "${name}" (ID: ${houseId || 'NEW'}) at (${x}, ${y})`);
 
-    // Note: In a real app, this would be handled by a PocketBase create call
-    // This is likely a placeholder for the UI editor
     const now = new Date().toISOString() as any;
     const newHouse: HouseData = {
-      id: String(Date.now()),
+      id: houseId || String(Date.now()),
       collectionId: '',
       collectionName: 'houses' as any,
       created: now,
@@ -41,7 +44,7 @@
           updated: now,
           name: 'Room 1',
           room_number: 1,
-          house: '',
+          house: houseId || '',
           amount_beds: bedCount,
           occupied: false,
           beds: Array.from({ length: bedCount }, (_, i) => ({
@@ -64,17 +67,18 @@
   }
 </script>
 
-<div class="editor-card-container">
+<div class="editor-card-container" class:edit-mode={isEditing}>
   <div class="editor-card">
     <header class="editor-header">
-        <h4>{name ? 'RECONFIGURE HOUSE' : 'NEW SANCTUARY'} 🏠</h4>
-        {#if name}
+        <div class="mode-badge">{isEditing ? 'RECONFIGURING' : 'IGNITING NEW'} ⚡️</div>
+        <h4>{isEditing ? 'UPDATE COORDINATES' : 'GENERATE SANCTUARY'} 🏠</h4>
+        {#if isEditing}
             <span class="house-name-tag">{name}</span>
         {/if}
     </header>
 
     <div class="input-group">
-        <label for="house-name">SANCTUARY NAME</label>
+        <label for="house-name">UNIT DESIGNATION</label>
         <input 
             id="house-name"
             bind:value={name} 
@@ -83,22 +87,29 @@
             on:input={() => showValidationError = false}
         />
         {#if showValidationError}
-            <span class="error-msg" transition:fade>⚠️ NAME REQUIRED TO EXIST IN THE DUST</span>
+            <span class="error-msg" transition:fade>⚠️ NAME REQUIRED FOR LOCALIZATION</span>
         {/if}
     </div>
 
-    <div class="input-group">
-        <label for="bed-count">INITIAL BED CAPACITY 🛌</label>
-        <div class="number-input-wrapper">
-            <input id="bed-count" type="number" bind:value={bedCount} min="1" />
-            <div class="laser-accent"></div>
+    {#if !isEditing}
+        <div class="input-group" in:fade>
+            <label for="bed-count">INITIAL CAPACITY (BEDS) 🛌</label>
+            <div class="number-input-wrapper">
+                <input id="bed-count" type="number" bind:value={bedCount} min="1" />
+                <div class="laser-accent"></div>
+            </div>
+            <p class="hint">Base occupancy for the first module.</p>
         </div>
-    </div>
+    {:else}
+        <div class="edit-info" in:fade>
+            <p>Position updated to <strong>X:{x} Y:{y}</strong>. Save to confirm the new coordinates in the grid.</p>
+        </div>
+    {/if}
 
     <div class="actions">
-      <button class="btn-cancel" on:click={() => dispatch('cancel')}>CANCEL 🏜️</button>
+      <button class="btn-cancel" on:click={() => dispatch('cancel')}>ABORT 🏜️</button>
       <button class="btn-save" on:click={handleSave}>
-        {name ? 'APPLY CHANGES' : 'IGNITE HOUSE'} ✨
+        {isEditing ? 'SYNC MODULE' : 'IGNITE HOUSE'} ✨
       </button>
     </div>
   </div>
@@ -116,6 +127,21 @@
     position: relative;
     overflow: hidden;
   }
+  
+  .editor-card-container.edit-mode { border-color: #f472b6; box-shadow: 0 0 30px rgba(244, 114, 182, 0.2); }
+
+  .mode-badge {
+      font-size: 0.6rem;
+      background: #222;
+      color: #888;
+      padding: 2px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 0.5rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+  }
+  .edit-mode .mode-badge { color: #f472b6; border: 1px solid #f472b6; }
 
   /* Decorative Laser Corner */
   .editor-card-container::before {
@@ -126,19 +152,20 @@
       border-top: 2px solid #f472b6;
       border-left: 2px solid #f472b6;
   }
+  .edit-mode::before { border-color: #2dd4bf; }
 
-  .editor-card { display: flex; flex-direction: column; gap: 2rem; }
+  .editor-card { display: flex; flex-direction: column; gap: 1.5rem; }
 
   .editor-header { border-bottom: 1px solid #222; padding-bottom: 1rem; }
   h4 { margin: 0; font-size: 0.8rem; letter-spacing: 2px; color: #666; font-weight: 900; }
-  .house-name-tag { font-size: 1.25rem; font-weight: bold; color: #2dd4bf; margin-top: 0.5rem; display: block; }
+  .house-name-tag { font-size: 1.25rem; font-weight: bold; color: #fff; margin-top: 0.5rem; display: block; text-transform: uppercase; letter-spacing: -0.5px; }
 
   .input-group { display: flex; flex-direction: column; gap: 0.75rem; }
-  label { font-size: 0.7rem; font-weight: 900; color: #aaa; letter-spacing: 1px; }
+  label { font-size: 0.7rem; font-weight: 900; color: #444; letter-spacing: 1px; }
 
   input { 
-    background: #1a1a1a; 
-    border: 1px solid #333; 
+    background: #050505; 
+    border: 1px solid #222; 
     color: white; 
     padding: 1rem; 
     border-radius: 8px;
@@ -146,9 +173,13 @@
     transition: all 0.3s;
   }
   input:focus { outline: none; border-color: #2dd4bf; box-shadow: 0 0 10px rgba(45, 212, 191, 0.2); }
+  .edit-mode input:focus { border-color: #f472b6; }
   input.error { border-color: #ef4444; background: rgba(239, 68, 68, 0.05); }
 
   .error-msg { font-size: 0.65rem; color: #ef4444; font-weight: bold; margin-top: 0.25rem; }
+  .hint { font-size: 0.65rem; color: #444; font-style: italic; }
+  .edit-info p { margin: 0; font-size: 0.85rem; color: #888; line-height: 1.4; }
+  .edit-info strong { color: #f472b6; }
 
   .number-input-wrapper { position: relative; }
   .laser-accent { 
@@ -182,5 +213,7 @@
       color: #000; 
       box-shadow: 0 0 15px rgba(45, 212, 191, 0.3);
   }
+  .edit-mode .btn-save { background: #f472b6; box-shadow: 0 0 15px rgba(244, 114, 182, 0.3); }
   .btn-save:hover { transform: scale(1.05); box-shadow: 0 0 25px rgba(45, 212, 191, 0.5); }
+  .edit-mode .btn-save:hover { box-shadow: 0 0 25px rgba(244, 114, 182, 0.5); }
 </style>

@@ -88,14 +88,28 @@ export const actions = {
 
 export const load: PageServerLoad = async ({ locals }) => {
   if (!locals.pb.authStore.isValid) {
+      console.warn('[Security] Unauthorized access attempt detected on Admin Dashboard.');
       throw redirect(303, '/admin/login');
   }
+
+  console.log(`[Dashboard] Initializing data for admin: ${locals.pb.authStore.model?.email}`);
 
   const [houses, allBeds, settings] = await Promise.all([
     locals.pb.collection('houses').getFullList<HousesResponse>({ sort: 'name' }),
     locals.pb.collection('beds').getFullList<BedsResponse<{ room: RoomsResponse }>>({ expand: 'room' }),
     locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false, booking_unlock_at: "" }))
   ]);
+
+  // SELF-HEALING / AUDIT: Detect data inconsistencies 🛠️
+  houses.forEach(house => {
+      const bedsInHouse = allBeds.filter(b => b.expand?.room?.house === house.id);
+      if (bedsInHouse.length === 0) {
+          console.warn(`[Audit] Sanctuary "${house.name}" (${house.id}) has NO active beds/modules. Deployment incomplete.`);
+      }
+      if (house.x === 0 && house.y === 0) {
+          console.warn(`[Audit] Sanctuary "${house.name}" (${house.id}) is located at ground zero (0,0). Manual relocation recommended.`);
+      }
+  });
 
   const housesWithStats: HouseStats[] = houses.map((house: HousesResponse) => {
     const bedsInHouse = allBeds.filter((b: BedsResponse<{ room: RoomsResponse }>) => {
