@@ -41,7 +41,7 @@
       <div class="locked-icon">🎪</div>
       <div class="locked-content">
         <h3>Bookings open soon!</h3>
-        <p>The Hamburn house is currently in the Pre-Orga phase. Come back when the playa ignites! 🔥</p>
+        <p>The Hamburn house is currently in the Staging Mode phase. Come back when the playa ignites! 🔥</p>
       </div>
     </div>
   {/if}
@@ -110,7 +110,7 @@
            <span class="label">{bed.label}</span>
            <div class="status-box free">
               <span>{isLocked ? 'Locked' : (iHaveAnotherBooking ? 'Locked' : 'Available')}</span>
-              <small>{isLocked ? 'Phase: Pre-Orga' : (iHaveAnotherBooking ? 'Release other spot first' : 'Grab it now!')}</small>
+              <small>{isLocked ? 'Phase: Staging Mode' : (iHaveAnotherBooking ? 'Release other spot first' : 'Grab it now!')}</small>
            </div>
         </button>
       {/if}

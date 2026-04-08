@@ -160,7 +160,7 @@
         {#if isVerified}
           <form method="POST" action="?/togglePhase" use:enhance>
             <button type="submit" class="btn-laser" class:live={isBookingActive}>
-              {isBookingActive ? '🎪 LIVE BOOKING ACTIVE' : '🛠 PRE-ORGA PHASE'}
+              {isBookingActive ? '🎪 LIVE BOOKING ACTIVE' : '🛠 STAGING MODE PHASE'}
               <div class="laser-glow"></div>
             </button>
           </form>
@@ -184,7 +184,7 @@
             <div class="intel-card pink">
                 <span class="icon">🖱️</span>
                 <h3>Drag & Drop</h3>
-                <p>Grab a house and drag it across the dust. (Only allowed in 🛠 PRE-ORGA phase)</p>
+                <p>Grab a house and drag it across the dust. (Only allowed in 🛠 STAGING MODE phase)</p>
             </div>
             <div class="intel-card orange">
                 <span class="icon">⚙️</span>
