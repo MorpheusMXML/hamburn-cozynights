@@ -1,19 +1,19 @@
 # Hamburn Cozynights 🔥🛌
 
-Welcome to the **Hamburn Cozynights** sanctuary management system! This is where we ensure every burner has a soft spot to land after a long day on the playa. 🏜️✨
+Welcome to the **Hamburn Cozynights** house management system! This is where we ensure every burner has a soft spot to land after a long day on the playa. 🏜️✨
 
 ## 🚀 Mission Objective
-Automate the chaos of house, room, and bed assignments with a sleek, real-time map and booking system. No more double-booked sanctuaries! 🛖⚡️
+Automate the chaos of house, room, and bed assignments with a sleek, real-time map and booking system. No more double-booked houses! 🛖⚡️
 
 ## 🛠 Tech Stack
 - **SvelteKit 5**: Frontend magic 🪄
-- **PocketBase**: Backend sanctuary & database 📂
+- **PocketBase**: Backend house & database 📂
 - **TypeScript**: Ensuring our logic doesn't turn into dust ⌨️
 - **GPG**: Protecting our sensitive burner data with local encryption 🔐
 
 ## 🗝 Getting Started
 
-### 1. The Sanctuary Backend (PocketBase)
+### 1. The House Backend (PocketBase)
 Start the backend using Docker:
 ```bash
 docker-compose up -d
@@ -35,7 +35,7 @@ We take privacy seriously. Our database files (`pb_data`) are **ignored by Git**
 - **Decrypt**: `./scripts/decrypt_data.sh` 🔓
 
 ## 🗺 Features
-- **Interactive Map**: Visualize sanctuaries across the camp. 🛰️
+- **Interactive Map**: Visualize houses across the camp. 🛰️
 - **Real-time Booking**: Grab a spot using your unique booking code (e.g., `ORD-1770327903423`). 🎫
 - **Admin Dashboard**: Manage houses, rooms, and beds with a powerful editor mode. 🛠️
 - **Auto-Names**: Get a cool random Burner Name if you're feeling adventurous! 🦎⚡️
