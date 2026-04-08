@@ -17,14 +17,14 @@ export const actions = {
     togglePhase: async ({ locals }) => {
         if (!locals.pb.authStore.model?.verified) return;
         
-        const settings = await locals.pb.collection('app_settings').getOne('settings_id').catch(() => null);
+        const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => null);
         if (settings) {
-            await locals.pb.collection('app_settings').update('settings_id', {
+            await locals.pb.collection('app_settings').update('abcsettings123', {
                 is_booking_active: !settings.is_booking_active
             });
         } else {
             await locals.pb.collection('app_settings').create({
-                id: 'settings_id',
+                id: 'abcsettings123',
                 is_booking_active: true
             });
         }
@@ -83,7 +83,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   const [houses, allBeds, settings] = await Promise.all([
     locals.pb.collection('houses').getFullList<HousesResponse>({ sort: 'name' }),
     locals.pb.collection('beds').getFullList<BedsResponse<{ room: RoomsResponse }>>({ expand: 'room' }),
-    locals.pb.collection('app_settings').getOne('settings_id').catch(() => ({ is_booking_active: false }))
+    locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }))
   ]);
 
   const housesWithStats: HouseStats[] = houses.map((house: HousesResponse) => {

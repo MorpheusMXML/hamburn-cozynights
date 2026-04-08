@@ -13,7 +13,7 @@ export const actions: Actions = {
         const y = parseInt(data.get('y') as string);
 
         try {
-            // Beispiel-Aufruf für Pocketbase
+            // Create house in PocketBase
             await locals.pb.collection('houses').create({
                 name,
                 x,
