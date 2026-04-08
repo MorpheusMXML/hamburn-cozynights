@@ -82,15 +82,18 @@
 
   function handleHouseClick(event: MouseEvent, house: any) {
     if (isEditorMode) {
-      if (hasDragged) return; // Prevent menu opening after drag
-      
+      // ALWAYS stop propagation in editor mode to avoid triggering "new house" logic on the SVG
       event.preventDefault();
       event.stopPropagation();
+
+      if (hasDragged) return; // Prevent menu opening if we just finished a drag
       
       if (selectedHouseId === house.id) {
         selectedHouseId = null;
       } else {
         selectedHouseId = house.id;
+        // In the new sidebar architecture, we use renameHouse event to trigger selection
+        dispatch('renameHouse', house); 
       }
       return;
     }

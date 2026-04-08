@@ -41,48 +41,110 @@ export const actions = {
         });
     },
     updateHouseCoords: async ({ locals, request }) => {
-        if (!locals.pb.authStore.model?.verified) return;
+        if (!locals.pb.authStore.model?.verified) return fail(403, { error: 'Unauthorized' });
         const data = await request.formData();
         const id = data.get('id') as string;
         const x = parseFloat(data.get('x') as string);
         const y = parseFloat(data.get('y') as string);
         
-        // Safeguard: Check occupancy
-        const beds = await locals.pb.collection('beds').getFullList({
-            filter: locals.pb.filter('room.house = {:id} && occupied = true', { id })
-        });
-        
-        if (beds.length > 0) {
-            return fail(400, { error: 'Cannot move house: It has active bookings!' });
-        }
+        try {
+            const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
+            if (settings.is_booking_active) {
+                // Safeguard: Check occupancy only in LIVE mode
+                const occupiedBeds = await locals.pb.collection('beds').getFullList({
+                    filter: locals.pb.filter('room.house = {:id} && occupied = true', { id })
+                });
+                
+                if (occupiedBeds.length > 0) {
+                    return fail(400, { error: 'Cannot move house: It has active bookings in LIVE mode! 🔒' });
+                }
+            }
 
-        await locals.pb.collection('houses').update(id, { x, y });
+            await locals.pb.collection('houses').update(id, { x, y });
+            console.log(`[Action] House ${id} coordinates synced: ${x}, ${y}`);
+            return { success: true };
+        } catch (err) {
+            console.error(`[Action] Coord sync failed for ${id}:`, err);
+            return fail(500, { error: 'Sync failed.' });
+        }
     },
     deleteHouse: async ({ locals, request }) => {
-        if (!locals.pb.authStore.model?.verified) return;
+        if (!locals.pb.authStore.model?.verified) return fail(403, { error: 'Unauthorized' });
+        
         const data = await request.formData();
         const id = data.get('id') as string;
         
-        // Safeguard: Check occupancy
-        const beds = await locals.pb.collection('beds').getFullList({
-            filter: locals.pb.filter('room.house = {:id} && occupied = true', { id })
-        });
-        
-        if (beds.length > 0) {
-            return fail(400, { error: 'Cannot delete: House has active bookings!' });
+        console.log(`[Action] Attempting to vanish house: ${id}`);
+
+        try {
+            // 1. Check current phase
+            const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
+            const isLive = settings.is_booking_active;
+
+            // 2. Check occupancy
+            const occupiedBeds = await locals.pb.collection('beds').getFullList({
+                filter: locals.pb.filter('room.house = {:id} && occupied = true', { id }),
+                expand: 'room'
+            });
+
+            if (occupiedBeds.length > 0) {
+                console.log(`[Action] Occupancy detected in House ${id}:`, 
+                    occupiedBeds.map((b: any) => `Bed ${b.label} (Room ${b.expand?.room?.room_number})`).join(', ')
+                );
+                
+                if (isLive) {
+                    console.warn(`[Action] Vanish blocked: House ${id} has ${occupiedBeds.length} active bookings in LIVE mode.`);
+                    return fail(400, { error: 'The playa says NO! 🛑 Cannot vanish a house with active bookings in LIVE mode.' });
+                } else {
+                    console.log(`[Action] Staging Mode: Clearing ${occupiedBeds.length} test bookings before vanishing house ${id}.`);
+                    // In Staging Mode, we auto-clear test bookings before deletion
+                    for (const bed of occupiedBeds) {
+                        await locals.pb.collection('beds').update(bed.id, { occupied: false, order: null });
+                    }
+                }
+            }
+
+            // 3. Vanish the house (and manually clear rooms/beds to ensure no orphans)
+            // Note: We do this manually because we want to be 100% sure everything is gone
+            const rooms = await locals.pb.collection('rooms').getFullList({
+                filter: locals.pb.filter('house = {:id}', { id })
+            });
+
+            for (const room of rooms) {
+                const beds = await locals.pb.collection('beds').getFullList({
+                    filter: locals.pb.filter('room = {:id}', { id: room.id })
+                });
+                for (const bed of beds) {
+                    await locals.pb.collection('beds').delete(bed.id);
+                }
+                await locals.pb.collection('rooms').delete(room.id);
+            }
+
+            await locals.pb.collection('houses').delete(id);
+            console.log(`[Action] House ${id} and all its modules successfully vanished. 🌪️`);
+            return { success: true };
+
+        } catch (err) {
+            console.error(`[Action] Vanish failed for house ${id}:`, err);
+            return fail(500, { error: 'The desert winds blocked your command. Try again.' });
         }
-        
-        // PocketBase will handle cascading delete if configured, 
-        // but we manually delete to be safe or just delete the house.
-        await locals.pb.collection('houses').delete(id);
     },
     renameHouse: async ({ locals, request }) => {
-        if (!locals.pb.authStore.model?.verified) return;
+        if (!locals.pb.authStore.model?.verified) return fail(403, { error: 'Unauthorized' });
         const data = await request.formData();
         const id = data.get('id') as string;
         const name = data.get('name') as string;
         
-        await locals.pb.collection('houses').update(id, { name });
+        if (!name) return fail(400, { error: 'Name is required' });
+
+        try {
+            await locals.pb.collection('houses').update(id, { name });
+            console.log(`[Action] House ${id} renamed to: ${name}`);
+            return { success: true };
+        } catch (err) {
+            console.error(`[Action] Rename failed for ${id}:`, err);
+            return fail(500, { error: 'Update failed.' });
+        }
     }
 };
 
@@ -117,9 +179,11 @@ export const load: PageServerLoad = async ({ locals }) => {
     });
 
     const totalBeds = bedsInHouse.length;
-    const occupiedBeds = bedsInHouse.filter((b: BedsResponse) => b.occupied).length;
-    const freeBeds = totalBeds - occupiedBeds;
+    const occupiedBeds = bedsInHouse.filter((b: BedsResponse) => b.occupied === true).length;
+    const freeBeds = Math.max(0, totalBeds - occupiedBeds);
     const occupancyRate = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
+
+    console.log(`[Dashboard] House ${house.name}: ${occupiedBeds}/${totalBeds} modules occupied.`);
 
     return {
       ...structuredClone(house),

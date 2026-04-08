@@ -100,6 +100,8 @@
       // CREATE NEW
       formData.append('x', editingHouse?.x.toString() || "0");
       formData.append('y', editingHouse?.y.toString() || "0");
+      formData.append('bedCount', newHouseData.totalBeds?.toString() || "0"); // Correctly map bedCount
+      
       const response = await fetch('/admin/house/new?/create', { method: 'POST', body: formData });
       if (!response.ok) alert("❌ CREATION FAILED! The dust has clogged the gears.");
     }
