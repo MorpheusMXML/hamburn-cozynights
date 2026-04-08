@@ -1,12 +1,14 @@
 <script lang="ts">
-  import type { House } from '$lib/types';
+  import type { HouseData } from '$lib/types';
   import { scale } from 'svelte/transition';
 
-  export let house: House;
-  export let selectedBedId: number | null = null;
+  export let house: HouseData;
+  export let selectedBedId: string | null = null;
   export let onClose: () => void;
-  export let onSelectBed: (id: number) => void;
+  export let onSelectBed: (id: string) => void;
   export let onBook: () => void;
+
+  $: allBeds = house.rooms.flatMap(r => r.beds);
 </script>
 
 <div 
@@ -17,10 +19,10 @@
   <div class="popup-content">
     <button class="close-btn" on:click={onClose}>&times;</button>
     <h3>{house.name}</h3>
-    <p>Wähle ein Bett:</p>
+    <p>Choose a spot:</p>
     
     <div class="bed-grid">
-      {#each house.beds as bed}
+      {#each allBeds as bed}
         <button 
           class="bed-btn" 
           class:occupied={bed.occupied} 
@@ -37,7 +39,7 @@
 
     {#if selectedBedId}
       <button class="confirm-action" on:click={onBook}>
-        Bett {selectedBedId} buchen
+        Reserve Spot
       </button>
     {/if}
   </div>

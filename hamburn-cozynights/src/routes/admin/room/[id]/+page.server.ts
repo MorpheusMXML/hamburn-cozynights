@@ -1,45 +1,72 @@
-// src/routes/admin/room/[id]/+page.server.ts
-import { pb } from '$lib/pocketbase';
-import { error } from '@sveltejs/kit';
+import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import type { RoomsResponse, BedsResponse, HousesResponse } from '$lib/pocketbase-types';
 
-export const load: PageServerLoad = async ({ params }) => {
+// 1. Define the type including "expand" for related records 🔗
+type RoomWithHouse = RoomsResponse<{ house: HousesResponse }>;
+
+export const load: PageServerLoad = async ({ params, locals }) => {
+  if (!locals.pb.authStore.isValid) throw error(403, 'Unauthorized');
+
   const roomId = params.id;
 
   try {
-    // 1. Zimmer-Infos laden
-    const room = await pb.collection('rooms').getOne(roomId);
+    // 2. Fetch room with its parent house expanded 🏠
+    const room = await locals.pb.collection('rooms').getOne<RoomWithHouse>(roomId, {
+        expand: 'house' 
+    });
 
-    // 2. Betten laden
-    const beds = await pb.collection('beds').getFullList({
-      filter: `room = "${roomId}"`, 
+    // 3. Fetch all beds in this sanctuary room 🛌
+    const beds = await locals.pb.collection('beds').getFullList<BedsResponse>({
+      filter: locals.pb.filter('room = {:roomId}', { roomId: roomId }), 
       sort: 'label'
     });
 
     return { room, beds };
 
   } catch (err) {
-    console.error("Fehler beim Laden der Betten:", err);
-    throw error(404, 'Zimmer nicht gefunden oder Datenbank-Fehler');
+    console.error("Error fetching sanctuary spots:", err);
+    throw error(404, 'Sanctuary room lost in the dust.');
   }
 };
 
 export const actions: Actions = {
-  // WICHTIG: Muss 'createBed' heißen, passend zu action="?/createBed" im Formular
-  createBed: async ({ request, params }) => {
+  createBed: async ({ request, params, locals }) => {
+    // SECURITY CHECK: Only verified burners can expand the sanctuary 🛡️
+    if (!locals.pb.authStore.model?.verified) {
+        return fail(403, { message: 'Only verified crew members can add spots.' });
+    }
+
     const data = await request.formData();
     
-    // guest_name entfernt, da nicht im Schema vorhanden
-    await pb.collection('beds').create({
-      label: data.get('label'),
-      room: params.id, // ID aus der URL
-      occupied: false
-    });
+    try {
+        await locals.pb.collection('beds').create({
+            label: data.get('label'),
+            room: params.id, 
+            occupied: false
+        });
+    } catch {
+        return fail(500, { error: true });
+    }
   },
 
-  // Wir nennen das hier auch spezifisch 'deleteBed'
-  deleteBed: async ({ request }) => {
+  deleteBed: async ({ request, locals }) => {
+    // SECURITY CHECK: Only verified burners can remove spots 🛡️
+    if (!locals.pb.authStore.model?.verified) {
+        return fail(403, { message: 'Only verified crew members can delete spots.' });
+    }
+
     const data = await request.formData();
-    await pb.collection('beds').delete(data.get('id') as string);
+    const id = data.get('id') as string;
+    
+    if (id) await locals.pb.collection('beds').delete(id);
+  },
+  
+  toggleOccupied: async ({ request, locals }) => {
+      const data = await request.formData();
+      const id = data.get('id') as string;
+      const occupied = data.get('occupied') === 'true';
+      
+      await locals.pb.collection('beds').update(id, { occupied: !occupied });
   }
 };

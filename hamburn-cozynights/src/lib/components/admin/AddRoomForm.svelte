@@ -3,28 +3,28 @@
 </script>
 
 <div class="form-card">
-  <h3>Neues Zimmer hinzufügen</h3>
+  <h3>🏠 Create New Sanctuary Room</h3>
   <form method="POST" action="?/createRoom" class="admin-form">
     <input type="hidden" name="houseId" value={houseId} />
 
     <div class="form-group">
-      <label for="name">Zimmer Name</label>
-      <input type="text" id="name" name="name" placeholder="z.B. Seeblick" required />
+      <label for="name">Room Name</label>
+      <input type="text" id="name" name="name" placeholder="e.g. Sunset View" required />
     </div>
 
     <div class="form-row">
       <div class="form-group">
-        <label for="room_number">Nummer</label>
+        <label for="room_number">Number #</label>
         <input type="number" id="room_number" name="room_number" placeholder="101" required />
       </div>
 
       <div class="form-group">
-        <label for="amount_beds">Anzahl Betten</label>
+        <label for="amount_beds">Bed Count 🛌</label>
         <input type="number" id="amount_beds" name="amount_beds" placeholder="0" min="0" />
       </div>
     </div>
 
-    <button type="submit" class="btn-primary">Zimmer erstellen</button>
+    <button type="submit" class="btn-primary">Create Sanctuary Room ✨</button>
   </form>
 </div>
 

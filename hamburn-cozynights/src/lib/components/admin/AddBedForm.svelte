@@ -9,13 +9,13 @@
     <input 
       type="text" 
       name="label" 
-      placeholder="Bett Label (z.B. B1)" 
+      placeholder="Spot Label (e.g. B1)" 
       required 
       class="input-small"
     />
     
     <button type="submit" class="btn-small">
-      + Bett
+      + Spot 🛌
     </button>
   </form>
 </div>

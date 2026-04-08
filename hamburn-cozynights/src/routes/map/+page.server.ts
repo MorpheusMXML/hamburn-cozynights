@@ -1,12 +1,11 @@
-import { pb } from '$lib/pocketbase';
+import { InventoryService } from '$lib/server/inventory';
 import type { PageServerLoad } from './$types';
-import type { HousesResponse } from '$lib/pocketbase-types';
 
-export const load: PageServerLoad = async () => {
-  // Lade alle Häuser mit Koordinaten
-  const houses = await pb.collection('houses').getFullList<HousesResponse>({
-    sort: 'name',
-  });
+export const load: PageServerLoad = async ({ locals }) => {
+    const inventory = new InventoryService(locals.pb);
+    const houses = await inventory.getFullTree();
 
-  return { houses };
+    return {
+        houses
+    };
 };

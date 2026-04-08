@@ -1,17 +1,17 @@
 <script lang="ts">
-  import type { House } from '$lib/types';
+  import type { HouseData } from '$lib/types';
 
-  export let house: House;
+  export let house: HouseData;
 
   // Die Funktion, die das Event verarbeitet
   function handleClick(event: MouseEvent) {
-    // clientX/Y sind relativ zum Browser-Fenster
-    // offsetX/Y sind relativ zum SVG-Element (oft hilfreicher)
     const { offsetX, offsetY } = event;
     
     console.log(`Klick auf Haus: ${house.name}`);
     console.log(`X-Koordinate: ${offsetX}, Y-Koordinate: ${offsetY}`);
   }
+
+  $: isAvailable = house.occupiedBeds < house.totalBeds;
 </script>
 
 <g
@@ -26,7 +26,7 @@
     cx={house.x} 
     cy={house.y} 
     r="15" 
-    fill={house.status === 'frei' ? '#22c55e' : '#ef4444'} 
+    fill={isAvailable ? '#22c55e' : '#ef4444'} 
     stroke="white" 
     stroke-width="3" 
   />
