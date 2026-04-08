@@ -40,7 +40,7 @@
     </div>
 
     <div class="beds-column">
-        <h3 class="column-title">Sanctuary Spots 🛌</h3>
+        <h3 class="column-title">House Spots 🛌</h3>
         
         <div class="beds-grid">
             {#each beds as bed (bed.id)}
@@ -71,7 +71,7 @@
             {/each}
             
             {#if beds.length === 0}
-                <div class="empty-state">No beds in this sanctuary yet. 🏜️</div>
+                <div class="empty-state">No beds in this house yet. 🏜️</div>
             {/if}
         </div>
     </div>

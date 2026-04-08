@@ -3,7 +3,7 @@
 </script>
 
 <div class="form-card">
-  <h3>🏠 Create New Sanctuary Room</h3>
+  <h3>🏠 Create New House Room</h3>
   <form method="POST" action="?/createRoom" class="admin-form">
     <input type="hidden" name="houseId" value={houseId} />
 
@@ -24,7 +24,7 @@
       </div>
     </div>
 
-    <button type="submit" class="btn-primary">Create Sanctuary Room ✨</button>
+    <button type="submit" class="btn-primary">Create House Room ✨</button>
   </form>
 </div>
 

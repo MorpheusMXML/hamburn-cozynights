@@ -15,7 +15,7 @@
     {#if form?.message || $page.url.searchParams.get('fail')}
         <div style="background: #fee; color: #c00; padding: 10px; margin-bottom: 20px; border-radius: 4px; text-align: center;">
             {#if $page.url.searchParams.get('reason') === 'not_verified'}
-                <strong>Sanctuary key not active! 🗝️</strong><br>
+                <strong>House key not active! 🗝️</strong><br>
                 Please wait for a senior burner to verify your access.
             {:else}
                 {form?.message || 'The playa says no. Action failed.'}
