@@ -88,7 +88,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   const [houses, allBeds, settings] = await Promise.all([
     locals.pb.collection('houses').getFullList<HousesResponse>({ sort: 'name' }),
     locals.pb.collection('beds').getFullList<BedsResponse<{ room: RoomsResponse }>>({ expand: 'room' }),
-    locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }))
+    locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false, booking_unlock_at: "" }))
   ]);
 
   const housesWithStats: HouseStats[] = houses.map((house: HousesResponse) => {
@@ -113,6 +113,6 @@ export const load: PageServerLoad = async ({ locals }) => {
   return { 
     houses: housesWithStats,
     isBookingActive: settings.is_booking_active,
-    bookingUnlockAt: settings.booking_unlock_at
+    bookingUnlockAt: settings.booking_unlock_at || ""
   };
 };
