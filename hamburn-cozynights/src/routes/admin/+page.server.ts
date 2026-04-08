@@ -11,105 +11,136 @@ type HouseStats = HousesResponse & {
 
 export const actions = {
     togglePhase: async ({ locals }) => {
-        if (!locals.pb.authStore.model?.verified) return;
+        console.log(`[Action:togglePhase] User: ${locals.pb.authStore.model?.email}, Verified: ${locals.pb.authStore.model?.verified}`);
+        if (!locals.pb.authStore.model?.verified) {
+            console.error('[Action:togglePhase] BLOCKED: User not verified.');
+            return fail(403, { error: 'Unauthorized' });
+        }
         
-        const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => null);
-        if (settings) {
-            await locals.pb.collection('app_settings').update('abcsettings123', {
-                is_booking_active: !settings.is_booking_active
-            });
-        } else {
-            await locals.pb.collection('app_settings').create({
-                id: 'abcsettings123',
-                is_booking_active: true
-            });
+        try {
+            const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => null);
+            if (settings) {
+                console.log(`[Action:togglePhase] Updating existing settings. Current: ${settings.is_booking_active}`);
+                await locals.pb.collection('app_settings').update('abcsettings123', {
+                    is_booking_active: !settings.is_booking_active
+                });
+            } else {
+                console.log('[Action:togglePhase] Creating initial settings.');
+                await locals.pb.collection('app_settings').create({
+                    id: 'abcsettings123',
+                    is_booking_active: true
+                });
+            }
+            console.log('[Action:togglePhase] SUCCESS.');
+        } catch (err) {
+            console.error('[Action:togglePhase] FAILED:', err);
+            return fail(500, { error: 'Toggle failed' });
         }
     },
     setUnlockTimer: async ({ locals, request }) => {
-        if (!locals.pb.authStore.model?.verified) return;
+        console.log(`[Action:setUnlockTimer] User: ${locals.pb.authStore.model?.email}`);
+        if (!locals.pb.authStore.model?.verified) return fail(403);
         const data = await request.formData();
         const date = data.get('unlockAt') as string;
         
-        await locals.pb.collection('app_settings').update('abcsettings123', {
-            booking_unlock_at: date ? new Date(date).toISOString() : ""
-        });
+        try {
+            await locals.pb.collection('app_settings').update('abcsettings123', {
+                booking_unlock_at: date ? new Date(date).toISOString() : ""
+            });
+            console.log(`[Action:setUnlockTimer] SUCCESS. Target: ${date}`);
+        } catch (err) {
+            console.error('[Action:setUnlockTimer] FAILED:', err);
+            return fail(500);
+        }
     },
     cancelUnlockTimer: async ({ locals }) => {
-        if (!locals.pb.authStore.model?.verified) return;
-        await locals.pb.collection('app_settings').update('abcsettings123', {
-            booking_unlock_at: ""
-        });
+        console.log(`[Action:cancelUnlockTimer] User: ${locals.pb.authStore.model?.email}`);
+        if (!locals.pb.authStore.model?.verified) return fail(403);
+        try {
+            await locals.pb.collection('app_settings').update('abcsettings123', {
+                booking_unlock_at: ""
+            });
+            console.log('[Action:cancelUnlockTimer] SUCCESS.');
+        } catch (err) {
+            console.error('[Action:cancelUnlockTimer] FAILED:', err);
+            return fail(500);
+        }
     },
     updateHouseCoords: async ({ locals, request }) => {
-        if (!locals.pb.authStore.model?.verified) return fail(403, { error: 'Unauthorized' });
         const data = await request.formData();
         const id = data.get('id') as string;
         const x = parseFloat(data.get('x') as string);
         const y = parseFloat(data.get('y') as string);
         
+        console.log(`[Action:updateHouseCoords] User: ${locals.pb.authStore.model?.email}, ID: ${id}, New: (${x}, ${y})`);
+        
+        if (!locals.pb.authStore.model?.verified) {
+            console.error('[Action:updateHouseCoords] BLOCKED: User not verified.');
+            return fail(403, { error: 'Unauthorized' });
+        }
+        
         try {
             const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
             if (settings.is_booking_active) {
-                // Safeguard: Check occupancy only in LIVE mode
                 const occupiedBeds = await locals.pb.collection('beds').getFullList({
                     filter: locals.pb.filter('room.house = {:id} && occupied = true', { id })
                 });
                 
                 if (occupiedBeds.length > 0) {
+                    console.warn(`[Action:updateHouseCoords] BLOCKED: House ${id} is occupied in LIVE mode.`);
                     return fail(400, { error: 'Cannot move house: It has active bookings in LIVE mode! 🔒' });
                 }
             }
 
             await locals.pb.collection('houses').update(id, { x, y });
-            console.log(`[Action] House ${id} coordinates synced: ${x}, ${y}`);
+            console.log(`[Action:updateHouseCoords] SUCCESS for ${id}`);
             return { success: true };
         } catch (err) {
-            console.error(`[Action] Coord sync failed for ${id}:`, err);
+            console.error(`[Action:updateHouseCoords] FAILED for ${id}:`, err);
             return fail(500, { error: 'Sync failed.' });
         }
     },
     deleteHouse: async ({ locals, request }) => {
-        if (!locals.pb.authStore.model?.verified) return fail(403, { error: 'Unauthorized' });
-        
         const data = await request.formData();
         const id = data.get('id') as string;
         
-        console.log(`[Action] Attempting to vanish house: ${id}`);
-
+        console.log(`[Action:deleteHouse] User: ${locals.pb.authStore.model?.email}, ID: ${id}`);
+        
+        if (!locals.pb.authStore.model?.verified) {
+            console.error('[Action:deleteHouse] BLOCKED: User not verified.');
+            return fail(403, { error: 'Unauthorized' });
+        }
+        
         try {
-            // 1. Check current phase
             const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
             const isLive = settings.is_booking_active;
 
-            // 2. Check occupancy
             const occupiedBeds = await locals.pb.collection('beds').getFullList({
                 filter: locals.pb.filter('room.house = {:id} && occupied = true', { id }),
                 expand: 'room'
             });
 
             if (occupiedBeds.length > 0) {
-                console.log(`[Action] Occupancy detected in House ${id}:`, 
+                console.log(`[Action:deleteHouse] Occupancy detected in House ${id}:`, 
                     occupiedBeds.map((b: any) => `Bed ${b.label} (Room ${b.expand?.room?.room_number})`).join(', ')
                 );
                 
                 if (isLive) {
-                    console.warn(`[Action] Vanish blocked: House ${id} has ${occupiedBeds.length} active bookings in LIVE mode.`);
+                    console.warn(`[Action:deleteHouse] BLOCKED: House ${id} has active bookings in LIVE mode.`);
                     return fail(400, { error: 'The playa says NO! 🛑 Cannot vanish a house with active bookings in LIVE mode.' });
                 } else {
-                    console.log(`[Action] Staging Mode: Clearing ${occupiedBeds.length} test bookings before vanishing house ${id}.`);
-                    // In Staging Mode, we auto-clear test bookings before deletion
+                    console.log(`[Action:deleteHouse] Staging Mode: Auto-clearing ${occupiedBeds.length} test bookings.`);
                     for (const bed of occupiedBeds) {
                         await locals.pb.collection('beds').update(bed.id, { occupied: false, order: null });
                     }
                 }
             }
 
-            // 3. Vanish the house and all linked modules
-            // Note: We delete beds first, then rooms, then house to avoid foreign key violations
             const rooms = await locals.pb.collection('rooms').getFullList({
                 filter: locals.pb.filter('house = {:id}', { id })
             });
 
+            console.log(`[Action:deleteHouse] Vanishing ${rooms.length} modules...`);
             for (const room of rooms) {
                 const beds = await locals.pb.collection('beds').getFullList({
                     filter: locals.pb.filter('room = {:id}', { id: room.id })
@@ -121,30 +152,34 @@ export const actions = {
             }
 
             await locals.pb.collection('houses').delete(id);
-            console.log(`[Action] House ${id} fully evaporated from the playa. 🌪️`);
-            
+            console.log(`[Action:deleteHouse] SUCCESS. House ${id} evaporated.`);
             return { success: true };
 
         } catch (err) {
-            console.error(`[Action] Vanish failed for house ${id}:`, err);
-            // PocketBase errors can be complex, let's extract the message
-            return fail(500, { error: 'Vanish failed. The playa resisted your command.' });
+            console.error(`[Action:deleteHouse] FAILED for ${id}:`, err);
+            return fail(500, { error: 'Vanish failed.' });
         }
     },
     renameHouse: async ({ locals, request }) => {
-        if (!locals.pb.authStore.model?.verified) return fail(403, { error: 'Unauthorized' });
         const data = await request.formData();
         const id = data.get('id') as string;
         const name = data.get('name') as string;
+        
+        console.log(`[Action:renameHouse] User: ${locals.pb.authStore.model?.email}, ID: ${id}, New Name: ${name}`);
+        
+        if (!locals.pb.authStore.model?.verified) {
+            console.error('[Action:renameHouse] BLOCKED: User not verified.');
+            return fail(403, { error: 'Unauthorized' });
+        }
         
         if (!name) return fail(400, { error: 'Name is required' });
 
         try {
             await locals.pb.collection('houses').update(id, { name });
-            console.log(`[Action] House ${id} renamed to: ${name}`);
+            console.log(`[Action:renameHouse] SUCCESS for ${id}`);
             return { success: true };
         } catch (err) {
-            console.error(`[Action] Rename failed for ${id}:`, err);
+            console.error(`[Action:renameHouse] FAILED for ${id}:`, err);
             return fail(500, { error: 'Update failed.' });
         }
     }
