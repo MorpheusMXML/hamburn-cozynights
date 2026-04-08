@@ -104,8 +104,8 @@ export const actions = {
                 }
             }
 
-            // 3. Vanish the house (and manually clear rooms/beds to ensure no orphans)
-            // Note: We do this manually because we want to be 100% sure everything is gone
+            // 3. Vanish the house and all linked modules
+            // Note: We delete beds first, then rooms, then house to avoid foreign key violations
             const rooms = await locals.pb.collection('rooms').getFullList({
                 filter: locals.pb.filter('house = {:id}', { id })
             });
@@ -121,12 +121,14 @@ export const actions = {
             }
 
             await locals.pb.collection('houses').delete(id);
-            console.log(`[Action] House ${id} and all its modules successfully vanished. 🌪️`);
+            console.log(`[Action] House ${id} fully evaporated from the playa. 🌪️`);
+            
             return { success: true };
 
         } catch (err) {
             console.error(`[Action] Vanish failed for house ${id}:`, err);
-            return fail(500, { error: 'The desert winds blocked your command. Try again.' });
+            // PocketBase errors can be complex, let's extract the message
+            return fail(500, { error: 'Vanish failed. The playa resisted your command.' });
         }
     },
     renameHouse: async ({ locals, request }) => {
