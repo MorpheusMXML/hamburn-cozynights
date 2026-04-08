@@ -36,6 +36,15 @@ export const actions = {
         const x = parseFloat(data.get('x') as string);
         const y = parseFloat(data.get('y') as string);
         
+        // Safeguard: Check occupancy
+        const beds = await locals.pb.collection('beds').getFullList({
+            filter: locals.pb.filter('room.house = {:id} && occupied = true', { id })
+        });
+        
+        if (beds.length > 0) {
+            return fail(400, { error: 'Cannot move house: It has active bookings!' });
+        }
+
         await locals.pb.collection('houses').update(id, { x, y });
     },
     deleteHouse: async ({ locals, request }) => {

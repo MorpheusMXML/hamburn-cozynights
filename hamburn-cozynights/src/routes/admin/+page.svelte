@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { PageData } from './$types';
   import Map from '$lib/components/Map.svelte';
+  import HouseEditor from '$lib/components/HouseEditor.svelte';
   import { goto, invalidateAll } from '$app/navigation';
   import { enhance } from '$app/forms';
   
@@ -9,6 +10,9 @@
   $: ({ houses, isVerified, isBookingActive } = data);
 
   let showMap = true; // Default to map for easier management
+
+  // Editor Modal State
+  let editingHouse: { id?: string, x: number, y: number, name: string } | null = null;
 
   function getStatusColor(free: number, total: number) {
     if (total === 0) return 'gray';
@@ -26,8 +30,7 @@
   // When clicking empty space on the map in editor mode
   function handleLocationSelected(event: CustomEvent) {
     const { x, y } = event.detail;
-    // Redirect to "New House" form with coordinates
-    goto(`/admin/house/new?x=${x}&y=${y}`);
+    editingHouse = { x, y, name: "" };
   }
 
   async function handleHouseMoved(event: CustomEvent) {
@@ -37,31 +40,47 @@
     formData.append('x', x.toString());
     formData.append('y', y.toString());
     
-    await fetch('?/updateHouseCoords', {
+    const response = await fetch('?/updateHouseCoords', {
       method: 'POST',
       body: formData
     });
+
+    if (!response.ok) {
+      alert("The playa says NO! 🔒 This house has active bookings and cannot be moved.");
+      invalidateAll(); // Revert local state
+    }
   }
 
-  async function handleRenameHouse(event: CustomEvent) {
+  function handleRenameHouse(event: CustomEvent) {
     const house = event.detail;
-    const newName = prompt(`Rename house "${house.name}":`, house.name);
-    if (newName && newName !== house.name) {
-      const formData = new FormData();
-      formData.append('id', house.id);
-      formData.append('name', newName);
-      
-      await fetch('?/renameHouse', {
-        method: 'POST',
-        body: formData
-      });
-      invalidateAll();
+    editingHouse = { id: house.id, x: house.x, y: house.y, name: house.name };
+  }
+
+  async function handleSaveHouse(event: CustomEvent) {
+    const newHouseData = event.detail;
+    const formData = new FormData();
+    formData.append('name', newHouseData.name);
+    
+    if (editingHouse?.id) {
+      // RENAME
+      formData.append('id', editingHouse.id);
+      const response = await fetch('?/renameHouse', { method: 'POST', body: formData });
+      if (!response.ok) alert("Failed to rename. The desert is harsh.");
+    } else {
+      // CREATE NEW
+      formData.append('x', editingHouse?.x.toString() || "0");
+      formData.append('y', editingHouse?.y.toString() || "0");
+      const response = await fetch('/admin/house/new?/create', { method: 'POST', body: formData });
+      if (!response.ok) alert("Creation failed. Dust in the gears.");
     }
+    
+    editingHouse = null;
+    invalidateAll();
   }
 
   async function handleDeleteHouse(event: CustomEvent) {
     const house = event.detail;
-    if (confirm(`Are you sure you want to delete "${house.name}"? This will delete all rooms and beds inside!`)) {
+    if (confirm(`Are you sure you want to delete "${house.name}"? This will vanish all rooms and beds into the dust! 🌪️`)) {
       const formData = new FormData();
       formData.append('id', house.id);
       
@@ -71,7 +90,7 @@
       });
       
       if (!response.ok) {
-        alert("Cannot delete house: It might have active bookings!");
+        alert("The playa protects! 🛡️ This house has active bookings and cannot be deleted.");
       }
       invalidateAll();
     }
@@ -165,6 +184,22 @@
     <button type="submit" class="btn-logout">Sign out 🚪</button>
   </form>
 </div>
+
+{#if editingHouse}
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
+  <div class="editor-modal-backdrop" on:click={() => editingHouse = null}>
+    <div on:click|stopPropagation>
+      <HouseEditor 
+        x={editingHouse.x} 
+        y={editingHouse.y} 
+        name={editingHouse.name} 
+        on:save={handleSaveHouse} 
+        on:cancel={() => editingHouse = null} 
+      />
+    </div>
+  </div>
+{/if}
 
 <style>
   /* Bestehende Styles bleiben erhalten */
@@ -308,4 +343,17 @@
   .progress-fill.full { background: #ef4444; }
   .coordinates { font-size: 0.8rem; color: #555; font-family: monospace; }
   .btn-logout { background: transparent; border: 1px solid #333; color: #888; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+
+  .editor-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+  }
 </style>
