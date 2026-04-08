@@ -35,6 +35,24 @@
       return `${free} spots free`;
   }
 
+  async function submitAction(actionUrl: string, formData: FormData) {
+    try {
+      const response = await fetch(actionUrl, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'x-sveltekit-action': 'true',
+          'accept': 'application/json'
+        }
+      });
+      const result = await response.json();
+      return result;
+    } catch (err: any) {
+      console.error(`[Action Error] Fetch failed for ${actionUrl}:`, err);
+      return { type: 'error', error: err.message };
+    }
+  }
+
   // When clicking empty space on the map in editor mode
   function handleLocationSelected(event: CustomEvent) {
     const { x, y } = event.detail;
@@ -60,13 +78,10 @@
     formData.append('x', x.toString());
     formData.append('y', y.toString());
     
-    const response = await fetch('?/updateHouseCoords', {
-      method: 'POST',
-      body: formData
-    });
+    const result = await submitAction('?/updateHouseCoords', formData);
 
-    if (!response.ok) {
-      alert("🔥 THE PLAYA PROTECTS! 🛡️ This house has active bookings and cannot be moved.");
+    if (result.type !== 'success') {
+      alert(`🔥 THE PLAYA PROTECTS! 🛡️ ${result.data?.error || 'This house has active bookings and cannot be moved.'}`);
       editingHouse = null;
       selectedHouseId = null;
       invalidateAll();
@@ -94,16 +109,16 @@
     if (editingHouse?.id) {
       // RENAME / UPDATE
       formData.append('id', editingHouse.id);
-      const response = await fetch('?/renameHouse', { method: 'POST', body: formData });
-      if (!response.ok) alert("❌ RENAME FAILED! The desert winds are too strong.");
+      const result = await submitAction('?/renameHouse', formData);
+      if (result.type !== 'success') alert(`❌ RENAME FAILED! ${result.data?.error || 'The desert winds are too strong.'}`);
     } else {
       // CREATE NEW
       formData.append('x', editingHouse?.x.toString() || "0");
       formData.append('y', editingHouse?.y.toString() || "0");
       formData.append('bedCount', newHouseData.totalBeds?.toString() || "0"); // Correctly map bedCount
       
-      const response = await fetch('/admin/house/new?/create', { method: 'POST', body: formData });
-      if (!response.ok) alert("❌ CREATION FAILED! The dust has clogged the gears.");
+      const result = await submitAction('/admin/house/new?/create', formData);
+      if (result.type !== 'success') alert(`❌ CREATION FAILED! ${result.data?.error || 'The dust has clogged the gears.'}`);
     }
     
     editingHouse = null;
@@ -118,16 +133,9 @@
       const formData = new FormData();
       formData.append('id', activeHouse.id);
       
-      const response = await fetch('?/deleteHouse', {
-        method: 'POST',
-        body: formData
-      });
+      const result = await submitAction('?/deleteHouse', formData);
       
-      const result = await response.json();
-      // Check if result has errors (SvelteKit returns a JSON object with 'data' and 'type')
-      // For actions, it's usually { type: 'success', status: 200 } or { type: 'failure', status: 400, data: { error: '...' } }
-      
-      if (response.status !== 200) {
+      if (result.type !== 'success') {
         alert(`🛑 ACTION BLOCKED! ${result.data?.error || 'The playa resisted your command.'}`);
       } else {
         console.log(`[Dashboard] House ${activeHouse.id} vanished successfully.`);

@@ -32,8 +32,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
   createBed: async ({ request, params, locals }) => {
-    // SECURITY CHECK: Only verified burners can expand the house 🛡️
+    console.log(`[Action:createBed] User: ${locals.pb.authStore.model?.email}, Room: ${params.id}`);
+    
     if (!locals.pb.authStore.model?.verified) {
+        console.error('[Action:createBed] BLOCKED: User not verified.');
         return fail(403, { message: 'Only verified crew members can add spots.' });
     }
 
@@ -45,21 +47,31 @@ export const actions: Actions = {
             room: params.id, 
             occupied: false
         });
-    } catch {
+        console.log('[Action:createBed] SUCCESS.');
+    } catch (err) {
+        console.error('[Action:createBed] FAILED:', err);
         return fail(500, { error: true });
     }
   },
 
   deleteBed: async ({ request, locals }) => {
-    // SECURITY CHECK: Only verified burners can remove spots 🛡️
+    console.log(`[Action:deleteBed] User: ${locals.pb.authStore.model?.email}`);
+    
     if (!locals.pb.authStore.model?.verified) {
+        console.error('[Action:deleteBed] BLOCKED: User not verified.');
         return fail(403, { message: 'Only verified crew members can delete spots.' });
     }
 
     const data = await request.formData();
     const id = data.get('id') as string;
     
-    if (id) await locals.pb.collection('beds').delete(id);
+    try {
+        if (id) await locals.pb.collection('beds').delete(id);
+        console.log(`[Action:deleteBed] SUCCESS for ${id}`);
+    } catch (err) {
+        console.error(`[Action:deleteBed] FAILED for ${id}:`, err);
+        return fail(500);
+    }
   },
   
   toggleOccupied: async ({ request, locals }) => {
@@ -67,6 +79,13 @@ export const actions: Actions = {
       const id = data.get('id') as string;
       const occupied = data.get('occupied') === 'true';
       
-      await locals.pb.collection('beds').update(id, { occupied: !occupied });
+      console.log(`[Action:toggleOccupied] User: ${locals.pb.authStore.model?.email}, ID: ${id}, Target: ${!occupied}`);
+      
+      try {
+          await locals.pb.collection('beds').update(id, { occupied: !occupied });
+          console.log('[Action:toggleOccupied] SUCCESS.');
+      } catch (err) {
+          console.error('[Action:toggleOccupied] FAILED:', err);
+      }
   }
 };

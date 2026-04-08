@@ -47,8 +47,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
   createRoom: async ({ request, locals, params }) => {
-    // SECURITY CHECK: Only verified burners can expand the house 🛡️
+    console.log(`[Action:createRoom] User: ${locals.pb.authStore.model?.email}, Verified: ${locals.pb.authStore.model?.verified}, House: ${params.id}`);
+    
     if (!locals.pb.authStore.model?.verified) {
+        console.error('[Action:createRoom] BLOCKED: User not verified.');
         return fail(403, { message: 'Only verified crew members can create rooms.' });
     }
 
@@ -62,15 +64,18 @@ export const actions: Actions = {
           amount_beds: parseInt(data.get('amount_beds') as string || '0'),
           house: houseId
         });
+        console.log('[Action:createRoom] SUCCESS.');
     } catch (err) {
-        console.error(err);
+        console.error('[Action:createRoom] FAILED:', err);
         return fail(500, { error: true });
     }
   },
 
   deleteRoom: async ({ request, locals }) => {
-    // SECURITY CHECK: Only verified burners can remove rooms 🛡️
+    console.log(`[Action:deleteRoom] User: ${locals.pb.authStore.model?.email}`);
+    
     if (!locals.pb.authStore.model?.verified) {
+        console.error('[Action:deleteRoom] BLOCKED: User not verified.');
         return fail(403, { message: 'Only verified crew members can delete rooms.' });
     }
 
@@ -79,8 +84,9 @@ export const actions: Actions = {
     
     try {
         if (id) await locals.pb.collection('rooms').delete(id);
+        console.log(`[Action:deleteRoom] SUCCESS for ${id}`);
     } catch (err) {
-        console.error(err);
+        console.error(`[Action:deleteRoom] FAILED for ${id}:`, err);
         return fail(500, { error: true });
     }
   }
