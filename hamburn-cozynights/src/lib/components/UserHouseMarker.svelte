@@ -1,12 +1,14 @@
 <script lang="ts">
   export let name: string;
   export let status: string = 'available';
+
+  $: isOccupied = status === 'full' || status === 'besetzt';
 </script>
 
 <div class="marker-wrapper">
   <div class="hit-area"></div>
   
-  <div class="pin" class:occupied={status === 'full'}></div>
+  <div class="pin" class:occupied={isOccupied}></div>
   <span class="label">{name}</span>
 </div>
 
