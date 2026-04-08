@@ -123,12 +123,17 @@
         body: formData
       });
       
-      if (!response.ok) {
-        alert("🛑 ACTION BLOCKED! Burners are currently inhabiting this sanctuary.");
+      const result = await response.json();
+      // Check if result has errors (SvelteKit returns a JSON object with 'data' and 'type')
+      // For actions, it's usually { type: 'success', status: 200 } or { type: 'failure', status: 400, data: { error: '...' } }
+      
+      if (response.status !== 200) {
+        alert(`🛑 ACTION BLOCKED! ${result.data?.error || 'The playa resisted your command.'}`);
       } else {
+        console.log(`[Dashboard] House ${activeHouse.id} vanished successfully.`);
         selectedHouseId = null;
         editingHouse = null;
-        invalidateAll();
+        await invalidateAll();
       }
     }
   }
