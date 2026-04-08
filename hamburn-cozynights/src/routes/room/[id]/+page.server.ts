@@ -19,7 +19,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     if (!locals.orderNumber) throw redirect(303, '/');
 
     try {
-        const settings = await locals.pb.collection('app_settings').getOne('settings_id').catch(() => ({ is_booking_active: false }));
+        const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
         const order = await locals.pb.collection('orders').getFirstListItem(locals.pb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber }));
         const userBed = await locals.pb.collection('beds').getFirstListItem(locals.pb.filter('order = {:orderId}', { orderId: order.id })).catch(() => null);
         
@@ -44,7 +44,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
     bookBed: async ({ request, locals }) => {
-        const settings = await locals.pb.collection('app_settings').getOne('settings_id').catch(() => ({ is_booking_active: false }));
+        const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
         if (!settings.is_booking_active) return fail(403, { error: 'Bookings are not open yet.' });
 
         const formData = await request.formData();
@@ -95,7 +95,7 @@ export const actions: Actions = {
     },
 
     unbookBed: async ({ locals }) => {
-        const settings = await locals.pb.collection('app_settings').getOne('settings_id').catch(() => ({ is_booking_active: false }));
+        const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
         if (!settings.is_booking_active) return fail(403, { error: 'Bookings are locked.' });
 
         if (!locals.orderNumber) return fail(401);

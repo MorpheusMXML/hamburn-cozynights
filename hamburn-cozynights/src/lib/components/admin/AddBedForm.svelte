@@ -9,13 +9,13 @@
     <input 
       type="text" 
       name="label" 
-      placeholder="Spot Label (e.g. B1)" 
+      placeholder="Unit ID (e.g. B1)" 
       required 
-      class="input-small"
+      class="input-laser"
     />
     
-    <button type="submit" class="btn-small">
-      + Spot 🛌
+    <button type="submit" class="btn-ignite-small">
+      IGNITE 🛌
     </button>
   </form>
 </div>
@@ -23,29 +23,39 @@
 <style>
   .inline-form {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.75rem;
     align-items: center;
-    margin-top: 0.5rem;
   }
 
-  .input-small {
-    background: #2a2a2a;
-    border: 1px solid #444;
+  .input-laser {
+    background: #1a1a1a;
+    border: 1px solid #333;
     color: white;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.9rem;
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    flex: 1;
+    transition: all 0.3s;
   }
+  .input-laser:focus { outline: none; border-color: #fb923c; box-shadow: 0 0 10px rgba(251, 146, 60, 0.2); }
 
-  .btn-small {
-    background: #333;
-    color: #fff;
-    border: 1px solid #555;
-    padding: 0.25rem 0.75rem;
-    border-radius: 4px;
+  .btn-ignite-small {
+    background: transparent;
+    color: #fb923c;
+    border: 1px solid #fb923c;
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 0.75rem;
+    font-weight: 900;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+    white-space: nowrap;
   }
   
-  .btn-small:hover { background: #444; }
+  .btn-ignite-small:hover { 
+      background: rgba(251, 146, 60, 0.1); 
+      box-shadow: 0 0 15px rgba(251, 146, 60, 0.2);
+      transform: translateY(-1px);
+  }
 </style>
