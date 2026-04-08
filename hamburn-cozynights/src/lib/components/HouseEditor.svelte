@@ -4,10 +4,10 @@
 
   export let x: number;
   export let y: number;
+  export let name = "";
 
   const dispatch = createEventDispatcher();
   
-  let name = "";
   let bedCount = 4;
 
   function handleSave() {
@@ -55,11 +55,11 @@
   }
 </script>
 
-<div class="editor-overlay" style="left: {x/10}%; top: {y/7}%;">
+<div class="editor-card-container">
   <div class="editor-card">
-    <h4>New House 🏠</h4>
+    <h4>{name ? `Edit House ${name}` : 'New House'} 🏠</h4>
     <label>Name: <input bind:value={name} placeholder="House Name" /></label>
-    <label>Beds 🛌: <input type="number" bind:value={bedCount} min="1" /></label>
+    <label>Initial Beds 🛌: <input type="number" bind:value={bedCount} min="1" /></label>
     <div class="actions">
       <button on:click={() => dispatch('cancel')}>Cancel 🏜️</button>
       <button class="save" on:click={handleSave} disabled={!name}>Save ✨</button>
@@ -68,19 +68,19 @@
 </div>
 
 <style>
-  .editor-overlay {
-    position: absolute;
-    z-index: 200;
-    transform: translate(-50%, -110%);
+  .editor-card-container {
     background: #1a1a1a;
     border: 2px solid #22c55e;
-    padding: 15px;
-    border-radius: 10px;
+    padding: 20px;
+    border-radius: 12px;
     color: white;
-    width: 200px;
+    width: 300px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
   }
-  .editor-card { display: flex; flex-direction: column; gap: 10px; }
-  input { background: #333; border: 1px solid #444; color: white; padding: 5px; }
-  .actions { display: flex; justify-content: space-between; margin-top: 5px; }
-  .save { background: #22c55e; border: none; color: white; cursor: pointer; }
+  .editor-card { display: flex; flex-direction: column; gap: 15px; }
+  label { display: flex; flex-direction: column; gap: 5px; font-size: 0.9rem; color: #aaa; }
+  input { background: #333; border: 1px solid #444; color: white; padding: 10px; border-radius: 6px; }
+  .actions { display: flex; justify-content: space-between; margin-top: 10px; }
+  button { padding: 8px 15px; border-radius: 6px; cursor: pointer; border: 1px solid #444; background: #222; color: #ccc; }
+  .save { background: #22c55e; border: none; color: white; font-weight: bold; }
 </style>
