@@ -12,6 +12,8 @@
     console.log(`Klick auf Haus: ${house.name}`);
     console.log(`X-Koordinate: ${offsetX}, Y-Koordinate: ${offsetY}`);
   }
+
+  $: isAvailable = house.status === 'available' || house.status === 'frei';
 </script>
 
 <g
@@ -26,7 +28,7 @@
     cx={house.x} 
     cy={house.y} 
     r="15" 
-    fill={house.status === 'available' ? '#22c55e' : '#ef4444'} 
+    fill={isAvailable ? '#22c55e' : '#ef4444'} 
     stroke="white" 
     stroke-width="3" 
   />
