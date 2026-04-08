@@ -41,13 +41,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       return { house, rooms: roomsWithStats };
   } catch (err) {
       console.error(err);
-      throw error(404, 'Sanctuary not found.');
+      throw error(404, 'House not found.');
   }
 };
 
 export const actions: Actions = {
   createRoom: async ({ request, locals, params }) => {
-    // SECURITY CHECK: Only verified burners can expand the sanctuary 🛡️
+    // SECURITY CHECK: Only verified burners can expand the house 🛡️
     if (!locals.pb.authStore.model?.verified) {
         return fail(403, { message: 'Only verified crew members can create rooms.' });
     }
