@@ -2,7 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { RoomsResponse, BedsResponse, HousesResponse } from '$lib/pocketbase-types';
 
-// 1. Definiere den Typ inkl. "expand"
+// 1. Define the type including "expand" for related records 🔗
 type RoomWithHouse = RoomsResponse<{ house: HousesResponse }>;
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -11,12 +11,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   const roomId = params.id;
 
   try {
-    // 2. Nutze den Typ beim Laden: getOne<RoomWithHouse>
+    // 2. Fetch room with its parent house expanded 🏠
     const room = await locals.pb.collection('rooms').getOne<RoomWithHouse>(roomId, {
         expand: 'house' 
     });
 
-    // Betten laden
+    // 3. Fetch all beds in this sanctuary room 🛌
     const beds = await locals.pb.collection('beds').getFullList<BedsResponse>({
       filter: locals.pb.filter('room = {:roomId}', { roomId: roomId }), 
       sort: 'label'
@@ -25,16 +25,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     return { room, beds };
 
   } catch (err) {
-    console.error("Fehler beim Laden der Betten:", err);
-    throw error(404, 'Zimmer nicht gefunden');
+    console.error("Error fetching sanctuary spots:", err);
+    throw error(404, 'Sanctuary room lost in the dust.');
   }
 };
 
 export const actions: Actions = {
   createBed: async ({ request, params, locals }) => {
-    // SICHERHEITS-CHECK
+    // SECURITY CHECK: Only verified burners can expand the sanctuary 🛡️
     if (!locals.pb.authStore.model?.verified) {
-        return fail(403, { message: 'Nur verifizierte Nutzer dürfen Betten hinzufügen.' });
+        return fail(403, { message: 'Only verified crew members can add spots.' });
     }
 
     const data = await request.formData();
@@ -51,9 +51,9 @@ export const actions: Actions = {
   },
 
   deleteBed: async ({ request, locals }) => {
-    // SICHERHEITS-CHECK
+    // SECURITY CHECK: Only verified burners can remove spots 🛡️
     if (!locals.pb.authStore.model?.verified) {
-        return fail(403, { message: 'Nur verifizierte Nutzer dürfen Betten löschen.' });
+        return fail(403, { message: 'Only verified crew members can delete spots.' });
     }
 
     const data = await request.formData();

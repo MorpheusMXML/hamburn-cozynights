@@ -34,18 +34,18 @@
   <header class="dashboard-header">
     <div class="header-content">
         <div>
-            <h1>Hamburn Dashboard</h1>
-            <p class="subtitle">Real-time management and occupancy</p>
+            <h1>Hamburn Dashboard 🔥</h1>
+            <p class="subtitle">Real-time sanctuary management & occupancy 🛖</p>
         </div>
         
         <div class="header-actions">
             <button class="btn-secondary" on:click={() => showMap = !showMap}>
-                {showMap ? 'Show List' : 'Show Map'}
+                {showMap ? '🗺️ Show List' : '🛰️ Show Map'}
             </button>
 
             {#if isVerified}
                 <a href="/admin/house/new" class="btn-add">
-                    <span class="plus-icon">+</span> Add House
+                    <span class="plus-icon">+</span> Add House 🏠
                 </a>
             {/if}
         </div>
@@ -55,7 +55,7 @@
   {#if showMap}
     <div class="map-section">
         <div class="map-info">
-            <p><strong>Editor Mode:</strong> Click anywhere on the map to place a new house at that location.</p>
+            <p><strong>🛠 Editor Mode:</strong> Click anywhere on the map to place a new sanctuary at that location. 📍</p>
         </div>
         <Map 
             {houses} 
@@ -68,7 +68,7 @@
         {#each houses as house}
           <a href="/admin/house/{house.id}" class="card">
             <div class="card-header">
-              <h2>{house.name}</h2>
+              <h2>{house.name} 🛖</h2>
               <span class="status-badge {getStatusColor(house.freeBeds, house.totalBeds)}">
                  {getStatusText(house.freeBeds, house.totalBeds)}
               </span>
@@ -76,7 +76,7 @@
 
             <div class="card-body">
                 <div class="stat-row">
-                    <span class="label">Occupancy</span>
+                    <span class="label">Occupancy 👥</span>
                     <span class="value">{house.occupiedBeds} / {house.totalBeds}</span>
                 </div>
 
@@ -98,7 +98,7 @@
   {/if}
 
   <form action="?/logout" method="POST" style="margin-top: 3rem; text-align: center;">
-    <button type="submit" class="btn-logout">Sign out</button>
+    <button type="submit" class="btn-logout">Sign out 🚪</button>
   </form>
 </div>
 

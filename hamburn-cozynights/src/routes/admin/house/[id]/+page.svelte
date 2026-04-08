@@ -10,19 +10,19 @@
 <div class="dashboard-container">
   <div class="header-row">
     <div class="breadcrumbs">
-        <a href="/admin">Übersicht</a> <span class="sep">/</span> <span>{house.name}</span>
+        <a href="/admin">Dashboard</a> <span class="sep">/</span> <span>{house.name}</span>
     </div>
-    <h1>{house.name} <span class="subtitle">Verwaltung</span></h1>
+    <h1>{house.name} 🏠 <span class="subtitle">Management</span></h1>
   </div>
 
   {#if isVerified}
       <div class="form-section">
-          <h3>Neuen Raum hinzufügen</h3>
+          <h3>➕ Add New Room</h3>
           <AddRoomForm houseId={house.id} />
       </div>
   {/if}
 
-  <h2 class="section-title">Zimmer & Belegung</h2>
+  <h2 class="section-title">Rooms & Occupancy 👥</h2>
   
   <div class="grid">
     {#each rooms as room (room.id)}
@@ -32,7 +32,7 @@
           <div class="room-badges">
             <span class="room-number">#{room.room_number}</span>
           </div>
-          <span class="room-name">{room.name}</span>
+          <span class="room-name">{room.name} 🚪</span>
         </div>
 
         <div class="card-body">
@@ -45,8 +45,8 @@
             </div>
             
             <div class="stat-row">
-                <span class="label">Belegung</span>
-                <span class="value">{room.stats.occupied} / {room.stats.total} Betten</span>
+                <span class="label">Occupancy</span>
+                <span class="value">{room.stats.occupied} / {room.stats.total} Beds 🛌</span>
             </div>
         </div>
         
@@ -54,8 +54,8 @@
             <div class="card-actions">
                 <form action="?/deleteRoom" method="POST" on:click|stopPropagation>
                     <input type="hidden" name="id" value={room.id} />
-                    <button type="submit" class="btn-delete" title="Raum löschen">
-                        🗑 Löschen
+                    <button type="submit" class="btn-delete" title="Delete Room">
+                        🗑 Delete
                     </button>
                 </form>
             </div>

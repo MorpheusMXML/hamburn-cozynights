@@ -10,12 +10,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       sort: 'room_number'
     });
     
-    // Betten laden für Statistik
+    // Fetch spots for statistics 📊
     const beds = await locals.pb.collection('beds').getFullList<BedsResponse>({
       filter: locals.pb.filter('room.house = {:id}', { id: params.id })
     });
 
-    // Statistik berechnen
+    // Calculate occupancy 👥
     const roomsWithStats = rooms.map(room => {
       const roomBeds = beds.filter(b => b.room === room.id);
       const freeCount = roomBeds.filter(b => !b.occupied).length;
@@ -24,6 +24,6 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
     return { house, rooms: roomsWithStats };
   } catch {
-    throw error(404, 'Haus nicht gefunden');
+    throw error(404, 'Sanctuary not found in the dust.');
   }
 };

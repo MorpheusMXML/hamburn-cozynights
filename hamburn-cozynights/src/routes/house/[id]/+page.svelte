@@ -5,18 +5,18 @@
 
 <div class="container">
   <header>
-    <a href="/map" class="back-link">← Karte</a>
+    <a href="/map" class="back-link">← Map</a>
     <h1>{data.house.name}</h1>
-    <p class="subtitle">Wähle ein Zimmer für deine Übernachtung</p>
+    <p class="subtitle">Choose a sanctuary for your night</p>
   </header>
 
   <div class="grid">
     {#each data.rooms as room}
       <a href="/room/{room.id}" class="card" class:full={room.freeCount === 0}>
         <div class="card-header">
-          <h2>{room.name || 'Zimmer'} #{room.room_number}</h2>
+          <h2>{room.name || 'Room'} #{room.room_number}</h2>
           <span class="badge" class:green={room.freeCount > 0}>
-             {room.freeCount > 0 ? `${room.freeCount} frei` : 'Voll'}
+             {room.freeCount > 0 ? `${room.freeCount} free` : 'Full'}
           </span>
         </div>
         <div class="progress-bar">
