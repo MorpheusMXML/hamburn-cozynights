@@ -10,10 +10,6 @@ type HouseStats = HousesResponse & {
 };
 
 export const actions = {
-    logout: async ({ locals }) => {
-        locals.pb.authStore.clear();
-        throw redirect(303, '/admin/login');
-    },
     togglePhase: async ({ locals }) => {
         if (!locals.pb.authStore.model?.verified) return;
         
