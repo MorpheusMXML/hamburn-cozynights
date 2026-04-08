@@ -270,14 +270,23 @@
 
 <!-- Editor Modal -->
 {#if editingHouse}
-  <div class="modal-overlay" transition:fade={{ duration: 200 }} on:mousedown={() => editingHouse = null}>
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
+  <div class="modal-overlay" transition:fade={{ duration: 200 }} on:mousedown={() => {
+      console.log('[Dashboard] Closing editor modal (backdrop click)');
+      editingHouse = null;
+  }}>
     <div class="modal-content" on:mousedown|stopPropagation in:fly={{ y: 50, duration: 400 }}>
       <HouseEditor 
         x={editingHouse.x} 
         y={editingHouse.y} 
         name={editingHouse.name} 
+        houseId={editingHouse.id}
         on:save={handleSaveHouse} 
-        on:cancel={() => editingHouse = null} 
+        on:cancel={() => {
+            console.log('[Dashboard] Closing editor modal (cancel button)');
+            editingHouse = null;
+        }} 
       />
     </div>
   </div>
