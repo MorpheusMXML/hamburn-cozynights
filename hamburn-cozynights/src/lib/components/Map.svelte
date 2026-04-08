@@ -16,6 +16,10 @@
   // Context Menu State
   let selectedHouseId: string | null = null;
 
+  // Staging Warning State
+  let showStagingWarning = false;
+  let warningTimeout: any;
+
   function handleMouseDown(event: MouseEvent, house: any) {
     if (!isEditorMode || isBookingActive) return;
     
@@ -77,16 +81,30 @@
   }
 
   function handleHouseClick(event: MouseEvent, house: any) {
-    if (!isEditorMode) return;
-    if (hasDragged) return; // Prevent menu opening after drag
-    
-    event.preventDefault();
-    event.stopPropagation();
-    
-    if (selectedHouseId === house.id) {
-      selectedHouseId = null;
-    } else {
-      selectedHouseId = house.id;
+    if (isEditorMode) {
+      if (hasDragged) return; // Prevent menu opening after drag
+      
+      event.preventDefault();
+      event.stopPropagation();
+      
+      if (selectedHouseId === house.id) {
+        selectedHouseId = null;
+      } else {
+        selectedHouseId = house.id;
+      }
+      return;
+    }
+
+    // Client-side navigation or Staging Mode warning
+    if (!isBookingActive) {
+      event.preventDefault();
+      event.stopPropagation();
+      
+      showStagingWarning = true;
+      clearTimeout(warningTimeout);
+      warningTimeout = setTimeout(() => {
+        showStagingWarning = false;
+      }, 4000);
     }
   }
 
@@ -140,7 +158,7 @@
               style="overflow: visible;"
             >
               {#if !isEditorMode}
-                <a href="/house/{house.id}" class="marker-link">
+                <a href="/house/{house.id}" class="marker-link" on:click={(e) => handleHouseClick(e, house)}>
                   <UserHouseMarker 
                     name={house.name} 
                     status={house.occupiedBeds >= house.totalBeds ? 'full' : 'available'} 
@@ -168,6 +186,17 @@
       </g>
     {/if}
   </svg>
+
+  {#if showStagingWarning}
+    <div class="staging-warning">
+      <div class="warning-content">
+        <p class="warning-title">PATIENCE, BURNER! 🏜️</p>
+        <p>This house is currently being calibrated in <strong>Staging Mode</strong>.</p>
+        <p>Ignition starts when the timer hits zero.</p>
+        <div class="laser-line"></div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -176,6 +205,7 @@
     height: 100%;
     background: #000;
     position: relative;
+    overflow: hidden;
   }
   svg {
     width: 100%;
@@ -242,5 +272,61 @@
   @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
+  }
+
+  .staging-warning {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2000;
+    pointer-events: none;
+    animation: slideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  .warning-content {
+    background: #111;
+    border: 1px solid #f472b6;
+    padding: 1.5rem 2rem;
+    border-radius: 16px;
+    color: #eee;
+    text-align: center;
+    box-shadow: 0 0 30px rgba(244, 114, 182, 0.4);
+    min-width: 300px;
+    position: relative;
+  }
+
+  .warning-title {
+    color: #f472b6;
+    font-weight: 900;
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+    letter-spacing: 1px;
+  }
+
+  .warning-content p {
+    margin: 0.2rem 0;
+    font-size: 0.9rem;
+  }
+
+  .laser-line {
+    position: absolute;
+    bottom: 0;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: #f472b6;
+    box-shadow: 0 0 10px #f472b6;
+    animation: laserPulse 1s infinite;
+  }
+
+  @keyframes slideUp {
+    from { transform: translate(-50%, 100px); opacity: 0; }
+    to { transform: translate(-50%, 0); opacity: 1; }
+  }
+
+  @keyframes laserPulse {
+    0%, 100% { opacity: 1; transform: scaleX(1); }
+    50% { opacity: 0.5; transform: scaleX(0.8); }
   }
 </style>
