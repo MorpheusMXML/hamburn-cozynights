@@ -25,6 +25,15 @@ export const actions = {
             });
         }
     },
+    setUnlockTimer: async ({ locals, request }) => {
+        if (!locals.pb.authStore.model?.verified) return;
+        const data = await request.formData();
+        const date = data.get('unlockAt') as string;
+        
+        await locals.pb.collection('app_settings').update('abcsettings123', {
+            booking_unlock_at: date ? new Date(date).toISOString() : ""
+        });
+    },
     updateHouseCoords: async ({ locals, request }) => {
         if (!locals.pb.authStore.model?.verified) return;
         const data = await request.formData();
@@ -103,6 +112,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   return { 
     houses: housesWithStats,
-    isBookingActive: settings.is_booking_active
+    isBookingActive: settings.is_booking_active,
+    bookingUnlockAt: settings.booking_unlock_at
   };
 };

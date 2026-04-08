@@ -156,6 +156,7 @@ export type AppSettingsRecord = {
 	created: IsoAutoDateString
 	id: string
 	is_booking_active?: boolean
+	booking_unlock_at?: IsoDateString
 	updated: IsoAutoDateString
 }
 
