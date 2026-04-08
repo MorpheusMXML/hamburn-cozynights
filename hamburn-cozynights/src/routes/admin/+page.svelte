@@ -36,6 +36,15 @@
 
   async function handleHouseMoved(event: CustomEvent) {
     const { id, x, y } = event.detail;
+    
+    // 1. Find the house object to get its current name
+    const house = houses.find(h => h.id === id);
+    if (!house) return;
+
+    // 2. Open the editor modal immediately so the user can see/confirm the move
+    editingHouse = { id: house.id, x, y, name: house.name };
+
+    // 3. Save coordinates to background
     const formData = new FormData();
     formData.append('id', id);
     formData.append('x', x.toString());
@@ -48,12 +57,14 @@
 
     if (!response.ok) {
       alert("🔥 THE PLAYA PROTECTS! 🛡️ This house has active bookings and cannot be moved.");
+      editingHouse = null; // Close editor if move was illegal
       invalidateAll();
     }
   }
 
   function handleRenameHouse(event: CustomEvent) {
     const house = event.detail;
+    // Ensure all data is correctly passed to pre-fill the modal
     editingHouse = { id: house.id, x: house.x, y: house.y, name: house.name };
   }
 
