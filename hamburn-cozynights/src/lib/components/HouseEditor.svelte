@@ -55,8 +55,8 @@
 
 <div class="editor-overlay" style="left: {x/10}%; top: {y/7}%;">
   <div class="editor-card">
-    <h4>New Sanctuary 🏠</h4>
-    <label>Name: <input bind:value={name} placeholder="Sanctuary Name" /></label>
+    <h4>New House 🏠</h4>
+    <label>Name: <input bind:value={name} placeholder="House Name" /></label>
     <label>Beds 🛌: <input type="number" bind:value={bedCount} min="1" /></label>
     <div class="actions">
       <button on:click={() => dispatch('cancel')}>Cancel 🏜️</button>
