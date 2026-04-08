@@ -1,13 +1,5 @@
-import type { TypedPocketBase, HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
-
-// Extended types for tree structure (Plain objects for SvelteKit compatibility)
-export type BedData = BedsResponse;
-export type RoomData = RoomsResponse & { beds: BedData[] };
-export type HouseData = HousesResponse & { 
-    rooms: RoomData[];
-    totalBeds: number;
-    occupiedBeds: number;
-};
+import type { TypedPocketBase } from '$lib/pocketbase-types';
+import type { HouseData } from '$lib/types';
 
 export class InventoryService {
     constructor(private pb: TypedPocketBase) {}

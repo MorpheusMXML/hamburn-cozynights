@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { House } from '$lib/types';
+  import type { HouseData } from '$lib/types';
   import { createEventDispatcher } from 'svelte';
 
   export let x: number;
@@ -11,17 +11,40 @@
   let bedCount = 4;
 
   function handleSave() {
-    const newHouse: House = {
-      id: String(Date.now()), // Simple ID generation
+    // Note: In a real app, this would be handled by a PocketBase create call
+    // This is likely a placeholder for the UI editor
+    const newHouse: HouseData = {
+      id: String(Date.now()),
+      collectionId: '',
+      collectionName: 'houses' as any,
+      created: new Date().toISOString(),
+      updated: new Date().toISOString(),
       name,
       x,
       y,
-      status: 'available',
-      beds: Array.from({ length: bedCount }, (_, i) => ({
-        id: String(Date.now() + i),
-        label: `B${i + 1}`,
-        occupied: false
-      }))
+      rooms: [{
+          id: 'temp-room',
+          collectionId: '',
+          collectionName: 'rooms' as any,
+          created: new Date().toISOString(),
+          updated: new Date().toISOString(),
+          name: 'Zimmer 1',
+          room_number: 1,
+          house: '',
+          amount_beds: bedCount,
+          beds: Array.from({ length: bedCount }, (_, i) => ({
+            id: String(Date.now() + i),
+            collectionId: '',
+            collectionName: 'beds' as any,
+            created: new Date().toISOString(),
+            updated: new Date().toISOString(),
+            label: `B${i + 1}`,
+            occupied: false,
+            room: 'temp-room'
+          }))
+      }],
+      totalBeds: bedCount,
+      occupiedBeds: 0
     };
     dispatch('save', newHouse);
   }
