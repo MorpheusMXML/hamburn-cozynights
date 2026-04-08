@@ -121,6 +121,7 @@ export type OrdersRecord = {
 	booking_date?: IsoDateString
 	created: IsoAutoDateString
 	customer_name: string
+	burner_name?: string
 	id: string
 	order_number: string
 	updated: IsoAutoDateString

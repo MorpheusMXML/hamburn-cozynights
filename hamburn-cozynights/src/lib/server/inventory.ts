@@ -1,51 +1,88 @@
-import { pb } from '$lib/pocketbase';
-import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
-
-// Erweiterte Typen für die Baumstruktur (OOP-ähnlich)
-export type Bed = BedsResponse;
-
-export type Room = RoomsResponse & {
-    items: Bed[]; // Ein Raum "hat" Betten
-};
-
-export type House = HousesResponse & {
-    items: Room[]; // Ein Haus "hat" Räume
-};
+import type { TypedPocketBase } from '$lib/pocketbase-types';
+import type { HouseData } from '$lib/types';
 
 export class InventoryService {
-    
-    // Lädt die komplette Hierarchie
-    static async getFullTree(): Promise<House[]> {
-        // 1. Alle Daten parallel laden (Performance!)
+    constructor(private pb: TypedPocketBase) {}
+
+    /**
+     * Fetches the entire house/room/bed hierarchy with statistics. 🛰️📊
+     */
+    async getFullTree(): Promise<HouseData[]> {
+        // Fetch all data in parallel
         const [housesRaw, roomsRaw, bedsRaw] = await Promise.all([
-            pb.collection('houses').getFullList({ sort: 'name' }),
-            pb.collection('rooms').getFullList({ sort: 'room_number' }),
-            pb.collection('beds').getFullList({ sort: 'label' })
+            this.pb.collection('houses').getFullList({ sort: 'name' }),
+            this.pb.collection('rooms').getFullList({ sort: 'room_number' }),
+            this.pb.collection('beds').getFullList({ sort: 'label' })
         ]);
 
-        // 2. Objekte verknüpfen (Mapping)
-        const tree: House[] = housesRaw.map(house => {
-            // Finde alle Räume für dieses Haus
-            const myRooms = roomsRaw
+        // Serialize everything to plain objects to ensure compatibility
+        const houses = housesRaw.map(h => ({ ...h }));
+        const rooms = roomsRaw.map(r => ({ ...r }));
+        const beds = bedsRaw.map(b => ({ ...b }));
+
+        // Build the hierarchy
+        return houses.map(house => {
+            const houseRooms = rooms
                 .filter(room => room.house === house.id)
                 .map(room => {
-                    // Finde alle Betten für diesen Raum
-                    const myBeds = bedsRaw.filter(bed => bed.room === room.id);
-                    
-                    // Rückgabe Raum-Objekt mit Kinder-Elementen
+                    const roomBeds = beds.filter(bed => bed.room === room.id);
                     return {
                         ...room,
-                        items: myBeds
-                    } as Room;
+                        beds: roomBeds
+                    };
                 });
 
-            // Rückgabe Haus-Objekt mit Kinder-Elementen
+            // Calculate stats for the house
+            const allBedsInHouse = houseRooms.flatMap(r => r.beds);
+            const totalBeds = allBedsInHouse.length;
+            const occupiedBeds = allBedsInHouse.filter(b => b.occupied).length;
+
             return {
                 ...house,
-                items: myRooms
-            } as House;
+                rooms: houseRooms,
+                totalBeds,
+                occupiedBeds
+            };
         });
+    }
 
-        return tree;
+    /**
+     * Fetches a single house with its rooms and beds. 🏠🚪🛌
+     */
+    async getHouse(houseId: string): Promise<HouseData | null> {
+        try {
+            const [houseRaw, roomsRaw, bedsRaw] = await Promise.all([
+                this.pb.collection('houses').getOne(houseId),
+                this.pb.collection('rooms').getFullList({ 
+                    filter: this.pb.filter('house = {:id}', { id: houseId }), 
+                    sort: 'room_number' 
+                }),
+                this.pb.collection('beds').getFullList({ 
+                    filter: this.pb.filter('room.house = {:id}', { id: houseId }),
+                    sort: 'label'
+                })
+            ]);
+
+            const houseRooms = roomsRaw.map(room => {
+                const roomBeds = bedsRaw.filter(bed => bed.room === room.id);
+                return {
+                    ...room,
+                    beds: roomBeds.map(b => ({ ...b }))
+                };
+            });
+
+            const totalBeds = bedsRaw.length;
+            const occupiedBeds = bedsRaw.filter(b => b.occupied).length;
+
+            return {
+                ...houseRaw,
+                rooms: houseRooms,
+                totalBeds,
+                occupiedBeds
+            };
+        } catch (error) {
+            console.error(`Error fetching house ${houseId}:`, error);
+            return null;
+        }
     }
 }

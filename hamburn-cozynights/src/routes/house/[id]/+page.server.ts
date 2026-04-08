@@ -1,22 +1,21 @@
-import { pb } from '$lib/pocketbase';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
   try {
-    const house = await pb.collection('houses').getOne<HousesResponse>(params.id);
-    const rooms = await pb.collection('rooms').getFullList<RoomsResponse>({
-      filter: `house = "${params.id}"`,
+    const house = await locals.pb.collection('houses').getOne<HousesResponse>(params.id);
+    const rooms = await locals.pb.collection('rooms').getFullList<RoomsResponse>({
+      filter: locals.pb.filter('house = {:id}', { id: params.id }),
       sort: 'room_number'
     });
     
-    // Betten laden für Statistik
-    const beds = await pb.collection('beds').getFullList<BedsResponse>({
-      filter: `room.house = "${params.id}"`
+    // Fetch spots for statistics 📊
+    const beds = await locals.pb.collection('beds').getFullList<BedsResponse>({
+      filter: locals.pb.filter('room.house = {:id}', { id: params.id })
     });
 
-    // Statistik berechnen
+    // Calculate occupancy 👥
     const roomsWithStats = rooms.map(room => {
       const roomBeds = beds.filter(b => b.room === room.id);
       const freeCount = roomBeds.filter(b => !b.occupied).length;
@@ -25,6 +24,6 @@ export const load: PageServerLoad = async ({ params }) => {
 
     return { house, rooms: roomsWithStats };
   } catch {
-    throw error(404, 'Haus nicht gefunden');
+    throw error(404, 'Sanctuary not found in the dust.');
   }
 };

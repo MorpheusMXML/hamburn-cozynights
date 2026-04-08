@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { House } from '$lib/types';
+  import type { HouseData } from '$lib/types';
   import { createEventDispatcher } from 'svelte';
 
   export let x: number;
@@ -11,17 +11,43 @@
   let bedCount = 4;
 
   function handleSave() {
-    const newHouse: House = {
-      id: Date.now(), // Simple ID generation
+    // Note: In a real app, this would be handled by a PocketBase create call
+    // This is likely a placeholder for the UI editor
+    const now = new Date().toISOString() as any;
+    const newHouse: HouseData = {
+      id: String(Date.now()),
+      collectionId: '',
+      collectionName: 'houses' as any,
+      created: now,
+      updated: now,
       name,
       x,
       y,
-      status: 'frei',
-      beds: Array.from({ length: bedCount }, (_, i) => ({
-        id: Date.now() + i,
-        label: `B${i + 1}`,
-        occupied: false
-      }))
+      rooms: [{
+          id: 'temp-room',
+          collectionId: '',
+          collectionName: 'rooms' as any,
+          created: now,
+          updated: now,
+          name: 'Room 1',
+          room_number: 1,
+          house: '',
+          amount_beds: bedCount,
+          beds: Array.from({ length: bedCount }, (_, i) => ({
+            id: String(Date.now() + i),
+            collectionId: '',
+            collectionName: 'beds' as any,
+            created: now,
+            updated: now,
+            label: `B${i + 1}`,
+            occupied: false,
+            room: 'temp-room',
+            bookedBy: '',
+            order: ''
+          }))
+      }],
+      totalBeds: bedCount,
+      occupiedBeds: 0
     };
     dispatch('save', newHouse);
   }
@@ -29,12 +55,12 @@
 
 <div class="editor-overlay" style="left: {x/10}%; top: {y/7}%;">
   <div class="editor-card">
-    <h4>Neues Haus</h4>
-    <label>Name: <input bind:value={name} placeholder="Haus Name" /></label>
-    <label>Betten: <input type="number" bind:value={bedCount} min="1" /></label>
+    <h4>New Sanctuary 🏠</h4>
+    <label>Name: <input bind:value={name} placeholder="Sanctuary Name" /></label>
+    <label>Beds 🛌: <input type="number" bind:value={bedCount} min="1" /></label>
     <div class="actions">
-      <button on:click={() => dispatch('cancel')}>Abbrechen</button>
-      <button class="save" on:click={handleSave} disabled={!name}>Speichern</button>
+      <button on:click={() => dispatch('cancel')}>Cancel 🏜️</button>
+      <button class="save" on:click={handleSave} disabled={!name}>Save ✨</button>
     </div>
   </div>
 </div>

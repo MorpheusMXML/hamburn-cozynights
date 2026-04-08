@@ -21,3 +21,6 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+# Database
+hamburn-cozynights/pb_data
+hamburn-cozynights/pb_data.tar.gz.gpg
