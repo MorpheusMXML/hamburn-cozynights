@@ -289,43 +289,52 @@
           </div>
       </div>
     {:else}
-      <div class="grid-view" in:fade={{ duration: 300 }}>
+    <div class="grid-view" in:fade={{ duration: 300 }}>
           {#each houses as house}
-            <a href="/admin/house/{house.id}" class="house-card">
-              <div class="card-glow"></div>
-              <header class="card-header">
-                <h2>{house.name} 🛖</h2>
-                <span class="badge {getStatusColor(house.freeBeds, house.totalBeds)}">
-                   {getStatusText(house.freeBeds, house.totalBeds)}
-                </span>
-              </header>
+            <div class="house-card-wrapper">
+              <a href="/admin/house/{house.id}" class="house-card">
+                <div class="card-glow"></div>
+                <header class="card-header">
+                  <h2>{house.name} 🛖</h2>
+                  <span class="badge {getStatusColor(house.freeBeds, house.totalBeds)}">
+                     {getStatusText(house.freeBeds, house.totalBeds)}
+                  </span>
+                </header>
 
-              <div class="card-body">
-                  <div class="stat-group">
-                      <span class="stat-label">Occupancy 👥</span>
-                      <span class="stat-value">{house.occupiedBeds} / {house.totalBeds}</span>
-                  </div>
+                <div class="card-body">
+                    <div class="stat-group">
+                        <span class="stat-label">Occupancy 👥</span>
+                        <span class="stat-value">{house.occupiedBeds} / {house.totalBeds}</span>
+                    </div>
 
-                  <div class="progress-bar">
-                      <div 
-                          class="progress-fill" 
-                          style="width: {house.occupancyRate}%;"
-                          class:full={house.occupancyRate === 100}
-                      ></div>
-                  </div>
-                  
-                  <footer class="card-footer">
-                      <span>📍 X: {house.x} / Y: {house.y}</span>
-                      <span class="btn-manage">Manage ⚙️</span>
-                  </footer>
-              </div>
-            </a>
+                    <div class="progress-bar">
+                        <div 
+                            class="progress-fill" 
+                            style="width: {house.occupancyRate}%;"
+                            class:full={house.occupancyRate === 100}
+                        ></div>
+                    </div>
+                    
+                    <footer class="card-footer">
+                        <span>📍 X: {house.x} / Y: {house.y}</span>
+                    </footer>
+                </div>
+              </a>
+              
+              {#if isVerified}
+                <div class="card-admin-actions">
+                    <button class="btn-action-small" on:click={() => handleRenameHouse({ detail: house })}>RENAME ✏️</button>
+                    <button class="btn-action-small vanish" on:click={() => handleDeleteHouse({ detail: house })}>VANISH 🌪️</button>
+                </div>
+              {/if}
+            </div>
           {/each}
           
           {#if isVerified}
-            <button class="add-house-card" on:click={() => showMap = true}>
+            <button class="add-house-card" on:click={() => handleLocationSelected({ detail: { x: 500, y: 350 } })}>
                 <span class="plus">+</span>
-                <span>Open Map to Add House</span>
+                <span>Ignite New House</span>
+                <small>Auto-centered at 500/350</small>
             </button>
           {/if}
       </div>
@@ -560,6 +569,34 @@
   /* Grid View */
   .grid-view { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 2rem; }
   
+  .house-card-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+  }
+
+  .card-admin-actions {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0 0.5rem;
+  }
+
+  .btn-action-small {
+      flex: 1;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #888;
+      padding: 6px;
+      border-radius: 6px;
+      font-size: 0.65rem;
+      font-weight: 900;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: all 0.2s;
+  }
+  .btn-action-small:hover { border-color: #2dd4bf; color: #2dd4bf; background: rgba(45, 212, 191, 0.05); }
+  .btn-action-small.vanish:hover { border-color: #f87171; color: #f87171; background: rgba(248, 113, 113, 0.05); }
+
   .house-card {
     background: #111;
     border: 1px solid #222;
@@ -591,13 +628,14 @@
   .progress-fill.full { background: #f87171; }
 
   .card-footer { display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: #444; font-family: monospace; }
-  .btn-manage { color: #2dd4bf; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; font-family: sans-serif; }
-
+  
   .add-house-card {
     background: transparent; border: 2px dashed #222; border-radius: 16px;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 1rem; color: #444; cursor: pointer; transition: all 0.2s;
+    gap: 0.5rem; color: #444; cursor: pointer; transition: all 0.2s;
+    min-height: 200px;
   }
+  .add-house-card small { font-size: 0.6rem; opacity: 0.5; text-transform: uppercase; letter-spacing: 1px; }
   .add-house-card:hover { border-color: #2dd4bf; color: #2dd4bf; background: rgba(45, 212, 191, 0.05); }
   .add-house-card .plus { font-size: 3rem; font-weight: 100; }
 
