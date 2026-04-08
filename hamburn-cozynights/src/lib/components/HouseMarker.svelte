@@ -26,7 +26,7 @@
     cx={house.x} 
     cy={house.y} 
     r="15" 
-    fill={house.status === 'frei' ? '#22c55e' : '#ef4444'} 
+    fill={house.status === 'available' ? '#22c55e' : '#ef4444'} 
     stroke="white" 
     stroke-width="3" 
   />

@@ -3,9 +3,9 @@
   import { scale } from 'svelte/transition';
 
   export let house: House;
-  export let selectedBedId: number | null = null;
+  export let selectedBedId: string | null = null;
   export let onClose: () => void;
-  export let onSelectBed: (id: number) => void;
+  export let onSelectBed: (id: string) => void;
   export let onBook: () => void;
 </script>
 

@@ -1,9 +1,12 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { Actions } from './$types';
-import { pb } from '$lib/pocketbase';
 
 export const actions: Actions = {
-    create: async ({ request }) => {
+    create: async ({ request, locals }) => {
+        if (!locals.pb.authStore.isValid) {
+            throw error(401, 'Unauthorized');
+        }
+
         const data = await request.formData();
         const name = data.get('name');
         const x = parseInt(data.get('x') as string);
@@ -11,7 +14,7 @@ export const actions: Actions = {
 
         try {
             // Beispiel-Aufruf für Pocketbase
-            await pb.collection('houses').create({
+            await locals.pb.collection('houses').create({
                 name,
                 x,
                 y,

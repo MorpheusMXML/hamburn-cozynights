@@ -1,5 +1,4 @@
 // src/routes/room/[id]/+page.server.ts
-import { pb } from '$lib/pocketbase';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { RoomsResponse, BedsResponse, OrdersResponse } from '$lib/pocketbase-types';
@@ -20,12 +19,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     if (!locals.orderNumber) throw redirect(303, '/');
 
     try {
-        const order = await pb.collection('orders').getFirstListItem(`order_number = "${locals.orderNumber}"`);
-        const userBed = await pb.collection('beds').getFirstListItem(`order = "${order.id}"`).catch(() => null);
+        const order = await locals.pb.collection('orders').getFirstListItem(locals.pb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber }));
+        const userBed = await locals.pb.collection('beds').getFirstListItem(locals.pb.filter('order = {:orderId}', { orderId: order.id })).catch(() => null);
         
-        const room = await pb.collection('rooms').getOne<RoomsResponse>(params.id);
-        const beds = await pb.collection('beds').getFullList<BedsResponse<{ order?: OrdersResponse }>>({
-            filter: `room = "${params.id}"`,
+        const room = await locals.pb.collection('rooms').getOne<RoomsResponse>(params.id);
+        const beds = await locals.pb.collection('beds').getFullList<BedsResponse<{ order?: OrdersResponse }>>({
+            filter: locals.pb.filter('room = {:roomId}', { roomId: params.id }),
             sort: 'label',
             expand: 'order' 
         });
@@ -54,24 +53,31 @@ export const actions: Actions = {
         }
 
         try {
-            const order = await pb.collection('orders').getFirstListItem(`order_number = "${locals.orderNumber}"`);
-
-            // 1. Alte Buchungen lösen
-            const previousBeds = await pb.collection('beds').getFullList({
-                filter: `order = "${order.id}"`
-            });
-            for (const prevBed of previousBeds) {
-                await pb.collection('beds').update(prevBed.id, { occupied: false, order: null });
+            const order = await locals.pb.collection('orders').getFirstListItem(locals.pb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber }));
+            
+            // Check if bed exists and is available
+            const bed = await locals.pb.collection('beds').getOne<BedsResponse>(bedId);
+            if (bed.occupied && bed.order !== order.id) {
+                return fail(400, { error: 'Dieses Bett ist bereits belegt.' });
             }
 
-            // 2. Update Order: Dank Schritt 1 kennt TypeScript jetzt 'burner_name'
-            // Kein 'as any' mehr nötig!
-            await pb.collection('orders').update(order.id, { 
+            // 1. Alte Buchungen lösen
+            const previousBeds = await locals.pb.collection('beds').getFullList({
+                filter: locals.pb.filter('order = {:orderId}', { orderId: order.id })
+            });
+            for (const prevBed of previousBeds) {
+                if (prevBed.id !== bedId) {
+                    await locals.pb.collection('beds').update(prevBed.id, { occupied: false, order: null });
+                }
+            }
+
+            // 2. Update Order
+            await locals.pb.collection('orders').update(order.id, { 
                 burner_name: guestName 
             });
 
             // 3. Neues Bett buchen
-            await pb.collection('beds').update(bedId, {
+            await locals.pb.collection('beds').update(bedId, {
                 occupied: true,
                 order: order.id
             });
@@ -86,11 +92,11 @@ export const actions: Actions = {
     unbookBed: async ({ locals }) => {
         if (!locals.orderNumber) return fail(401);
         try {
-            const order = await pb.collection('orders').getFirstListItem(`order_number = "${locals.orderNumber}"`);
-            const beds = await pb.collection('beds').getFullList({ filter: `order = "${order.id}"` });
+            const order = await locals.pb.collection('orders').getFirstListItem(locals.pb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber }));
+            const beds = await locals.pb.collection('beds').getFullList({ filter: locals.pb.filter('order = {:orderId}', { orderId: order.id }) });
             
             for (const bed of beds) {
-                await pb.collection('beds').update(bed.id, { occupied: false, order: null });
+                await locals.pb.collection('beds').update(bed.id, { occupied: false, order: null });
             }
             return { success: true };
         } catch {

@@ -12,13 +12,13 @@
 
   function handleSave() {
     const newHouse: House = {
-      id: Date.now(), // Simple ID generation
+      id: String(Date.now()), // Simple ID generation
       name,
       x,
       y,
-      status: 'frei',
+      status: 'available',
       beds: Array.from({ length: bedCount }, (_, i) => ({
-        id: Date.now() + i,
+        id: String(Date.now() + i),
         label: `B${i + 1}`,
         occupied: false
       }))
