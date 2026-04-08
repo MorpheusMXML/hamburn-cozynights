@@ -24,7 +24,7 @@
 
 <div class="container">
   <header>
-    <a href="/house/{data.room.house}" class="back-link">← Zurück zum Haus</a>
+    <a href="/house/{data.room.house}" class="back-link">← Back to House</a>
     <h1>{data.room.name} <small>#{data.room.room_number}</small></h1>
   </header>
 
@@ -34,10 +34,10 @@
       <div class="booking-warning-banner">
         <div class="warning-icon">⚠️</div>
         <div class="warning-content">
-          <h3>Du hast bereits eine Buchung!</h3>
-          <p>Du hast bereits ein Bett in einem anderen Zimmer gebucht. Um hier ein neues Bett zu wählen, musst du deine bestehende Buchung zuerst freigeben.</p>
+          <h3>You already have a booking!</h3>
+          <p>You have already secured a spot in another room. To choose a new bed here, you must release your current reservation first.</p>
           <form method="POST" action="?/unbookBed" use:enhance>
-            <button type="submit" class="btn-unbook-banner">Bestehende Buchung jetzt freigeben</button>
+            <button type="submit" class="btn-unbook-banner">Release Current Spot</button>
           </form>
         </div>
       </div>
@@ -45,8 +45,8 @@
       <div class="booking-success-banner">
         <div class="success-icon">✨</div>
         <div class="success-content">
-          <h3>Dein Zuhause für heute!</h3>
-          <p>Du hast das Bett <strong>{myBed.label}</strong> in diesem Zimmer erfolgreich reserviert.</p>
+          <h3>Welcome Home!</h3>
+          <p>You have successfully reserved bed <strong>{myBed.label}</strong> in this sanctuary.</p>
         </div>
       </div>
     {/if}
@@ -63,7 +63,7 @@
            <div class="icon">🛏️</div>
            <span class="label">{bed.label}</span>
            <div class="status-box occupied">
-              <span class="status-text">Belegt</span>
+              <span class="status-text">Occupied</span>
               <span class="guest-name">
                 {bed.expand?.order?.burner_name || 'Mystery Burner'}
               </span>
@@ -75,10 +75,10 @@
            <div class="icon">🛏️</div>
            <span class="label">{bed.label}</span>
            <div class="status-box my-status">
-              <span class="status-text">Dein Bett</span>
+              <span class="status-text">Your Spot</span>
               <span class="guest-name">{bed.expand?.order?.burner_name}</span>
            </div>
-           <small class="edit-hint">Klicken zum Ändern</small>
+           <small class="edit-hint">Click to modify</small>
         </button>
 
       {:else}
@@ -90,8 +90,8 @@
            <div class="icon">🛏️</div>
            <span class="label">{bed.label}</span>
            <div class="status-box free">
-              <span>{iHaveAnotherBooking ? 'Gesperrt' : 'Frei'}</span>
-              <small>{iHaveAnotherBooking ? 'Zuerst anderes Bett freigeben' : 'Jetzt buchen!'}</small>
+              <span>{iHaveAnotherBooking ? 'Locked' : 'Available'}</span>
+              <small>{iHaveAnotherBooking ? 'Release other spot first' : 'Grab it now!'}</small>
            </div>
         </button>
       {/if}
@@ -102,8 +102,8 @@
 {#if showModal}
   <div class="modal-backdrop" on:click={closeModal} role="presentation">
     <div class="modal" on:click|stopPropagation role="dialog">
-      <h2>{selectedBedId === data.userBedId ? 'Buchung bearbeiten' : 'Bett buchen'}</h2>
-      <p>Gib einen Burner-Namen ein (optional).</p>
+      <h2>{selectedBedId === data.userBedId ? 'Edit Your Spot' : 'Grab This Spot'}</h2>
+      <p>Set your Burner Name (optional).</p>
       
       <form method="POST" action="?/bookBed" use:enhance={() => {
           return async ({ result, update }) => {
@@ -120,16 +120,16 @@
                 name="guestName" 
                 id="guestName" 
                 bind:value={currentNameInput} 
-                placeholder="Leer lassen für Zufallsnamen..." 
+                placeholder="Leave blank for a random one..." 
             />
         </div>
 
         <div class="actions">
             {#if selectedBedId === data.userBedId}
-                <button type="submit" formaction="?/unbookBed" class="btn-unbook">Freigeben</button>
+                <button type="submit" formaction="?/unbookBed" class="btn-unbook">Release</button>
             {/if}
-            <button type="button" class="btn-cancel" on:click={closeModal}>Abbrechen</button>
-            <button type="submit" class="btn-confirm">Speichern</button>
+            <button type="button" class="btn-cancel" on:click={closeModal}>Cancel</button>
+            <button type="submit" class="btn-confirm">Save Spot</button>
         </div>
       </form>
     </div>

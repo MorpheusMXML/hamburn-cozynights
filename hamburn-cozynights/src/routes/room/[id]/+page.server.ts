@@ -58,10 +58,10 @@ export const actions: Actions = {
             // Check if bed exists and is available
             const bed = await locals.pb.collection('beds').getOne<BedsResponse>(bedId);
             if (bed.occupied && bed.order !== order.id) {
-                return fail(400, { error: 'Dieses Bett ist bereits belegt.' });
+                return fail(400, { error: 'This spot is already claimed by another soul.' });
             }
 
-            // 1. Alte Buchungen lösen
+            // 1. Release previous bookings 🕊️
             const previousBeds = await locals.pb.collection('beds').getFullList({
                 filter: locals.pb.filter('order = {:orderId}', { orderId: order.id })
             });
@@ -71,12 +71,12 @@ export const actions: Actions = {
                 }
             }
 
-            // 2. Update Order
+            // 2. Update Order with new burner name 📛
             await locals.pb.collection('orders').update(order.id, { 
                 burner_name: guestName 
             });
 
-            // 3. Neues Bett buchen
+            // 3. Claim the new spot ✨
             await locals.pb.collection('beds').update(bedId, {
                 occupied: true,
                 order: order.id
@@ -85,7 +85,7 @@ export const actions: Actions = {
             return { success: true };
         } catch (err) {
             console.error(err);
-            return fail(500, { error: 'Datenbankfehler.' });
+            return fail(500, { error: 'The database turned into dust.' });
         }
     },
 

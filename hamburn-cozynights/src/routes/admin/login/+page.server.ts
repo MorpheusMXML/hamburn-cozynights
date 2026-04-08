@@ -12,7 +12,7 @@ interface SafeAuthProvider {
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
-    // Wenn schon eingeloggt und verifiziert -> Dashboard
+    // If already logged in and verified -> Dashboard 🚀
     if (locals.pb.authStore.isValid && locals.pb.authStore.model?.verified) {
         throw redirect(303, '/admin');
     }
@@ -28,32 +28,32 @@ export const load: PageServerLoad = async ({ locals }) => {
 
         return {
             providers: providers,
-            // Email-Login ist quasi immer möglich, wenn wir Register anbieten
+            // Email login is almost always available if we offer registration 👤
             enableEmail: true 
         };
     } catch {
-        return { providers: [], enableEmail: true, error: "Backend nicht erreichbar" };
+        return { providers: [], enableEmail: true, error: "Sanctuary backend unreachable." };
     }
 };
 
 export const actions: Actions = {
-    // ACTION 1: Login mit Email
+    // ACTION 1: Login with Email 👤
     login: async ({ locals, request }) => {
         const data = await request.formData();
         const email = data.get('email')?.toString();
         const password = data.get('password')?.toString();
 
-        if (!email || !password) return fail(400, { message: 'Bitte Felder ausfüllen' });
+        if (!email || !password) return fail(400, { message: 'Fill in the blanks!' });
 
         try {
             await locals.pb.collection('users').authWithPassword(email, password);
         } catch {
-            return fail(400, { fail: true, message: 'Falsche Zugangsdaten oder User existiert nicht.' });
+            return fail(400, { fail: true, message: 'Invalid keys or burner does not exist.' });
         }
         throw redirect(303, '/admin');
     },
 
-    // ACTION 2: Registrieren (User erstellen + Login)
+    // ACTION 2: Register (Create User + Login) ✨
     register: async ({ locals, request }) => {
         const data = await request.formData();
         const email = data.get('email')?.toString();
@@ -61,35 +61,34 @@ export const actions: Actions = {
         const passwordConfirm = data.get('passwordConfirm')?.toString();
 
         if (!email || !password || !passwordConfirm) {
-            return fail(400, { register: true, message: 'Alle Felder ausfüllen.' });
+            return fail(400, { register: true, message: 'The playa needs all info.' });
         }
         if (password !== passwordConfirm) {
-            return fail(400, { register: true, message: 'Passwörter stimmen nicht überein.' });
+            return fail(400, { register: true, message: 'Passphrases do not match.' });
         }
 
         try {
-            // 1. User erstellen (Standard: verified = false)
+            // 1. Create user (Default: verified = false) 🗝️
             await locals.pb.collection('users').create({
                 email,
                 password,
                 passwordConfirm,
-                verified: false // explizit false (obwohl default)
+                verified: false 
             });
 
-            // 2. Sofort einloggen
+            // 2. Login immediately 🚀
             await locals.pb.collection('users').authWithPassword(email, password);
 
         } catch (error) {
             const err = error as ClientResponseError;
-            // Fehler abfangen (z.B. Email schon vergeben)
-            return fail(400, { register: true, message: err.message || 'Registrierung fehlgeschlagen.' });
+            return fail(400, { register: true, message: err.message || 'Registration turned into dust.' });
         }
         
-        // Redirect zum Admin -> Layout wird blockieren, weil verified=false
+        // Redirect to admin -> layout will block because verified=false 🛡️
         throw redirect(303, '/admin');
     },
 
-    // ACTION 3: OAuth (GitHub/Google)
+    // ACTION 3: OAuth (GitHub/Google) 🔗
     oauth2: async ({ locals, cookies, url, request }) => {
         const formData = await request.formData();
         const providerName = formData.get('provider')?.toString();
@@ -103,7 +102,7 @@ export const actions: Actions = {
         }
         
         const provider = providers.find((p) => p.name === providerName);
-        if (!provider) return fail(400, { message: 'Provider fehlt' });
+        if (!provider) return fail(400, { message: 'Provider lost in the desert.' });
 
         const redirectUrl = `${url.origin}/auth/callback/${provider.name}`;
         

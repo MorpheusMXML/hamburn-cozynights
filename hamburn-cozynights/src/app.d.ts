@@ -1,19 +1,20 @@
 // src/app.d.ts
-import type PocketBase from 'pocketbase'; // <--- WICHTIG: Import für den 'user' Typ
-import type { TypedPocketBase } from '$lib/pocketbase-types'; // <--- WICHTIG: Deine generierten Typen
+import type PocketBase from 'pocketbase'; // <--- IMPORTANT: Import for the 'user' type 👤
+import type { TypedPocketBase } from '$lib/pocketbase-types'; // <--- IMPORTANT: Your generated types 🛠️
 
 declare global {
 	namespace App {
 		// interface Error {}
 		
 		interface Locals {
-			// Hier nutzen wir TypedPocketBase statt dem Standard-PocketBase
-			// Damit funktionieren Dinge wie .getFullList<HousesResponse>()
+			// We use TypedPocketBase for full type safety in our collections ⚡️
 			pb: TypedPocketBase;
+			// The current burner's booking code from the cookie 🎫
 			orderNumber: string | null;
-			burner_Name?: string; // Optional, falls du den Namen des Gastes irgendwo speichern möchtest
+			// Optional field for storing the guest name session-wide 📛
+			burner_Name?: string; 
 			
-			// Hier nutzen wir den importierten PocketBase Typ
+			// The PocketBase user model if authenticated 🔐
 			user?: PocketBase['authStore']['model'];
 		}
 

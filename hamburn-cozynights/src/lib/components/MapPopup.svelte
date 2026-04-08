@@ -19,7 +19,7 @@
   <div class="popup-content">
     <button class="close-btn" on:click={onClose}>&times;</button>
     <h3>{house.name}</h3>
-    <p>Wähle ein Bett:</p>
+    <p>Choose a spot:</p>
     
     <div class="bed-grid">
       {#each allBeds as bed}
@@ -39,7 +39,7 @@
 
     {#if selectedBedId}
       <button class="confirm-action" on:click={onBook}>
-        Bett buchen
+        Reserve Spot
       </button>
     {/if}
   </div>

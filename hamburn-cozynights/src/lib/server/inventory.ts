@@ -5,7 +5,7 @@ export class InventoryService {
     constructor(private pb: TypedPocketBase) {}
 
     /**
-     * Fetches the entire house/room/bed hierarchy with statistics.
+     * Fetches the entire house/room/bed hierarchy with statistics. 🛰️📊
      */
     async getFullTree(): Promise<HouseData[]> {
         // Fetch all data in parallel
@@ -47,7 +47,7 @@ export class InventoryService {
     }
 
     /**
-     * Fetches a single house with its rooms and beds.
+     * Fetches a single house with its rooms and beds. 🏠🚪🛌
      */
     async getHouse(houseId: string): Promise<HouseData | null> {
         try {

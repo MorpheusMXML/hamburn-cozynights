@@ -11,36 +11,36 @@
 <div class="dashboard-container">
   <div class="header-row">
     <div class="breadcrumbs">
-        <a href="/admin">Übersicht</a> 
+        <a href="/admin">Dashboard</a> 
         <span class="sep">/</span>
         {#if house}<a href="/admin/house/{house.id}">{house.name}</a> <span class="sep">/</span>{/if}
-        <span>Zimmer {room.room_number}</span>
+        <span>Room {room.room_number}</span>
     </div>
     
-    <h1>{room.name || `Zimmer ${room.room_number}`} <span class="badge">#{room.room_number}</span></h1>
+    <h1>{room.name || `Room ${room.room_number}`} 🛌 <span class="badge">#{room.room_number}</span></h1>
   </div>
 
   <div class="content-split">
     <div class="info-column">
         <div class="status-card">
-            <h3>Auslastung</h3>
+            <h3>Occupancy 📊</h3>
             <div class="big-number">
                 {beds.filter(b => b.occupied).length} <span class="divider">/</span> {beds.length}
             </div>
-            <p class="label">Betten belegt</p>
+            <p class="label">Beds occupied</p>
         </div>
 
         {#if isVerified}
             <div class="form-panel">
-                <h3>Neues Bett hinzufügen</h3>
-                <p class="hint">Bezeichnung (z.B. "Etagenbett unten links")</p>
+                <h3>➕ Add New Bed</h3>
+                <p class="hint">Label (e.g. "Bunk bed bottom left")</p>
                 <AddBedForm roomId={room.id} />
             </div>
         {/if}
     </div>
 
     <div class="beds-column">
-        <h3 class="column-title">Vorhandene Betten</h3>
+        <h3 class="column-title">Sanctuary Spots 🛌</h3>
         
         <div class="beds-grid">
             {#each beds as bed (bed.id)}
@@ -49,21 +49,21 @@
                         {#if bed.occupied}🔴{:else}🟢{/if}
                     </div>
                     <div class="bed-info">
-                        <span class="bed-label">{bed.label || 'Unbenannt'}</span>
-                        <span class="bed-status">{bed.occupied ? 'Belegt' : 'Frei'}</span>
+                        <span class="bed-label">{bed.label || 'Unnamed Spot'}</span>
+                        <span class="bed-status">{bed.occupied ? 'Occupied 👥' : 'Available ✨'}</span>
                     </div>
 
                     <div class="bed-actions">
                         <form action="?/toggleOccupied" method="POST">
                             <input type="hidden" name="id" value={bed.id} />
                             <input type="hidden" name="occupied" value={bed.occupied.toString()} />
-                            <button class="btn-icon" title="Status ändern">🔄</button>
+                            <button class="btn-icon" title="Toggle status">🔄</button>
                         </form>
 
                         {#if isVerified}
                             <form action="?/deleteBed" method="POST">
                                 <input type="hidden" name="id" value={bed.id} />
-                                <button class="btn-icon delete" title="Bett löschen">🗑</button>
+                                <button class="btn-icon delete" title="Delete bed">🗑</button>
                             </form>
                         {/if}
                     </div>
@@ -71,7 +71,7 @@
             {/each}
             
             {#if beds.length === 0}
-                <div class="empty-state">Noch keine Betten in diesem Zimmer.</div>
+                <div class="empty-state">No beds in this sanctuary yet. 🏜️</div>
             {/if}
         </div>
     </div>
