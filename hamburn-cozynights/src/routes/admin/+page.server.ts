@@ -34,6 +34,12 @@ export const actions = {
             booking_unlock_at: date ? new Date(date).toISOString() : ""
         });
     },
+    cancelUnlockTimer: async ({ locals }) => {
+        if (!locals.pb.authStore.model?.verified) return;
+        await locals.pb.collection('app_settings').update('abcsettings123', {
+            booking_unlock_at: ""
+        });
+    },
     updateHouseCoords: async ({ locals, request }) => {
         if (!locals.pb.authStore.model?.verified) return;
         const data = await request.formData();

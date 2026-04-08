@@ -125,13 +125,31 @@
         <div class="header-right">
             {#if isVerified && !isBookingActive}
               <div class="timer-config" in:fade>
-                <form method="POST" action="?/setUnlockTimer" use:enhance>
-                  <label for="unlockAt">AUTO-UNLOCK ⏳</label>
-                  <div class="input-row">
-                    <input type="datetime-local" id="unlockAt" name="unlockAt" bind:value={unlockDateInput} />
-                    <button type="submit" class="btn-save-timer">Set</button>
+                {#if bookingUnlockAt}
+                  <div class="active-timer-display">
+                    <div class="timer-info">
+                      <span class="label">ACTIVE COUNTDOWN ⏳</span>
+                      <span class="value">{new Date(bookingUnlockAt).toLocaleString()}</span>
+                    </div>
+                    <form method="POST" action="?/cancelUnlockTimer" use:enhance={() => {
+                      return async ({ result, update }) => {
+                        if (confirm("⚠️ WARNING: This will immediately stop the countdown for all burners. Continue?")) {
+                          await update();
+                        }
+                      };
+                    }}>
+                      <button type="submit" class="btn-cancel-timer">Cancel</button>
+                    </form>
                   </div>
-                </form>
+                {:else}
+                  <form method="POST" action="?/setUnlockTimer" use:enhance>
+                    <label for="unlockAt">AUTO-UNLOCK ⏳</label>
+                    <div class="input-row">
+                      <input type="datetime-local" id="unlockAt" name="unlockAt" bind:value={unlockDateInput} required />
+                      <button type="submit" class="btn-save-timer">Set</button>
+                    </div>
+                  </form>
+                {/if}
               </div>
             {/if}
 
@@ -305,6 +323,19 @@
     background: #fb923c; color: #000; border: none; padding: 2px 8px; border-radius: 4px;
     font-size: 0.7rem; font-weight: 900; cursor: pointer;
   }
+
+  .active-timer-display {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .timer-info { display: flex; flex-direction: column; gap: 2px; }
+  .active-timer-display .value { color: #fb923c; font-weight: 900; font-size: 0.8rem; font-family: monospace; }
+  .btn-cancel-timer {
+    background: transparent; border: 1px solid #ef4444; color: #ef4444; padding: 4px 10px; border-radius: 6px;
+    font-size: 0.7rem; font-weight: 900; cursor: pointer; transition: all 0.2s;
+  }
+  .btn-cancel-timer:hover { background: #ef4444; color: #fff; box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); }
 
   /* Buttons */
   .btn-laser {
