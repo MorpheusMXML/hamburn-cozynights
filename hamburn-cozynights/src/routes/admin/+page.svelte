@@ -75,6 +75,11 @@
   }
 
   async function handleHouseMoved(event: CustomEvent) {
+    if (isBookingActive) {
+      alert("🔒 LOCKDOWN ACTIVE: Map layout is locked during Live Booking. Switch to Staging Mode to reposition houses.");
+      invalidateAll();
+      return;
+    }
     const { id, x, y } = event.detail;
     selectedHouseId = id; // Select the house being moved
     
@@ -109,15 +114,23 @@
   }
 
   function handleRenameHouse(house: any) {
+    if (isBookingActive) {
+      alert("🔒 LOCKDOWN ACTIVE: House names are locked during Live Booking. Switch to Staging Mode to manage.");
+      return;
+    }
     selectedHouseId = house.id;
     editingHouse = { id: house.id, x: house.x, y: house.y, name: house.name };
     console.log(`[Dashboard] House selected for rename: ${house.name}`);
   }
 
   async function handleDeleteHouse(house: any) {
+    if (isBookingActive) {
+      alert("🔒 LOCKDOWN ACTIVE: You cannot vanish sanctuaries while bookings are live! Switch to Staging Mode first.");
+      return;
+    }
     if (!house || !house.id) return;
     
-    if (confirm(`⚠️ DANGER! ⚠️ Are you sure you want to vanish "${house.name}"? This will evaporate all modules and spots! 🌪️`)) {
+    if (confirm(`⚠️ DANGER! ⚠️ Are you sure you want to vanish "${house.name}"? This will evaporate all rooms and spots! 🌪️`)) {
       const formData = new FormData();
       formData.append('id', house.id);
       
@@ -131,6 +144,12 @@
   }
 
   async function handleSaveHouse(event: CustomEvent) {
+    if (isBookingActive) {
+        alert("🔒 LOCKDOWN ACTIVE: House deployment is locked during Live Booking.");
+        editingHouse = null;
+        selectedHouseId = null;
+        return;
+    }
     const newHouseData = event.detail;
     
     if (!newHouseData.name || newHouseData.name.trim() === "") {
@@ -162,9 +181,13 @@
   }
 
   async function handleDeleteActiveHouse() {
+    if (isBookingActive) {
+      alert("🔒 LOCKDOWN ACTIVE: You cannot vanish sanctuaries while bookings are live!");
+      return;
+    }
     if (!activeHouse || !activeHouse.id) return;
     
-    if (confirm(`⚠️ DANGER! ⚠️ Are you sure you want to vanish "${activeHouse.name}"? This will evaporate all modules and spots! 🌪️`)) {
+    if (confirm(`⚠️ DANGER! ⚠️ Are you sure you want to vanish "${activeHouse.name}"? This will evaporate all rooms and spots! 🌪️`)) {
       console.log(`[Dashboard] Requesting VANISH for house ID: ${activeHouse.id}`);
       
       // Visual feedback: Start disintegration
@@ -333,7 +356,7 @@
                     </div>
                     <div class="intel-card orange">
                         <span class="icon">⚙️</span>
-                        <p>Click house for Unit Intel sidebar.</p>
+                        <p>Click house for House Intel sidebar.</p>
                     </div>
                     <div class="intel-card green">
                         <span class="icon">🎪</span>
@@ -351,7 +374,7 @@
       <div class="map-view" in:fade={{ duration: 300 }}>
           <div class="map-status-bar" class:live={isBookingActive}>
               {#if isBookingActive}
-                <span class="status-msg">🔒 MAP LOCKED: Bookings are active on the playa!</span>
+                <span class="status-msg">🔒 LOCKDOWN: Map layout is locked. Switch to 🛠 STAGING to manage.</span>
               {:else}
                 <span class="status-msg">🛠 EDITOR ACTIVE: Drag houses to reposition. Click house or space to manage.</span>
               {/if}
@@ -373,7 +396,7 @@
                 <aside class="details-sidebar" in:fly={{ x: 100, duration: 400 }}>
                     <div class="sidebar-header">
                         <span class="laser-dot turquoise"></span>
-                        <h3>{selectedHouseId ? 'UNIT INTEL' : 'NEW DEPLOYMENT'}</h3>
+                        <h3>{selectedHouseId ? 'HOUSE INTEL' : 'NEW DEPLOYMENT'}</h3>
                         <button class="btn-close-sidebar" on:click={() => { selectedHouseId = null; editingHouse = null; }}>&times;</button>
                     </div>
 
@@ -391,8 +414,8 @@
                         {#if selectedHouseId}
                             <div class="danger-zone" in:fade>
                                 <span class="zone-label">CRITICAL ACTIONS</span>
-                                <a href="/admin/house/{selectedHouseId}" class="btn-manage-link">MANAGE MODULES ⚙️</a>
-                                <button class="btn-vanish-big" on:click={handleDeleteActiveHouse}>
+                                <a href="/admin/house/{selectedHouseId}" class="btn-manage-link">MANAGE ROOMS ⚙️</a>
+                                <button class="btn-vanish-big" on:click={handleDeleteActiveHouse} class:disabled={isBookingActive}>
                                     VANISH FROM PLAYA 🌪️
                                 </button>
                             </div>
@@ -417,7 +440,7 @@
 
                 <div class="card-body">
                     <div class="stat-group">
-                        <span class="stat-label">Occupancy 👥</span>
+                        <span class="stat-label">Spots Claimed 👥</span>
                         <span class="stat-value">{house.occupiedBeds} / {house.totalBeds}</span>
                     </div>
 
@@ -437,15 +460,15 @@
               
               {#if isVerified}
                 <div class="card-admin-actions">
-                    <button class="btn-action-small" on:click={() => handleRenameHouse(house)}>RENAME ✏️</button>
-                    <button class="btn-action-small vanish" on:click={() => handleDeleteHouse(house)}>VANISH 🌪️</button>
+                    <button class="btn-action-small" on:click={() => handleRenameHouse(house)} class:disabled={isBookingActive}>RENAME ✏️</button>
+                    <button class="btn-action-small vanish" on:click={() => handleDeleteHouse(house)} class:disabled={isBookingActive}>VANISH 🌪️</button>
                 </div>
               {/if}
             </div>
           {/each}
           
           {#if isVerified}
-            <button class="add-house-card" on:click={() => handleLocationSelected({ x: 500, y: 350 })}>
+            <button class="add-house-card" on:click={() => isBookingActive ? alert("🔒 LOCKDOWN ACTIVE: Switch to 🛠 STAGING to ignite new sanctuaries.") : handleLocationSelected({ x: 500, y: 350 })} class:disabled={isBookingActive}>
                 <span class="plus">+</span>
                 <span>Ignite New House</span>
                 <small>Auto-centered at 500/350</small>
@@ -786,6 +809,19 @@
       letter-spacing: 1px;
   }
   .btn-vanish-big:hover { background: #ef4444; color: #fff; box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
+
+  .btn-vanish-big.disabled, .btn-action-small.disabled, .add-house-card.disabled {
+      opacity: 0.3;
+      cursor: not-allowed !important;
+      filter: grayscale(1);
+      pointer-events: auto !important; /* Allow click for alert */
+  }
+  .btn-vanish-big.disabled:hover, .btn-action-small.disabled:hover, .add-house-card.disabled:hover {
+      background: rgba(255,255,255,0.05) !important;
+      box-shadow: none !important;
+      transform: none !important;
+      border-color: #333 !important;
+  }
 
   /* Grid View */
   .grid-view { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 2rem; }
