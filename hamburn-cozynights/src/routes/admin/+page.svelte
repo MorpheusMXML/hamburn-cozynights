@@ -35,7 +35,7 @@
     <div class="header-content">
         <div>
             <h1>Hamburn Dashboard 🔥</h1>
-            <p class="subtitle">Real-time sanctuary management & occupancy 🛖</p>
+            <p class="subtitle">Real-time house management & occupancy 🛖</p>
         </div>
         
         <div class="header-actions">
@@ -55,7 +55,7 @@
   {#if showMap}
     <div class="map-section">
         <div class="map-info">
-            <p><strong>🛠 Editor Mode:</strong> Click anywhere on the map to place a new sanctuary at that location. 📍</p>
+            <p><strong>🛠 Editor Mode:</strong> Click anywhere on the map to place a new house at that location. 📍</p>
         </div>
         <Map 
             {houses} 

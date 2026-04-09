@@ -24,6 +24,6 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
     return { house, rooms: roomsWithStats };
   } catch {
-    throw error(404, 'Sanctuary not found in the dust.');
+    throw error(404, 'House not found in the dust.');
   }
 };
