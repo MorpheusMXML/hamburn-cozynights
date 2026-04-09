@@ -4,17 +4,18 @@ import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbas
 
 export const load: PageServerLoad = async ({ params, locals }) => {
   try {
-    const house = await locals.pb.collection('houses').getOne<HousesResponse>(params.id);
-    const rooms = await locals.pb.collection('rooms').getFullList<RoomsResponse>({
-      filter: locals.pb.filter('house = {:id}', { id: params.id }),
-      sort: 'room_number'
-    });
+    const [house, rooms, beds, settings] = await Promise.all([
+        locals.pb.collection('houses').getOne<HousesResponse>(params.id),
+        locals.pb.collection('rooms').getFullList<RoomsResponse>({
+            filter: locals.pb.filter('house = {:id}', { id: params.id }),
+            sort: 'room_number'
+        }),
+        locals.pb.collection('beds').getFullList<BedsResponse>({
+            filter: locals.pb.filter('room.house = {:id}', { id: params.id })
+        }),
+        locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false, booking_unlock_at: "" }))
+    ]);
     
-    // Fetch spots for statistics 📊
-    const beds = await locals.pb.collection('beds').getFullList<BedsResponse>({
-      filter: locals.pb.filter('room.house = {:id}', { id: params.id })
-    });
-
     // Calculate occupancy 👥
     const roomsWithStats = rooms.map(room => {
       const roomBeds = beds.filter(b => b.room === room.id);
@@ -22,7 +23,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       return { ...room, freeCount, totalCount: roomBeds.length };
     });
 
-    return { house, rooms: roomsWithStats };
+    return { 
+        house, 
+        rooms: roomsWithStats,
+        isBookingActive: settings.is_booking_active,
+        bookingUnlockAt: settings.booking_unlock_at || ""
+    };
   } catch {
     throw error(404, 'House not found in the dust.');
   }

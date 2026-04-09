@@ -8,7 +8,9 @@
 <div class="marker-wrapper">
   <div class="hit-area"></div>
   
-  <div class="pin" class:occupied={isOccupied}></div>
+  <div class="pin" class:occupied={isOccupied}>
+      <div class="pulse-ring"></div>
+  </div>
   <span class="label">{name}</span>
 </div>
 
@@ -19,7 +21,6 @@
     align-items: center;
     position: relative;
     transform: translate(-50%, -50%);
-    /* Ermöglicht Hover-Effekte */
     pointer-events: none; 
   }
 
@@ -30,39 +31,65 @@
     border-radius: 50%;
     background: transparent;
     z-index: 1;
-    /* Die Hit-Area soll Klicks empfangen, damit der Link triggert */
     pointer-events: auto; 
     cursor: pointer;
   }
 
   .pin {
-    width: 24px;
-    height: 24px;
-    background-color: #22c55e;
+    width: 20px;
+    height: 20px;
+    background-color: #2dd4bf;
     border: 3px solid white;
     border-radius: 50%;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    box-shadow: 0 0 15px rgba(45, 212, 191, 0.6);
     z-index: 2;
-    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
   }
 
-  /* Hover wird über den Link oder die hit-area ausgelöst */
+  .pulse-ring {
+      position: absolute;
+      top: -5px; left: -5px; right: -5px; bottom: -5px;
+      border: 2px solid currentColor;
+      border-radius: 50%;
+      opacity: 0;
+      pointer-events: none;
+  }
+
   :global(.marker-link:hover) .pin {
-    transform: scale(1.3);
-    background-color: #4ade80;
+    transform: scale(1.4);
+    background-color: #fff;
+    box-shadow: 0 0 25px #2dd4bf;
+  }
+  
+  :global(.marker-link:hover) .pulse-ring {
+      animation: laser-pulse 1.5s infinite;
+      color: #2dd4bf;
   }
 
-  .pin.occupied { background-color: #ef4444; }
+  .pin.occupied { background-color: #f87171; box-shadow: 0 0 15px rgba(248, 113, 113, 0.6); }
+  :global(.marker-link:hover) .pin.occupied { box-shadow: 0 0 25px #f87171; }
+  :global(.marker-link:hover) .pin.occupied .pulse-ring { color: #f87171; }
+
+  @keyframes laser-pulse {
+      0% { transform: scale(1); opacity: 0.8; }
+      100% { transform: scale(2); opacity: 0; }
+  }
 
   .label {
-    margin-top: 6px;
-    background: rgba(0, 0, 0, 0.85);
+    margin-top: 8px;
+    background: rgba(15, 15, 15, 0.9);
+    backdrop-filter: blur(4px);
     color: white;
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 900;
+    letter-spacing: 1px;
     z-index: 3;
     white-space: nowrap;
+    border: 1px solid #333;
+    text-transform: uppercase;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
   }
 </style>
