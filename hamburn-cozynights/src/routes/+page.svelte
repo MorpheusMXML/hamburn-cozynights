@@ -49,7 +49,7 @@
   .hero { position: relative; min-height: 100vh; width: 100%; display: flex; align-items: center; justify-content: center; font-family: sans-serif; overflow: hidden; background: #222 center center / cover; }
   .background-video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
   .content-wrapper { display: flex; flex-direction: column; align-items: center; text-align: center; width: 100%; max-width: 800px; padding: 20px; z-index: 1; }
-  .burning-text { font-size: 4rem; font-weight: 900; background: linear-gradient(0deg, #ffff00 0%, #ff6600 40%, #ff0000 80%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: url(#fire-filter); animation: flicker-fire 3s infinite alternate; }
+  .burning-text { font-size: 4rem; font-weight: 900; background: linear-gradient(0deg, #ffff00 0%, #ff6600 40%, #ff0000 80%); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: url(#fire-filter); animation: flicker-fire 3s infinite alternate; }
   @keyframes flicker-fire { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 1; transform: scale(1.02); } }
   .club-logo { width: 150px; height: auto; margin-bottom: 2rem; animation: intense-glow 2s ease-in-out infinite alternate; }
   @keyframes intense-glow { from { filter: drop-shadow(0 0 10px rgba(255, 140, 0, 0.8)); } to { filter: drop-shadow(0 0 20px rgba(255, 200, 0, 0.9)); } }

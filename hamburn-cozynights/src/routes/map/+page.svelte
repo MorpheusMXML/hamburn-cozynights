@@ -130,6 +130,7 @@
     font-weight: 900;
     letter-spacing: -1px;
     background: linear-gradient(to right, #2dd4bf, #f472b6);
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     text-transform: uppercase;
@@ -174,10 +175,6 @@
     transition: filter 0.5s ease;
   }
 
-  .staging-blur {
-    filter: blur(4px) grayscale(0.5) brightness(0.5);
-  }
-
   .staging-overlay {
     position: absolute;
     top: 0;
@@ -219,7 +216,6 @@
   }
 
   .laser-text.pink { color: #f472b6; }
-  .laser-text.turquoise { color: #2dd4bf; }
 
   .reload-button {
     background: #111;
