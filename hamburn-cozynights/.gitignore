@@ -24,4 +24,3 @@ vite.config.ts.timestamp-*
 
 # Database (Local only)
 pb_data/
-pb_data.tar.gz.gpg
