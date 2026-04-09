@@ -51,13 +51,14 @@
     {:else}
       <div class="phase-badge staging">🛠 STAGING MODE</div>
     {/if}
+    <div class="debug-counter" style="color: white; font-size: 0.6rem; opacity: 0.5; margin-left: 1rem;">
+      SENSORS: {houses?.length || 0}
+    </div>
   </div>
 
-  {#if houses}
-    <div class="map-container" class:staging-blur={!isBookingActive}>
-      {#key houses}
-        <Map {houses} isEditorMode={false} {isBookingActive} />
-      {/key}
+  {#if data.houses}
+    <div class="map-container">
+      <Map houses={data.houses} isEditorMode={false} isBookingActive={data.isBookingActive} />
     </div>
   {:else}
     <div class="loading">Igniting Sensors...</div>
@@ -93,6 +94,7 @@
   .page-container {
     width: 100vw;
     height: 100vh;
+    min-height: 100vh;
     background: #050505;
     overflow: hidden;
     position: relative;

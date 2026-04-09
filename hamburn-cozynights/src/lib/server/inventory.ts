@@ -8,42 +8,57 @@ export class InventoryService {
      * Fetches the entire house/room/bed hierarchy with statistics. 🛰️📊
      */
     async getFullTree(): Promise<HouseData[]> {
-        // Fetch all data in parallel
-        const [housesRaw, roomsRaw, bedsRaw] = await Promise.all([
-            this.pb.collection('houses').getFullList({ sort: 'name' }),
-            this.pb.collection('rooms').getFullList({ sort: 'room_number' }),
-            this.pb.collection('beds').getFullList({ sort: 'label' })
-        ]);
+        console.log('[Inventory] Fetching full tree...');
+        try {
+            // Fetch all data in parallel
+            const [housesRaw, roomsRaw, bedsRaw] = await Promise.all([
+                this.pb.collection('houses').getFullList({ sort: 'name' }),
+                this.pb.collection('rooms').getFullList({ sort: 'room_number' }),
+                this.pb.collection('beds').getFullList({ sort: 'label' })
+            ]);
 
-        // Serialize everything to plain objects to ensure compatibility
-        const houses = housesRaw.map(h => ({ ...h }));
-        const rooms = roomsRaw.map(r => ({ ...r }));
-        const beds = bedsRaw.map(b => ({ ...b }));
+            console.log(`[Inventory] Raw data fetched: ${housesRaw.length} houses, ${roomsRaw.length} rooms, ${bedsRaw.length} beds.`);
+            
+            if (housesRaw.length > 0) {
+                console.log(`[Inventory] Sample house: ${housesRaw[0].name} (ID: ${housesRaw[0].id}) at ${housesRaw[0].x},${housesRaw[0].y}`);
+            }
 
-        // Build the hierarchy
-        return houses.map(house => {
-            const houseRooms = rooms
-                .filter(room => room.house === house.id)
-                .map(room => {
-                    const roomBeds = beds.filter(bed => bed.room === room.id);
-                    return {
-                        ...room,
-                        beds: roomBeds
-                    };
-                });
+            // Serialize everything to plain objects to ensure compatibility
+            const houses = housesRaw.map(h => ({ ...h }));
+            const rooms = roomsRaw.map(r => ({ ...r }));
+            const beds = bedsRaw.map(b => ({ ...b }));
 
-            // Calculate stats for the house
-            const allBedsInHouse = houseRooms.flatMap(r => r.beds);
-            const totalBeds = allBedsInHouse.length;
-            const occupiedBeds = allBedsInHouse.filter(b => b.occupied).length;
+            // Build the hierarchy
+            const tree = houses.map(house => {
+                const houseRooms = rooms
+                    .filter(room => room.house === house.id)
+                    .map(room => {
+                        const roomBeds = beds.filter(bed => bed.room === room.id);
+                        return {
+                            ...room,
+                            beds: roomBeds
+                        };
+                    });
 
-            return {
-                ...house,
-                rooms: houseRooms,
-                totalBeds,
-                occupiedBeds
-            };
-        });
+                // Calculate stats for the house
+                const allBedsInHouse = houseRooms.flatMap(r => r.beds);
+                const totalBeds = allBedsInHouse.length;
+                const occupiedBeds = allBedsInHouse.filter(b => b.occupied).length;
+
+                return {
+                    ...house,
+                    rooms: houseRooms,
+                    totalBeds,
+                    occupiedBeds
+                };
+            });
+
+            console.log(`[Inventory] Tree built with ${tree.length} houses.`);
+            return tree;
+        } catch (err) {
+            console.error('[Inventory] getFullTree failed:', err);
+            return [];
+        }
     }
 
     /**

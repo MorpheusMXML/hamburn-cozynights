@@ -1,51 +1,12 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-
   export let name: string;
   export let status: string = 'available';
-
-  let markerEl: HTMLElement;
-  let offsetX = 0;
-  let offsetY = 0;
+  export let labelPosition: 'top' | 'bottom' = 'bottom';
 
   $: isOccupied = status === 'full' || status === 'besetzt';
-
-  onMount(() => {
-      const handleMouseMove = (e: MouseEvent) => {
-          if (!markerEl) return;
-          const rect = markerEl.getBoundingClientRect();
-          const centerX = rect.left + rect.width / 2;
-          const centerY = rect.top + rect.height / 2;
-          
-          // Calculate distance from center
-          const distX = e.clientX - centerX;
-          const distY = e.clientY - centerY;
-          
-          // Parallax effect: shift slightly based on proximity (max 5px)
-          const limit = 300; // Activation radius
-          const strength = 10;
-          
-          const mag = Math.sqrt(distX*distX + distY*distY);
-          if (mag < limit) {
-              const ratio = (1 - mag / limit) * strength;
-              offsetX = (distX / mag) * ratio;
-              offsetY = (distY / mag) * ratio;
-          } else {
-              offsetX = 0;
-              offsetY = 0;
-          }
-      };
-
-      window.addEventListener('mousemove', handleMouseMove);
-      return () => window.removeEventListener('mousemove', handleMouseMove);
-  });
 </script>
 
-<div 
-    class="marker-wrapper" 
-    bind:this={markerEl}
-    style="transform: translate(calc(-50% + {offsetX}px), calc(-50% + {offsetY}px))"
->
+<div class="marker-wrapper" class:label-top={labelPosition === 'top'}>
   <div class="hit-area"></div>
   
   <div class="pin" class:occupied={isOccupied}>
@@ -61,9 +22,18 @@
     flex-direction: column;
     align-items: center;
     position: relative;
+    transform: translate(-50%, -50%);
     pointer-events: none; 
-    transition: transform 0.1s ease-out;
     filter: drop-shadow(0 0 10px rgba(0,0,0,0.5));
+  }
+
+  .marker-wrapper.label-top {
+      flex-direction: column-reverse;
+  }
+  
+  .marker-wrapper.label-top .label {
+      margin-top: 0;
+      margin-bottom: 8px;
   }
 
   .hit-area {
