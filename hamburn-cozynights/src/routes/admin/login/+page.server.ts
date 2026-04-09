@@ -32,7 +32,7 @@ export const load: PageServerLoad = async ({ locals }) => {
             enableEmail: true 
         };
     } catch {
-        return { providers: [], enableEmail: true, error: "Sanctuary backend unreachable." };
+        return { providers: [], enableEmail: true, error: "House backend unreachable." };
     }
 };
 

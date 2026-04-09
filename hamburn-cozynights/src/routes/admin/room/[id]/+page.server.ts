@@ -16,7 +16,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         expand: 'house' 
     });
 
-    // 3. Fetch all beds in this sanctuary room 🛌
+    // 3. Fetch all beds in this house room 🛌
     const beds = await locals.pb.collection('beds').getFullList<BedsResponse>({
       filter: locals.pb.filter('room = {:roomId}', { roomId: roomId }), 
       sort: 'label'
@@ -25,14 +25,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     return { room, beds };
 
   } catch (err) {
-    console.error("Error fetching sanctuary spots:", err);
-    throw error(404, 'Sanctuary room lost in the dust.');
+    console.error("Error fetching house spots:", err);
+    throw error(404, 'House room lost in the dust.');
   }
 };
 
 export const actions: Actions = {
   createBed: async ({ request, params, locals }) => {
-    // SECURITY CHECK: Only verified burners can expand the sanctuary 🛡️
+    // SECURITY CHECK: Only verified burners can expand the house 🛡️
     if (!locals.pb.authStore.model?.verified) {
         return fail(403, { message: 'Only verified crew members can add spots.' });
     }

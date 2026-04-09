@@ -7,7 +7,7 @@
   <header>
     <a href="/map" class="back-link">← Map</a>
     <h1>{data.house.name}</h1>
-    <p class="subtitle">Choose a sanctuary for your night</p>
+    <p class="subtitle">Choose a house for your night</p>
   </header>
 
   <div class="grid">

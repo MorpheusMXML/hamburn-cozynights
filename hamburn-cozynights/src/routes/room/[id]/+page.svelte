@@ -46,7 +46,7 @@
         <div class="success-icon">✨</div>
         <div class="success-content">
           <h3>Welcome Home!</h3>
-          <p>You have successfully reserved bed <strong>{myBed.label}</strong> in this sanctuary.</p>
+          <p>You have successfully reserved bed <strong>{myBed.label}</strong> in this house.</p>
         </div>
       </div>
     {/if}
