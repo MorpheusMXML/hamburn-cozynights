@@ -19,10 +19,12 @@ export const actions = {
         
         try {
             const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => null);
+            let nextStatus = true;
             if (settings) {
-                console.log(`[Action:togglePhase] Updating existing settings. Current: ${settings.is_booking_active}`);
+                nextStatus = !settings.is_booking_active;
+                console.log(`[Action:togglePhase] Updating existing settings. Current: ${settings.is_booking_active}, Target: ${nextStatus}`);
                 await locals.pb.collection('app_settings').update('abcsettings123', {
-                    is_booking_active: !settings.is_booking_active
+                    is_booking_active: nextStatus
                 });
             } else {
                 console.log('[Action:togglePhase] Creating initial settings.');
@@ -32,9 +34,45 @@ export const actions = {
                 });
             }
             console.log('[Action:togglePhase] SUCCESS.');
+            return { success: true, isBookingActive: nextStatus };
         } catch (err) {
             console.error('[Action:togglePhase] FAILED:', err);
             return fail(500, { error: 'Toggle failed' });
+        }
+    },
+    clearAllBookings: async ({ locals }) => {
+        if (!locals.pb.authStore.model?.verified) return fail(403, { error: 'Unauthorized' });
+        
+        console.log(`[Action:clearAllBookings] INITIATED by ${locals.pb.authStore.model?.email}`);
+        
+        try {
+            // 1. Fetch all occupied beds
+            const occupiedBeds = await locals.pb.collection('beds').getFullList({
+                filter: 'occupied = true'
+            });
+            
+            console.log(`[Action:clearAllBookings] Clearing ${occupiedBeds.length} spots.`);
+            
+            // 2. Reset all beds
+            for (const bed of occupiedBeds) {
+                await locals.pb.collection('beds').update(bed.id, {
+                    occupied: false,
+                    bookedBy: null,
+                    order: null
+                });
+            }
+            
+            // 3. Clear orders collection (optional but logical)
+            const orders = await locals.pb.collection('orders').getFullList();
+            for (const order of orders) {
+                await locals.pb.collection('orders').delete(order.id);
+            }
+            
+            console.log('[Action:clearAllBookings] SUCCESS. Database purged of all bookings.');
+            return { success: true };
+        } catch (err) {
+            console.error('[Action:clearAllBookings] FAILED:', err);
+            return fail(500, { error: 'Purge failed' });
         }
     },
     setUnlockTimer: async ({ locals, request }) => {
@@ -193,22 +231,34 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   console.log(`[Dashboard] Initializing data for admin: ${locals.pb.authStore.model?.email}`);
 
-  const [houses, allBeds, settings] = await Promise.all([
+  const [houses, allRooms, allBeds, settings] = await Promise.all([
     locals.pb.collection('houses').getFullList<HousesResponse>({ sort: 'name' }),
+    locals.pb.collection('rooms').getFullList<RoomsResponse>(),
     locals.pb.collection('beds').getFullList<BedsResponse<{ room: RoomsResponse }>>({ expand: 'room' }),
     locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false, booking_unlock_at: "" }))
   ]);
 
-  // SELF-HEALING / AUDIT: Detect data inconsistencies 🛠️
-  houses.forEach(house => {
-      const bedsInHouse = allBeds.filter(b => b.expand?.room?.house === house.id);
-      if (bedsInHouse.length === 0) {
-          console.warn(`[Audit] Sanctuary "${house.name}" (${house.id}) has NO active beds/modules. Deployment incomplete.`);
-      }
-      if (house.x === 0 && house.y === 0) {
-          console.warn(`[Audit] Sanctuary "${house.name}" (${house.id}) is located at ground zero (0,0). Manual relocation recommended.`);
-      }
-  });
+  // Sanity Checks logic 🛠️
+  const sanityWarnings = houses.map(house => {
+      const houseRooms = allRooms.filter(r => r.house === house.id);
+      const roomsWithIssues = houseRooms.map(room => {
+          const roomBeds = allBeds.filter(b => b.room === room.id);
+          return {
+              id: room.id,
+              name: room.name,
+              number: room.room_number,
+              bedCount: roomBeds.length,
+              hasNoBeds: roomBeds.length === 0
+          };
+      }).filter(r => r.hasNoBeds);
+
+      return {
+          id: house.id,
+          name: house.name,
+          noRooms: houseRooms.length === 0,
+          roomsWithNoBeds: roomsWithIssues
+      };
+  }).filter(w => w.noRooms || w.roomsWithNoBeds.length > 0);
 
   const housesWithStats: HouseStats[] = houses.map((house: HousesResponse) => {
     const bedsInHouse = allBeds.filter((b: BedsResponse<{ room: RoomsResponse }>) => {
@@ -220,8 +270,6 @@ export const load: PageServerLoad = async ({ locals }) => {
     const freeBeds = Math.max(0, totalBeds - occupiedBeds);
     const occupancyRate = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
 
-    console.log(`[Dashboard] House ${house.name}: ${occupiedBeds}/${totalBeds} modules occupied.`);
-
     return {
       ...structuredClone(house),
       totalBeds,
@@ -231,8 +279,17 @@ export const load: PageServerLoad = async ({ locals }) => {
     };
   });
 
+  // Mocked historical data for trend charts
+  const history = {
+      bookingTrend: [12, 15, 18, 22, 30, 45, 52], // Last 7 days cumulative
+      trafficTrend: [120, 150, 110, 200, 350, 420, 380], // Last 7 days hits
+      labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  };
+
   return { 
     houses: housesWithStats,
+    sanityWarnings,
+    history,
     isBookingActive: settings.is_booking_active,
     bookingUnlockAt: settings.booking_unlock_at || ""
   };

@@ -45,11 +45,15 @@ export class InventoryService {
                 const totalBeds = allBedsInHouse.length;
                 const occupiedBeds = allBedsInHouse.filter(b => b.occupied).length;
 
+                // A house is bookable ONLY if it has at least one room AND at least one bed
+                const isBookable = houseRooms.length > 0 && totalBeds > 0;
+
                 return {
                     ...house,
                     rooms: houseRooms,
                     totalBeds,
-                    occupiedBeds
+                    occupiedBeds,
+                    isBookable
                 };
             });
 
