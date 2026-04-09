@@ -86,12 +86,14 @@
         
         {#if isVerified}
             <footer class="card-actions">
-                <form action="?/deleteRoom" method="POST" use:enhance={() => handleAction(room.id)} on:click|stopPropagation>
-                    <input type="hidden" name="id" value={room.id} />
-                    <button type="submit" class="btn-vanish" title="Vanish Room" class:disabled={isBookingActive} disabled={isBookingActive}>
-                        VANISH ROOM 🌪️
-                    </button>
-                </form>
+                <div on:click|stopPropagation on:keydown|stopPropagation={(e) => e.key === 'Enter' && e.stopPropagation()} role="presentation">
+                    <form action="?/deleteRoom" method="POST" use:enhance={() => handleAction(room.id)}>
+                        <input type="hidden" name="id" value={room.id} />
+                        <button type="submit" class="btn-vanish" title="Vanish Room" class:disabled={isBookingActive} disabled={isBookingActive}>
+                            VANISH ROOM 🌪️
+                        </button>
+                    </form>
+                </div>
             </footer>
         {/if}
       </a>

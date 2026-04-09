@@ -109,6 +109,19 @@
     window.location.href = `/house/${house.id}`;
   }
 
+  function handleHouseKeydown(event: KeyboardEvent, house: any) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      // Simulate click
+      const mouseEvent = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window
+      });
+      handleHouseClick(mouseEvent, house);
+    }
+  }
+
   function handleMapClick(event: MouseEvent) {
     if (selectedHouseId) { selectedHouseId = null; return; }
     if (!isEditorMode) return;
@@ -118,6 +131,12 @@
     const y = Math.round((event.clientY - CTM.f) / CTM.d);
     dispatch('locationSelected', { x, y });
   }
+
+  function handleMapKeydown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+          selectedHouseId = null;
+      }
+  }
 </script>
 
 <div class="map-wrapper" on:mousemove={handleMouseMoveGlobal} role="presentation">
@@ -125,8 +144,11 @@
     viewBox="0 0 1000 700" 
     preserveAspectRatio="xMidYMid meet"
     on:click={handleMapClick}
+    on:keydown={handleMapKeydown}
     bind:this={svgEl}
     style="background: #0a0a0a;"
+    role="presentation"
+    aria-label="Interactive house map"
   >
     <image href="/lageplan-brahmsee.jpg" width="1000" height="700" />
     
@@ -138,6 +160,10 @@
             class:selected={selectedHouseId === house.id}
             on:mousedown={(e) => handleMouseDown(e, house)}
             on:click={(e) => handleHouseClick(e, house)}
+            on:keydown={(e) => handleHouseKeydown(e, house)}
+            role="button"
+            tabindex="0"
+            aria-label="House {house.name}"
           >
             <foreignObject x={house.x} y={house.y} width="1" height="1" style="overflow: visible;">
                 <UserHouseMarker 
