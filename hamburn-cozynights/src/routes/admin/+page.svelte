@@ -383,6 +383,7 @@
                             y={activeHouse.y} 
                             name={activeHouse.name} 
                             houseId={selectedHouseId || undefined}
+                            flat={true}
                             on:save={handleSaveHouse} 
                             on:cancel={() => { selectedHouseId = null; editingHouse = null; }} 
                         />

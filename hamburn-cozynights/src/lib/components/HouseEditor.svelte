@@ -7,6 +7,7 @@
   export let y: number;
   export let name = "";
   export let houseId: string | undefined = undefined;
+  export let flat = false;
 
   const dispatch = createEventDispatcher();
   
@@ -67,7 +68,7 @@
   }
 </script>
 
-<div class="editor-card-container" class:edit-mode={isEditing}>
+<div class="editor-card-container" class:edit-mode={isEditing} class:flat>
   <div class="editor-card">
     <header class="editor-header">
         <div class="mode-badge">{isEditing ? 'RECONFIGURING' : 'IGNITING NEW'} ⚡️</div>
@@ -128,7 +129,14 @@
     overflow: hidden;
   }
   
-  .editor-card-container.edit-mode { border-color: #f472b6; box-shadow: 0 0 30px rgba(244, 114, 182, 0.2); }
+  .editor-card-container.flat {
+      background: transparent;
+      border: none;
+      padding: 0;
+      width: 100%;
+      box-shadow: none;
+  }
+  .flat::before { display: none; }
 
   .mode-badge {
       font-size: 0.6rem;
