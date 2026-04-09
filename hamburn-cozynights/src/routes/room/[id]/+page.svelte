@@ -2,6 +2,7 @@
   import type { PageData } from './$types';
   import { enhance } from '$app/forms';
   import CountdownTimer from '$lib/components/CountdownTimer.svelte';
+  import SlotMachine from '$lib/components/SlotMachine.svelte';
 
   export let data: PageData;
 
@@ -23,6 +24,10 @@
 
   function handleBackdropKeydown(event: KeyboardEvent) {
       if (event.key === 'Escape') closeModal();
+  }
+
+  function handleSlotSelect(event: CustomEvent<string>) {
+      currentNameInput = event.detail;
   }
 </script>
 
@@ -127,6 +132,8 @@
       <h2>{selectedBedId === data.userBedId ? 'Edit Your Spot' : 'Grab This Spot'}</h2>
       <p>Set your Burner Name (optional).</p>
       
+      <SlotMachine on:select={handleSlotSelect} />
+
       <form method="POST" action="?/bookBed" use:enhance={() => {
           return async ({ result, update }) => {
               if (result.type === 'success') closeModal();
@@ -136,13 +143,13 @@
         <input type="hidden" name="bedId" value={selectedBedId} />
         
         <div class="form-group">
-            <label for="guestName">Burner Name</label>
+            <label for="guestName">Manual Adjustment</label>
             <input 
                 type="text" 
                 name="guestName" 
                 id="guestName" 
                 bind:value={currentNameInput} 
-                placeholder="Leave blank for a random one..." 
+                placeholder="Type name here..." 
             />
         </div>
 
