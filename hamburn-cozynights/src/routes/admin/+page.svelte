@@ -10,6 +10,19 @@
   
   $: ({ houses, isVerified, isBookingActive, bookingUnlockAt } = data);
 
+  // Management Summary Calculations
+  $: totalBeds = houses.reduce((sum, h) => sum + (h.totalBeds || 0), 0);
+  $: occupiedBeds = houses.reduce((sum, h) => sum + (h.occupiedBeds || 0), 0);
+  $: freeBeds = totalBeds - occupiedBeds;
+  $: occupancyRate = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
+  
+  $: houseStats = {
+      empty: houses.filter(h => h.occupiedBeds === 0 && h.totalBeds > 0).length,
+      partial: houses.filter(h => h.occupiedBeds > 0 && h.occupiedBeds < h.totalBeds).length,
+      full: houses.filter(h => h.occupiedBeds >= h.totalBeds && h.totalBeds > 0).length,
+      unconfigured: houses.filter(h => h.totalBeds === 0).length
+  };
+
   // Main View state
   let showMap = true;
   let showGuide = false;
@@ -54,8 +67,8 @@
   }
 
   // When clicking empty space on the map in editor mode
-  function handleLocationSelected(event: CustomEvent) {
-    const { x, y } = event.detail;
+  function handleLocationSelected(data: { x: number, y: number }) {
+    const { x, y } = data;
     selectedHouseId = null; // Deselect existing
     editingHouse = { x, y, name: "" };
     console.log(`[Dashboard] Preparing new house deployment at (${x}, ${y})`);
@@ -93,6 +106,28 @@
     selectedHouseId = house.id;
     editingHouse = { id: house.id, x: house.x, y: house.y, name: house.name };
     console.log(`[Dashboard] House selected: ${house.name}`);
+  }
+
+  function handleRenameHouse(house: any) {
+    selectedHouseId = house.id;
+    editingHouse = { id: house.id, x: house.x, y: house.y, name: house.name };
+    console.log(`[Dashboard] House selected for rename: ${house.name}`);
+  }
+
+  async function handleDeleteHouse(house: any) {
+    if (!house || !house.id) return;
+    
+    if (confirm(`⚠️ DANGER! ⚠️ Are you sure you want to vanish "${house.name}"? This will evaporate all modules and spots! 🌪️`)) {
+      const formData = new FormData();
+      formData.append('id', house.id);
+      
+      const result = await submitAction('?/deleteHouse', formData);
+      
+      if (result.type !== 'success') {
+        alert(`❌ VANISH FAILED! ${result.data?.error || 'The playa protects this sanctuary.'}`);
+      }
+      invalidateAll();
+    }
   }
 
   async function handleSaveHouse(event: CustomEvent) {
@@ -160,13 +195,6 @@
       }
     }
   }
-
-  async function handleDeleteHouse(event: CustomEvent) {
-      // Fallback for events from Map.svelte
-      const house = event.detail;
-      selectedHouseId = house.id;
-      handleDeleteActiveHouse();
-  }
 </script>
 
 <div class="dashboard-wrapper">
@@ -178,6 +206,12 @@
     </div>
     
         <div class="header-right">
+            {#if !showGuide}
+                <button class="btn-help-small" on:click={() => showGuide = true} in:fade>
+                    HELP EDITING ❓
+                </button>
+            {/if}
+
             {#if isVerified && !isBookingActive}
               <div class="timer-config" in:fade>
                 {#if bookingUnlockAt}
@@ -208,8 +242,8 @@
               </div>
             {/if}
 
-            <button class="btn-guide" on:click={() => showGuide = !showGuide}>
-            {showGuide ? 'Close Intel 📖' : 'Show Intel ❓'}
+            <button class="btn-guide" on:click={() => showGuide = !showGuide} class:active={showGuide}>
+            {showGuide ? 'CLOSE INTEL 📡' : 'SHOW INTEL 📊'}
         </button>
 
         {#if isVerified}
@@ -227,29 +261,85 @@
     </div>
   </header>
 
-  <!-- Interactive Guide -->
+  <!-- Interactive Dashboard & Guide -->
   {#if showGuide}
     <section class="intel-panel" transition:slide>
-        <div class="intel-grid">
-            <div class="intel-card turquoise">
-                <span class="icon">📍</span>
-                <h3>Placing Houses</h3>
-                <p>Click any empty spot on the map to ignite a new sanctuary. Name it wisely!</p>
+        <div class="intel-container">
+            <!-- Management Summary -->
+            <div class="dashboard-section">
+                <div class="section-header">
+                    <span class="laser-dot pink"></span>
+                    <h3>LIVE OPERATIONS INTEL</h3>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-box cyan">
+                        <span class="label">CAPACITY</span>
+                        <span class="value">{totalBeds}</span>
+                    </div>
+                    <div class="stat-box pink">
+                        <span class="label">BOOKED</span>
+                        <span class="value">{occupiedBeds}</span>
+                    </div>
+                    <div class="stat-box green">
+                        <span class="label">FREE</span>
+                        <span class="value">{freeBeds}</span>
+                    </div>
+                    <div class="stat-box orange">
+                        <span class="label">LOAD</span>
+                        <span class="value">{occupancyRate.toFixed(1)}%</span>
+                    </div>
+                </div>
+
+                <div class="visual-progress">
+                    <div class="progress-track">
+                        <div class="progress-fill laser-gradient" style="width: {occupancyRate}%"></div>
+                        <div class="scanline"></div>
+                    </div>
+                    <div class="status-legend">
+                        <div class="legend-item">
+                            <span class="dot empty"></span>
+                            <span class="count">{houseStats.empty}</span>
+                            <span class="text">EMPTY</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="dot partial"></span>
+                            <span class="count">{houseStats.partial}</span>
+                            <span class="text">FILLING</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="dot full"></span>
+                            <span class="count">{houseStats.full}</span>
+                            <span class="text">FULL</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="intel-card pink">
-                <span class="icon">🖱️</span>
-                <h3>Drag & Drop</h3>
-                <p>Grab a house and drag it across the dust. (Only allowed in 🛠 STAGING MODE)</p>
-            </div>
-            <div class="intel-card orange">
-                <span class="icon">⚙️</span>
-                <h3>Management</h3>
-                <p>Click a house to see details in the sidebar. Move, rename, or vanish it.</p>
-            </div>
-            <div class="intel-card green">
-                <span class="icon">🎪</span>
-                <h3>Go Live</h3>
-                <p>Switch to Live Booking to let burners secure their spots. Map layout will be locked 🔒</p>
+
+            <!-- Help Section -->
+            <div class="dashboard-section">
+                <div class="section-header">
+                    <span class="laser-dot turquoise"></span>
+                    <h3>PLAYA PROTOCOLS</h3>
+                </div>
+                <div class="intel-grid">
+                    <div class="intel-card turquoise">
+                        <span class="icon">📍</span>
+                        <p>Click map to ignite house. (STAGING ONLY)</p>
+                    </div>
+                    <div class="intel-card pink">
+                        <span class="icon">🖱️</span>
+                        <p>Drag to reposition. (STAGING ONLY)</p>
+                    </div>
+                    <div class="intel-card orange">
+                        <span class="icon">⚙️</span>
+                        <p>Click house for Unit Intel sidebar.</p>
+                    </div>
+                    <div class="intel-card green">
+                        <span class="icon">🎪</span>
+                        <p>Go LIVE to lock layout & allow bookings.</p>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -272,10 +362,10 @@
                       {houses} 
                       isEditorMode={true} 
                       {isBookingActive}
-                      on:locationSelected={handleLocationSelected} 
+                      on:locationSelected={(e) => handleLocationSelected(e.detail)} 
                       on:houseMoved={handleHouseMoved}
                       on:renameHouse={handleSelectHouse}
-                      on:deleteHouse={handleDeleteHouse}
+                      on:deleteHouse={(e) => handleDeleteHouse(e.detail)}
                   />
               </div>
 
@@ -346,15 +436,15 @@
               
               {#if isVerified}
                 <div class="card-admin-actions">
-                    <button class="btn-action-small" on:click={() => handleRenameHouse({ detail: house })}>RENAME ✏️</button>
-                    <button class="btn-action-small vanish" on:click={() => handleDeleteHouse({ detail: house })}>VANISH 🌪️</button>
+                    <button class="btn-action-small" on:click={() => handleRenameHouse(house)}>RENAME ✏️</button>
+                    <button class="btn-action-small vanish" on:click={() => handleDeleteHouse(house)}>VANISH 🌪️</button>
                 </div>
               {/if}
             </div>
           {/each}
           
           {#if isVerified}
-            <button class="add-house-card" on:click={() => handleLocationSelected({ detail: { x: 500, y: 350 } })}>
+            <button class="add-house-card" on:click={() => handleLocationSelected({ x: 500, y: 350 })}>
                 <span class="plus">+</span>
                 <span>Ignite New House</span>
                 <small>Auto-centered at 500/350</small>
@@ -456,32 +546,139 @@
   .btn-guide { color: #f472b6; border-color: #f472b6; }
   .btn-guide:hover { background: rgba(244, 114, 182, 0.1); box-shadow: 0 0 15px rgba(244, 114, 182, 0.2); }
 
-  /* Intel Panel */
+  /* Intel Panel & Dashboard */
   .intel-panel {
-    background: #111;
-    border: 1px dashed #333;
+    background: #0a0a0a;
+    border: 1px solid #222;
     border-radius: 16px;
     padding: 2rem;
+    box-shadow: inset 0 0 50px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.5);
   }
-  .intel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; }
+
+  .intel-container {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 3rem;
+  }
+
+  @media (max-width: 1000px) {
+      .intel-container { grid-template-columns: 1fr; gap: 2rem; }
+  }
+
+  .dashboard-section {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+  }
+
+  .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid #1a1a1a;
+      padding-bottom: 0.75rem;
+  }
+  .section-header h3 { margin: 0; font-size: 0.7rem; font-weight: 900; letter-spacing: 2.5px; color: #666; }
+
+  .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+  }
+  .stat-box {
+      background: #111;
+      padding: 1.25rem;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      border: 1px solid #222;
+      position: relative;
+      overflow: hidden;
+  }
+  .stat-box::after {
+      content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 2px; opacity: 0.5;
+  }
+  .stat-box.cyan::after { background: #2dd4bf; box-shadow: 0 0 10px #2dd4bf; }
+  .stat-box.pink::after { background: #f472b6; box-shadow: 0 0 10px #f472b6; }
+  .stat-box.green::after { background: #4ade80; box-shadow: 0 0 10px #4ade80; }
+  .stat-box.orange::after { background: #fb923c; box-shadow: 0 0 10px #fb923c; }
+
+  .stat-box .label { font-size: 0.55rem; font-weight: 900; color: #444; letter-spacing: 1px; }
+  .stat-box .value { font-size: 1.5rem; font-weight: 900; color: #fff; font-family: monospace; }
+  .stat-box.cyan .value { color: #2dd4bf; }
+  .stat-box.pink .value { color: #f472b6; }
+  .stat-box.green .value { color: #4ade80; }
+  .stat-box.orange .value { color: #fb923c; }
+
+  .visual-progress {
+      background: #111;
+      padding: 1.5rem;
+      border-radius: 12px;
+      border: 1px solid #222;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+  }
+
+  .progress-track {
+      height: 40px;
+      background: #050505;
+      border-radius: 6px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid #222;
+  }
+  .progress-fill {
+      height: 100%;
+      transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+  }
+  .laser-gradient {
+      background: linear-gradient(90deg, #111, #f472b6);
+      box-shadow: 0 0 20px rgba(244, 114, 182, 0.3);
+  }
+
+  .scanline {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.5) 50%);
+      background-size: 100% 4px;
+      pointer-events: none;
+  }
+
+  .status-legend {
+      display: flex;
+      justify-content: space-around;
+      border-top: 1px solid #1a1a1a;
+      padding-top: 1rem;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-item .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .legend-item .dot.empty { background: #444; }
+  .legend-item .dot.partial { background: #fb923c; box-shadow: 0 0 10px #fb923c; }
+  .legend-item .dot.full { background: #f87171; box-shadow: 0 0 10px #f87171; }
+  .legend-item .count { font-weight: 900; color: #fff; font-size: 0.9rem; }
+  .legend-item .text { font-size: 0.6rem; font-weight: 900; color: #666; letter-spacing: 1px; }
+
+  .intel-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
   
   .intel-card {
     display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 1.5rem;
-    background: #0a0a0a;
-    border-radius: 12px;
-    border-left: 4px solid #333;
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: #111;
+    border-radius: 10px;
+    border: 1px solid #1a1a1a;
   }
-  .intel-card.turquoise { border-left-color: #2dd4bf; }
-  .intel-card.pink { border-left-color: #f472b6; }
-  .intel-card.orange { border-left-color: #fb923c; }
-  .intel-card.green { border-left-color: #4ade80; }
+  .intel-card p { margin: 0; font-size: 0.75rem; color: #888; line-height: 1.2; font-weight: bold; }
+  .icon { font-size: 1rem; }
 
-  .intel-card h3 { margin: 0; font-size: 1rem; color: #fff; }
-  .intel-card p { margin: 0; font-size: 0.85rem; color: #888; line-height: 1.4; }
-  .icon { font-size: 1.5rem; }
+  .laser-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .laser-dot.pink { background: #f472b6; box-shadow: 0 0 10px #f472b6; }
+  .laser-dot.turquoise { background: #2dd4bf; box-shadow: 0 0 10px #2dd4bf; }
 
   /* Map View */
   .map-view { display: flex; flex-direction: column; gap: 1rem; }

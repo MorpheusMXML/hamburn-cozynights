@@ -2,7 +2,9 @@
     import { onMount } from 'svelte';
     import { fade } from 'svelte/transition';
 
-    interface Fairy {
+    type SpriteType = 'pixel' | 'glow' | 'unicorn' | 'wizard' | 'wine' | 'mermaid';
+
+    interface Creature {
         id: number;
         y: number;
         size: number;
@@ -10,55 +12,63 @@
         color: string;
         opacity: number;
         delay: number;
-        type: 'pixel' | 'glow';
+        type: SpriteType;
     }
 
-    let fairies: Fairy[] = [];
-    const colors = ['#2dd4bf', '#f472b6', '#fb923c', '#4ade80'];
+    let creatures: Creature[] = [];
+    const colors = ['#2dd4bf', '#f472b6', '#fb923c', '#4ade80', '#e879f9'];
 
-    function createFairy(id: number): Fairy {
+    function createCreature(id: number): Creature {
+        const types: SpriteType[] = ['pixel', 'glow', 'unicorn', 'wizard', 'wine', 'mermaid'];
         return {
             id,
             y: Math.random() * 90 + 5,
-            size: 15 + Math.random() * 15,
-            speed: 20 + Math.random() * 30,
+            size: 20 + Math.random() * 20,
+            speed: 15 + Math.random() * 35,
             color: colors[Math.floor(Math.random() * colors.length)],
-            opacity: 0.2 + Math.random() * 0.4,
-            delay: Math.random() * 20,
-            type: Math.random() > 0.3 ? 'pixel' : 'glow'
+            opacity: 0.15 + Math.random() * 0.4,
+            delay: Math.random() * 25,
+            type: types[Math.floor(Math.random() * types.length)]
         };
     }
 
     onMount(() => {
-        for (let i = 0; i < 12; i++) {
-            fairies = [...fairies, createFairy(i)];
+        for (let i = 0; i < 18; i++) {
+            creatures = [...creatures, createCreature(i)];
         }
     });
 </script>
 
 <div class="fairy-container">
     <div class="background-grid"></div>
-    {#each fairies as fairy (fairy.id)}
+    <div class="laser-scan"></div>
+    
+    {#each creatures as c (c.id)}
         <div 
-            class="fairy {fairy.type}"
+            class="creature {c.type}"
             style="
-                --y: {fairy.y}%;
-                --size: {fairy.size}px;
-                --color: {fairy.color};
-                --speed: {fairy.speed}s;
-                --opacity: {fairy.opacity};
-                --delay: -{fairy.delay}s;
+                --y: {c.y}%;
+                --size: {c.size}px;
+                --color: {c.color};
+                --speed: {c.speed}s;
+                --opacity: {c.opacity};
+                --delay: -{c.delay}s;
             "
         >
-            {#if fairy.type === 'pixel'}
+            {#if c.type === 'pixel'}
                 <svg viewBox="0 0 8 8" width="100%" height="100%">
-                    <!-- Pixel Art Sprite -->
-                    <rect x="3" y="3" width="2" height="2" fill="white" /> <!-- Core -->
-                    <rect x="1" y="2" width="2" height="2" fill="currentColor" opacity="0.8" /> <!-- Wing L -->
-                    <rect x="5" y="2" width="2" height="2" fill="currentColor" opacity="0.8" /> <!-- Wing R -->
-                    <rect x="2" y="4" width="1" height="1" fill="currentColor" opacity="0.6" /> <!-- Tail L -->
-                    <rect x="5" y="4" width="1" height="1" fill="currentColor" opacity="0.6" /> <!-- Tail R -->
+                    <rect x="3" y="3" width="2" height="2" fill="white" />
+                    <rect x="1" y="2" width="2" height="2" fill="currentColor" opacity="0.8" />
+                    <rect x="5" y="2" width="2" height="2" fill="currentColor" opacity="0.8" />
                 </svg>
+            {:else if c.type === 'unicorn'}
+                <span class="emoji-sprite">🦄</span>
+            {:else if c.type === 'wizard'}
+                <span class="emoji-sprite">🧙‍♂️</span>
+            {:else if c.type === 'wine'}
+                <span class="emoji-sprite">🍾</span>
+            {:else if c.type === 'mermaid'}
+                <span class="emoji-sprite">🧜‍♀️</span>
             {:else}
                 <div class="glow-core"></div>
             {/if}
@@ -83,17 +93,30 @@
         background-image: 
             linear-gradient(rgba(45, 212, 191, 0.03) 1px, transparent 1px),
             linear-gradient(90deg, rgba(45, 212, 191, 0.03) 1px, transparent 1px);
-        background-size: 50px 50px;
+        background-size: 60px 60px;
         transform: perspective(500px) rotateX(60deg);
         animation: grid-move 20s linear infinite;
     }
 
-    @keyframes grid-move {
-        from { transform: perspective(500px) rotateX(60deg) translateY(0); }
-        to { transform: perspective(500px) rotateX(60deg) translateY(50px); }
+    .laser-scan {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 2px;
+        background: linear-gradient(90deg, transparent, #2dd4bf, transparent);
+        opacity: 0.1;
+        animation: scan 8s ease-in-out infinite;
     }
 
-    .fairy {
+    @keyframes scan {
+        0%, 100% { top: 0; }
+        50% { top: 100%; }
+    }
+
+    @keyframes grid-move {
+        from { transform: perspective(500px) rotateX(60deg) translateY(0); }
+        to { transform: perspective(500px) rotateX(60deg) translateY(60px); }
+    }
+
+    .creature {
         position: absolute;
         top: var(--y);
         width: var(--size);
@@ -101,7 +124,16 @@
         color: var(--color);
         opacity: var(--opacity);
         animation: float-horizontal var(--speed) linear infinite var(--delay);
-        filter: drop-shadow(0 0 5px var(--color));
+        filter: drop-shadow(0 0 8px var(--color));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .emoji-sprite {
+        font-size: var(--size);
+        filter: saturate(1.5) brightness(1.2);
+        animation: sway 3s ease-in-out infinite alternate;
     }
 
     .glow-core {
@@ -109,17 +141,17 @@
         background: white;
         border-radius: 50%;
         box-shadow: 0 0 15px 5px var(--color);
-        position: absolute;
-        top: 30%; left: 30%;
         animation: pulse 1s ease-in-out infinite alternate;
     }
 
     @keyframes float-horizontal {
-        0% { left: -10%; transform: translateY(0); }
-        25% { transform: translateY(-30px); }
-        50% { transform: translateY(0); }
-        75% { transform: translateY(30px); }
-        100% { left: 110%; transform: translateY(0); }
+        0% { left: -15%; transform: rotate(0deg); }
+        100% { left: 115%; transform: rotate(360deg); }
+    }
+
+    @keyframes sway {
+        from { transform: translateY(-10px) rotate(-10deg); }
+        to { transform: translateY(10px) rotate(10deg); }
     }
 
     @keyframes pulse {
