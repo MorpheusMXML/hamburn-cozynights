@@ -1,15 +1,56 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+
   export let name: string;
   export let status: string = 'available';
 
+  let markerEl: HTMLElement;
+  let offsetX = 0;
+  let offsetY = 0;
+
   $: isOccupied = status === 'full' || status === 'besetzt';
+
+  onMount(() => {
+      const handleMouseMove = (e: MouseEvent) => {
+          if (!markerEl) return;
+          const rect = markerEl.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+          
+          // Calculate distance from center
+          const distX = e.clientX - centerX;
+          const distY = e.clientY - centerY;
+          
+          // Parallax effect: shift slightly based on proximity (max 5px)
+          const limit = 300; // Activation radius
+          const strength = 10;
+          
+          const mag = Math.sqrt(distX*distX + distY*distY);
+          if (mag < limit) {
+              const ratio = (1 - mag / limit) * strength;
+              offsetX = (distX / mag) * ratio;
+              offsetY = (distY / mag) * ratio;
+          } else {
+              offsetX = 0;
+              offsetY = 0;
+          }
+      };
+
+      window.addEventListener('mousemove', handleMouseMove);
+      return () => window.removeEventListener('mousemove', handleMouseMove);
+  });
 </script>
 
-<div class="marker-wrapper">
+<div 
+    class="marker-wrapper" 
+    bind:this={markerEl}
+    style="transform: translate(calc(-50% + {offsetX}px), calc(-50% + {offsetY}px))"
+>
   <div class="hit-area"></div>
   
   <div class="pin" class:occupied={isOccupied}>
       <div class="pulse-ring"></div>
+      <div class="laser-shine"></div>
   </div>
   <span class="label">{name}</span>
 </div>
@@ -20,8 +61,9 @@
     flex-direction: column;
     align-items: center;
     position: relative;
-    transform: translate(-50%, -50%);
     pointer-events: none; 
+    transition: transform 0.1s ease-out;
+    filter: drop-shadow(0 0 10px rgba(0,0,0,0.5));
   }
 
   .hit-area {
@@ -45,6 +87,20 @@
     z-index: 2;
     transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     position: relative;
+    overflow: hidden;
+  }
+
+  .laser-shine {
+      position: absolute;
+      top: -100%; left: -100%; width: 300%; height: 300%;
+      background: linear-gradient(45deg, transparent, rgba(255,255,255,0.4), transparent);
+      transform: rotate(45deg);
+      animation: shine 3s infinite;
+  }
+
+  @keyframes shine {
+      0% { left: -100%; top: -100%; }
+      20%, 100% { left: 100%; top: 100%; }
   }
 
   .pulse-ring {
@@ -91,5 +147,13 @@
     border: 1px solid #333;
     text-transform: uppercase;
     box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    transition: all 0.2s;
+  }
+
+  :global(.marker-link:hover) .label {
+      background: #2dd4bf;
+      color: #000;
+      border-color: #fff;
+      transform: translateY(2px);
   }
 </style>
