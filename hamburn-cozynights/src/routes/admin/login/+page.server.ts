@@ -3,7 +3,7 @@ import { dev } from '$app/environment';
 import type { Actions, PageServerLoad } from './$types';
 import type { ClientResponseError } from 'pocketbase';
 
-// Eigener Typ für sauberen Code
+// Custom type for cleaner code
 interface SafeAuthProvider {
     name: string;
     displayName: string;

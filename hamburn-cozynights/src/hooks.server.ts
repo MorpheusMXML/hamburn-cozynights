@@ -20,13 +20,23 @@ export const handle: Handle = async ({ event, resolve }) => {
 
     try {
         if (event.locals.pb.authStore.isValid) {
-            // Re-authenticate and refresh the session
-            await event.locals.pb.collection('users').authRefresh();
+            // Re-authenticate and refresh the session based on the auth model type
+            // Superusers/Admins use a different refresh mechanism in older PB, 
+            // but in newer PB they are just another collection or use .admins
+            
+            // Check if it's a regular user or a superuser (admin)
+            if (event.locals.pb.authStore.isAdmin) {
+                await event.locals.pb.admins.authRefresh();
+            } else {
+                await event.locals.pb.collection('users').authRefresh();
+            }
+            
             event.locals.user = event.locals.pb.authStore.model;
         } else {
             event.locals.user = undefined;
         }
-    } catch {
+    } catch (err) {
+        console.warn('[Security] Auth refresh failed. Clearing session.', err);
         event.locals.pb.authStore.clear();
         event.locals.user = undefined;
     }
