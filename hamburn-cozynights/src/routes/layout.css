@@ -1,3 +1,71 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
+
+:root {
+    --mouse-x: 0px;
+    --mouse-y: 0px;
+}
+
+/* Global Transition for all interactive elements */
+* {
+    transition: border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease, transform 0.2s ease;
+}
+
+/* Laser Glass Effect for Cards */
+.house-card, .room-card, .bed-card, .intel-card, .form-section, .status-card, .form-panel {
+    position: relative;
+    background: rgba(15, 15, 15, 0.7) !important;
+    backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    overflow: hidden;
+}
+
+.house-card::before, .room-card::before, .bed-card::before, .intel-card::before, .form-section::before, .status-card::before, .form-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: radial-gradient(
+        600px circle at var(--mouse-x) var(--mouse-y),
+        rgba(45, 212, 191, 0.05),
+        transparent 40%
+    );
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+.house-card:hover::before, .room-card:hover::before, .bed-card:hover::before, .intel-card:hover::before, .form-section:hover::before, .status-card:hover::before, .form-panel:hover::before {
+    opacity: 1;
+}
+
+/* Hover scales for all cards */
+.house-card:hover, .room-card:hover, .bed-card:hover {
+    transform: translateY(-2px) scale(1.01);
+    border-color: rgba(45, 212, 191, 0.4) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(45, 212, 191, 0.1) !important;
+}
+
+/* Button Pulse Animation */
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 15px rgba(45, 212, 191, 0.3); }
+    50% { box-shadow: 0 0 30px rgba(45, 212, 191, 0.6); }
+}
+
+.btn-ignite, .btn-laser.live, .btn-confirm {
+    animation: pulse-glow 3s infinite ease-in-out;
+}
+
+/* Disintegrate effect for deletion */
+.disintegrating {
+    animation: disintegrate 0.6s forwards cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+}
+
+@keyframes disintegrate {
+    0% { transform: scale(1) rotate(0deg); filter: blur(0) brightness(1); opacity: 1; }
+    20% { transform: scale(1.1) rotate(2deg); filter: blur(2px) brightness(1.5); }
+    100% { transform: scale(0.5) rotate(-10deg) translateY(-50px); filter: blur(20px) brightness(2); opacity: 0; }
+}
