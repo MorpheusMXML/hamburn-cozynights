@@ -2,10 +2,24 @@
   import type { PageData } from './$types';
   import AddRoomForm from '$lib/components/admin/AddRoomForm.svelte';
   import { fade, fly } from 'svelte/transition';
+  import { invalidateAll } from '$app/navigation';
+  import { enhance } from '$app/forms';
 
   export let data: PageData;
   // isVerified comes from the layout
   $: ({ house, rooms, isVerified } = data);
+
+  function handleAction(roomId: string) {
+      return async ({ result, update }: { result: any, update: any }) => {
+          if (result.type === 'success') {
+              const card = document.querySelector(`.room-card:has([value="${roomId}"])`);
+              if (card) card.classList.add('disintegrating');
+              await new Promise(r => setTimeout(r, 550));
+          }
+          await update();
+          await invalidateAll();
+      };
+  }
 </script>
 
 <div class="dashboard-container">
@@ -65,7 +79,7 @@
         
         {#if isVerified}
             <footer class="card-actions">
-                <form action="?/deleteRoom" method="POST" on:click|stopPropagation>
+                <form action="?/deleteRoom" method="POST" use:enhance={() => handleAction(room.id)} on:click|stopPropagation>
                     <input type="hidden" name="id" value={room.id} />
                     <button type="submit" class="btn-vanish" title="Vanish Room">
                         VANISH MODULE 🌪️
