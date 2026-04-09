@@ -55,6 +55,7 @@
             created: now,
             updated: now,
             label: `B${i + 1}`,
+            enabled: false,
             occupied: false,
             room: 'temp-room',
             bookedBy: '',

@@ -22,7 +22,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       sort: 'label'
     });
 
-    return { room, beds };
+    const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
+
+    return { room, beds, isBookingActive: !!settings.is_booking_active };
 
   } catch (err) {
     console.error("Error fetching house spots:", err);
@@ -32,6 +34,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
   createBed: async ({ request, params, locals }) => {
+    const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
+    if (settings.is_booking_active) return fail(403, { message: 'Management locked during live booking.' });
+
     console.log(`[Action:createBed] User: ${locals.pb.authStore.model?.email}, Room: ${params.id}`);
     
     if (!locals.pb.authStore.model?.verified) {
@@ -55,6 +60,9 @@ export const actions: Actions = {
   },
 
   deleteBed: async ({ request, locals }) => {
+    const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
+    if (settings.is_booking_active) return fail(403, { message: 'Management locked during live booking.' });
+
     console.log(`[Action:deleteBed] User: ${locals.pb.authStore.model?.email}`);
     
     if (!locals.pb.authStore.model?.verified) {
@@ -75,6 +83,9 @@ export const actions: Actions = {
   },
   
   toggleOccupied: async ({ request, locals }) => {
+      const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
+      if (settings.is_booking_active) return fail(403, { message: 'Management locked during live booking.' });
+
       const data = await request.formData();
       const id = data.get('id') as string;
       const occupied = data.get('occupied') === 'true';
@@ -87,5 +98,20 @@ export const actions: Actions = {
       } catch (err) {
           console.error('[Action:toggleOccupied] FAILED:', err);
       }
+  },
+
+  toggleEnabled: async ({ request, locals }) => {
+    const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
+    if (settings.is_booking_active) return fail(403, { message: 'Management locked during live booking.' });
+
+    const data = await request.formData();
+    const id = data.get('id') as string;
+    const enabled = data.get('enabled') === 'true';
+
+    try {
+        await locals.pb.collection('beds').update(id, { enabled: !enabled });
+    } catch (err) {
+        return fail(500, { error: true });
+    }
   }
 };
