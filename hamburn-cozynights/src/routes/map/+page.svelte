@@ -51,13 +51,14 @@
     {:else}
       <div class="phase-badge staging">🛠 STAGING MODE</div>
     {/if}
+    <div class="debug-counter" style="color: white; font-size: 0.6rem; opacity: 0.5; margin-left: 1rem;">
+      SENSORS: {houses?.length || 0}
+    </div>
   </div>
 
-  {#if houses}
-    <div class="map-container" class:staging-blur={!isBookingActive}>
-      {#key houses}
-        <Map {houses} isEditorMode={false} {isBookingActive} />
-      {/key}
+  {#if data.houses}
+    <div class="map-container">
+      <Map houses={data.houses} isEditorMode={false} isBookingActive={data.isBookingActive} />
     </div>
   {:else}
     <div class="loading">Igniting Sensors...</div>
@@ -93,6 +94,7 @@
   .page-container {
     width: 100vw;
     height: 100vh;
+    min-height: 100vh;
     background: #050505;
     overflow: hidden;
     position: relative;
@@ -128,6 +130,7 @@
     font-weight: 900;
     letter-spacing: -1px;
     background: linear-gradient(to right, #2dd4bf, #f472b6);
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     text-transform: uppercase;
@@ -172,10 +175,6 @@
     transition: filter 0.5s ease;
   }
 
-  .staging-blur {
-    filter: blur(4px) grayscale(0.5) brightness(0.5);
-  }
-
   .staging-overlay {
     position: absolute;
     top: 0;
@@ -217,7 +216,6 @@
   }
 
   .laser-text.pink { color: #f472b6; }
-  .laser-text.turquoise { color: #2dd4bf; }
 
   .reload-button {
     background: #111;

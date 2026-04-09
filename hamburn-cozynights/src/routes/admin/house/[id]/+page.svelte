@@ -7,9 +7,13 @@
 
   export let data: PageData;
   // isVerified comes from the layout
-  $: ({ house, rooms, isVerified } = data);
+  $: ({ house, rooms, isVerified, isBookingActive } = data);
 
   function handleAction(roomId: string) {
+      if (isBookingActive) {
+          alert("🔒 LOCKDOWN ACTIVE: Configuration is locked during Live Booking.");
+          return;
+      }
       return async ({ result, update }: { result: any, update: any }) => {
           if (result.type === 'success') {
               const card = document.querySelector(`.room-card:has([value="${roomId}"])`);
@@ -28,27 +32,30 @@
         <a href="/admin">Control Center</a> <span class="sep">/</span> <span class="current">{house.name}</span>
     </nav>
     <h1>
-        <span class="house-icon">🏠</span> 
+        <span class="house-icon">🛖</span> 
         {house.name} 
-        <span class="subtitle">MANAGEMENT UNIT</span>
+        <span class="subtitle">SANCTUARY OVERSIGHT</span>
     </h1>
   </div>
 
   {#if isVerified}
-      <section class="form-section" in:fade={{ delay: 200 }}>
+      <section class="form-section" in:fade={{ delay: 200 }} class:disabled={isBookingActive}>
           <header class="section-header">
               <span class="laser-dot turquoise"></span>
-              <h3>EXPAND ARCHITECTURE ➕</h3>
+              <h3>ADD ROOM ➕</h3>
           </header>
+          {#if isBookingActive}
+            <div class="lockdown-notice">🔒 MANAGEMENT LOCKED DURING LIVE BOOKING</div>
+          {/if}
           <div class="form-wrapper">
-              <AddRoomForm houseId={house.id} />
+              <AddRoomForm houseId={house.id} disabled={isBookingActive} />
           </div>
       </section>
   {/if}
 
   <header class="section-title-row">
       <span class="laser-dot pink"></span>
-      <h2 class="section-title">ACTIVE MODULES 👥</h2>
+      <h2 class="section-title">ACTIVE ROOMS 🚪</h2>
   </header>
   
   <div class="grid">
@@ -58,7 +65,7 @@
         
         <header class="card-header">
           <span class="room-number">#{room.room_number}</span>
-          <span class="room-name">{room.name} 🚪</span>
+          <span class="room-name">{room.name}</span>
         </header>
 
         <div class="card-body">
@@ -71,20 +78,22 @@
                     ></div>
                 </div>
                 <div class="stat-info">
-                    <span class="label">OCCUPANCY 📊</span>
-                    <span class="value">{room.stats.occupied} / {room.stats.total} SPOTS</span>
+                    <span class="label">SPOTS CLAIMED 📊</span>
+                    <span class="value">{room.stats.occupied} / {room.stats.total}</span>
                 </div>
             </div>
         </div>
         
         {#if isVerified}
             <footer class="card-actions">
-                <form action="?/deleteRoom" method="POST" use:enhance={() => handleAction(room.id)} on:click|stopPropagation>
-                    <input type="hidden" name="id" value={room.id} />
-                    <button type="submit" class="btn-vanish" title="Vanish Room">
-                        VANISH MODULE 🌪️
-                    </button>
-                </form>
+                <div on:click|stopPropagation on:keydown|stopPropagation={(e) => e.key === 'Enter' && e.stopPropagation()} role="presentation">
+                    <form action="?/deleteRoom" method="POST" use:enhance={() => handleAction(room.id)}>
+                        <input type="hidden" name="id" value={room.id} />
+                        <button type="submit" class="btn-vanish" title="Vanish Room" class:disabled={isBookingActive} disabled={isBookingActive}>
+                            VANISH ROOM 🌪️
+                        </button>
+                    </form>
+                </div>
             </footer>
         {/if}
       </a>
@@ -124,6 +133,12 @@
       margin-bottom: 4rem;
       border-top: 2px solid #2dd4bf;
       box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      position: relative;
+  }
+  .form-section.disabled { opacity: 0.4; filter: grayscale(1); pointer-events: none; }
+  .lockdown-notice { 
+      position: absolute; top: 1.5rem; right: 2rem; 
+      color: #fb923c; font-size: 0.65rem; font-weight: 900; letter-spacing: 1px;
   }
   .form-section h3 { margin: 0; color: #eee; font-size: 0.9rem; font-weight: 900; letter-spacing: 1px; }
 
@@ -172,4 +187,5 @@
       padding: 0.5rem 1rem; border-radius: 6px; transition: all 0.2s; 
   }
   .btn-vanish:hover { color: #f87171; border-color: #f87171; background: rgba(248, 113, 113, 0.05); }
+  .btn-vanish.disabled { opacity: 0.3; cursor: not-allowed; }
 </style>

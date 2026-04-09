@@ -39,10 +39,23 @@
     onDestroy(() => {
         if (interval) clearInterval(interval);
     });
+
+    $: targetTimeStr = new Date(targetDate).toLocaleTimeString('de-DE', { 
+        timeZone: 'Europe/Berlin',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    $: targetDateStr = new Date(targetDate).toLocaleDateString('de-DE', {
+        timeZone: 'Europe/Berlin',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
 </script>
 
 <div class="countdown-wrapper" in:fade>
-    <span class="label">IGNITION IN:</span>
+    <div class="timezone-badge">GERMANY / BERLIN TIME</div>
+    <span class="label">IGNITION AT {targetDateStr} - {targetTimeStr} (CET/CEST):</span>
     <span class="timer">{timeLeft}</span>
 </div>
 
@@ -51,24 +64,41 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        background: rgba(0, 0, 0, 0.8);
-        padding: 1rem 2rem;
-        border-radius: 12px;
-        border: 1px solid #fb923c;
-        box-shadow: 0 0 20px rgba(251, 146, 60, 0.2);
-        min-width: 200px;
+        background: rgba(0, 0, 0, 0.85);
+        padding: 1.5rem 2.5rem;
+        border-radius: 16px;
+        border: 2px solid #fb923c;
+        box-shadow: 0 0 30px rgba(251, 146, 60, 0.15), inset 0 0 15px rgba(251, 146, 60, 0.1);
+        min-width: 240px;
+        position: relative;
+        overflow: hidden;
+    }
+    .timezone-badge {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #fb923c;
+        color: #000;
+        font-size: 0.5rem;
+        font-weight: 900;
+        padding: 2px 8px;
+        border-radius: 0 0 8px 8px;
+        letter-spacing: 1px;
     }
     .label {
         font-size: 0.65rem;
         font-weight: 900;
-        color: #666;
-        letter-spacing: 2px;
+        color: #888;
+        letter-spacing: 1.5px;
+        margin-top: 5px;
+        margin-bottom: 5px;
     }
     .timer {
-        font-size: 1.5rem;
+        font-size: 1.75rem;
         font-weight: 900;
         color: #fb923c;
-        font-family: monospace;
-        text-shadow: 0 0 10px rgba(251, 146, 60, 0.5);
+        font-family: 'JetBrains Mono', monospace;
+        text-shadow: 0 0 15px rgba(251, 146, 60, 0.6);
     }
 </style>

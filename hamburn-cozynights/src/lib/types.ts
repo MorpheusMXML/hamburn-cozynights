@@ -11,6 +11,7 @@ export type HouseData = HousesResponse & {
     rooms: RoomData[];
     totalBeds: number;
     occupiedBeds: number;
+    isBookable?: boolean;
 };
 
 /**
