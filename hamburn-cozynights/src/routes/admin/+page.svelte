@@ -130,15 +130,30 @@
     if (!activeHouse || !activeHouse.id) return;
     
     if (confirm(`⚠️ DANGER! ⚠️ Are you sure you want to vanish "${activeHouse.name}"? This will evaporate all modules and spots! 🌪️`)) {
+      console.log(`[Dashboard] Requesting VANISH for house ID: ${activeHouse.id}`);
+      
+      // Visual feedback: Start disintegration
+      const card = document.querySelector(`.house-card-wrapper:has([href*="${activeHouse.id}"])`);
+      if (card) card.classList.add('disintegrating');
+      const sidebar = document.querySelector('.details-sidebar');
+      if (sidebar) sidebar.classList.add('disintegrating');
+
       const formData = new FormData();
       formData.append('id', activeHouse.id);
       
+      // Delay deletion slightly to let animation play
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       const result = await submitAction('?/deleteHouse', formData);
       
       if (result.type !== 'success') {
+        console.error('[Dashboard] Vanish FAILED:', result);
+        // Revert visual state if failed
+        if (card) card.classList.remove('disintegrating');
+        if (sidebar) sidebar.classList.remove('disintegrating');
         alert(`🛑 ACTION BLOCKED! ${result.data?.error || 'The playa resisted your command.'}`);
       } else {
-        console.log(`[Dashboard] House ${activeHouse.id} vanished successfully.`);
+        console.log('[Dashboard] Vanish SUCCESS. Clearing state...');
         selectedHouseId = null;
         editingHouse = null;
         await invalidateAll();

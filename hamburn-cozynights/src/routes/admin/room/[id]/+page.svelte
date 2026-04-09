@@ -2,11 +2,25 @@
   import type { PageData } from './$types';
   import AddBedForm from '$lib/components/admin/AddBedForm.svelte';
   import { fade, fly } from 'svelte/transition';
+  import { invalidateAll } from '$app/navigation';
+  import { enhance } from '$app/forms';
 
   export let data: PageData;
   // isVerified from layout
   $: ({ room, beds, isVerified } = data);
   $: house = room.expand?.house;
+
+  function handleAction(bedId: string, actionType: 'delete' | 'toggle') {
+      return async ({ result, update }: { result: any, update: any }) => {
+          if (actionType === 'delete' && result.type === 'success') {
+              const card = document.querySelector(`.bed-card:has([value="${bedId}"])`);
+              if (card) card.classList.add('disintegrating');
+              await new Promise(r => setTimeout(r, 550));
+          }
+          await update();
+          await invalidateAll();
+      };
+  }
 </script>
 
 <div class="dashboard-container">
@@ -66,14 +80,14 @@
                     </div>
 
                     <div class="bed-actions">
-                        <form action="?/toggleOccupied" method="POST">
+                        <form action="?/toggleOccupied" method="POST" use:enhance={() => handleAction(bed.id, 'toggle')}>
                             <input type="hidden" name="id" value={bed.id} />
                             <input type="hidden" name="occupied" value={bed.occupied.toString()} />
                             <button class="btn-icon turquoise" title="Toggle status">🔄</button>
                         </form>
 
                         {#if isVerified}
-                            <form action="?/deleteBed" method="POST">
+                            <form action="?/deleteBed" method="POST" use:enhance={() => handleAction(bed.id, 'delete')}>
                                 <input type="hidden" name="id" value={bed.id} />
                                 <button class="btn-icon vanish" title="Delete spot">🗑</button>
                             </form>
