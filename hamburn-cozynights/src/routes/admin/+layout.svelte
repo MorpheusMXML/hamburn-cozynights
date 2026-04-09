@@ -95,6 +95,7 @@
         font-size: 1.5rem;
         letter-spacing: -1px;
         background: linear-gradient(to right, #2dd4bf, #f472b6);
+        background-clip: text;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         text-transform: uppercase;

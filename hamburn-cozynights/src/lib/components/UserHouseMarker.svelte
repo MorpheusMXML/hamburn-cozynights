@@ -3,6 +3,7 @@
 
   export let name: string;
   export let status: string = 'available';
+  export let labelPosition: 'top' | 'bottom' = 'bottom';
 
   let markerEl: HTMLElement;
   let offsetX = 0;
@@ -21,7 +22,7 @@
           const distX = e.clientX - centerX;
           const distY = e.clientY - centerY;
           
-          // Parallax effect: shift slightly based on proximity (max 5px)
+          // Parallax effect: shift slightly based on proximity (max 10px)
           const limit = 300; // Activation radius
           const strength = 10;
           
@@ -43,6 +44,7 @@
 
 <div 
     class="marker-wrapper" 
+    class:label-top={labelPosition === 'top'}
     bind:this={markerEl}
     style="transform: translate(calc(-50% + {offsetX}px), calc(-50% + {offsetY}px))"
 >
@@ -62,8 +64,17 @@
     align-items: center;
     position: relative;
     pointer-events: none; 
-    transition: transform 0.1s ease-out;
     filter: drop-shadow(0 0 10px rgba(0,0,0,0.5));
+    transition: transform 0.1s ease-out;
+  }
+
+  .marker-wrapper.label-top {
+      flex-direction: column-reverse;
+  }
+  
+  .marker-wrapper.label-top .label {
+      margin-top: 0;
+      margin-bottom: 8px;
   }
 
   .hit-area {

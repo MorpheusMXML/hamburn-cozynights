@@ -1,5 +1,6 @@
 <script lang="ts">
   export let houseId: string;
+  export let disabled = false;
 </script>
 
 <div class="form-card">
@@ -7,24 +8,24 @@
     <input type="hidden" name="houseId" value={houseId} />
 
     <div class="form-group">
-      <label for="name">UNIT DESIGNATION (NAME)</label>
-      <input type="text" id="name" name="name" placeholder="e.g. Skyline Sanctuary" required />
+      <label for="name">ROOM DESIGNATION (NAME)</label>
+      <input type="text" id="name" name="name" placeholder="e.g. Skyline Sanctuary" required {disabled} />
     </div>
 
     <div class="form-row">
       <div class="form-group">
-        <label for="room_number">MODULE #</label>
-        <input type="number" id="room_number" name="room_number" placeholder="101" required />
+        <label for="room_number">ROOM #</label>
+        <input type="number" id="room_number" name="room_number" placeholder="101" required {disabled} />
       </div>
 
       <div class="form-group">
-        <label for="amount_beds">INITIAL CAPACITY 🛌</label>
-        <input type="number" id="amount_beds" name="amount_beds" placeholder="0" min="0" />
+        <label for="amount_beds">BED CAPACITY 🛌</label>
+        <input type="number" id="amount_beds" name="amount_beds" placeholder="0" min="0" {disabled} />
       </div>
     </div>
 
-    <button type="submit" class="btn-ignite">
-        IGNITE MODULE ✨
+    <button type="submit" class="btn-ignite" class:disabled {disabled}>
+        IGNITE ROOM ✨
     </button>
   </form>
 </div>
@@ -52,6 +53,7 @@
     transition: all 0.3s;
   }
   input:focus { outline: none; border-color: #2dd4bf; box-shadow: 0 0 10px rgba(45, 212, 191, 0.2); }
+  input:disabled { opacity: 0.5; cursor: not-allowed; }
   
   .btn-ignite {
     background: #2dd4bf;
@@ -68,4 +70,5 @@
     box-shadow: 0 0 15px rgba(45, 212, 191, 0.3);
   }
   .btn-ignite:hover { transform: scale(1.02); box-shadow: 0 0 25px rgba(45, 212, 191, 0.5); }
+  .btn-ignite.disabled { opacity: 0.3; cursor: not-allowed; box-shadow: none; transform: none; }
 </style>

@@ -100,6 +100,7 @@ export type SuperusersRecord = {
 export type BedsRecord = {
 	bookedBy?: RecordIdString
 	created: IsoAutoDateString
+	enabled?: boolean
 	id: string
 	label?: string
 	occupied?: boolean

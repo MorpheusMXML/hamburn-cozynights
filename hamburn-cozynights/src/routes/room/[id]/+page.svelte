@@ -1,10 +1,9 @@
 <script lang="ts">
-  import type { PageData, ActionData } from './$types';
+  import type { PageData } from './$types';
   import { enhance } from '$app/forms';
   import CountdownTimer from '$lib/components/CountdownTimer.svelte';
 
   export let data: PageData;
-  export let form: ActionData;
 
   // Modal State
   let showModal = false;
@@ -20,6 +19,10 @@
   function closeModal() {
     showModal = false;
     selectedBedId = null;
+  }
+
+  function handleBackdropKeydown(event: KeyboardEvent) {
+      if (event.key === 'Escape') closeModal();
   }
 </script>
 
@@ -119,8 +122,8 @@
 </div>
 
 {#if showModal}
-  <div class="modal-backdrop" on:click={closeModal} role="presentation">
-    <div class="modal" on:click|stopPropagation role="dialog">
+  <div class="modal-backdrop" on:click={closeModal} on:keydown={handleBackdropKeydown} role="presentation">
+    <div class="modal" on:click|stopPropagation role="dialog" aria-modal="true" tabindex="-1">
       <h2>{selectedBedId === data.userBedId ? 'Edit Your Spot' : 'Grab This Spot'}</h2>
       <p>Set your Burner Name (optional).</p>
       
@@ -156,173 +159,72 @@
 {/if}
 
 <style>
-  :global(body) { background: #050505; color: #eee; font-family: 'Segoe UI', sans-serif; margin: 0; }
-  .container { max-width: 1000px; margin: 0 auto; padding: 2rem; }
+  .container { max-width: 1000px; margin: 0 auto; padding: 2rem; color: #fff; }
   
-  header { margin-bottom: 2rem; border-bottom: 1px solid #333; padding-bottom: 1rem; }
+  header { margin-bottom: 3rem; }
+  .header-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+  .back-link { color: #2dd4bf; text-decoration: none; font-weight: 900; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
+  .back-link:hover { color: #fff; }
   
-  .header-nav {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1rem;
-  }
+  h1 { font-size: 3rem; margin: 0; font-weight: 900; letter-spacing: -1px; }
+  h1 small { color: #f472b6; font-size: 1.5rem; margin-left: 0.5rem; }
 
-  .back-link { color: #888; text-decoration: none; font-size: 0.9rem; }
-  .back-link:hover { color: white; }
+  .booking-locked-banner { background: rgba(251, 146, 60, 0.1); border: 1px solid #fb923c; border-radius: 12px; padding: 1.5rem; display: flex; gap: 1.5rem; align-items: center; margin-bottom: 2rem; }
+  .locked-icon { font-size: 2rem; }
+  .locked-content h3 { margin: 0; color: #fb923c; }
+  .locked-content p { margin: 0.25rem 0 0 0; color: #888; }
 
-  .timer-mini { transform: scale(0.7); transform-origin: right center; }
+  .booking-warning-banner { background: rgba(248, 113, 113, 0.1); border: 1px solid #f87171; border-radius: 12px; padding: 1.5rem; display: flex; gap: 1.5rem; align-items: center; margin-bottom: 2rem; }
+  .warning-icon { font-size: 2rem; }
+  .warning-content h3 { margin: 0; color: #f87171; }
+  .warning-content p { margin: 0.25rem 0 1rem 0; color: #888; }
+  .btn-unbook-banner { background: #f87171; color: #000; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 900; cursor: pointer; }
 
-  h1 { margin: 0; font-size: 2.5rem; font-weight: 900; letter-spacing: -1px; }
-  h1 small { font-weight: normal; color: #666; font-size: 0.6em; margin-left: 10px; }
+  .booking-success-banner { background: rgba(45, 212, 191, 0.1); border: 1px solid #2dd4bf; border-radius: 12px; padding: 1.5rem; display: flex; gap: 1.5rem; align-items: center; margin-bottom: 2rem; }
+  .success-icon { font-size: 2rem; }
+  .success-content h3 { margin: 0; color: #2dd4bf; }
+  .success-content p { margin: 0.25rem 0 0 0; color: #888; }
 
-  .booking-warning-banner, .booking-success-banner {
-      display: flex; gap: 1.5rem; padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem;
-      align-items: flex-start; animation: fadeIn 0.4s ease-out;
-  }
+  .beds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+
+  .bed-card { background: #111; border: 1px solid #222; border-radius: 16px; padding: 1.5rem; display: flex; align-items: center; gap: 1.5rem; text-align: left; transition: all 0.2s; position: relative; overflow: hidden; }
+  .bed-card.mine { border-color: #2dd4bf; background: rgba(45, 212, 191, 0.05); cursor: pointer; }
+  .bed-card.mine:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(45, 212, 191, 0.1); }
+  .bed-card.free { cursor: pointer; }
+  .bed-card.free:hover:not(.disabled) { border-color: #f472b6; transform: translateY(-3px); box-shadow: 0 10px 20px rgba(244, 114, 182, 0.1); }
+  .bed-card.disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
+  .bed-card.occupied { opacity: 0.7; }
+  .bed-card.locked { opacity: 0.5; cursor: not-allowed; }
+
+  .icon { font-size: 1.5rem; }
+  .label { font-weight: 900; font-size: 1.25rem; flex: 1; }
   
-  .booking-warning-banner { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; }
-  .booking-success-banner { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; }
-  .booking-locked-banner { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: #93c5fd; display: flex; gap: 1.5rem; padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; align-items: flex-start; }
+  .status-box { display: flex; flex-direction: column; align-items: flex-end; }
+  .status-text { font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #666; }
+  .guest-name { font-weight: bold; font-size: 0.9rem; color: #fff; }
+  .my-status .status-text { color: #2dd4bf; }
+  .free span { font-weight: 900; color: #f472b6; font-size: 0.8rem; }
+  .free small { font-size: 0.6rem; color: #666; }
   
-  .warning-icon, .success-icon, .locked-icon { font-size: 2rem; }
-  .warning-content h3, .success-content h3, .locked-content h3 { margin: 0 0 0.5rem 0; font-size: 1.25rem; }
-  .warning-content p, .success-content p, .locked-content p { margin: 0 0 1rem 0; font-size: 0.95rem; line-height: 1.5; color: rgba(255,255,255,0.8); }
-  .locked-content p { margin-bottom: 0; }
-  
-  .btn-unbook-banner {
-      background: #ef4444; color: white; border: none; padding: 0.6rem 1.2rem; 
-      border-radius: 6px; font-weight: bold; cursor: pointer; transition: transform 0.1s;
-  }
-  .btn-unbook-banner:hover { transform: scale(1.02); background: #dc2626; }
+  .edit-hint { position: absolute; bottom: 8px; right: 12px; font-size: 0.5rem; color: #444; font-weight: 900; text-transform: uppercase; }
 
-  .beds-grid { 
-      display: grid; 
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); 
-      gap: 1.5rem; 
-  }
+  /* Modal */
+  .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .modal { background: #0a0a0a; border: 1px solid #333; border-top: 4px solid #2dd4bf; border-radius: 20px; padding: 2.5rem; width: 100%; max-width: 450px; box-shadow: 0 30px 60px rgba(0,0,0,0.5); }
+  .modal h2 { margin: 0 0 0.5rem 0; font-weight: 900; }
+  .modal p { color: #666; margin-bottom: 2rem; }
 
-  .bed-card {
-      position: relative;
-      border-radius: 12px;
-      padding: 1.5rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.5rem;
-      border: 2px solid #333;
-      background: #1a1a1a;
-      transition: all 0.2s ease;
-      text-align: center;
-      min-height: 180px;
-      justify-content: center;
-      color: white;
-  }
+  .form-group { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 2rem; }
+  .form-group label { font-size: 0.7rem; font-weight: 900; color: #444; letter-spacing: 1px; text-transform: uppercase; }
+  .form-group input { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 12px; color: #fff; font-size: 1rem; }
+  .form-group input:focus { outline: none; border-color: #2dd4bf; }
 
-  .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
-  .label { font-size: 1.2rem; font-weight: bold; display: block; }
-
-  button.bed-card.free { cursor: pointer; border: 2px solid #333; }
-  button.bed-card.free:hover:not(.disabled) {
-      background: #222;
-      border-color: #4ade80;
-      transform: translateY(-4px);
-      box-shadow: 0 4px 12px rgba(74, 222, 128, 0.2);
-  }
-  .status-box.free { color: #4ade80; font-weight: bold; display: flex; flex-direction: column; gap: 2px; }
-  .status-box.free small { font-weight: normal; font-size: 0.75rem; color: #888; }
-
-  .bed-card.mine.locked {
-      opacity: 0.6;
-      cursor: not-allowed;
-      box-shadow: none;
-  }
-  .bed-card.mine.locked:hover { transform: none; }
-
-  button.bed-card.free.disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-      border-style: dashed;
-      filter: grayscale(1);
-  }
-
-  .bed-card.occupied {
-      background: #150505;
-      border-color: #331111;
-      cursor: default;
-      opacity: 0.8;
-  }
-  .status-box.occupied { color: #ef4444; }
-  .guest-name { display: block; color: #999; font-size: 0.85rem; margin-top: 5px; font-style: italic; word-break: break-word; }
-
-  button.bed-card.mine {
-      background: #0a1220;
-      border-color: #3b82f6;
-      cursor: pointer;
-      box-shadow: 0 0 15px rgba(59, 130, 246, 0.15);
-  }
-  button.bed-card.mine:hover {
-      background: #0f1c30;
-      transform: translateY(-2px);
-      box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
-  }
-  .my-status { color: #3b82f6; font-weight: bold; }
-  .edit-hint { font-size: 0.7rem; color: #3b82f6; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-
-  .modal-backdrop {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.85);
-      backdrop-filter: blur(4px);
-      display: flex; align-items: center; justify-content: center;
-      z-index: 1000;
-      animation: fadeIn 0.2s ease-out;
-  }
-  .modal {
-      background: #1a1a1a;
-      padding: 2rem;
-      border-radius: 16px;
-      border: 1px solid #444;
-      width: 90%;
-      max-width: 420px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-      animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  .modal h2 { margin-top: 0; color: white; margin-bottom: 0.5rem; }
-  .modal p { color: #aaa; margin-bottom: 1.5rem; font-size: 0.95rem; }
-
-  .form-group { margin-bottom: 2rem; }
-  .form-group label { display: block; margin-bottom: 0.5rem; color: #bbb; font-size: 0.9rem; font-weight: bold; }
-  .form-group input {
-      width: 100%; padding: 0.8rem; background: #0a0a0a; border: 1px solid #333;
-      color: white; border-radius: 8px; font-size: 1rem; box-sizing: border-box;
-      transition: border-color 0.2s;
-  }
-  .form-group input:focus { outline: none; border-color: #4ade80; }
-
-  .actions { display: flex; gap: 1rem; justify-content: flex-end; align-items: center; }
-  
-  button { font-family: inherit; }
-
-  .btn-confirm { 
-      padding: 0.8rem 1.5rem; border-radius: 8px; border: none; font-weight: bold; 
-      background: #4ade80; color: #000; cursor: pointer; 
-      transition: transform 0.1s, background 0.2s;
-  }
-  .btn-confirm:hover { background: #22c55e; transform: scale(1.02); }
-
-  .btn-cancel { 
-      background: transparent; color: #aaa; border: none; cursor: pointer; padding: 0.8rem;
-      font-weight: 500;
-  }
-  .btn-cancel:hover { color: white; }
-
-  .btn-unbook {
-      margin-right: auto;
-      background: transparent; color: #ef4444; border: 1px solid #ef4444; 
-      padding: 0.6rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem;
-  }
-  .btn-unbook:hover { background: #ef4444; color: white; }
-
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .actions { display: flex; gap: 1rem; }
+  .actions button { flex: 1; padding: 12px; border-radius: 8px; font-weight: 900; cursor: pointer; transition: all 0.2s; }
+  .btn-cancel { background: transparent; border: 1px solid #333; color: #888; }
+  .btn-cancel:hover { background: #1a1a1a; color: #fff; }
+  .btn-confirm { background: #2dd4bf; border: none; color: #000; }
+  .btn-confirm:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(45, 212, 191, 0.3); }
+  .btn-unbook { background: transparent; border: 1px solid #f87171; color: #f87171; }
+  .btn-unbook:hover { background: #f87171; color: #000; }
 </style>

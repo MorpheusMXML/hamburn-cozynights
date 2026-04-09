@@ -23,9 +23,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         filter: locals.pb.filter('room.house = {:id}', { id: houseId }),
       });
 
-      // 4. Map statistics 📊
+      // 4. Fetch app settings for booking status
+      const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
+
+      // 5. Map statistics 📊
       const roomsWithStats = rooms.map((room) => {
-        const roomBeds = beds.filter((b) => b.room === room.id);
+        const roomBeds = beds.filter((b) => b.room === room.id && b.enabled !== false);
         const occupied = roomBeds.filter((b) => b.occupied).length;
         
         return {
@@ -38,7 +41,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         };
       });
 
-      return { house, rooms: roomsWithStats };
+      return { house, rooms: roomsWithStats, isBookingActive: !!settings.is_booking_active };
   } catch (err) {
       console.error(err);
       throw error(404, 'House not found.');
@@ -47,6 +50,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
   createRoom: async ({ request, locals, params }) => {
+    const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
+    if (settings.is_booking_active) return fail(403, { message: 'Management locked during live booking.' });
+
     console.log(`[Action:createRoom] User: ${locals.pb.authStore.model?.email}, Verified: ${locals.pb.authStore.model?.verified}, House: ${params.id}`);
     
     if (!locals.pb.authStore.model?.verified) {
@@ -56,14 +62,28 @@ export const actions: Actions = {
 
     const data = await request.formData();
     const houseId = params.id; 
+    const amountBeds = parseInt(data.get('amount_beds') as string || '0');
 
     try {
-        await locals.pb.collection('rooms').create({
+        const room = await locals.pb.collection('rooms').create({
           name: data.get('name'),
           room_number: parseInt(data.get('room_number') as string),
-          amount_beds: parseInt(data.get('amount_beds') as string || '0'),
+          amount_beds: amountBeds,
           house: houseId
         });
+
+        // Automatically create bed templates
+        if (amountBeds > 0) {
+            for (let i = 1; i <= amountBeds; i++) {
+                await locals.pb.collection('beds').create({
+                    label: `Spot ${i}`,
+                    room: room.id,
+                    enabled: false,
+                    occupied: false
+                });
+            }
+        }
+
         console.log('[Action:createRoom] SUCCESS.');
     } catch (err) {
         console.error('[Action:createRoom] FAILED:', err);
@@ -72,6 +92,9 @@ export const actions: Actions = {
   },
 
   deleteRoom: async ({ request, locals }) => {
+    const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
+    if (settings.is_booking_active) return fail(403, { message: 'Management locked during live booking.' });
+
     console.log(`[Action:deleteRoom] User: ${locals.pb.authStore.model?.email}`);
     
     if (!locals.pb.authStore.model?.verified) {
