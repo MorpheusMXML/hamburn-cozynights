@@ -93,7 +93,9 @@
                     <div class="bed-info">
                         <span class="bed-label">{bed.label || 'Unnamed Spot'}</span>
                         <span class="bed-status">
-                            {#if bed.enabled === false}
+                            {#if bed.is_locked}
+                                LOCKED 🔒
+                            {:else if bed.enabled === false}
                                 INACTIVE 🧊
                             {:else}
                                 {bed.occupied ? 'CLAIMED 👥' : 'VACANT ✨'}
@@ -102,6 +104,16 @@
                     </div>
 
                     <div class="bed-actions">
+                        {#if isVerified}
+                            <form action="?/toggleLocked" method="POST" use:enhance={() => handleAction(bed.id, 'toggle')}>
+                                <input type="hidden" name="id" value={bed.id} />
+                                <input type="hidden" name="is_locked" value={bed.is_locked?.toString()} />
+                                <button class="btn-icon" class:orange={bed.is_locked} title={bed.is_locked ? 'Unlock' : 'Lock (Block Guests)'}>
+                                    {bed.is_locked ? '🔓' : '🔒'}
+                                </button>
+                            </form>
+                        {/if}
+
                         <form action="?/toggleEnabled" method="POST" use:enhance={() => handleAction(bed.id, 'toggle')}>
                             <input type="hidden" name="id" value={bed.id} />
                             <input type="hidden" name="enabled" value={bed.enabled !== false} />

@@ -113,5 +113,22 @@ export const actions: Actions = {
     } catch (err) {
         return fail(500, { error: true });
     }
+  },
+
+  toggleLocked: async ({ request, locals }) => {
+    const data = await request.formData();
+    const id = data.get('id') as string;
+    const isLocked = data.get('is_locked') === 'true';
+
+    if (!locals.pb.authStore.model?.verified) {
+        return fail(403, { message: 'Only verified crew can lock spots.' });
+    }
+
+    try {
+        await locals.pb.collection('beds').update(id, { is_locked: !isLocked });
+    } catch (err) {
+        console.error('[Action:toggleLocked] FAILED:', err);
+        return fail(500, { error: true });
+    }
   }
 };
