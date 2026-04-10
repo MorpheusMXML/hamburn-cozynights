@@ -192,9 +192,16 @@
 
   .random-btn:hover {
     transform: translateY(-5px) scale(1.05);
-    box-shadow: 0 0 40px rgba(244, 114, 182, 0.7);
     border-color: #fff;
     letter-spacing: 3px;
+    animation: btn-color-cycle 2s infinite linear;
+  }
+
+  @keyframes btn-color-cycle {
+      0%, 100% { border-color: #f472b6; box-shadow: 0 0 25px #f472b6, 0 0 45px rgba(244, 114, 182, 0.4); }
+      25% { border-color: #2dd4bf; box-shadow: 0 0 25px #2dd4bf, 0 0 45px rgba(45, 212, 191, 0.4); }
+      50% { border-color: #fb923c; box-shadow: 0 0 25px #fb923c, 0 0 45px rgba(251, 146, 60, 0.4); }
+      75% { border-color: #a855f7; box-shadow: 0 0 25px #a855f7, 0 0 45px rgba(168, 85, 247, 0.4); }
   }
 
   .pulsing-laser {

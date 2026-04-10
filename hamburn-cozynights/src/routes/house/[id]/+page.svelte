@@ -1,7 +1,9 @@
 <script lang="ts">
-  import type { PageData } from './$types';
+  import type { PageData, ActionData } from './$types';
+  import { enhance } from '$app/forms';
   import CountdownTimer from '$lib/components/CountdownTimer.svelte';
   export let data: PageData;
+  export let form: ActionData;
 </script>
 
 <div class="container">
@@ -17,6 +19,22 @@
     <h1>{data.house.name}</h1>
     <p class="subtitle">Choose a house for your night</p>
   </header>
+
+  {#if data.userBedId}
+      <div class="booking-warning-banner">
+        <div class="warning-icon">⚠️</div>
+        <div class="warning-content">
+          <h3>You already have a booking!</h3>
+          <p>You have already secured a spot. To choose a new bed, you must release your current reservation first.</p>
+          {#if form?.error}
+              <p class="error-msg">{form.error}</p>
+          {/if}
+          <form method="POST" action="?/unbookBed" use:enhance>
+            <button type="submit" class="btn-unbook-banner">Release Current Spot</button>
+          </form>
+        </div>
+      </div>
+  {/if}
 
   <div class="grid">
     {#each data.rooms as room}
@@ -56,6 +74,13 @@
 
   h1 { margin: 0; font-size: 2.5rem; font-weight: 900; letter-spacing: -1px; }
   .subtitle { color: #666; margin: 0; }
+
+  .booking-warning-banner { background: rgba(248, 113, 113, 0.1); border: 1px solid #f87171; border-radius: 12px; padding: 1.5rem; display: flex; gap: 1.5rem; align-items: center; margin-bottom: 2rem; }
+  .warning-icon { font-size: 2rem; }
+  .warning-content h3 { margin: 0; color: #f87171; }
+  .warning-content p { margin: 0.25rem 0 1rem 0; color: #888; }
+  .btn-unbook-banner { background: #f87171; color: #000; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 900; cursor: pointer; }
+  .error-msg { color: #f87171; font-weight: bold; font-size: 0.9rem; margin: 0.5rem 0; }
 
   .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 
