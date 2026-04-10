@@ -4,37 +4,25 @@ import { type Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { TypedPocketBase } from '$lib/pocketbase-types';
 import { env } from '$env/dynamic/public';
-import { env as privateEnv } from '$env/dynamic/private';
+import { getAdminPb } from '$lib/server/pocketbase';
 
 const PB_URL = env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
 
 export const handle: Handle = async ({ event, resolve }) => {
     // 1. Initialize PocketBase instances for the request
     event.locals.pb = new PocketBase(PB_URL) as TypedPocketBase;
-    event.locals.adminPb = new PocketBase(PB_URL) as TypedPocketBase;
-
-    // 2. Authenticate Admin instance for secure server-side ops
+    
     try {
-        if (privateEnv.PB_ADMIN_EMAIL && privateEnv.PB_ADMIN_PASSWORD) {
-            try {
-                // New PB (v0.23+)
-                await event.locals.adminPb.collection('_superusers').authWithPassword(
-                    privateEnv.PB_ADMIN_EMAIL, 
-                    privateEnv.PB_ADMIN_PASSWORD
-                );
-            } catch {
-                // Old PB
-                await event.locals.adminPb.admins.authWithPassword(
-                    privateEnv.PB_ADMIN_EMAIL, 
-                    privateEnv.PB_ADMIN_PASSWORD
-                );
-            }
-        }
-    } catch (err) {
-        console.error('[Security] Failed to authenticate adminPb instance.', err);
+        // Use singleton admin instance to prevent rate-limiting auth requests
+        event.locals.adminPb = await getAdminPb();
+    } catch (err: any) {
+        console.error(`[Security] Admin auth critical failure. Reason: ${err.message}`);
+        // Still assign it (even if unauthenticated) so actions can check .isValid
+        // @ts-ignore - Importing adminPb singleton as fallback
+        import('$lib/server/pocketbase').then(m => event.locals.adminPb = m.adminPb);
     }
 
-    // 3. Retrieve booking code from cookies
+    // 2. Retrieve booking code from cookies
     event.locals.orderNumber = event.cookies.get('bookingCode') || null;
 
     // 3. Handle PocketBase Auth (Session-based via cookies)
@@ -43,10 +31,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 
     try {
         if (event.locals.pb.authStore.isValid) {
-            // Re-authenticate and refresh the session based on the auth model type
-            // Check if it's a regular user or a superuser (admin)
-            // @ts-ignore - isAdmin is deprecated in newer PB, checking collection name instead
-            const isSuper = event.locals.pb.authStore.model?.collectionName === '_superusers' || event.locals.pb.authStore.isAdmin;
+            const model = event.locals.pb.authStore.model;
+            // @ts-ignore - isAdmin is deprecated in newer PB
+            const isSuper = model?.collectionName === '_superusers' || event.locals.pb.authStore.isAdmin;
             
             if (isSuper) {
                 try {

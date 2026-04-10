@@ -1,6 +1,7 @@
 // src/routes/+page.server.ts
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions } from './$types';
+import { BookingService } from '$lib/server/booking';
 
 export const actions: Actions = {
     login: async ({ request, cookies, locals }) => {
@@ -11,21 +12,16 @@ export const actions: Actions = {
             return fail(400, { error: 'Please enter a booking code.' });
         }
 
-        // Basic alphanumeric validation to prevent injection attempts
+        // Basic alphanumeric validation
         if (!/^[a-zA-Z0-9_-]+$/.test(bookingCode)) {
             return fail(400, { error: 'Invalid booking code format.' });
         }
 
-        try {
-            // Use locals.pb for per-request isolation
-            // Using a parameterized filter to prevent injection
-            const order = await locals.pb.collection('orders').getFirstListItem(
-                locals.pb.filter('order_number = {:code}', { code: bookingCode })
-            );
-            
-            console.log('Order found:', order.id);
+        const bookingService = new BookingService(locals.adminPb);
+        const order = await bookingService.getOrderByNumber(bookingCode);
 
-            // Persist the code in a cookie for 30 days
+        if (order) {
+            // Persist the code in a cookie
             cookies.set('bookingCode', bookingCode, {
                 path: '/',
                 httpOnly: false,
@@ -34,12 +30,8 @@ export const actions: Actions = {
             });
 
             throw redirect(303, '/map');
-        } catch (err) {
-            if (err && typeof err === 'object' && 'status' in err && err.status === 303) {
-                throw err;
-            }
-            
-            console.error('Login error:', err);
+        } else {
+            console.warn(`[Login] Code not found: ${bookingCode}`);
             return fail(404, { error: `Order code "${bookingCode}" not found.` });
         }
     }

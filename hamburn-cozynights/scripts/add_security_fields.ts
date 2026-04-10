@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 
 const PB_URL = process.env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
 const PB_ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL;
@@ -32,16 +32,23 @@ async function run() {
         console.log('Authenticated as Admin');
 
         // Add order_hash to orders collection
-        const ordersCollection = await pb.collections.getOne('orders');
-        const hasOrderHash = ordersCollection.schema.find(f => f.name === 'order_hash');
+        const ordersCollection = await pb.collections.getOne('orders') as any;
+        const fields = ordersCollection.fields || ordersCollection.schema || [];
+        const hasOrderHash = fields.find((f: any) => f.name === 'order_hash');
+        
         if (!hasOrderHash) {
-            ordersCollection.schema.push({
+            const newField = {
                 name: 'order_hash',
                 type: 'text',
                 required: false,
                 unique: true,
                 options: { min: null, max: null, pattern: '' }
-            });
+            };
+            if (ordersCollection.fields) {
+                ordersCollection.fields.push(newField);
+            } else {
+                ordersCollection.schema.push(newField);
+            }
             await pb.collections.update(ordersCollection.id, ordersCollection);
             console.log('Added order_hash to orders collection');
         } else {
@@ -49,15 +56,22 @@ async function run() {
         }
 
         // Add is_locked to beds collection
-        const bedsCollection = await pb.collections.getOne('beds');
-        const hasIsLocked = bedsCollection.schema.find(f => f.name === 'is_locked');
+        const bedsCollection = await pb.collections.getOne('beds') as any;
+        const bedFields = bedsCollection.fields || bedsCollection.schema || [];
+        const hasIsLocked = bedFields.find((f: any) => f.name === 'is_locked');
+        
         if (!hasIsLocked) {
-            bedsCollection.schema.push({
+            const newField = {
                 name: 'is_locked',
                 type: 'bool',
                 required: false,
                 options: {}
-            });
+            };
+            if (bedsCollection.fields) {
+                bedsCollection.fields.push(newField);
+            } else {
+                bedsCollection.schema.push(newField);
+            }
             await pb.collections.update(bedsCollection.id, bedsCollection);
             console.log('Added is_locked to beds collection');
         } else {

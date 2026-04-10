@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 
 const PB_URL = process.env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
@@ -37,6 +37,12 @@ async function run() {
             const existingOrder = await pb.collection('orders').getFirstListItem(`order_number="${testCode}"`);
             orderId = existingOrder.id;
             console.log('✅ Test order XXXXX already exists.');
+            
+            // Ensure hash is set
+            if (!existingOrder.order_hash) {
+                await pb.collection('orders').update(orderId, { order_hash: orderHash });
+                console.log('✅ Updated test order hash.');
+            }
         } catch {
             const newOrder = await pb.collection('orders').create({
                 order_number: testCode,

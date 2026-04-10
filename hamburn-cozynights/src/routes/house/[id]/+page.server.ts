@@ -1,14 +1,22 @@
+// src/routes/house/[id]/+page.server.ts
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
-import type { HousesResponse, RoomsResponse, BedsResponse, OrdersResponse } from '$lib/pocketbase-types';
-import { createLookupHash } from '$lib/server/crypto';
+import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
+import { BookingService } from '$lib/server/booking';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
   if (!locals.orderNumber) throw redirect(303, '/');
+  
+  const bookingService = new BookingService(locals.adminPb);
+  const order = await bookingService.getOrderByNumber(locals.orderNumber);
+  
+  if (!order) {
+      console.error('[Security] House load: Order not found for code:', locals.orderNumber);
+      throw redirect(303, '/');
+  }
 
   try {
-    const orderHash = createLookupHash(locals.orderNumber);
-    const [house, rooms, beds, settings] = await Promise.all([
+    const [house, rooms, beds, settings, userBed] = await Promise.all([
         locals.pb.collection('houses').getOne<HousesResponse>(params.id),
         locals.pb.collection('rooms').getFullList<RoomsResponse>({
             filter: locals.pb.filter('house = {:id}', { id: params.id }),
@@ -17,27 +25,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         locals.pb.collection('beds').getFullList<BedsResponse>({
             filter: locals.pb.filter('room.house = {:id}', { id: params.id })
         }),
-        locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false, booking_unlock_at: "" }))
+        locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false, booking_unlock_at: "" })),
+        bookingService.getBedForOrder(order.id)
     ]);
-
-    // Check if user has a bed in ANY house/room
-    let userBed;
-    try {
-        userBed = await locals.adminPb.collection('beds').getFirstListItem(
-            locals.adminPb.filter('order.order_hash = {:orderHash}', { orderHash })
-        );
-    } catch {
-        // Fallback to order_number lookup via order expansion
-        const order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
-            locals.adminPb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber })
-        ).catch(() => null);
-        
-        if (order) {
-            userBed = await locals.adminPb.collection('beds').getFirstListItem(
-                locals.adminPb.filter('order = {:orderId}', { orderId: order.id })
-            ).catch(() => null);
-        }
-    }
 
     // Calculate occupancy 👥
     const roomsWithStats = rooms.map(room => {
@@ -61,36 +51,26 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
     unbookBed: async ({ locals }) => {
-        const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false, booking_unlock_at: "" }));
+        if (!locals.adminPb.authStore.isValid) {
+            console.error('[Security] House unbookBed: Admin auth invalid.');
+            return fail(500, { error: 'System authentication failed.' });
+        }
+
+        const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
         if (!settings.is_booking_active) return fail(403, { error: 'Bookings are locked.' });
 
         if (!locals.orderNumber) return fail(401);
-        try {
-            const orderHash = createLookupHash(locals.orderNumber);
-            let order;
-            try {
-                order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
-                    locals.adminPb.filter('order_hash = {:orderHash}', { orderHash })
-                );
-            } catch (hashErr) {
-                // Fallback
-                order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
-                    locals.adminPb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber })
-                );
-                // Try to migrate
-                await locals.adminPb.collection('orders').update(order.id, { order_hash: orderHash }).catch(() => {});
-            }
-            const beds = await locals.adminPb.collection('beds').getFullList({ 
-                filter: locals.adminPb.filter('order = {:orderId}', { orderId: order.id }) 
-            });
 
-            for (const bed of beds) {
-                await locals.adminPb.collection('beds').update(bed.id, { occupied: false, order: null });
-            }
+        const bookingService = new BookingService(locals.adminPb);
+        const order = await bookingService.getOrderByNumber(locals.orderNumber);
+        if (!order) return fail(404, { error: 'Order not found.' });
+
+        try {
+            await bookingService.unbookOrder(order.id);
             return { success: true };
         } catch (err: any) {
             console.error('[Security] House unbookBed failed:', err);
-            return fail(500, { error: `Spot release failed: ${err.message || 'Database error'}` });
+            return fail(500, { error: `Spot release failed: ${err.message}` });
         }
     }
 };
