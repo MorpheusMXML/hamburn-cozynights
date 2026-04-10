@@ -1,45 +1,12 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-
   export let name: string;
   export let status: string = 'available';
   export let labelPosition: 'top' | 'bottom' = 'bottom';
   export let hovered: boolean = false;
 
   let markerEl: HTMLElement;
-  let offsetX = 0;
-  let offsetY = 0;
 
   $: isOccupied = status === 'full' || status === 'besetzt';
-
-  onMount(() => {
-      const handleMouseMove = (e: MouseEvent) => {
-          if (!markerEl || !hovered) {
-              offsetX = 0;
-              offsetY = 0;
-              return;
-          }
-          const rect = markerEl.getBoundingClientRect();
-          const centerX = rect.left + rect.width / 2;
-          const centerY = rect.top + rect.height / 2;
-          
-          const distX = e.clientX - centerX;
-          const distY = e.clientY - centerY;
-          
-          const limit = 100; // Smaller radius for better focus
-          const strength = 8;
-          
-          const mag = Math.sqrt(distX*distX + distY*distY);
-          if (mag < limit) {
-              const ratio = (1 - mag / limit) * strength;
-              offsetX = (distX / mag) * ratio;
-              offsetY = (distY / mag) * ratio;
-          }
-      };
-
-      window.addEventListener('mousemove', handleMouseMove);
-      return () => window.removeEventListener('mousemove', handleMouseMove);
-  });
 </script>
 
 <div 
@@ -47,8 +14,8 @@
     class:label-top={labelPosition === 'top'}
     class:is-hovered={hovered}
     bind:this={markerEl}
-    style="transform: translate(calc(-50% + {offsetX}px), calc(-50% + {offsetY}px))"
->
+    style="transform: translate(-50%, -50%)"
+>>
   <div class="hit-area"></div>
   
   <div class="pin" class:occupied={isOccupied} class:hovered>
@@ -103,14 +70,23 @@
   }
 
   .pin.hovered {
-    transform: scale(1.4);
+    transform: scale(1.6);
     background-color: #fff;
-    box-shadow: 0 0 25px #2dd4bf, 0 0 40px #2dd4bf;
+    box-shadow: 0 0 25px #f472b6, 0 0 45px #2dd4bf, 0 0 65px #a855f7;
     border-color: #fff;
+    animation: pin-color-cycle 2s infinite linear;
+  }
+
+  @keyframes pin-color-cycle {
+      0% { box-shadow: 0 0 25px #f472b6, 0 0 45px #f472b6; }
+      25% { box-shadow: 0 0 25px #2dd4bf, 0 0 45px #2dd4bf; }
+      50% { box-shadow: 0 0 25px #fb923c, 0 0 45px #fb923c; }
+      75% { box-shadow: 0 0 25px #a855f7, 0 0 45px #a855f7; }
+      100% { box-shadow: 0 0 25px #f472b6, 0 0 45px #f472b6; }
   }
 
   .pin.occupied { background-color: #f87171; box-shadow: 0 0 15px rgba(248, 113, 113, 0.6); }
-  .pin.occupied.hovered { box-shadow: 0 0 25px #f87171, 0 0 40px #f87171; }
+  .pin.occupied.hovered { border-color: #f87171; }
 
   .laser-shine {
       position: absolute;
@@ -128,22 +104,28 @@
   .pulse-ring {
       position: absolute;
       top: -5px; left: -5px; right: -5px; bottom: -5px;
-      border: 2px solid currentColor;
+      border: 3px solid currentColor;
       border-radius: 50%;
       opacity: 0;
       pointer-events: none;
   }
 
   .pin.hovered .pulse-ring {
-      animation: laser-pulse 1s infinite;
-      color: #2dd4bf;
+      animation: laser-pulse 1s infinite, color-cycle 2s infinite linear;
       opacity: 1;
   }
-  .pin.occupied.hovered .pulse-ring { color: #f87171; }
 
   @keyframes laser-pulse {
       0% { transform: scale(1); opacity: 0.8; }
-      100% { transform: scale(2.5); opacity: 0; }
+      100% { transform: scale(3); opacity: 0; }
+  }
+
+  @keyframes color-cycle {
+      0% { color: #f472b6; }
+      25% { color: #2dd4bf; }
+      50% { color: #fb923c; }
+      75% { color: #a855f7; }
+      100% { color: #f472b6; }
   }
 
   .label {
@@ -151,9 +133,9 @@
     background: rgba(15, 15, 15, 0.9);
     backdrop-filter: blur(4px);
     color: #888;
-    padding: 4px 12px;
-    border-radius: 6px;
-    font-size: 0.75rem;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 0.8rem;
     font-weight: 900;
     letter-spacing: 1px;
     z-index: 3;
@@ -167,13 +149,20 @@
   .label.hovered {
       background: #000;
       color: #fff;
-      border: 2px solid #2dd4bf;
-      box-shadow: 0 0 20px rgba(45, 212, 191, 0.5);
-      animation: label-glow 1.5s infinite;
+      border: 3px solid transparent;
+      background-image: linear-gradient(#000, #000), linear-gradient(135deg, #f472b6, #2dd4bf, #fb923c, #a855f7);
+      background-origin: border-box;
+      background-clip: content-box, border-box;
+      box-shadow: 0 0 30px rgba(244, 114, 182, 0.4);
+      animation: label-ultra-glow 2s infinite linear;
+      transform: translateY(4px) scale(1.1);
+      z-index: 10;
   }
 
-  @keyframes label-glow {
-      0%, 100% { border-color: #2dd4bf; box-shadow: 0 0 10px rgba(45, 212, 191, 0.3); }
-      50% { border-color: #fff; box-shadow: 0 0 25px rgba(45, 212, 191, 0.8); }
+  @keyframes label-ultra-glow {
+      0%, 100% { filter: drop-shadow(0 0 10px #f472b6); }
+      25% { filter: drop-shadow(0 0 10px #2dd4bf); }
+      50% { filter: drop-shadow(0 0 10px #fb923c); }
+      75% { filter: drop-shadow(0 0 10px #a855f7); }
   }
 </style>

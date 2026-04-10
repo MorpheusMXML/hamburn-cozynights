@@ -47,13 +47,7 @@
     </div>
     
     {#if isBookingActive}
-      <div class="header-actions">
-        <a href="/random-bed" class="random-btn pulsing-laser">
-          <span class="icon">🎰</span>
-          DESTINY ROULETTE
-        </a>
-        <div class="phase-badge live">🎪 LIVE BOOKING</div>
-      </div>
+      <div class="phase-badge live">🎪 LIVE BOOKING</div>
     {:else}
       <div class="phase-badge staging">🛠 STAGING MODE</div>
     {/if}
@@ -66,6 +60,15 @@
     <div class="map-container">
       <Map houses={data.houses} isEditorMode={false} isBookingActive={data.isBookingActive} />
     </div>
+
+    {#if isBookingActive}
+      <div class="floating-action-bar">
+        <a href="/random-bed" class="random-btn pulsing-laser">
+          <span class="icon">🎰</span>
+          DESTINY ROULETTE
+        </a>
+      </div>
+    {/if}
   {:else}
     <div class="loading">Igniting Sensors...</div>
   {/if}
@@ -119,47 +122,58 @@
     pointer-events: none;
   }
 
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
+  .floating-action-bar {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
     pointer-events: auto;
   }
 
   .random-btn {
-    background: #050505;
-    color: #f472b6;
+    background: #000;
+    color: #fff;
     text-decoration: none;
-    padding: 0.6rem 1.2rem;
-    border-radius: 10px;
+    padding: 0.7rem 1.5rem;
+    border-radius: 12px;
     font-weight: 900;
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     letter-spacing: 2px;
-    border: 2px solid #f472b633;
+    border: 2px solid #f472b6;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    transition: all 0.3s;
-    box-shadow: 0 0 20px rgba(244, 114, 182, 0.2);
+    gap: 0.8rem;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 0 25px rgba(244, 114, 182, 0.4);
     text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .random-btn .icon {
+    font-size: 1.2rem;
   }
 
   .random-btn:hover {
-    background: #f472b6;
-    color: #000;
-    box-shadow: 0 0 40px rgba(244, 114, 182, 0.6);
-    transform: translateY(-2px) scale(1.05);
+    transform: translateY(-5px) scale(1.05);
+    box-shadow: 0 0 40px rgba(244, 114, 182, 0.7);
     border-color: #fff;
+    letter-spacing: 3px;
   }
 
   .pulsing-laser {
-    animation: laser-pulse-btn 3s infinite;
+    animation: destiny-pulse 2s infinite;
   }
 
-  @keyframes laser-pulse-btn {
-    0% { border-color: #f472b633; box-shadow: 0 0 20px rgba(244, 114, 182, 0.2); }
-    50% { border-color: #f472b6; box-shadow: 0 0 40px rgba(244, 114, 182, 0.5); }
-    100% { border-color: #f472b633; box-shadow: 0 0 20px rgba(244, 114, 182, 0.2); }
+  @keyframes destiny-pulse {
+    0%, 100% { 
+        box-shadow: 0 0 20px rgba(244, 114, 182, 0.4);
+        transform: scale(1);
+    }
+    50% { 
+        box-shadow: 0 0 40px rgba(244, 114, 182, 0.7);
+        transform: scale(1.02);
+    }
   }
 
   .logo-box {
