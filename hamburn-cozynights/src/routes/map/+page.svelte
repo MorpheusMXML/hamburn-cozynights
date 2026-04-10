@@ -41,18 +41,25 @@
 
 <div class="page-container">
   <div class="header-overlay">
-    <div class="logo-box">
-      <span class="logo">Hamburn</span>
-      <span class="tagline">Interactive Map</span>
+    <div class="header-left">
+      <div class="logo-box">
+        <span class="logo">Hamburn</span>
+        <span class="tagline">Interactive Map</span>
+      </div>
     </div>
     
-    {#if isBookingActive}
-      <div class="phase-badge live">🎪 LIVE BOOKING</div>
-    {:else}
-      <div class="phase-badge staging">🛠 STAGING MODE</div>
-    {/if}
-    <div class="debug-counter" style="color: white; font-size: 0.6rem; opacity: 0.5; margin-left: 1rem;">
-      SENSORS: {houses?.length || 0}
+    <div class="header-center">
+      {#if isBookingActive}
+        <div class="phase-badge live">🎪 LIVE BOOKING</div>
+      {:else}
+        <div class="phase-badge staging">🛠 STAGING MODE</div>
+      {/if}
+    </div>
+
+    <div class="header-right">
+      <div class="debug-counter">
+        SENSORS: {houses?.length || 0}
+      </div>
     </div>
   </div>
 
@@ -118,8 +125,37 @@
     z-index: 100;
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     pointer-events: none;
+  }
+
+  .header-left, .header-right {
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+
+  .header-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .header-right {
+    justify-content: flex-end;
+  }
+
+  .debug-counter {
+    background: rgba(10, 10, 10, 0.8);
+    border: 1px solid #333;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    color: #666;
+    font-size: 0.6rem;
+    font-weight: 900;
+    letter-spacing: 1px;
+    backdrop-filter: blur(10px);
   }
 
   .floating-action-bar {

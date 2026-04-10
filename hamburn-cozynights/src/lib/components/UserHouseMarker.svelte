@@ -130,12 +130,12 @@
 
   .label {
     margin-top: 8px;
-    background: rgba(15, 15, 15, 0.9);
-    backdrop-filter: blur(4px);
+    background: rgba(10, 10, 10, 0.95);
+    backdrop-filter: blur(8px);
     color: #888;
-    padding: 6px 14px;
-    border-radius: 8px;
-    font-size: 0.8rem;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.7rem;
     font-weight: 900;
     letter-spacing: 1px;
     z-index: 3;
@@ -143,26 +143,23 @@
     border: 1px solid #333;
     text-transform: uppercase;
     box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-    transition: all 0.2s;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .label.hovered {
       background: #000;
       color: #fff;
-      border: 3px solid transparent;
-      background-image: linear-gradient(#000, #000), linear-gradient(135deg, #f472b6, #2dd4bf, #fb923c, #a855f7);
-      background-origin: border-box;
-      background-clip: content-box, border-box;
-      box-shadow: 0 0 30px rgba(244, 114, 182, 0.4);
-      animation: label-ultra-glow 2s infinite linear;
-      transform: translateY(4px) scale(1.1);
+      border: 2px solid #f472b6;
+      box-shadow: 0 0 20px rgba(244, 114, 182, 0.4);
+      animation: label-color-cycle 2s infinite linear;
+      transform: scale(1.1);
       z-index: 10;
   }
 
-  @keyframes label-ultra-glow {
-      0%, 100% { filter: drop-shadow(0 0 10px #f472b6); }
-      25% { filter: drop-shadow(0 0 10px #2dd4bf); }
-      50% { filter: drop-shadow(0 0 10px #fb923c); }
-      75% { filter: drop-shadow(0 0 10px #a855f7); }
+  @keyframes label-color-cycle {
+      0%, 100% { border-color: #f472b6; box-shadow: 0 0 15px rgba(244, 114, 182, 0.4); }
+      25% { border-color: #2dd4bf; box-shadow: 0 0 15px rgba(45, 212, 191, 0.4); }
+      50% { border-color: #fb923c; box-shadow: 0 0 15px rgba(251, 146, 60, 0.4); }
+      75% { border-color: #a855f7; box-shadow: 0 0 15px rgba(168, 85, 247, 0.4); }
   }
 </style>
