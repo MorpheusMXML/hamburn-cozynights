@@ -107,6 +107,7 @@ export type BedsRecord = {
 	order?: RecordIdString
 	room: RecordIdString
 	updated: IsoAutoDateString
+	is_locked?: boolean
 }
 
 export type HousesRecord = {
@@ -126,6 +127,7 @@ export type OrdersRecord = {
 	burner_name?: string
 	id: string
 	order_number: string
+	order_hash?: string
 	updated: IsoAutoDateString
 }
 
