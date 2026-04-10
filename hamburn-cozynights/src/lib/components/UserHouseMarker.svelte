@@ -15,7 +15,7 @@
     class:is-hovered={hovered}
     bind:this={markerEl}
     style="transform: translate(-50%, -50%)"
->>
+>
   <div class="hit-area"></div>
   
   <div class="pin" class:occupied={isOccupied} class:hovered>

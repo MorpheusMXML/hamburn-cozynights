@@ -1,10 +1,11 @@
 <script lang="ts">
-  import type { PageData } from './$types';
   import { enhance } from '$app/forms';
+  import type { PageData, ActionData } from './$types';
   import CountdownTimer from '$lib/components/CountdownTimer.svelte';
   import SlotMachine from '$lib/components/SlotMachine.svelte';
 
   export let data: PageData;
+  export let form: ActionData;
 
   // Modal State
   let showModal = false;
@@ -90,6 +91,9 @@
         <div class="warning-content">
           <h3>You already have a booking!</h3>
           <p>You have already secured a spot in another room. To choose a new bed here, you must release your current reservation first.</p>
+          {#if form?.error}
+              <p class="error-msg">{form.error}</p>
+          {/if}
           <form method="POST" action="?/unbookBed" use:enhance>
             <button type="submit" class="btn-unbook-banner">Release Current Spot</button>
           </form>
@@ -160,6 +164,12 @@
       <h2>{selectedBedId === data.userBedId ? 'Edit Your Spot' : 'Grab This Spot'}</h2>
       <p>Set your Burner Name (optional).</p>
       
+      {#if form?.error}
+          <div class="modal-error-banner">
+              {form.error}
+          </div>
+      {/if}
+
       {#if showSlotManually}
         <SlotMachine bind:this={slotMachineRef} on:select={handleSlotSelect} />
       {/if}
@@ -225,6 +235,9 @@
   .warning-content h3 { margin: 0; color: #f87171; }
   .warning-content p { margin: 0.25rem 0 1rem 0; color: #888; }
   .btn-unbook-banner { background: #f87171; color: #000; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 900; cursor: pointer; }
+
+  .error-msg { color: #f87171; font-weight: bold; font-size: 0.9rem; margin: 0.5rem 0; }
+  .modal-error-banner { background: rgba(248, 113, 113, 0.1); border: 1px solid #f87171; color: #f87171; padding: 0.75rem; border-radius: 8px; font-size: 0.8rem; margin-bottom: 1rem; font-weight: bold; }
 
   .booking-success-banner { background: rgba(45, 212, 191, 0.1); border: 1px solid #2dd4bf; border-radius: 12px; padding: 1.5rem; display: flex; gap: 1.5rem; align-items: center; margin-bottom: 2rem; }
   .success-icon { font-size: 2rem; }

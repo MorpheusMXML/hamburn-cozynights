@@ -22,23 +22,38 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     try {
         const orderHash = createLookupHash(locals.orderNumber);
         const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false, booking_unlock_at: "" }));
-        
+
         // Use adminPb to find order by hash (since orders are locked for public)
-        const order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
-            locals.adminPb.filter('order_hash = {:orderHash}', { orderHash })
-        );
+        let order;
+        try {
+            order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
+                locals.adminPb.filter('order_hash = {:orderHash}', { orderHash })
+            );
+        } catch (hashErr) {
+            console.warn('[Security] Order hash not found. Attempting fallback migration for order:', locals.orderNumber);
+            // Fallback to searching by order_number directly
+            order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
+                locals.adminPb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber })
+            );
+
+            // Auto-migrate by setting the order_hash
+            await locals.adminPb.collection('orders').update(order.id, {
+                order_hash: orderHash
+            });
+            console.log('[Security] Fallback successful. Order migrated.');
+        }
 
         const userBed = await locals.adminPb.collection('beds').getFirstListItem(
             locals.adminPb.filter('order = {:orderId}', { orderId: order.id })
         ).catch(() => null);
-        
+
         const room = await locals.pb.collection('rooms').getOne<RoomsResponse>(params.id);
-        
+
         // Fetch beds and expand order (via adminPb to get expanded order data)
         const beds = await locals.adminPb.collection('beds').getFullList<BedsResponse<{ order?: OrdersResponse }>>({
             filter: locals.adminPb.filter('room = {:roomId}', { roomId: params.id }),
             sort: 'label',
-            expand: 'order' 
+            expand: 'order'
         });
 
         // Decrypt burner names for display
@@ -51,16 +66,19 @@ export const load: PageServerLoad = async ({ params, locals }) => {
             return bed;
         });
 
-        return { 
-            room, 
-            beds: decryptedBeds, 
-            userBedId: userBed?.id || null, 
+        return {
+            room,
+            beds: decryptedBeds,
+            userBedId: userBed?.id || null,
             currentOrderNumber: locals.orderNumber,
             isBookingActive: settings.is_booking_active,
             bookingUnlockAt: settings.booking_unlock_at || ""
         };
-    } catch (err) {
+    } catch (err: any) {
         console.error('[Security] Room load failed:', err);
+        if (err?.status === 404 && err?.message?.includes('rooms')) {
+            throw error(404, 'Raum nicht gefunden.');
+        }
         throw error(404, 'Raum nicht gefunden oder Buchungscode ungültig');
     }
 };
@@ -82,9 +100,18 @@ export const actions: Actions = {
 
         try {
             const orderHash = createLookupHash(locals.orderNumber);
-            const order = await locals.adminPb.collection('orders').getFirstListItem(
-                locals.adminPb.filter('order_hash = {:orderHash}', { orderHash })
-            );
+            let order;
+            try {
+                order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
+                    locals.adminPb.filter('order_hash = {:orderHash}', { orderHash })
+                );
+            } catch (hashErr) {
+                console.warn('[Security] Order hash not found in bookBed. Attempting fallback migration.');
+                order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
+                    locals.adminPb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber })
+                );
+                await locals.adminPb.collection('orders').update(order.id, { order_hash: orderHash });
+            }
             
             // Check if bed exists and is available
             const bed = await locals.adminPb.collection('beds').getOne<BedsResponse>(bedId);
@@ -133,9 +160,18 @@ export const actions: Actions = {
         if (!locals.orderNumber) return fail(401);
         try {
             const orderHash = createLookupHash(locals.orderNumber);
-            const order = await locals.adminPb.collection('orders').getFirstListItem(
-                locals.adminPb.filter('order_hash = {:orderHash}', { orderHash })
-            );
+            let order;
+            try {
+                order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
+                    locals.adminPb.filter('order_hash = {:orderHash}', { orderHash })
+                );
+            } catch (hashErr) {
+                console.warn('[Security] Order hash not found in unbookBed. Attempting fallback migration.');
+                order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
+                    locals.adminPb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber })
+                );
+                await locals.adminPb.collection('orders').update(order.id, { order_hash: orderHash });
+            }
             const beds = await locals.adminPb.collection('beds').getFullList({ 
                 filter: locals.adminPb.filter('order = {:orderId}', { orderId: order.id }) 
             });
@@ -144,9 +180,9 @@ export const actions: Actions = {
                 await locals.adminPb.collection('beds').update(bed.id, { occupied: false, order: null });
             }
             return { success: true };
-        } catch (err) {
+        } catch (err: any) {
             console.error('[Security] unbookBed failed:', err);
-            return fail(500);
+            return fail(500, { error: `Spot release failed: ${err.message || 'Database error'}` });
         }
     }
 };

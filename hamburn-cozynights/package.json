@@ -12,12 +12,14 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "vitest run",
 		"test:ui": "vitest --ui",
+		"test:report": "vitest run --reporter=html",
 		"lint": "prettier --check . && eslint .",
 		"typegen": "npx pocketbase-typegen --url http://127.0.0.1:8090 --email brosiusmax@gmail.com --password Hamburg65256525! --out src/lib/pocketbase-types.ts"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.4.0",
 		"@eslint/js": "^9.39.1",
+		"@playwright/test": "^1.59.1",
 		"@sveltejs/adapter-auto": "^7.0.0",
 		"@sveltejs/kit": "^2.49.1",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
