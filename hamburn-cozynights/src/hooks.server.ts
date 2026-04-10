@@ -4,7 +4,7 @@ import { type Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { TypedPocketBase } from '$lib/pocketbase-types';
 import { env } from '$env/dynamic/public';
-import { getAdminPb } from '$lib/server/pocketbase';
+import { getAdminPb, adminPb as globalAdminPb } from '$lib/server/pocketbase';
 
 const PB_URL = env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
 
@@ -15,11 +15,11 @@ export const handle: Handle = async ({ event, resolve }) => {
     try {
         // Use singleton admin instance to prevent rate-limiting auth requests
         event.locals.adminPb = await getAdminPb();
+        console.log(`[Hooks] adminPb assigned. Valid: ${event.locals.adminPb.authStore.isValid}`);
     } catch (err: any) {
-        console.error(`[Security] Admin auth critical failure. Reason: ${err.message}`);
-        // Still assign it (even if unauthenticated) so actions can check .isValid
-        // @ts-ignore - Importing adminPb singleton as fallback
-        import('$lib/server/pocketbase').then(m => event.locals.adminPb = m.adminPb);
+        console.error(`[Security] Admin auth critical failure in Hooks. Reason: ${err.message}`);
+        // Fallback to the instance even if invalid, so actions can handle it
+        event.locals.adminPb = globalAdminPb;
     }
 
     // 2. Retrieve booking code from cookies
@@ -31,9 +31,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 
     try {
         if (event.locals.pb.authStore.isValid) {
-            const model = event.locals.pb.authStore.model;
-            // @ts-ignore - isAdmin is deprecated in newer PB
-            const isSuper = model?.collectionName === '_superusers' || event.locals.pb.authStore.isAdmin;
+            const record = event.locals.pb.authStore.record || event.locals.pb.authStore.model;
+            // @ts-ignore - Handle old and new PB versions
+            const isSuper = record?.collectionName === '_superusers' || (event.locals.pb.authStore as any).isSuperuser;
             
             if (isSuper) {
                 try {
@@ -45,7 +45,7 @@ export const handle: Handle = async ({ event, resolve }) => {
                 await event.locals.pb.collection('users').authRefresh();
             }
             
-            event.locals.user = event.locals.pb.authStore.model;
+            event.locals.user = record;
         } else {
             event.locals.user = undefined;
         }
