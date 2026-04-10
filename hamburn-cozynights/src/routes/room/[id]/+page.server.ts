@@ -2,7 +2,8 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { RoomsResponse, BedsResponse, OrdersResponse } from '$lib/pocketbase-types';
-import { encrypt, decrypt, createLookupHash } from '$lib/server/crypto';
+import { decrypt } from '$lib/server/crypto';
+import { BookingService } from '$lib/server/booking';
 
 const burnerNames = [
     "Dusty Nomad", "Neon Shaman", "Sparkle Pony", "Fire Weaver", "LED Lizard", 
@@ -19,44 +20,25 @@ function getRandomName(): string {
 export const load: PageServerLoad = async ({ params, locals }) => {
     if (!locals.orderNumber) throw redirect(303, '/');
 
+    const bookingService = new BookingService(locals.adminPb);
+    const order = await bookingService.getOrderByNumber(locals.orderNumber);
+
+    if (!order) {
+        console.error('[Security] Order not found for code:', locals.orderNumber);
+        throw error(404, 'Buchungscode ungültig oder nicht gefunden.');
+    }
+
     try {
-        const orderHash = createLookupHash(locals.orderNumber);
-        const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false, booking_unlock_at: "" }));
-
-        // Use adminPb to find order (try hash first, then raw number)
-        let order;
-        try {
-            order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
-                locals.adminPb.filter('order_hash = {:orderHash}', { orderHash })
-            );
-        } catch (hashErr: any) {
-            // If field doesn't exist (400) or not found (404), fall back to order_number
-            try {
-                order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
-                    locals.adminPb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber })
-                );
-                
-                // Optional: Try to auto-migrate if field exists
-                await locals.adminPb.collection('orders').update(order.id, { order_hash: orderHash }).catch(() => {
-                    // Silently ignore if field missing in DB schema
-                });
-            } catch (numErr) {
-                throw error(404, 'Buchungscode ungültig oder nicht gefunden.');
-            }
-        }
-
-        const userBed = await locals.adminPb.collection('beds').getFirstListItem(
-            locals.adminPb.filter('order = {:orderId}', { orderId: order.id })
-        ).catch(() => null);
-
-        const room = await locals.pb.collection('rooms').getOne<RoomsResponse>(params.id);
-
-        // Fetch beds and expand order (via adminPb to get expanded order data)
-        const beds = await locals.adminPb.collection('beds').getFullList<BedsResponse<{ order?: OrdersResponse }>>({
-            filter: locals.adminPb.filter('room = {:roomId}', { roomId: params.id }),
-            sort: 'label',
-            expand: 'order'
-        });
+        const [settings, userBed, room, beds] = await Promise.all([
+            locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false, booking_unlock_at: "" })),
+            bookingService.getBedForOrder(order.id),
+            locals.pb.collection('rooms').getOne<RoomsResponse>(params.id),
+            locals.adminPb.collection('beds').getFullList<BedsResponse<{ order?: OrdersResponse }>>({
+                filter: locals.adminPb.filter('room = {:roomId}', { roomId: params.id }),
+                sort: 'label',
+                expand: 'order'
+            })
+        ]);
 
         // Decrypt burner names for display
         const decryptedBeds = beds.map(bed => {
@@ -78,16 +60,18 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         };
     } catch (err: any) {
         console.error('[Security] Room load failed:', err);
-        if (err?.status === 404 && err?.message?.includes('rooms')) {
-            throw error(404, 'Raum nicht gefunden.');
-        }
-        throw error(404, 'Raum nicht gefunden oder Buchungscode ungültig');
+        throw error(404, 'Raum nicht gefunden.');
     }
 };
 
 export const actions: Actions = {
     bookBed: async ({ request, locals }) => {
-        const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false, booking_unlock_at: "" }));
+        if (!locals.adminPb.authStore.isValid) {
+            console.error('[Security] bookBed: Admin auth invalid.');
+            return fail(500, { error: 'System authentication failed. Please contact admin.' });
+        }
+
+        const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
         if (!settings.is_booking_active) return fail(403, { error: 'Bookings are not open yet.' });
 
         const formData = await request.formData();
@@ -95,98 +79,53 @@ export const actions: Actions = {
         let guestName = formData.get('guestName') as string;
 
         if (!locals.orderNumber) return fail(401, { error: 'Sitzung abgelaufen' });
+        if (!guestName || guestName.trim() === '') guestName = getRandomName();
 
-        if (!guestName || guestName.trim() === '') {
-            guestName = getRandomName();
-        }
+        const bookingService = new BookingService(locals.adminPb);
+        const order = await bookingService.getOrderByNumber(locals.orderNumber);
+        if (!order) return fail(404, { error: 'Your booking code was not found.' });
 
         try {
-            const orderHash = createLookupHash(locals.orderNumber);
-            let order;
-            try {
-                order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
-                    locals.adminPb.filter('order_hash = {:orderHash}', { orderHash })
-                );
-            } catch (hashErr) {
-                // Fallback to order_number
-                order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
-                    locals.adminPb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber })
-                );
-                // Try to migrate
-                await locals.adminPb.collection('orders').update(order.id, { order_hash: orderHash }).catch(() => {});
-            }
-            
-            // Check if bed exists and is available
             const bed = await locals.adminPb.collection('beds').getOne<BedsResponse>(bedId);
             
             // SECURITY: Check if bed is locked by admin
-            if (bed.is_locked && !locals.user?.verified) {
-                return fail(403, { error: 'This bed is currently under maintenance or blocked by an admin.' });
+            if ((bed as any).is_locked && !locals.user?.verified) {
+                return fail(403, { error: 'This bed is currently locked by an admin.' });
             }
 
             if (bed.occupied && bed.order !== order.id) {
-                return fail(400, { error: 'This spot is already claimed by another soul.' });
+                return fail(400, { error: 'This spot is already claimed.' });
             }
 
-            // 1. Release previous bookings 🕊️
-            const previousBeds = await locals.adminPb.collection('beds').getFullList({
-                filter: locals.adminPb.filter('order = {:orderId}', { orderId: order.id })
-            });
-            for (const prevBed of previousBeds) {
-                if (prevBed.id !== bedId) {
-                    await locals.adminPb.collection('beds').update(prevBed.id, { occupied: false, order: null });
-                }
-            }
-
-            // 2. Update Order with new encrypted burner name 📛
-            await locals.adminPb.collection('orders').update(order.id, { 
-                burner_name: encrypt(guestName) 
-            });
-
-            // 3. Claim the new spot ✨
-            await locals.adminPb.collection('beds').update(bedId, {
-                occupied: true,
-                order: order.id
-            });
-
+            await bookingService.bookBed(order, bedId, guestName);
             return { success: true };
-        } catch (err) {
-            console.error('[Security] bookBed failed:', err);
-            return fail(500, { error: 'The database turned into dust.' });
+        } catch (err: any) {
+            console.error('[Security] bookBed failure:', err);
+            return fail(500, { error: `Database error: ${err.message}` });
         }
     },
 
     unbookBed: async ({ locals }) => {
-        const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false, booking_unlock_at: "" }));
+        if (!locals.adminPb.authStore.isValid) {
+            console.error('[Security] unbookBed: Admin auth invalid.');
+            return fail(500, { error: 'System authentication failed.' });
+        }
+
+        const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false }));
         if (!settings.is_booking_active) return fail(403, { error: 'Bookings are locked.' });
 
         if (!locals.orderNumber) return fail(401);
+
+        const bookingService = new BookingService(locals.adminPb);
+        const order = await bookingService.getOrderByNumber(locals.orderNumber);
+        if (!order) return fail(404, { error: 'Order not found.' });
+
         try {
-            const orderHash = createLookupHash(locals.orderNumber);
-            let order;
-            try {
-                order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
-                    locals.adminPb.filter('order_hash = {:orderHash}', { orderHash })
-                );
-            } catch (hashErr) {
-                // Fallback to order_number
-                order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
-                    locals.adminPb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber })
-                );
-                // Try to migrate
-                await locals.adminPb.collection('orders').update(order.id, { order_hash: orderHash }).catch(() => {});
-            }
-            const beds = await locals.adminPb.collection('beds').getFullList({ 
-                filter: locals.adminPb.filter('order = {:orderId}', { orderId: order.id }) 
-            });
-            
-            for (const bed of beds) {
-                await locals.adminPb.collection('beds').update(bed.id, { occupied: false, order: null });
-            }
+            await bookingService.unbookOrder(order.id);
             return { success: true };
         } catch (err: any) {
             console.error('[Security] unbookBed failed:', err);
-            return fail(500, { error: `Spot release failed: ${err.message || 'Database error'}` });
+            return fail(500, { error: `Spot release failed: ${err.message}` });
         }
     }
 };

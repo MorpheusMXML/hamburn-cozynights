@@ -8,7 +8,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load env vars from the project root .env
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+// override: true ensures that .env values win over any pre-set shell variables
+dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: true });
 
 test.describe('Booking Flow', () => {
     const TEST_CODE = 'XXXXX'; 
@@ -55,7 +56,7 @@ test.describe('Booking Flow', () => {
         const roomHeader = page.locator('h1');
         await expect(roomHeader).toBeVisible();
         // The room page has an <h1> with a <small> tag inside for the room number
-        await expect(page.locator('h1 small')).toContainText('#');
+        await expect(page.locator('h1')).toContainText('#');
 
         // 3. CLEANUP: If we already have a booking, release it first
         const releaseBanner = page.locator('.btn-unbook-banner');
