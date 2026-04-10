@@ -4,6 +4,7 @@
   export let name: string;
   export let status: string = 'available';
   export let labelPosition: 'top' | 'bottom' = 'bottom';
+  export let hovered: boolean = false;
 
   let markerEl: HTMLElement;
   let offsetX = 0;
@@ -13,27 +14,26 @@
 
   onMount(() => {
       const handleMouseMove = (e: MouseEvent) => {
-          if (!markerEl) return;
+          if (!markerEl || !hovered) {
+              offsetX = 0;
+              offsetY = 0;
+              return;
+          }
           const rect = markerEl.getBoundingClientRect();
           const centerX = rect.left + rect.width / 2;
           const centerY = rect.top + rect.height / 2;
           
-          // Calculate distance from center
           const distX = e.clientX - centerX;
           const distY = e.clientY - centerY;
           
-          // Parallax effect: shift slightly based on proximity (max 10px)
-          const limit = 300; // Activation radius
-          const strength = 10;
+          const limit = 100; // Smaller radius for better focus
+          const strength = 8;
           
           const mag = Math.sqrt(distX*distX + distY*distY);
           if (mag < limit) {
               const ratio = (1 - mag / limit) * strength;
               offsetX = (distX / mag) * ratio;
               offsetY = (distY / mag) * ratio;
-          } else {
-              offsetX = 0;
-              offsetY = 0;
           }
       };
 
@@ -45,16 +45,17 @@
 <div 
     class="marker-wrapper" 
     class:label-top={labelPosition === 'top'}
+    class:is-hovered={hovered}
     bind:this={markerEl}
     style="transform: translate(calc(-50% + {offsetX}px), calc(-50% + {offsetY}px))"
 >
   <div class="hit-area"></div>
   
-  <div class="pin" class:occupied={isOccupied}>
+  <div class="pin" class:occupied={isOccupied} class:hovered>
       <div class="pulse-ring"></div>
       <div class="laser-shine"></div>
   </div>
-  <span class="label">{name}</span>
+  <span class="label" class:hovered>{name}</span>
 </div>
 
 <style>
@@ -101,6 +102,16 @@
     overflow: hidden;
   }
 
+  .pin.hovered {
+    transform: scale(1.4);
+    background-color: #fff;
+    box-shadow: 0 0 25px #2dd4bf, 0 0 40px #2dd4bf;
+    border-color: #fff;
+  }
+
+  .pin.occupied { background-color: #f87171; box-shadow: 0 0 15px rgba(248, 113, 113, 0.6); }
+  .pin.occupied.hovered { box-shadow: 0 0 25px #f87171, 0 0 40px #f87171; }
+
   .laser-shine {
       position: absolute;
       top: -100%; left: -100%; width: 300%; height: 300%;
@@ -123,34 +134,26 @@
       pointer-events: none;
   }
 
-  :global(.marker-link:hover) .pin {
-    transform: scale(1.4);
-    background-color: #fff;
-    box-shadow: 0 0 25px #2dd4bf;
-  }
-  
-  :global(.marker-link:hover) .pulse-ring {
-      animation: laser-pulse 1.5s infinite;
+  .pin.hovered .pulse-ring {
+      animation: laser-pulse 1s infinite;
       color: #2dd4bf;
+      opacity: 1;
   }
-
-  .pin.occupied { background-color: #f87171; box-shadow: 0 0 15px rgba(248, 113, 113, 0.6); }
-  :global(.marker-link:hover) .pin.occupied { box-shadow: 0 0 25px #f87171; }
-  :global(.marker-link:hover) .pin.occupied .pulse-ring { color: #f87171; }
+  .pin.occupied.hovered .pulse-ring { color: #f87171; }
 
   @keyframes laser-pulse {
       0% { transform: scale(1); opacity: 0.8; }
-      100% { transform: scale(2); opacity: 0; }
+      100% { transform: scale(2.5); opacity: 0; }
   }
 
   .label {
     margin-top: 8px;
     background: rgba(15, 15, 15, 0.9);
     backdrop-filter: blur(4px);
-    color: white;
-    padding: 4px 10px;
+    color: #888;
+    padding: 4px 12px;
     border-radius: 6px;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 900;
     letter-spacing: 1px;
     z-index: 3;
@@ -161,10 +164,16 @@
     transition: all 0.2s;
   }
 
-  :global(.marker-link:hover) .label {
-      background: #2dd4bf;
-      color: #000;
-      border-color: #fff;
-      transform: translateY(2px);
+  .label.hovered {
+      background: #000;
+      color: #fff;
+      border: 2px solid #2dd4bf;
+      box-shadow: 0 0 20px rgba(45, 212, 191, 0.5);
+      animation: label-glow 1.5s infinite;
+  }
+
+  @keyframes label-glow {
+      0%, 100% { border-color: #2dd4bf; box-shadow: 0 0 10px rgba(45, 212, 191, 0.3); }
+      50% { border-color: #fff; box-shadow: 0 0 25px rgba(45, 212, 191, 0.8); }
   }
 </style>
