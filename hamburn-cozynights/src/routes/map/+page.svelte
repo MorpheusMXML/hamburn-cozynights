@@ -48,9 +48,9 @@
     
     {#if isBookingActive}
       <div class="header-actions">
-        <a href="/random-bed" class="random-btn">
+        <a href="/random-bed" class="random-btn pulsing-laser">
           <span class="icon">🎰</span>
-          LUCK OF THE PLAYA
+          DESTINY ROULETTE
         </a>
         <div class="phase-badge live">🎪 LIVE BOOKING</div>
       </div>
@@ -127,27 +127,39 @@
   }
 
   .random-btn {
-    background: #111;
+    background: #050505;
     color: #f472b6;
     text-decoration: none;
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
+    padding: 0.6rem 1.2rem;
+    border-radius: 10px;
     font-weight: 900;
-    font-size: 0.7rem;
-    letter-spacing: 1px;
-    border: 1px solid #f472b633;
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+    border: 2px solid #f472b633;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    transition: all 0.2s;
-    box-shadow: 0 0 15px rgba(244, 114, 182, 0.1);
+    gap: 0.75rem;
+    transition: all 0.3s;
+    box-shadow: 0 0 20px rgba(244, 114, 182, 0.2);
+    text-transform: uppercase;
   }
 
   .random-btn:hover {
     background: #f472b6;
     color: #000;
-    box-shadow: 0 0 20px rgba(244, 114, 182, 0.4);
-    transform: translateY(-2px);
+    box-shadow: 0 0 40px rgba(244, 114, 182, 0.6);
+    transform: translateY(-2px) scale(1.05);
+    border-color: #fff;
+  }
+
+  .pulsing-laser {
+    animation: laser-pulse-btn 3s infinite;
+  }
+
+  @keyframes laser-pulse-btn {
+    0% { border-color: #f472b633; box-shadow: 0 0 20px rgba(244, 114, 182, 0.2); }
+    50% { border-color: #f472b6; box-shadow: 0 0 40px rgba(244, 114, 182, 0.5); }
+    100% { border-color: #f472b633; box-shadow: 0 0 20px rgba(244, 114, 182, 0.2); }
   }
 
   .logo-box {

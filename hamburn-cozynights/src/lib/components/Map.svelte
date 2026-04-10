@@ -41,6 +41,7 @@
   let dragOffset = { x: 0, y: 0 };
   let hasDragged = false;
   let selectedHouseId: string | null = null;
+  let hoveredHouseId: string | null = null;
 
   function handleMouseDown(event: MouseEvent, house: any) {
     if (!isEditorMode || isBookingActive) return;
@@ -140,6 +141,14 @@
           selectedHouseId = null;
       }
   }
+
+  function handleMouseEnter(houseId: string) {
+    hoveredHouseId = houseId;
+  }
+
+  function handleMouseLeave() {
+    hoveredHouseId = null;
+  }
 </script>
 
 <div class="map-wrapper" on:mousemove={handleMouseMoveGlobal} role="presentation">
@@ -174,6 +183,8 @@
             on:mousedown={(e) => handleMouseDown(e, house)}
             on:click={(e) => handleHouseClick(e, house)}
             on:keydown={(e) => handleHouseKeydown(e, house)}
+            on:mouseenter={() => handleMouseEnter(house.id)}
+            on:mouseleave={handleMouseLeave}
             role="button"
             tabindex="0"
             aria-label="House {house.name}"
@@ -183,6 +194,7 @@
                     name={house.name} 
                     status={house.occupiedBeds >= house.totalBeds ? 'full' : 'available'} 
                     labelPosition={labelPositions[house.id]}
+                    hovered={hoveredHouseId === house.id}
                 />
             </foreignObject>
           </g>
@@ -200,7 +212,6 @@
   .map-image.blurred { filter: blur(5px) grayscale(0.5) brightness(0.3); }
 
   .house-group { cursor: grab; pointer-events: auto; outline: none; }
-  .house-group.selected { filter: drop-shadow(0 0 10px #f472b6); }
   
   .marker-layer { animation: fadeIn 0.3s ease-out forwards; }
 
