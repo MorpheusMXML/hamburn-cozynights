@@ -47,7 +47,13 @@
     </div>
     
     {#if isBookingActive}
-      <div class="phase-badge live">🎪 LIVE BOOKING</div>
+      <div class="header-actions">
+        <a href="/random-bed" class="random-btn">
+          <span class="icon">🎰</span>
+          LUCK OF THE PLAYA
+        </a>
+        <div class="phase-badge live">🎪 LIVE BOOKING</div>
+      </div>
     {:else}
       <div class="phase-badge staging">🛠 STAGING MODE</div>
     {/if}
@@ -111,6 +117,37 @@
     justify-content: space-between;
     align-items: flex-start;
     pointer-events: none;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    pointer-events: auto;
+  }
+
+  .random-btn {
+    background: #111;
+    color: #f472b6;
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-weight: 900;
+    font-size: 0.7rem;
+    letter-spacing: 1px;
+    border: 1px solid #f472b633;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+    box-shadow: 0 0 15px rgba(244, 114, 182, 0.1);
+  }
+
+  .random-btn:hover {
+    background: #f472b6;
+    color: #000;
+    box-shadow: 0 0 20px rgba(244, 114, 182, 0.4);
+    transform: translateY(-2px);
   }
 
   .logo-box {

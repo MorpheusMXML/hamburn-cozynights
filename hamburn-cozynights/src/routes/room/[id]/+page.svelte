@@ -10,16 +10,23 @@
   let showModal = false;
   let selectedBedId: string | null = null;
   let currentNameInput = "";
+  let slotMachineRef: SlotMachine;
+  let isAutoSpinning = false;
+  let showSlotManually = false;
 
   function openBookingModal(bedId: string, existingName?: string) {
     selectedBedId = bedId;
     currentNameInput = existingName || "";
     showModal = true;
+    showSlotManually = false;
+    isAutoSpinning = false;
   }
 
   function closeModal() {
     showModal = false;
     selectedBedId = null;
+    showSlotManually = false;
+    isAutoSpinning = false;
   }
 
   function handleBackdropKeydown(event: KeyboardEvent) {
@@ -28,6 +35,27 @@
 
   function handleSlotSelect(event: CustomEvent<string>) {
       currentNameInput = event.detail;
+      if (isAutoSpinning) {
+          // Delayed submit after confetti show
+          setTimeout(() => {
+              const form = document.getElementById('booking-form') as HTMLFormElement;
+              if (form) form.requestSubmit();
+          }, 2000);
+      }
+  }
+
+  function handleFormSubmit(event: SubmitEvent) {
+      const submitter = event.submitter as HTMLButtonElement;
+      if (submitter?.formAction?.includes('unbookBed')) return;
+
+      if (!currentNameInput || currentNameInput.trim() === "") {
+          event.preventDefault();
+          showSlotManually = true;
+          isAutoSpinning = true;
+          setTimeout(() => {
+              slotMachineRef.spin();
+          }, 100);
+      }
   }
 </script>
 
@@ -132,9 +160,16 @@
       <h2>{selectedBedId === data.userBedId ? 'Edit Your Spot' : 'Grab This Spot'}</h2>
       <p>Set your Burner Name (optional).</p>
       
-      <SlotMachine on:select={handleSlotSelect} />
+      {#if showSlotManually}
+        <SlotMachine bind:this={slotMachineRef} on:select={handleSlotSelect} />
+      {/if}
 
-      <form method="POST" action="?/bookBed" use:enhance={() => {
+      <form 
+        id="booking-form"
+        method="POST" 
+        action="?/bookBed" 
+        on:submit={handleFormSubmit}
+        use:enhance={() => {
           return async ({ result, update }) => {
               if (result.type === 'success') closeModal();
               await update(); 
@@ -142,24 +177,28 @@
       }}>
         <input type="hidden" name="bedId" value={selectedBedId} />
         
-        <div class="form-group">
-            <label for="guestName">Manual Adjustment</label>
+        <div class="form-group" class:hidden={showSlotManually}>
+            <label for="guestName">Burner Name</label>
             <input 
                 type="text" 
                 name="guestName" 
                 id="guestName" 
                 bind:value={currentNameInput} 
-                placeholder="Type name here..." 
+                placeholder="Leave empty for a surprise! 🎰" 
             />
         </div>
 
-        <div class="actions">
+        <div class="actions" class:hidden={showSlotManually}>
             {#if selectedBedId === data.userBedId}
                 <button type="submit" formaction="?/unbookBed" class="btn-unbook">Release</button>
             {/if}
             <button type="button" class="btn-cancel" on:click={closeModal}>Cancel</button>
             <button type="submit" class="btn-confirm">Save Spot</button>
         </div>
+
+        {#if showSlotManually}
+            <p class="auto-spin-hint">Rolling for your burner identity...</p>
+        {/if}
       </form>
     </div>
   </div>
@@ -222,11 +261,13 @@
   .modal p { color: #666; margin-bottom: 2rem; }
 
   .form-group { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 2rem; }
+  .form-group.hidden { display: none; }
   .form-group label { font-size: 0.7rem; font-weight: 900; color: #444; letter-spacing: 1px; text-transform: uppercase; }
   .form-group input { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 12px; color: #fff; font-size: 1rem; }
   .form-group input:focus { outline: none; border-color: #2dd4bf; }
 
   .actions { display: flex; gap: 1rem; }
+  .actions.hidden { display: none; }
   .actions button { flex: 1; padding: 12px; border-radius: 8px; font-weight: 900; cursor: pointer; transition: all 0.2s; }
   .btn-cancel { background: transparent; border: 1px solid #333; color: #888; }
   .btn-cancel:hover { background: #1a1a1a; color: #fff; }
@@ -234,4 +275,11 @@
   .btn-confirm:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(45, 212, 191, 0.3); }
   .btn-unbook { background: transparent; border: 1px solid #f87171; color: #f87171; }
   .btn-unbook:hover { background: #f87171; color: #000; }
+
+  .auto-spin-hint { color: #2dd4bf !important; font-weight: 900; text-align: center; margin-top: 1rem; font-size: 0.8rem; letter-spacing: 1px; text-transform: uppercase; animation: pulse 1s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
 </style>
