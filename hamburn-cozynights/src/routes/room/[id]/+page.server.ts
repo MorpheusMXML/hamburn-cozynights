@@ -23,24 +23,26 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         const orderHash = createLookupHash(locals.orderNumber);
         const settings = await locals.pb.collection('app_settings').getOne('abcsettings123').catch(() => ({ is_booking_active: false, booking_unlock_at: "" }));
 
-        // Use adminPb to find order by hash (since orders are locked for public)
+        // Use adminPb to find order (try hash first, then raw number)
         let order;
         try {
             order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
                 locals.adminPb.filter('order_hash = {:orderHash}', { orderHash })
             );
-        } catch (hashErr) {
-            console.warn('[Security] Order hash not found. Attempting fallback migration for order:', locals.orderNumber);
-            // Fallback to searching by order_number directly
-            order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
-                locals.adminPb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber })
-            );
-
-            // Auto-migrate by setting the order_hash
-            await locals.adminPb.collection('orders').update(order.id, {
-                order_hash: orderHash
-            });
-            console.log('[Security] Fallback successful. Order migrated.');
+        } catch (hashErr: any) {
+            // If field doesn't exist (400) or not found (404), fall back to order_number
+            try {
+                order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
+                    locals.adminPb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber })
+                );
+                
+                // Optional: Try to auto-migrate if field exists
+                await locals.adminPb.collection('orders').update(order.id, { order_hash: orderHash }).catch(() => {
+                    // Silently ignore if field missing in DB schema
+                });
+            } catch (numErr) {
+                throw error(404, 'Buchungscode ungültig oder nicht gefunden.');
+            }
         }
 
         const userBed = await locals.adminPb.collection('beds').getFirstListItem(
@@ -106,11 +108,12 @@ export const actions: Actions = {
                     locals.adminPb.filter('order_hash = {:orderHash}', { orderHash })
                 );
             } catch (hashErr) {
-                console.warn('[Security] Order hash not found in bookBed. Attempting fallback migration.');
+                // Fallback to order_number
                 order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
                     locals.adminPb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber })
                 );
-                await locals.adminPb.collection('orders').update(order.id, { order_hash: orderHash });
+                // Try to migrate
+                await locals.adminPb.collection('orders').update(order.id, { order_hash: orderHash }).catch(() => {});
             }
             
             // Check if bed exists and is available
@@ -166,11 +169,12 @@ export const actions: Actions = {
                     locals.adminPb.filter('order_hash = {:orderHash}', { orderHash })
                 );
             } catch (hashErr) {
-                console.warn('[Security] Order hash not found in unbookBed. Attempting fallback migration.');
+                // Fallback to order_number
                 order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
                     locals.adminPb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber })
                 );
-                await locals.adminPb.collection('orders').update(order.id, { order_hash: orderHash });
+                // Try to migrate
+                await locals.adminPb.collection('orders').update(order.id, { order_hash: orderHash }).catch(() => {});
             }
             const beds = await locals.adminPb.collection('beds').getFullList({ 
                 filter: locals.adminPb.filter('order = {:orderId}', { orderId: order.id }) 

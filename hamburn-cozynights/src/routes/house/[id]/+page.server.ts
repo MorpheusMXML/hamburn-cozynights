@@ -21,9 +21,23 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     ]);
 
     // Check if user has a bed in ANY house/room
-    const userBed = await locals.adminPb.collection('beds').getFirstListItem(
-        locals.adminPb.filter('order.order_hash = {:orderHash}', { orderHash })
-    ).catch(() => null);
+    let userBed;
+    try {
+        userBed = await locals.adminPb.collection('beds').getFirstListItem(
+            locals.adminPb.filter('order.order_hash = {:orderHash}', { orderHash })
+        );
+    } catch {
+        // Fallback to order_number lookup via order expansion
+        const order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
+            locals.adminPb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber })
+        ).catch(() => null);
+        
+        if (order) {
+            userBed = await locals.adminPb.collection('beds').getFirstListItem(
+                locals.adminPb.filter('order = {:orderId}', { orderId: order.id })
+            ).catch(() => null);
+        }
+    }
 
     // Calculate occupancy 👥
     const roomsWithStats = rooms.map(room => {
@@ -59,10 +73,12 @@ export const actions: Actions = {
                     locals.adminPb.filter('order_hash = {:orderHash}', { orderHash })
                 );
             } catch (hashErr) {
+                // Fallback
                 order = await locals.adminPb.collection('orders').getFirstListItem<OrdersResponse>(
                     locals.adminPb.filter('order_number = {:orderNumber}', { orderNumber: locals.orderNumber })
                 );
-                await locals.adminPb.collection('orders').update(order.id, { order_hash: orderHash });
+                // Try to migrate
+                await locals.adminPb.collection('orders').update(order.id, { order_hash: orderHash }).catch(() => {});
             }
             const beds = await locals.adminPb.collection('beds').getFullList({ 
                 filter: locals.adminPb.filter('order = {:orderId}', { orderId: order.id }) 
