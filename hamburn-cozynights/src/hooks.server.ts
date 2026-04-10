@@ -16,10 +16,19 @@ export const handle: Handle = async ({ event, resolve }) => {
     // 2. Authenticate Admin instance for secure server-side ops
     try {
         if (privateEnv.PB_ADMIN_EMAIL && privateEnv.PB_ADMIN_PASSWORD) {
-            await event.locals.adminPb.admins.authWithPassword(
-                privateEnv.PB_ADMIN_EMAIL, 
-                privateEnv.PB_ADMIN_PASSWORD
-            );
+            try {
+                // New PB (v0.23+)
+                await event.locals.adminPb.collection('_superusers').authWithPassword(
+                    privateEnv.PB_ADMIN_EMAIL, 
+                    privateEnv.PB_ADMIN_PASSWORD
+                );
+            } catch {
+                // Old PB
+                await event.locals.adminPb.admins.authWithPassword(
+                    privateEnv.PB_ADMIN_EMAIL, 
+                    privateEnv.PB_ADMIN_PASSWORD
+                );
+            }
         }
     } catch (err) {
         console.error('[Security] Failed to authenticate adminPb instance.', err);
@@ -35,12 +44,16 @@ export const handle: Handle = async ({ event, resolve }) => {
     try {
         if (event.locals.pb.authStore.isValid) {
             // Re-authenticate and refresh the session based on the auth model type
-            // Superusers/Admins use a different refresh mechanism in older PB, 
-            // but in newer PB they are just another collection or use .admins
-            
             // Check if it's a regular user or a superuser (admin)
-            if (event.locals.pb.authStore.isAdmin) {
-                await event.locals.pb.admins.authRefresh();
+            // @ts-ignore - isAdmin is deprecated in newer PB, checking collection name instead
+            const isSuper = event.locals.pb.authStore.model?.collectionName === '_superusers' || event.locals.pb.authStore.isAdmin;
+            
+            if (isSuper) {
+                try {
+                    await event.locals.pb.collection('_superusers').authRefresh();
+                } catch {
+                    await event.locals.pb.admins.authRefresh();
+                }
             } else {
                 await event.locals.pb.collection('users').authRefresh();
             }
