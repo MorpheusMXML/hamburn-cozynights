@@ -16,6 +16,9 @@
 		"test:e2e": "playwright test",
 		"test:e2e:ui": "playwright test --ui",
 		"test:e2e:report": "playwright show-report",
+		"health": "npx tsx scripts/health_check.ts",
+		"test:setup": "npx tsx scripts/test_setup.ts",
+		"predev": "npm run health",
 		"lint": "prettier --check . && eslint .",
 		"typegen": "npx pocketbase-typegen --url http://127.0.0.1:8090 --email brosiusmax@gmail.com --password Hamburg65256525! --out src/lib/pocketbase-types.ts"
 	},
