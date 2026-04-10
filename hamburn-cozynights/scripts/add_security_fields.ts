@@ -2,6 +2,10 @@
 import PocketBase from 'pocketbase';
 import * as dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
@@ -18,7 +22,13 @@ async function run() {
     }
 
     try {
-        await pb.admins.authWithPassword(PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD);
+        try {
+            // New PocketBase (v0.23+)
+            await pb.collection('_superusers').authWithPassword(PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD);
+        } catch {
+            // Old PocketBase
+            await pb.admins.authWithPassword(PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD);
+        }
         console.log('Authenticated as Admin');
 
         // Add order_hash to orders collection
