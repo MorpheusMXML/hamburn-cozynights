@@ -1,8 +1,10 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { tick } from 'svelte';
   import type { PageData, ActionData } from './$types';
   import CountdownTimer from '$lib/components/CountdownTimer.svelte';
   import SlotMachine from '$lib/components/SlotMachine.svelte';
+  import { getAdminPb } from '$lib/server/pocketbase';
 
   export let data: PageData;
   export let form: ActionData;
@@ -12,6 +14,7 @@
   let selectedBedId: string | null = null;
   let currentNameInput = "";
   let slotMachineRef: SlotMachine;
+  let formElement: HTMLFormElement;
   let isAutoSpinning = false;
   let showSlotManually = false;
 
@@ -39,13 +42,12 @@
       if (isAutoSpinning) {
           // Delayed submit after confetti show
           setTimeout(() => {
-              const form = document.getElementById('booking-form') as HTMLFormElement;
-              if (form) form.requestSubmit();
+              if (formElement) formElement.requestSubmit();
           }, 2000);
       }
   }
 
-  function handleFormSubmit(event: SubmitEvent) {
+  async function handleFormSubmit(event: SubmitEvent) {
       const submitter = event.submitter as HTMLButtonElement;
       if (submitter?.formAction?.includes('unbookBed')) return;
 
@@ -53,9 +55,8 @@
           event.preventDefault();
           showSlotManually = true;
           isAutoSpinning = true;
-          setTimeout(() => {
-              slotMachineRef.spin();
-          }, 100);
+          await tick();
+          if (slotMachineRef) slotMachineRef.spin();
       }
   }
 </script>
@@ -159,7 +160,10 @@
 </div>
 
 {#if showModal}
-  <div class="modal-backdrop" on:click={closeModal} on:keydown={handleBackdropKeydown} role="presentation">
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
+  <div class="modal-backdrop" on:click={closeModal} role="presentation">
     <div class="modal" on:click|stopPropagation role="dialog" aria-modal="true" tabindex="-1">
       <h2>{selectedBedId === data.userBedId ? 'Edit Your Spot' : 'Grab This Spot'}</h2>
       <p>Set your Burner Name (optional).</p>
@@ -175,6 +179,7 @@
       {/if}
 
       <form 
+        bind:this={formElement}
         id="booking-form"
         method="POST" 
         action="?/bookBed" 
