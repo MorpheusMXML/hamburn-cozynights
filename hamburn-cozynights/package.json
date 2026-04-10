@@ -10,7 +10,8 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"format": "prettier --write .",
+		"test": "vitest run",
+		"test:ui": "vitest --ui",
 		"lint": "prettier --check . && eslint .",
 		"typegen": "npx pocketbase-typegen --url http://127.0.0.1:8090 --email brosiusmax@gmail.com --password Hamburg65256525! --out src/lib/pocketbase-types.ts"
 	},
@@ -24,6 +25,8 @@
 		"@tailwindcss/typography": "^0.5.19",
 		"@tailwindcss/vite": "^4.1.17",
 		"@types/node": "^22",
+		"@vitest/ui": "^4.1.4",
+		"dotenv": "^17.4.1",
 		"eslint": "^9.39.1",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.13.1",
@@ -37,7 +40,8 @@
 		"tailwindcss": "^4.1.17",
 		"typescript": "^5.9.3",
 		"typescript-eslint": "^8.48.1",
-		"vite": "^7.2.6"
+		"vite": "^7.2.6",
+		"vitest": "^4.1.4"
 	},
 	"dependencies": {
 		"chart.js": "^4.5.1",
