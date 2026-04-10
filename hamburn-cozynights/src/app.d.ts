@@ -9,6 +9,8 @@ declare global {
 		interface Locals {
 			// We use TypedPocketBase for full type safety in our collections ⚡️
 			pb: TypedPocketBase;
+			// Dedicated Admin instance for secure server-side operations 🛡️
+			adminPb: TypedPocketBase;
 			// The current burner's booking code from the cookie 🎫
 			orderNumber: string | null;
 			// Optional field for storing the guest name session-wide 📛

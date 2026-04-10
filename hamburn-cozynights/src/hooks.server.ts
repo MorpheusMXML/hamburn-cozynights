@@ -4,14 +4,28 @@ import { type Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { TypedPocketBase } from '$lib/pocketbase-types';
 import { env } from '$env/dynamic/public';
+import { env as privateEnv } from '$env/dynamic/private';
 
 const PB_URL = env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
 
 export const handle: Handle = async ({ event, resolve }) => {
-    // 1. Initialize PocketBase instance for the request
+    // 1. Initialize PocketBase instances for the request
     event.locals.pb = new PocketBase(PB_URL) as TypedPocketBase;
+    event.locals.adminPb = new PocketBase(PB_URL) as TypedPocketBase;
 
-    // 2. Retrieve booking code from cookies
+    // 2. Authenticate Admin instance for secure server-side ops
+    try {
+        if (privateEnv.PB_ADMIN_EMAIL && privateEnv.PB_ADMIN_PASSWORD) {
+            await event.locals.adminPb.admins.authWithPassword(
+                privateEnv.PB_ADMIN_EMAIL, 
+                privateEnv.PB_ADMIN_PASSWORD
+            );
+        }
+    } catch (err) {
+        console.error('[Security] Failed to authenticate adminPb instance.', err);
+    }
+
+    // 3. Retrieve booking code from cookies
     event.locals.orderNumber = event.cookies.get('bookingCode') || null;
 
     // 3. Handle PocketBase Auth (Session-based via cookies)
