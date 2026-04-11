@@ -20,9 +20,15 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
 	const userModel = locals.pb.authStore.model;
 	const userJSON = userModel ? JSON.parse(JSON.stringify(userModel)) : null;
 
+	// NOTE: Superusers are always verified by default in PocketBase.
+	// We check collectionName or isSuperuser to ensure Admins bypass the 'verified' flag check
+	// which is typically only used for regular 'users' collection records.
+	const isSuper = userModel?.collectionName === '_superusers' || locals.pb.authStore.isSuperuser;
+	const isVerified = isSuper || userJSON?.verified === true;
+
 	return {
 		user: userJSON,
 		// Explicit flag for the frontend to hide buttons
-		isVerified: userJSON?.verified === true
+		isVerified
 	};
 };
