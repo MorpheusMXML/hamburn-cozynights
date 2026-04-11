@@ -12,8 +12,12 @@ interface SafeAuthProvider {
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
-	// If already logged in and verified -> Dashboard 🚀
-	if (locals.pb.authStore.isValid && locals.pb.authStore.model?.verified) {
+	// If already logged in and verified (or superuser) -> Dashboard 🚀
+	const user = locals.pb.authStore.model;
+	const isSuper = user?.collectionName === '_superusers' || locals.pb.authStore.isSuperuser;
+	const isVerified = isSuper || user?.verified === true;
+
+	if (locals.pb.authStore.isValid && isVerified) {
 		throw redirect(303, '/admin');
 	}
 

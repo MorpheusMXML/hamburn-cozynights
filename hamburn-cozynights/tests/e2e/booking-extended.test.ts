@@ -86,7 +86,8 @@ test.describe('Extended Booking & Admin Flow', () => {
 		// Check for error message
 		const errorMsg = page.locator('.error-msg');
 		await expect(errorMsg).toBeVisible();
-		await expect(page).toHaveURL('/');
+		// SvelteKit may append the action name to the URL on failure (e.g. /?/login)
+		await expect(page).toHaveURL(/\/(\?\/login)?$/);
 	});
 
 	test('Negative: Direct Room Access without session should redirect to login', async ({ page }) => {
@@ -125,26 +126,28 @@ test.describe('Extended Booking & Admin Flow', () => {
 		const userContext = await browser.newContext();
 		const adminPage = await adminContext.newPage();
 		const userPage = await userContext.newPage();
+// 1. Admin Login & Check Dashboard (Pre-booking)
+await adminPage.goto('/admin/login');
+await adminPage.fill('input[name="email"]', process.env.PB_ADMIN_EMAIL!);
+await adminPage.fill('input[name="password"]', process.env.PB_ADMIN_PASSWORD!);
 
-		// 1. Admin Login & Check Dashboard (Pre-booking)
-		await adminPage.goto('/admin/login');
-		await adminPage.fill('input[name="email"]', process.env.PB_ADMIN_EMAIL!);
-		await adminPage.fill('input[name="password"]', process.env.PB_ADMIN_PASSWORD!);
-		
-		// Use Promise.all to reliably catch the redirect
-		await Promise.all([
-			adminPage.waitForURL(/\/admin(\/)?$/, { timeout: 15000 }),
-			adminPage.click('button[type="submit"]')
-		]);
+// TRACE: Use Promise.all to catch navigation events reliably. 
+// SvelteKit's client-side routing can be fast enough to miss a simple click + waitForURL.
+await Promise.all([
+	adminPage.waitForURL(/\/admin(\/)?$/, { timeout: 15000 }),
+	adminPage.click('button[type="submit"]')
+]);
 
-		// Helper to ensure we are in List View (stats are visible)
-		const ensureListView = async () => {
-			const btn = adminPage.locator('button', { hasText: 'LIST VIEW' });
-			if (await btn.isVisible()) {
-				await btn.click();
-				await expect(adminPage.locator('button', { hasText: 'MAP VIEW' })).toBeVisible();
-			}
-		};
+// Helper to ensure we are in List View (stats cards are visible).
+// TRACE: adminPage.reload() resets the UI state to default (Map View).
+const ensureListView = async () => {
+	const btn = adminPage.locator('button', { hasText: 'LIST VIEW' });
+	if (await btn.isVisible()) {
+		await btn.click();
+		// Confirm toggle worked
+		await expect(adminPage.locator('button', { hasText: 'MAP VIEW' })).toBeVisible();
+	}
+};
 
 		await ensureListView();
 
