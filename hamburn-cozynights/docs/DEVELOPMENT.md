@@ -5,12 +5,14 @@ This guide covers how to maintain, test, and update the Hamburn Cozynights appli
 ## 1. Environment Setup
 
 Copy `.env.example` to `.env` and fill in the following:
+
 - `PUBLIC_PB_URL`: The URL of your PocketBase instance.
 - `ENCRYPTION_KEY`: A 64-character hex string (32 bytes).
 - `PB_ADMIN_EMAIL`: Your superuser email.
 - `PB_ADMIN_PASSWORD`: Your superuser password.
 
 To generate a new key:
+
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
@@ -28,21 +30,25 @@ If the database schema changes, you may need to run these scripts:
   npx tsx scripts/encrypt_db_migration.ts
   ```
 
-*Note: These scripts automatically detect if you are using PocketBase v0.23+ (Superusers) or an older version.*
+_Note: These scripts automatically detect if you are using PocketBase v0.23+ (Superusers) or an older version._
 
 ## 3. Testing Suite
 
 We use two types of testing to ensure the app is robust:
 
 ### Unit & Security Tests (Vitest)
+
 Checks the core logic like encryption, hashing, and server-side actions.
+
 ```bash
 npm run test       # Run once
 npm run test:ui    # Open visual Vitest dashboard
 ```
 
 ### End-to-End Tests (Playwright)
+
 Simulates a real user journey: logging in, navigating the map, booking a bed, and releasing it.
+
 ```bash
 npm run test:e2e      # Run in terminal
 npm run test:e2e:ui   # Open professional visual dashboard 📊
