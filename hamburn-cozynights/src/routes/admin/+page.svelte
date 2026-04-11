@@ -262,6 +262,29 @@
 			}
 		}
 	}
+	let showTemplates = false;
+	let isImporting = false;
+
+	const handleImportTemplate: SubmitFunction = ({ cancel }) => {
+		if (
+			!confirm(
+				'☢️ NUCLEAR WARNING ☢️\n\nImporting a template will PERMANENTLY ERASE:\n- All current Houses\n- All current Rooms\n- All current Beds\n- ALL ACTIVE BOOKINGS AND ORDERS\n\nThis cannot be undone. Are you absolutely sure the playa is ready for a reset?'
+			)
+		) {
+			cancel();
+			return;
+		}
+
+		isImporting = true;
+		return async ({ result, update }) => {
+			isImporting = false;
+			if (result.type === 'success') {
+				showTemplates = false;
+				alert('✨ PLAYA REBORN: Template applied successfully.');
+			}
+			await update();
+		};
+	};
 </script>
 
 <div class="dashboard-wrapper">
@@ -272,6 +295,10 @@
 		</div>
 
 		<div class="header-right">
+			<button class="btn-secondary" on:click={() => (showTemplates = !showTemplates)}>
+				{showTemplates ? 'CLOSE TOOLS 🛠' : 'TEMPLATES 💾'}
+			</button>
+
 			<button class="btn-guide" on:click={() => (showGuide = !showGuide)} class:active={showGuide}>
 				{showGuide ? 'CLOSE INTEL 📡' : 'SHOW INTEL 📊'}
 			</button>
@@ -290,6 +317,62 @@
 			</button>
 		</div>
 	</header>
+
+	{#if showTemplates}
+		<section class="templates-overlay" in:fade out:fade>
+			<div class="templates-content" in:fly={{ y: 20 }}>
+				<div class="modal-header">
+					<h2>Burn Template Manager</h2>
+					<button class="btn-close" on:click={() => (showTemplates = false)}>✕</button>
+				</div>
+
+				<div class="templates-grid">
+					<div class="tool-card export-card">
+						<div class="icon">📡</div>
+						<h3>Export Current Layout</h3>
+						<p>
+							Download the entire structure of houses, rooms, and beds as a JSON file. Use this for
+							backups or starting new burns.
+						</p>
+						<a href="/admin/api/export-template" class="btn-action" download> DOWNLOAD JSON 💾 </a>
+					</div>
+
+					<div class="tool-card import-card">
+						<div class="icon">🌀</div>
+						<h3>Import New Layout</h3>
+						<p>
+							Wipe the current database and rebuild the playa from a JSON template. <strong
+								>Warning: This clears all data!</strong
+							>
+						</p>
+
+						<form
+							method="POST"
+							action="?/importTemplate"
+							enctype="multipart/form-data"
+							use:enhance={handleImportTemplate}
+						>
+							<div class="file-input-wrapper">
+								<input type="file" name="template" accept=".json" required id="template-upload" />
+								<label for="template-upload">Choose File</label>
+							</div>
+							<button type="submit" class="btn-action danger" disabled={isImporting}>
+								{isImporting ? 'IGNITING...' : 'APPLY TEMPLATE 🔥'}
+							</button>
+						</form>
+					</div>
+				</div>
+
+				{#if isImporting}
+					<div class="loading-overlay" in:fade>
+						<div class="spinner"></div>
+						<p>REBUILDING THE PLAYA STRUCTURE...</p>
+						<small>The desert winds are reshaping the dust.</small>
+					</div>
+				{/if}
+			</div>
+		</section>
+	{/if}
 
 	{#if showGuide}
 		<section class="intel-panel" transition:slide>
@@ -1095,6 +1178,208 @@
 			opacity: 0;
 			transform: scale(0.8);
 			filter: blur(20px);
+		}
+	}
+
+	.btn-secondary {
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid #333;
+		color: #888;
+		padding: 0.8rem 1.5rem;
+		border-radius: 12px;
+		font-weight: 900;
+		font-size: 0.8rem;
+		cursor: pointer;
+		transition: all 0.2s;
+		letter-spacing: 1px;
+	}
+	.btn-secondary:hover {
+		background: rgba(255, 255, 255, 0.1);
+		color: #fff;
+		border-color: #666;
+	}
+
+	/* Templates UI */
+	.templates-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100vw;
+		height: 100vh;
+		background: rgba(0, 0, 0, 0.9);
+		backdrop-filter: blur(20px);
+		z-index: 1000;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 2rem;
+	}
+
+	.templates-content {
+		background: #0a0a0a;
+		border: 1px solid #222;
+		border-top: 4px solid #fb923c;
+		border-radius: 32px;
+		width: 100%;
+		max-width: 900px;
+		padding: 3rem;
+		position: relative;
+		box-shadow: 0 50px 100px rgba(0, 0, 0, 0.8);
+	}
+
+	.modal-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 3rem;
+	}
+	.modal-header h2 {
+		font-size: 2.5rem;
+		font-weight: 900;
+		letter-spacing: -1px;
+		margin: 0;
+	}
+	.btn-close {
+		background: transparent;
+		border: none;
+		color: #444;
+		font-size: 1.5rem;
+		cursor: pointer;
+		transition: color 0.2s;
+	}
+	.btn-close:hover {
+		color: #fff;
+	}
+
+	.templates-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 2rem;
+	}
+
+	.tool-card {
+		background: #111;
+		border: 1px solid #222;
+		border-radius: 24px;
+		padding: 2.5rem;
+		text-align: center;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1.5rem;
+		transition: border-color 0.3s;
+	}
+	.tool-card:hover {
+		border-color: #333;
+	}
+	.tool-card .icon {
+		font-size: 3rem;
+	}
+	.tool-card h3 {
+		margin: 0;
+		font-weight: 900;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+	}
+	.tool-card p {
+		color: #666;
+		font-size: 0.9rem;
+		line-height: 1.6;
+		margin: 0;
+	}
+
+	.btn-action {
+		display: inline-block;
+		width: 100%;
+		padding: 1.2rem;
+		background: #2dd4bf;
+		color: #000;
+		text-decoration: none;
+		border-radius: 16px;
+		font-weight: 900;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+		font-size: 0.9rem;
+		cursor: pointer;
+		border: none;
+		transition: all 0.2s;
+	}
+	.btn-action:hover:not(:disabled) {
+		background: #fff;
+		transform: scale(1.02);
+	}
+	.btn-action.danger {
+		background: transparent;
+		border: 2px solid #ef4444;
+		color: #ef4444;
+	}
+	.btn-action.danger:hover:not(:disabled) {
+		background: #ef4444;
+		color: #000;
+	}
+
+	.file-input-wrapper {
+		width: 100%;
+		margin-bottom: 1rem;
+	}
+	.file-input-wrapper input {
+		display: none;
+	}
+	.file-input-wrapper label {
+		display: block;
+		padding: 1rem;
+		background: #050505;
+		border: 1px dashed #333;
+		border-radius: 12px;
+		color: #444;
+		font-weight: 900;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+	.file-input-wrapper label:hover {
+		border-color: #666;
+		color: #888;
+	}
+
+	/* Loading Overlay */
+	.loading-overlay {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background: rgba(0, 0, 0, 0.9);
+		border-radius: 32px;
+		z-index: 10;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 1.5rem;
+	}
+	.spinner {
+		width: 50px;
+		height: 50px;
+		border: 4px solid #2dd4bf;
+		border-top-color: transparent;
+		border-radius: 50%;
+		animation: spin 1s linear infinite;
+	}
+	.loading-overlay p {
+		font-weight: 900;
+		letter-spacing: 2px;
+		margin: 0;
+	}
+	.loading-overlay small {
+		color: #444;
+		text-transform: uppercase;
+		font-weight: 900;
+		letter-spacing: 1px;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
 		}
 	}
 </style>
