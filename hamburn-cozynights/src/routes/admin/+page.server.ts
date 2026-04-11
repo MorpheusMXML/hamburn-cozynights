@@ -245,6 +245,83 @@ export const actions = {
 			console.error(`[Action:renameHouse] FAILED for ${id}:`, err);
 			return fail(500, { error: 'Update failed.' });
 		}
+	},
+	importTemplate: async ({ locals, request }) => {
+		if (!locals.pb.authStore.model?.verified) return fail(403, { error: 'Unauthorized' });
+
+		const formData = await request.formData();
+		const file = formData.get('template') as File;
+
+		if (!file || file.size === 0) {
+			return fail(400, { error: 'No template file provided' });
+		}
+
+		try {
+			const text = await file.text();
+			const template = JSON.parse(text);
+
+			if (!template.houses || !Array.isArray(template.houses)) {
+				return fail(400, { error: 'Invalid template structure: Missing houses array' });
+			}
+
+			console.log(`[Import Template] Starting Nuke Phase...`);
+
+			// 1. Fetch and delete everything
+			const houses = await locals.pb.collection('houses').getFullList();
+			const rooms = await locals.pb.collection('rooms').getFullList();
+			const beds = await locals.pb.collection('beds').getFullList();
+			const orders = await locals.pb.collection('orders').getFullList();
+
+			console.log(
+				`[Import Template] Deleting ${houses.length} houses, ${rooms.length} rooms, ${beds.length} beds, ${orders.length} orders.`
+			);
+
+			// Delete in reverse order of dependency
+			for (const bed of beds) await locals.pb.collection('beds').delete(bed.id);
+			for (const room of rooms) await locals.pb.collection('rooms').delete(room.id);
+			for (const house of houses) await locals.pb.collection('houses').delete(house.id);
+			for (const order of orders) await locals.pb.collection('orders').delete(order.id);
+
+			console.log(`[Import Template] Nuke Complete. Rebuilding...`);
+
+			// 2. Rebuild from template
+			for (const h of template.houses) {
+				const houseRecord = await locals.pb.collection('houses').create({
+					name: h.name,
+					x: h.x,
+					y: h.y
+				});
+
+				if (h.rooms && Array.isArray(h.rooms)) {
+					for (const r of h.rooms) {
+						const roomRecord = await locals.pb.collection('rooms').create({
+							name: r.name,
+							room_number: r.room_number,
+							amount_beds: r.amount_beds,
+							house: houseRecord.id
+						});
+
+						if (r.beds && Array.isArray(r.beds)) {
+							for (const b of r.beds) {
+								await locals.pb.collection('beds').create({
+									label: b.label,
+									enabled: b.enabled,
+									is_locked: b.is_locked,
+									room: roomRecord.id,
+									occupied: false
+								});
+							}
+						}
+					}
+				}
+			}
+
+			console.log(`[Import Template] Rebuild Complete. SUCCESS.`);
+			return { success: true };
+		} catch (err: any) {
+			console.error('[Import Template] FAILED:', err);
+			return fail(500, { error: `Import failed: ${err.message}` });
+		}
 	}
 };
 
