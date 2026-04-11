@@ -19,20 +19,18 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ## 2. Database Migrations
 
-...
+If the database schema changes, you may need to run these scripts:
 
-### 2.1 Secure Typegen (GPG)
+- **Update Schema:** Adds new fields like `order_hash` and `is_locked`.
+  ```bash
+  npx tsx scripts/add_security_fields.ts
+  ```
+- **Encrypt Data:** Migrates existing plaintext data to the encrypted format.
+  ```bash
+  npx tsx scripts/encrypt_db_migration.ts
+  ```
 
-The `npm run typegen` command no longer stores your password in `package.json`. Instead, it loads credentials from your `.env` file or a GPG-encrypted file.
-
-If `PB_ADMIN_PASSWORD` is not found in your `.env`, the script will automatically look for one of these files and attempt to decrypt it using GPG:
-- `.env.gpg`
-- `secrets.gpg`
-- `pb_password.gpg`
-
-This allows you to keep your admin credentials safely encrypted while still being able to generate types easily.
-
----
+_Note: These scripts automatically detect if you are using PocketBase v0.23+ (Superusers) or an older version._
 
 ## 3. Testing Suite
 

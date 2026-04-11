@@ -20,7 +20,10 @@
 		"test:setup": "npx tsx scripts/test_setup.ts",
 		"predev": "npm run health",
 		"lint": "prettier --check . && eslint .",
-		"typegen": "npx pocketbase-typegen --url http://127.0.0.1:8090 --email brosiusmax@gmail.com --password Hamburg65256525! --out src/lib/pocketbase-types.ts"
+		"typegen": "npx tsx scripts/secure_typegen.ts",
+		"docs:ts": "typedoc --out docs/generated/ts src/lib",
+		"docs:svelte": "node scripts/generate-svelte-docs.js",
+		"docs:generate": "npm run docs:ts && npm run docs:svelte"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.4.0",
@@ -45,7 +48,9 @@
 		"prettier-plugin-tailwindcss": "^0.7.2",
 		"svelte": "^5.45.6",
 		"svelte-check": "^4.3.4",
+		"sveltedoc-parser": "^4.2.1",
 		"tailwindcss": "^4.1.17",
+		"typedoc": "^0.28.18",
 		"typescript": "^5.9.3",
 		"typescript-eslint": "^8.48.1",
 		"vite": "^7.2.6",

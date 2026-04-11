@@ -264,6 +264,43 @@
 	}
 	let showTemplates = false;
 	let isImporting = false;
+	let isExporting = false;
+	let selectedFileName = '';
+
+	function handleFileChange(event: Event) {
+		const input = event.target as HTMLInputElement;
+		if (input.files && input.files.length > 0) {
+			selectedFileName = input.files[0].name;
+		} else {
+			selectedFileName = '';
+		}
+	}
+
+	async function handleExportTemplate() {
+		isExporting = true;
+		try {
+			const response = await fetch('/admin/api/export-template');
+			if (!response.ok) throw new Error('Export failed');
+
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `burn-template-${new Date().toISOString().slice(0, 10)}.json`;
+			document.body.appendChild(a);
+			a.click();
+			window.URL.revokeObjectURL(url);
+			document.body.removeChild(a);
+		} catch (err) {
+			console.error('[Export] Error:', err);
+			alert('❌ EXPORT FAILED: The data stream was interrupted.');
+		} finally {
+			// Stay in loading state a bit longer for visual fun
+			setTimeout(() => {
+				isExporting = false;
+			}, 1500);
+		}
+	}
 
 	const handleImportTemplate: SubmitFunction = ({ cancel }) => {
 		if (
@@ -334,7 +371,22 @@
 							Download the entire structure of houses, rooms, and beds as a JSON file. Use this for
 							backups or starting new burns.
 						</p>
-						<a href="/admin/api/export-template" class="btn-action" download> DOWNLOAD JSON 💾 </a>
+						<button class="btn-action" on:click={handleExportTemplate} disabled={isExporting}>
+							{isExporting ? 'ENCODING...' : 'DOWNLOAD JSON 💾'}
+						</button>
+
+						{#if isExporting}
+							<div class="card-loading-overlay" in:fade>
+								<div class="data-stream">
+									{#each Array(10) as _, i}
+										<div class="bit" style="--delay: {i * 0.1}s; --left: {Math.random() * 100}%">
+											{Math.random() > 0.5 ? '1' : '0'}
+										</div>
+									{/each}
+								</div>
+								<p>PACKAGING THE PLAYA...</p>
+							</div>
+						{/if}
 					</div>
 
 					<div class="tool-card import-card">
@@ -353,10 +405,20 @@
 							use:enhance={handleImportTemplate}
 						>
 							<div class="file-input-wrapper">
-								<input type="file" name="template" accept=".json" required id="template-upload" />
-								<label for="template-upload">Choose File</label>
+								<input
+									type="file"
+									name="template"
+									accept=".json"
+									required
+									id="template-upload"
+									on:change={handleFileChange}
+								/>
+								<label for="template-upload" class:selected={selectedFileName}>
+									<span class="file-icon">{selectedFileName ? '📄' : '📁'}</span>
+									{selectedFileName || 'CHOOSE TEMPLATE FILE'}
+								</label>
 							</div>
-							<button type="submit" class="btn-action danger" disabled={isImporting}>
+							<button type="submit" class="btn-action danger" disabled={isImporting || !selectedFileName}>
 								{isImporting ? 'IGNITING...' : 'APPLY TEMPLATE 🔥'}
 							</button>
 						</form>
@@ -1327,18 +1389,34 @@
 	}
 	.file-input-wrapper label {
 		display: block;
-		padding: 1rem;
+		padding: 1.2rem;
 		background: #050505;
 		border: 1px dashed #333;
 		border-radius: 12px;
 		color: #444;
 		font-weight: 900;
 		cursor: pointer;
-		transition: all 0.2s;
+		transition: all 0.3s;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		font-size: 0.8rem;
+		letter-spacing: 1px;
 	}
 	.file-input-wrapper label:hover {
 		border-color: #666;
 		color: #888;
+	}
+	.file-input-wrapper label.selected {
+		border: 2px solid #2dd4bf;
+		background: rgba(45, 212, 191, 0.05);
+		color: #fff;
+		border-style: solid;
+		box-shadow: 0 0 20px rgba(45, 212, 191, 0.1);
+	}
+	.file-icon {
+		margin-right: 0.5rem;
+		font-size: 1.1rem;
 	}
 
 	/* Loading Overlay */
@@ -1380,6 +1458,65 @@
 	@keyframes spin {
 		to {
 			transform: rotate(360deg);
+		}
+	}
+
+	/* Card Specific Loading */
+	.card-loading-overlay {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background: rgba(0, 0, 0, 0.95);
+		border-radius: 24px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		z-index: 5;
+		overflow: hidden;
+	}
+	.card-loading-overlay p {
+		font-weight: 900;
+		color: #2dd4bf;
+		font-size: 0.8rem;
+		letter-spacing: 2px;
+		margin-top: 1rem;
+	}
+
+	.data-stream {
+		position: relative;
+		width: 60px;
+		height: 60px;
+	}
+	.bit {
+		position: absolute;
+		top: -20px;
+		left: var(--left);
+		color: #2dd4bf;
+		font-family: 'JetBrains Mono', monospace;
+		font-weight: 900;
+		font-size: 1.2rem;
+		opacity: 0;
+		animation: fall-bit 1s linear infinite;
+		animation-delay: var(--delay);
+	}
+
+	@keyframes fall-bit {
+		0% {
+			top: -20px;
+			opacity: 0;
+		}
+		20% {
+			opacity: 1;
+		}
+		80% {
+			opacity: 1;
+		}
+		100% {
+			top: 60px;
+			opacity: 0;
 		}
 	}
 </style>

@@ -7,7 +7,6 @@ The Hamburn Cozynights app supports two distinct phases of operation to manage t
 When the app is in **Staging Mode** (managed via the `app_settings` collection in PocketBase):
 
 - **Admin Control:** Admins have full freedom to modify the map. They can add houses, rename them, and use the drag-and-drop editor to set their coordinates.
-- **Template Management:** Use the **Location Template Manager** to export current layouts as JSON or import existing ones to quickly rebuild the playa structure.
 - **Guest Access:** Public visitors can see the map but **cannot book beds**. They will see a countdown timer (if configured) indicating when bookings will open.
 - **Purpose:** Use this phase to finalize the camp layout without worrying about users grabbing spots before they are ready.
 
