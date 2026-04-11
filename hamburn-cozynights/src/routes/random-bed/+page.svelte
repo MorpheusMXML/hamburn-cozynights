@@ -17,7 +17,7 @@
     let slotMachineRef: SlotMachine;
 
     let bedIterations = 0;
-    const maxBedIterations = 35;
+    const maxBedIterations = 20; // Halved for snappier reveal
     let hasBedBeenSelected = false;
 
     function spinBed() {
@@ -43,7 +43,7 @@
             hasBedBeenSelected = true;
             setTimeout(() => {
                 slotMachineRef.spin();
-            }, 800);
+            }, 400); // Reduced anticipation delay
         }
     }
 

@@ -25,36 +25,72 @@ Call log:
 # Page snapshot
 
 ```yaml
-- generic [ref=e4]:
-  - banner [ref=e5]:
-    - link "← Back to House" [ref=e7] [cursor=pointer]:
-      - /url: /house/brahmseevilla01
-    - 'heading "Brahmsee Villa (1) #1" [level=1] [ref=e8]'
-  - generic [ref=e9]:
-    - button "🛏️ R Available Grab it now!" [active] [ref=e10] [cursor=pointer]:
-      - generic [ref=e11]: 🛏️
-      - generic [ref=e12]: R
-      - generic [ref=e13]:
-        - generic [ref=e14]: Available
-        - generic [ref=e15]: Grab it now!
-    - button "🛏️ test1 Available Grab it now!" [ref=e16] [cursor=pointer]:
-      - generic [ref=e17]: 🛏️
-      - generic [ref=e18]: test1
-      - generic [ref=e19]:
-        - generic [ref=e20]: Available
-        - generic [ref=e21]: Grab it now!
-    - button "🛏️ test2 Available Grab it now!" [ref=e22] [cursor=pointer]:
-      - generic [ref=e23]: 🛏️
-      - generic [ref=e24]: test2
-      - generic [ref=e25]:
-        - generic [ref=e26]: Available
-        - generic [ref=e27]: Grab it now!
-    - button "🛏️ test3 Available Grab it now!" [ref=e28] [cursor=pointer]:
-      - generic [ref=e29]: 🛏️
-      - generic [ref=e30]: test3
-      - generic [ref=e31]:
-        - generic [ref=e32]: Available
-        - generic [ref=e33]: Grab it now!
+- generic [ref=e2]:
+  - generic:
+    - generic:
+      - generic: 🧙‍♂️
+    - generic:
+      - img
+    - generic:
+      - generic: 🍾
+    - generic:
+      - img
+    - generic:
+      - generic: 🍾
+    - generic:
+      - img
+    - generic:
+      - generic: 🧜‍♀️
+    - generic:
+      - img
+    - generic:
+      - generic: 🦄
+    - generic:
+      - img
+    - generic:
+      - generic: 🦄
+    - generic:
+      - generic: 🍾
+    - generic:
+      - generic: 🧜‍♀️
+    - generic:
+      - generic: 🦄
+    - generic:
+      - generic: 🧜‍♀️
+    - generic:
+      - generic: 🧜‍♀️
+    - generic:
+      - generic: 🧜‍♀️
+  - generic [ref=e4]:
+    - banner [ref=e5]:
+      - link "← Back to House" [ref=e7] [cursor=pointer]:
+        - /url: /house/brahmseevilla01
+      - 'heading "Brahmsee Villa (1) #1" [level=1] [ref=e8]'
+    - generic [ref=e9]:
+      - button "🛏️ R Available Grab it now!" [active] [ref=e10] [cursor=pointer]:
+        - generic [ref=e11]: 🛏️
+        - generic [ref=e12]: R
+        - generic [ref=e13]:
+          - generic [ref=e14]: Available
+          - generic [ref=e15]: Grab it now!
+      - button "🛏️ test1 Available Grab it now!" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: 🛏️
+        - generic [ref=e18]: test1
+        - generic [ref=e19]:
+          - generic [ref=e20]: Available
+          - generic [ref=e21]: Grab it now!
+      - button "🛏️ test2 Available Grab it now!" [ref=e22] [cursor=pointer]:
+        - generic [ref=e23]: 🛏️
+        - generic [ref=e24]: test2
+        - generic [ref=e25]:
+          - generic [ref=e26]: Available
+          - generic [ref=e27]: Grab it now!
+      - button "🛏️ test3 Available Grab it now!" [ref=e28] [cursor=pointer]:
+        - generic [ref=e29]: 🛏️
+        - generic [ref=e30]: test3
+        - generic [ref=e31]:
+          - generic [ref=e32]: Available
+          - generic [ref=e33]: Grab it now!
 ```
 
 # Test source

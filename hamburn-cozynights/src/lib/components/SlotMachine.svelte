@@ -11,13 +11,14 @@
         "Cactus Jack", "Desert Rose", "Fire Starter", "Solar Flare",
         "Prism Pilot", "Laser Lynx", "Vortex Voyager", "Cosmic Coyote",
         "Quartz Queen", "Mirage Maker", "Zenith Zephyr", "Oasis Owl",
-        "Stardust Scout", "Thunder Thistle", "Midnight Muse", "Silver Streak"
+        "Stardust Scout", "Thunder Thistle", "Midnight Muse", "Silver Streak",
+        "Neon Nebula", "Plasma Puma", "Quantum Quokka", "Cyber Cipher"
     ];
 
     let isSpinning = false;
     let currentName = "???";
     let iterations = 0;
-    const maxIterations = 40; // Increased for a longer, better feel
+    const maxIterations = 20; // Halved for ~2s duration
     let showConfetti = false;
 
     export function spin() {
@@ -33,9 +34,9 @@
         iterations++;
 
         if (iterations < maxIterations) {
-            // Smoother, more dramatic deceleration
+            // Snappier deceleration for ~2 seconds total
             const progress = iterations / maxIterations;
-            const nextDelay = 30 + Math.pow(progress, 2) * 400; 
+            const nextDelay = 20 + Math.pow(progress, 2) * 250; 
             setTimeout(runSpin, nextDelay);
         } else {
             isSpinning = false;
@@ -66,7 +67,7 @@
         <div class="laser-line"></div>
         {#if showConfetti}
             <div class="confetti-container">
-                {#each Array(30) as _, i}
+                {#each Array(35) as _, i}
                     <div class="confetti" style="--delay: {Math.random() * 2}s; --left: {Math.random() * 100}%; --color: {['#f472b6', '#2dd4bf', '#fb923c', '#a855f7'][Math.floor(Math.random() * 4)]}"></div>
                 {/each}
             </div>
@@ -83,44 +84,45 @@
     .slot-machine {
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 1.5rem;
         width: 100%;
-        margin-bottom: 1.5rem;
+        margin-bottom: 2rem;
         position: relative;
     }
 
     .display {
-        background: #050505;
-        border: 2px solid #333;
-        border-radius: 12px;
-        height: 80px;
+        background: #000;
+        border: 2px solid #222;
+        border-radius: 16px;
+        height: 90px;
         display: flex;
         align-items: center;
         justify-content: center;
         position: relative;
         overflow: hidden;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
     .display.spinning {
         border-color: #f472b6;
-        box-shadow: 0 0 30px rgba(244, 114, 182, 0.4);
+        box-shadow: 0 0 40px rgba(244, 114, 182, 0.3), inset 0 0 20px rgba(244, 114, 182, 0.1);
     }
     .display.finished {
         border-color: #2dd4bf;
-        box-shadow: 0 0 50px rgba(45, 212, 191, 0.6);
-        transform: scale(1.05);
+        box-shadow: 0 0 60px rgba(45, 212, 191, 0.4), inset 0 0 30px rgba(45, 212, 191, 0.1);
+        transform: scale(1.02);
     }
 
     .name-box {
         font-family: 'JetBrains Mono', monospace;
         font-weight: 900;
-        font-size: 1.6rem;
+        font-size: 1.8rem;
         color: #fff;
         z-index: 2;
-        text-shadow: 0 0 15px rgba(255,255,255,0.3);
+        text-shadow: 0 0 15px rgba(255,255,255,0.4);
+        letter-spacing: -0.5px;
     }
     .spinning .name-box {
-        animation: blur-text 0.1s infinite;
+        animation: blur-text 0.12s infinite;
     }
 
     .laser-line {
@@ -128,19 +130,22 @@
         top: 50%;
         left: 0;
         width: 100%;
-        height: 2px;
-        background: #f472b6;
-        box-shadow: 0 0 15px #f472b6;
-        opacity: 0.3;
+        height: 1px;
+        background: rgba(244, 114, 182, 0.5);
+        box-shadow: 0 0 20px #f472b6;
         z-index: 1;
+    }
+    .finished .laser-line {
+        background: rgba(45, 212, 191, 0.5);
+        box-shadow: 0 0 20px #2dd4bf;
     }
 
     .spin-btn {
-        background: #111;
-        border: 2px solid #333;
-        color: #888;
-        padding: 0.8rem;
-        border-radius: 10px;
+        background: #0a0a0a;
+        border: 2px solid #222;
+        color: #555;
+        padding: 1rem;
+        border-radius: 12px;
         font-size: 0.8rem;
         font-weight: 900;
         cursor: pointer;
@@ -149,13 +154,13 @@
         text-transform: uppercase;
     }
     .spin-btn:hover:not(:disabled) {
-        background: #1a1a1a;
+        background: #111;
         color: #f472b6;
         border-color: #f472b6;
-        box-shadow: 0 0 15px rgba(244, 114, 182, 0.3);
+        box-shadow: 0 0 20px rgba(244, 114, 182, 0.2);
     }
     .spin-btn:disabled {
-        opacity: 0.5;
+        opacity: 0.4;
         cursor: not-allowed;
     }
 
@@ -172,11 +177,11 @@
         position: absolute;
         top: -10px;
         left: var(--left);
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
         background: var(--color);
-        border-radius: 2px;
-        animation: fall 2.5s linear forwards;
+        border-radius: 1px;
+        animation: fall 3s linear forwards;
         animation-delay: var(--delay);
         opacity: 0;
     }
@@ -187,8 +192,8 @@
     }
 
     @keyframes blur-text {
-        0% { filter: blur(0); transform: translateY(0); }
-        50% { filter: blur(4px); transform: translateY(-2px); }
-        100% { filter: blur(0); transform: translateY(2px); }
+        0% { filter: blur(0); transform: translateY(0); opacity: 1; }
+        50% { filter: blur(6px); transform: translateY(-4px); opacity: 0.7; }
+        100% { filter: blur(0); transform: translateY(4px); opacity: 1; }
     }
 </style>

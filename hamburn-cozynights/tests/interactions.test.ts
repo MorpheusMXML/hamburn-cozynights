@@ -118,7 +118,7 @@ describe('Room Load & Booking Logic', () => {
         mockAdminPb.getFullList.mockResolvedValueOnce([{ id: 'bed1', occupied: false, label: 'A1' }]); // beds list
         mockAdminPb.update.mockResolvedValueOnce({}); // migration update
 
-        const result = await roomLoad({ params: { id: 'room1' }, locals: mockLocals } as any);
+        const result: any = await roomLoad({ params: { id: 'room1' }, locals: mockLocals } as any);
         
         expect(result.room.id).toBe('room1');
         expect(result.beds.length).toBe(1);

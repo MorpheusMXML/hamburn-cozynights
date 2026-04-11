@@ -18,6 +18,7 @@
   let isAutoSpinning = false;
   let showSlotManually = false;
   let nameGenerated = false;
+  let triggerFireworks = false;
 
   function openBookingModal(bedId: string, existingName?: string) {
     selectedBedId = bedId;
@@ -200,7 +201,11 @@
         on:submit={handleFormSubmit}
         use:enhance={() => {
           return async ({ result, update }) => {
-              if (result.type === 'success') closeModal();
+              if (result.type === 'success' && (result.data as any)?.success) {
+                  triggerFireworks = true;
+                  setTimeout(() => { triggerFireworks = false; }, 5000);
+                  closeModal();
+              }
               await update(); 
           };
       }}>
@@ -220,11 +225,11 @@
         {#if showSlotManually}
           <div class="slot-actions" in:fade>
               {#if nameGenerated}
-                  <button type="submit" class="btn-confirm">Accept Fate & Book 🌵</button>
                   <div class="respin-row">
                       <button type="button" class="btn-respin" on:click={respinName}>New Name 🎲</button>
                       <button type="button" class="btn-cancel" on:click={cancelSlotSelection}>Cancel</button>
                   </div>
+                  <button type="submit" class="btn-confirm-fate">Accept Fate & Book 🌵</button>
               {:else}
                   <p class="auto-spin-hint">Rolling for your burner identity...</p>
               {/if}
@@ -243,6 +248,16 @@
   </div>
 {/if}
 
+{#if triggerFireworks}
+    <div class="fireworks-overlay" in:fade={{ duration: 1000 }} out:fade={{ duration: 1000 }}>
+        <div class="pixel-fireworks">
+            {#each Array(12) as _, i}
+                <div class="firework" style="--left: {Math.random() * 100}%; --top: {Math.random() * 80}%; --delay: {Math.random() * 2}s; --color: {['#f472b6', '#2dd4bf', '#fb923c', '#a855f7'][Math.floor(Math.random() * 4)]}"></div>
+            {/each}
+        </div>
+    </div>
+{/if}
+
 <style>
   .container { max-width: 1000px; margin: 0 auto; padding: 2rem; color: #fff; }
   
@@ -250,28 +265,28 @@
   .header-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
   .back-link { color: #2dd4bf; text-decoration: none; font-weight: 900; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
   .back-link:hover { color: #fff; }
-  
-  h1 { font-size: 3rem; margin: 0; font-weight: 900; letter-spacing: -1px; }
-  h1 small { color: #f472b6; font-size: 1.5rem; margin-left: 0.5rem; }
 
-  .booking-locked-banner { background: rgba(251, 146, 60, 0.1); border: 1px solid #fb923c; border-radius: 12px; padding: 1.5rem; display: flex; gap: 1.5rem; align-items: center; margin-bottom: 2rem; }
-  .locked-icon { font-size: 2rem; }
-  .locked-content h3 { margin: 0; color: #fb923c; }
-  .locked-content p { margin: 0.25rem 0 0 0; color: #888; }
+  .timer-mini { background: rgba(0,0,0,0.5); padding: 0.5rem 1rem; border-radius: 99px; border: 1px solid #222; }
 
-  .booking-warning-banner { background: rgba(248, 113, 113, 0.1); border: 1px solid #f87171; border-radius: 12px; padding: 1.5rem; display: flex; gap: 1.5rem; align-items: center; margin-bottom: 2rem; }
-  .warning-icon { font-size: 2rem; }
-  .warning-content h3 { margin: 0; color: #f87171; }
-  .warning-content p { margin: 0.25rem 0 1rem 0; color: #888; }
-  .btn-unbook-banner { background: #f87171; color: #000; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 900; cursor: pointer; }
+  h1 { font-size: 3.5rem; font-weight: 900; margin: 0; letter-spacing: -2px; }
+  h1 small { color: #444; font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; margin-left: 0.5rem; }
 
-  .error-msg { color: #f87171; font-weight: bold; font-size: 0.9rem; margin: 0.5rem 0; }
-  .modal-error-banner { background: rgba(248, 113, 113, 0.1); border: 1px solid #f87171; color: #f87171; padding: 0.75rem; border-radius: 8px; font-size: 0.8rem; margin-bottom: 1rem; font-weight: bold; }
+  .booking-locked-banner { background: #111; border: 1px solid #222; border-left: 4px solid #f472b6; padding: 2rem; border-radius: 20px; margin-bottom: 3rem; display: flex; align-items: center; gap: 2rem; }
+  .locked-icon { font-size: 2.5rem; }
+  .locked-content h3 { margin: 0; font-weight: 900; color: #f472b6; }
+  .locked-content p { margin: 0.5rem 0 0 0; color: #666; font-size: 0.9rem; }
 
-  .booking-success-banner { background: rgba(45, 212, 191, 0.1); border: 1px solid #2dd4bf; border-radius: 12px; padding: 1.5rem; display: flex; gap: 1.5rem; align-items: center; margin-bottom: 2rem; }
-  .success-icon { font-size: 2rem; }
-  .success-content h3 { margin: 0; color: #2dd4bf; }
-  .success-content p { margin: 0.25rem 0 0 0; color: #888; }
+  .booking-warning-banner { background: #111; border: 1px solid #222; border-left: 4px solid #fb923c; padding: 2rem; border-radius: 20px; margin-bottom: 3rem; display: flex; align-items: center; gap: 2rem; }
+  .warning-icon { font-size: 2.5rem; }
+  .warning-content h3 { margin: 0; font-weight: 900; color: #fb923c; }
+  .warning-content p { margin: 0.5rem 0 0 0; color: #666; font-size: 0.9rem; }
+  .error-msg { color: #f87171; font-weight: bold; margin-top: 1rem; font-size: 0.8rem; }
+  .btn-unbook-banner { background: #fb923c; border: none; color: #000; padding: 0.8rem 1.5rem; border-radius: 10px; font-weight: 900; cursor: pointer; margin-top: 1.5rem; }
+
+  .booking-success-banner { background: #111; border: 1px solid #222; border-left: 4px solid #2dd4bf; padding: 2rem; border-radius: 20px; margin-bottom: 3rem; display: flex; align-items: center; gap: 2rem; }
+  .success-icon { font-size: 2.5rem; }
+  .success-content h3 { margin: 0; font-weight: 900; color: #2dd4bf; }
+  .success-content p { margin: 0.5rem 0 0 0; color: #666; font-size: 0.9rem; }
 
   .beds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
 
@@ -297,34 +312,87 @@
   .edit-hint { position: absolute; bottom: 8px; right: 12px; font-size: 0.5rem; color: #444; font-weight: 900; text-transform: uppercase; }
 
   /* Modal */
-  .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; z-index: 100; }
-  .modal { background: #0a0a0a; border: 1px solid #333; border-top: 4px solid #2dd4bf; border-radius: 20px; padding: 2.5rem; width: 100%; max-width: 450px; box-shadow: 0 30px 60px rgba(0,0,0,0.5); }
-  .modal h2 { margin: 0 0 0.5rem 0; font-weight: 900; color: #fff; }
-  .modal p { color: #666; margin-bottom: 2rem; }
+  .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .modal { background: #000; border: 1px solid #222; border-top: 4px solid #f472b6; border-radius: 32px; padding: 3rem; width: 100%; max-width: 500px; box-shadow: 0 40px 100px rgba(0,0,0,0.8); }
+  .modal h2 { margin: 0 0 0.5rem 0; font-weight: 900; color: #fff; font-size: 2rem; letter-spacing: -1px; }
+  .modal p { color: #444; margin-bottom: 2rem; font-weight: 500; }
 
   .form-group { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 2rem; }
   .form-group.hidden { display: none; }
-  .form-group label { font-size: 0.7rem; font-weight: 900; color: #444; letter-spacing: 1px; text-transform: uppercase; }
-  .form-group input { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 12px; color: #fff; font-size: 1rem; }
-  .form-group input:focus { outline: none; border-color: #2dd4bf; }
+  .form-group label { font-size: 0.7rem; font-weight: 900; color: #333; letter-spacing: 2px; text-transform: uppercase; }
+  .form-group input { background: #0a0a0a; border: 1px solid #222; border-radius: 12px; padding: 16px; color: #fff; font-size: 1.1rem; font-family: 'JetBrains Mono', monospace; transition: all 0.2s; }
+  .form-group input:focus { outline: none; border-color: #f472b6; box-shadow: 0 0 20px rgba(244, 114, 182, 0.2); }
 
   .actions { display: flex; gap: 1rem; }
   .actions.hidden { display: none; }
-  .actions button { flex: 1; padding: 12px; border-radius: 8px; font-weight: 900; cursor: pointer; transition: all 0.2s; }
-  .btn-cancel { background: transparent; border: 1px solid #333; color: #888; }
-  .btn-cancel:hover { background: #1a1a1a; color: #fff; }
-  .btn-confirm { background: #2dd4bf; border: none; color: #000; }
-  .btn-confirm:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(45, 212, 191, 0.3); }
-  .btn-unbook { background: transparent; border: 1px solid #f87171; color: #f87171; }
+  .actions button { flex: 1; padding: 14px; border-radius: 12px; font-weight: 900; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem; }
+  .btn-cancel { background: transparent; border: 2px solid #222; color: #444; }
+  .btn-cancel:hover { border-color: #444; color: #fff; }
+  .btn-confirm { background: #f472b6; border: none; color: #fff; box-shadow: 0 10px 20px rgba(244, 114, 182, 0.2); }
+  .btn-confirm:hover { transform: translateY(-2px); box-shadow: 0 15px 30px rgba(244, 114, 182, 0.4); }
+  .btn-unbook { background: transparent; border: 2px solid #f87171; color: #f87171; }
   .btn-unbook:hover { background: #f87171; color: #000; }
 
   .slot-actions { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem; }
   .respin-row { display: flex; gap: 1rem; }
-  .respin-row button { flex: 1; }
-  .btn-respin { background: #111; border: 1px solid #333; color: #888; padding: 12px; border-radius: 8px; font-weight: 900; cursor: pointer; transition: all 0.2s; }
+  .respin-row button { flex: 1; padding: 12px; border-radius: 12px; font-weight: 900; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; }
+  .btn-respin { background: #0a0a0a; border: 2px solid #222; color: #444; }
   .btn-respin:hover { border-color: #666; color: #fff; }
+  
+  .btn-confirm-fate { 
+      background: linear-gradient(135deg, #2dd4bf, #0ea5e9); 
+      border: none; 
+      color: #000; 
+      padding: 1.5rem; 
+      border-radius: 16px; 
+      font-weight: 900; 
+      text-transform: uppercase; 
+      font-size: 1.1rem; 
+      letter-spacing: 2px; 
+      cursor: pointer; 
+      transition: all 0.3s;
+      box-shadow: 0 15px 30px rgba(45, 212, 191, 0.2);
+  }
+  .btn-confirm-fate:hover { transform: scale(1.02); box-shadow: 0 20px 40px rgba(45, 212, 191, 0.4); }
 
-  .auto-spin-hint { color: #2dd4bf !important; font-weight: 900; text-align: center; margin-top: 1rem; font-size: 0.8rem; letter-spacing: 1px; text-transform: uppercase; animation: pulse 1s infinite; }
+  .auto-spin-hint { color: #f472b6 !important; font-weight: 900; text-align: center; margin-top: 1rem; font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase; animation: pulse 1s infinite; }
+
+  /* Fireworks Art */
+  .fireworks-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 200; overflow: hidden; background: rgba(0,0,0,0.2); }
+  .pixel-fireworks { position: relative; width: 100%; height: 100%; }
+  
+  .firework {
+      position: absolute;
+      left: var(--left);
+      top: var(--top);
+      width: 4px;
+      height: 4px;
+      background: transparent;
+      box-shadow: 0 0 0 0 var(--color);
+      animation: pixel-explode 1.5s ease-out forwards;
+      animation-delay: var(--delay);
+  }
+
+  @keyframes pixel-explode {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 var(--color); opacity: 1; }
+    50% { 
+        box-shadow: 
+            -20px -20px 0 2px var(--color), 20px -20px 0 2px var(--color),
+            -20px 20px 0 2px var(--color), 20px 20px 0 2px var(--color),
+            0 -30px 0 2px var(--color), 0 30px 0 2px var(--color),
+            -30px 0 0 2px var(--color), 30px 0 0 2px var(--color);
+        opacity: 1;
+    }
+    100% { 
+        box-shadow: 
+            -40px -40px 0 0 var(--color), 40px -40px 0 0 var(--color),
+            -40px 40px 0 0 var(--color), 40px 40px 0 0 var(--color),
+            0 -60px 0 0 var(--color), 0 60px 0 0 var(--color),
+            -60px 0 0 0 var(--color), 60px 0 0 0 var(--color);
+        opacity: 0;
+        transform: scale(1.5);
+    }
+  }
 
   @keyframes pulse {
     0%, 100% { opacity: 1; }
