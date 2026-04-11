@@ -265,6 +265,16 @@
 	let showTemplates = false;
 	let isImporting = false;
 	let isExporting = false;
+	let selectedFileName = '';
+
+	function handleFileChange(event: Event) {
+		const input = event.target as HTMLInputElement;
+		if (input.files && input.files.length > 0) {
+			selectedFileName = input.files[0].name;
+		} else {
+			selectedFileName = '';
+		}
+	}
 
 	async function handleExportTemplate() {
 		isExporting = true;
@@ -395,10 +405,20 @@
 							use:enhance={handleImportTemplate}
 						>
 							<div class="file-input-wrapper">
-								<input type="file" name="template" accept=".json" required id="template-upload" />
-								<label for="template-upload">Choose File</label>
+								<input
+									type="file"
+									name="template"
+									accept=".json"
+									required
+									id="template-upload"
+									on:change={handleFileChange}
+								/>
+								<label for="template-upload" class:selected={selectedFileName}>
+									<span class="file-icon">{selectedFileName ? '📄' : '📁'}</span>
+									{selectedFileName || 'CHOOSE TEMPLATE FILE'}
+								</label>
 							</div>
-							<button type="submit" class="btn-action danger" disabled={isImporting}>
+							<button type="submit" class="btn-action danger" disabled={isImporting || !selectedFileName}>
 								{isImporting ? 'IGNITING...' : 'APPLY TEMPLATE 🔥'}
 							</button>
 						</form>
@@ -1369,18 +1389,34 @@
 	}
 	.file-input-wrapper label {
 		display: block;
-		padding: 1rem;
+		padding: 1.2rem;
 		background: #050505;
 		border: 1px dashed #333;
 		border-radius: 12px;
 		color: #444;
 		font-weight: 900;
 		cursor: pointer;
-		transition: all 0.2s;
+		transition: all 0.3s;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		font-size: 0.8rem;
+		letter-spacing: 1px;
 	}
 	.file-input-wrapper label:hover {
 		border-color: #666;
 		color: #888;
+	}
+	.file-input-wrapper label.selected {
+		border: 2px solid #2dd4bf;
+		background: rgba(45, 212, 191, 0.05);
+		color: #fff;
+		border-style: solid;
+		box-shadow: 0 0 20px rgba(45, 212, 191, 0.1);
+	}
+	.file-icon {
+		margin-right: 0.5rem;
+		font-size: 1.1rem;
 	}
 
 	/* Loading Overlay */
