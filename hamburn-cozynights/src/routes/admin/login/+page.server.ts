@@ -46,9 +46,20 @@ export const actions: Actions = {
 		if (!email || !password) return fail(400, { message: 'Fill in the blanks!' });
 
 		try {
+			// 1. Try regular user auth
 			await locals.pb.collection('users').authWithPassword(email, password);
-		} catch {
-			return fail(400, { fail: true, message: 'Invalid keys or burner does not exist.' });
+		} catch (userErr) {
+			try {
+				// 2. Fallback: Try Superuser (v0.23+) / Admin auth
+				try {
+					await locals.pb.collection('_superusers').authWithPassword(email, password);
+				} catch {
+					await locals.pb.admins.authWithPassword(email, password);
+				}
+			} catch (adminErr) {
+				console.error('[Login] Both user and admin auth failed for:', email);
+				return fail(400, { fail: true, message: 'Invalid keys or burner does not exist.' });
+			}
 		}
 		throw redirect(303, '/admin');
 	},
