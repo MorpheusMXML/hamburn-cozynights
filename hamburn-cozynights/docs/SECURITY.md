@@ -21,16 +21,17 @@ We use field-level encryption to ensure that even if the database is compromised
 
 ## 3. Rights Management
 
-| Action | Rights Enforced |
-| :--- | :--- |
-| **Viewing the Map** | Allowed if a valid `bookingCode` cookie is present. |
-| **Booking a Bed** | Server verifies the order exists and that the user doesn't already have another active booking. |
+| Action               | Rights Enforced                                                                                                                   |
+| :------------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| **Viewing the Map**  | Allowed if a valid `bookingCode` cookie is present.                                                                               |
+| **Booking a Bed**    | Server verifies the order exists and that the user doesn't already have another active booking.                                   |
 | **Releasing a Spot** | Server performs a strict lookup using the `order_id` from the session cookie. A user can **only** release their own assigned bed. |
-| **Admin Actions** | Restricted to users authenticated via the PocketBase Admin/Superuser login (e.g., using GitHub or password). |
+| **Admin Actions**    | Restricted to users authenticated via the PocketBase Admin/Superuser login (e.g., using GitHub or password).                      |
 
 ## 4. Bed Locking
 
 Admins have the power to **Lock 🔒** individual beds. A locked bed:
+
 - Cannot be selected by regular guests.
 - Is visually marked as unavailable on the room detail page.
 - Can only be managed (booked/unbooked) by an authenticated admin.

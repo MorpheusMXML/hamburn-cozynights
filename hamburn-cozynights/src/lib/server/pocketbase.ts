@@ -15,41 +15,41 @@ let isAuthenticating = false;
  * Re-authenticates only if the token is missing or invalid.
  */
 export async function getAdminPb(): Promise<TypedPocketBase> {
-    if (adminPb.authStore.isValid) {
-        return adminPb;
-    }
+	if (adminPb.authStore.isValid) {
+		return adminPb;
+	}
 
-    if (isAuthenticating) {
-        // Wait for current auth attempt to finish
-        while (isAuthenticating) {
-            await new Promise(resolve => setTimeout(resolve, 50));
-        }
-        return adminPb;
-    }
+	if (isAuthenticating) {
+		// Wait for current auth attempt to finish
+		while (isAuthenticating) {
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		}
+		return adminPb;
+	}
 
-    const email = privateEnv.PB_ADMIN_EMAIL;
-    const password = privateEnv.PB_ADMIN_PASSWORD;
+	const email = privateEnv.PB_ADMIN_EMAIL;
+	const password = privateEnv.PB_ADMIN_PASSWORD;
 
-    if (!email || !password) {
-        console.error('[PocketBase] CRITICAL: Missing credentials in .env');
-        return adminPb;
-    }
+	if (!email || !password) {
+		console.error('[PocketBase] CRITICAL: Missing credentials in .env');
+		return adminPb;
+	}
 
-    isAuthenticating = true;
-    try {
-        try {
-            // New PocketBase (v0.23+) uses _superusers
-            await adminPb.collection('_superusers').authWithPassword(email, password);
-        } catch {
-            // Old PocketBase uses .admins
-            await adminPb.admins.authWithPassword(email, password);
-        }
-        console.log(`[PocketBase] Successfully authenticated as admin (${email})`);
-    } catch (err: any) {
-        console.error(`[PocketBase] Authentication FAILED for ${email}: ${err.message}`);
-    } finally {
-        isAuthenticating = false;
-    }
+	isAuthenticating = true;
+	try {
+		try {
+			// New PocketBase (v0.23+) uses _superusers
+			await adminPb.collection('_superusers').authWithPassword(email, password);
+		} catch {
+			// Old PocketBase uses .admins
+			await adminPb.admins.authWithPassword(email, password);
+		}
+		console.log(`[PocketBase] Successfully authenticated as admin (${email})`);
+	} catch (err: any) {
+		console.error(`[PocketBase] Authentication FAILED for ${email}: ${err.message}`);
+	} finally {
+		isAuthenticating = false;
+	}
 
-    return adminPb;
+	return adminPb;
 }

@@ -5,7 +5,7 @@ import type { TypedPocketBase } from '$lib/pocketbase-types'; // <--- IMPORTANT:
 declare global {
 	namespace App {
 		// interface Error {}
-		
+
 		interface Locals {
 			// We use TypedPocketBase for full type safety in our collections ⚡️
 			pb: TypedPocketBase;
@@ -14,8 +14,8 @@ declare global {
 			// The current burner's booking code from the cookie 🎫
 			orderNumber: string | null;
 			// Optional field for storing the guest name session-wide 📛
-			burner_Name?: string; 
-			
+			burner_Name?: string;
+
 			// The PocketBase user model if authenticated 🔐
 			user?: PocketBase['authStore']['model'];
 		}
