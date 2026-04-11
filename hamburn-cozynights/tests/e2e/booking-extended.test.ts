@@ -130,10 +130,23 @@ test.describe('Extended Booking & Admin Flow', () => {
 		await adminPage.goto('/admin/login');
 		await adminPage.fill('input[name="email"]', process.env.PB_ADMIN_EMAIL!);
 		await adminPage.fill('input[name="password"]', process.env.PB_ADMIN_PASSWORD!);
-		await Promise.all([adminPage.waitForURL('/admin'), adminPage.click('button[type="submit"]')]);
+		
+		// Use Promise.all to reliably catch the redirect
+		await Promise.all([
+			adminPage.waitForURL(/\/admin(\/)?$/, { timeout: 15000 }),
+			adminPage.click('button[type="submit"]')
+		]);
 
-		// Switch to List View to see stats easily
-		await adminPage.click('text=LIST VIEW');
+		// Helper to ensure we are in List View (stats are visible)
+		const ensureListView = async () => {
+			const btn = adminPage.locator('button', { hasText: 'LIST VIEW' });
+			if (await btn.isVisible()) {
+				await btn.click();
+				await expect(adminPage.locator('button', { hasText: 'MAP VIEW' })).toBeVisible();
+			}
+		};
+
+		await ensureListView();
 
 		// Get initial stats from house card
 		const houseCard = adminPage.locator('.house-card').filter({ hasText: testHouseName });
@@ -168,7 +181,7 @@ test.describe('Extended Booking & Admin Flow', () => {
 
 		// 4. Admin Dashboard Verification (Post-booking)
 		await adminPage.reload();
-		await adminPage.click('text=LIST VIEW');
+		await ensureListView();
 		const updatedStatText = await houseCard.locator('.stat-value').innerText();
 		expect(parseInt(updatedStatText.split('/')[0].trim())).toBe(initialOccupiedNum + 1);
 
@@ -183,7 +196,7 @@ test.describe('Extended Booking & Admin Flow', () => {
 		expect(bedAfter.order).toBe('');
 
 		await adminPage.reload();
-		await adminPage.click('text=LIST VIEW');
+		await ensureListView();
 		const finalStatText = await houseCard.locator('.stat-value').innerText();
 		expect(parseInt(finalStatText.split('/')[0].trim())).toBe(initialOccupiedNum);
 
