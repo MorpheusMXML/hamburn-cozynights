@@ -2,6 +2,7 @@
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
     import FairyBackground from '$lib/components/FairyBackground.svelte';
+    import NyanTrail from '$lib/components/NyanTrail.svelte';
     import { onMount } from 'svelte';
 
 	let { children } = $props();
@@ -22,6 +23,7 @@
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
 
 <FairyBackground />
+<NyanTrail />
 
 <div class="app-root">
     {@render children()}
