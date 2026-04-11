@@ -1,4 +1,17 @@
 {
+  "name": "hamburn-cozynights-root",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev --prefix hamburn-cozynights",
+    "test": "npm run test --prefix hamburn-cozynights",
+    "test:report": "npm run test:report --prefix hamburn-cozynights",
+    "test:e2e": "npm run test:e2e --prefix hamburn-cozynights",
+    "test:e2e:ui": "npm run test:e2e:ui --prefix hamburn-cozynights",
+    "health": "npm run health --prefix hamburn-cozynights",
+    "test:setup": "npm run test:setup --prefix hamburn-cozynights",
+    "db:up": "docker-compose -f hamburn-cozynights/docker-compose.yml up -d",
+    "db:down": "docker-compose -f hamburn-cozynights/docker-compose.yml down"
+  },
   "dependencies": {
     "pocketbase": "^0.26.6"
   }

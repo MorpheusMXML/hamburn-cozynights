@@ -12,8 +12,8 @@ const gitignorePath = fileURLToPath(new URL('./.gitignore', import.meta.url));
 
 export default defineConfig(
 	{
-        ignores: ["src/lib/pocketbase-types.ts"] 
-    },
+		ignores: ['src/lib/pocketbase-types.ts']
+	},
 	includeIgnoreFile(gitignorePath),
 	js.configs.recommended,
 	...ts.configs.recommended,

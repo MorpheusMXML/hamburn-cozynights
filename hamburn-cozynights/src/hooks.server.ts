@@ -4,52 +4,64 @@ import { type Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { TypedPocketBase } from '$lib/pocketbase-types';
 import { env } from '$env/dynamic/public';
+import { getAdminPb } from '$lib/server/pocketbase';
 
 const PB_URL = env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
 
 export const handle: Handle = async ({ event, resolve }) => {
-    // 1. Initialize PocketBase instance for the request
-    event.locals.pb = new PocketBase(PB_URL) as TypedPocketBase;
+	// 1. Initialize PocketBase instances
+	event.locals.pb = new PocketBase(PB_URL) as TypedPocketBase;
 
-    // 2. Retrieve booking code from cookies
-    event.locals.orderNumber = event.cookies.get('bookingCode') || null;
+	// Use the singleton admin instance (Master Key)
+	event.locals.adminPb = await getAdminPb();
 
-    // 3. Handle PocketBase Auth (Session-based via cookies)
-    const cookie = event.request.headers.get('cookie') || '';
-    event.locals.pb.authStore.loadFromCookie(cookie);
+	// 2. Retrieve session data
+	event.locals.orderNumber = event.cookies.get('bookingCode') || null;
 
-    try {
-        if (event.locals.pb.authStore.isValid) {
-            // Re-authenticate and refresh the session based on the auth model type
-            // Superusers/Admins use a different refresh mechanism in older PB, 
-            // but in newer PB they are just another collection or use .admins
-            
-            // Check if it's a regular user or a superuser (admin)
-            if (event.locals.pb.authStore.isAdmin) {
-                await event.locals.pb.admins.authRefresh();
-            } else {
-                await event.locals.pb.collection('users').authRefresh();
-            }
-            
-            event.locals.user = event.locals.pb.authStore.model;
-        } else {
-            event.locals.user = undefined;
-        }
-    } catch (err) {
-        console.warn('[Security] Auth refresh failed. Clearing session.', err);
-        event.locals.pb.authStore.clear();
-        event.locals.user = undefined;
-    }
+	// 3. Handle Auth (Session-based via cookies)
+	const cookie = event.request.headers.get('cookie') || '';
+	event.locals.pb.authStore.loadFromCookie(cookie);
 
-    const response = await resolve(event);
+	try {
+		if (event.locals.pb.authStore.isValid) {
+			const record = event.locals.pb.authStore.record || event.locals.pb.authStore.model;
 
-    // 4. Export updated auth state back to cookie
-    response.headers.append('set-cookie', event.locals.pb.authStore.exportToCookie({ 
-        httpOnly: false, // Must be false if client-side PocketBase needs to read it
-        secure: !dev,
-        sameSite: 'lax',
-        path: '/'
-    }));
+			// Check for Superuser (v0.23+) or Legacy Admin
+			// @ts-ignore - isSuperuser is the new way
+			const isSuper =
+				record?.collectionName === '_superusers' || event.locals.pb.authStore.isSuperuser;
 
-    return response;
+			if (isSuper) {
+				try {
+					await event.locals.pb.collection('_superusers').authRefresh();
+				} catch {
+					await event.locals.pb.admins.authRefresh();
+				}
+			} else {
+				await event.locals.pb.collection('users').authRefresh();
+			}
+
+			event.locals.user = event.locals.pb.authStore.record || event.locals.pb.authStore.model;
+		} else {
+			event.locals.user = undefined;
+		}
+	} catch (err) {
+		event.locals.pb.authStore.clear();
+		event.locals.user = undefined;
+	}
+
+	const response = await resolve(event);
+
+	// 4. Export updated auth state
+	response.headers.append(
+		'set-cookie',
+		event.locals.pb.authStore.exportToCookie({
+			httpOnly: false,
+			secure: !dev,
+			sameSite: 'lax',
+			path: '/'
+		})
+	);
+
+	return response;
 };

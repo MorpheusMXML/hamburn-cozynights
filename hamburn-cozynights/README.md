@@ -3,50 +3,48 @@
 Welcome to the **Hamburn Cozynights** house management system! This is where we ensure every burner has a soft spot to land after a long day on the playa. 🏜️✨
 
 ## 🚀 Mission Objective
+
 Automate the chaos of house, room, and bed assignments with a sleek, real-time map and booking system. No more double-booked houses! 🛖⚡️
 
-## 🛠 Tech Stack
-- **SvelteKit 5**: Frontend magic 🪄
-- **PocketBase**: Backend house & database 📂
-- **TypeScript**: Ensuring our logic doesn't turn into dust ⌨️
-- **GPG**: Protecting our sensitive burner data with local encryption 🔐
-
-## 🗝 Getting Started
+## 🛠 Quick Start
 
 ### 1. The House Backend (PocketBase)
+
 Start the backend using Docker:
+
 ```bash
-docker-compose up -d
+npm run db:up
 ```
-Access the Admin UI at [http://localhost:8090/_/](http://localhost:8090/_/).
+
+Access the Admin UI at [http://localhost:8090/\_/](http://localhost:8090/_/).
 
 ### 2. The Frontend Portal
+
 Install dependencies and ignite the dev server:
+
 ```bash
 npm install
 npm run dev
 ```
+
 Open your browser at [http://localhost:5173](http://localhost:5173).
 
-## 🔐 Sensitive Data Protection
-We take privacy seriously. Our database files (`pb_data`) are **ignored by Git** to prevent leakage. Use our custom scripts to manage local encrypted backups:
+## 📖 Documentation
 
-- **Encrypt**: `./scripts/encrypt_data.sh` (Requires GPG) 🔒
-- **Decrypt**: `./scripts/decrypt_data.sh` 🔓
+For detailed information on how the system works and how to manage it, please refer to our documentation:
 
-## 🗺 Features
-- **Interactive Map**: Visualize houses across the camp. 🛰️
+- [🛡️ Security Architecture](./docs/SECURITY.md): Encryption, Trusted Proxy, and Rights Management.
+- [🛠️ Development & Operations](./docs/DEVELOPMENT.md): Testing, Migrations, and Backups.
+- [🎪 Operational Workflow](./docs/WORKFLOW.md): Staging vs. Live modes and the booking lifecycle.
+
+## 🗺 Core Features
+
+- **Interactive Map**: Visualize houses across the camp with real-time occupancy. 🛰️
 - **Real-time Booking**: Grab a spot using your unique booking code. 🎫
-- **Admin Dashboard**:
-  - **🛠 Staging Mode Phase**: Full freedom to add, rename, and drag-and-drop houses on the map.
-  - **🎪 Live Booking Phase**: Global switch to enable public bookings and lock the map layout for consistency.
-  - **Safeguards**: Prevention of house/room deletion if active bookings exist. 🛡️
-- **Auto-Names**: Get a cool random Burner Name! 🦎⚡️
-
-## 📜 Principles
-- **Leave No Trace**: Keep the code clean and well-documented. 🧹
-- **Radical Self-Reliance**: Use the GPG scripts to protect your own data. 🔐
-- **Gifting**: This software is a gift to the camp. Enjoy! 🎁
+- **Admin Dashboard**: Drag-and-drop map editor, house management, and global booking toggles. 🛠️
+- **Privacy First**: Field-level encryption and secure server-side processing for all burner data. 🔐
+- **Destiny Roulette**: Let the playa decide your burner identity with random name generation. 🎰⚡️
 
 ---
-*Made with 🔥 by the Hamburn Crew.*
+
+_Made with 🔥 by the Hamburn Crew._
