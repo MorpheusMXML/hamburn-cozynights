@@ -264,6 +264,33 @@
 	}
 	let showTemplates = false;
 	let isImporting = false;
+	let isExporting = false;
+
+	async function handleExportTemplate() {
+		isExporting = true;
+		try {
+			const response = await fetch('/admin/api/export-template');
+			if (!response.ok) throw new Error('Export failed');
+
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `burn-template-${new Date().toISOString().slice(0, 10)}.json`;
+			document.body.appendChild(a);
+			a.click();
+			window.URL.revokeObjectURL(url);
+			document.body.removeChild(a);
+		} catch (err) {
+			console.error('[Export] Error:', err);
+			alert('❌ EXPORT FAILED: The data stream was interrupted.');
+		} finally {
+			// Stay in loading state a bit longer for visual fun
+			setTimeout(() => {
+				isExporting = false;
+			}, 1500);
+		}
+	}
 
 	const handleImportTemplate: SubmitFunction = ({ cancel }) => {
 		if (
@@ -334,7 +361,22 @@
 							Download the entire structure of houses, rooms, and beds as a JSON file. Use this for
 							backups or starting new burns.
 						</p>
-						<a href="/admin/api/export-template" class="btn-action" download> DOWNLOAD JSON 💾 </a>
+						<button class="btn-action" on:click={handleExportTemplate} disabled={isExporting}>
+							{isExporting ? 'ENCODING...' : 'DOWNLOAD JSON 💾'}
+						</button>
+
+						{#if isExporting}
+							<div class="card-loading-overlay" in:fade>
+								<div class="data-stream">
+									{#each Array(10) as _, i}
+										<div class="bit" style="--delay: {i * 0.1}s; --left: {Math.random() * 100}%">
+											{Math.random() > 0.5 ? '1' : '0'}
+										</div>
+									{/each}
+								</div>
+								<p>PACKAGING THE PLAYA...</p>
+							</div>
+						{/if}
 					</div>
 
 					<div class="tool-card import-card">
@@ -1380,6 +1422,65 @@
 	@keyframes spin {
 		to {
 			transform: rotate(360deg);
+		}
+	}
+
+	/* Card Specific Loading */
+	.card-loading-overlay {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background: rgba(0, 0, 0, 0.95);
+		border-radius: 24px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		z-index: 5;
+		overflow: hidden;
+	}
+	.card-loading-overlay p {
+		font-weight: 900;
+		color: #2dd4bf;
+		font-size: 0.8rem;
+		letter-spacing: 2px;
+		margin-top: 1rem;
+	}
+
+	.data-stream {
+		position: relative;
+		width: 60px;
+		height: 60px;
+	}
+	.bit {
+		position: absolute;
+		top: -20px;
+		left: var(--left);
+		color: #2dd4bf;
+		font-family: 'JetBrains Mono', monospace;
+		font-weight: 900;
+		font-size: 1.2rem;
+		opacity: 0;
+		animation: fall-bit 1s linear infinite;
+		animation-delay: var(--delay);
+	}
+
+	@keyframes fall-bit {
+		0% {
+			top: -20px;
+			opacity: 0;
+		}
+		20% {
+			opacity: 1;
+		}
+		80% {
+			opacity: 1;
+		}
+		100% {
+			top: 60px;
+			opacity: 0;
 		}
 	}
 </style>
