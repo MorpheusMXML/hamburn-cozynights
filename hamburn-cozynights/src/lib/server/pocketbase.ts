@@ -8,6 +8,8 @@ const PB_URL = publicEnv.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
 // Global singleton instance
 export const adminPb = new PocketBase(PB_URL) as TypedPocketBase;
 
+let isAuthenticating = false;
+
 /**
  * Returns an authenticated admin instance.
  * Re-authenticates only if the token is missing or invalid.
@@ -17,14 +19,23 @@ export async function getAdminPb(): Promise<TypedPocketBase> {
         return adminPb;
     }
 
+    if (isAuthenticating) {
+        // Wait for current auth attempt to finish
+        while (isAuthenticating) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        return adminPb;
+    }
+
     const email = privateEnv.PB_ADMIN_EMAIL;
     const password = privateEnv.PB_ADMIN_PASSWORD;
 
     if (!email || !password) {
-        console.error('[PocketBase] CRITICAL: Missing PB_ADMIN_EMAIL or PB_ADMIN_PASSWORD in environment.');
+        console.error('[PocketBase] CRITICAL: Missing credentials in .env');
         return adminPb;
     }
 
+    isAuthenticating = true;
     try {
         try {
             // New PocketBase (v0.23+) uses _superusers
@@ -36,6 +47,8 @@ export async function getAdminPb(): Promise<TypedPocketBase> {
         console.log(`[PocketBase] Successfully authenticated as admin (${email})`);
     } catch (err: any) {
         console.error(`[PocketBase] Authentication FAILED for ${email}: ${err.message}`);
+    } finally {
+        isAuthenticating = false;
     }
 
     return adminPb;

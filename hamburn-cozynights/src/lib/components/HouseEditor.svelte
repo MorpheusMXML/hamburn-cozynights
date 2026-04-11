@@ -57,6 +57,7 @@
             label: `B${i + 1}`,
             enabled: false,
             occupied: false,
+            is_locked: false,
             room: 'temp-room',
             bookedBy: '',
             order: ''

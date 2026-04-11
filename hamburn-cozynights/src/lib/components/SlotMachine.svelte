@@ -4,18 +4,20 @@
 
     export let autoSpin = false;
     export let delay = 0;
+    export let showButton = true;
 
     const burnerNames = [
         "Dusty Nomad", "Neon Lizard", "Spark Plug", "Glow Worm", 
         "Cactus Jack", "Desert Rose", "Fire Starter", "Solar Flare",
         "Prism Pilot", "Laser Lynx", "Vortex Voyager", "Cosmic Coyote",
-        "Quartz Queen", "Mirage Maker", "Zenith Zephyr", "Oasis Owl"
+        "Quartz Queen", "Mirage Maker", "Zenith Zephyr", "Oasis Owl",
+        "Stardust Scout", "Thunder Thistle", "Midnight Muse", "Silver Streak"
     ];
 
     let isSpinning = false;
     let currentName = "???";
     let iterations = 0;
-    const maxIterations = 25;
+    const maxIterations = 40; // Increased for a longer, better feel
     let showConfetti = false;
 
     export function spin() {
@@ -31,7 +33,10 @@
         iterations++;
 
         if (iterations < maxIterations) {
-            setTimeout(runSpin, 40 + iterations * 4); // Decelerate
+            // Smoother, more dramatic deceleration
+            const progress = iterations / maxIterations;
+            const nextDelay = 30 + Math.pow(progress, 2) * 400; 
+            setTimeout(runSpin, nextDelay);
         } else {
             isSpinning = false;
             const finalSuffix = Math.floor(100 + Math.random() * 900);
@@ -42,7 +47,7 @@
             
             setTimeout(() => {
                 showConfetti = false;
-            }, 3000);
+            }, 4000);
         }
     }
 
@@ -61,13 +66,13 @@
         <div class="laser-line"></div>
         {#if showConfetti}
             <div class="confetti-container">
-                {#each Array(20) as _, i}
+                {#each Array(30) as _, i}
                     <div class="confetti" style="--delay: {Math.random() * 2}s; --left: {Math.random() * 100}%; --color: {['#f472b6', '#2dd4bf', '#fb923c', '#a855f7'][Math.floor(Math.random() * 4)]}"></div>
                 {/each}
             </div>
         {/if}
     </div>
-    {#if !autoSpin}
+    {#if !autoSpin && showButton}
         <button type="button" class="spin-btn" on:click={spin} disabled={isSpinning}>
             {isSpinning ? 'SHUFFLING...' : 'GET RANDOM NAME 🎲'}
         </button>
@@ -88,13 +93,13 @@
         background: #050505;
         border: 2px solid #333;
         border-radius: 12px;
-        height: 70px;
+        height: 80px;
         display: flex;
         align-items: center;
         justify-content: center;
         position: relative;
         overflow: hidden;
-        transition: all 0.3s;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .display.spinning {
         border-color: #f472b6;
@@ -102,20 +107,20 @@
     }
     .display.finished {
         border-color: #2dd4bf;
-        box-shadow: 0 0 40px rgba(45, 212, 191, 0.5);
+        box-shadow: 0 0 50px rgba(45, 212, 191, 0.6);
         transform: scale(1.05);
     }
 
     .name-box {
         font-family: 'JetBrains Mono', monospace;
         font-weight: 900;
-        font-size: 1.4rem;
+        font-size: 1.6rem;
         color: #fff;
         z-index: 2;
-        text-shadow: 0 0 10px rgba(255,255,255,0.5);
+        text-shadow: 0 0 15px rgba(255,255,255,0.3);
     }
     .spinning .name-box {
-        animation: blur-text 0.08s infinite;
+        animation: blur-text 0.1s infinite;
     }
 
     .laser-line {
@@ -126,7 +131,7 @@
         height: 2px;
         background: #f472b6;
         box-shadow: 0 0 15px #f472b6;
-        opacity: 0.5;
+        opacity: 0.3;
         z-index: 1;
     }
 
@@ -171,19 +176,19 @@
         height: 8px;
         background: var(--color);
         border-radius: 2px;
-        animation: fall 2s linear forwards;
+        animation: fall 2.5s linear forwards;
         animation-delay: var(--delay);
         opacity: 0;
     }
 
     @keyframes fall {
         0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-        100% { transform: translateY(100px) rotate(720deg); opacity: 0; }
+        100% { transform: translateY(120px) rotate(720deg); opacity: 0; }
     }
 
     @keyframes blur-text {
-        0% { filter: blur(0); transform: translateY(0) scale(1); }
-        50% { filter: blur(3px); transform: translateY(-3px) scale(1.1); }
-        100% { filter: blur(0); transform: translateY(3px) scale(1); }
+        0% { filter: blur(0); transform: translateY(0); }
+        50% { filter: blur(4px); transform: translateY(-2px); }
+        100% { filter: blur(0); transform: translateY(2px); }
     }
 </style>

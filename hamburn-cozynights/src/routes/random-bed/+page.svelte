@@ -9,19 +9,23 @@
     $: ({ freeBeds, isBookingActive } = data);
 
     let isSpinning = false;
+    let nameSelected = false;
     let selectedBed: any = null;
     let currentBedLabel = "???";
     let finalName = "";
     let showBookingSuccess = false;
     let slotMachineRef: SlotMachine;
 
-    let iterations = 0;
-    const maxIterations = 30;
+    let bedIterations = 0;
+    const maxBedIterations = 35;
+    let hasBedBeenSelected = false;
 
     function spinBed() {
         if (isSpinning || freeBeds.length === 0) return;
         isSpinning = true;
-        iterations = 0;
+        nameSelected = false;
+        hasBedBeenSelected = false;
+        bedIterations = 0;
         showBookingSuccess = false;
         runBedSpin();
     }
@@ -30,27 +34,35 @@
         const randomIndex = Math.floor(Math.random() * freeBeds.length);
         selectedBed = freeBeds[randomIndex];
         currentBedLabel = selectedBed.label;
-        iterations++;
+        bedIterations++;
 
-        if (iterations < maxIterations) {
-            setTimeout(runBedSpin, 30 + iterations * 3);
+        if (bedIterations < maxBedIterations) {
+            setTimeout(runBedSpin, 40 + bedIterations * 4);
         } else {
-            // Bed selected, now roll for name
+            // Bed selected, show name section and roll for name
+            hasBedBeenSelected = true;
             setTimeout(() => {
                 slotMachineRef.spin();
-            }, 500);
+            }, 800);
         }
     }
 
     function handleNameSelect(event: CustomEvent<string>) {
         finalName = event.detail;
         isSpinning = false;
-        
-        // Auto submit the form
-        setTimeout(() => {
-            const form = document.getElementById('random-form') as HTMLFormElement;
-            if (form) form.requestSubmit();
-        }, 2500);
+        nameSelected = true;
+    }
+
+    function confirmBooking() {
+        const form = document.getElementById('random-form') as HTMLFormElement;
+        if (form) form.requestSubmit();
+    }
+
+    function respinName() {
+        if (isSpinning) return;
+        nameSelected = false;
+        finalName = "";
+        slotMachineRef.spin();
     }
 </script>
 
@@ -75,12 +87,12 @@
             </div>
         {:else}
             <div class="machine-container">
-                <div class="bed-display" class:spinning={isSpinning}>
+                <div class="bed-display" class:spinning={isSpinning && !hasBedBeenSelected}>
                     <div class="bed-label">
                         <span class="prefix">BED</span>
                         <span class="value">{currentBedLabel}</span>
                     </div>
-                    {#if selectedBed && !isSpinning}
+                    {#if selectedBed && hasBedBeenSelected}
                         <div class="bed-info" in:fade>
                             {selectedBed.expand?.room?.name} • {selectedBed.expand?.room?.expand?.house?.name}
                         </div>
@@ -88,17 +100,29 @@
                     <div class="scan-line"></div>
                 </div>
 
-                <div class="name-section" class:visible={iterations >= maxIterations}>
-                    <SlotMachine bind:this={slotMachineRef} autoSpin={false} on:select={handleNameSelect} />
-                </div>
+                {#if hasBedBeenSelected}
+                    <div class="name-section" in:fade={{ duration: 600 }}>
+                        <SlotMachine bind:this={slotMachineRef} autoSpin={false} showButton={false} on:select={handleNameSelect} />
+                    </div>
+                {/if}
 
-                <button 
-                    class="main-spin-btn" 
-                    on:click={spinBed} 
-                    disabled={isSpinning}
-                >
-                    {isSpinning ? 'CALCULATING FATE...' : 'ROLL THE DICE 🎲'}
-                </button>
+                {#if nameSelected}
+                    <div class="selection-actions" in:fade>
+                        <button class="confirm-btn" on:click={confirmBooking}>Accept Fate & Book 🌵</button>
+                        <div class="respin-row">
+                            <button class="respin-btn secondary" on:click={respinName}>New Name 🎲</button>
+                            <button class="respin-btn secondary" on:click={spinBed}>Full Respin 🔥</button>
+                        </div>
+                    </div>
+                {:else}
+                    <button 
+                        class="main-spin-btn" 
+                        on:click={spinBed} 
+                        disabled={isSpinning}
+                    >
+                        {isSpinning ? 'CALCULATING FATE...' : 'ROLL THE DICE 🎲'}
+                    </button>
+                {/if}
 
                 <form 
                     id="random-form" 
@@ -185,7 +209,7 @@
 
     .bed-label { display: flex; flex-direction: column; align-items: center; }
     .bed-label .prefix { font-size: 0.7rem; font-weight: 900; color: #444; letter-spacing: 4px; }
-    .bed-label .value { font-size: 4rem; font-weight: 900; font-family: 'JetBrains Mono', monospace; }
+    .bed-label .value { font-size: 4.5rem; font-weight: 900; font-family: 'JetBrains Mono', monospace; }
 
     .bed-info { margin-top: 1rem; color: #2dd4bf; font-weight: 900; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
 
@@ -208,15 +232,7 @@
     }
 
     .name-section {
-        opacity: 0;
-        transform: translateY(20px);
-        transition: all 0.5s;
-        pointer-events: none;
-    }
-    .name-section.visible {
-        opacity: 1;
-        transform: translateY(0);
-        pointer-events: auto;
+        margin-top: 1rem;
     }
 
     .main-spin-btn {
@@ -236,6 +252,53 @@
         box-shadow: 0 15px 30px rgba(244, 114, 182, 0.5);
     }
     .main-spin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .selection-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .confirm-btn {
+        background: #2dd4bf;
+        color: #000;
+        border: none;
+        padding: 1.2rem;
+        border-radius: 16px;
+        font-size: 1.1rem;
+        font-weight: 900;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .confirm-btn:hover {
+        transform: scale(1.02);
+        box-shadow: 0 0 30px rgba(45, 212, 191, 0.4);
+    }
+
+    .respin-row {
+        display: flex;
+        gap: 1rem;
+    }
+
+    .respin-btn {
+        flex: 1;
+        background: #111;
+        border: 2px solid #333;
+        color: #888;
+        padding: 1rem;
+        border-radius: 12px;
+        font-weight: 900;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+    }
+    .respin-btn:hover {
+        border-color: #666;
+        color: #fff;
+    }
 
     /* Success Overlay */
     .success-overlay {
