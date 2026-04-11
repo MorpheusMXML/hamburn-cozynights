@@ -20,11 +20,12 @@ function getRandomName(): string {
 export const load: PageServerLoad = async ({ params, locals }) => {
     if (!locals.orderNumber) throw redirect(303, '/');
 
+    // Always use the adminPb instance for backend operations
     const bookingService = new BookingService(locals.adminPb);
     const order = await bookingService.getOrderByNumber(locals.orderNumber);
 
     if (!order) {
-        console.error('[Security] Order not found for code:', locals.orderNumber);
+        console.error('[Security] Room load: Order not found for code:', locals.orderNumber);
         throw error(404, 'Buchungscode ungültig oder nicht gefunden.');
     }
 
@@ -66,8 +67,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
     bookBed: async ({ request, locals }) => {
+        // PRIO 1: Security & Auth Checks
         if (!locals.adminPb.authStore.isValid) {
-            console.error('[Security] bookBed: Admin auth invalid.');
+            console.error('[Security] bookBed: Master Key (Admin Auth) is invalid.');
             return fail(500, { error: 'System authentication failed. Please contact admin.' });
         }
 
@@ -83,7 +85,11 @@ export const actions: Actions = {
 
         const bookingService = new BookingService(locals.adminPb);
         const order = await bookingService.getOrderByNumber(locals.orderNumber);
-        if (!order) return fail(404, { error: 'Your booking code was not found.' });
+        
+        if (!order) {
+            console.error('[Security] bookBed: Order not found for code:', locals.orderNumber);
+            return fail(404, { error: 'Your booking code was not found.' });
+        }
 
         try {
             const bed = await locals.adminPb.collection('beds').getOne<BedsResponse>(bedId);
@@ -100,14 +106,14 @@ export const actions: Actions = {
             await bookingService.bookBed(order, bedId, guestName);
             return { success: true };
         } catch (err: any) {
-            console.error('[Security] bookBed failure:', err);
+            console.error('[Security] bookBed critical failure:', err);
             return fail(500, { error: `Database error: ${err.message}` });
         }
     },
 
     unbookBed: async ({ locals }) => {
         if (!locals.adminPb.authStore.isValid) {
-            console.error('[Security] unbookBed: Admin auth invalid.');
+            console.error('[Security] unbookBed: Master Key (Admin Auth) is invalid.');
             return fail(500, { error: 'System authentication failed.' });
         }
 
@@ -118,6 +124,7 @@ export const actions: Actions = {
 
         const bookingService = new BookingService(locals.adminPb);
         const order = await bookingService.getOrderByNumber(locals.orderNumber);
+        
         if (!order) return fail(404, { error: 'Order not found.' });
 
         try {

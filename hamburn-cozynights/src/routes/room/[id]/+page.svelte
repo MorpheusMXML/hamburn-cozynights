@@ -1,10 +1,10 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { tick } from 'svelte';
+  import { fade } from 'svelte/transition';
   import type { PageData, ActionData } from './$types';
   import CountdownTimer from '$lib/components/CountdownTimer.svelte';
   import SlotMachine from '$lib/components/SlotMachine.svelte';
-  import { getAdminPb } from '$lib/server/pocketbase';
 
   export let data: PageData;
   export let form: ActionData;
@@ -17,6 +17,7 @@
   let formElement: HTMLFormElement;
   let isAutoSpinning = false;
   let showSlotManually = false;
+  let nameGenerated = false;
 
   function openBookingModal(bedId: string, existingName?: string) {
     selectedBedId = bedId;
@@ -24,6 +25,7 @@
     showModal = true;
     showSlotManually = false;
     isAutoSpinning = false;
+    nameGenerated = false;
   }
 
   function closeModal() {
@@ -31,6 +33,7 @@
     selectedBedId = null;
     showSlotManually = false;
     isAutoSpinning = false;
+    nameGenerated = false;
   }
 
   function handleBackdropKeydown(event: KeyboardEvent) {
@@ -40,11 +43,21 @@
   function handleSlotSelect(event: CustomEvent<string>) {
       currentNameInput = event.detail;
       if (isAutoSpinning) {
-          // Delayed submit after confetti show
-          setTimeout(() => {
-              if (formElement) formElement.requestSubmit();
-          }, 2000);
+          nameGenerated = true;
       }
+  }
+
+  function respinName() {
+      nameGenerated = false;
+      currentNameInput = "";
+      if (slotMachineRef) slotMachineRef.spin();
+  }
+
+  function cancelSlotSelection() {
+      showSlotManually = false;
+      isAutoSpinning = false;
+      nameGenerated = false;
+      currentNameInput = "";
   }
 
   async function handleFormSubmit(event: SubmitEvent) {
@@ -55,6 +68,7 @@
           event.preventDefault();
           showSlotManually = true;
           isAutoSpinning = true;
+          nameGenerated = false;
           await tick();
           if (slotMachineRef) slotMachineRef.spin();
       }
@@ -175,7 +189,7 @@
       {/if}
 
       {#if showSlotManually}
-        <SlotMachine bind:this={slotMachineRef} on:select={handleSlotSelect} />
+        <SlotMachine bind:this={slotMachineRef} showButton={false} on:select={handleSlotSelect} />
       {/if}
 
       <form 
@@ -203,16 +217,26 @@
             />
         </div>
 
-        <div class="actions" class:hidden={showSlotManually}>
-            {#if selectedBedId === data.userBedId}
-                <button type="submit" formaction="?/unbookBed" class="btn-unbook">Release</button>
-            {/if}
-            <button type="button" class="btn-cancel" on:click={closeModal}>Cancel</button>
-            <button type="submit" class="btn-confirm">Save Spot</button>
-        </div>
-
         {#if showSlotManually}
-            <p class="auto-spin-hint">Rolling for your burner identity...</p>
+          <div class="slot-actions" in:fade>
+              {#if nameGenerated}
+                  <button type="submit" class="btn-confirm">Accept Fate & Book 🌵</button>
+                  <div class="respin-row">
+                      <button type="button" class="btn-respin" on:click={respinName}>New Name 🎲</button>
+                      <button type="button" class="btn-cancel" on:click={cancelSlotSelection}>Cancel</button>
+                  </div>
+              {:else}
+                  <p class="auto-spin-hint">Rolling for your burner identity...</p>
+              {/if}
+          </div>
+        {:else}
+          <div class="actions">
+              {#if selectedBedId === data.userBedId}
+                  <button type="submit" formaction="?/unbookBed" class="btn-unbook">Release</button>
+              {/if}
+              <button type="button" class="btn-cancel" on:click={closeModal}>Cancel</button>
+              <button type="submit" class="btn-confirm">Save Spot</button>
+          </div>
         {/if}
       </form>
     </div>
@@ -275,7 +299,7 @@
   /* Modal */
   .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; z-index: 100; }
   .modal { background: #0a0a0a; border: 1px solid #333; border-top: 4px solid #2dd4bf; border-radius: 20px; padding: 2.5rem; width: 100%; max-width: 450px; box-shadow: 0 30px 60px rgba(0,0,0,0.5); }
-  .modal h2 { margin: 0 0 0.5rem 0; font-weight: 900; }
+  .modal h2 { margin: 0 0 0.5rem 0; font-weight: 900; color: #fff; }
   .modal p { color: #666; margin-bottom: 2rem; }
 
   .form-group { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 2rem; }
@@ -293,6 +317,12 @@
   .btn-confirm:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(45, 212, 191, 0.3); }
   .btn-unbook { background: transparent; border: 1px solid #f87171; color: #f87171; }
   .btn-unbook:hover { background: #f87171; color: #000; }
+
+  .slot-actions { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem; }
+  .respin-row { display: flex; gap: 1rem; }
+  .respin-row button { flex: 1; }
+  .btn-respin { background: #111; border: 1px solid #333; color: #888; padding: 12px; border-radius: 8px; font-weight: 900; cursor: pointer; transition: all 0.2s; }
+  .btn-respin:hover { border-color: #666; color: #fff; }
 
   .auto-spin-hint { color: #2dd4bf !important; font-weight: 900; text-align: center; margin-top: 1rem; font-size: 0.8rem; letter-spacing: 1px; text-transform: uppercase; animation: pulse 1s infinite; }
 
