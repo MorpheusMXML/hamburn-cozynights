@@ -9,9 +9,9 @@ export const pb = new PocketBase(PB_URL);
 
 // Initialize auth store from cookie in browser
 if (browser) {
-    pb.authStore.loadFromCookie(document.cookie);
-    pb.authStore.onChange(() => {
-        // Sync auth store to cookie for subsequent SSR requests
-        document.cookie = pb.authStore.exportToCookie({ httpOnly: false, secure: false }); // secure: false for local dev, should be true in prod
-    });
+	pb.authStore.loadFromCookie(document.cookie);
+	pb.authStore.onChange(() => {
+		// Sync auth store to cookie for subsequent SSR requests
+		document.cookie = pb.authStore.exportToCookie({ httpOnly: false, secure: false }); // secure: false for local dev, should be true in prod
+	});
 }

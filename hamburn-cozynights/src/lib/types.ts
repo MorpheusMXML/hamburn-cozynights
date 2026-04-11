@@ -3,15 +3,15 @@ import type { BedsResponse, RoomsResponse, HousesResponse } from './pocketbase-t
 // Extended types for tree structure (Plain objects for SvelteKit compatibility)
 export type BedData = BedsResponse;
 
-export type RoomData = RoomsResponse & { 
-    beds: BedData[] 
+export type RoomData = RoomsResponse & {
+	beds: BedData[];
 };
 
-export type HouseData = HousesResponse & { 
-    rooms: RoomData[];
-    totalBeds: number;
-    occupiedBeds: number;
-    isBookable?: boolean;
+export type HouseData = HousesResponse & {
+	rooms: RoomData[];
+	totalBeds: number;
+	occupiedBeds: number;
+	isBookable?: boolean;
 };
 
 /**

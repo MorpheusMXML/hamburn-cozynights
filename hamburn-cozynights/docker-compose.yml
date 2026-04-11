@@ -6,13 +6,13 @@ services:
     # Expliziter Befehl: Bindet an 0.0.0.0, damit Docker Ports weiterleiten kann
     command: --http=0.0.0.0:8090
     ports:
-      - "8090:8090"
+      - '8090:8090'
     volumes:
       # Hier werden deine Daten (Häuser, Betten, User) gespeichert
       - ./pb_data:/pb_data
     # Gesundheitsprüfung: Startet Container neu, falls PB abstürzt
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8090/api/health"]
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:8090/api/health']
       interval: 5s
       timeout: 5s
       retries: 5
