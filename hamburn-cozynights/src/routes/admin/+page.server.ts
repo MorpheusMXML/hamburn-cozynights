@@ -9,7 +9,7 @@ type HouseStats = HousesResponse & {
 	occupancyRate: number;
 };
 
-export const actions = {
+export const actions: Actions = {
 	togglePhase: async ({ locals }) => {
 		console.log(
 			`[Action:togglePhase] User: ${locals.pb.authStore.model?.email}, Verified: ${locals.pb.authStore.model?.verified}`

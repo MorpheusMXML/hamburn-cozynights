@@ -1,36 +1,26 @@
 <script lang="ts">
+	/**
+	 * @component
+	 * SlotMachine handles the randomized "Burner Name" generation logic and animation.
+	 * It features a technical "laser" aesthetic with exponential deceleration and confetti effects.
+	 */
 	import { createEventDispatcher, onMount } from 'svelte';
 	const dispatch = createEventDispatcher();
 
+	/** @type {boolean} Whether the slot machine should start spinning automatically on mount. */
 	export let autoSpin = false;
+	/** @type {number} Delay in milliseconds before the auto-spin begins. */
 	export let delay = 0;
+	/** @type {boolean} Whether to show the internal "GET RANDOM NAME" button. */
 	export let showButton = true;
 
 	const burnerNames = [
-		'Dusty Nomad',
-		'Neon Lizard',
-		'Spark Plug',
-		'Glow Worm',
-		'Cactus Jack',
-		'Desert Rose',
-		'Fire Starter',
-		'Solar Flare',
-		'Prism Pilot',
-		'Laser Lynx',
-		'Vortex Voyager',
-		'Cosmic Coyote',
-		'Quartz Queen',
-		'Mirage Maker',
-		'Zenith Zephyr',
-		'Oasis Owl',
-		'Stardust Scout',
-		'Thunder Thistle',
-		'Midnight Muse',
-		'Silver Streak',
-		'Neon Nebula',
-		'Plasma Puma',
-		'Quantum Quokka',
-		'Cyber Cipher'
+		'Dusty Nomad', 'Neon Lizard', 'Spark Plug', 'Glow Worm',
+		'Cactus Jack', 'Desert Rose', 'Fire Starter', 'Solar Flare',
+		'Prism Pilot', 'Laser Lynx', 'Vortex Voyager', 'Cosmic Coyote',
+		'Quartz Queen', 'Mirage Maker', 'Zenith Zephyr', 'Oasis Owl',
+		'Stardust Scout', 'Thunder Thistle', 'Midnight Muse', 'Silver Streak',
+		'Neon Nebula', 'Plasma Puma', 'Quantum Quokka', 'Cyber Cipher'
 	];
 
 	let isSpinning = false;
@@ -39,6 +29,9 @@
 	const maxIterations = 20; // Halved for ~2s duration
 	let showConfetti = false;
 
+	/**
+	 * Triggers the spinning sequence manually.
+	 */
 	export function spin() {
 		if (isSpinning) return;
 		isSpinning = true;
@@ -62,6 +55,12 @@
 			const finalResult = `${currentName} #${finalSuffix}`;
 			currentName = finalResult;
 			showConfetti = true;
+			
+			/**
+			 * @event select
+			 * Dispatched when a final name has been chosen.
+			 * @property {string} detail - The generated Burner Name.
+			 */
 			dispatch('select', finalResult);
 
 			setTimeout(() => {
