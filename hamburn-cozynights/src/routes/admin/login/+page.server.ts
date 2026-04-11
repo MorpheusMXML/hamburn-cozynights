@@ -45,25 +45,18 @@ export const actions: Actions = {
 
 		if (!email || !password) return fail(400, { message: 'Fill in the blanks!' });
 
-		console.log(`[Login Attempt] Email: ${email}`);
-
 		try {
 			// 1. Try regular user auth
 			await locals.pb.collection('users').authWithPassword(email, password);
-			console.log(`[Login Success] User auth for ${email}`);
 		} catch (userErr) {
-			console.warn(`[Login Info] User auth failed for ${email}, trying fallback...`);
 			try {
 				// 2. Fallback: Try Superuser (v0.23+) / Admin auth
 				try {
 					await locals.pb.collection('_superusers').authWithPassword(email, password);
-					console.log(`[Login Success] Superuser auth for ${email}`);
 				} catch {
 					await locals.pb.admins.authWithPassword(email, password);
-					console.log(`[Login Success] Admin (legacy) auth for ${email}`);
 				}
 			} catch (adminErr) {
-				console.error(`[Login Error] Both user and admin auth failed for: ${email}`);
 				return fail(400, { fail: true, message: 'Invalid keys or burner does not exist.' });
 			}
 		}
