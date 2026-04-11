@@ -1,0 +1,457 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: booking-extended.test.ts >> Extended Booking & Admin Flow >> Positive: Full Booking Cycle with DB & Admin Dashboard Verification
+- Location: tests/e2e/booking-extended.test.ts:121:2
+
+# Error details
+
+```
+Test timeout of 30000ms exceeded.
+```
+
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic:
+    - generic:
+      - generic: 🍾
+    - generic:
+      - img
+    - generic:
+      - img
+    - generic:
+      - img
+    - generic:
+      - img
+    - generic:
+      - generic: 🧜‍♀️
+    - generic:
+      - generic: 🧙‍♂️
+    - generic:
+      - generic: 🧜‍♀️
+    - generic:
+      - generic: 🦄
+    - generic:
+      - generic: 🧙‍♂️
+    - generic:
+      - img
+    - generic:
+      - generic: 🦄
+    - generic:
+      - generic: 🦄
+    - generic:
+      - generic: 🍾
+  - generic [ref=e4]:
+    - banner [ref=e5]:
+      - link "Hamburn Admin" [ref=e7] [cursor=pointer]:
+        - /url: /admin
+        - generic [ref=e8]: Hamburn
+        - generic [ref=e9]: Admin
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - generic [ref=e12]: "Burner:"
+          - generic [ref=e13]: service@hamburn.de
+        - button "Eject 🚀" [ref=e15] [cursor=pointer]:
+          - img [ref=e16]
+          - generic [ref=e19]: Eject 🚀
+    - main [ref=e20]:
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - generic [ref=e23]:
+            - heading "Control Center 🔥" [level=1] [ref=e24]
+            - paragraph [ref=e25]: Orchestrating the chaos of the playa 🏜️
+          - generic [ref=e26]:
+            - button "TEMPLATES 💾" [ref=e27] [cursor=pointer]
+            - button "SHOW INTEL 📊" [ref=e28] [cursor=pointer]
+            - button "🎪 LIVE BOOKING ACTIVE" [ref=e30] [cursor=pointer]: 🎪 LIVE BOOKING ACTIVE
+            - button "🛰️ LIST VIEW" [ref=e31] [cursor=pointer]
+        - generic [ref=e32]:
+          - generic [ref=e33]:
+            - generic [ref=e34]: ⚠️
+            - 'heading "RED ALERT: ARCHITECTURAL DEVIATIONS" [level=3] [ref=e35]'
+            - generic [ref=e36]: 9 ISSUES DETECTED
+          - generic [ref=e37]:
+            - generic [ref=e39]:
+              - generic [ref=e40]: 🛖
+              - generic [ref=e41]: Brahmsee Buden
+              - generic [ref=e42]: NO ROOMS DETECTED
+              - link "EXPAND ➕" [ref=e43] [cursor=pointer]:
+                - /url: /admin/house/8qyq7izp9bk0u9k
+            - generic [ref=e44]:
+              - generic [ref=e45]:
+                - generic [ref=e46]: 🛖
+                - generic [ref=e47]: Brahmsee Butzen
+              - generic [ref=e48]:
+                - generic [ref=e50]:
+                  - generic [ref=e51]: 🚪
+                  - generic [ref=e52]: Brahmseebutzen (8)
+                  - generic [ref=e53]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e54] [cursor=pointer]:
+                    - /url: /admin/room/cwullw087eojcre
+                - generic [ref=e56]:
+                  - generic [ref=e57]: 🚪
+                  - generic [ref=e58]: Brahmseebutzen (8)
+                  - generic [ref=e59]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e60] [cursor=pointer]:
+                    - /url: /admin/room/bv7ir8l0zos9bus
+                - generic [ref=e62]:
+                  - generic [ref=e63]: 🚪
+                  - generic [ref=e64]: Brahmseebutzen (8)
+                  - generic [ref=e65]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e66] [cursor=pointer]:
+                    - /url: /admin/room/bakwzpfuxj20rbc
+                - generic [ref=e68]:
+                  - generic [ref=e69]: 🚪
+                  - generic [ref=e70]: Brahmseebutzen (8)
+                  - generic [ref=e71]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e72] [cursor=pointer]:
+                    - /url: /admin/room/8s3xlt42vemjirc
+                - generic [ref=e74]:
+                  - generic [ref=e75]: 🚪
+                  - generic [ref=e76]: Brahmseebutzen (8)
+                  - generic [ref=e77]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e78] [cursor=pointer]:
+                    - /url: /admin/room/ts1z6y2ep2upzuw
+                - generic [ref=e80]:
+                  - generic [ref=e81]: 🚪
+                  - generic [ref=e82]: Brahmseebutzen (8)
+                  - generic [ref=e83]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e84] [cursor=pointer]:
+                    - /url: /admin/room/jdqifw4rl6owjqd
+                - generic [ref=e86]:
+                  - generic [ref=e87]: 🚪
+                  - generic [ref=e88]: Brahmseebutzen (8)
+                  - generic [ref=e89]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e90] [cursor=pointer]:
+                    - /url: /admin/room/kae99v8l5umqz4h
+            - generic [ref=e91]:
+              - generic [ref=e92]:
+                - generic [ref=e93]: 🛖
+                - generic [ref=e94]: Brahmsee Villa
+              - generic [ref=e95]:
+                - generic [ref=e97]:
+                  - generic [ref=e98]: 🚪
+                  - generic [ref=e99]: Brahmsee Villa (4)
+                  - generic [ref=e100]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e101] [cursor=pointer]:
+                    - /url: /admin/room/n8ezh6uy2vtsgur
+                - generic [ref=e103]:
+                  - generic [ref=e104]: 🚪
+                  - generic [ref=e105]: Brahmsee Villa (2)
+                  - generic [ref=e106]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e107] [cursor=pointer]:
+                    - /url: /admin/room/muh1qz0z8jiikbl
+                - generic [ref=e109]:
+                  - generic [ref=e110]: 🚪
+                  - generic [ref=e111]: Brahmsee Villa (6)
+                  - generic [ref=e112]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e113] [cursor=pointer]:
+                    - /url: /admin/room/u6tn5yr5wttjcji
+                - generic [ref=e115]:
+                  - generic [ref=e116]: 🚪
+                  - generic [ref=e117]: Brahmsee Villa (5)
+                  - generic [ref=e118]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e119] [cursor=pointer]:
+                    - /url: /admin/room/nv54z9yj9h10diu
+                - generic [ref=e121]:
+                  - generic [ref=e122]: 🚪
+                  - generic [ref=e123]: Brahmsee Villa (5)
+                  - generic [ref=e124]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e125] [cursor=pointer]:
+                    - /url: /admin/room/8z3mqsd119jc7uv
+                - generic [ref=e127]:
+                  - generic [ref=e128]: 🚪
+                  - generic [ref=e129]: Brahmsee Villa (4)
+                  - generic [ref=e130]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e131] [cursor=pointer]:
+                    - /url: /admin/room/le2u5jgg23hymbj
+                - generic [ref=e133]:
+                  - generic [ref=e134]: 🚪
+                  - generic [ref=e135]: Brahmsee Villa (4)
+                  - generic [ref=e136]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e137] [cursor=pointer]:
+                    - /url: /admin/room/e3zhk21w0f5vaoh
+            - generic [ref=e139]:
+              - generic [ref=e140]: 🛖
+              - generic [ref=e141]: BrahmseeVilla
+              - generic [ref=e142]: NO ROOMS DETECTED
+              - link "EXPAND ➕" [ref=e143] [cursor=pointer]:
+                - /url: /admin/house/3jc45lzw80mz504
+            - generic [ref=e144]:
+              - generic [ref=e145]:
+                - generic [ref=e146]: 🛖
+                - generic [ref=e147]: Haus am See
+              - generic [ref=e148]:
+                - generic [ref=e150]:
+                  - generic [ref=e151]: 🚪
+                  - generic [ref=e152]: Haus am See (4)
+                  - generic [ref=e153]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e154] [cursor=pointer]:
+                    - /url: /admin/room/lgheblemybbvqpu
+                - generic [ref=e156]:
+                  - generic [ref=e157]: 🚪
+                  - generic [ref=e158]: Haus am See (4)
+                  - generic [ref=e159]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e160] [cursor=pointer]:
+                    - /url: /admin/room/toc9r7gg1fs83ie
+                - generic [ref=e162]:
+                  - generic [ref=e163]: 🚪
+                  - generic [ref=e164]: Haus am See (4)
+                  - generic [ref=e165]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e166] [cursor=pointer]:
+                    - /url: /admin/room/p5kf8d9koe21hyw
+                - generic [ref=e168]:
+                  - generic [ref=e169]: 🚪
+                  - generic [ref=e170]: Haus am See (2)
+                  - generic [ref=e171]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e172] [cursor=pointer]:
+                    - /url: /admin/room/liwf6n9ojeqfc08
+                - generic [ref=e174]:
+                  - generic [ref=e175]: 🚪
+                  - generic [ref=e176]: Haus am See (1)
+                  - generic [ref=e177]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e178] [cursor=pointer]:
+                    - /url: /admin/room/2tc5zvbg1p5d6gh
+                - generic [ref=e180]:
+                  - generic [ref=e181]: 🚪
+                  - generic [ref=e182]: Haus am See (6)
+                  - generic [ref=e183]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e184] [cursor=pointer]:
+                    - /url: /admin/room/9shq2bck9jkxcbl
+                - generic [ref=e186]:
+                  - generic [ref=e187]: 🚪
+                  - generic [ref=e188]: Haus am See (2)
+                  - generic [ref=e189]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e190] [cursor=pointer]:
+                    - /url: /admin/room/zlg4ka24ekjzvdi
+                - generic [ref=e192]:
+                  - generic [ref=e193]: 🚪
+                  - generic [ref=e194]: Haus am See (3)
+                  - generic [ref=e195]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e196] [cursor=pointer]:
+                    - /url: /admin/room/6ztjqg366obo69y
+                - generic [ref=e198]:
+                  - generic [ref=e199]: 🚪
+                  - generic [ref=e200]: Haus am See (2)
+                  - generic [ref=e201]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e202] [cursor=pointer]:
+                    - /url: /admin/room/qd30vnuixju3wsl
+                - generic [ref=e204]:
+                  - generic [ref=e205]: 🚪
+                  - generic [ref=e206]: Haus am See (2)
+                  - generic [ref=e207]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e208] [cursor=pointer]:
+                    - /url: /admin/room/ic2ol6abwkazqxg
+            - generic [ref=e210]:
+              - generic [ref=e211]: 🛖
+              - generic [ref=e212]: Seehütte I
+              - generic [ref=e213]: NO ROOMS DETECTED
+              - link "EXPAND ➕" [ref=e214] [cursor=pointer]:
+                - /url: /admin/house/eq3kfh7d3bytrfe
+            - generic [ref=e216]:
+              - generic [ref=e217]: 🛖
+              - generic [ref=e218]: Seehütte II
+              - generic [ref=e219]: NO ROOMS DETECTED
+              - link "EXPAND ➕" [ref=e220] [cursor=pointer]:
+                - /url: /admin/house/zvny33mqryf3h8i
+            - generic [ref=e221]:
+              - generic [ref=e222]:
+                - generic [ref=e223]: 🛖
+                - generic [ref=e224]: Waldhütten
+              - generic [ref=e225]:
+                - generic [ref=e227]:
+                  - generic [ref=e228]: 🚪
+                  - generic [ref=e229]: Waldhütten (7)
+                  - generic [ref=e230]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e231] [cursor=pointer]:
+                    - /url: /admin/room/llfk5ga0ynnzq5g
+                - generic [ref=e233]:
+                  - generic [ref=e234]: 🚪
+                  - generic [ref=e235]: Waldhütten (7)
+                  - generic [ref=e236]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e237] [cursor=pointer]:
+                    - /url: /admin/room/7ar7ztk5a7m1i93
+                - generic [ref=e239]:
+                  - generic [ref=e240]: 🚪
+                  - generic [ref=e241]: Waldhütten (7)
+                  - generic [ref=e242]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e243] [cursor=pointer]:
+                    - /url: /admin/room/tfhmxiejspsqj6p
+                - generic [ref=e245]:
+                  - generic [ref=e246]: 🚪
+                  - generic [ref=e247]: Waldhütten (7)
+                  - generic [ref=e248]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e249] [cursor=pointer]:
+                    - /url: /admin/room/04n4jzlyhgyq1to
+                - generic [ref=e251]:
+                  - generic [ref=e252]: 🚪
+                  - generic [ref=e253]: Waldhütten (7)
+                  - generic [ref=e254]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e255] [cursor=pointer]:
+                    - /url: /admin/room/o93ms7trqaju4fk
+                - generic [ref=e257]:
+                  - generic [ref=e258]: 🚪
+                  - generic [ref=e259]: Waldhütten (7)
+                  - generic [ref=e260]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e261] [cursor=pointer]:
+                    - /url: /admin/room/1inu3omqdzmbuo3
+                - generic [ref=e263]:
+                  - generic [ref=e264]: 🚪
+                  - generic [ref=e265]: Waldhütten links (1)
+                  - generic [ref=e266]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e267] [cursor=pointer]:
+                    - /url: /admin/room/euzb2s4qo60snns
+                - generic [ref=e269]:
+                  - generic [ref=e270]: 🚪
+                  - generic [ref=e271]: Waldhütten rechts (1)
+                  - generic [ref=e272]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e273] [cursor=pointer]:
+                    - /url: /admin/room/ib1yfh0judw5odf
+            - generic [ref=e274]:
+              - generic [ref=e275]:
+                - generic [ref=e276]: 🛖
+                - generic [ref=e277]: Wälderhaus
+              - generic [ref=e278]:
+                - generic [ref=e280]:
+                  - generic [ref=e281]: 🚪
+                  - generic [ref=e282]: Wälderhaus (1)
+                  - generic [ref=e283]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e284] [cursor=pointer]:
+                    - /url: /admin/room/ta0rbq8plf306pa
+                - generic [ref=e286]:
+                  - generic [ref=e287]: 🚪
+                  - generic [ref=e288]: Wälderhaus (5)
+                  - generic [ref=e289]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e290] [cursor=pointer]:
+                    - /url: /admin/room/wpr18wj9ba1gyvz
+                - generic [ref=e292]:
+                  - generic [ref=e293]: 🚪
+                  - generic [ref=e294]: Wälderhaus (5)
+                  - generic [ref=e295]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e296] [cursor=pointer]:
+                    - /url: /admin/room/bq5dh7mrhhrsz4j
+                - generic [ref=e298]:
+                  - generic [ref=e299]: 🚪
+                  - generic [ref=e300]: Wälderhaus (6)
+                  - generic [ref=e301]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e302] [cursor=pointer]:
+                    - /url: /admin/room/ji1d4h5uk8vqgfj
+                - generic [ref=e304]:
+                  - generic [ref=e305]: 🚪
+                  - generic [ref=e306]: Wälderhaus (2)
+                  - generic [ref=e307]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e308] [cursor=pointer]:
+                    - /url: /admin/room/f0v0c3k46ypxoea
+                - generic [ref=e310]:
+                  - generic [ref=e311]: 🚪
+                  - generic [ref=e312]: Wälderhaus (5)
+                  - generic [ref=e313]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e314] [cursor=pointer]:
+                    - /url: /admin/room/11ss6qr8mmmrd9f
+                - generic [ref=e316]:
+                  - generic [ref=e317]: 🚪
+                  - generic [ref=e318]: Wälderhaus (5)
+                  - generic [ref=e319]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e320] [cursor=pointer]:
+                    - /url: /admin/room/h1stwvag0vyrb69
+                - generic [ref=e322]:
+                  - generic [ref=e323]: 🚪
+                  - generic [ref=e324]: Wälderhaus (1)
+                  - generic [ref=e325]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e326] [cursor=pointer]:
+                    - /url: /admin/room/7flkxmac5q42yc2
+                - generic [ref=e328]:
+                  - generic [ref=e329]: 🚪
+                  - generic [ref=e330]: Wälderhaus (4)
+                  - generic [ref=e331]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e332] [cursor=pointer]:
+                    - /url: /admin/room/lfrulx4djp4pjtx
+                - generic [ref=e334]:
+                  - generic [ref=e335]: 🚪
+                  - generic [ref=e336]: Wälderhaus (4)
+                  - generic [ref=e337]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e338] [cursor=pointer]:
+                    - /url: /admin/room/tx6afpyqijj04q3
+                - generic [ref=e340]:
+                  - generic [ref=e341]: 🚪
+                  - generic [ref=e342]: Wälderhaus (5)
+                  - generic [ref=e343]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e344] [cursor=pointer]:
+                    - /url: /admin/room/7qmxyphzqh3d2ya
+                - generic [ref=e346]:
+                  - generic [ref=e347]: 🚪
+                  - generic [ref=e348]: Wälderhaus (5)
+                  - generic [ref=e349]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e350] [cursor=pointer]:
+                    - /url: /admin/room/b2x1c5jq49cerz5
+                - generic [ref=e352]:
+                  - generic [ref=e353]: 🚪
+                  - generic [ref=e354]: Wälderhaus (5)
+                  - generic [ref=e355]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e356] [cursor=pointer]:
+                    - /url: /admin/room/n3115rczc4gzmvp
+                - generic [ref=e358]:
+                  - generic [ref=e359]: 🚪
+                  - generic [ref=e360]: Wälderhaus (5)
+                  - generic [ref=e361]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e362] [cursor=pointer]:
+                    - /url: /admin/room/zqsrvdnz35d4icj
+                - generic [ref=e364]:
+                  - generic [ref=e365]: 🚪
+                  - generic [ref=e366]: Wälderhaus (5)
+                  - generic [ref=e367]: EMPTY MODULE (NO BEDS)
+                  - link "ADD SPOTS 🛌" [ref=e368] [cursor=pointer]:
+                    - /url: /admin/room/v6k2un8smiabb4g
+        - main [ref=e369]:
+          - generic [ref=e370]:
+            - generic [ref=e371]: "🔒 LOCKDOWN: Map layout is locked. Switch to 🛠 STAGING to manage."
+            - img "Interactive house map" [ref=e374]:
+              - generic [ref=e376]:
+                - button "House BUmsBuDE" [ref=e377]:
+                  - generic [ref=e378]:
+                    - generic:
+                      - generic: BUmsBuDE
+                - button "House Brahmsee Buden" [ref=e380]:
+                  - generic [ref=e381]:
+                    - generic:
+                      - generic: Brahmsee Buden
+                - button "House Brahmsee Butzen" [ref=e383]:
+                  - generic [ref=e384]:
+                    - generic:
+                      - generic: Brahmsee Butzen
+                - button "House Brahmsee Villa" [ref=e386]:
+                  - generic [ref=e387]:
+                    - generic:
+                      - generic: Brahmsee Villa
+                - button "House BrahmseeVilla" [ref=e389]:
+                  - generic [ref=e390]:
+                    - generic:
+                      - generic: BrahmseeVilla
+                - button "House Haus am See" [ref=e392]:
+                  - generic [ref=e393]:
+                    - generic:
+                      - generic: Haus am See
+                - button "House Seehütte I" [ref=e395]:
+                  - generic [ref=e396]:
+                    - generic:
+                      - generic: Seehütte I
+                - button "House Seehütte II" [ref=e398]:
+                  - generic [ref=e399]:
+                    - generic:
+                      - generic: Seehütte II
+                - button "House Waldhütten" [ref=e401]:
+                  - generic [ref=e402]:
+                    - generic:
+                      - generic: Waldhütten
+                - button "House Wälderhaus" [ref=e404]:
+                  - generic [ref=e405]:
+                    - generic:
+                      - generic: Wälderhaus
+```
