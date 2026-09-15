@@ -2,6 +2,32 @@ import type { TypedPocketBase, OrdersResponse, BedsResponse } from '$lib/pocketb
 import { createLookupHash, encrypt } from '$lib/server/crypto';
 
 /**
+ * Thrown when a bed can no longer be booked (already taken by someone else,
+ * or locked). Distinguishes expected booking-conflict outcomes from real
+ * infrastructure/DB errors so callers can show the right message.
+ */
+export class BedUnavailableError extends Error {}
+
+// Per-bed async lock: chains concurrent bookBed() calls for the same bedId so
+// the "is it still free" check and the write that follows it are atomic with
+// respect to each other. Without this, two requests can both read
+// occupied=false before either writes, and both succeed — a real, reproducible
+// double-booking race (confirmed via concurrent booking tests).
+const bedLocks = new Map<string, Promise<unknown>>();
+
+function withBedLock<T>(bedId: string, fn: () => Promise<T>): Promise<T> {
+	const prior = bedLocks.get(bedId) ?? Promise.resolve();
+	const run = prior.then(fn, fn);
+	// Key space is bounded by the number of beds, so entries are simply
+	// overwritten on reuse rather than explicitly cleaned up.
+	bedLocks.set(
+		bedId,
+		run.catch(() => {})
+	);
+	return run;
+}
+
+/**
  * Service for managing bed bookings and orders on the playa.
  * Handles order lookups, bed assignments, and spot releases.
  */
@@ -78,35 +104,48 @@ export class BookingService {
 	 * @param order The order record of the user making the booking.
 	 * @param bedId The ID of the bed to be claimed.
 	 * @param guestName The burner name chosen by the user.
+	 * @throws {BedUnavailableError} if the bed is no longer free.
 	 */
 	async bookBed(order: OrdersResponse, bedId: string, guestName: string): Promise<void> {
 		console.log(
 			`[BookingService] Booking bed ${bedId} for order ${order.id} (Guest: ${guestName})`
 		);
 
-		// Release previous bookings
-		const previousBeds = await this.adminPb.collection('beds').getFullList({
-			filter: this.adminPb.filter('order = {:orderId}', { orderId: order.id })
-		});
-
-		console.log(`[BookingService] Found ${previousBeds.length} previous bookings to release.`);
-		for (const prevBed of previousBeds) {
-			if (prevBed.id !== bedId) {
-				await this.adminPb.collection('beds').update(prevBed.id, { occupied: false, order: null });
+		await withBedLock(bedId, async () => {
+			// Authoritative availability check, re-read fresh inside the lock so
+			// it's atomic with the write below — this is what actually prevents
+			// two concurrent requests from both claiming the same bed.
+			const bed = await this.adminPb.collection('beds').getOne<BedsResponse>(bedId);
+			if (bed.occupied && bed.order !== order.id) {
+				throw new BedUnavailableError('This spot is already claimed.');
 			}
-		}
 
-		// Update Order Burner Name
-		await this.adminPb.collection('orders').update(order.id, {
-			burner_name: encrypt(guestName)
-		});
+			// Release previous bookings
+			const previousBeds = await this.adminPb.collection('beds').getFullList({
+				filter: this.adminPb.filter('order = {:orderId}', { orderId: order.id })
+			});
 
-		// Claim new spot
-		await this.adminPb.collection('beds').update(bedId, {
-			occupied: true,
-			order: order.id
+			console.log(`[BookingService] Found ${previousBeds.length} previous bookings to release.`);
+			for (const prevBed of previousBeds) {
+				if (prevBed.id !== bedId) {
+					await this.adminPb
+						.collection('beds')
+						.update(prevBed.id, { occupied: false, order: null });
+				}
+			}
+
+			// Update Order Burner Name
+			await this.adminPb.collection('orders').update(order.id, {
+				burner_name: encrypt(guestName)
+			});
+
+			// Claim new spot
+			await this.adminPb.collection('beds').update(bedId, {
+				occupied: true,
+				order: order.id
+			});
+			console.log(`[BookingService] Booking finalized successfully.`);
 		});
-		console.log(`[BookingService] Booking finalized successfully.`);
 	}
 
 	/**

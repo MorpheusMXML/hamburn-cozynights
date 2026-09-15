@@ -5,7 +5,7 @@
 
 	export let totalBeds: number;
 	export let occupiedBeds: number;
-	export let history: { bookingTrend: number[]; trafficTrend: number[]; labels: string[] };
+	export let history: { bookingTrend: number[]; labels: string[] };
 
 	let occupancyChart: HTMLCanvasElement;
 	let trendChart: HTMLCanvasElement;
@@ -35,29 +35,18 @@
 			}
 		});
 
-		// 2. Trend Chart (Booking & Traffic)
+		// 2. New bookings per day, last 7 days (real order counts)
 		new Chart(trendChart, {
-			type: 'line',
+			type: 'bar',
 			data: {
 				labels: history.labels,
 				datasets: [
 					{
-						label: 'Bookings',
+						label: 'New Bookings',
 						data: history.bookingTrend,
-						borderColor: '#2dd4bf',
-						backgroundColor: 'rgba(45, 212, 191, 0.1)',
-						fill: true,
-						tension: 0.4,
-						pointRadius: 4,
-						pointBackgroundColor: '#2dd4bf'
-					},
-					{
-						label: 'Traffic',
-						data: history.trafficTrend.map((v) => v / 10), // Scale for visual fit
-						borderColor: '#fb923c',
-						borderDash: [5, 5],
-						tension: 0.4,
-						pointRadius: 0
+						backgroundColor: '#2dd4bf',
+						borderRadius: 4,
+						barPercentage: 0.6
 					}
 				]
 			},
@@ -65,23 +54,14 @@
 				responsive: true,
 				maintainAspectRatio: false,
 				scales: {
-					y: { display: false },
+					y: { display: false, beginAtZero: true },
 					x: {
-						grid: { color: '#1a1a1a' },
+						grid: { display: false },
 						ticks: { color: '#444', font: { size: 10 } }
 					}
 				},
 				plugins: {
-					legend: {
-						display: true,
-						position: 'top',
-						align: 'end',
-						labels: {
-							color: '#666',
-							boxWidth: 10,
-							font: { size: 10, weight: 'bold' }
-						}
-					}
+					legend: { display: false }
 				}
 			}
 		});
@@ -99,6 +79,7 @@
 		</div>
 	</div>
 	<div class="chart-container line-box">
+		<span class="chart-title">New Bookings · Last 7 Days</span>
 		<canvas bind:this={trendChart}></canvas>
 	</div>
 </div>
@@ -125,6 +106,16 @@
 	.line-box {
 		flex: 1;
 		height: 150px;
+		display: flex;
+		flex-direction: column;
+	}
+	.chart-title {
+		font-size: 0.6rem;
+		font-weight: 900;
+		color: #444;
+		letter-spacing: 1px;
+		text-transform: uppercase;
+		margin-bottom: 0.5rem;
 	}
 
 	.pie-overlay {

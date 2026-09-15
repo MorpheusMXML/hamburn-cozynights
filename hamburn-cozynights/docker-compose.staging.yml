@@ -1,0 +1,82 @@
+services:
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: cozynights-staging-pocketbase
+    restart: unless-stopped
+    command: --http=0.0.0.0:8090
+    ports:
+      # Only reachable from the host itself (e.g. via SSH tunnel), never from the internet.
+      - '127.0.0.1:8091:8090'
+    volumes:
+      - pb_data_staging:/pb_data
+      # Schema-Migrationen (siehe docs/DEPLOYMENT.md #7) + optionale Hooks
+      - ./pb_migrations:/pb_migrations
+      - ./pb_hooks:/pb_hooks
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:8090/api/health']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cozynights_staging_net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cozynights-staging-app
+    restart: unless-stopped
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # PUBLIC_PB_URL comes from .env — it must be the public HTTPS URL (e.g.
+      # https://test-cozynights.hamburn.de/pb), NOT the internal Docker hostname:
+      # this value is also bundled into client-side JS and called from the browser.
+      PORT: 3000
+      HOST: 0.0.0.0
+      # adapter-node behind an nginx reverse proxy: trust the proxy's headers
+      # so form-action CSRF checks and req.url see the real public origin.
+      PROTOCOL_HEADER: x-forwarded-proto
+      HOST_HEADER: x-forwarded-host
+    ports:
+      # Only reachable from the host itself; nginx reverse-proxies to this.
+      - '127.0.0.1:3001:3000'
+    networks:
+      - cozynights_staging_net
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
+    container_name: cozynights-staging-oauth2-proxy
+    restart: unless-stopped
+    env_file:
+      # Secrets (OAUTH2_PROXY_CLIENT_ID, OAUTH2_PROXY_CLIENT_SECRET,
+      # OAUTH2_PROXY_COOKIE_SECRET) and OAUTH2_PROXY_EMAIL_DOMAINS live in .env,
+      # never in this file.
+      - .env
+    environment:
+      OAUTH2_PROXY_PROVIDER: google
+      OAUTH2_PROXY_REDIRECT_URL: https://test-cozynights.hamburn.de/oauth2/callback
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      # nginx gates access via auth_request, not by proxying through here —
+      # there is no real upstream for oauth2-proxy to forward to.
+      OAUTH2_PROXY_UPSTREAMS: static://202
+      OAUTH2_PROXY_COOKIE_SECURE: 'true'
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+      # Trust nginx's X-Forwarded-* headers (they're only reachable via nginx,
+      # not directly from the internet — see the port binding below).
+      OAUTH2_PROXY_REVERSE_PROXY: 'true'
+      OAUTH2_PROXY_SET_XAUTHREQUEST: 'true'
+    ports:
+      - '127.0.0.1:4180:4180'
+    networks:
+      - cozynights_staging_net
+
+networks:
+  cozynights_staging_net:
+    driver: bridge
+
+volumes:
+  pb_data_staging:

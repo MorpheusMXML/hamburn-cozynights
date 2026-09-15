@@ -355,6 +355,37 @@
 		</div>
 	</header>
 
+	{#if isVerified}
+		<section class="timer-panel">
+			{#if bookingUnlockAt}
+				<div class="timer-active">
+					<span class="timer-icon">⏱</span>
+					<span
+						>Auto-opens live booking on <strong
+							>{new Date(bookingUnlockAt).toLocaleString('de-DE', {
+								timeZone: 'Europe/Berlin',
+								dateStyle: 'medium',
+								timeStyle: 'short'
+							})}</strong
+						> (CET/CEST)</span
+					>
+					<form method="POST" action="?/cancelUnlockTimer" use:enhance>
+						<button type="submit" class="btn-timer-cancel">Cancel Timer ✕</button>
+					</form>
+				</div>
+			{:else}
+				<form method="POST" action="?/setUnlockTimer" use:enhance class="timer-set-form">
+					<span class="timer-icon">⏱</span>
+					<span class="timer-label">Schedule automatic go-live:</span>
+					<input type="datetime-local" name="unlockAt" bind:value={unlockDateInput} required />
+					<button type="submit" class="btn-timer-set" disabled={!unlockDateInput}>
+						Schedule ✨
+					</button>
+				</form>
+			{/if}
+		</section>
+	{/if}
+
 	{#if showTemplates}
 		<section class="templates-overlay" in:fade out:fade>
 			<div class="templates-content" in:fly={{ y: 20 }}>
@@ -734,6 +765,71 @@
 		background: #2dd4bf;
 		color: #000;
 		border-color: #2dd4bf;
+	}
+
+	.timer-panel {
+		background: rgba(251, 146, 60, 0.05);
+		border: 1px solid rgba(251, 146, 60, 0.2);
+		border-radius: 12px;
+		padding: 0.85rem 1.5rem;
+	}
+	.timer-active,
+	.timer-set-form {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+		font-size: 0.8rem;
+		color: #888;
+		font-weight: 700;
+	}
+	.timer-icon {
+		font-size: 1rem;
+	}
+	.timer-active strong {
+		color: #fb923c;
+	}
+	.timer-label {
+		color: #888;
+	}
+	.timer-set-form input[type='datetime-local'] {
+		background: #050505;
+		border: 1px solid #333;
+		color: #fff;
+		padding: 0.5rem 0.75rem;
+		border-radius: 8px;
+		font-size: 0.8rem;
+		font-family: inherit;
+	}
+	.btn-timer-set,
+	.btn-timer-cancel {
+		background: #fb923c;
+		border: none;
+		color: #000;
+		padding: 0.5rem 1rem;
+		border-radius: 8px;
+		font-weight: 900;
+		font-size: 0.75rem;
+		cursor: pointer;
+		transition: all 0.2s;
+		white-space: nowrap;
+	}
+	.btn-timer-set:hover:not(:disabled) {
+		transform: scale(1.05);
+	}
+	.btn-timer-set:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+	.btn-timer-cancel {
+		background: transparent;
+		border: 1px solid #444;
+		color: #888;
+		margin-left: auto;
+	}
+	.btn-timer-cancel:hover {
+		border-color: #ef4444;
+		color: #f87171;
 	}
 
 	.intel-panel {
