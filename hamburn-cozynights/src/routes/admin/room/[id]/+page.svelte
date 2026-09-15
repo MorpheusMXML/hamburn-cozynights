@@ -6,6 +6,7 @@
 	import { enhance } from '$app/forms';
 
 	export let data: PageData;
+	export let form: { message?: string } | null = null;
 	// isVerified from layout
 	$: ({ room, beds, isVerified, isBookingActive } = data);
 	$: house = room.expand?.house;
@@ -21,6 +22,17 @@
 				if (card) card.classList.add('disintegrating');
 				await new Promise((r) => setTimeout(r, 550));
 			}
+			await update();
+			await invalidateAll();
+		};
+	}
+
+	// Locking/unlocking a spot is intentionally allowed during Live Booking too
+	// (e.g. taking a broken bed out of service mid-event) — unlike every other
+	// structural edit on this page, so it doesn't go through handleAction's
+	// blanket lockdown check.
+	function handleLockToggle() {
+		return async ({ update }: { update: any }) => {
 			await update();
 			await invalidateAll();
 		};
@@ -42,6 +54,10 @@
 			<span class="badge turquoise">#{room.room_number}</span>
 		</h1>
 	</div>
+
+	{#if form?.message}
+		<div class="error-banner" in:fade>⚠️ {form.message}</div>
+	{/if}
 
 	<div class="content-split">
 		<aside class="info-column" in:fly={{ x: -20, duration: 500, delay: 200 }}>
@@ -116,11 +132,7 @@
 
 						<div class="bed-actions">
 							{#if isVerified}
-								<form
-									action="?/toggleLocked"
-									method="POST"
-									use:enhance={() => handleAction(bed.id, 'toggle')}
-								>
+								<form action="?/toggleLocked" method="POST" use:enhance={handleLockToggle}>
 									<input type="hidden" name="id" value={bed.id} />
 									<input type="hidden" name="is_locked" value={bed.is_locked?.toString()} />
 									<button
@@ -249,6 +261,17 @@
 		background: rgba(45, 212, 191, 0.1);
 		color: #2dd4bf;
 		border: 1px solid #2dd4bf;
+	}
+
+	.error-banner {
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		color: #f87171;
+		padding: 1rem 1.5rem;
+		border-radius: 12px;
+		font-weight: 700;
+		font-size: 0.85rem;
+		margin-bottom: 2rem;
 	}
 
 	/* Layout */

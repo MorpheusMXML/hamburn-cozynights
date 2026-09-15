@@ -4,6 +4,7 @@ import { actions as loginActions } from '../src/routes/+page.server';
 import { load as roomLoad, actions as roomActions } from '../src/routes/room/[id]/+page.server';
 import { actions as adminActions } from '../src/routes/admin/room/[id]/+page.server';
 import { actions as houseAdminActions } from '../src/routes/admin/house/[id]/+page.server';
+import { APP_SETTINGS_ID } from '../src/lib/server/constants';
 
 // Mock environment variables
 vi.mock('$env/dynamic/private', () => ({
@@ -48,7 +49,12 @@ describe('Interactions & Registration', () => {
 	});
 
 	it('should register/login with a valid booking code', async () => {
-		mockPb.getFirstListItem.mockResolvedValueOnce({ id: 'order_123', order_number: 'VALID-CODE' });
+		// login resolves the order via BookingService, which always uses
+		// adminPb (orders are never readable through the public pb connection).
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({
+			id: 'order_123',
+			order_number: 'VALID-CODE'
+		});
 
 		const formData = new FormData();
 		formData.append('bookingCode', 'VALID-CODE');
@@ -65,7 +71,8 @@ describe('Interactions & Registration', () => {
 	});
 
 	it('should fail login with an invalid booking code', async () => {
-		mockPb.getFirstListItem.mockRejectedValueOnce({ status: 404 });
+		mockAdminPb.getFirstListItem.mockRejectedValueOnce({ status: 404 });
+		mockAdminPb.getFirstListItem.mockRejectedValueOnce({ status: 404 });
 
 		const formData = new FormData();
 		formData.append('bookingCode', 'INVALID');
@@ -98,7 +105,10 @@ describe('Room Load & Booking Logic', () => {
 			getFullList: vi.fn(),
 			getOne: vi.fn(),
 			update: vi.fn(),
-			filter: vi.fn((q: any) => q)
+			filter: vi.fn((q: any) => q),
+			// bookBed/unbookBed require a valid admin session before touching
+			// the database — see BookingService and room/[id]/+page.server.ts.
+			authStore: { isValid: true }
 		};
 		mockLocals = {
 			pb: mockPb,
@@ -110,7 +120,7 @@ describe('Room Load & Booking Logic', () => {
 
 	it('should load a room and successfully handle order hash migration', async () => {
 		mockPb.getOne.mockImplementation(async (id: string) => {
-			if (id === 'abcsettings123') return { is_booking_active: true };
+			if (id === APP_SETTINGS_ID) return { is_booking_active: true };
 			if (id === 'room1') return { id: 'room1', name: 'Test Room' };
 			throw new Error('Not found');
 		});
@@ -132,7 +142,10 @@ describe('Room Load & Booking Logic', () => {
 	it('should allow booking an available bed', async () => {
 		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true }); // Settings
 		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' }); // Order lookup
-		mockAdminPb.getOne.mockResolvedValueOnce({ id: 'bed1', occupied: false, is_locked: false }); // Bed lookup
+		// Bed is read twice: once by the route's own is_locked pre-check, and
+		// again inside BookingService.bookBed's authoritative under-lock check.
+		mockAdminPb.getOne.mockResolvedValueOnce({ id: 'bed1', occupied: false, is_locked: false });
+		mockAdminPb.getOne.mockResolvedValueOnce({ id: 'bed1', occupied: false, is_locked: false });
 		mockAdminPb.getFullList.mockResolvedValueOnce([]); // Previous beds
 
 		const formData = new FormData();

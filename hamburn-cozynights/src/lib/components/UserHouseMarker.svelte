@@ -14,7 +14,6 @@
 	class:label-top={labelPosition === 'top'}
 	class:is-hovered={hovered}
 	bind:this={markerEl}
-	style="transform: translate(-50%, -50%)"
 >
 	<div class="hit-area"></div>
 
@@ -27,10 +26,15 @@
 
 <style>
 	.marker-wrapper {
+		/* Centers within the parent foreignObject's box, which Map.svelte sizes
+		   and positions to be centered on the house's (x, y) coordinate — so
+		   this stays correct regardless of the box's exact dimensions. */
+		position: absolute;
+		inset: 0;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		position: relative;
+		justify-content: center;
 		pointer-events: none;
 		filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));
 		transition: transform 0.1s ease-out;
@@ -47,6 +51,9 @@
 
 	.hit-area {
 		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
 		width: 60px;
 		height: 60px;
 		border-radius: 50%;

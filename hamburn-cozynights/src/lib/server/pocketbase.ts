@@ -5,8 +5,13 @@ import type { TypedPocketBase } from '$lib/pocketbase-types';
 
 const PB_URL = publicEnv.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
 
-// Global singleton instance
+// Global singleton instance, shared across all concurrent requests from all
+// users. Auto-cancellation is designed for a single browser client deduping
+// its own rapid-fire requests — on a shared server instance it instead cancels
+// unrelated users' in-flight requests that happen to hit the same endpoint
+// shape at the same time, surfacing as random "autocancelled" failures.
 export const adminPb = new PocketBase(PB_URL) as TypedPocketBase;
+adminPb.autoCancellation(false);
 
 let isAuthenticating = false;
 

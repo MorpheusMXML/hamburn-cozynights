@@ -1,6 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
+import { getBookingSettings } from '$lib/server/settings';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	// Security check 🛡️
@@ -24,10 +25,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		});
 
 		// 4. Fetch app settings for booking status
-		const settings = await locals.pb
-			.collection('app_settings')
-			.getOne('abcsettings123')
-			.catch(() => ({ is_booking_active: false }));
+		const settings = await getBookingSettings(locals.pb);
 
 		// 5. Map statistics 📊
 		const roomsWithStats = rooms.map((room) => {
@@ -44,7 +42,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			};
 		});
 
-		return { house, rooms: roomsWithStats, isBookingActive: !!settings.is_booking_active };
+		return { house, rooms: roomsWithStats, isBookingActive: settings.isBookingActive };
 	} catch (err) {
 		console.error(err);
 		throw error(404, 'House not found.');
@@ -53,11 +51,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
 	createRoom: async ({ request, locals, params }) => {
-		const settings = await locals.pb
-			.collection('app_settings')
-			.getOne('abcsettings123')
-			.catch(() => ({ is_booking_active: false }));
-		if (settings.is_booking_active)
+		const { isBookingActive } = await getBookingSettings(locals.pb);
+		if (isBookingActive)
 			return fail(403, { message: 'Management locked during live booking.' });
 
 		console.log(
@@ -96,16 +91,13 @@ export const actions: Actions = {
 			console.log('[Action:createRoom] SUCCESS.');
 		} catch (err) {
 			console.error('[Action:createRoom] FAILED:', err);
-			return fail(500, { error: true });
+			return fail(500, { message: 'Something went wrong. Please try again.' });
 		}
 	},
 
 	deleteRoom: async ({ request, locals }) => {
-		const settings = await locals.pb
-			.collection('app_settings')
-			.getOne('abcsettings123')
-			.catch(() => ({ is_booking_active: false }));
-		if (settings.is_booking_active)
+		const { isBookingActive } = await getBookingSettings(locals.pb);
+		if (isBookingActive)
 			return fail(403, { message: 'Management locked during live booking.' });
 
 		console.log(`[Action:deleteRoom] User: ${locals.pb.authStore.model?.email}`);
@@ -123,7 +115,7 @@ export const actions: Actions = {
 			console.log(`[Action:deleteRoom] SUCCESS for ${id}`);
 		} catch (err) {
 			console.error(`[Action:deleteRoom] FAILED for ${id}:`, err);
-			return fail(500, { error: true });
+			return fail(500, { message: 'Something went wrong. Please try again.' });
 		}
 	}
 };

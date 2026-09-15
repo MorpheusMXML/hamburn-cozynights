@@ -4,6 +4,7 @@ import * as dotenv from 'dotenv';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import { APP_SETTINGS_ID } from '../src/lib/server/constants';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,7 +59,19 @@ async function run() {
 			console.log('✅ Created test order XXXXX.');
 		}
 
-		// 2. Unbook all beds
+		// 2. Ensure booking is active for the e2e run
+		try {
+			await pb.collection('app_settings').update(APP_SETTINGS_ID, { is_booking_active: true });
+			console.log('✅ Booking set to active.');
+		} catch {
+			await pb.collection('app_settings').create({
+				id: APP_SETTINGS_ID,
+				is_booking_active: true
+			});
+			console.log('✅ Created app_settings with booking active.');
+		}
+
+		// 3. Unbook all beds
 		const beds = await pb.collection('beds').getFullList({ filter: 'occupied = true' });
 		for (const bed of beds) {
 			await pb.collection('beds').update(bed.id, { occupied: false, order: null });
