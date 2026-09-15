@@ -18,7 +18,6 @@ We use field-level encryption to ensure that even if the database is compromised
 - **AES-256-GCM Encryption:** Personal data like `burner_name` and `customer_name` are stored as encrypted ciphertext in the `orders` collection.
 - **Deterministic Hashing:** We use `order_hash` (a SHA-256 HMAC of the booking code salted with your `ENCRYPTION_KEY`) for database lookups. This allows us to find an order without storing the raw booking code in a searchable way or exposing it in the database schema.
 - **GPG Backups:** The local database folder (`pb_data`) is ignored by Git. We use GPG-encrypted archives (`pb_data.tar.gz.gpg`) for backups and sharing the database state between developers.
-- **Secure Typegen (GPG):** The `npm run typegen` command is hardened to avoid storing plaintext passwords. It automatically attempts to decrypt credentials from `.env.gpg`, `secrets.gpg`, or `pb_password.gpg` using GPG if they are not provided in the environment.
 
 ## 3. Rights Management
 

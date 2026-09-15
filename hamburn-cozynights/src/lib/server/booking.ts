@@ -27,11 +27,17 @@ function withBedLock<T>(bedId: string, fn: () => Promise<T>): Promise<T> {
 	return run;
 }
 
+/**
+ * Service for managing bed bookings and orders on the playa.
+ * Handles order lookups, bed assignments, and spot releases.
+ */
 export class BookingService {
 	constructor(private adminPb: TypedPocketBase) {}
 
 	/**
 	 * Resolves an order by its number, performing auto-migration to order_hash if needed.
+	 * @param orderNumber The unique booking code/order number provided by the user.
+	 * @returns The order record if found, or null otherwise.
 	 */
 	async getOrderByNumber(orderNumber: string): Promise<OrdersResponse | null> {
 		if (!orderNumber) {
@@ -80,6 +86,8 @@ export class BookingService {
 
 	/**
 	 * Finds the bed currently booked for a specific order.
+	 * @param orderId The ID of the order to check.
+	 * @returns The bed record if one exists for this order, or null.
 	 */
 	async getBedForOrder(orderId: string): Promise<BedsResponse | null> {
 		return await this.adminPb
@@ -93,7 +101,10 @@ export class BookingService {
 
 	/**
 	 * Performs a bed booking for a user.
-	 * Throws BedUnavailableError if the bed is no longer free.
+	 * @param order The order record of the user making the booking.
+	 * @param bedId The ID of the bed to be claimed.
+	 * @param guestName The burner name chosen by the user.
+	 * @throws {BedUnavailableError} if the bed is no longer free.
 	 */
 	async bookBed(order: OrdersResponse, bedId: string, guestName: string): Promise<void> {
 		console.log(
@@ -139,6 +150,7 @@ export class BookingService {
 
 	/**
 	 * Releases all spots for an order.
+	 * @param orderId The ID of the order to release spots for.
 	 */
 	async unbookOrder(orderId: string): Promise<void> {
 		console.log(`[BookingService] Unbooking all beds for order ${orderId}`);

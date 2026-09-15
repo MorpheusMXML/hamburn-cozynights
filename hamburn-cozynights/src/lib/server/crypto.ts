@@ -10,6 +10,9 @@ const HASH_ALGORITHM = 'sha256';
 /**
  * Encrypts a string using AES-256-GCM.
  * The result is a hex string containing IV, ciphertext, and authentication tag.
+ * @param text The plaintext string to encrypt.
+ * @returns A formatted string: `iv:tag:ciphertext`.
+ * @throws Error if ENCRYPTION_KEY is missing or invalid.
  */
 export function encrypt(text: string): string {
 	const key = Buffer.from(env.ENCRYPTION_KEY || '', 'hex');
@@ -30,6 +33,9 @@ export function encrypt(text: string): string {
 
 /**
  * Decrypts a hex string (iv:tag:ciphertext) back to its original value.
+ * @param encryptedText The formatted encrypted string to decrypt.
+ * @returns The original plaintext string.
+ * @throws Error if ENCRYPTION_KEY is invalid.
  */
 export function decrypt(encryptedText: string): string {
 	const key = Buffer.from(env.ENCRYPTION_KEY || '', 'hex');
@@ -56,6 +62,8 @@ export function decrypt(encryptedText: string): string {
 /**
  * Creates a deterministic SHA-256 hash for database lookups.
  * Includes a salt derived from the ENCRYPTION_KEY for added security.
+ * @param text The input string to hash (e.g., an order number).
+ * @returns A deterministic hex hash.
  */
 export function createLookupHash(text: string): string {
 	const salt = env.ENCRYPTION_KEY || 'default_salt';
