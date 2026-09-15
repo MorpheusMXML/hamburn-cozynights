@@ -3,6 +3,7 @@ import PocketBase from 'pocketbase';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,7 +35,7 @@ test.describe('Booking Flow', () => {
 			}
 
 			// Ensure bookings are active for testing
-			await pb.collection('app_settings').update('abcsettings123', { is_booking_active: true });
+			await pb.collection('app_settings').update(APP_SETTINGS_ID, { is_booking_active: true });
 		} catch (e) {
 			console.warn(
 				'[E2E Setup] Admin Auth failed. Skipping staging mode toggle. Test may fail if locked.',
