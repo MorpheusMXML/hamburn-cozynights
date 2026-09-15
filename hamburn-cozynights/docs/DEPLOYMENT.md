@@ -60,7 +60,21 @@ used for the server's other applications. This keeps every environment's
 attack surface limited to "does nginx route this domain correctly," rather
 than each container managing its own public exposure.
 
-## 5. Adding a new environment
+## 5. Staging access gate
+
+Staging carries real booking data (restored from a backup) and is reachable
+from the public internet, so before anyone outside the team is pointed at
+it, the whole environment (guest flow included, not just `/admin`) sits
+behind a Google login gate: `oauth2-proxy` in front of nginx, restricted to
+the team's Workspace domain via `OAUTH2_PROXY_EMAIL_DOMAINS`. This is
+separate from the app's own PocketBase OAuth (which only guards `/admin`)
+— it's a blanket gate on the whole staging subdomain, implemented entirely
+at the nginx/oauth2-proxy layer via `auth_request`, with no changes to the
+app itself. See `docker-compose.staging.yml` and `deploy/nginx/` for the
+concrete setup. Production is not expected to need this, since anyone with
+a valid ticket code is supposed to reach it.
+
+## 6. Adding a new environment
 
 1. Copy `docker-compose.staging.yml` to `docker-compose.<env>.yml`, adjust
    container names, ports, and volume names so they don't collide with any
@@ -71,7 +85,7 @@ than each container managing its own public exposure.
 4. Add a GitHub Actions workflow mirroring `deploy-staging.yml`, pointed at
    a deploy user scoped to that environment's directory only.
 
-## 6. Known gap: schema isn't version-controlled
+## 7. Known gap: schema isn't version-controlled
 
 The PocketBase collection schema (`houses`, `rooms`, `beds`, `orders`,
 `app_settings`) and their API access rules currently exist only inside
