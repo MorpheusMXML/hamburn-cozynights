@@ -6,6 +6,7 @@
 	import { enhance } from '$app/forms';
 
 	export let data: PageData;
+	export let form: { message?: string } | null = null;
 	// isVerified comes from the layout
 	$: ({ house, rooms, isVerified, isBookingActive } = data);
 
@@ -38,6 +39,10 @@
 			<span class="subtitle">SANCTUARY OVERSIGHT</span>
 		</h1>
 	</div>
+
+	{#if form?.message}
+		<div class="error-banner" in:fade>⚠️ {form.message}</div>
+	{/if}
 
 	{#if isVerified}
 		<section class="form-section" in:fade={{ delay: 200 }} class:disabled={isBookingActive}>
@@ -205,6 +210,17 @@
 		color: #fff;
 		font-weight: 900;
 		letter-spacing: 2px;
+	}
+
+	.error-banner {
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		color: #f87171;
+		padding: 1rem 1.5rem;
+		border-radius: 12px;
+		font-weight: 700;
+		font-size: 0.85rem;
+		margin-bottom: 2rem;
 	}
 
 	/* Form Section */

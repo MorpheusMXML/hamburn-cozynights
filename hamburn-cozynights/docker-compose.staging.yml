@@ -1,0 +1,52 @@
+services:
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: cozynights-staging-pocketbase
+    restart: unless-stopped
+    command: --http=0.0.0.0:8090
+    ports:
+      # Only reachable from the host itself (e.g. via SSH tunnel), never from the internet.
+      - '127.0.0.1:8091:8090'
+    volumes:
+      - pb_data_staging:/pb_data
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:8090/api/health']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cozynights_staging_net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cozynights-staging-app
+    restart: unless-stopped
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # PUBLIC_PB_URL comes from .env — it must be the public HTTPS URL (e.g.
+      # https://test-cozynights.hamburn.de/pb), NOT the internal Docker hostname:
+      # this value is also bundled into client-side JS and called from the browser.
+      PORT: 3000
+      HOST: 0.0.0.0
+      # adapter-node behind an nginx reverse proxy: trust the proxy's headers
+      # so form-action CSRF checks and req.url see the real public origin.
+      PROTOCOL_HEADER: x-forwarded-proto
+      HOST_HEADER: x-forwarded-host
+    ports:
+      # Only reachable from the host itself; nginx reverse-proxies to this.
+      - '127.0.0.1:3001:3000'
+    networks:
+      - cozynights_staging_net
+
+networks:
+  cozynights_staging_net:
+    driver: bridge
+
+volumes:
+  pb_data_staging:

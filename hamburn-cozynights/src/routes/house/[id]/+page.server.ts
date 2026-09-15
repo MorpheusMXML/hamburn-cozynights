@@ -3,6 +3,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
 import { BookingService } from '$lib/server/booking';
+import { getBookingSettings } from '$lib/server/settings';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.orderNumber) throw redirect(303, '/');
@@ -25,10 +26,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			locals.pb.collection('beds').getFullList<BedsResponse>({
 				filter: locals.pb.filter('room.house = {:id}', { id: params.id })
 			}),
-			locals.pb
-				.collection('app_settings')
-				.getOne('abcsettings123')
-				.catch(() => ({ is_booking_active: false, booking_unlock_at: '' })),
+			getBookingSettings(locals.pb),
 			bookingService.getBedForOrder(order.id)
 		]);
 
@@ -43,8 +41,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			house,
 			rooms: roomsWithStats,
 			userBedId: userBed?.id || null,
-			isBookingActive: settings.is_booking_active,
-			bookingUnlockAt: settings.booking_unlock_at || ''
+			isBookingActive: settings.isBookingActive,
+			bookingUnlockAt: settings.bookingUnlockAt
 		};
 	} catch (err) {
 		console.error('[Security] House load failed:', err);
@@ -59,11 +57,8 @@ export const actions: Actions = {
 			return fail(500, { error: 'System authentication failed.' });
 		}
 
-		const settings = await locals.pb
-			.collection('app_settings')
-			.getOne('abcsettings123')
-			.catch(() => ({ is_booking_active: false }));
-		if (!settings.is_booking_active) return fail(403, { error: 'Bookings are locked.' });
+		const { isBookingActive } = await getBookingSettings(locals.pb);
+		if (!isBookingActive) return fail(403, { error: 'Bookings are locked.' });
 
 		if (!locals.orderNumber) return fail(401);
 

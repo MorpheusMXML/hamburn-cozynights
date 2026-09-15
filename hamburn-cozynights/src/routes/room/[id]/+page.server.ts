@@ -3,7 +3,8 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { RoomsResponse, BedsResponse, OrdersResponse } from '$lib/pocketbase-types';
 import { decrypt } from '$lib/server/crypto';
-import { BookingService } from '$lib/server/booking';
+import { BookingService, BedUnavailableError } from '$lib/server/booking';
+import { getBookingSettings } from '$lib/server/settings';
 
 const burnerNames = [
 	'Dusty Nomad',
@@ -43,10 +44,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	try {
 		const [settings, userBed, room, beds] = await Promise.all([
-			locals.pb
-				.collection('app_settings')
-				.getOne('abcsettings123')
-				.catch(() => ({ is_booking_active: false, booking_unlock_at: '' })),
+			getBookingSettings(locals.pb),
 			bookingService.getBedForOrder(order.id),
 			locals.pb.collection('rooms').getOne<RoomsResponse>(params.id),
 			locals.adminPb.collection('beds').getFullList<BedsResponse<{ order?: OrdersResponse }>>({
@@ -73,8 +71,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			beds: decryptedBeds,
 			userBedId: userBed?.id || null,
 			currentOrderNumber: locals.orderNumber,
-			isBookingActive: settings.is_booking_active,
-			bookingUnlockAt: settings.booking_unlock_at || ''
+			isBookingActive: settings.isBookingActive,
+			bookingUnlockAt: settings.bookingUnlockAt
 		};
 	} catch (err: any) {
 		console.error('[Security] Room load failed:', err);
@@ -90,11 +88,8 @@ export const actions: Actions = {
 			return fail(500, { error: 'System authentication failed. Please contact admin.' });
 		}
 
-		const settings = await locals.pb
-			.collection('app_settings')
-			.getOne('abcsettings123')
-			.catch(() => ({ is_booking_active: false }));
-		if (!settings.is_booking_active) return fail(403, { error: 'Bookings are not open yet.' });
+		const { isBookingActive } = await getBookingSettings(locals.pb);
+		if (!isBookingActive) return fail(403, { error: 'Bookings are not open yet.' });
 
 		const formData = await request.formData();
 		const bedId = formData.get('bedId') as string;
@@ -119,13 +114,16 @@ export const actions: Actions = {
 				return fail(403, { error: 'This bed is currently locked by an admin.' });
 			}
 
-			if (bed.occupied && bed.order !== order.id) {
-				return fail(400, { error: 'This spot is already claimed.' });
-			}
-
+			// The authoritative "still free?" check happens inside bookBed itself,
+			// under a per-bed lock — see BedUnavailableError below. Doing it only
+			// here would race: two concurrent requests could both pass this check
+			// before either writes.
 			await bookingService.bookBed(order, bedId, guestName);
 			return { success: true };
 		} catch (err: any) {
+			if (err instanceof BedUnavailableError) {
+				return fail(400, { error: err.message });
+			}
 			console.error('[Security] bookBed critical failure:', err);
 			return fail(500, { error: `Database error: ${err.message}` });
 		}
@@ -137,11 +135,8 @@ export const actions: Actions = {
 			return fail(500, { error: 'System authentication failed.' });
 		}
 
-		const settings = await locals.pb
-			.collection('app_settings')
-			.getOne('abcsettings123')
-			.catch(() => ({ is_booking_active: false }));
-		if (!settings.is_booking_active) return fail(403, { error: 'Bookings are locked.' });
+		const { isBookingActive } = await getBookingSettings(locals.pb);
+		if (!isBookingActive) return fail(403, { error: 'Bookings are locked.' });
 
 		if (!locals.orderNumber) return fail(401);
 

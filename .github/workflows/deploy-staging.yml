@@ -1,0 +1,24 @@
+name: Deploy staging
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'hamburn-cozynights/**'
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Trigger deploy on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.STAGING_SSH_HOST }}
+          username: deploy
+          key: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
+          # The deploy user's key is restricted to a single forced command on the
+          # server side (see deploy/README.md), so what we send here is ignored —
+          # it only exists because the action requires a script to run.
+          script: echo "triggering forced deploy command"
