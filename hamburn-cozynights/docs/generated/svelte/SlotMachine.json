@@ -1,0 +1,103 @@
+{
+  "version": 3,
+  "name": "SlotMachine",
+  "data": [
+    {
+      "keywords": [
+        {
+          "name": "type",
+          "description": "{boolean} Whether the slot machine should start spinning automatically on mount."
+        }
+      ],
+      "visibility": "public",
+      "description": "",
+      "name": "autoSpin",
+      "kind": "let",
+      "static": false,
+      "readonly": false,
+      "type": {
+        "kind": "type",
+        "text": "boolean",
+        "type": "boolean"
+      },
+      "defaultValue": false
+    },
+    {
+      "keywords": [
+        {
+          "name": "type",
+          "description": "{number} Delay in milliseconds before the auto-spin begins."
+        }
+      ],
+      "visibility": "public",
+      "description": "",
+      "name": "delay",
+      "kind": "let",
+      "static": false,
+      "readonly": false,
+      "type": {
+        "kind": "type",
+        "text": "number",
+        "type": "number"
+      },
+      "defaultValue": 0
+    },
+    {
+      "keywords": [
+        {
+          "name": "type",
+          "description": "{boolean} Whether to show the internal \"GET RANDOM NAME\" button."
+        }
+      ],
+      "visibility": "public",
+      "description": "",
+      "name": "showButton",
+      "kind": "let",
+      "static": false,
+      "readonly": false,
+      "type": {
+        "kind": "type",
+        "text": "boolean",
+        "type": "boolean"
+      },
+      "defaultValue": true
+    }
+  ],
+  "computed": [],
+  "methods": [
+    {
+      "keywords": [],
+      "visibility": "public",
+      "description": "Triggers the spinning sequence manually.",
+      "name": "spin",
+      "static": false
+    }
+  ],
+  "components": [],
+  "description": "",
+  "keywords": [
+    {
+      "name": "component",
+      "description": "SlotMachine handles the randomized \"Burner Name\" generation logic and animation.\nIt features a technical \"laser\" aesthetic with exponential deceleration and confetti effects."
+    }
+  ],
+  "events": [
+    {
+      "keywords": [
+        {
+          "name": "event",
+          "description": "select\nDispatched when a final name has been chosen."
+        },
+        {
+          "name": "property",
+          "description": "{string} detail - The generated Burner Name."
+        }
+      ],
+      "visibility": "public",
+      "description": "@event select\nDispatched when a final name has been chosen.",
+      "name": "select"
+    }
+  ],
+  "slots": [],
+  "refs": []
+}

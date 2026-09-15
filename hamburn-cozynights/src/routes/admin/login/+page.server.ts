@@ -12,8 +12,12 @@ interface SafeAuthProvider {
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
-	// If already logged in and verified -> Dashboard 🚀
-	if (locals.pb.authStore.isValid && locals.pb.authStore.model?.verified) {
+	// If already logged in and verified (or superuser) -> Dashboard 🚀
+	const user = locals.pb.authStore.model;
+	const isSuper = user?.collectionName === '_superusers' || locals.pb.authStore.isSuperuser;
+	const isVerified = isSuper || user?.verified === true;
+
+	if (locals.pb.authStore.isValid && isVerified) {
 		throw redirect(303, '/admin');
 	}
 
@@ -46,9 +50,19 @@ export const actions: Actions = {
 		if (!email || !password) return fail(400, { message: 'Fill in the blanks!' });
 
 		try {
+			// 1. Try regular user auth
 			await locals.pb.collection('users').authWithPassword(email, password);
-		} catch {
-			return fail(400, { fail: true, message: 'Invalid keys or burner does not exist.' });
+		} catch (userErr) {
+			try {
+				// 2. Fallback: Try Superuser (v0.23+) / Admin auth
+				try {
+					await locals.pb.collection('_superusers').authWithPassword(email, password);
+				} catch {
+					await locals.pb.admins.authWithPassword(email, password);
+				}
+			} catch (adminErr) {
+				return fail(400, { fail: true, message: 'Invalid keys or burner does not exist.' });
+			}
 		}
 		throw redirect(303, '/admin');
 	},
