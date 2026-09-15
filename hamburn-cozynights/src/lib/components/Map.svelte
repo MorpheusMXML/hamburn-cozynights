@@ -210,7 +210,13 @@
 						tabindex="0"
 						aria-label="House {house.name}"
 					>
-						<foreignObject x={house.x} y={house.y} width="1" height="1" style="overflow: visible;">
+						<foreignObject
+							x={house.x - 60}
+							y={house.y - 60}
+							width="120"
+							height="120"
+							style="overflow: visible; pointer-events: none;"
+						>
 							<UserHouseMarker
 								name={house.name}
 								status={house.occupiedBeds >= house.totalBeds ? 'full' : 'available'}
