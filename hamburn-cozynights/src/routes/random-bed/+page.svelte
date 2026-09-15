@@ -2,7 +2,6 @@
 	import { enhance } from '$app/forms';
 	import SlotMachine from '$lib/components/SlotMachine.svelte';
 	import type { PageData } from './$types';
-	import { onMount } from 'svelte';
 	import { fade, scale } from 'svelte/transition';
 
 	export let data: PageData;

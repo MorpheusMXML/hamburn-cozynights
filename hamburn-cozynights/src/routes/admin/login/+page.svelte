@@ -86,7 +86,7 @@
 
 		<div class="oauth-grid">
 			{#if data.providers}
-				{#each data.providers as provider}
+				{#each data.providers as provider (provider.name)}
 					<form action="?/oauth2" method="POST" class="oauth-form">
 						<input type="hidden" name="provider" value={provider.name} />
 						<button type="submit" class="btn-oauth">

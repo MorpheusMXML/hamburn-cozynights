@@ -40,7 +40,7 @@
 	{/if}
 
 	<div class="grid">
-		{#each data.rooms as room}
+		{#each data.rooms as room (room.id)}
 			<a href="/room/{room.id}" class="card" class:full={room.freeCount === 0}>
 				<div class="card-header">
 					<h2>{room.name || 'Room'} #{room.room_number}</h2>

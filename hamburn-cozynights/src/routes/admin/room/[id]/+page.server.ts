@@ -35,8 +35,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 export const actions: Actions = {
 	createBed: async ({ request, params, locals }) => {
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive)
-			return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
 
 		console.log(`[Action:createBed] User: ${locals.pb.authStore.model?.email}, Room: ${params.id}`);
 
@@ -62,8 +61,7 @@ export const actions: Actions = {
 
 	deleteBed: async ({ request, locals }) => {
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive)
-			return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
 
 		console.log(`[Action:deleteBed] User: ${locals.pb.authStore.model?.email}`);
 
@@ -86,8 +84,7 @@ export const actions: Actions = {
 
 	toggleOccupied: async ({ request, locals }) => {
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive)
-			return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
 
 		const data = await request.formData();
 		const id = data.get('id') as string;
@@ -102,13 +99,13 @@ export const actions: Actions = {
 			console.log('[Action:toggleOccupied] SUCCESS.');
 		} catch (err) {
 			console.error('[Action:toggleOccupied] FAILED:', err);
+			return fail(500, { message: 'Something went wrong. Please try again.' });
 		}
 	},
 
 	toggleEnabled: async ({ request, locals }) => {
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive)
-			return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
 
 		const data = await request.formData();
 		const id = data.get('id') as string;
@@ -117,6 +114,7 @@ export const actions: Actions = {
 		try {
 			await locals.pb.collection('beds').update(id, { enabled: !enabled });
 		} catch (err) {
+			console.error('[Action:toggleEnabled] FAILED:', err);
 			return fail(500, { message: 'Something went wrong. Please try again.' });
 		}
 	},

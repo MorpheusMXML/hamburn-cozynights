@@ -52,8 +52,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 export const actions: Actions = {
 	createRoom: async ({ request, locals, params }) => {
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive)
-			return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
 
 		console.log(
 			`[Action:createRoom] User: ${locals.pb.authStore.model?.email}, Verified: ${locals.pb.authStore.model?.verified}, House: ${params.id}`
@@ -97,8 +96,7 @@ export const actions: Actions = {
 
 	deleteRoom: async ({ request, locals }) => {
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive)
-			return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
 
 		console.log(`[Action:deleteRoom] User: ${locals.pb.authStore.model?.email}`);
 

@@ -55,13 +55,16 @@ For detailed information on how the system works and how to manage it, please re
 ## 📚 Auto-Documentation
 
 This project uses a hybrid auto-documentation system:
+
 - **TypeDoc**: For core TypeScript logic and server-side functions.
 - **Svelte-Doc**: For UI component API references (Props, Slots, Events).
 
 To generate the latest documentation locally:
+
 ```bash
 npm run docs:generate
 ```
+
 The output will be available in `/docs/generated`.
 
 ---

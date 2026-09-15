@@ -1,7 +1,6 @@
 <script lang="ts">
 	import UserHouseMarker from './UserHouseMarker.svelte';
-	import { createEventDispatcher, onMount } from 'svelte';
-	import { fade, fly } from 'svelte/transition';
+	import { createEventDispatcher } from 'svelte';
 
 	export let houses: any[] = [];
 	export let isEditorMode = false;

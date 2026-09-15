@@ -1,4 +1,4 @@
-import { redirect, error, fail } from '@sveltejs/kit';
+import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { HousesResponse, BedsResponse, RoomsResponse } from '$lib/pocketbase-types';
 import { APP_SETTINGS_ID } from '$lib/server/constants';
@@ -43,9 +43,7 @@ export const actions: Actions = {
 			}
 
 			if (raw) {
-				console.log(
-					`[Action:togglePhase] Effective: ${effectivelyActive}, Target: ${nextStatus}`
-				);
+				console.log(`[Action:togglePhase] Effective: ${effectivelyActive}, Target: ${nextStatus}`);
 				await locals.pb.collection('app_settings').update(APP_SETTINGS_ID, update);
 			} else {
 				console.log('[Action:togglePhase] Creating initial settings.');
@@ -250,7 +248,8 @@ export const actions: Actions = {
 		if (isBookingActive) {
 			console.warn('[Import Template] BLOCKED: cannot nuke the database during LIVE mode.');
 			return fail(403, {
-				error: 'Templates cannot be imported during Live Booking — this would erase live bookings. Switch to Staging first. 🔒'
+				error:
+					'Templates cannot be imported during Live Booking — this would erase live bookings. Switch to Staging first. 🔒'
 			});
 		}
 

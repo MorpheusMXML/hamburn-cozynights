@@ -1,4 +1,4 @@
-import { error, redirect } from '@sveltejs/kit';
+import { fail } from '@sveltejs/kit';
 import type { Actions } from './$types';
 import { getBookingSettings } from '$lib/server/settings';
 
@@ -6,13 +6,15 @@ export const actions: Actions = {
 	create: async ({ request, locals }) => {
 		if (!locals.pb.authStore.model?.verified) {
 			console.error('[Action] Unauthorized attempt to create house.');
-			throw error(403, 'Unauthorized');
+			return fail(403, { message: 'Only verified crew members can ignite new sanctuaries.' });
 		}
 
 		const { isBookingActive } = await getBookingSettings(locals.pb);
 		if (isBookingActive) {
 			console.warn('[Action] BLOCKED: cannot create a house during LIVE mode.');
-			throw error(403, 'New sanctuaries cannot be ignited during Live Booking. Switch to Staging.');
+			return fail(403, {
+				message: 'New sanctuaries cannot be ignited during Live Booking. Switch to Staging.'
+			});
 		}
 
 		const data = await request.formData();
@@ -55,7 +57,7 @@ export const actions: Actions = {
 			return { success: true };
 		} catch (err) {
 			console.error('[Action] House ignition failed:', err);
-			throw error(500, 'Could not ignite house. The dust is too thick.');
+			return fail(500, { message: 'Could not ignite house. The dust is too thick.' });
 		}
 	}
 };

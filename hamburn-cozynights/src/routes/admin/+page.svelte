@@ -12,11 +12,20 @@
 
 	$: ({ houses, sanityWarnings, history, isVerified, isBookingActive, bookingUnlockAt } = data);
 
+	// Inline notification banner — replaces raw alert() popups for consistency
+	// with the room-/house-management pages.
+	let notice: { type: 'error' | 'success'; message: string } | null = null;
+	let noticeTimeout: ReturnType<typeof setTimeout>;
+
+	function showNotice(type: 'error' | 'success', message: string) {
+		clearTimeout(noticeTimeout);
+		notice = { type, message };
+		noticeTimeout = setTimeout(() => (notice = null), 6000);
+	}
+
 	// Management Summary Calculations
 	$: totalBeds = houses.reduce((sum, h) => sum + (h.totalBeds || 0), 0);
 	$: occupiedBeds = houses.reduce((sum, h) => sum + (h.occupiedBeds || 0), 0);
-	$: freeBeds = totalBeds - occupiedBeds;
-	$: occupancyRate = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
 
 	$: houseStats = {
 		empty: houses.filter((h) => h.occupiedBeds === 0 && h.totalBeds > 0).length,
@@ -70,7 +79,7 @@
 						if (result.type === 'success') {
 							const formData = new FormData();
 							await submitAction('?/clearAllBookings', formData);
-							alert('✨ PLAYA PURGED: All spots are vacant once more.');
+							showNotice('success', '✨ PLAYA PURGED: All spots are vacant once more.');
 						}
 						await update();
 					};
@@ -110,7 +119,8 @@
 
 	async function handleHouseMoved(event: CustomEvent) {
 		if (isBookingActive) {
-			alert(
+			showNotice(
+				'error',
 				'🔒 LOCKDOWN ACTIVE: Map layout is locked during Live Booking. Switch to Staging Mode to reposition houses.'
 			);
 			invalidateAll();
@@ -132,7 +142,8 @@
 		const result = await submitAction('?/updateHouseCoords', formData);
 
 		if (result.type !== 'success') {
-			alert(
+			showNotice(
+				'error',
 				`🔥 THE PLAYA PROTECTS! 🛡️ ${result.data?.error || 'This house has active bookings and cannot be moved.'}`
 			);
 			editingHouse = null;
@@ -150,7 +161,8 @@
 
 	function handleRenameHouse(house: any) {
 		if (isBookingActive) {
-			alert(
+			showNotice(
+				'error',
 				'🔒 LOCKDOWN ACTIVE: House names are locked during Live Booking. Switch to Staging Mode to manage.'
 			);
 			return;
@@ -162,7 +174,8 @@
 
 	async function handleDeleteHouse(house: any) {
 		if (isBookingActive) {
-			alert(
+			showNotice(
+				'error',
 				'🔒 LOCKDOWN ACTIVE: You cannot vanish sanctuaries while bookings are live! Switch to Staging Mode first.'
 			);
 			return;
@@ -180,7 +193,10 @@
 			const result = await submitAction('?/deleteHouse', formData);
 
 			if (result.type !== 'success') {
-				alert(`❌ VANISH FAILED! ${result.data?.error || 'The playa protects this sanctuary.'}`);
+				showNotice(
+					'error',
+					`❌ VANISH FAILED! ${result.data?.error || 'The playa protects this sanctuary.'}`
+				);
 			}
 			invalidateAll();
 		}
@@ -188,7 +204,7 @@
 
 	async function handleSaveHouse(event: CustomEvent) {
 		if (isBookingActive) {
-			alert('🔒 LOCKDOWN ACTIVE: House deployment is locked during Live Booking.');
+			showNotice('error', '🔒 LOCKDOWN ACTIVE: House deployment is locked during Live Booking.');
 			editingHouse = null;
 			selectedHouseId = null;
 			return;
@@ -196,7 +212,7 @@
 		const newHouseData = event.detail;
 
 		if (!newHouseData.name || newHouseData.name.trim() === '') {
-			alert('⚠️ NAME REQUIRED! A sanctuary needs a name to exist in the dust.');
+			showNotice('error', '⚠️ NAME REQUIRED! A sanctuary needs a name to exist in the dust.');
 			return;
 		}
 
@@ -207,7 +223,10 @@
 			formData.append('id', editingHouse.id);
 			const result = await submitAction('?/renameHouse', formData);
 			if (result.type !== 'success')
-				alert(`❌ RENAME FAILED! ${result.data?.error || 'The desert winds are too strong.'}`);
+				showNotice(
+					'error',
+					`❌ RENAME FAILED! ${result.data?.error || 'The desert winds are too strong.'}`
+				);
 		} else {
 			formData.append('x', editingHouse?.x.toString() || '0');
 			formData.append('y', editingHouse?.y.toString() || '0');
@@ -215,7 +234,10 @@
 
 			const result = await submitAction('/admin/house/new?/create', formData);
 			if (result.type !== 'success')
-				alert(`❌ CREATION FAILED! ${result.data?.error || 'The dust has clogged the gears.'}`);
+				showNotice(
+					'error',
+					`❌ CREATION FAILED! ${result.data?.error || 'The dust has clogged the gears.'}`
+				);
 		}
 
 		editingHouse = null;
@@ -225,7 +247,10 @@
 
 	async function handleDeleteActiveHouse() {
 		if (isBookingActive) {
-			alert('🔒 LOCKDOWN ACTIVE: You cannot vanish sanctuaries while bookings are live!');
+			showNotice(
+				'error',
+				'🔒 LOCKDOWN ACTIVE: You cannot vanish sanctuaries while bookings are live!'
+			);
 			return;
 		}
 		if (!activeHouse || !activeHouse.id) return;
@@ -253,7 +278,10 @@
 				console.error('[Dashboard] Vanish FAILED:', result);
 				if (card) card.classList.remove('disintegrating');
 				if (sidebar) sidebar.classList.remove('disintegrating');
-				alert(`❌ VANISH FAILED: ${result.data?.error || 'The playa protects this sanctuary.'}`);
+				showNotice(
+					'error',
+					`❌ VANISH FAILED: ${result.data?.error || 'The playa protects this sanctuary.'}`
+				);
 			} else {
 				console.log('[Dashboard] Vanish SUCCESS. Clearing state...');
 				selectedHouseId = null;
@@ -293,7 +321,7 @@
 			document.body.removeChild(a);
 		} catch (err) {
 			console.error('[Export] Error:', err);
-			alert('❌ EXPORT FAILED: The data stream was interrupted.');
+			showNotice('error', '❌ EXPORT FAILED: The data stream was interrupted.');
 		} finally {
 			// Stay in loading state a bit longer for visual fun
 			setTimeout(() => {
@@ -317,7 +345,7 @@
 			isImporting = false;
 			if (result.type === 'success') {
 				showTemplates = false;
-				alert('✨ PLAYA REBORN: Template applied successfully.');
+				showNotice('success', '✨ PLAYA REBORN: Template applied successfully.');
 			}
 			await update();
 		};
@@ -354,6 +382,13 @@
 			</button>
 		</div>
 	</header>
+
+	{#if notice}
+		<div class="notice-banner {notice.type}" in:fly={{ y: -20, duration: 300 }} out:fade>
+			<span>{notice.message}</span>
+			<button class="dismiss" on:click={() => (notice = null)} aria-label="Dismiss">&times;</button>
+		</div>
+	{/if}
 
 	{#if isVerified}
 		<section class="timer-panel">
@@ -409,7 +444,7 @@
 						{#if isExporting}
 							<div class="card-loading-overlay" in:fade>
 								<div class="data-stream">
-									{#each Array(10) as _, i}
+									{#each Array(10) as _, i (i)}
 										<div class="bit" style="--delay: {i * 0.1}s; --left: {Math.random() * 100}%">
 											{Math.random() > 0.5 ? '1' : '0'}
 										</div>
@@ -449,7 +484,11 @@
 									{selectedFileName || 'CHOOSE TEMPLATE FILE'}
 								</label>
 							</div>
-							<button type="submit" class="btn-action danger" disabled={isImporting || !selectedFileName}>
+							<button
+								type="submit"
+								class="btn-action danger"
+								disabled={isImporting || !selectedFileName}
+							>
 								{isImporting ? 'IGNITING...' : 'APPLY TEMPLATE 🔥'}
 							</button>
 						</form>
@@ -606,7 +645,7 @@
 			</div>
 		{:else}
 			<div class="grid-view" in:fade={{ duration: 300 }}>
-				{#each houses as house}
+				{#each houses as house (house.id)}
 					<div class="house-card-wrapper">
 						<a href="/admin/house/{house.id}" class="house-card">
 							<div class="card-glow"></div>
@@ -659,7 +698,10 @@
 						class="add-house-card"
 						on:click={() =>
 							isBookingActive
-								? alert('🔒 LOCKDOWN ACTIVE: Switch to 🛠 STAGING to ignite new sanctuaries.')
+								? showNotice(
+										'error',
+										'🔒 LOCKDOWN ACTIVE: Switch to 🛠 STAGING to ignite new sanctuaries.'
+									)
 								: handleLocationSelected({ x: 500, y: 350 })}
 						class:disabled={isBookingActive}
 					>
@@ -703,6 +745,40 @@
 		color: #666;
 		font-size: 0.85rem;
 		font-weight: bold;
+	}
+
+	.notice-banner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 1rem 1.5rem;
+		border-radius: 12px;
+		font-weight: 700;
+		font-size: 0.85rem;
+	}
+	.notice-banner.error {
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		color: #f87171;
+	}
+	.notice-banner.success {
+		background: rgba(74, 222, 128, 0.08);
+		border: 1px solid rgba(74, 222, 128, 0.3);
+		color: #4ade80;
+	}
+	.notice-banner .dismiss {
+		background: none;
+		border: none;
+		color: inherit;
+		font-size: 1.2rem;
+		line-height: 1;
+		cursor: pointer;
+		opacity: 0.7;
+		padding: 0;
+	}
+	.notice-banner .dismiss:hover {
+		opacity: 1;
 	}
 
 	.header-right {

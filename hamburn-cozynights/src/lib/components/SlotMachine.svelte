@@ -15,12 +15,30 @@
 	export let showButton = true;
 
 	const burnerNames = [
-		'Dusty Nomad', 'Neon Lizard', 'Spark Plug', 'Glow Worm',
-		'Cactus Jack', 'Desert Rose', 'Fire Starter', 'Solar Flare',
-		'Prism Pilot', 'Laser Lynx', 'Vortex Voyager', 'Cosmic Coyote',
-		'Quartz Queen', 'Mirage Maker', 'Zenith Zephyr', 'Oasis Owl',
-		'Stardust Scout', 'Thunder Thistle', 'Midnight Muse', 'Silver Streak',
-		'Neon Nebula', 'Plasma Puma', 'Quantum Quokka', 'Cyber Cipher'
+		'Dusty Nomad',
+		'Neon Lizard',
+		'Spark Plug',
+		'Glow Worm',
+		'Cactus Jack',
+		'Desert Rose',
+		'Fire Starter',
+		'Solar Flare',
+		'Prism Pilot',
+		'Laser Lynx',
+		'Vortex Voyager',
+		'Cosmic Coyote',
+		'Quartz Queen',
+		'Mirage Maker',
+		'Zenith Zephyr',
+		'Oasis Owl',
+		'Stardust Scout',
+		'Thunder Thistle',
+		'Midnight Muse',
+		'Silver Streak',
+		'Neon Nebula',
+		'Plasma Puma',
+		'Quantum Quokka',
+		'Cyber Cipher'
 	];
 
 	let isSpinning = false;
@@ -55,7 +73,7 @@
 			const finalResult = `${currentName} #${finalSuffix}`;
 			currentName = finalResult;
 			showConfetti = true;
-			
+
 			/**
 			 * @event select
 			 * Dispatched when a final name has been chosen.
@@ -84,7 +102,7 @@
 		<div class="laser-line"></div>
 		{#if showConfetti}
 			<div class="confetti-container">
-				{#each Array(35) as _, i}
+				{#each Array(35) as _, i (i)}
 					<div
 						class="confetti"
 						style="--delay: {Math.random() * 2}s; --left: {Math.random() * 100}%; --color: {[

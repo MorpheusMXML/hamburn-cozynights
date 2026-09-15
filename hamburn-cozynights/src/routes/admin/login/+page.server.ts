@@ -52,7 +52,7 @@ export const actions: Actions = {
 		try {
 			// 1. Try regular user auth
 			await locals.pb.collection('users').authWithPassword(email, password);
-		} catch (userErr) {
+		} catch {
 			try {
 				// 2. Fallback: Try Superuser (v0.23+) / Admin auth
 				try {
@@ -60,7 +60,7 @@ export const actions: Actions = {
 				} catch {
 					await locals.pb.admins.authWithPassword(email, password);
 				}
-			} catch (adminErr) {
+			} catch {
 				return fail(400, { fail: true, message: 'Invalid keys or burner does not exist.' });
 			}
 		}

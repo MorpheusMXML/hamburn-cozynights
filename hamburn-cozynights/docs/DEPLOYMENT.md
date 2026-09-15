@@ -6,11 +6,11 @@ stay isolated from each other despite sharing one physical server.
 
 ## 1. Environments
 
-| Environment | Purpose                                    | Data                                              |
-| :---------- | :------------------------------------------ | :------------------------------------------------- |
-| **Local**   | Development on your own machine (`npm run dev` + `npm run db:up`). | Your own local `pb_data/`, never shared. |
-| **Staging** | Testing with real users before things go live — its own subdomain, its own PocketBase instance, its own `.env`. | Isolated. Treat as disposable. |
-| **Production** | The live event. | Real bookings. |
+| Environment    | Purpose                                                                                                         | Data                                     |
+| :------------- | :-------------------------------------------------------------------------------------------------------------- | :--------------------------------------- |
+| **Local**      | Development on your own machine (`npm run dev` + `npm run db:up`).                                              | Your own local `pb_data/`, never shared. |
+| **Staging**    | Testing with real users before things go live — its own subdomain, its own PocketBase instance, its own `.env`. | Isolated. Treat as disposable.           |
+| **Production** | The live event.                                                                                                 | Real bookings.                           |
 
 Staging and production are **fully separate stacks** (separate containers,
 separate Docker network, separate database volume, separate `ENCRYPTION_KEY`).

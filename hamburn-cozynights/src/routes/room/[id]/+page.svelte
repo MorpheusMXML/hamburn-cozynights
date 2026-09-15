@@ -133,7 +133,7 @@
 	{/if}
 
 	<div class="beds-grid">
-		{#each data.beds as bed}
+		{#each data.beds as bed (bed.id)}
 			{@const isMyBed = bed.id === data.userBedId}
 			{@const someoneElseBooked = bed.occupied && !isMyBed}
 			{@const iHaveAnotherBooking = !!data.userBedId && !isMyBed}
@@ -189,10 +189,12 @@
 </div>
 
 {#if showModal}
-	<!-- svelte-ignore a11y-click-events-have-key-events -->
-	<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
-	<div class="modal-backdrop" on:click={closeModal} role="presentation">
+	<div
+		class="modal-backdrop"
+		on:click={closeModal}
+		on:keydown={handleBackdropKeydown}
+		role="presentation"
+	>
 		<div class="modal" on:click|stopPropagation role="dialog" aria-modal="true" tabindex="-1">
 			<h2>{selectedBedId === data.userBedId ? 'Edit Your Spot' : 'Grab This Spot'}</h2>
 			<p>Set your Burner Name (optional).</p>
@@ -270,7 +272,7 @@
 {#if triggerFireworks}
 	<div class="fireworks-overlay" in:fade={{ duration: 1000 }} out:fade={{ duration: 1000 }}>
 		<div class="pixel-fireworks">
-			{#each Array(12) as _, i}
+			{#each Array(12) as _, i (i)}
 				<div
 					class="firework"
 					style="--left: {Math.random() * 100}%; --top: {Math.random() *

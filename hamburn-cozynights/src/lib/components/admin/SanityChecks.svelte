@@ -24,7 +24,7 @@
 		</header>
 
 		<div class="tree-container">
-			{#each warnings as warning}
+			{#each warnings as warning (warning.id)}
 				<div class="house-node">
 					<div class="node-content">
 						<span class="icon">🛖</span>
@@ -37,7 +37,7 @@
 
 					{#if warning.roomsWithNoBeds.length > 0}
 						<div class="children">
-							{#each warning.roomsWithNoBeds as room}
+							{#each warning.roomsWithNoBeds as room (room.id)}
 								<div class="room-node">
 									<div class="node-content">
 										<span class="icon">🚪</span>

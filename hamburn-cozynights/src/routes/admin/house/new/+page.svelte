@@ -1,6 +1,21 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { enhance } from '$app/forms';
+	import { fade } from 'svelte/transition';
+	import type { ActionData, SubmitFunction } from './$types';
+
+	export let form: ActionData;
+
+	const handleCreate: SubmitFunction = () => {
+		return async ({ result, update }) => {
+			if (result.type === 'success') {
+				await goto('/admin');
+			} else {
+				await update();
+			}
+		};
+	};
 
 	// Extrahiere Koordinaten aus der URL (?x=880&y=373)
 	$: x = $page.url.searchParams.get('x') || 0;
@@ -8,30 +23,17 @@
 
 	let name = '';
 	let description = '';
-
-	async function createHouse() {
-		const response = await fetch('?/create', {
-			method: 'POST',
-			body: new URLSearchParams({
-				name,
-				description,
-				x: x.toString(),
-				y: y.toString()
-			})
-		});
-
-		if (response.ok) {
-			// Zurück zur Admin-Übersicht nach Erfolg
-			window.location.href = '/admin';
-		}
-	}
 </script>
 
 <div class="edit-container">
 	<h1>Add New House</h1>
 	<p class="coords-display">Location: 📍 X: {x} / Y: {y}</p>
 
-	<form method="POST" action="?/create" class="edit-form">
+	{#if form?.message}
+		<div class="error-banner" in:fade>⚠️ {form.message}</div>
+	{/if}
+
+	<form method="POST" action="?/create" class="edit-form" use:enhance={handleCreate}>
 		<input type="hidden" name="x" value={x} />
 		<input type="hidden" name="y" value={y} />
 
@@ -75,6 +77,16 @@
 		padding: 0.5rem;
 		border-radius: 4px;
 		display: inline-block;
+	}
+	.error-banner {
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		color: #f87171;
+		padding: 1rem 1.5rem;
+		border-radius: 8px;
+		font-weight: 700;
+		font-size: 0.85rem;
+		margin-top: 1rem;
 	}
 	.edit-form {
 		display: flex;

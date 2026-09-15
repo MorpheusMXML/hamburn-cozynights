@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { HouseData } from '$lib/types';
-	import { createEventDispatcher, onMount } from 'svelte';
-	import { fade, fly } from 'svelte/transition';
+	import { createEventDispatcher } from 'svelte';
+	import { fade } from 'svelte/transition';
 
 	export let x: number;
 	export let y: number;

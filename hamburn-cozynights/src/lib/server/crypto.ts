@@ -4,7 +4,6 @@ import { env } from '$env/dynamic/private';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
-const TAG_LENGTH = 16;
 const HASH_ALGORITHM = 'sha256';
 
 /**

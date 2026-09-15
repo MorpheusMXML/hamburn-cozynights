@@ -21,7 +21,7 @@ async function run() {
 	try {
 		await pb.health.check();
 		console.log('✅ PocketBase is reachable at', PB_URL);
-	} catch (e) {
+	} catch {
 		console.error('❌ PocketBase is NOT reachable. Did you run `npm run db:up`?');
 		process.exit(1);
 	}
@@ -41,7 +41,7 @@ async function run() {
 			await pb.admins.authWithPassword(PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD);
 		}
 		console.log('✅ Service Account authentication successful for', PB_ADMIN_EMAIL);
-	} catch (e) {
+	} catch {
 		console.error('❌ Authentication failed for', PB_ADMIN_EMAIL);
 		console.error(
 			'💡 Fix: Ensure the user exists in PocketBase and the password matches your .env file.'

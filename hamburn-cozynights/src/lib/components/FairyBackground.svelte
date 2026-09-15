@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fade } from 'svelte/transition';
 
 	type SpriteType = 'pixel' | 'glow' | 'unicorn' | 'wizard' | 'wine' | 'mermaid';
 

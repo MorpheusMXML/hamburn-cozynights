@@ -22,7 +22,7 @@
 		<p>Choose a spot:</p>
 
 		<div class="bed-grid">
-			{#each allBeds as bed}
+			{#each allBeds as bed (bed.id)}
 				<button
 					class="bed-btn"
 					class:occupied={bed.occupied}

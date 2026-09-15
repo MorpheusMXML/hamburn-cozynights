@@ -27,3 +27,8 @@ pb_data/
 
 # Test reports
 html/
+playwright-report/
+test-results/
+
+# Generated docs
+docs/generated/

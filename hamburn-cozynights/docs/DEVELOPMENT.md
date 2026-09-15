@@ -26,6 +26,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 The `npm run typegen` command no longer stores your password in `package.json`. Instead, it loads credentials from your `.env` file or a GPG-encrypted file.
 
 If `PB_ADMIN_PASSWORD` is not found in your `.env`, the script will automatically look for one of these files and attempt to decrypt it using GPG:
+
 - `.env.gpg`
 - `secrets.gpg`
 - `pb_password.gpg`
@@ -76,18 +77,24 @@ Since `pb_data` is ignored by Git, use these scripts to manage your database sta
 We maintain technical documentation through automated extraction from source code comments.
 
 ### 5.1 Tools Used
+
 - **TypeDoc**: Generates API references for TypeScript files in `src/lib`.
 - **Svelte-Doc**: Extracts prop, slot, and event information from UI components.
 
 ### 5.2 Generation Commands
+
 To build the static documentation site:
+
 ```bash
 npm run docs:generate
 ```
+
 This will populate the `docs/generated/` directory with HTML files.
 
 ### 5.3 Commenting Standards
+
 All new code should adhere to the following standards to ensure clean auto-docs:
+
 - **Functions:** Use JSDoc blocks with `@param` and `@returns`.
 - **Svelte Props:** Add a comment block above `export let` statements.
 - **Complexity:** Complex logic should have a brief architectural overview in a module-level doc block.

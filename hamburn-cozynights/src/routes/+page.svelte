@@ -12,7 +12,7 @@
 	let isHovering = false;
 
 	onMount(() => {
-		titleLetters = fullTitle.split('').map((char, i) => ({
+		titleLetters = fullTitle.split('').map((char) => ({
 			char,
 			color: neonColors[Math.floor(Math.random() * neonColors.length)],
 			delay: Math.random() * 800,
@@ -36,7 +36,7 @@
 		<div class="title-container">
 			<div class="laser-scanner"></div>
 			<h1 class="burning-laser-title">
-				{#each titleLetters as { char, color, delay, offset }, i}
+				{#each titleLetters as { char, color, delay, offset }, i (i)}
 					<span class="letter" style="--color: {color}; --delay: {delay}ms; --offset: {offset}px">
 						{char === ' ' ? '\u00A0' : char}
 					</span>
@@ -56,7 +56,7 @@
 				<div class="button-container">
 					{#if isHovering}
 						<div class="party-zone">
-							{#each Array(40) as _, i}
+							{#each Array(40) as _, i (i)}
 								<div
 									class="particle"
 									style="--angle: {Math.random() * 360}deg; --dist: {60 +

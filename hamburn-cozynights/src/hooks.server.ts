@@ -27,7 +27,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 			const record = event.locals.pb.authStore.record || event.locals.pb.authStore.model;
 
 			// Check for Superuser (v0.23+) or Legacy Admin
-			// @ts-ignore - isSuperuser is the new way
 			const isSuper =
 				record?.collectionName === '_superusers' || event.locals.pb.authStore.isSuperuser;
 
@@ -45,7 +44,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		} else {
 			event.locals.user = undefined;
 		}
-	} catch (err) {
+	} catch {
 		event.locals.pb.authStore.clear();
 		event.locals.user = undefined;
 	}
