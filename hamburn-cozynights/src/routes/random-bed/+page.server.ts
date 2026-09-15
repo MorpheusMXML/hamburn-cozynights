@@ -1,23 +1,14 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { APP_SETTINGS_ID } from '$lib/server/constants';
+import { getBookingSettings } from '$lib/server/settings';
 import { BookingService, BedUnavailableError } from '$lib/server/booking';
+import type { BedsResponse, RoomsResponse, HousesResponse } from '$lib/pocketbase-types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.orderNumber) throw redirect(303, '/');
 
 	try {
-		const settings = await locals.pb
-			.collection('app_settings')
-			.getOne(APP_SETTINGS_ID)
-			.catch(() => ({ is_booking_active: false }));
-
-		// Fetch all available beds with room and house info
-		const freeBeds = await locals.pb.collection('beds').getFullList({
-			filter: 'occupied = false',
-			expand: 'room,room.house',
-			sort: 'label'
-		});
+		const { isBookingActive } = await getBookingSettings(locals.pb);
 
 		// Orders contain PII and are never readable via the public `pb` connection
 		// (see BookingService.getOrderByNumber, which uses the privileged adminPb).
@@ -25,12 +16,36 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const order = await bookingService.getOrderByNumber(locals.orderNumber);
 		if (!order) throw error(404, 'Booking code not found.');
 
-		const userBed = await bookingService.getBedForOrder(order.id);
+		const userBed = await locals.adminPb
+			.collection('beds')
+			.getFirstListItem<BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>>(
+				locals.adminPb.filter('order = {:orderId}', { orderId: order.id }),
+				{ expand: 'room,room.house' }
+			)
+			.catch(() => null);
+
+		// Only fetch the (possibly large) free-bed list when the user doesn't
+		// already have a spot — they can't roll again without releasing first.
+		const freeBeds = userBed
+			? []
+			: await locals.pb.collection('beds').getFullList({
+					filter: 'occupied = false',
+					expand: 'room,room.house',
+					sort: 'label'
+				});
 
 		return {
 			freeBeds,
-			userBedId: userBed?.id || null,
-			isBookingActive: settings.is_booking_active
+			isBookingActive,
+			userBed: userBed
+				? {
+						id: userBed.id,
+						label: userBed.label,
+						roomId: userBed.room,
+						roomName: userBed.expand?.room?.name,
+						houseName: userBed.expand?.room?.expand?.house?.name
+					}
+				: null
 		};
 	} catch (err) {
 		console.error(err);
@@ -45,11 +60,8 @@ export const actions: Actions = {
 			return fail(500, { error: 'System authentication failed. Please contact admin.' });
 		}
 
-		const settings = await locals.pb
-			.collection('app_settings')
-			.getOne(APP_SETTINGS_ID)
-			.catch(() => ({ is_booking_active: false }));
-		if (!settings.is_booking_active) return fail(403, { error: 'The gates are closed.' });
+		const { isBookingActive } = await getBookingSettings(locals.pb);
+		if (!isBookingActive) return fail(403, { error: 'The gates are closed.' });
 
 		const formData = await request.formData();
 		const bedId = formData.get('bedId') as string;
@@ -63,6 +75,13 @@ export const actions: Actions = {
 		const order = await bookingService.getOrderByNumber(locals.orderNumber);
 		if (!order) {
 			return fail(404, { error: 'Your booking code was not found.' });
+		}
+
+		// Roulette is only for claiming a first spot — once you have one, use
+		// "release spot" and re-roll deliberately rather than silently rebooking.
+		const existingBed = await bookingService.getBedForOrder(order.id);
+		if (existingBed) {
+			return fail(409, { error: 'You already have a spot. Release it first to roll again.' });
 		}
 
 		try {
@@ -81,6 +100,29 @@ export const actions: Actions = {
 			}
 			console.error(err);
 			return fail(500, { error: 'The playa swallowed your request.' });
+		}
+	},
+
+	releaseBed: async ({ locals }) => {
+		if (!locals.adminPb.authStore.isValid) {
+			return fail(500, { error: 'System authentication failed.' });
+		}
+
+		const { isBookingActive } = await getBookingSettings(locals.pb);
+		if (!isBookingActive) return fail(403, { error: 'Bookings are locked.' });
+
+		if (!locals.orderNumber) return fail(401);
+
+		const bookingService = new BookingService(locals.adminPb);
+		const order = await bookingService.getOrderByNumber(locals.orderNumber);
+		if (!order) return fail(404, { error: 'Order not found.' });
+
+		try {
+			await bookingService.unbookOrder(order.id);
+			return { success: true };
+		} catch (err: any) {
+			console.error('[Security] random-bed releaseBed failed:', err);
+			return fail(500, { error: `Spot release failed: ${err.message}` });
 		}
 	}
 };

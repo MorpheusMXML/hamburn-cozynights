@@ -6,7 +6,9 @@
 	import { fade, scale } from 'svelte/transition';
 
 	export let data: PageData;
-	$: ({ freeBeds, isBookingActive } = data);
+	$: ({ freeBeds, isBookingActive, userBed } = data);
+
+	let isReleasing = false;
 
 	let isSpinning = false;
 	let nameSelected = false;
@@ -75,7 +77,35 @@
 		<h1 class="laser-text pink">Luck of the Playa</h1>
 		<p class="subtitle">Surrender to the dust. We'll find you a home.</p>
 
-		{#if freeBeds.length === 0}
+		{#if userBed}
+			<div class="already-booked" in:fade>
+				<span class="icon">🏠</span>
+				<p class="already-booked-title">You already have a home for the night</p>
+				<div class="already-booked-card">
+					<strong>{userBed.label}</strong>
+					<span>{userBed.roomName} • {userBed.houseName}</span>
+				</div>
+				<p class="hint">Release your spot first if you want to roll for a different one.</p>
+				<div class="already-booked-actions">
+					<a href="/room/{userBed.roomId}" class="btn-goto">Visit My Room</a>
+					<form
+						method="POST"
+						action="?/releaseBed"
+						use:enhance={() => {
+							isReleasing = true;
+							return async ({ update }) => {
+								isReleasing = false;
+								await update();
+							};
+						}}
+					>
+						<button class="respin-btn secondary" type="submit" disabled={isReleasing}>
+							{isReleasing ? 'RELEASING...' : 'Release This Spot 🔓'}
+						</button>
+					</form>
+				</div>
+			</div>
+		{:else if freeBeds.length === 0}
 			<div class="empty-state">
 				<span class="icon">🏜️</span>
 				<p>The playa is full. No free beds left to scavenge.</p>
@@ -437,5 +467,60 @@
 		font-size: 4rem;
 		display: block;
 		margin-bottom: 1rem;
+	}
+
+	.already-booked {
+		padding: 2rem 0;
+		text-align: center;
+	}
+	.already-booked .icon {
+		font-size: 3.5rem;
+		display: block;
+		margin-bottom: 1rem;
+	}
+	.already-booked-title {
+		color: #fff;
+		font-weight: 900;
+		font-size: 1.1rem;
+		margin: 0 0 1.5rem 0;
+	}
+	.already-booked-card {
+		background: #000;
+		border: 2px solid #2dd4bf;
+		border-radius: 16px;
+		padding: 1.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		box-shadow: 0 0 30px rgba(45, 212, 191, 0.15);
+	}
+	.already-booked-card strong {
+		font-size: 1.5rem;
+		color: #2dd4bf;
+	}
+	.already-booked-card span {
+		color: #888;
+		font-size: 0.85rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+	.already-booked .hint {
+		color: #444;
+		font-size: 0.8rem;
+		margin: 1.5rem 0 0 0;
+	}
+	.already-booked-actions {
+		display: flex;
+		gap: 1rem;
+		margin-top: 1rem;
+	}
+	.already-booked-actions .btn-goto,
+	.already-booked-actions form {
+		flex: 1;
+	}
+	.already-booked-actions .respin-btn {
+		width: 100%;
+		height: 100%;
 	}
 </style>
