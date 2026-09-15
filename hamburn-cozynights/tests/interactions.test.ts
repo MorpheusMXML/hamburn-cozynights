@@ -48,7 +48,10 @@ describe('Interactions & Registration', () => {
 	});
 
 	it('should register/login with a valid booking code', async () => {
-		mockPb.getFirstListItem.mockResolvedValueOnce({ id: 'order_123', order_number: 'VALID-CODE' });
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({
+			id: 'order_123',
+			order_number: 'VALID-CODE'
+		});
 
 		const formData = new FormData();
 		formData.append('bookingCode', 'VALID-CODE');
@@ -65,7 +68,7 @@ describe('Interactions & Registration', () => {
 	});
 
 	it('should fail login with an invalid booking code', async () => {
-		mockPb.getFirstListItem.mockRejectedValueOnce({ status: 404 });
+		mockAdminPb.getFirstListItem.mockRejectedValueOnce({ status: 404 });
 
 		const formData = new FormData();
 		formData.append('bookingCode', 'INVALID');
@@ -98,7 +101,8 @@ describe('Room Load & Booking Logic', () => {
 			getFullList: vi.fn(),
 			getOne: vi.fn(),
 			update: vi.fn(),
-			filter: vi.fn((q: any) => q)
+			filter: vi.fn((q: any) => q),
+			authStore: { isValid: true, model: null }
 		};
 		mockLocals = {
 			pb: mockPb,
@@ -132,7 +136,9 @@ describe('Room Load & Booking Logic', () => {
 	it('should allow booking an available bed', async () => {
 		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true }); // Settings
 		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' }); // Order lookup
-		mockAdminPb.getOne.mockResolvedValueOnce({ id: 'bed1', occupied: false, is_locked: false }); // Bed lookup
+		// Bed lookup: once in the route action's is_locked pre-check, once more
+		// inside BookingService.bookBed's authoritative re-check under the lock.
+		mockAdminPb.getOne.mockResolvedValue({ id: 'bed1', occupied: false, is_locked: false });
 		mockAdminPb.getFullList.mockResolvedValueOnce([]); // Previous beds
 
 		const formData = new FormData();
