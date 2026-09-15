@@ -4,6 +4,7 @@ import { actions as loginActions } from '../src/routes/+page.server';
 import { load as roomLoad, actions as roomActions } from '../src/routes/room/[id]/+page.server';
 import { actions as adminActions } from '../src/routes/admin/room/[id]/+page.server';
 import { actions as houseAdminActions } from '../src/routes/admin/house/[id]/+page.server';
+import { APP_SETTINGS_ID } from '../src/lib/server/constants';
 
 // Mock environment variables
 vi.mock('$env/dynamic/private', () => ({
@@ -114,7 +115,7 @@ describe('Room Load & Booking Logic', () => {
 
 	it('should load a room and successfully handle order hash migration', async () => {
 		mockPb.getOne.mockImplementation(async (id: string) => {
-			if (id === 'abcsettings123') return { is_booking_active: true };
+			if (id === APP_SETTINGS_ID) return { is_booking_active: true };
 			if (id === 'room1') return { id: 'room1', name: 'Test Room' };
 			throw new Error('Not found');
 		});

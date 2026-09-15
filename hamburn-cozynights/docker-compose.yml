@@ -10,6 +10,10 @@ services:
     volumes:
       # Hier werden deine Daten (Häuser, Betten, User) gespeichert
       - ./pb_data:/pb_data
+      # Schema-Migrationen (siehe pb_migrations/) — versioniert in Git, damit
+      # jede neue Instanz automatisch denselben Collection-Aufbau bekommt.
+      - ./pb_migrations:/pb_migrations
+      - ./pb_hooks:/pb_hooks
     # Gesundheitsprüfung: Startet Container neu, falls PB abstürzt
     healthcheck:
       test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:8090/api/health']

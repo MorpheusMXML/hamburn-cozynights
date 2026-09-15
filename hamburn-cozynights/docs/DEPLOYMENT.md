@@ -71,13 +71,27 @@ than each container managing its own public exposure.
 4. Add a GitHub Actions workflow mirroring `deploy-staging.yml`, pointed at
    a deploy user scoped to that environment's directory only.
 
-## 6. Known gap: schema isn't version-controlled
+## 6. Schema as code
 
 The PocketBase collection schema (`houses`, `rooms`, `beds`, `orders`,
-`app_settings`) and their API access rules currently exist only inside
-whatever database is running — there are no exported migrations in this
-repo. This means every fresh environment needs its schema recreated by
-hand (or restored from a backup) before the app is usable, and there is no
-single source of truth for what the correct API access rules should be.
-Exporting PocketBase's collections via its migration feature and committing
-the result would close this gap.
+`app_settings`) and their API access rules are defined in
+`pb_migrations/` and applied automatically on startup (`--automigrate`,
+on by default). `docker-compose.yml` mounts both `pb_migrations/` and
+`pb_hooks/` into the container, so:
+
+- a brand-new environment gets the full schema for free on first boot —
+  no manual collection setup, no restoring a backup just to get a usable
+  database;
+- changing schema through the PocketBase Dashboard or Admin API against a
+  local instance auto-writes a new migration file back into
+  `pb_migrations/` — commit that file the same way you would any other
+  code change;
+- `pb_hooks/admin_view.pb.js` is now actually loaded by the server for
+  the first time (it previously existed in the repo but was never
+  mounted, so it was dead code).
+
+Access rules were reconstructed from how the app itself talks to
+PocketBase (see the comment at the top of the migration file) rather than
+copied from a previously undocumented live instance — review them before
+relying on this as an exact record of what any given production database
+currently enforces.

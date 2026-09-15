@@ -12,7 +12,10 @@ const gitignorePath = fileURLToPath(new URL('./.gitignore', import.meta.url));
 
 export default defineConfig(
 	{
-		ignores: ['src/lib/pocketbase-types.ts']
+		// Not app code: pb_migrations/pb_hooks run inside PocketBase's own JS
+		// VM (globals like `migrate`, `$app`, `routerAdd`), a different
+		// runtime from this project's Node/browser TypeScript.
+		ignores: ['src/lib/pocketbase-types.ts', 'pb_migrations/**', 'pb_hooks/**']
 	},
 	includeIgnoreFile(gitignorePath),
 	js.configs.recommended,

@@ -3,6 +3,7 @@ import PocketBase from 'pocketbase';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,9 +33,7 @@ test.describe('Extended Booking & Admin Flow', () => {
 				);
 			}
 			// Ensure booking is active
-			await adminPb
-				.collection('app_settings')
-				.update('abcsettings123', { is_booking_active: true });
+			await adminPb.collection('app_settings').update(APP_SETTINGS_ID, { is_booking_active: true });
 
 			// Find a room with beds to test with
 			const beds = await adminPb.collection('beds').getFullList({ expand: 'room,room.house' });
@@ -104,7 +103,7 @@ test.describe('Extended Booking & Admin Flow', () => {
 
 	test('Negative: Booking Locked in Staging Mode', async ({ page }) => {
 		// 1. Set to Staging Mode (Locked)
-		await adminPb.collection('app_settings').update('abcsettings123', { is_booking_active: false });
+		await adminPb.collection('app_settings').update(APP_SETTINGS_ID, { is_booking_active: false });
 
 		try {
 			// 2. Login
@@ -122,9 +121,7 @@ test.describe('Extended Booking & Admin Flow', () => {
 			await expect(firstBed).toHaveAttribute('disabled', '');
 		} finally {
 			// Restore Live Mode
-			await adminPb
-				.collection('app_settings')
-				.update('abcsettings123', { is_booking_active: true });
+			await adminPb.collection('app_settings').update(APP_SETTINGS_ID, { is_booking_active: true });
 		}
 	});
 
