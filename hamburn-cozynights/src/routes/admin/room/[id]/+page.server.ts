@@ -1,6 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { RoomsResponse, BedsResponse, HousesResponse } from '$lib/pocketbase-types';
+import { APP_SETTINGS_ID } from '$lib/server/constants';
 
 // 1. Define the type including "expand" for related records 🔗
 type RoomWithHouse = RoomsResponse<{ house: HousesResponse }>;
@@ -24,7 +25,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 		const settings = await locals.pb
 			.collection('app_settings')
-			.getOne('abcsettings123')
+			.getOne(APP_SETTINGS_ID)
 			.catch(() => ({ is_booking_active: false }));
 
 		return { room, beds, isBookingActive: !!settings.is_booking_active };
@@ -38,7 +39,7 @@ export const actions: Actions = {
 	createBed: async ({ request, params, locals }) => {
 		const settings = await locals.pb
 			.collection('app_settings')
-			.getOne('abcsettings123')
+			.getOne(APP_SETTINGS_ID)
 			.catch(() => ({ is_booking_active: false }));
 		if (settings.is_booking_active)
 			return fail(403, { message: 'Management locked during live booking.' });
@@ -68,7 +69,7 @@ export const actions: Actions = {
 	deleteBed: async ({ request, locals }) => {
 		const settings = await locals.pb
 			.collection('app_settings')
-			.getOne('abcsettings123')
+			.getOne(APP_SETTINGS_ID)
 			.catch(() => ({ is_booking_active: false }));
 		if (settings.is_booking_active)
 			return fail(403, { message: 'Management locked during live booking.' });
@@ -95,7 +96,7 @@ export const actions: Actions = {
 	toggleOccupied: async ({ request, locals }) => {
 		const settings = await locals.pb
 			.collection('app_settings')
-			.getOne('abcsettings123')
+			.getOne(APP_SETTINGS_ID)
 			.catch(() => ({ is_booking_active: false }));
 		if (settings.is_booking_active)
 			return fail(403, { message: 'Management locked during live booking.' });
@@ -119,7 +120,7 @@ export const actions: Actions = {
 	toggleEnabled: async ({ request, locals }) => {
 		const settings = await locals.pb
 			.collection('app_settings')
-			.getOne('abcsettings123')
+			.getOne(APP_SETTINGS_ID)
 			.catch(() => ({ is_booking_active: false }));
 		if (settings.is_booking_active)
 			return fail(403, { message: 'Management locked during live booking.' });

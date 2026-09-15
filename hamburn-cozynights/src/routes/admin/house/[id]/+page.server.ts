@@ -1,6 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
+import { APP_SETTINGS_ID } from '$lib/server/constants';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	// Security check 🛡️
@@ -26,7 +27,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		// 4. Fetch app settings for booking status
 		const settings = await locals.pb
 			.collection('app_settings')
-			.getOne('abcsettings123')
+			.getOne(APP_SETTINGS_ID)
 			.catch(() => ({ is_booking_active: false }));
 
 		// 5. Map statistics 📊
@@ -55,7 +56,7 @@ export const actions: Actions = {
 	createRoom: async ({ request, locals, params }) => {
 		const settings = await locals.pb
 			.collection('app_settings')
-			.getOne('abcsettings123')
+			.getOne(APP_SETTINGS_ID)
 			.catch(() => ({ is_booking_active: false }));
 		if (settings.is_booking_active)
 			return fail(403, { message: 'Management locked during live booking.' });
@@ -103,7 +104,7 @@ export const actions: Actions = {
 	deleteRoom: async ({ request, locals }) => {
 		const settings = await locals.pb
 			.collection('app_settings')
-			.getOne('abcsettings123')
+			.getOne(APP_SETTINGS_ID)
 			.catch(() => ({ is_booking_active: false }));
 		if (settings.is_booking_active)
 			return fail(403, { message: 'Management locked during live booking.' });

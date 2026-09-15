@@ -1,12 +1,13 @@
 import { InventoryService } from '$lib/server/inventory';
 import type { PageServerLoad } from './$types';
+import { APP_SETTINGS_ID } from '$lib/server/constants';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const inventory = new InventoryService(locals.pb);
 	let houses = await inventory.getFullTree();
 	const settings = await locals.pb
 		.collection('app_settings')
-		.getOne('abcsettings123')
+		.getOne(APP_SETTINGS_ID)
 		.catch(() => ({ is_booking_active: false, booking_unlock_at: '' }));
 
 	if (settings.is_booking_active) {

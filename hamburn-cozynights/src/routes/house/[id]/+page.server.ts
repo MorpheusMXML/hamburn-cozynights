@@ -3,6 +3,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
 import { BookingService } from '$lib/server/booking';
+import { APP_SETTINGS_ID } from '$lib/server/constants';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.orderNumber) throw redirect(303, '/');
@@ -27,7 +28,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			}),
 			locals.pb
 				.collection('app_settings')
-				.getOne('abcsettings123')
+				.getOne(APP_SETTINGS_ID)
 				.catch(() => ({ is_booking_active: false, booking_unlock_at: '' })),
 			bookingService.getBedForOrder(order.id)
 		]);
@@ -61,7 +62,7 @@ export const actions: Actions = {
 
 		const settings = await locals.pb
 			.collection('app_settings')
-			.getOne('abcsettings123')
+			.getOne(APP_SETTINGS_ID)
 			.catch(() => ({ is_booking_active: false }));
 		if (!settings.is_booking_active) return fail(403, { error: 'Bookings are locked.' });
 

@@ -3,7 +3,8 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { RoomsResponse, BedsResponse, OrdersResponse } from '$lib/pocketbase-types';
 import { decrypt } from '$lib/server/crypto';
-import { BookingService } from '$lib/server/booking';
+import { BookingService, BedUnavailableError } from '$lib/server/booking';
+import { APP_SETTINGS_ID } from '$lib/server/constants';
 
 const burnerNames = [
 	'Dusty Nomad',
@@ -45,7 +46,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		const [settings, userBed, room, beds] = await Promise.all([
 			locals.pb
 				.collection('app_settings')
-				.getOne('abcsettings123')
+				.getOne(APP_SETTINGS_ID)
 				.catch(() => ({ is_booking_active: false, booking_unlock_at: '' })),
 			bookingService.getBedForOrder(order.id),
 			locals.pb.collection('rooms').getOne<RoomsResponse>(params.id),
@@ -92,7 +93,7 @@ export const actions: Actions = {
 
 		const settings = await locals.pb
 			.collection('app_settings')
-			.getOne('abcsettings123')
+			.getOne(APP_SETTINGS_ID)
 			.catch(() => ({ is_booking_active: false }));
 		if (!settings.is_booking_active) return fail(403, { error: 'Bookings are not open yet.' });
 
@@ -119,13 +120,16 @@ export const actions: Actions = {
 				return fail(403, { error: 'This bed is currently locked by an admin.' });
 			}
 
-			if (bed.occupied && bed.order !== order.id) {
-				return fail(400, { error: 'This spot is already claimed.' });
-			}
-
+			// The authoritative "still free?" check happens inside bookBed itself,
+			// under a per-bed lock — see BedUnavailableError below. Doing it only
+			// here would race: two concurrent requests could both pass this check
+			// before either writes.
 			await bookingService.bookBed(order, bedId, guestName);
 			return { success: true };
 		} catch (err: any) {
+			if (err instanceof BedUnavailableError) {
+				return fail(400, { error: err.message });
+			}
 			console.error('[Security] bookBed critical failure:', err);
 			return fail(500, { error: `Database error: ${err.message}` });
 		}
@@ -139,7 +143,7 @@ export const actions: Actions = {
 
 		const settings = await locals.pb
 			.collection('app_settings')
-			.getOne('abcsettings123')
+			.getOne(APP_SETTINGS_ID)
 			.catch(() => ({ is_booking_active: false }));
 		if (!settings.is_booking_active) return fail(403, { error: 'Bookings are locked.' });
 

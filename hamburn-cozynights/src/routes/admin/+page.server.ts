@@ -1,6 +1,7 @@
 import { redirect, error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { HousesResponse, BedsResponse, RoomsResponse } from '$lib/pocketbase-types';
+import { APP_SETTINGS_ID } from '$lib/server/constants';
 
 type HouseStats = HousesResponse & {
 	totalBeds: number;
@@ -22,7 +23,7 @@ export const actions = {
 		try {
 			const settings = await locals.pb
 				.collection('app_settings')
-				.getOne('abcsettings123')
+				.getOne(APP_SETTINGS_ID)
 				.catch(() => null);
 			let nextStatus = true;
 			if (settings) {
@@ -30,13 +31,13 @@ export const actions = {
 				console.log(
 					`[Action:togglePhase] Updating existing settings. Current: ${settings.is_booking_active}, Target: ${nextStatus}`
 				);
-				await locals.pb.collection('app_settings').update('abcsettings123', {
+				await locals.pb.collection('app_settings').update(APP_SETTINGS_ID, {
 					is_booking_active: nextStatus
 				});
 			} else {
 				console.log('[Action:togglePhase] Creating initial settings.');
 				await locals.pb.collection('app_settings').create({
-					id: 'abcsettings123',
+					id: APP_SETTINGS_ID,
 					is_booking_active: true
 				});
 			}
@@ -89,7 +90,7 @@ export const actions = {
 		const date = data.get('unlockAt') as string;
 
 		try {
-			await locals.pb.collection('app_settings').update('abcsettings123', {
+			await locals.pb.collection('app_settings').update(APP_SETTINGS_ID, {
 				booking_unlock_at: date ? new Date(date).toISOString() : ''
 			});
 			console.log(`[Action:setUnlockTimer] SUCCESS. Target: ${date}`);
@@ -102,7 +103,7 @@ export const actions = {
 		console.log(`[Action:cancelUnlockTimer] User: ${locals.pb.authStore.model?.email}`);
 		if (!locals.pb.authStore.model?.verified) return fail(403);
 		try {
-			await locals.pb.collection('app_settings').update('abcsettings123', {
+			await locals.pb.collection('app_settings').update(APP_SETTINGS_ID, {
 				booking_unlock_at: ''
 			});
 			console.log('[Action:cancelUnlockTimer] SUCCESS.');
@@ -129,7 +130,7 @@ export const actions = {
 		try {
 			const settings = await locals.pb
 				.collection('app_settings')
-				.getOne('abcsettings123')
+				.getOne(APP_SETTINGS_ID)
 				.catch(() => ({ is_booking_active: false }));
 			if (settings.is_booking_active) {
 				const occupiedBeds = await locals.pb.collection('beds').getFullList({
@@ -164,7 +165,7 @@ export const actions = {
 		try {
 			const settings = await locals.pb
 				.collection('app_settings')
-				.getOne('abcsettings123')
+				.getOne(APP_SETTINGS_ID)
 				.catch(() => ({ is_booking_active: false }));
 			const isLive = settings.is_booking_active;
 
@@ -341,7 +342,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.getFullList<BedsResponse<{ room: RoomsResponse }>>({ expand: 'room' }),
 		locals.pb
 			.collection('app_settings')
-			.getOne('abcsettings123')
+			.getOne(APP_SETTINGS_ID)
 			.catch(() => ({ is_booking_active: false, booking_unlock_at: '' }))
 	]);
 
