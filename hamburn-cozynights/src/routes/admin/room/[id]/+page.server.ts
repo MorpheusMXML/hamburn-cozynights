@@ -1,7 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { RoomsResponse, BedsResponse, HousesResponse } from '$lib/pocketbase-types';
-import { APP_SETTINGS_ID } from '$lib/server/constants';
+import { getBookingSettings } from '$lib/server/settings';
 
 // 1. Define the type including "expand" for related records 🔗
 type RoomWithHouse = RoomsResponse<{ house: HousesResponse }>;
@@ -23,12 +23,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			sort: 'label'
 		});
 
-		const settings = await locals.pb
-			.collection('app_settings')
-			.getOne(APP_SETTINGS_ID)
-			.catch(() => ({ is_booking_active: false }));
+		const { isBookingActive } = await getBookingSettings(locals.pb);
 
-		return { room, beds, isBookingActive: !!settings.is_booking_active };
+		return { room, beds, isBookingActive };
 	} catch (err) {
 		console.error('Error fetching house spots:', err);
 		throw error(404, 'House room lost in the dust.');
@@ -37,11 +34,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
 	createBed: async ({ request, params, locals }) => {
-		const settings = await locals.pb
-			.collection('app_settings')
-			.getOne(APP_SETTINGS_ID)
-			.catch(() => ({ is_booking_active: false }));
-		if (settings.is_booking_active)
+		const { isBookingActive } = await getBookingSettings(locals.pb);
+		if (isBookingActive)
 			return fail(403, { message: 'Management locked during live booking.' });
 
 		console.log(`[Action:createBed] User: ${locals.pb.authStore.model?.email}, Room: ${params.id}`);
@@ -62,16 +56,13 @@ export const actions: Actions = {
 			console.log('[Action:createBed] SUCCESS.');
 		} catch (err) {
 			console.error('[Action:createBed] FAILED:', err);
-			return fail(500, { error: true });
+			return fail(500, { message: 'Something went wrong. Please try again.' });
 		}
 	},
 
 	deleteBed: async ({ request, locals }) => {
-		const settings = await locals.pb
-			.collection('app_settings')
-			.getOne(APP_SETTINGS_ID)
-			.catch(() => ({ is_booking_active: false }));
-		if (settings.is_booking_active)
+		const { isBookingActive } = await getBookingSettings(locals.pb);
+		if (isBookingActive)
 			return fail(403, { message: 'Management locked during live booking.' });
 
 		console.log(`[Action:deleteBed] User: ${locals.pb.authStore.model?.email}`);
@@ -89,16 +80,13 @@ export const actions: Actions = {
 			console.log(`[Action:deleteBed] SUCCESS for ${id}`);
 		} catch (err) {
 			console.error(`[Action:deleteBed] FAILED for ${id}:`, err);
-			return fail(500);
+			return fail(500, { message: 'Something went wrong. Please try again.' });
 		}
 	},
 
 	toggleOccupied: async ({ request, locals }) => {
-		const settings = await locals.pb
-			.collection('app_settings')
-			.getOne(APP_SETTINGS_ID)
-			.catch(() => ({ is_booking_active: false }));
-		if (settings.is_booking_active)
+		const { isBookingActive } = await getBookingSettings(locals.pb);
+		if (isBookingActive)
 			return fail(403, { message: 'Management locked during live booking.' });
 
 		const data = await request.formData();
@@ -118,11 +106,8 @@ export const actions: Actions = {
 	},
 
 	toggleEnabled: async ({ request, locals }) => {
-		const settings = await locals.pb
-			.collection('app_settings')
-			.getOne(APP_SETTINGS_ID)
-			.catch(() => ({ is_booking_active: false }));
-		if (settings.is_booking_active)
+		const { isBookingActive } = await getBookingSettings(locals.pb);
+		if (isBookingActive)
 			return fail(403, { message: 'Management locked during live booking.' });
 
 		const data = await request.formData();
@@ -132,7 +117,7 @@ export const actions: Actions = {
 		try {
 			await locals.pb.collection('beds').update(id, { enabled: !enabled });
 		} catch (err) {
-			return fail(500, { error: true });
+			return fail(500, { message: 'Something went wrong. Please try again.' });
 		}
 	},
 
@@ -149,7 +134,7 @@ export const actions: Actions = {
 			await locals.pb.collection('beds').update(id, { is_locked: !isLocked });
 		} catch (err) {
 			console.error('[Action:toggleLocked] FAILED:', err);
-			return fail(500, { error: true });
+			return fail(500, { message: 'Something went wrong. Please try again.' });
 		}
 	}
 };
