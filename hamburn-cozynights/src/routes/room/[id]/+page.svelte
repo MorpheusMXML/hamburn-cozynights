@@ -146,24 +146,33 @@
 					<div class="status-box occupied">
 						<span class="status-text">Occupied</span>
 						<span class="guest-name">
-							{bed.expand?.order?.burner_name || 'Mystery Burner'}
+							{bed.burnerName || 'Mystery Burner'}
 						</span>
 					</div>
 				</div>
 			{:else if isMyBed}
 				<button
 					class="bed-card mine {isLocked ? 'locked' : ''}"
-					on:click={() => !isLocked && openBookingModal(bed.id, bed.expand?.order?.burner_name)}
+					on:click={() => !isLocked && openBookingModal(bed.id, bed.burnerName)}
 					disabled={isLocked}
 				>
 					<div class="icon">🛏️</div>
 					<span class="label">{bed.label}</span>
 					<div class="status-box my-status">
 						<span class="status-text">Your Spot</span>
-						<span class="guest-name">{bed.expand?.order?.burner_name}</span>
+						<span class="guest-name">{bed.burnerName}</span>
 					</div>
 					<small class="edit-hint">{isLocked ? 'Bookings Locked' : 'Click to modify'}</small>
 				</button>
+			{:else if !bed.bookable}
+				<div class="bed-card occupied">
+					<div class="icon">🔒</div>
+					<span class="label">{bed.label}</span>
+					<div class="status-box occupied">
+						<span class="status-text">Not available</span>
+						<span class="guest-name">Reserved by the crew</span>
+					</div>
+				</div>
 			{:else}
 				<button
 					class="bed-card free {iHaveAnotherBooking || isLocked ? 'disabled' : ''}"

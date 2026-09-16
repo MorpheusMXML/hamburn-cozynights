@@ -2,7 +2,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
-import { BookingService } from '$lib/server/booking';
+import { BookingService, isBedBookable } from '$lib/server/booking';
 import { getBookingSettings } from '$lib/server/settings';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -12,7 +12,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const order = await bookingService.getOrderByNumber(locals.orderNumber);
 
 	if (!order) {
-		console.error('[Security] House load: Order not found for code:', locals.orderNumber);
+		console.warn('[Security] House load: unknown booking code in cookie.');
 		throw redirect(303, '/');
 	}
 
@@ -30,10 +30,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			bookingService.getBedForOrder(order.id)
 		]);
 
-		// Calculate occupancy 👥
+		// Calculate occupancy 👥 (deactivated beds don't exist for guests,
+		// locked ones count as taken)
+		const allowLocked = !!locals.admin;
 		const roomsWithStats = rooms.map((room) => {
-			const roomBeds = beds.filter((b) => b.room === room.id);
-			const freeCount = roomBeds.filter((b) => !b.occupied).length;
+			const roomBeds = beds.filter((b) => b.room === room.id && b.enabled !== false);
+			const freeCount = roomBeds.filter(
+				(b) => !b.occupied && isBedBookable(b, { allowLocked })
+			).length;
 			return { ...room, freeCount, totalCount: roomBeds.length };
 		});
 
@@ -45,7 +49,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			bookingUnlockAt: settings.bookingUnlockAt
 		};
 	} catch (err) {
-		console.error('[Security] House load failed:', err);
+		console.error('[Security] House load failed:', (err as Error)?.message);
 		throw error(404, 'House not found in the dust.');
 	}
 };
@@ -63,15 +67,16 @@ export const actions: Actions = {
 		if (!locals.orderNumber) return fail(401);
 
 		const bookingService = new BookingService(locals.adminPb);
-		const order = await bookingService.getOrderByNumber(locals.orderNumber);
-		if (!order) return fail(404, { error: 'Order not found.' });
 
 		try {
+			const order = await bookingService.getOrderByNumber(locals.orderNumber);
+			if (!order) return fail(404, { error: 'Order not found.' });
+
 			await bookingService.unbookOrder(order.id);
 			return { success: true };
 		} catch (err: any) {
-			console.error('[Security] House unbookBed failed:', err);
-			return fail(500, { error: `Spot release failed: ${err.message}` });
+			console.error('[Security] House unbookBed failed:', err?.message);
+			return fail(500, { error: 'Spot release failed. Please try again.' });
 		}
 	}
 };

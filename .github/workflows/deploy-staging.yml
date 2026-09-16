@@ -19,6 +19,6 @@ jobs:
           username: deploy
           key: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
           # The deploy user's key is restricted to a single forced command on the
-          # server side (see deploy/README.md), so what we send here is ignored —
+          # server side (see hamburn-cozynights/docs/DEPLOYMENT.md), so what we send here is ignored —
           # it only exists because the action requires a script to run.
           script: echo "triggering forced deploy command"

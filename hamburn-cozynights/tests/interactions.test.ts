@@ -114,7 +114,7 @@ describe('Room Load & Booking Logic', () => {
 			pb: mockPb,
 			adminPb: mockAdminPb,
 			orderNumber: 'TEST-CODE',
-			user: { verified: false }
+			admin: null
 		};
 	});
 
@@ -129,23 +129,76 @@ describe('Room Load & Booking Logic', () => {
 		mockAdminPb.getFirstListItem.mockRejectedValueOnce({ status: 404 }); // hash lookup fail
 		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1', order_number: 'TEST-CODE' }); // fallback success
 		mockAdminPb.getFirstListItem.mockResolvedValueOnce(null); // user bed lookup
-		mockAdminPb.getFullList.mockResolvedValueOnce([{ id: 'bed1', occupied: false, label: 'A1' }]); // beds list
+		mockAdminPb.getFullList.mockResolvedValueOnce([
+			{ id: 'bed1', occupied: false, label: 'A1', enabled: true },
+			{
+				id: 'bed2',
+				occupied: true,
+				label: 'A2',
+				enabled: true,
+				order: 'other-order',
+				expand: {
+					order: {
+						order_number: 'SOMEONE-ELSES-CODE',
+						order_hash: 'hash',
+						customer_name: 'Jane Doe',
+						burner_name: 'Dusty Nomad #123'
+					}
+				}
+			}
+		]); // beds list
 		mockAdminPb.update.mockResolvedValueOnce({}); // migration update
 
 		const result: any = await roomLoad({ params: { id: 'room1' }, locals: mockLocals } as any);
 
 		expect(result.room.id).toBe('room1');
-		expect(result.beds.length).toBe(1);
+		expect(result.beds.length).toBe(2);
 		expect(mockAdminPb.update).toHaveBeenCalled(); // Migration was called
+		expect(result.beds[1]).toEqual({
+			id: 'bed2',
+			label: 'A2',
+			occupied: true,
+			bookable: true,
+			burnerName: 'Dusty Nomad #123'
+		});
+	});
+
+	it("never sends other guests' order data (ticket codes, names) to the browser", async () => {
+		mockPb.getOne.mockImplementation(async (id: string) => {
+			if (id === APP_SETTINGS_ID) return { is_booking_active: true };
+			return { id: 'room1', name: 'Test Room', room_number: 1, house: 'house1' };
+		});
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' }); // own order
+		mockAdminPb.getFirstListItem.mockRejectedValueOnce({ status: 404 }); // no bed yet
+		mockAdminPb.getFullList.mockResolvedValueOnce([
+			{
+				id: 'bed2',
+				occupied: true,
+				label: 'A2',
+				order: 'other-order',
+				expand: { order: { order_number: 'SECRET-CODE-42', customer_name: 'Jane Doe' } }
+			}
+		]);
+
+		const result: any = await roomLoad({ params: { id: 'room1' }, locals: mockLocals } as any);
+		const serialized = JSON.stringify(result);
+
+		expect(serialized).not.toContain('SECRET-CODE-42');
+		expect(serialized).not.toContain('Jane Doe');
+		expect(serialized).not.toContain('other-order');
+		expect(serialized).not.toContain('TEST-CODE');
 	});
 
 	it('should allow booking an available bed', async () => {
 		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true }); // Settings
 		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' }); // Order lookup
-		// Bed is read twice: once by the route's own is_locked pre-check, and
-		// again inside BookingService.bookBed's authoritative under-lock check.
-		mockAdminPb.getOne.mockResolvedValueOnce({ id: 'bed1', occupied: false, is_locked: false });
-		mockAdminPb.getOne.mockResolvedValueOnce({ id: 'bed1', occupied: false, is_locked: false });
+		// Read inside BookingService.bookBed's authoritative under-lock check.
+		mockAdminPb.getOne.mockResolvedValueOnce({
+			id: 'bed1',
+			occupied: false,
+			is_locked: false,
+			enabled: true
+		});
 		mockAdminPb.getFullList.mockResolvedValueOnce([]); // Previous beds
 
 		const formData = new FormData();
@@ -159,6 +212,50 @@ describe('Room Load & Booking Logic', () => {
 			'bed1',
 			expect.objectContaining({ occupied: true, order: 'order1' })
 		);
+	});
+
+	it('should refuse a locked bed for guests but allow it for admins', async () => {
+		const lockedBed = { id: 'bed1', occupied: false, is_locked: true, enabled: true };
+		const makeRequest = () => {
+			const formData = new FormData();
+			formData.append('bedId', 'bed1');
+			formData.append('guestName', 'Alice');
+			return { formData: async () => formData } as any;
+		};
+
+		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true });
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' });
+		mockAdminPb.getOne.mockResolvedValueOnce(lockedBed);
+		const guest = (await roomActions.bookBed({
+			request: makeRequest(),
+			locals: mockLocals
+		} as any)) as any;
+		expect(guest.status).toBe(400);
+		expect(mockAdminPb.update).not.toHaveBeenCalled();
+
+		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true });
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' });
+		mockAdminPb.getOne.mockResolvedValueOnce(lockedBed);
+		mockAdminPb.getFullList.mockResolvedValueOnce([]);
+		const admin = (await roomActions.bookBed({
+			request: makeRequest(),
+			locals: { ...mockLocals, admin: { email: 'max@mauersegler.art', role: 'admin' } }
+		} as any)) as any;
+		expect(admin.success).toBe(true);
+	});
+
+	it('should refuse a deactivated bed', async () => {
+		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true });
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' });
+		mockAdminPb.getOne.mockResolvedValueOnce({ id: 'bed1', occupied: false, enabled: false });
+
+		const formData = new FormData();
+		formData.append('bedId', 'bed1');
+		const request = { formData: async () => formData } as any;
+
+		const result = (await roomActions.bookBed({ request, locals: mockLocals } as any)) as any;
+		expect(result.status).toBe(400);
+		expect(mockAdminPb.update).not.toHaveBeenCalled();
 	});
 
 	it('should allow unbooking a bed', async () => {
@@ -185,13 +282,42 @@ describe('Admin Management Actions', () => {
 			create: vi.fn(),
 			delete: vi.fn(),
 			update: vi.fn(),
-			filter: vi.fn((q: any) => q),
-			authStore: {
-				isValid: true,
-				model: { verified: true, email: 'admin@test' }
+			filter: vi.fn((q: any) => q)
+		};
+		mockLocals = {
+			pb: mockPb,
+			admin: {
+				id: 'admin1',
+				email: 'crew@mauersegler.art',
+				name: '',
+				role: 'admin',
+				isSuperuser: false
 			}
 		};
-		mockLocals = { pb: mockPb };
+	});
+
+	it('should refuse every structural action without an admin session', async () => {
+		const noAdmin = { pb: mockPb, admin: null };
+		const formData = new FormData();
+		formData.append('id', 'x');
+		formData.append('name', 'x');
+		formData.append('label', 'x');
+		const request = { formData: async () => formData } as any;
+
+		const results = [
+			await houseAdminActions.createRoom({ request, params: { id: 'h' }, locals: noAdmin } as any),
+			await houseAdminActions.deleteRoom({ request, locals: noAdmin } as any),
+			await adminActions.createBed({ request, params: { id: 'r' }, locals: noAdmin } as any),
+			await adminActions.deleteBed({ request, locals: noAdmin } as any),
+			await adminActions.toggleOccupied({ request, locals: noAdmin } as any),
+			await adminActions.toggleEnabled({ request, locals: noAdmin } as any),
+			await adminActions.toggleLocked({ request, locals: noAdmin } as any)
+		] as any[];
+
+		for (const result of results) expect(result.status).toBe(403);
+		expect(mockPb.create).not.toHaveBeenCalled();
+		expect(mockPb.update).not.toHaveBeenCalled();
+		expect(mockPb.delete).not.toHaveBeenCalled();
 	});
 
 	it('should create a room and bed templates in staging mode', async () => {
@@ -256,7 +382,7 @@ describe('Admin Management Actions', () => {
 		expect(mockPb.delete).toHaveBeenCalledWith('bed1');
 	});
 
-	it('should toggle bed locked status as verified admin', async () => {
+	it('should toggle bed locked status as admin', async () => {
 		const formData = new FormData();
 		formData.append('id', 'bed1');
 		formData.append('is_locked', 'false');

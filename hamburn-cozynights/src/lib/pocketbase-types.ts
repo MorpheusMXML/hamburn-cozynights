@@ -11,6 +11,7 @@ export enum Collections {
 	Mfas = '_mfas',
 	Otps = '_otps',
 	Superusers = '_superusers',
+	Admins = 'admins',
 	Beds = 'beds',
 	Houses = 'houses',
 	Orders = 'orders',
@@ -97,6 +98,23 @@ export type SuperusersRecord = {
 	verified?: boolean;
 };
 
+export enum AdminsRoleOptions {
+	superuser = 'superuser',
+	admin = 'admin'
+}
+export type AdminsRecord = {
+	created: IsoAutoDateString;
+	email: string;
+	emailVisibility?: boolean;
+	id: string;
+	name?: string;
+	password: string;
+	role: AdminsRoleOptions;
+	tokenKey: string;
+	updated: IsoAutoDateString;
+	verified?: boolean;
+};
+
 export type BedsRecord = {
 	bookedBy?: RecordIdString;
 	created: IsoAutoDateString;
@@ -172,6 +190,7 @@ export type MfasResponse<Texpand = unknown> = Required<MfasRecord> & BaseSystemF
 export type OtpsResponse<Texpand = unknown> = Required<OtpsRecord> & BaseSystemFields<Texpand>;
 export type SuperusersResponse<Texpand = unknown> = Required<SuperusersRecord> &
 	AuthSystemFields<Texpand>;
+export type AdminsResponse<Texpand = unknown> = Required<AdminsRecord> & AuthSystemFields<Texpand>;
 export type BedsResponse<Texpand = unknown> = Required<BedsRecord> & BaseSystemFields<Texpand>;
 export type HousesResponse<Texpand = unknown> = Required<HousesRecord> & BaseSystemFields<Texpand>;
 export type OrdersResponse<Texpand = unknown> = Required<OrdersRecord> & BaseSystemFields<Texpand>;
@@ -188,6 +207,7 @@ export type CollectionRecords = {
 	_mfas: MfasRecord;
 	_otps: OtpsRecord;
 	_superusers: SuperusersRecord;
+	admins: AdminsRecord;
 	beds: BedsRecord;
 	houses: HousesRecord;
 	orders: OrdersRecord;
@@ -202,6 +222,7 @@ export type CollectionResponses = {
 	_mfas: MfasResponse;
 	_otps: OtpsResponse;
 	_superusers: SuperusersResponse;
+	admins: AdminsResponse;
 	beds: BedsResponse;
 	houses: HousesResponse;
 	orders: OrdersResponse;
@@ -215,9 +236,9 @@ export type CollectionResponses = {
 type ProcessCreateAndUpdateFields<T> = Omit<
 	{
 		// Omit AutoDate fields
-		[K in keyof T as Extract<T[K], IsoAutoDateString> extends never
-			? K
-			: never]: T[K] extends infer U // Convert FileNameString to File
+		[
+			K in keyof T as Extract<T[K], IsoAutoDateString> extends never ? K : never
+		]: T[K] extends infer U // Convert FileNameString to File
 			? U extends FileNameString | FileNameString[]
 				? U extends any[]
 					? File[]

@@ -1,102 +1,80 @@
 <script lang="ts">
 	import type { PageData, ActionData } from './$types';
-	import { page } from '$app/stores';
 	import { fade, fly } from 'svelte/transition';
 
 	export let data: PageData;
 	export let form: ActionData;
 
-	// UI State: Toggle between login and registration form
-	let showRegister = false;
+	const ERROR_MESSAGES: Record<string, { title: string; text: string }> = {
+		not_authorized: {
+			title: 'NO ACCESS 🛑',
+			text: 'This Google account has not been granted access to the control center. Ask a superuser to add you.'
+		},
+		wrong_domain: {
+			title: 'WRONG ACCOUNT 🛑',
+			text: `Only verified @${data.adminDomain} Google accounts can sign in.`
+		},
+		not_workspace: {
+			title: 'WRONG ACCOUNT 🛑',
+			text: `Only @${data.adminDomain} Google Workspace accounts can sign in.`
+		},
+		cancelled: {
+			title: 'SIGN-IN CANCELLED',
+			text: 'Google sign-in was cancelled. Try again whenever you are ready.'
+		},
+		expired: {
+			title: 'SIGN-IN EXPIRED ⏳',
+			text: 'The sign-in attempt timed out or was started in another tab. Please try again.'
+		},
+		unavailable: {
+			title: 'BACKEND UNREACHABLE 📡',
+			text: 'The control center backend could not be reached. Try again shortly.'
+		},
+		failed: {
+			title: 'SIGN-IN FAILED',
+			text: 'Google sign-in did not complete. Please try again.'
+		}
+	};
+
+	$: loginError = data.error ? (ERROR_MESSAGES[data.error] ?? ERROR_MESSAGES.failed) : null;
 </script>
 
 <div class="login-wrapper">
 	<div class="login-container" in:fly={{ y: 20, duration: 600 }}>
 		<header class="login-header">
 			<div class="laser-line-top"></div>
-			<h1>{showRegister ? 'JOIN THE CREW ✨' : 'ADMIN PORTAL 🔐'}</h1>
+			<h1>ADMIN PORTAL 🔐</h1>
 			<p class="subtitle">Secure access to the Hamburn Control Center</p>
 		</header>
 
-		{#if form?.message || $page.url.searchParams.get('fail')}
+		{#if form?.message || loginError || data.backendError}
 			<div class="error-banner" in:fade>
 				<span class="icon">🛑</span>
 				<div class="msg-content">
-					{#if $page.url.searchParams.get('reason') === 'not_verified'}
-						<strong>SANCTUARY KEY INACTIVE! 🗝️</strong>
-						<p>Wait for a senior burner to verify your coordinates.</p>
+					{#if form?.message}
+						{form.message}
+					{:else if loginError}
+						<strong>{loginError.title}</strong>
+						<p>{loginError.text}</p>
 					{:else}
-						{form?.message || 'The playa says NO. Action failed.'}
+						<strong>BACKEND UNREACHABLE 📡</strong>
+						<p>The control center backend could not be reached. Try again shortly.</p>
 					{/if}
 				</div>
 			</div>
 		{/if}
 
-		{#if showRegister}
-			<form action="?/register" method="POST" class="laser-form" in:fade>
-				<div class="input-group">
-					<label for="email">EMAIL ADDRESS</label>
-					<input name="email" id="email" type="email" placeholder="burner@playa.com" required />
-				</div>
-				<div class="input-group">
-					<label for="password">PASSPHRASE</label>
-					<input name="password" id="password" type="password" placeholder="••••••••" required />
-				</div>
-				<div class="input-group">
-					<label for="passwordConfirm">CONFIRM PASSPHRASE</label>
-					<input
-						name="passwordConfirm"
-						id="passwordConfirm"
-						type="password"
-						placeholder="••••••••"
-						required
-					/>
-				</div>
-				<button type="submit" class="btn-ignite">IGNITE ACCOUNT ✨</button>
+		{#if data.googleEnabled}
+			<form action="?/google" method="POST" class="oauth-form">
+				<button type="submit" class="btn-ignite">SIGN IN WITH GOOGLE ⚡️</button>
 			</form>
-			<p class="toggle-text">
-				ALREADY HAVE KEYS? <button
-					type="button"
-					class="btn-link"
-					on:click={() => (showRegister = false)}>SIGN IN</button
-				>
-			</p>
-		{:else}
-			<form action="?/login" method="POST" class="laser-form" in:fade>
-				<div class="input-group">
-					<label for="email">EMAIL ADDRESS</label>
-					<input name="email" id="email" type="email" placeholder="burner@playa.com" required />
-				</div>
-				<div class="input-group">
-					<label for="password">PASSPHRASE</label>
-					<input name="password" id="password" type="password" placeholder="••••••••" required />
-				</div>
-				<button type="submit" class="btn-ignite">ACCESS PORTAL ⚡️</button>
-			</form>
-			<p class="toggle-text">
-				NEW BURNER? <button type="button" class="btn-link" on:click={() => (showRegister = true)}
-					>CREATE ACCOUNT</button
-				>
-			</p>
+		{:else if !data.backendError}
+			<p class="hint">Google sign-in is not configured on this server yet.</p>
 		{/if}
 
-		<div class="divider">
-			<span>OR CONNECT VIA BEACON</span>
-		</div>
-
-		<div class="oauth-grid">
-			{#if data.providers}
-				{#each data.providers as provider}
-					<form action="?/oauth2" method="POST" class="oauth-form">
-						<input type="hidden" name="provider" value={provider.name} />
-						<button type="submit" class="btn-oauth">
-							{showRegister ? 'Register with' : 'Login with'}
-							{provider.displayName}
-						</button>
-					</form>
-				{/each}
-			{/if}
-		</div>
+		<p class="hint">
+			Access is limited to invited <strong>@{data.adminDomain}</strong> Google Workspace accounts.
+		</p>
 	</div>
 </div>
 
@@ -170,37 +148,9 @@
 		opacity: 0.8;
 	}
 
-	.laser-form {
+	.oauth-form {
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
-	}
-
-	.input-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-	.input-group label {
-		font-size: 0.65rem;
-		font-weight: 900;
-		color: #444;
-		letter-spacing: 1.5px;
-	}
-
-	input {
-		background: #050505;
-		border: 1px solid #222;
-		color: white;
-		padding: 1rem;
-		border-radius: 8px;
-		font-size: 1rem;
-		transition: all 0.3s;
-	}
-	input:focus {
-		outline: none;
-		border-color: #2dd4bf;
-		box-shadow: 0 0 15px rgba(45, 212, 191, 0.2);
 	}
 
 	.btn-ignite {
@@ -213,7 +163,6 @@
 		cursor: pointer;
 		font-size: 0.9rem;
 		letter-spacing: 1px;
-		margin-top: 0.5rem;
 		transition: all 0.3s;
 		box-shadow: 0 0 20px rgba(45, 212, 191, 0.3);
 	}
@@ -222,68 +171,14 @@
 		box-shadow: 0 0 30px rgba(45, 212, 191, 0.5);
 	}
 
-	.toggle-text {
+	.hint {
 		text-align: center;
 		font-size: 0.75rem;
-		color: #444;
-		font-weight: 900;
+		color: #555;
 		margin-top: 1.5rem;
-		letter-spacing: 1px;
+		line-height: 1.5;
 	}
-	.btn-link {
-		background: none;
-		border: none;
-		color: #f472b6;
-		cursor: pointer;
-		font-weight: 900;
-		font-size: 0.75rem;
-		padding: 0 5px;
-		text-decoration: underline;
-	}
-	.btn-link:hover {
-		color: #fff;
-	}
-
-	.divider {
-		display: flex;
-		align-items: center;
-		text-align: center;
-		margin: 2rem 0;
-		color: #222;
-		font-size: 0.6rem;
-		font-weight: 900;
-		letter-spacing: 2px;
-	}
-	.divider::before,
-	.divider::after {
-		content: '';
-		flex: 1;
-		border-bottom: 1px solid #222;
-	}
-	.divider span {
-		padding: 0 1rem;
-	}
-
-	.oauth-grid {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-	.btn-oauth {
-		width: 100%;
-		background: transparent;
-		border: 1px solid #333;
-		color: #aaa;
-		padding: 0.75rem;
-		border-radius: 8px;
-		cursor: pointer;
-		font-weight: bold;
-		font-size: 0.85rem;
-		transition: all 0.2s;
-	}
-	.btn-oauth:hover {
-		border-color: #666;
-		color: #fff;
-		background: rgba(255, 255, 255, 0.05);
+	.hint strong {
+		color: #888;
 	}
 </style>

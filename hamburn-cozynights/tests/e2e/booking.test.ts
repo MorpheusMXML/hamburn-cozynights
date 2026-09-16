@@ -19,7 +19,7 @@ test.describe('Booking Flow', () => {
 
 	test.beforeAll(async () => {
 		// Initialize admin PB for test setup
-		const PB_URL = process.env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
+		const PB_URL = process.env.PB_URL || process.env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
 		pb = new PocketBase(PB_URL);
 
 		try {

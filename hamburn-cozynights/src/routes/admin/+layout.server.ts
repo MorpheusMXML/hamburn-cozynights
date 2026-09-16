@@ -1,34 +1,25 @@
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
+import { isPublicAdminPath } from '$lib/server/admin-auth';
 
 export const load: LayoutServerLoad = async ({ locals, url }) => {
-	// 1. Basic Check: Is user logged in?
-	if (!locals.pb.authStore.isValid) {
-		if (url.pathname !== '/admin/login') {
-			throw redirect(303, '/admin/login');
-		}
-	} else {
-		// User is logged in.
-
-		// Lock login page for authenticated users
-		if (url.pathname === '/admin/login') {
+	if (isPublicAdminPath(url.pathname)) {
+		// Already signed in: no reason to see the login page.
+		if (locals.admin && url.pathname === '/admin/login') {
 			throw redirect(303, '/admin');
 		}
+		return { admin: null, isSuperuser: false };
 	}
 
-	// Fetch user object
-	const userModel = locals.pb.authStore.model;
-	const userJSON = userModel ? JSON.parse(JSON.stringify(userModel)) : null;
+	// hooks.server.ts only lets page/data requests through without a session,
+	// so they can be redirected here.
+	if (!locals.admin) {
+		throw redirect(303, '/admin/login');
+	}
 
-	// NOTE: Superusers are always verified by default in PocketBase.
-	// We check collectionName or isSuperuser to ensure Admins bypass the 'verified' flag check
-	// which is typically only used for regular 'users' collection records.
-	const isSuper = userModel?.collectionName === '_superusers' || locals.pb.authStore.isSuperuser;
-	const isVerified = isSuper || userJSON?.verified === true;
-
+	const { email, name, role, isSuperuser } = locals.admin;
 	return {
-		user: userJSON,
-		// Explicit flag for the frontend to hide buttons
-		isVerified
+		admin: { email, name, role },
+		isSuperuser
 	};
 };

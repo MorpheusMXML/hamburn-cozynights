@@ -2,9 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ locals }) => {
-	if (!locals.pb.authStore.model?.verified) {
-		throw error(403, 'Unauthorized');
-	}
+	if (!locals.admin) throw error(403, 'Unauthorized');
 
 	try {
 		const houses = await locals.pb.collection('houses').getFullList({
@@ -15,7 +13,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 		for (const house of houses) {
 			const rooms = await locals.pb.collection('rooms').getFullList({
-				filter: `house = "${house.id}"`,
+				filter: locals.pb.filter('house = {:id}', { id: house.id }),
 				sort: 'room_number'
 			});
 
@@ -23,7 +21,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 			for (const room of rooms) {
 				const beds = await locals.pb.collection('beds').getFullList({
-					filter: `room = "${room.id}"`,
+					filter: locals.pb.filter('room = {:id}', { id: room.id }),
 					sort: 'label'
 				});
 

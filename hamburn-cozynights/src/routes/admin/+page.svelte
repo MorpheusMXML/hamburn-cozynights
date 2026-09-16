@@ -7,10 +7,13 @@
 	import { invalidateAll } from '$app/navigation';
 	import { enhance } from '$app/forms';
 	import { fade, fly, slide } from 'svelte/transition';
+	import { isoToBerlinLocal } from '$lib/time';
 
 	export let data: PageData;
 
-	$: ({ houses, sanityWarnings, history, isVerified, isBookingActive, bookingUnlockAt } = data);
+	// Only admins reach this page (hooks + layout); superusers additionally get
+	// the destructive tools (clear all bookings, template import).
+	$: ({ houses, sanityWarnings, history, isSuperuser, isBookingActive, bookingUnlockAt } = data);
 
 	// Management Summary Calculations
 	$: totalBeds = houses.reduce((sum, h) => sum + (h.totalBeds || 0), 0);
@@ -29,7 +32,7 @@
 	let showMap = true;
 	let showGuide = false;
 	let selectedHouseId: string | null = null;
-	let unlockDateInput = bookingUnlockAt ? new Date(bookingUnlockAt).toISOString().slice(0, 16) : '';
+	let unlockDateInput = bookingUnlockAt ? isoToBerlinLocal(bookingUnlockAt) : '';
 
 	// Editor Sidebar State
 	let editingHouse: { id?: string; x: number; y: number; name: string } | null = null;
@@ -61,7 +64,7 @@
 				return;
 			}
 
-			if (occupiedBeds > 0) {
+			if (occupiedBeds > 0 && isSuperuser) {
 				const clear = confirm(
 					`📊 DETECTED: There are currently ${occupiedBeds} active bookings. Would you like to CLEAR ALL BOOKINGS now to reset the database? (This cannot be undone!)`
 				);
@@ -340,14 +343,12 @@
 				{showGuide ? 'CLOSE INTEL 📡' : 'SHOW INTEL 📊'}
 			</button>
 
-			{#if isVerified}
-				<form method="POST" action="?/togglePhase" use:enhance={handleTogglePhase}>
-					<button type="submit" class="btn-laser" class:live={isBookingActive}>
-						{isBookingActive ? '🎪 LIVE BOOKING ACTIVE' : '🛠 STAGING MODE'}
-						<div class="laser-glow"></div>
-					</button>
-				</form>
-			{/if}
+			<form method="POST" action="?/togglePhase" use:enhance={handleTogglePhase}>
+				<button type="submit" class="btn-laser" class:live={isBookingActive}>
+					{isBookingActive ? '🎪 LIVE BOOKING ACTIVE' : '🛠 STAGING MODE'}
+					<div class="laser-glow"></div>
+				</button>
+			</form>
 
 			<button class="btn-toggle" on:click={() => (showMap = !showMap)}>
 				{showMap ? '🛰️ LIST VIEW' : '🗺️ MAP VIEW'}
@@ -355,36 +356,34 @@
 		</div>
 	</header>
 
-	{#if isVerified}
-		<section class="timer-panel">
-			{#if bookingUnlockAt}
-				<div class="timer-active">
-					<span class="timer-icon">⏱</span>
-					<span
-						>Auto-opens live booking on <strong
-							>{new Date(bookingUnlockAt).toLocaleString('de-DE', {
-								timeZone: 'Europe/Berlin',
-								dateStyle: 'medium',
-								timeStyle: 'short'
-							})}</strong
-						> (CET/CEST)</span
-					>
-					<form method="POST" action="?/cancelUnlockTimer" use:enhance>
-						<button type="submit" class="btn-timer-cancel">Cancel Timer ✕</button>
-					</form>
-				</div>
-			{:else}
-				<form method="POST" action="?/setUnlockTimer" use:enhance class="timer-set-form">
-					<span class="timer-icon">⏱</span>
-					<span class="timer-label">Schedule automatic go-live:</span>
-					<input type="datetime-local" name="unlockAt" bind:value={unlockDateInput} required />
-					<button type="submit" class="btn-timer-set" disabled={!unlockDateInput}>
-						Schedule ✨
-					</button>
+	<section class="timer-panel">
+		{#if bookingUnlockAt}
+			<div class="timer-active">
+				<span class="timer-icon">⏱</span>
+				<span
+					>Auto-opens live booking on <strong
+						>{new Date(bookingUnlockAt).toLocaleString('de-DE', {
+							timeZone: 'Europe/Berlin',
+							dateStyle: 'medium',
+							timeStyle: 'short'
+						})}</strong
+					> (CET/CEST)</span
+				>
+				<form method="POST" action="?/cancelUnlockTimer" use:enhance>
+					<button type="submit" class="btn-timer-cancel">Cancel Timer ✕</button>
 				</form>
-			{/if}
-		</section>
-	{/if}
+			</div>
+		{:else}
+			<form method="POST" action="?/setUnlockTimer" use:enhance class="timer-set-form">
+				<span class="timer-icon">⏱</span>
+				<span class="timer-label">Schedule automatic go-live:</span>
+				<input type="datetime-local" name="unlockAt" bind:value={unlockDateInput} required />
+				<button type="submit" class="btn-timer-set" disabled={!unlockDateInput}>
+					Schedule ✨
+				</button>
+			</form>
+		{/if}
+	</section>
 
 	{#if showTemplates}
 		<section class="templates-overlay" in:fade out:fade>
@@ -420,40 +419,56 @@
 						{/if}
 					</div>
 
-					<div class="tool-card import-card">
-						<div class="icon">🌀</div>
-						<h3>Import New Layout</h3>
-						<p>
-							Wipe the current database and rebuild the playa from a JSON template. <strong
-								>Warning: This clears all data!</strong
-							>
-						</p>
+					{#if isSuperuser}
+						<div class="tool-card import-card">
+							<div class="icon">🌀</div>
+							<h3>Import New Layout</h3>
+							<p>
+								Wipe all houses, rooms and beds and rebuild the playa from a JSON template. Ticket
+								codes are kept, existing bookings are released. <strong
+									>Warning: This replaces the whole layout!</strong
+								>
+							</p>
 
-						<form
-							method="POST"
-							action="?/importTemplate"
-							enctype="multipart/form-data"
-							use:enhance={handleImportTemplate}
-						>
-							<div class="file-input-wrapper">
-								<input
-									type="file"
-									name="template"
-									accept=".json"
-									required
-									id="template-upload"
-									on:change={handleFileChange}
-								/>
-								<label for="template-upload" class:selected={selectedFileName}>
-									<span class="file-icon">{selectedFileName ? '📄' : '📁'}</span>
-									{selectedFileName || 'CHOOSE TEMPLATE FILE'}
-								</label>
-							</div>
-							<button type="submit" class="btn-action danger" disabled={isImporting || !selectedFileName}>
-								{isImporting ? 'IGNITING...' : 'APPLY TEMPLATE 🔥'}
-							</button>
-						</form>
-					</div>
+							<form
+								method="POST"
+								action="?/importTemplate"
+								enctype="multipart/form-data"
+								use:enhance={handleImportTemplate}
+							>
+								<div class="file-input-wrapper">
+									<input
+										type="file"
+										name="template"
+										accept=".json"
+										required
+										id="template-upload"
+										on:change={handleFileChange}
+									/>
+									<label for="template-upload" class:selected={selectedFileName}>
+										<span class="file-icon">{selectedFileName ? '📄' : '📁'}</span>
+										{selectedFileName || 'CHOOSE TEMPLATE FILE'}
+									</label>
+								</div>
+								<button
+									type="submit"
+									class="btn-action danger"
+									disabled={isImporting || !selectedFileName}
+								>
+									{isImporting ? 'IGNITING...' : 'APPLY TEMPLATE 🔥'}
+								</button>
+							</form>
+						</div>
+					{:else}
+						<div class="tool-card import-card">
+							<div class="icon">🔒</div>
+							<h3>Import New Layout</h3>
+							<p>
+								Importing a template replaces all houses, rooms and beds. Only superusers can do
+								this.
+							</p>
+						</div>
+					{/if}
 				</div>
 
 				{#if isImporting}
@@ -637,37 +652,33 @@
 							</div>
 						</a>
 
-						{#if isVerified}
-							<div class="card-admin-actions">
-								<button
-									class="btn-action-small"
-									on:click={() => handleRenameHouse(house)}
-									class:disabled={isBookingActive}>RENAME ✏️</button
-								>
-								<button
-									class="btn-action-small vanish"
-									on:click={() => handleDeleteHouse(house)}
-									class:disabled={isBookingActive}>VANISH 🌪️</button
-								>
-							</div>
-						{/if}
+						<div class="card-admin-actions">
+							<button
+								class="btn-action-small"
+								on:click={() => handleRenameHouse(house)}
+								class:disabled={isBookingActive}>RENAME ✏️</button
+							>
+							<button
+								class="btn-action-small vanish"
+								on:click={() => handleDeleteHouse(house)}
+								class:disabled={isBookingActive}>VANISH 🌪️</button
+							>
+						</div>
 					</div>
 				{/each}
 
-				{#if isVerified}
-					<button
-						class="add-house-card"
-						on:click={() =>
-							isBookingActive
-								? alert('🔒 LOCKDOWN ACTIVE: Switch to 🛠 STAGING to ignite new sanctuaries.')
-								: handleLocationSelected({ x: 500, y: 350 })}
-						class:disabled={isBookingActive}
-					>
-						<span class="plus">+</span>
-						<span>Ignite New House</span>
-						<small>Auto-centered at 500/350</small>
-					</button>
-				{/if}
+				<button
+					class="add-house-card"
+					on:click={() =>
+						isBookingActive
+							? alert('🔒 LOCKDOWN ACTIVE: Switch to 🛠 STAGING to ignite new sanctuaries.')
+							: handleLocationSelected({ x: 500, y: 350 })}
+					class:disabled={isBookingActive}
+				>
+					<span class="plus">+</span>
+					<span>Ignite New House</span>
+					<small>Auto-centered at 500/350</small>
+				</button>
 			</div>
 		{/if}
 	</main>

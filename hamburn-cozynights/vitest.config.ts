@@ -14,7 +14,8 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			$lib: path.resolve(__dirname, './src/lib'),
-			$env: path.resolve(__dirname, './src/env-mock') // We'll create a mock for $env
+			$env: path.resolve(__dirname, './src/env-mock'), // We'll create a mock for $env
+			'$app/environment': path.resolve(__dirname, './src/env-mock/app/environment.ts')
 		}
 	}
 });

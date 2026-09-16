@@ -6,10 +6,18 @@ This guide covers how to maintain, test, and update the Hamburn Cozynights appli
 
 Copy `.env.example` to `.env` and fill in the following:
 
-- `PUBLIC_PB_URL`: The URL of your PocketBase instance.
+- `PB_URL`: The URL of your PocketBase instance (server-side only), e.g. `http://127.0.0.1:8090`.
 - `ENCRYPTION_KEY`: A 64-character hex string (32 bytes).
-- `PB_ADMIN_EMAIL`: Your superuser email.
-- `PB_ADMIN_PASSWORD`: Your superuser password.
+- `PB_ADMIN_EMAIL` / `PB_ADMIN_PASSWORD`: a dedicated service-account superuser for the app.
+- `PB_GOOGLE_CLIENT_ID` / `PB_GOOGLE_CLIENT_SECRET` (optional locally): Google OAuth client for the
+  admin login, with the redirect URI `http://localhost:5173/auth/callback/google`.
+
+To use the admin area locally, invite yourself (the same script as on servers, pointed at the local
+compose file):
+
+```bash
+COZY_COMPOSE_FILE=docker-compose.yml ./scripts/cozy-admin.sh add you@mauersegler.art
+```
 
 To generate a new key:
 
