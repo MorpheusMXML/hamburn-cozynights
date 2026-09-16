@@ -56,6 +56,12 @@ services:
       # OAUTH2_PROXY_COOKIE_SECRET) and OAUTH2_PROXY_EMAIL_DOMAINS live in .env,
       # never in this file.
       - .env
+    # --trusted-proxy-ip is a repeatable ("strings") flag; oauth2-proxy does not
+    # accept multiple values for it via a single comma-joined env var, so it's
+    # passed as explicit CLI args here instead.
+    command:
+      - --trusted-proxy-ip=127.0.0.1
+      - --trusted-proxy-ip=::1
     environment:
       OAUTH2_PROXY_PROVIDER: google
       OAUTH2_PROXY_REDIRECT_URL: https://test-cozynights.hamburn.de/oauth2/callback
