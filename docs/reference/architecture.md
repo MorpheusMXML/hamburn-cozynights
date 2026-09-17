@@ -5,7 +5,7 @@ CozyNights is a server-rendered SvelteKit app in front of a PocketBase database,
 ## The big picture
 
 ```mermaid
-flowchart LR
+flowchart TB
   guest["📱 Guest browser"]
   admin["💻 Admin browser"]
   google["🔑 Google<br/>Workspace sign-in"]
@@ -23,7 +23,7 @@ flowchart LR
   nginx --> app
   app -- "internal network only" --> pb
   admin -. "sign-in redirect" .-> google
-  pb -. "verifies the Google sign-in" .-> google
+  pb -. "verifies the sign-in" .-> google
 ```
 
 - **Browsers only ever talk to the app.** Pages are rendered on the server, and every button submits a form to a server action. There is no public database API.

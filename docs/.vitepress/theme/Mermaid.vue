@@ -8,6 +8,9 @@ const { isDark } = useData();
 const source = decodeURIComponent(props.code);
 const svg = ref('');
 const failed = ref(false);
+// Mermaid sizes the boxes by measuring the labels in this element, i.e. with the
+// same page styles the finished diagram gets (otherwise text can be clipped).
+const sandbox = ref<HTMLElement>();
 
 const fontFamily = 'Inter, ui-sans-serif, system-ui, sans-serif';
 
@@ -122,7 +125,7 @@ async function render() {
 			themeVariables: isDark.value ? darkVariables : lightVariables
 		});
 		const id = `mermaid-${Math.random().toString(36).slice(2, 10)}`;
-		const result = await mermaid.render(id, source);
+		const result = await mermaid.render(id, source, sandbox.value);
 		// A theme switch while rendering: only the latest render wins.
 		if (run === renderCount) {
 			svg.value = result.svg;
@@ -143,5 +146,6 @@ watch(isDark, render);
 		<div v-if="svg" v-html="svg" />
 		<pre v-else-if="failed"><code>{{ source }}</code></pre>
 		<div v-else class="mermaid-loading" aria-hidden="true" />
+		<div ref="sandbox" class="mermaid-sandbox" aria-hidden="true" />
 	</div>
 </template>

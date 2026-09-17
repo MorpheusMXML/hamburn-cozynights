@@ -240,6 +240,7 @@
 
 /* Mermaid diagrams. */
 .mermaid-diagram {
+	position: relative;
 	margin: 1.25rem 0;
 	padding: 1.25rem;
 	border: 1px solid var(--vp-c-divider);
@@ -256,6 +257,20 @@
 
 .mermaid-diagram .mermaid-loading {
 	min-height: 160px;
+}
+
+.mermaid-diagram .mermaid-sandbox {
+	position: absolute;
+	inset: 0;
+	visibility: hidden;
+	pointer-events: none;
+	overflow: hidden;
+}
+
+/* Labels are HTML paragraphs; keep the docs' paragraph spacing out of them. */
+.vp-doc .mermaid-diagram p {
+	margin: 0;
+	line-height: 1.5;
 }
 
 /* Checklists ("- [ ] item"). */

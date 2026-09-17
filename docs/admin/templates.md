@@ -18,12 +18,11 @@ Press <kbd>DOWNLOAD JSON 💾</kbd>. Your browser saves `burn-template-YYYY-MM-D
 Choose a file with <kbd>CHOOSE TEMPLATE FILE</kbd>, then press <kbd>APPLY TEMPLATE 🔥</kbd> and confirm.
 
 ```mermaid
-flowchart TD
+flowchart LR
   file["📄 template.json"] --> check{"Valid JSON with<br/>a houses list?"}
-  check -- no --> stop["❌ Rejected, nothing changes"]
-  check -- yes --> wipe["🌪️ Delete all houses, rooms and spots<br/>🧹 forget all burner names"]
-  wipe --> rebuild["🏗️ Rebuild the layout from the file"]
-  rebuild --> done["✨ PLAYA REBORN"]
+  check -- no --> stop["❌ Rejected,<br/>nothing changes"]
+  check -- yes --> wipe["🌪️ Delete houses, rooms, spots<br/>🧹 forget burner names<br/>🏗️ rebuild from the file"]
+  wipe --> done["✨ PLAYA<br/>REBORN"]
 ```
 
 > [!CAUTION] Import replaces everything

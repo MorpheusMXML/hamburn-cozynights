@@ -52,17 +52,15 @@ gh run watch
 ```mermaid
 flowchart TD
   run(["▶ Run workflow on a branch"]) --> verify["CI: npm ci · npm test · docker build"]
-  verify -- fails --> stop1["❌ Stops here, server untouched"]
-  verify --> approve{"Reviewer approves<br/>the staging deployment"}
-  approve --> ssh["SSH with a key that can only<br/>start the deploy script"]
-  ssh --> checkout["Check out exactly that commit"]
-  checkout --> build["Build the new app image<br/>(old containers keep serving)"]
-  build --> backup["Back up the PocketBase data"]
-  backup --> up["Restart the stack"]
-  up --> health{"Health check<br/>within 60 s"}
+  verify -- fails --> stop1["❌ Server untouched"]
+  verify --> approve{"Reviewer<br/>approval"}
+  approve --> server["🖥️ On the server, via a key that can only start the deploy script:<br/>check out the commit · build the image · back up PocketBase · restart"]
+  server --> health{"Health check<br/>within 60 s"}
   health -- ok --> done["✅ Deployed"]
-  health -- fails --> rollback["↩ Start the previous commit again,<br/>job turns red"]
+  health -- fails --> rollback["↩ Previous commit restarted,<br/>job turns red"]
 ```
+
+The old containers keep serving while the new image builds.
 
 - The script **refuses to deploy** and changes nothing if the server checkout has local changes, the build fails, or the backup can't be written.
 - The **PocketBase version** comes from the compose file of the deployed commit. It is pinned and never updated implicitly.
