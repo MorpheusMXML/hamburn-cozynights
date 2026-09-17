@@ -3,6 +3,7 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import FairyBackground from '$lib/components/FairyBackground.svelte';
 	import BurnerTrail from '$lib/components/BurnerTrail.svelte';
+	import DialogHost from '$lib/components/DialogHost.svelte';
 
 	let { children } = $props();
 </script>
@@ -15,6 +16,8 @@
 <div class="app-root">
 	{@render children()}
 </div>
+
+<DialogHost />
 
 <style>
 	.app-root {

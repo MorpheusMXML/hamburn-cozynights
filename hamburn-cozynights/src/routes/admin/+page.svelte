@@ -10,6 +10,7 @@
 	import { fade, fly, slide } from 'svelte/transition';
 	import { isoToBerlinLocal } from '$lib/time';
 	import { tick } from 'svelte';
+	import { toast } from '$lib/dialogs';
 
 	export let data: PageData;
 
@@ -132,11 +133,20 @@
 		console.log(`[Dashboard] Preparing new house deployment at (${x}, ${y})`);
 	}
 
+	const LAYOUT_LOCKED_MESSAGE =
+		'The layout is locked while Live Booking is active. Switch to Staging Mode to add or move houses.';
+	let lastLockedToast = 0;
+
+	function handleLayoutLocked() {
+		// One hint per gesture is enough.
+		if (Date.now() - lastLockedToast < 2500) return;
+		lastLockedToast = Date.now();
+		toast(`🔒 ${LAYOUT_LOCKED_MESSAGE}`, 'warning');
+	}
+
 	async function handleHouseMoved(event: CustomEvent) {
 		if (isBookingActive) {
-			alert(
-				'🔒 LOCKDOWN ACTIVE: Map layout is locked during Live Booking. Switch to Staging Mode to reposition houses.'
-			);
+			handleLayoutLocked();
 			invalidateAll();
 			return;
 		}
@@ -155,14 +165,28 @@
 
 		const result = await submitAction('?/updateHouseCoords', formData);
 
-		if (result.type !== 'success') {
-			alert(
-				`🔥 THE PLAYA PROTECTS! 🛡️ ${actionErrorMessage(result) || 'This house has active bookings and cannot be moved.'}`
+		if (result.type === 'success') {
+			toast(`📍 ${house.name} moved to X ${x} / Y ${y}. Saved.`, 'success', 3000);
+			// Reload so the list view and the sidebar show the stored position.
+			await invalidateAll();
+		} else {
+			toast(
+				`The new position was not saved: ${actionErrorMessage(result) || 'the server could not be reached.'} The pin is back where it was.`,
+				'danger',
+				8000
 			);
 			editingHouse = null;
 			selectedHouseId = null;
-			invalidateAll();
+			await invalidateAll();
 		}
+	}
+
+	/** Typed coordinates from the sidebar. */
+	function handleMoveFromEditor(event: CustomEvent<{ x: number; y: number }>) {
+		if (!selectedHouseId) return;
+		handleHouseMoved(
+			new CustomEvent('houseMoved', { detail: { id: selectedHouseId, ...event.detail } })
+		);
 	}
 
 	function handleSelectHouse(event: CustomEvent) {
@@ -616,6 +640,7 @@
 							{isBookingActive}
 							on:locationSelected={(e) => handleLocationSelected(e.detail)}
 							on:houseMoved={handleHouseMoved}
+							on:layoutLocked={handleLayoutLocked}
 							on:renameHouse={handleSelectHouse}
 							on:deleteHouse={(e) => handleDeleteHouse(e.detail)}
 						/>
@@ -643,6 +668,7 @@
 									houseId={selectedHouseId || undefined}
 									flat={true}
 									on:save={handleSaveHouse}
+									on:move={handleMoveFromEditor}
 									on:cancel={() => {
 										selectedHouseId = null;
 										editingHouse = null;

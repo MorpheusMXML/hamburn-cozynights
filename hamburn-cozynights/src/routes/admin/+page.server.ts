@@ -10,6 +10,7 @@ import { APP_SETTINGS_ID } from '$lib/server/constants';
 import { getBookingSettings } from '$lib/server/settings';
 import { berlinLocalToIso } from '$lib/time';
 import { countSpots } from '$lib/occupancy';
+import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
 
 /** Clears the burner names of all orders (they only describe bookings). */
 async function clearBurnerNames(pb: TypedPocketBase) {
@@ -143,14 +144,19 @@ export const actions: Actions = {
 	updateHouseCoords: async ({ locals, request }) => {
 		const data = await request.formData();
 		const id = data.get('id') as string;
-		const x = parseFloat(data.get('x') as string);
-		const y = parseFloat(data.get('y') as string);
+		const x = parseMapCoordinate(data.get('x'), MAP_WIDTH);
+		const y = parseMapCoordinate(data.get('y'), MAP_HEIGHT);
 
 		console.log(
 			`[Action:updateHouseCoords] Admin: ${locals.admin?.email}, ID: ${id}, New: (${x}, ${y})`
 		);
 
 		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
+		if (!id || x === null || y === null) {
+			return fail(400, {
+				error: `Coordinates must be numbers on the map: X 0–${MAP_WIDTH}, Y 0–${MAP_HEIGHT}.`
+			});
+		}
 
 		try {
 			const { isBookingActive } = await getBookingSettings(locals.pb);
