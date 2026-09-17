@@ -1,135 +1,77 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { Actions, PageServerLoad } from './$types';
-import type { ClientResponseError } from 'pocketbase';
+import {
+	ADMIN_COLLECTION,
+	ADMIN_EMAIL_DOMAIN,
+	ADMIN_OAUTH_COOKIE,
+	ADMIN_OAUTH_COOKIE_PATH,
+	ADMIN_OAUTH_PROVIDER
+} from '$lib/server/admin-auth';
 
-// Custom type for cleaner code
-interface SafeAuthProvider {
-	name: string;
-	displayName: string;
-	authURL?: string;
-	authUrl?: string; // Fallback
+// Admin sign-in is Google only. There is deliberately no password login and no
+// invite/approval UI here: a first sign-in of a @mauersegler.art Workspace
+// account creates an access request, which a superuser approves on the server
+// (scripts/cozy-admin.sh approve, or the PocketBase dashboard).
+
+async function getGoogleProvider(locals: App.Locals) {
+	const methods = await locals.pb.collection(ADMIN_COLLECTION).listAuthMethods();
+	return methods.oauth2?.providers?.find((p) => p.name === ADMIN_OAUTH_PROVIDER) ?? null;
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
-	// If already logged in and verified (or superuser) -> Dashboard 🚀
-	const user = locals.pb.authStore.model;
-	const isSuper = user?.collectionName === '_superusers' || locals.pb.authStore.isSuperuser;
-	const isVerified = isSuper || user?.verified === true;
-
-	if (locals.pb.authStore.isValid && isVerified) {
-		throw redirect(303, '/admin');
-	}
-
+export const load: PageServerLoad = async ({ locals, url }) => {
+	let googleEnabled = false;
+	let backendError = false;
 	try {
-		const rawData = await locals.pb.collection('users').listAuthMethods();
-		const data = JSON.parse(JSON.stringify(rawData));
-
-		let providers: SafeAuthProvider[] = data.authProviders || [];
-		if ((!providers || providers.length === 0) && data.oauth2 && data.oauth2.providers) {
-			providers = data.oauth2.providers;
-		}
-
-		return {
-			providers: providers,
-			// Email login is almost always available if we offer registration 👤
-			enableEmail: true
-		};
-	} catch {
-		return { providers: [], enableEmail: true, error: 'House backend unreachable.' };
+		googleEnabled = !!(await getGoogleProvider(locals));
+	} catch (err: any) {
+		backendError = true;
+		console.error('[AdminLogin] Could not load auth methods:', err?.message);
 	}
+
+	return {
+		googleEnabled,
+		backendError,
+		adminDomain: ADMIN_EMAIL_DOMAIN,
+		pendingAdmin: locals.pendingAdmin,
+		error: url.searchParams.get('error')
+	};
 };
 
 export const actions: Actions = {
-	// ACTION 1: Login with Email 👤
-	login: async ({ locals, request }) => {
-		const data = await request.formData();
-		const email = data.get('email')?.toString();
-		const password = data.get('password')?.toString();
-
-		if (!email || !password) return fail(400, { message: 'Fill in the blanks!' });
-
+	google: async ({ locals, cookies, url }) => {
+		let provider;
 		try {
-			// 1. Try regular user auth
-			await locals.pb.collection('users').authWithPassword(email, password);
-		} catch (userErr) {
-			try {
-				// 2. Fallback: Try Superuser (v0.23+) / Admin auth
-				try {
-					await locals.pb.collection('_superusers').authWithPassword(email, password);
-				} catch {
-					await locals.pb.admins.authWithPassword(email, password);
-				}
-			} catch (adminErr) {
-				return fail(400, { fail: true, message: 'Invalid keys or burner does not exist.' });
+			provider = await getGoogleProvider(locals);
+		} catch (err: any) {
+			console.error('[AdminLogin] Could not load auth methods:', err?.message);
+			return fail(503, {
+				message: 'The control center backend is unreachable. Try again shortly.'
+			});
+		}
+		if (!provider) {
+			return fail(503, { message: 'Google sign-in is not configured on this server.' });
+		}
+
+		// PocketBase does not check `state`; the callback does, against this cookie.
+		cookies.set(
+			ADMIN_OAUTH_COOKIE,
+			JSON.stringify({ state: provider.state, codeVerifier: provider.codeVerifier }),
+			{
+				path: ADMIN_OAUTH_COOKIE_PATH,
+				httpOnly: true,
+				secure: !dev,
+				sameSite: 'lax',
+				maxAge: 60 * 10
 			}
-		}
-		throw redirect(303, '/admin');
-	},
+		);
 
-	// ACTION 2: Register (Create User + Login) ✨
-	register: async ({ locals, request }) => {
-		const data = await request.formData();
-		const email = data.get('email')?.toString();
-		const password = data.get('password')?.toString();
-		const passwordConfirm = data.get('passwordConfirm')?.toString();
-
-		if (!email || !password || !passwordConfirm) {
-			return fail(400, { register: true, message: 'The playa needs all info.' });
-		}
-		if (password !== passwordConfirm) {
-			return fail(400, { register: true, message: 'Passphrases do not match.' });
-		}
-
-		try {
-			// 1. Create user (Default: verified = false) 🗝️
-			await locals.pb.collection('users').create({
-				email,
-				password,
-				passwordConfirm,
-				verified: false
-			});
-
-			// 2. Login immediately 🚀
-			await locals.pb.collection('users').authWithPassword(email, password);
-		} catch (error) {
-			const err = error as ClientResponseError;
-			return fail(400, {
-				register: true,
-				message: err.message || 'Registration turned into dust.'
-			});
-		}
-
-		// Redirect to admin -> layout will block because verified=false 🛡️
-		throw redirect(303, '/admin');
-	},
-
-	// ACTION 3: OAuth (GitHub/Google) 🔗
-	oauth2: async ({ locals, cookies, url, request }) => {
-		const formData = await request.formData();
-		const providerName = formData.get('provider')?.toString();
-
-		const rawData = await locals.pb.collection('users').listAuthMethods();
-		const data = JSON.parse(JSON.stringify(rawData));
-
-		let providers: SafeAuthProvider[] = data.authProviders || [];
-		if ((!providers || providers.length === 0) && data.oauth2?.providers) {
-			providers = data.oauth2.providers;
-		}
-
-		const provider = providers.find((p) => p.name === providerName);
-		if (!provider) return fail(400, { message: 'Provider lost in the desert.' });
-
-		const redirectUrl = `${url.origin}/auth/callback/${provider.name}`;
-
-		cookies.set('provider', JSON.stringify(provider), {
-			path: '/',
-			httpOnly: true,
-			secure: !dev,
-			maxAge: 60 * 5
-		});
-
-		const targetUrl = provider.authURL || provider.authUrl || '';
-		throw redirect(303, targetUrl + redirectUrl);
+		// authURL ends with "redirect_uri=". `hd` and `prompt` only pre-select the
+		// Workspace account in Google's chooser; enforcement is server-side.
+		const redirectUrl = `${url.origin}/auth/callback/${ADMIN_OAUTH_PROVIDER}`;
+		throw redirect(
+			303,
+			`${provider.authURL}${encodeURIComponent(redirectUrl)}&hd=${encodeURIComponent(ADMIN_EMAIL_DOMAIN)}&prompt=select_account`
+		);
 	}
 };

@@ -1,0 +1,63 @@
+/**
+ * Event-time helpers. The event runs in Europe/Berlin, and admin forms use
+ * `<input type="datetime-local">`, whose value carries no timezone. These
+ * helpers convert between that wall-clock value and ISO instants explicitly,
+ * so neither the server's timezone (UTC in the container) nor the admin's
+ * browser timezone changes the meaning of an entered time.
+ */
+
+export const EVENT_TIME_ZONE = 'Europe/Berlin';
+
+const LOCAL_VALUE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
+
+const wallClock = new Intl.DateTimeFormat('en-US', {
+	timeZone: EVENT_TIME_ZONE,
+	hourCycle: 'h23',
+	year: 'numeric',
+	month: '2-digit',
+	day: '2-digit',
+	hour: '2-digit',
+	minute: '2-digit',
+	second: '2-digit'
+});
+
+function wallClockParts(instant: number) {
+	const parts: Record<string, number> = {};
+	for (const part of wallClock.formatToParts(new Date(instant))) {
+		if (part.type !== 'literal') parts[part.type] = Number(part.value);
+	}
+	return parts;
+}
+
+/** Offset of the event timezone from UTC at the given instant, in ms. */
+function offsetAt(instant: number): number {
+	const p = wallClockParts(instant);
+	const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+	return asUtc - Math.floor(instant / 1000) * 1000;
+}
+
+/**
+ * "2026-09-20T18:00" (Berlin wall time) -> "2026-09-20T16:00:00.000Z".
+ * Returns '' for malformed input.
+ */
+export function berlinLocalToIso(value: string): string {
+	const m = LOCAL_VALUE.exec(value.trim());
+	if (!m) return '';
+	const [year, month, day, hour, minute] = m.slice(1).map(Number);
+	const wallAsUtc = Date.UTC(year, month - 1, day, hour, minute);
+	if (Number.isNaN(wallAsUtc)) return '';
+
+	// Two passes settle the offset across DST transitions.
+	let instant = wallAsUtc - offsetAt(wallAsUtc);
+	instant = wallAsUtc - offsetAt(instant);
+	return new Date(instant).toISOString();
+}
+
+/** ISO instant -> "YYYY-MM-DDTHH:mm" in Berlin wall time (for datetime-local inputs). */
+export function isoToBerlinLocal(iso: string): string {
+	const instant = new Date(iso).getTime();
+	if (Number.isNaN(instant)) return '';
+	const p = wallClockParts(instant);
+	const pad = (n: number) => String(n).padStart(2, '0');
+	return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour)}:${pad(p.minute)}`;
+}

@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 
-const PB_URL = process.env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
+const PB_URL = process.env.PB_URL || process.env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 
 function createLookupHash(text: string): string {

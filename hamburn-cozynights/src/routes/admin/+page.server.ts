@@ -1,8 +1,25 @@
 import { redirect, error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import type { HousesResponse, BedsResponse, RoomsResponse } from '$lib/pocketbase-types';
+import type {
+	HousesResponse,
+	BedsResponse,
+	RoomsResponse,
+	TypedPocketBase
+} from '$lib/pocketbase-types';
 import { APP_SETTINGS_ID } from '$lib/server/constants';
 import { getBookingSettings } from '$lib/server/settings';
+import { berlinLocalToIso } from '$lib/time';
+
+/** Clears the burner names of all orders (they only describe bookings). */
+async function clearBurnerNames(pb: TypedPocketBase) {
+	const named = await pb.collection('orders').getFullList({
+		filter: 'burner_name != ""',
+		fields: 'id'
+	});
+	for (const order of named) {
+		await pb.collection('orders').update(order.id, { burner_name: '' });
+	}
+}
 
 type HouseStats = HousesResponse & {
 	totalBeds: number;
@@ -13,13 +30,8 @@ type HouseStats = HousesResponse & {
 
 export const actions: Actions = {
 	togglePhase: async ({ locals }) => {
-		console.log(
-			`[Action:togglePhase] User: ${locals.pb.authStore.model?.email}, Verified: ${locals.pb.authStore.model?.verified}`
-		);
-		if (!locals.pb.authStore.model?.verified) {
-			console.error('[Action:togglePhase] BLOCKED: User not verified.');
-			return fail(403, { error: 'Unauthorized' });
-		}
+		console.log(`[Action:togglePhase] Admin: ${locals.admin?.email}`);
+		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
 
 		try {
 			const raw = await locals.pb
@@ -43,9 +55,7 @@ export const actions: Actions = {
 			}
 
 			if (raw) {
-				console.log(
-					`[Action:togglePhase] Effective: ${effectivelyActive}, Target: ${nextStatus}`
-				);
+				console.log(`[Action:togglePhase] Effective: ${effectivelyActive}, Target: ${nextStatus}`);
 				await locals.pb.collection('app_settings').update(APP_SETTINGS_ID, update);
 			} else {
 				console.log('[Action:togglePhase] Creating initial settings.');
@@ -62,34 +72,33 @@ export const actions: Actions = {
 		}
 	},
 	clearAllBookings: async ({ locals }) => {
-		if (!locals.pb.authStore.model?.verified) return fail(403, { error: 'Unauthorized' });
+		if (!locals.admin?.isSuperuser) {
+			return fail(403, { error: 'Only superusers can clear all bookings.' });
+		}
 
-		console.log(`[Action:clearAllBookings] INITIATED by ${locals.pb.authStore.model?.email}`);
+		console.log(`[Action:clearAllBookings] INITIATED by ${locals.admin.email}`);
 
 		try {
-			// 1. Fetch all occupied beds
-			const occupiedBeds = await locals.pb.collection('beds').getFullList({
-				filter: 'occupied = true'
+			// 1. Release every occupied bed. The orders themselves are the ticket
+			//    roster (one order per ticket code) and must survive, otherwise every
+			//    guest's code would stop working.
+			const occupiedBeds = await locals.adminPb.collection('beds').getFullList({
+				filter: 'occupied = true || order != ""'
 			});
 
 			console.log(`[Action:clearAllBookings] Clearing ${occupiedBeds.length} spots.`);
 
-			// 2. Reset all beds
 			for (const bed of occupiedBeds) {
-				await locals.pb.collection('beds').update(bed.id, {
+				await locals.adminPb.collection('beds').update(bed.id, {
 					occupied: false,
-					bookedBy: null,
 					order: null
 				});
 			}
 
-			// 3. Clear orders collection (optional but logical)
-			const orders = await locals.pb.collection('orders').getFullList();
-			for (const order of orders) {
-				await locals.pb.collection('orders').delete(order.id);
-			}
+			// 2. Forget the burner names chosen for those bookings.
+			await clearBurnerNames(locals.adminPb);
 
-			console.log('[Action:clearAllBookings] SUCCESS. Database purged of all bookings.');
+			console.log('[Action:clearAllBookings] SUCCESS. All spots released, ticket codes kept.');
 			return { success: true };
 		} catch (err) {
 			console.error('[Action:clearAllBookings] FAILED:', err);
@@ -97,14 +106,19 @@ export const actions: Actions = {
 		}
 	},
 	setUnlockTimer: async ({ locals, request }) => {
-		console.log(`[Action:setUnlockTimer] User: ${locals.pb.authStore.model?.email}`);
-		if (!locals.pb.authStore.model?.verified) return fail(403);
+		console.log(`[Action:setUnlockTimer] Admin: ${locals.admin?.email}`);
+		if (!locals.admin) return fail(403);
 		const data = await request.formData();
 		const date = data.get('unlockAt') as string;
 
+		// The form's datetime-local value has no timezone; the UI presents it as
+		// event time (Europe/Berlin), independent of the server's own timezone.
+		const unlockAt = date ? berlinLocalToIso(date) : '';
+		if (date && !unlockAt) return fail(400, { error: 'Invalid date.' });
+
 		try {
 			await locals.pb.collection('app_settings').update(APP_SETTINGS_ID, {
-				booking_unlock_at: date ? new Date(date).toISOString() : ''
+				booking_unlock_at: unlockAt
 			});
 			console.log(`[Action:setUnlockTimer] SUCCESS. Target: ${date}`);
 		} catch (err) {
@@ -113,8 +127,8 @@ export const actions: Actions = {
 		}
 	},
 	cancelUnlockTimer: async ({ locals }) => {
-		console.log(`[Action:cancelUnlockTimer] User: ${locals.pb.authStore.model?.email}`);
-		if (!locals.pb.authStore.model?.verified) return fail(403);
+		console.log(`[Action:cancelUnlockTimer] Admin: ${locals.admin?.email}`);
+		if (!locals.admin) return fail(403);
 		try {
 			await locals.pb.collection('app_settings').update(APP_SETTINGS_ID, {
 				booking_unlock_at: ''
@@ -132,13 +146,10 @@ export const actions: Actions = {
 		const y = parseFloat(data.get('y') as string);
 
 		console.log(
-			`[Action:updateHouseCoords] User: ${locals.pb.authStore.model?.email}, ID: ${id}, New: (${x}, ${y})`
+			`[Action:updateHouseCoords] Admin: ${locals.admin?.email}, ID: ${id}, New: (${x}, ${y})`
 		);
 
-		if (!locals.pb.authStore.model?.verified) {
-			console.error('[Action:updateHouseCoords] BLOCKED: User not verified.');
-			return fail(403, { error: 'Unauthorized' });
-		}
+		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
 
 		try {
 			const { isBookingActive } = await getBookingSettings(locals.pb);
@@ -159,12 +170,9 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const id = data.get('id') as string;
 
-		console.log(`[Action:deleteHouse] User: ${locals.pb.authStore.model?.email}, ID: ${id}`);
+		console.log(`[Action:deleteHouse] Admin: ${locals.admin?.email}, ID: ${id}`);
 
-		if (!locals.pb.authStore.model?.verified) {
-			console.error('[Action:deleteHouse] BLOCKED: User not verified.');
-			return fail(403, { error: 'Unauthorized' });
-		}
+		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
 
 		try {
 			const { isBookingActive } = await getBookingSettings(locals.pb);
@@ -217,14 +225,9 @@ export const actions: Actions = {
 		const id = data.get('id') as string;
 		const name = data.get('name') as string;
 
-		console.log(
-			`[Action:renameHouse] User: ${locals.pb.authStore.model?.email}, ID: ${id}, New Name: ${name}`
-		);
+		console.log(`[Action:renameHouse] Admin: ${locals.admin?.email}, ID: ${id}, New Name: ${name}`);
 
-		if (!locals.pb.authStore.model?.verified) {
-			console.error('[Action:renameHouse] BLOCKED: User not verified.');
-			return fail(403, { error: 'Unauthorized' });
-		}
+		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
 
 		if (!name) return fail(400, { error: 'Name is required' });
 
@@ -244,13 +247,16 @@ export const actions: Actions = {
 		}
 	},
 	importTemplate: async ({ locals, request }) => {
-		if (!locals.pb.authStore.model?.verified) return fail(403, { error: 'Unauthorized' });
+		if (!locals.admin?.isSuperuser) {
+			return fail(403, { error: 'Only superusers can import a template.' });
+		}
 
 		const { isBookingActive } = await getBookingSettings(locals.pb);
 		if (isBookingActive) {
 			console.warn('[Import Template] BLOCKED: cannot nuke the database during LIVE mode.');
 			return fail(403, {
-				error: 'Templates cannot be imported during Live Booking — this would erase live bookings. Switch to Staging first. 🔒'
+				error:
+					'Templates cannot be imported during Live Booking — this would erase live bookings. Switch to Staging first. 🔒'
 			});
 		}
 
@@ -271,27 +277,28 @@ export const actions: Actions = {
 
 			console.log(`[Import Template] Starting Nuke Phase...`);
 
-			// 1. Fetch and delete everything
-			const houses = await locals.pb.collection('houses').getFullList();
-			const rooms = await locals.pb.collection('rooms').getFullList();
-			const beds = await locals.pb.collection('beds').getFullList();
-			const orders = await locals.pb.collection('orders').getFullList();
+			// 1. Fetch and delete the whole structure. Orders (the ticket roster)
+			//    stay: only the bookings attached to the deleted beds disappear.
+			const pb = locals.adminPb;
+			const houses = await pb.collection('houses').getFullList();
+			const rooms = await pb.collection('rooms').getFullList();
+			const beds = await pb.collection('beds').getFullList();
 
 			console.log(
-				`[Import Template] Deleting ${houses.length} houses, ${rooms.length} rooms, ${beds.length} beds, ${orders.length} orders.`
+				`[Import Template] ${locals.admin.email} deletes ${houses.length} houses, ${rooms.length} rooms, ${beds.length} beds.`
 			);
 
 			// Delete in reverse order of dependency
-			for (const bed of beds) await locals.pb.collection('beds').delete(bed.id);
-			for (const room of rooms) await locals.pb.collection('rooms').delete(room.id);
-			for (const house of houses) await locals.pb.collection('houses').delete(house.id);
-			for (const order of orders) await locals.pb.collection('orders').delete(order.id);
+			for (const bed of beds) await pb.collection('beds').delete(bed.id);
+			for (const room of rooms) await pb.collection('rooms').delete(room.id);
+			for (const house of houses) await pb.collection('houses').delete(house.id);
+			await clearBurnerNames(pb);
 
 			console.log(`[Import Template] Nuke Complete. Rebuilding...`);
 
 			// 2. Rebuild from template
 			for (const h of template.houses) {
-				const houseRecord = await locals.pb.collection('houses').create({
+				const houseRecord = await pb.collection('houses').create({
 					name: h.name,
 					x: h.x,
 					y: h.y
@@ -299,7 +306,7 @@ export const actions: Actions = {
 
 				if (h.rooms && Array.isArray(h.rooms)) {
 					for (const r of h.rooms) {
-						const roomRecord = await locals.pb.collection('rooms').create({
+						const roomRecord = await pb.collection('rooms').create({
 							name: r.name,
 							room_number: r.room_number,
 							amount_beds: r.amount_beds,
@@ -308,7 +315,7 @@ export const actions: Actions = {
 
 						if (r.beds && Array.isArray(r.beds)) {
 							for (const b of r.beds) {
-								await locals.pb.collection('beds').create({
+								await pb.collection('beds').create({
 									label: b.label,
 									enabled: b.enabled,
 									is_locked: b.is_locked,
@@ -325,18 +332,14 @@ export const actions: Actions = {
 			return { success: true };
 		} catch (err: any) {
 			console.error('[Import Template] FAILED:', err);
-			return fail(500, { error: `Import failed: ${err.message}` });
+			return fail(500, { error: 'Import failed. Check the template file and the server log.' });
 		}
 	}
 };
 
 export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.pb.authStore.isValid) {
-		console.warn('[Security] Unauthorized access attempt detected on Admin Dashboard.');
-		throw redirect(303, '/admin/login');
-	}
-
-	console.log(`[Dashboard] Initializing data for admin: ${locals.pb.authStore.model?.email}`);
+	// Runs in parallel with the layout load, so it guards itself too.
+	if (!locals.admin) throw redirect(303, '/admin/login');
 
 	const [houses, allRooms, allBeds, settings, orders] = await Promise.all([
 		locals.pb.collection('houses').getFullList<HousesResponse>({ sort: 'name' }),
