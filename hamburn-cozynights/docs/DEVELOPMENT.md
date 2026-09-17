@@ -44,7 +44,15 @@ This allows you to keep your admin credentials safely encrypted while still bein
 
 ## 3. Testing Suite
 
-We use two types of testing to ensure the app is robust:
+`npm run verify` runs everything CI runs (type check, unit, integration and
+smoke tests; needs Docker). The layers, what they prove and the release routine
+are described in [TESTING.md](TESTING.md). In short:
+
+```bash
+npm run verify             # everything, before a pull request / deploy
+npm run test:integration   # real, empty PocketBase: migrations, hooks, API rules
+npm run test:smoke         # the staging Docker image, driven over HTTP
+```
 
 ### Unit & Security Tests (Vitest)
 
