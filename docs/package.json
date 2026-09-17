@@ -1,0 +1,17 @@
+{
+	"name": "hamburn-cozynights-docs",
+	"private": true,
+	"type": "module",
+	"description": "Documentation site for Hamburn CozyNights (VitePress, published to GitHub Pages)",
+	"scripts": {
+		"dev": "vitepress dev",
+		"build": "vitepress build",
+		"preview": "vitepress preview"
+	},
+	"devDependencies": {
+		"medium-zoom": "^1.1.0",
+		"mermaid": "^11.17.2",
+		"vitepress": "^1.6.4",
+		"vue": "^3.5.43"
+	}
+}
