@@ -109,6 +109,16 @@ New requests can be announced in a chat: set `COZY_ADMIN_WEBHOOK_URL`
   `PB_ADMIN_PASSWORD`). Never use a person's account for it: rotating its
   password revokes the app's token.
 
+### Staging secrets
+
+The server's `.env` is created from `deploy/staging.env.template`: fill it
+locally (`openssl rand -hex 32` for `ENCRYPTION_KEY`, `openssl rand -hex 24`
+for `PB_ADMIN_PASSWORD`, the Google OAuth client below, optionally the
+webhook), keep a copy in Vaultwarden, then install it on the server as
+`deploy:deploy` with mode `600`. After the first deploy,
+`scripts/cozy-admin.sh service-account` creates the service superuser with
+exactly that password.
+
 ### Google OAuth client
 
 PocketBase needs a Google OAuth client ("Web application") for the `admins`

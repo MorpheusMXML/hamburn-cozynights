@@ -13,8 +13,9 @@
 #   scripts/cozy-admin.sh superuser <email>             PocketBase superuser (prompts for a
 #                                                       password) + app role superuser
 #   scripts/cozy-admin.sh remove <email>                reject/revoke app access + superuser
-#   scripts/cozy-admin.sh service-account               create/rotate the app's service superuser
-#                                                       (PB_ADMIN_EMAIL/PASSWORD in .env) and
+#   scripts/cozy-admin.sh service-account               create/update the app's service superuser
+#                                                       from PB_ADMIN_EMAIL/PASSWORD in .env
+#                                                       (generates the password if missing) and
 #                                                       recreate the app container
 #
 # Targets docker-compose.staging.yml next to this script's parent folder;
@@ -128,14 +129,26 @@ case "$cmd" in
 		[[ -f "$ENV_FILE" ]] || die ".env not found at $ENV_FILE"
 		email="$(grep -E '^PB_ADMIN_EMAIL=' "$ENV_FILE" | tail -n1 | cut -d= -f2- | tr -d "\"' ")"
 		email="${email:-app-service@cozynights.local}"
-		COZY_SU_PASSWORD="$(openssl rand -hex 24)"
+		# Use the password already in .env (e.g. generated locally and kept in a
+		# password manager) if it is long enough; otherwise generate one and
+		# write it to .env.
+		COZY_SU_PASSWORD="$(grep -E '^PB_ADMIN_PASSWORD=' "$ENV_FILE" | tail -n1 | cut -d= -f2- | tr -d "\"'")"
+		keep_password=1
+		if [[ ${#COZY_SU_PASSWORD} -lt 24 ]]; then
+			COZY_SU_PASSWORD="$(openssl rand -hex 24)"
+			keep_password=0
+		fi
 		export COZY_SU_PASSWORD
 		cozy -e COZY_SU_PASSWORD -- service-account "$email"
-		cp -p "$ENV_FILE" "$ENV_FILE.before-service-account"
-		set_env_var PB_ADMIN_EMAIL "$email"
-		set_env_var PB_ADMIN_PASSWORD "$COZY_SU_PASSWORD"
+		if [[ $keep_password -eq 1 ]]; then
+			echo "used PB_ADMIN_PASSWORD from $ENV_FILE (unchanged)"
+		else
+			cp -p "$ENV_FILE" "$ENV_FILE.before-service-account"
+			set_env_var PB_ADMIN_EMAIL "$email"
+			set_env_var PB_ADMIN_PASSWORD "$COZY_SU_PASSWORD"
+			echo "generated a new PB_ADMIN_PASSWORD and wrote it to $ENV_FILE (previous copy: .env.before-service-account)"
+		fi
 		unset COZY_SU_PASSWORD
-		echo "updated PB_ADMIN_EMAIL/PB_ADMIN_PASSWORD in $ENV_FILE (previous copy: .env.before-service-account)"
 		# env_file is only read when a container is created, so recreate the app.
 		compose up -d --no-deps --force-recreate app
 		;;
