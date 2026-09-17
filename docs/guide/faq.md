@@ -39,7 +39,7 @@ Only with their ticket code. On a shared device, entering another code switches 
 :::
 
 ::: details A spot says "Not available · Reserved by the crew"
-The crew has locked it, for example because the bed is broken or kept free on purpose. Pick another spot.
+The crew has locked or deactivated it, for example because the bed is broken, kept free on purpose or not in use. Pick another spot.
 :::
 
 ## For admins
