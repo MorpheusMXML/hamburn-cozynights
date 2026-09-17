@@ -106,7 +106,9 @@ describe('any deployment (read-only)', () => {
 	});
 });
 
-describe.runIf(FULL)('full flow (throwaway stack only)', () => {
+// Skipped against a real site on purpose: these tests write data (tickets,
+// houses, admin accounts, bookings) and need superuser access to the database.
+describe.runIf(FULL)('full flow — writes data, test stack only (skipped on real sites)', () => {
 	let su: PocketBase;
 
 	async function setBookingOpen(open: boolean) {

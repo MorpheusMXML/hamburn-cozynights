@@ -11,6 +11,9 @@ export default defineConfig({
 		globals: true,
 		environment: 'node',
 		include: ['tests/integration/**/*.test.ts', 'tests/smoke/**/*.test.ts'],
+		// Name every test in the output (CI and deploy logs should show what was
+		// checked); the default reporter only lists slow ones.
+		reporters: ['verbose'],
 		// One shared database / app: run the files one after another.
 		fileParallelism: false,
 		testTimeout: 20_000,

@@ -53,6 +53,11 @@ It needs Node and a running Docker (Docker Desktop on a Mac). Nothing else — n
   names, admin area opens for approved admins only, a removed admin is out on
   the next request, "clear all bookings" is superuser-only and keeps the tickets.
 
+Against a real site the log therefore ends with `6 passed | 6 skipped`: the
+full-flow tests write data and need superuser access to the database, so they
+are skipped there on purpose. They have already run against the Docker image of
+the same commit in the `verify` job.
+
 ### What no automatic test covers
 
 The Google consent screen itself. Everything around it is tested (who may get
