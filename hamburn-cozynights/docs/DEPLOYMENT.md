@@ -6,11 +6,11 @@ stay isolated from each other despite sharing one physical server.
 
 ## 1. Environments
 
-| Environment | Purpose                                    | Data                                              |
-| :---------- | :------------------------------------------ | :------------------------------------------------- |
-| **Local**   | Development on your own machine (`npm run dev` + `npm run db:up`). | Your own local `pb_data/`, never shared. |
-| **Staging** | Testing with real users before things go live — its own subdomain, its own PocketBase instance, its own `.env`. | Isolated. Treat as disposable. |
-| **Production** | The live event. | Real bookings. |
+| Environment    | Purpose                                                                                                         | Data                                     |
+| :------------- | :-------------------------------------------------------------------------------------------------------------- | :--------------------------------------- |
+| **Local**      | Development on your own machine (`npm run dev` + `npm run db:up`).                                              | Your own local `pb_data/`, never shared. |
+| **Staging**    | Testing with real users before things go live — its own subdomain, its own PocketBase instance, its own `.env`. | Isolated. Treat as disposable.           |
+| **Production** | The live event.                                                                                                 | Real bookings.                           |
 
 Staging and production are **fully separate stacks** (separate containers,
 separate Docker network, separate database volume, separate `ENCRYPTION_KEY`).
@@ -36,9 +36,15 @@ manager, not in chat, not in a text file inside the repo.
 
 ## 3. Deployment pipeline
 
-Pushing to `main` (paths under `hamburn-cozynights/`) triggers a GitHub
-Actions workflow (`.github/workflows/deploy-staging.yml`) that deploys to
-staging automatically. The workflow authenticates as a dedicated,
+Staging is deployed **on demand**: GitHub → Actions → _Deploy staging_ →
+_Run workflow_, picking the branch to deploy
+(`.github/workflows/deploy-staging.yml`). The workflow first runs the tests
+and builds the Docker image in CI, then deploys that exact commit. On the
+server the deploy script backs up the PocketBase volume, restarts the stack
+and rolls back to the previous commit if the health check fails. Setup and
+rollback steps: `deploy/README.md`.
+
+The deploy job authenticates as a dedicated,
 non-privileged **deploy user** on the server whose SSH key can run exactly
 one thing — the deploy script for that environment — and nothing else. It
 cannot log in interactively, read other files, or touch any other service on
