@@ -1,0 +1,63 @@
+# /etc/server-backup/backup.conf — configuration of /usr/local/sbin/server-backup
+# (bash syntax; root:root, mode 600). Setup: deploy/backup/README.md.
+#
+# Paths are either absolute host paths or "volume:<docker volume>:<path inside
+# the volume>" (the script resolves the volume's mountpoint itself).
+
+# restic repository on the Storage Box. "storagebox" is the host alias from
+# /root/.ssh/config; the path is relative to the Storage Box home directory.
+RESTIC_REPOSITORY="sftp:storagebox:restic/$(hostname)"
+RESTIC_PASSWORD_FILE=/etc/server-backup/restic-password
+
+# Live SQLite databases, copied consistently while the apps keep running:
+# "name=path". Never list them in BACKUP_PATHS as well (a plain file copy of a
+# database that is being written to can be corrupt).
+SQLITE_DBS=(
+	"cozynights-staging=volume:hamburn-cozynights_pb_data_staging:data.db"
+	# "cozynights-prod=volume:cozynights-prod_pb_data:data.db"
+	"vaultwarden=/path/to/vaultwarden/data/db.sqlite3"
+)
+
+# PostgreSQL databases in containers: "name=container:user:database"
+PG_DUMPS=(
+	"listmonk=listmonk_db:listmonk:listmonk"
+)
+
+# Everything else needed to rebuild the server: configuration, certificates,
+# secrets and uploaded files.
+BACKUP_PATHS=(
+	/etc/nginx
+	/etc/letsencrypt
+	/etc/cozynights
+	/root/.ssh/config
+	/opt/hamburn-cozynights-staging/hamburn-cozynights/.env
+	# /opt/hamburn-cozynights-prod/hamburn-cozynights/.env
+	/path/to/vaultwarden/data
+	/opt/docker-compose.yml
+)
+
+# Excluded from BACKUP_PATHS (restic --exclude patterns). The live SQLite
+# files are already in the database copies above.
+EXCLUDES=(
+	'*.sqlite3'
+	'*.sqlite3-wal'
+	'*.sqlite3-shm'
+	'*/vaultwarden/data/icon_cache'
+)
+
+# Retention (restic forget), applied once a day at PRUNE_HOUR (server time).
+KEEP_HOURLY=24
+KEEP_DAILY=14
+KEEP_WEEKLY=8
+KEEP_MONTHLY=12
+PRUNE_HOUR=3
+# Weekly repository check + restore test on this weekday (1 = Monday, 7 = Sunday).
+CHECK_WEEKDAY=7
+
+# Alert on failure: same webhook format as COZY_ADMIN_WEBHOOK_URL, e.g.
+# 'https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<CHAT_ID>'
+ALERT_WEBHOOK_URL=''
+# Optional dead man's switch (alerts when backups stop running at all), e.g. a
+# free check on https://healthchecks.io with period 1 hour, grace 2 hours:
+# 'https://hc-ping.com/<uuid>'
+HEALTHCHECK_URL=''

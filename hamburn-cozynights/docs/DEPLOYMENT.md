@@ -158,3 +158,33 @@ docker compose -f docker-compose.staging.yml logs pocketbase | grep -iE 'failed 
 The PocketBase image is pinned (`ghcr.io/muchobien/pocketbase:0.40.4`): hooks and
 migrations use its JavaScript API, and PocketBase's own system migrations are
 one-way. Back up the data volume before bumping it.
+
+## 8. Backups and where data lives
+
+| What                                                       | Source of truth                                       |
+| :--------------------------------------------------------- | :---------------------------------------------------- |
+| Code, schema (`pb_migrations/`), hooks, location templates | Git                                                   |
+| Secrets (`.env` per environment, `ENCRYPTION_KEY`)         | the server + Vaultwarden + an offline emergency sheet |
+| Live data (ticket codes, bookings, admins)                 | the PocketBase volume on the server + backups         |
+
+The live database stays on the server's local disk. SQLite must not run on a
+network share (Storage Box via SMB/WebDAV/SFTP): file locking over the network
+is unreliable and can corrupt the database. The Storage Box is the backup
+target only.
+
+- **Local, hourly:** PocketBase writes ZIP backups into the volume
+  (`pb_hooks/cozy_backups.pb.js`, `PB_BACKUP_CRON` / `PB_BACKUP_KEEP`). Quick
+  undo from the dashboard; no protection against losing the server.
+- **Before every deploy:** the deploy script archives the volume
+  (`deploy/README.md`).
+- **Off-site, hourly:** `deploy/backup/server-backup.sh` copies all live
+  databases of the server consistently (CozyNights, Vaultwarden, Listmonk) and
+  stores them together with `.env` files, nginx and certificates, encrypted with
+  restic, on a Hetzner Storage Box. Daily Storage Box snapshots protect those
+  backups from being deleted from the server. It alerts via webhook on failure
+  and test-restores the databases weekly.
+
+Setup, restore and the emergency sheet: [`deploy/backup/README.md`](../deploy/backup/README.md).
+Without an environment's `ENCRYPTION_KEY`, a restored database is useless
+(burner names can't be decrypted, ticket codes no longer match), so keep that
+key outside the server as well.

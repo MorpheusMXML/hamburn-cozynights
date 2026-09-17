@@ -17,6 +17,10 @@ services:
       # Optional: chat webhook notified about new admin access requests
       # (Telegram / Slack / Google Chat / Discord), see .env.example.
       COZY_ADMIN_WEBHOOK_URL: ${COZY_ADMIN_WEBHOOK_URL:-}
+      # Local auto-backups into the volume's backups/ folder (defaults: hourly,
+      # keep 72), see pb_hooks/cozy_backups.pb.js. Off-site: deploy/backup/.
+      PB_BACKUP_CRON: ${PB_BACKUP_CRON:-}
+      PB_BACKUP_KEEP: ${PB_BACKUP_KEEP:-}
       # NOTE: never pass PB_ADMIN_EMAIL/PB_ADMIN_PASSWORD to this container —
       # the image's entrypoint would re-upsert that superuser on every start,
       # which revokes the app's cached service-account token.
