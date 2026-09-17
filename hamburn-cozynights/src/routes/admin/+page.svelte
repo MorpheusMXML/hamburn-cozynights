@@ -1,11 +1,12 @@
 <script lang="ts">
 	import type { PageData, SubmitFunction } from './$types';
+	import type { ActionResult } from '@sveltejs/kit';
 	import Map from '$lib/components/Map.svelte';
 	import HouseEditor from '$lib/components/HouseEditor.svelte';
 	import IntelDashboard from '$lib/components/admin/IntelDashboard.svelte';
 	import SanityChecks from '$lib/components/admin/SanityChecks.svelte';
 	import { invalidateAll } from '$app/navigation';
-	import { enhance } from '$app/forms';
+	import { enhance, deserialize } from '$app/forms';
 	import { fade, fly, slide } from 'svelte/transition';
 
 	export let data: PageData;
@@ -78,8 +79,15 @@
 					return async ({ result, update }) => {
 						if (result.type === 'success') {
 							const formData = new FormData();
-							await submitAction('?/clearAllBookings', formData);
-							showNotice('success', '✨ PLAYA PURGED: All spots are vacant once more.');
+							const purgeResult = await submitAction('?/clearAllBookings', formData);
+							if (purgeResult.type === 'success') {
+								showNotice('success', '✨ PLAYA PURGED: All spots are vacant once more.');
+							} else {
+								showNotice(
+									'error',
+									`❌ PURGE FAILED: ${actionErrorMessage(purgeResult) || 'Could not clear all bookings.'}`
+								);
+							}
 						}
 						await update();
 					};
@@ -101,12 +109,29 @@
 					accept: 'application/json'
 				}
 			});
-			const result = await response.json();
-			return result;
+			// The action-JSON response's `data` field is a devalue-encoded string,
+			// not a plain object — plain response.json() leaves it unparsed, so
+			// every `result.data?.error` read below would silently be undefined.
+			// deserialize() (from $app/forms) does the same decoding use:enhance
+			// does internally.
+			return deserialize(await response.text());
 		} catch (err: any) {
 			console.error(`[Action Error] Fetch failed for ${actionUrl}:`, err);
-			return { type: 'error', error: err.message };
+			return { type: 'error', error: err.message } as ActionResult;
 		}
+	}
+
+	// `.data` only exists on the 'failure' variant of ActionResult, and
+	// `.error` only on 'error' — this pulls a display string out of
+	// whichever one a submitAction() result actually is.
+	function actionErrorMessage(result: ActionResult): string | undefined {
+		if (result.type === 'failure') {
+			return (result.data as Record<string, unknown> | undefined)?.error as string | undefined;
+		}
+		if (result.type === 'error') {
+			return typeof result.error === 'string' ? result.error : result.error?.message;
+		}
+		return undefined;
 	}
 
 	// When clicking empty space on the map in editor mode
@@ -144,7 +169,7 @@
 		if (result.type !== 'success') {
 			showNotice(
 				'error',
-				`🔥 THE PLAYA PROTECTS! 🛡️ ${result.data?.error || 'This house has active bookings and cannot be moved.'}`
+				`🔥 THE PLAYA PROTECTS! 🛡️ ${actionErrorMessage(result) || 'This house has active bookings and cannot be moved.'}`
 			);
 			editingHouse = null;
 			selectedHouseId = null;
@@ -195,7 +220,7 @@
 			if (result.type !== 'success') {
 				showNotice(
 					'error',
-					`❌ VANISH FAILED! ${result.data?.error || 'The playa protects this sanctuary.'}`
+					`❌ VANISH FAILED! ${actionErrorMessage(result) || 'The playa protects this sanctuary.'}`
 				);
 			}
 			invalidateAll();
@@ -225,7 +250,7 @@
 			if (result.type !== 'success')
 				showNotice(
 					'error',
-					`❌ RENAME FAILED! ${result.data?.error || 'The desert winds are too strong.'}`
+					`❌ RENAME FAILED! ${actionErrorMessage(result) || 'The desert winds are too strong.'}`
 				);
 		} else {
 			formData.append('x', editingHouse?.x.toString() || '0');
@@ -236,7 +261,7 @@
 			if (result.type !== 'success')
 				showNotice(
 					'error',
-					`❌ CREATION FAILED! ${result.data?.error || 'The dust has clogged the gears.'}`
+					`❌ CREATION FAILED! ${actionErrorMessage(result) || 'The dust has clogged the gears.'}`
 				);
 		}
 
@@ -280,7 +305,7 @@
 				if (sidebar) sidebar.classList.remove('disintegrating');
 				showNotice(
 					'error',
-					`❌ VANISH FAILED: ${result.data?.error || 'The playa protects this sanctuary.'}`
+					`❌ VANISH FAILED: ${actionErrorMessage(result) || 'The playa protects this sanctuary.'}`
 				);
 			} else {
 				console.log('[Dashboard] Vanish SUCCESS. Clearing state...');

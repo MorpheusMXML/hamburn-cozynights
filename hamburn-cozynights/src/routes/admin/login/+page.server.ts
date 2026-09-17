@@ -100,7 +100,12 @@ export const actions: Actions = {
 			});
 		}
 
-		// Redirect to admin -> layout will block because verified=false 🛡️
+		// Redirect to admin. The layout does NOT block unverified users from
+		// viewing /admin — it only uses `isVerified` to hide action buttons in
+		// the UI (src/routes/admin/+layout.server.ts). Every actual write
+		// action across the admin routes independently checks
+		// `locals.pb.authStore.model?.verified` before mutating anything, so
+		// that's the real gate for a freshly self-registered, unverified user.
 		throw redirect(303, '/admin');
 	},
 

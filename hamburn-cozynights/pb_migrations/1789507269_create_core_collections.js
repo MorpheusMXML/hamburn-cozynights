@@ -24,7 +24,13 @@
 // Every create/update/delete rule below matches a real call site gated by
 // `locals.pb.authStore.model?.verified` in the corresponding +page.server.ts
 // action, so this is defense-in-depth for an existing app-level check, not
-// a new restriction.
+// a new restriction. That app-level check is NOT provided by the /admin
+// layout — src/routes/admin/+layout.server.ts only gates on
+// `authStore.isValid` and uses `isVerified` purely to hide UI buttons, so an
+// unverified-but-logged-in user (e.g. a fresh self-registration) can reach
+// every admin page. Each write action checks `.verified` itself instead;
+// these PocketBase rules are the real backstop if any of those individual
+// checks is ever missed, not merely a mirror of a layout-level gate.
 
 migrate(
 	(app) => {

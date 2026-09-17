@@ -6,15 +6,21 @@ export const actions: Actions = {
 	create: async ({ request, locals }) => {
 		if (!locals.pb.authStore.model?.verified) {
 			console.error('[Action] Unauthorized attempt to create house.');
-			return fail(403, { message: 'Only verified crew members can ignite new sanctuaries.' });
+			// This action is called two ways with two different failure-field
+			// conventions: this page's own <form> reads `form?.message`, while
+			// admin/+page.svelte's map-based "new house" flow calls it via
+			// fetch/submitAction and reads `result.data?.error` (matching the
+			// rest of that file's own actions in admin/+page.server.ts) — set
+			// both so either caller shows the real reason.
+			const reason = 'Only verified crew members can ignite new sanctuaries.';
+			return fail(403, { message: reason, error: reason });
 		}
 
 		const { isBookingActive } = await getBookingSettings(locals.pb);
 		if (isBookingActive) {
 			console.warn('[Action] BLOCKED: cannot create a house during LIVE mode.');
-			return fail(403, {
-				message: 'New sanctuaries cannot be ignited during Live Booking. Switch to Staging.'
-			});
+			const reason = 'New sanctuaries cannot be ignited during Live Booking. Switch to Staging.';
+			return fail(403, { message: reason, error: reason });
 		}
 
 		const data = await request.formData();
@@ -57,7 +63,8 @@ export const actions: Actions = {
 			return { success: true };
 		} catch (err) {
 			console.error('[Action] House ignition failed:', err);
-			return fail(500, { message: 'Could not ignite house. The dust is too thick.' });
+			const reason = 'Could not ignite house. The dust is too thick.';
+			return fail(500, { message: reason, error: reason });
 		}
 	}
 };

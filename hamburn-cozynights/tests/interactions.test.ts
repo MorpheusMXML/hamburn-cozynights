@@ -69,6 +69,11 @@ describe('Interactions & Registration', () => {
 	});
 
 	it('should fail login with an invalid booking code', async () => {
+		// getOrderByNumber tries a hash lookup, then falls back to a legacy
+		// order_number lookup — both need to reject for this to genuinely
+		// exercise the "code doesn't exist at all" path, not just fall through
+		// to the second (unmocked) call resolving to undefined.
+		mockAdminPb.getFirstListItem.mockRejectedValueOnce({ status: 404 });
 		mockAdminPb.getFirstListItem.mockRejectedValueOnce({ status: 404 });
 
 		const formData = new FormData();

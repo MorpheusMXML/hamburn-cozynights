@@ -9,6 +9,11 @@ services:
       - '127.0.0.1:8091:8090'
     volumes:
       - pb_data_staging:/pb_data
+      # Same schema/hooks mounts as docker-compose.yml (see pb_migrations/) —
+      # without these, staging boots with an empty database: no collections,
+      # no admin_view.pb.js hook.
+      - ./pb_migrations:/pb_migrations
+      - ./pb_hooks:/pb_hooks
     healthcheck:
       test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:8090/api/health']
       interval: 5s

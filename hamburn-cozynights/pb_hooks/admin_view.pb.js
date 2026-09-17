@@ -1,12 +1,12 @@
 // Was previously in this file only ever ran if you mounted pb_hooks/ into
 // the container, which docker-compose.yml never did — so none of this had
-// actually executed before. Ported from the pre-0.23 `dao.*` API (removed
-// in modern PocketBase) to `$app.*`, and from a `status`/`guest_name`
+// actually executed before. Ported from the pre-0.23 `dao.*`/`c.pathParam()`
+// API (removed in modern PocketBase, which runs on Go's net/http.ServeMux)
+// to `$app.*` / `c.request.pathValue()`, from Express-style `:id` route
+// wildcards to ServeMux's `{id}` syntax, and from a `status`/`guest_name`
 // field pair that doesn't exist on these collections (see pb_migrations/)
-// to the real ones. The list view below (/my-admin) works; the nested
-// /my-admin/house/:id and /my-admin/room/:id routes still 404 — looks like
-// a routing quirk in this PocketBase version rather than anything
-// specific to this handler, not chased down further here.
+// to the real ones. All three routes verified end-to-end against a live
+// instance with real seeded data.
 routerAdd('GET', '/my-admin', (c) => {
 	// Holt alle Häuser aus der DB
 	const houses = $app.findRecordsByFilter('houses', '');
@@ -31,8 +31,8 @@ routerAdd('GET', '/my-admin', (c) => {
 	);
 });
 
-routerAdd('GET', '/my-admin/house/:id', (c) => {
-	const houseId = c.pathParam('id');
+routerAdd('GET', '/my-admin/house/{id}', (c) => {
+	const houseId = c.request.pathValue('id');
 	const rooms = $app.findRecordsByFilter('rooms', `house = "${houseId}"`);
 
 	return c.html(
@@ -54,8 +54,8 @@ routerAdd('GET', '/my-admin/house/:id', (c) => {
 	);
 });
 
-routerAdd('GET', '/my-admin/room/:id', (c) => {
-	const roomId = c.pathParam('id');
+routerAdd('GET', '/my-admin/room/{id}', (c) => {
+	const roomId = c.request.pathValue('id');
 	const beds = $app.findRecordsByFilter('beds', `room = "${roomId}"`);
 
 	return c.html(

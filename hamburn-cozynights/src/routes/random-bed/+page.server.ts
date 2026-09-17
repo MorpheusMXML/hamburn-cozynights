@@ -85,8 +85,8 @@ export const actions: Actions = {
 		}
 
 		try {
-			const bed = await locals.adminPb.collection('beds').getOne(bedId);
-			if ((bed as any).is_locked && !locals.user?.verified) {
+			const bed = await locals.adminPb.collection('beds').getOne<BedsResponse>(bedId);
+			if (bed.is_locked && !locals.user?.verified) {
 				return fail(403, { error: 'This bed is currently locked by an admin.' });
 			}
 
@@ -120,9 +120,10 @@ export const actions: Actions = {
 		try {
 			await bookingService.unbookOrder(order.id);
 			return { success: true };
-		} catch (err: any) {
+		} catch (err) {
 			console.error('[Security] random-bed releaseBed failed:', err);
-			return fail(500, { error: `Spot release failed: ${err.message}` });
+			const message = err instanceof Error ? err.message : String(err);
+			return fail(500, { error: `Spot release failed: ${message}` });
 		}
 	}
 };

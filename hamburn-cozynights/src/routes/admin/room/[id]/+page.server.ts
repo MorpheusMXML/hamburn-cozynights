@@ -86,6 +86,11 @@ export const actions: Actions = {
 		const { isBookingActive } = await getBookingSettings(locals.pb);
 		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
 
+		if (!locals.pb.authStore.model?.verified) {
+			console.error('[Action:toggleOccupied] BLOCKED: User not verified.');
+			return fail(403, { message: 'Only verified crew members can toggle spots.' });
+		}
+
 		const data = await request.formData();
 		const id = data.get('id') as string;
 		const occupied = data.get('occupied') === 'true';
@@ -106,6 +111,11 @@ export const actions: Actions = {
 	toggleEnabled: async ({ request, locals }) => {
 		const { isBookingActive } = await getBookingSettings(locals.pb);
 		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
+
+		if (!locals.pb.authStore.model?.verified) {
+			console.error('[Action:toggleEnabled] BLOCKED: User not verified.');
+			return fail(403, { message: 'Only verified crew members can toggle spots.' });
+		}
 
 		const data = await request.formData();
 		const id = data.get('id') as string;

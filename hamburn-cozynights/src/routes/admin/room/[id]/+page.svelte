@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { PageData } from './$types';
+	import type { PageData, SubmitFunction } from './$types';
 	import AddBedForm from '$lib/components/admin/AddBedForm.svelte';
 	import { fade, fly } from 'svelte/transition';
 	import { invalidateAll } from '$app/navigation';
@@ -11,12 +11,15 @@
 	$: ({ room, beds, isVerified, isBookingActive } = data);
 	$: house = room.expand?.house;
 
-	function handleAction(bedId: string, actionType: 'delete' | 'toggle') {
+	function handleAction(
+		bedId: string,
+		actionType: 'delete' | 'toggle'
+	): ReturnType<SubmitFunction> {
 		if (isBookingActive) {
 			alert('🔒 LOCKDOWN ACTIVE: Spots are locked during Live Booking.');
 			return;
 		}
-		return async ({ result, update }: { result: any; update: any }) => {
+		return async ({ result, update }) => {
 			if (actionType === 'delete' && result.type === 'success') {
 				const card = document.querySelector(`.bed-card:has([value="${bedId}"])`);
 				if (card) card.classList.add('disintegrating');
@@ -31,12 +34,12 @@
 	// (e.g. taking a broken bed out of service mid-event) — unlike every other
 	// structural edit on this page, so it doesn't go through handleAction's
 	// blanket lockdown check.
-	function handleLockToggle() {
-		return async ({ update }: { update: any }) => {
+	const handleLockToggle: SubmitFunction = () => {
+		return async ({ update }) => {
 			await update();
 			await invalidateAll();
 		};
-	}
+	};
 </script>
 
 <div class="dashboard-container">
