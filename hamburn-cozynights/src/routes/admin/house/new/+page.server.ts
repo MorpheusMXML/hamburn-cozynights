@@ -4,10 +4,7 @@ import { getBookingSettings } from '$lib/server/settings';
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
-		if (!locals.pb.authStore.model?.verified) {
-			console.error('[Action] Unauthorized attempt to create house.');
-			throw error(403, 'Unauthorized');
-		}
+		if (!locals.admin) throw error(403, 'Unauthorized');
 
 		const { isBookingActive } = await getBookingSettings(locals.pb);
 		if (isBookingActive) {
@@ -46,7 +43,10 @@ export const actions: Actions = {
 					await locals.pb.collection('beds').create({
 						label: `B${i}`,
 						room: room.id,
-						occupied: false
+						occupied: false,
+						// Initial spots are meant to be bookable right away; guests can
+						// only book enabled beds.
+						enabled: true
 					});
 				}
 				console.log(`[Action] House ${house.id}: Initial module and ${bedCount} spots deployed.`);

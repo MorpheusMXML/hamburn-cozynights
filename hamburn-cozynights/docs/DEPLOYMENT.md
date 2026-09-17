@@ -66,38 +66,95 @@ used for the server's other applications. This keeps every environment's
 attack surface limited to "does nginx route this domain correctly," rather
 than each container managing its own public exposure.
 
-## 5. Staging access gate
+## 5. Access model on public environments
 
-Staging carries real booking data (restored from a backup) and is reachable
-from the public internet, so before anyone outside the team is pointed at
-it, the whole environment (guest flow included, not just `/admin`) sits
-behind a Google login gate: `oauth2-proxy` in front of nginx, restricted to
-the team's Workspace domain via `OAUTH2_PROXY_EMAIL_DOMAINS`. This is
-separate from the app's own PocketBase OAuth (which only guards `/admin`)
-— it's a blanket gate on the whole staging subdomain, implemented entirely
-at the nginx/oauth2-proxy layer via `auth_request`, with no changes to the
-app itself. See `docker-compose.staging.yml` and `deploy/nginx/` for the
-concrete setup. Production is not expected to need this, since anyone with
-a valid ticket code is supposed to reach it.
+There is no login gate in front of staging or production anymore: guests reach
+the site with their ticket code, exactly like on production. (Staging used to
+sit behind an `oauth2-proxy` Google gate; it was removed so staging behaves
+like production.)
+
+- **PocketBase is not public.** nginx only proxies the SvelteKit app. The app
+  talks to PocketBase over the compose network (`PB_URL=http://pocketbase:8090`),
+  and the dashboard (`/_/`) is only reachable through an SSH tunnel:
+  `ssh -N -L 8091:127.0.0.1:8091 root@<server>`, then http://127.0.0.1:8091/_/.
+- **The admin area** (`/admin`) is protected by the app's own Google sign-in,
+  limited to approved `@mauersegler.art` Workspace accounts. See
+  [SECURITY.md](SECURITY.md#2-admin-access) for the full model.
+
+### Admin access (run on the server as root)
+
+Team members sign in at `/admin/login` with Google. Their first sign-in
+creates an access request (role `pending`, no rights). Approve or manage
+access with `scripts/cozy-admin.sh`, next to the compose file — or in the
+PocketBase dashboard (collection `admins`, field `role`):
+
+```bash
+cd /opt/hamburn-cozynights-staging/hamburn-cozynights
+./scripts/cozy-admin.sh list                               # pending requests, admins, superusers
+./scripts/cozy-admin.sh approve someone@mauersegler.art    # approve a request (role admin)
+./scripts/cozy-admin.sh add someone@mauersegler.art        # or invite up front
+./scripts/cozy-admin.sh superuser max@mauersegler.art      # prompts for a password
+./scripts/cozy-admin.sh remove someone@mauersegler.art     # reject/revoke immediately
+./scripts/cozy-admin.sh service-account                    # create/rotate PB_ADMIN_* in .env
+```
+
+New requests can be announced in a chat: set `COZY_ADMIN_WEBHOOK_URL`
+(Telegram, Slack, Google Chat or Discord webhook, see `.env.example`) and run
+`docker compose -f docker-compose.staging.yml up -d pocketbase`.
+
+- `superuser` sets a PocketBase superuser (dashboard login with that password)
+  **and** grants the app role `superuser`. In the app, everyone signs in with
+  Google — the password is only for the PocketBase dashboard.
+- `service-account` manages the app's own superuser (`PB_ADMIN_EMAIL` /
+  `PB_ADMIN_PASSWORD`). Never use a person's account for it: rotating its
+  password revokes the app's token.
+
+### Staging secrets
+
+The server's `.env` follows `deploy/staging.env.template`. Only three things
+come from a human: `ENCRYPTION_KEY` (`openssl rand -hex 32`, keep a copy in
+Vaultwarden) and the Google OAuth client id/secret below. The service
+account password is left empty — `scripts/cozy-admin.sh service-account`
+generates it after the deploy and writes it into `.env`. The superuser
+password for the PocketBase dashboard is typed in by
+`scripts/cozy-admin.sh superuser` and never stored in `.env`. The file must
+be `deploy:deploy` with mode `600`.
+
+### Google OAuth client
+
+PocketBase needs a Google OAuth client ("Web application") for the `admins`
+collection, provided as `PB_GOOGLE_CLIENT_ID` / `PB_GOOGLE_CLIENT_SECRET` in the
+environment's `.env` (the secret in single quotes). Authorized redirect URI:
+`https://<domain>/auth/callback/google`. Use an **Internal** consent screen in
+the mauersegler.art Google Workspace if possible. The values are synced into
+PocketBase on every start (`pb_hooks/cozy_admin.pb.js`), so rotating the secret
+is an `.env` change plus `docker compose up -d pocketbase`.
 
 ## 6. Adding a new environment
 
 1. Copy `docker-compose.staging.yml` to `docker-compose.<env>.yml`, adjust
-   container names, ports, and volume names so they don't collide with any
-   existing environment.
+   container names, ports, volume names and `ORIGIN` so they don't collide with
+   any existing environment. `scripts/cozy-admin.sh` targets it with
+   `COZY_COMPOSE_FILE=docker-compose.<env>.yml`.
 2. Create that environment's `.env` on the server (never in git).
 3. Add an nginx vhost for its subdomain (see `deploy/nginx/` for the
-   pattern) and issue a certificate for it.
+   pattern) and issue a certificate for it. Add
+   `https://<subdomain>/auth/callback/google` to the Google OAuth client.
 4. Add a GitHub Actions workflow mirroring `deploy-staging.yml`, pointed at
    a deploy user scoped to that environment's directory only.
 
-## 7. Known gap: schema isn't version-controlled
+## 7. Schema migrations
 
-The PocketBase collection schema (`houses`, `rooms`, `beds`, `orders`,
-`app_settings`) and their API access rules currently exist only inside
-whatever database is running — there are no exported migrations in this
-repo. This means every fresh environment needs its schema recreated by
-hand (or restored from a backup) before the app is usable, and there is no
-single source of truth for what the correct API access rules should be.
-Exporting PocketBase's collections via its migration feature and committing
-the result would close this gap.
+The collection schema and API rules live in `pb_migrations/` and are applied by
+PocketBase on start (`--automigrate=false`, so dashboard edits never write new
+migration files into the checkout). Migrations are written to be idempotent,
+because an environment may start from a restored database backup that already
+contains the collections. After every deploy, check that nothing failed:
+
+```bash
+docker compose -f docker-compose.staging.yml logs pocketbase | grep -iE 'failed to (apply|execute)' || echo ok
+```
+
+The PocketBase image is pinned (`ghcr.io/muchobien/pocketbase:0.40.4`): hooks and
+migrations use its JavaScript API, and PocketBase's own system migrations are
+one-way. Back up the data volume before bumping it.

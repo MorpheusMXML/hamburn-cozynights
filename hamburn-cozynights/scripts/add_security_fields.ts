@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 
-const PB_URL = process.env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
+const PB_URL = process.env.PB_URL || process.env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
 const PB_ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL;
 const PB_ADMIN_PASSWORD = process.env.PB_ADMIN_PASSWORD;
 

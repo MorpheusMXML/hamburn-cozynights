@@ -6,7 +6,7 @@ import * as fs from 'fs';
 // Load .env
 dotenv.config();
 
-const url = process.env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
+const url = process.env.PB_URL || process.env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
 const email = process.env.PB_ADMIN_EMAIL;
 let password = process.env.PB_ADMIN_PASSWORD;
 
@@ -36,7 +36,9 @@ if (!password) {
 }
 
 if (!password) {
-	console.error('❌ PB_ADMIN_PASSWORD is not set. Please provide it in .env or a GPG encrypted file.');
+	console.error(
+		'❌ PB_ADMIN_PASSWORD is not set. Please provide it in .env or a GPG encrypted file.'
+	);
 	process.exit(1);
 }
 
@@ -44,7 +46,17 @@ console.log(`🚀 Running typegen for ${url} (${email})...`);
 
 const typegen = spawnSync(
 	'npx',
-	['pocketbase-typegen', '--url', url, '--email', email, '--password', password, '--out', 'src/lib/pocketbase-types.ts'],
+	[
+		'pocketbase-typegen',
+		'--url',
+		url,
+		'--email',
+		email,
+		'--password',
+		password,
+		'--out',
+		'src/lib/pocketbase-types.ts'
+	],
 	{ stdio: 'inherit' }
 );
 

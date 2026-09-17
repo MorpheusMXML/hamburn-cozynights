@@ -7,8 +7,8 @@
 
 	export let data: PageData;
 	export let form: { message?: string } | null = null;
-	// isVerified comes from the layout
-	$: ({ house, rooms, isVerified, isBookingActive } = data);
+	// Only admins reach this page (hooks + layout)
+	$: ({ house, rooms, isBookingActive } = data);
 
 	function handleAction(roomId: string) {
 		if (isBookingActive) {
@@ -44,20 +44,18 @@
 		<div class="error-banner" in:fade>⚠️ {form.message}</div>
 	{/if}
 
-	{#if isVerified}
-		<section class="form-section" in:fade={{ delay: 200 }} class:disabled={isBookingActive}>
-			<header class="section-header">
-				<span class="laser-dot turquoise"></span>
-				<h3>ADD ROOM ➕</h3>
-			</header>
-			{#if isBookingActive}
-				<div class="lockdown-notice">🔒 MANAGEMENT LOCKED DURING LIVE BOOKING</div>
-			{/if}
-			<div class="form-wrapper">
-				<AddRoomForm houseId={house.id} disabled={isBookingActive} />
-			</div>
-		</section>
-	{/if}
+	<section class="form-section" in:fade={{ delay: 200 }} class:disabled={isBookingActive}>
+		<header class="section-header">
+			<span class="laser-dot turquoise"></span>
+			<h3>ADD ROOM ➕</h3>
+		</header>
+		{#if isBookingActive}
+			<div class="lockdown-notice">🔒 MANAGEMENT LOCKED DURING LIVE BOOKING</div>
+		{/if}
+		<div class="form-wrapper">
+			<AddRoomForm houseId={house.id} disabled={isBookingActive} />
+		</div>
+	</section>
 
 	<header class="section-title-row">
 		<span class="laser-dot pink"></span>
@@ -94,28 +92,26 @@
 					</div>
 				</div>
 
-				{#if isVerified}
-					<footer class="card-actions">
-						<div
-							on:click|stopPropagation
-							on:keydown|stopPropagation={(e) => e.key === 'Enter' && e.stopPropagation()}
-							role="presentation"
-						>
-							<form action="?/deleteRoom" method="POST" use:enhance={() => handleAction(room.id)}>
-								<input type="hidden" name="id" value={room.id} />
-								<button
-									type="submit"
-									class="btn-vanish"
-									title="Vanish Room"
-									class:disabled={isBookingActive}
-									disabled={isBookingActive}
-								>
-									VANISH ROOM 🌪️
-								</button>
-							</form>
-						</div>
-					</footer>
-				{/if}
+				<footer class="card-actions">
+					<div
+						on:click|stopPropagation
+						on:keydown|stopPropagation={(e) => e.key === 'Enter' && e.stopPropagation()}
+						role="presentation"
+					>
+						<form action="?/deleteRoom" method="POST" use:enhance={() => handleAction(room.id)}>
+							<input type="hidden" name="id" value={room.id} />
+							<button
+								type="submit"
+								class="btn-vanish"
+								title="Vanish Room"
+								class:disabled={isBookingActive}
+								disabled={isBookingActive}
+							>
+								VANISH ROOM 🌪️
+							</button>
+						</form>
+					</div>
+				</footer>
 			</a>
 		{/each}
 	</div>

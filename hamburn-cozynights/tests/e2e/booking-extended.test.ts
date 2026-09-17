@@ -3,6 +3,7 @@ import PocketBase from 'pocketbase';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,7 +11,33 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: true });
 
 const TEST_CODE = 'XXXXX';
 const ROOM_ID = 'brahmseevill001';
-const PB_URL = process.env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
+const PB_URL = process.env.PB_URL || process.env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
+const APP_URL = 'http://localhost:5173';
+// Admin sign-in is Google-only; the test impersonates an invited admin instead.
+const E2E_ADMIN_EMAIL = 'e2e-admin@mauersegler.art';
+
+/** Session cookie of an invited admin, minted via superuser impersonation. */
+async function adminSessionCookie(adminPb: any) {
+	let admin;
+	try {
+		admin = await adminPb.collection('admins').getFirstListItem(`email="${E2E_ADMIN_EMAIL}"`);
+	} catch {
+		const password = crypto.randomUUID() + crypto.randomUUID();
+		admin = await adminPb.collection('admins').create({
+			email: E2E_ADMIN_EMAIL,
+			role: 'admin',
+			password,
+			passwordConfirm: password
+		});
+	}
+	const impersonated = await adminPb.collection('admins').impersonate(admin.id, 3600);
+	const exported: string = impersonated.authStore.exportToCookie({
+		httpOnly: false,
+		secure: false
+	});
+	const value = exported.split(';')[0].slice('pb_auth='.length);
+	return { name: 'pb_auth', value, url: APP_URL };
+}
 
 test.describe('Extended Booking & Admin Flow', () => {
 	let adminPb: any;
@@ -33,12 +60,16 @@ test.describe('Extended Booking & Admin Flow', () => {
 				);
 			}
 			// Ensure booking is active
-			await adminPb.collection('app_settings').update('abcsettings123', { is_booking_active: true });
+			await adminPb.collection('app_settings').update(APP_SETTINGS_ID, { is_booking_active: true });
 
 			// Find a room with beds to test with
-			const beds = await adminPb.collection('beds').getFullList({ expand: 'room,room.house' });
+			// Guests can only book enabled, unlocked beds.
+			const beds = await adminPb.collection('beds').getFullList({
+				filter: 'enabled = true && is_locked = false',
+				expand: 'room,room.house'
+			});
 			if (beds.length === 0) throw new Error('No beds found in DB to test with');
-			
+
 			const bed = beds[0];
 			testRoomId = bed.room;
 			testHouseName = bed.expand.room.expand.house.name;
@@ -51,7 +82,9 @@ test.describe('Extended Booking & Admin Flow', () => {
 
 	test.beforeEach(async () => {
 		// Clean slate for the test order and bed
-		const order = await adminPb.collection('orders').getFirstListItem(`order_number="${TEST_CODE}"`);
+		const order = await adminPb
+			.collection('orders')
+			.getFirstListItem(`order_number="${TEST_CODE}"`);
 		const beds = await adminPb.collection('beds').getFullList({
 			filter: `order = "${order.id}"`
 		});
@@ -66,7 +99,9 @@ test.describe('Extended Booking & Admin Flow', () => {
 	test.afterAll(async () => {
 		// Final cleanup
 		try {
-			const order = await adminPb.collection('orders').getFirstListItem(`order_number="${TEST_CODE}"`);
+			const order = await adminPb
+				.collection('orders')
+				.getFirstListItem(`order_number="${TEST_CODE}"`);
 			const beds = await adminPb.collection('beds').getFullList({
 				filter: `order = "${order.id}"`
 			});
@@ -90,14 +125,16 @@ test.describe('Extended Booking & Admin Flow', () => {
 		await expect(page).toHaveURL(/\/(\?\/login)?$/);
 	});
 
-	test('Negative: Direct Room Access without session should redirect to login', async ({ page }) => {
+	test('Negative: Direct Room Access without session should redirect to login', async ({
+		page
+	}) => {
 		await page.goto(`/room/${testRoomId}`);
 		await expect(page).toHaveURL('/');
 	});
 
 	test('Negative: Booking Locked in Staging Mode', async ({ page }) => {
 		// 1. Set to Staging Mode (Locked)
-		await adminPb.collection('app_settings').update('abcsettings123', { is_booking_active: false });
+		await adminPb.collection('app_settings').update(APP_SETTINGS_ID, { is_booking_active: false });
 
 		try {
 			// 2. Login
@@ -115,8 +152,23 @@ test.describe('Extended Booking & Admin Flow', () => {
 			await expect(firstBed).toHaveAttribute('disabled', '');
 		} finally {
 			// Restore Live Mode
-			await adminPb.collection('app_settings').update('abcsettings123', { is_booking_active: true });
+			await adminPb.collection('app_settings').update(APP_SETTINGS_ID, { is_booking_active: true });
 		}
+	});
+
+	test('Negative: Admin area requires a session and offers Google sign-in only', async ({
+		page
+	}) => {
+		await page.goto('/admin');
+		await expect(page).toHaveURL(/\/admin\/login/);
+		await expect(page.locator('input[name="password"]')).toHaveCount(0);
+		await expect(page.getByText(/create account/i)).toHaveCount(0);
+
+		const response = await page.request.post('/admin?/togglePhase', {
+			form: {},
+			headers: { origin: APP_URL }
+		});
+		expect(response.status()).toBe(403);
 	});
 
 	test('Positive: Full Booking Cycle with DB & Admin Dashboard Verification', async ({
@@ -126,28 +178,21 @@ test.describe('Extended Booking & Admin Flow', () => {
 		const userContext = await browser.newContext();
 		const adminPage = await adminContext.newPage();
 		const userPage = await userContext.newPage();
-// 1. Admin Login & Check Dashboard (Pre-booking)
-await adminPage.goto('/admin/login');
-await adminPage.fill('input[name="email"]', process.env.PB_ADMIN_EMAIL!);
-await adminPage.fill('input[name="password"]', process.env.PB_ADMIN_PASSWORD!);
+		// 1. Admin session & Check Dashboard (Pre-booking)
+		await adminContext.addCookies([await adminSessionCookie(adminPb)]);
+		await adminPage.goto('/admin');
+		await expect(adminPage).toHaveURL(/\/admin(\/)?$/, { timeout: 15000 });
 
-// TRACE: Use Promise.all to catch navigation events reliably. 
-// SvelteKit's client-side routing can be fast enough to miss a simple click + waitForURL.
-await Promise.all([
-	adminPage.waitForURL(/\/admin(\/)?$/, { timeout: 15000 }),
-	adminPage.click('button[type="submit"]')
-]);
-
-// Helper to ensure we are in List View (stats cards are visible).
-// TRACE: adminPage.reload() resets the UI state to default (Map View).
-const ensureListView = async () => {
-	const btn = adminPage.locator('button', { hasText: 'LIST VIEW' });
-	if (await btn.isVisible()) {
-		await btn.click();
-		// Confirm toggle worked
-		await expect(adminPage.locator('button', { hasText: 'MAP VIEW' })).toBeVisible();
-	}
-};
+		// Helper to ensure we are in List View (stats cards are visible).
+		// TRACE: adminPage.reload() resets the UI state to default (Map View).
+		const ensureListView = async () => {
+			const btn = adminPage.locator('button', { hasText: 'LIST VIEW' });
+			if (await btn.isVisible()) {
+				await btn.click();
+				// Confirm toggle worked
+				await expect(adminPage.locator('button', { hasText: 'MAP VIEW' })).toBeVisible();
+			}
+		};
 
 		await ensureListView();
 
@@ -173,9 +218,13 @@ const ensureListView = async () => {
 		await expect(userPage.locator('.bed-card.mine')).toBeVisible();
 
 		// 3. DB Verification via Admin API
-		const order = await adminPb.collection('orders').getFirstListItem(`order_number="${TEST_CODE}"`);
-		const bed = await adminPb.collection('beds').getFirstListItem(`label="${bedLabel}" && room="${testRoomId}"`);
-		
+		const order = await adminPb
+			.collection('orders')
+			.getFirstListItem(`order_number="${TEST_CODE}"`);
+		const bed = await adminPb
+			.collection('beds')
+			.getFirstListItem(`label="${bedLabel}" && room="${testRoomId}"`);
+
 		expect(bed.occupied).toBe(true);
 		expect(bed.order).toBe(order.id);
 		// burner_name should be encrypted

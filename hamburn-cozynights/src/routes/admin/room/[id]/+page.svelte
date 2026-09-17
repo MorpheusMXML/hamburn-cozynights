@@ -7,8 +7,8 @@
 
 	export let data: PageData;
 	export let form: { message?: string } | null = null;
-	// isVerified from layout
-	$: ({ room, beds, isVerified, isBookingActive } = data);
+	// Only admins reach this page (hooks + layout)
+	$: ({ room, beds, isBookingActive } = data);
 	$: house = room.expand?.house;
 
 	function handleAction(bedId: string, actionType: 'delete' | 'toggle') {
@@ -77,19 +77,17 @@
 				</div>
 			</div>
 
-			{#if isVerified}
-				<section class="form-panel orange" class:disabled={isBookingActive}>
-					<header class="panel-header">
-						<span class="laser-dot orange"></span>
-						<h3>ADD SPOT ➕</h3>
-					</header>
-					{#if isBookingActive}
-						<div class="lockdown-notice">🔒 LOCKED</div>
-					{/if}
-					<p class="hint">Define spot label (e.g. "Upper Deck")</p>
-					<AddBedForm roomId={room.id} disabled={isBookingActive} />
-				</section>
-			{/if}
+			<section class="form-panel orange" class:disabled={isBookingActive}>
+				<header class="panel-header">
+					<span class="laser-dot orange"></span>
+					<h3>ADD SPOT ➕</h3>
+				</header>
+				{#if isBookingActive}
+					<div class="lockdown-notice">🔒 LOCKED</div>
+				{/if}
+				<p class="hint">Define spot label (e.g. "Upper Deck")</p>
+				<AddBedForm roomId={room.id} disabled={isBookingActive} />
+			</section>
 		</aside>
 
 		<main class="beds-column" in:fade={{ delay: 400 }}>
@@ -131,19 +129,17 @@
 						</div>
 
 						<div class="bed-actions">
-							{#if isVerified}
-								<form action="?/toggleLocked" method="POST" use:enhance={handleLockToggle}>
-									<input type="hidden" name="id" value={bed.id} />
-									<input type="hidden" name="is_locked" value={bed.is_locked?.toString()} />
-									<button
-										class="btn-icon"
-										class:orange={bed.is_locked}
-										title={bed.is_locked ? 'Unlock' : 'Lock (Block Guests)'}
-									>
-										{bed.is_locked ? '🔓' : '🔒'}
-									</button>
-								</form>
-							{/if}
+							<form action="?/toggleLocked" method="POST" use:enhance={handleLockToggle}>
+								<input type="hidden" name="id" value={bed.id} />
+								<input type="hidden" name="is_locked" value={bed.is_locked?.toString()} />
+								<button
+									class="btn-icon"
+									class:orange={bed.is_locked}
+									title={bed.is_locked ? 'Unlock' : 'Lock (Block Guests)'}
+								>
+									{bed.is_locked ? '🔓' : '🔒'}
+								</button>
+							</form>
 
 							<form
 								action="?/toggleEnabled"
@@ -178,21 +174,19 @@
 								>
 							</form>
 
-							{#if isVerified}
-								<form
-									action="?/deleteBed"
-									method="POST"
-									use:enhance={() => handleAction(bed.id, 'delete')}
+							<form
+								action="?/deleteBed"
+								method="POST"
+								use:enhance={() => handleAction(bed.id, 'delete')}
+							>
+								<input type="hidden" name="id" value={bed.id} />
+								<button
+									class="btn-icon vanish"
+									title="Delete spot"
+									disabled={isBookingActive}
+									class:disabled={isBookingActive}>🗑</button
 								>
-									<input type="hidden" name="id" value={bed.id} />
-									<button
-										class="btn-icon vanish"
-										title="Delete spot"
-										disabled={isBookingActive}
-										class:disabled={isBookingActive}>🗑</button
-									>
-								</form>
-							{/if}
+							</form>
 						</div>
 					</div>
 				{/each}

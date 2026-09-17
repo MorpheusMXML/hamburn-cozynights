@@ -7,7 +7,8 @@ import { getBookingSettings } from '$lib/server/settings';
 type RoomWithHouse = RoomsResponse<{ house: HousesResponse }>;
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-	if (!locals.pb.authStore.isValid) throw error(403, 'Unauthorized');
+	// Runs in parallel with the layout load, so it guards itself too.
+	if (!locals.admin) throw error(403, 'Unauthorized');
 
 	const roomId = params.id;
 
@@ -34,16 +35,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
 	createBed: async ({ request, params, locals }) => {
+		if (!locals.admin) return fail(403, { message: 'Only admins can add spots.' });
+
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive)
-			return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
 
-		console.log(`[Action:createBed] User: ${locals.pb.authStore.model?.email}, Room: ${params.id}`);
-
-		if (!locals.pb.authStore.model?.verified) {
-			console.error('[Action:createBed] BLOCKED: User not verified.');
-			return fail(403, { message: 'Only verified crew members can add spots.' });
-		}
+		console.log(`[Action:createBed] Admin: ${locals.admin.email}, Room: ${params.id}`);
 
 		const data = await request.formData();
 
@@ -61,16 +58,12 @@ export const actions: Actions = {
 	},
 
 	deleteBed: async ({ request, locals }) => {
+		if (!locals.admin) return fail(403, { message: 'Only admins can delete spots.' });
+
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive)
-			return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
 
-		console.log(`[Action:deleteBed] User: ${locals.pb.authStore.model?.email}`);
-
-		if (!locals.pb.authStore.model?.verified) {
-			console.error('[Action:deleteBed] BLOCKED: User not verified.');
-			return fail(403, { message: 'Only verified crew members can delete spots.' });
-		}
+		console.log(`[Action:deleteBed] Admin: ${locals.admin.email}`);
 
 		const data = await request.formData();
 		const id = data.get('id') as string;
@@ -85,16 +78,17 @@ export const actions: Actions = {
 	},
 
 	toggleOccupied: async ({ request, locals }) => {
+		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
+
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive)
-			return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
 
 		const data = await request.formData();
 		const id = data.get('id') as string;
 		const occupied = data.get('occupied') === 'true';
 
 		console.log(
-			`[Action:toggleOccupied] User: ${locals.pb.authStore.model?.email}, ID: ${id}, Target: ${!occupied}`
+			`[Action:toggleOccupied] Admin: ${locals.admin.email}, ID: ${id}, Target: ${!occupied}`
 		);
 
 		try {
@@ -102,13 +96,15 @@ export const actions: Actions = {
 			console.log('[Action:toggleOccupied] SUCCESS.');
 		} catch (err) {
 			console.error('[Action:toggleOccupied] FAILED:', err);
+			return fail(500, { message: 'Something went wrong. Please try again.' });
 		}
 	},
 
 	toggleEnabled: async ({ request, locals }) => {
+		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
+
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive)
-			return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
 
 		const data = await request.formData();
 		const id = data.get('id') as string;
@@ -126,9 +122,7 @@ export const actions: Actions = {
 		const id = data.get('id') as string;
 		const isLocked = data.get('is_locked') === 'true';
 
-		if (!locals.pb.authStore.model?.verified) {
-			return fail(403, { message: 'Only verified crew can lock spots.' });
-		}
+		if (!locals.admin) return fail(403, { message: 'Only admins can lock spots.' });
 
 		try {
 			await locals.pb.collection('beds').update(id, { is_locked: !isLocked });

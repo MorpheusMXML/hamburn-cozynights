@@ -27,10 +27,14 @@ export class InventoryService {
 				);
 			}
 
-			// Serialize everything to plain objects to ensure compatibility
+			// Serialize everything to plain objects to ensure compatibility.
+			// This tree is the public guest map: deactivated beds are left out,
+			// locked beds show as taken, and the booking's order id is not exposed.
 			const houses = housesRaw.map((h) => ({ ...h }));
 			const rooms = roomsRaw.map((r) => ({ ...r }));
-			const beds = bedsRaw.map((b) => ({ ...b }));
+			const beds = bedsRaw
+				.filter((b) => b.enabled !== false)
+				.map((b) => ({ ...b, occupied: !!b.occupied || !!b.is_locked, order: '' }));
 
 			// Build the hierarchy
 			const tree = houses.map((house) => {

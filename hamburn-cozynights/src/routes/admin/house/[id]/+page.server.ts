@@ -4,8 +4,8 @@ import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbas
 import { getBookingSettings } from '$lib/server/settings';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-	// Security check 🛡️
-	if (!locals.pb.authStore.isValid) throw error(403, 'Unauthorized');
+	// Security check 🛡️ (runs in parallel with the layout load)
+	if (!locals.admin) throw error(403, 'Unauthorized');
 
 	const houseId = params.id;
 
@@ -51,18 +51,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
 	createRoom: async ({ request, locals, params }) => {
+		if (!locals.admin) return fail(403, { message: 'Only admins can create rooms.' });
+
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive)
-			return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
 
-		console.log(
-			`[Action:createRoom] User: ${locals.pb.authStore.model?.email}, Verified: ${locals.pb.authStore.model?.verified}, House: ${params.id}`
-		);
-
-		if (!locals.pb.authStore.model?.verified) {
-			console.error('[Action:createRoom] BLOCKED: User not verified.');
-			return fail(403, { message: 'Only verified crew members can create rooms.' });
-		}
+		console.log(`[Action:createRoom] Admin: ${locals.admin.email}, House: ${params.id}`);
 
 		const data = await request.formData();
 		const houseId = params.id;
@@ -96,16 +90,12 @@ export const actions: Actions = {
 	},
 
 	deleteRoom: async ({ request, locals }) => {
+		if (!locals.admin) return fail(403, { message: 'Only admins can delete rooms.' });
+
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive)
-			return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
 
-		console.log(`[Action:deleteRoom] User: ${locals.pb.authStore.model?.email}`);
-
-		if (!locals.pb.authStore.model?.verified) {
-			console.error('[Action:deleteRoom] BLOCKED: User not verified.');
-			return fail(403, { message: 'Only verified crew members can delete rooms.' });
-		}
+		console.log(`[Action:deleteRoom] Admin: ${locals.admin.email}`);
 
 		const data = await request.formData();
 		const id = data.get('id') as string;

@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
 
-	// Get data from server (includes user & isVerified)
+	// Get data from server (admin session; null on the login page)
 	export let data;
 
 	let mounted = false;
@@ -13,22 +13,22 @@
 </script>
 
 <div class="admin-layout">
-	{#if mounted}
+	{#if mounted && data.admin}
 		<header class="admin-header" in:fly={{ y: -50, duration: 500 }}>
 			<div class="logo-area">
 				<a href="/admin" class="logo-link">
 					<span class="logo-text">Hamburn</span>
 					<span class="logo-badge">Admin</span>
 				</a>
-				{#if !data.isVerified}
-					<span class="badge-readonly">READ ONLY 👁️</span>
+				{#if data.isSuperuser}
+					<span class="badge-role">SUPERUSER ⚡️</span>
 				{/if}
 			</div>
 
 			<div class="user-area">
 				<div class="user-info">
 					<span class="user-label">Burner:</span>
-					<span class="user-email">{data.user?.email}</span>
+					<span class="user-email">{data.admin.email}</span>
 				</div>
 
 				<form action="/admin/logout" method="POST" style="display: inline;">
@@ -174,17 +174,16 @@
 		transform: translateY(-1px);
 	}
 
-	.badge-readonly {
-		background: rgba(251, 191, 36, 0.1);
-		color: #fbbf24;
+	.badge-role {
+		background: rgba(45, 212, 191, 0.1);
+		color: #2dd4bf;
 		padding: 4px 12px;
 		border-radius: 20px;
 		font-size: 0.7rem;
 		font-weight: 900;
-		border: 1px solid #fbbf24;
+		border: 1px solid #2dd4bf;
 		margin-left: 1rem;
-		box-shadow: 0 0 10px rgba(251, 191, 36, 0.2);
-		animation: pulse 2s infinite;
+		box-shadow: 0 0 10px rgba(45, 212, 191, 0.2);
 	}
 
 	@keyframes pulse {
