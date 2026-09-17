@@ -37,7 +37,7 @@ We use field-level encryption to ensure that even if the database is compromised
 - **AES-256-GCM Encryption:** `burner_name` is stored as encrypted ciphertext in the `orders` collection.
 - **Deterministic Hashing:** We use `order_hash` (an HMAC-SHA256 of the booking code keyed with your `ENCRYPTION_KEY`) for lookups. Note: `order_number` is still stored in plain text for legacy imports.
 - **No secrets in logs:** ticket codes are never logged.
-- **GPG Backups:** The local database folder (`pb_data`) is ignored by Git. We use GPG-encrypted archives (`pb_data.tar.gz.gpg`) for backups and sharing the database state between developers. Such snapshots contain the Google OAuth client secret in plain text.
+- **GPG Backups:** The local database folder (`pb_data`) is ignored by Git. GPG-encrypted archives (`pb_data.tar.gz.gpg`) are used to back up and share database state between developers — **never commit them** (the repository is public; anyone could brute-force the passphrase offline). Share them through a private channel instead, e.g. a Vaultwarden attachment. Such snapshots contain the Google OAuth client secret in plain text.
 - **Secure Typegen (GPG):** The `npm run typegen` command is hardened to avoid storing plaintext passwords. It automatically attempts to decrypt credentials from `.env.gpg`, `secrets.gpg`, or `pb_password.gpg` using GPG if they are not provided in the environment.
 
 ## 4. Rights Management

@@ -1,0 +1,31 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /hamburn-cozynights
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # SvelteKit, svelte-check and typescript-eslint support TypeScript <= 6.
+      - dependency-name: typescript
+        versions: [">=7"]
+
+  - package-ecosystem: docker
+    directory: /hamburn-cozynights
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker-compose
+    directory: /hamburn-cozynights
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
