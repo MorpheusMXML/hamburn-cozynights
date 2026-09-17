@@ -12,7 +12,7 @@ The camp is a simple tree: **houses** on the map contain **rooms**, and rooms co
 - **Map view:** click an empty place on the map. In the *GENERATE SANCTUARY* sidebar enter a name (**UNIT DESIGNATION**) and the **INITIAL CAPACITY (BEDS)**, then press <kbd>IGNITE HOUSE ✨</kbd>.
 - **List view:** click **Ignite New House**. CozyNights switches to the map view and opens the same sidebar. The house starts in the middle of the map; drag it into place afterwards.
 
-CozyNights creates the house, a first room called **Main Module** (#1), and spots **B1 … Bn** for the capacity you entered. These first spots are **active right away**.
+CozyNights creates the house, a first room called **Main Module** (#1), and spots **B1 … Bn** for the capacity you entered. Like every new spot, they are **active right away**.
 
 ### Move, rename, delete
 
@@ -43,8 +43,8 @@ Fill in **ADD ROOM ➕**:
 
 Press <kbd>IGNITE ROOM ✨</kbd>.
 
-> [!WARNING] New spots start inactive
-> Spots created together with a room, and spots you add one by one, are **inactive** until you activate them, so nobody can book a half-finished room. Activate each spot with ⚡️ on the room page. Only the spots that come with a brand-new house are active from the start.
+> [!NOTE] New spots are active
+> Every new spot, whether it comes with a house, with a room or on its own, is **active**: guests can book it as soon as booking opens. Lock 🔒 or deactivate ❄️ the spots that shouldn't be booked, see [Spot actions](#spot-actions).
 
 ### Room cards
 

@@ -62,13 +62,14 @@ export const actions: Actions = {
 				house: houseId
 			});
 
-			// Automatically create bed templates
+			// Automatically create the room's spots. Like every new spot they are
+			// active, i.e. bookable once booking opens.
 			if (amountBeds > 0) {
 				for (let i = 1; i <= amountBeds; i++) {
 					await locals.pb.collection('beds').create({
 						label: `Spot ${i}`,
 						room: room.id,
-						enabled: false,
+						enabled: true,
 						occupied: false
 					});
 				}

@@ -45,7 +45,7 @@ When the layout has gaps, a red **RED ALERT: ARCHITECTURAL DEVIATIONS** panel li
 | 🚪 **EMPTY MODULE (NO BEDS)** | <kbd>ADD SPOTS 🛌</kbd> | The room page, to add spots |
 
 > [!TIP]
-> During Live Booking, houses without any active spot don't appear on the guest map. Clear the red alert, and activate new spots, before you go live.
+> During Live Booking, houses without any active spot don't appear on the guest map. Clear the red alert before you go live.
 
 ## Map view: the editor
 

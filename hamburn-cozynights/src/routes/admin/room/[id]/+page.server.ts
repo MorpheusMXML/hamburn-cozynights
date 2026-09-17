@@ -48,6 +48,9 @@ export const actions: Actions = {
 			await locals.pb.collection('beds').create({
 				label: data.get('label'),
 				room: params.id,
+				// New spots are active (bookable once booking opens), like a new
+				// room's or house's spots.
+				enabled: true,
 				occupied: false
 			});
 			console.log('[Action:createBed] SUCCESS.');
