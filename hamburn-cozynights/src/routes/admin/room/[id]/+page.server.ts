@@ -51,17 +51,21 @@ export const actions: Actions = {
 		}
 
 		const data = await request.formData();
+		const roomId = (data.get('roomId') as string) || params.id;
 
 		try {
+			console.log(`[Action:createBed] Creating spot for room: ${roomId}`);
 			await locals.pb.collection('beds').create({
 				label: data.get('label'),
-				room: params.id,
+				room: roomId,
 				occupied: false
 			});
 			console.log('[Action:createBed] SUCCESS.');
-		} catch (err) {
+			return { success: true };
+		} catch (err: any) {
 			console.error('[Action:createBed] FAILED:', err);
-			return fail(500, { error: true });
+			console.error('[Action:createBed] Error Data:', err.data);
+			return fail(500, { error: true, message: err.message });
 		}
 	},
 

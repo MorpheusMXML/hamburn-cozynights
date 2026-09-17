@@ -70,10 +70,11 @@ export const actions: Actions = {
 		}
 
 		const data = await request.formData();
-		const houseId = params.id;
+		const houseId = (data.get('houseId') as string) || params.id;
 		const amountBeds = parseInt((data.get('amount_beds') as string) || '0');
 
 		try {
+			console.log(`[Action:createRoom] Creating room for house: ${houseId}`);
 			const room = await locals.pb.collection('rooms').create({
 				name: data.get('name'),
 				room_number: parseInt(data.get('room_number') as string),
@@ -83,6 +84,7 @@ export const actions: Actions = {
 
 			// Automatically create bed templates
 			if (amountBeds > 0) {
+				console.log(`[Action:createRoom] Creating ${amountBeds} bed templates...`);
 				for (let i = 1; i <= amountBeds; i++) {
 					await locals.pb.collection('beds').create({
 						label: `Spot ${i}`,
@@ -94,9 +96,11 @@ export const actions: Actions = {
 			}
 
 			console.log('[Action:createRoom] SUCCESS.');
-		} catch (err) {
+			return { success: true };
+		} catch (err: any) {
 			console.error('[Action:createRoom] FAILED:', err);
-			return fail(500, { error: true });
+			console.error('[Action:createRoom] Error Data:', err.data);
+			return fail(500, { error: true, message: err.message });
 		}
 	},
 

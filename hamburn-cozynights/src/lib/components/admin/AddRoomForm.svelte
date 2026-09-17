@@ -1,10 +1,29 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+	import { createEventDispatcher } from 'svelte';
 	export let houseId: string;
 	export let disabled = false;
+	export let actionBase = '';
+
+	const dispatch = createEventDispatcher();
 </script>
 
 <div class="form-card">
-	<form method="POST" action="?/createRoom" class="admin-form">
+	<form
+		method="POST"
+		action="{actionBase}?/createRoom"
+		class="admin-form"
+		use:enhance={() => {
+			dispatch('submitting');
+			return async ({ result, update }) => {
+				await update();
+				dispatch('result', result);
+				if (result.type === 'success') {
+					dispatch('success');
+				}
+			};
+		}}
+	>
 		<input type="hidden" name="houseId" value={houseId} />
 
 		<div class="form-group">

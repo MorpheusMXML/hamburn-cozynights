@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { slide } from 'svelte/transition';
+	import { slide, fade, fly } from 'svelte/transition';
+	import AddRoomForm from './AddRoomForm.svelte';
+	import AddBedForm from './AddBedForm.svelte';
 
 	export let warnings: Array<{
 		id: string;
@@ -13,6 +15,27 @@
 	}>;
 
 	$: hasWarnings = warnings.length > 0;
+
+	let activeModal: 'house' | 'room' | null = null;
+	let activeId: string | null = null;
+	let activeName: string | null = null;
+	let isSubmitting = false;
+	let errorMessage: string | null = null;
+
+	function openModal(type: 'house' | 'room', id: string, name: string) {
+		activeModal = type;
+		activeId = id;
+		activeName = name;
+		errorMessage = null;
+	}
+
+	function closeModal() {
+		if (isSubmitting) return;
+		activeModal = null;
+		activeId = null;
+		activeName = null;
+		errorMessage = null;
+	}
 </script>
 
 {#if hasWarnings}
@@ -31,7 +54,9 @@
 						<span class="name">{warning.name}</span>
 						{#if warning.noRooms}
 							<span class="error-tag">NO ROOMS DETECTED</span>
-							<a href="/admin/house/{warning.id}" class="fix-btn">EXPAND ➕</a>
+							<button class="fix-btn" on:click={() => openModal('house', warning.id, warning.name)}>
+								SOLVE ISSUE NOW ⚡️
+							</button>
 						{/if}
 					</div>
 
@@ -43,7 +68,12 @@
 										<span class="icon">🚪</span>
 										<span class="name">{room.name || `Room ${room.number}`}</span>
 										<span class="error-tag">EMPTY MODULE (NO BEDS)</span>
-										<a href="/admin/room/{room.id}" class="fix-btn">ADD SPOTS 🛌</a>
+										<button
+											class="fix-btn"
+											on:click={() => openModal('room', room.id, room.name || `Room ${room.number}`)}
+										>
+											SOLVE ISSUE NOW ⚡️
+										</button>
 									</div>
 								</div>
 							{/each}
@@ -55,7 +85,123 @@
 	</div>
 {/if}
 
+{#if activeModal}
+	<div class="modal-backdrop" on:mousedown={closeModal} in:fade out:fade>
+		<div class="modal-content" on:mousedown|stopPropagation in:fly={{ y: 20 }}>
+			<header class="modal-header">
+				<h2>FIXING: {activeName}</h2>
+				<button class="btn-close" on:click={closeModal} disabled={isSubmitting}>✕</button>
+			</header>
+			<div class="modal-body">
+				{#if errorMessage}
+					<div class="error-banner" in:slide>
+						<span>⚠️</span>
+						<p>{errorMessage}</p>
+					</div>
+				{/if}
+
+				{#if activeModal === 'house' && activeId}
+					<p class="hint">Ignite a new module for this sanctuary.</p>
+					<AddRoomForm
+						houseId={activeId}
+						actionBase={`/admin/house/${activeId}`}
+						disabled={isSubmitting}
+						on:submitting={handleFormStart}
+						on:result={handleFormResult}
+						on:success={closeModal}
+					/>
+				{:else if activeModal === 'room' && activeId}
+					<p class="hint">Define a spot label for this room.</p>
+					<AddBedForm
+						roomId={activeId}
+						actionBase={`/admin/room/${activeId}`}
+						disabled={isSubmitting}
+						on:submitting={handleFormStart}
+						on:result={handleFormResult}
+						on:success={closeModal}
+					/>
+				{/if}
+			</div>
+		</div>
+	</div>
+{/if}
+
 <style>
+	.modal-backdrop {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100vw;
+		height: 100vh;
+		background: rgba(0, 0, 0, 0.85);
+		backdrop-filter: blur(8px);
+		z-index: 1000;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.modal-content {
+		background: #0a0a0a;
+		border: 1px solid #333;
+		border-top: 2px solid #2dd4bf;
+		border-radius: 16px;
+		width: 95%;
+		max-width: 500px;
+		padding: 2.5rem;
+		box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8);
+		position: relative;
+	}
+	.modal-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		border-bottom: 1px solid #222;
+		padding-bottom: 1rem;
+		margin-bottom: 2rem;
+	}
+	.modal-header h2 {
+		margin: 0;
+		font-size: 1.1rem;
+		color: #2dd4bf;
+		font-weight: 900;
+		letter-spacing: 1px;
+	}
+	.btn-close {
+		background: none;
+		border: none;
+		color: #444;
+		font-size: 1.5rem;
+		cursor: pointer;
+		transition: color 0.2s;
+	}
+	.btn-close:hover {
+		color: #fff;
+	}
+	.hint {
+		color: #666;
+		font-size: 0.8rem;
+		margin-bottom: 1.5rem;
+		font-weight: bold;
+		letter-spacing: 0.5px;
+	}
+
+	.error-banner {
+		background: rgba(239, 68, 68, 0.1);
+		border: 1px solid #ef4444;
+		border-radius: 8px;
+		padding: 1rem;
+		margin-bottom: 1.5rem;
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		color: #f87171;
+		font-size: 0.85rem;
+		font-weight: bold;
+	}
+	.error-banner p {
+		margin: 0;
+	}
+
 	.sanity-wrapper {
 		background: rgba(239, 68, 68, 0.05);
 		border: 1px solid rgba(239, 68, 68, 0.2);
@@ -123,6 +269,8 @@
 		padding: 4px 10px;
 		border-radius: 4px;
 		transition: all 0.2s;
+		background: transparent;
+		cursor: pointer;
 	}
 	.fix-btn:hover {
 		background: #2dd4bf;

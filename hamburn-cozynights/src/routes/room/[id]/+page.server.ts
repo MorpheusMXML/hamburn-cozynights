@@ -113,17 +113,15 @@ export const actions: Actions = {
 
 		try {
 			const bed = await locals.adminPb.collection('beds').getOne<BedsResponse>(bedId);
-
 			// SECURITY: Check if bed is locked by admin
 			if ((bed as any).is_locked && !locals.user?.verified) {
-				return fail(403, { error: 'This bed is currently locked by an admin.' });
+				return fail(403, { error: 'Dieser Platz ist derzeit von einem Admin gesperrt.' });
 			}
 
-			if (bed.occupied && bed.order !== order.id) {
-				return fail(400, { error: 'This spot is already claimed.' });
+			const success = await bookingService.bookBed(order, bedId, guestName);
+			if (!success) {
+				return fail(400, { error: 'Zu spät! Dieser Platz wurde gerade von jemand anderem geschnappt. 🌵' });
 			}
-
-			await bookingService.bookBed(order, bedId, guestName);
 			return { success: true };
 		} catch (err: any) {
 			console.error('[Security] bookBed critical failure:', err);

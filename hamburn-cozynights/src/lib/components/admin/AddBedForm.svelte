@@ -1,9 +1,28 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+	import { createEventDispatcher } from 'svelte';
 	export let roomId: string;
 	export let disabled = false;
+	export let actionBase = '';
+
+	const dispatch = createEventDispatcher();
 </script>
 
-<form method="POST" action="?/createBed" class="add-bed-form">
+<form
+	method="POST"
+	action="{actionBase}?/createBed"
+	class="add-bed-form"
+	use:enhance={() => {
+		dispatch('submitting');
+		return async ({ result, update }) => {
+			await update();
+			dispatch('result', result);
+			if (result.type === 'success') {
+				dispatch('success');
+			}
+		};
+	}}
+>
 	<input type="hidden" name="roomId" value={roomId} />
 
 	<div class="input-row">

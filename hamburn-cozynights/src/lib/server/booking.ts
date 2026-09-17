@@ -78,35 +78,44 @@ export class BookingService {
 	 * @param order The order record of the user making the booking.
 	 * @param bedId The ID of the bed to be claimed.
 	 * @param guestName The burner name chosen by the user.
+	 * @returns True if booking succeeded, false if bed was already taken.
 	 */
-	async bookBed(order: OrdersResponse, bedId: string, guestName: string): Promise<void> {
+	async bookBed(order: OrdersResponse, bedId: string, guestName: string): Promise<boolean> {
 		console.log(
 			`[BookingService] Booking bed ${bedId} for order ${order.id} (Guest: ${guestName})`
 		);
 
-		// Release previous bookings
+		// 1. ATOMIC CHECK: Fetch fresh bed state
+		const bed = await this.adminPb.collection('beds').getOne<BedsResponse>(bedId);
+		if (bed.occupied && bed.order !== order.id) {
+			console.warn(`[BookingService] CONCURRENCY ALERT: Bed ${bedId} already taken by ${bed.order}`);
+			return false;
+		}
+
+		// 2. Release previous bookings for this order
 		const previousBeds = await this.adminPb.collection('beds').getFullList({
 			filter: this.adminPb.filter('order = {:orderId}', { orderId: order.id })
 		});
 
-		console.log(`[BookingService] Found ${previousBeds.length} previous bookings to release.`);
 		for (const prevBed of previousBeds) {
 			if (prevBed.id !== bedId) {
 				await this.adminPb.collection('beds').update(prevBed.id, { occupied: false, order: null });
 			}
 		}
 
-		// Update Order Burner Name
+		// 3. Update Order Burner Name
 		await this.adminPb.collection('orders').update(order.id, {
 			burner_name: encrypt(guestName)
 		});
 
-		// Claim new spot
+		// 4. Claim new spot
 		await this.adminPb.collection('beds').update(bedId, {
 			occupied: true,
 			order: order.id
 		});
+		
 		console.log(`[BookingService] Booking finalized successfully.`);
+		return true;
 	}
 
 	/**
