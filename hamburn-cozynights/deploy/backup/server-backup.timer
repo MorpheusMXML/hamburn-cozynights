@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly off-site server backup
+
+[Timer]
+# PocketBase's own local auto-backups run at minute 5 (pb_hooks/cozy_backups.pb.js).
+OnCalendar=*-*-* *:20:00
+RandomizedDelaySec=5m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

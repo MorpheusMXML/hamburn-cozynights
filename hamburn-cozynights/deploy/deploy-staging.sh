@@ -85,8 +85,10 @@ if [[ -n "$volume" ]]; then
 	backup="pb_data-$(date -u +%Y%m%dT%H%M%SZ)-${prev:0:7}.tar.gz"
 	log "backing up volume $volume → $BACKUP_DIR/$backup"
 	compose stop pocketbase
+	# backups/ holds PocketBase's own hourly ZIPs (pb_hooks/cozy_backups.pb.js):
+	# not needed to roll back a deploy, and they would bloat every archive.
 	docker run --rm -v "$volume":/pb_data:ro -v "$BACKUP_DIR":/backup alpine \
-		tar czf "/backup/$backup" -C /pb_data .
+		tar czf "/backup/$backup" --exclude=./backups -C /pb_data .
 	ls -1t "$BACKUP_DIR"/pb_data-*.tar.gz | tail -n +"$((BACKUP_KEEP + 1))" | xargs -r rm --
 elif [[ "${ALLOW_NO_BACKUP:-0}" == 1 ]]; then
 	log "WARNING: $PB_CONTAINER not found, skipping backup (ALLOW_NO_BACKUP=1)"

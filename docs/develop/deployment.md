@@ -76,6 +76,26 @@ docker compose -f docker-compose.staging.yml logs pocketbase | grep -iE 'failed 
 
 Then sign in to `/admin` once and open the camp map with a test ticket code.
 
+## Backups and where data lives
+
+| What | Source of truth |
+| --- | --- |
+| Code, schema (`pb_migrations/`), hooks, location templates | Git |
+| Secrets (each environment's `.env`, `ENCRYPTION_KEY`) | the server, the team's password manager and an offline emergency sheet |
+| Live data (ticket codes, bookings, admins) | the PocketBase volume on the server, plus backups |
+
+The live database stays on the server's local disk. SQLite must not run on a network share: file locking over the network is unreliable and can corrupt the database. A Storage Box is a backup target only.
+
+- **Local, hourly:** PocketBase writes ZIP backups into its volume (`pb_hooks/cozy_backups.pb.js`, `PB_BACKUP_CRON` / `PB_BACKUP_KEEP`). A quick undo from the dashboard, but no protection against losing the server.
+- **Before every deploy:** the deploy script archives the volume.
+- **Off-site, hourly:** `deploy/backup/server-backup.sh` copies all live databases of the server consistently and stores them, together with configuration and certificates, encrypted with restic on a Hetzner Storage Box. It alerts on failure and test-restores the databases weekly.
+
+Setup, restore and the emergency sheet are in the operator runbook [`hamburn-cozynights/deploy/backup/README.md`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/backup/README.md) (German).
+
+::: warning Keep the encryption key outside the server too
+Without an environment's `ENCRYPTION_KEY`, a restored database is useless: burner names can't be decrypted and ticket codes no longer match.
+:::
+
 ## Google sign-in per environment
 
 Each environment needs the Google OAuth client to know its address:
