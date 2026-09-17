@@ -1,10 +1,17 @@
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 
+// Public pages within /admin that must stay reachable without a session 🔓
+const PUBLIC_PATHS = ['/admin/login', '/admin/reset-password'];
+
 export const load: LayoutServerLoad = async ({ locals, url }) => {
+	const isPublicPath = PUBLIC_PATHS.some(
+		(path) => url.pathname === path || url.pathname.startsWith(`${path}/`)
+	);
+
 	// 1. Basic Check: Is user logged in?
 	if (!locals.pb.authStore.isValid) {
-		if (url.pathname !== '/admin/login') {
+		if (!isPublicPath) {
 			throw redirect(303, '/admin/login');
 		}
 	} else {

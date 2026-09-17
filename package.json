@@ -9,6 +9,7 @@
     "test:e2e:ui": "npm run test:e2e:ui --prefix hamburn-cozynights",
     "health": "npm run health --prefix hamburn-cozynights",
     "test:setup": "npm run test:setup --prefix hamburn-cozynights",
+    "invite:setup": "npm run invite:setup --prefix hamburn-cozynights --",
     "db:up": "docker-compose -f hamburn-cozynights/docker-compose.yml up -d",
     "db:down": "docker-compose -f hamburn-cozynights/docker-compose.yml down"
   },

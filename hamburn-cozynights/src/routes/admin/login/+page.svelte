@@ -5,18 +5,25 @@
 
 	export let data: PageData;
 	export let form: ActionData;
-
-	// UI State: Toggle between login and registration form
-	let showRegister = false;
 </script>
 
 <div class="login-wrapper">
 	<div class="login-container" in:fly={{ y: 20, duration: 600 }}>
 		<header class="login-header">
 			<div class="laser-line-top"></div>
-			<h1>{showRegister ? 'JOIN THE CREW ✨' : 'ADMIN PORTAL 🔐'}</h1>
+			<h1>ADMIN PORTAL 🔐</h1>
 			<p class="subtitle">Secure access to the Hamburn Control Center</p>
 		</header>
+
+		{#if $page.url.searchParams.get('activated')}
+			<div class="success-banner" in:fade>
+				<span class="icon">✅</span>
+				<div class="msg-content">
+					<strong>ACCOUNT ACTIVATED!</strong>
+					<p>Sign in with your new passphrase.</p>
+				</div>
+			</div>
+		{/if}
 
 		{#if form?.message || $page.url.searchParams.get('fail')}
 			<div class="error-banner" in:fade>
@@ -32,53 +39,18 @@
 			</div>
 		{/if}
 
-		{#if showRegister}
-			<form action="?/register" method="POST" class="laser-form" in:fade>
-				<div class="input-group">
-					<label for="email">EMAIL ADDRESS</label>
-					<input name="email" id="email" type="email" placeholder="burner@playa.com" required />
-				</div>
-				<div class="input-group">
-					<label for="password">PASSPHRASE</label>
-					<input name="password" id="password" type="password" placeholder="••••••••" required />
-				</div>
-				<div class="input-group">
-					<label for="passwordConfirm">CONFIRM PASSPHRASE</label>
-					<input
-						name="passwordConfirm"
-						id="passwordConfirm"
-						type="password"
-						placeholder="••••••••"
-						required
-					/>
-				</div>
-				<button type="submit" class="btn-ignite">IGNITE ACCOUNT ✨</button>
-			</form>
-			<p class="toggle-text">
-				ALREADY HAVE KEYS? <button
-					type="button"
-					class="btn-link"
-					on:click={() => (showRegister = false)}>SIGN IN</button
-				>
-			</p>
-		{:else}
-			<form action="?/login" method="POST" class="laser-form" in:fade>
-				<div class="input-group">
-					<label for="email">EMAIL ADDRESS</label>
-					<input name="email" id="email" type="email" placeholder="burner@playa.com" required />
-				</div>
-				<div class="input-group">
-					<label for="password">PASSPHRASE</label>
-					<input name="password" id="password" type="password" placeholder="••••••••" required />
-				</div>
-				<button type="submit" class="btn-ignite">ACCESS PORTAL ⚡️</button>
-			</form>
-			<p class="toggle-text">
-				NEW BURNER? <button type="button" class="btn-link" on:click={() => (showRegister = true)}
-					>CREATE ACCOUNT</button
-				>
-			</p>
-		{/if}
+		<form action="?/login" method="POST" class="laser-form" in:fade>
+			<div class="input-group">
+				<label for="email">EMAIL ADDRESS</label>
+				<input name="email" id="email" type="email" placeholder="burner@playa.com" required />
+			</div>
+			<div class="input-group">
+				<label for="password">PASSPHRASE</label>
+				<input name="password" id="password" type="password" placeholder="••••••••" required />
+			</div>
+			<button type="submit" class="btn-ignite">ACCESS PORTAL ⚡️</button>
+		</form>
+		<p class="toggle-text">NO KEYS YET? ASK A SENIOR BURNER TO INVITE YOU 🔑</p>
 
 		<div class="divider">
 			<span>OR CONNECT VIA BEACON</span>
@@ -90,7 +62,7 @@
 					<form action="?/oauth2" method="POST" class="oauth-form">
 						<input type="hidden" name="provider" value={provider.name} />
 						<button type="submit" class="btn-oauth">
-							{showRegister ? 'Register with' : 'Login with'}
+							Login with
 							{provider.displayName}
 						</button>
 					</form>
@@ -158,6 +130,17 @@
 		gap: 1rem;
 		align-items: center;
 		color: #f87171;
+	}
+	.success-banner {
+		background: rgba(45, 212, 191, 0.1);
+		border: 1px solid rgba(45, 212, 191, 0.3);
+		border-radius: 12px;
+		padding: 1rem;
+		margin-bottom: 2rem;
+		display: flex;
+		gap: 1rem;
+		align-items: center;
+		color: #2dd4bf;
 	}
 	.msg-content strong {
 		display: block;
@@ -229,19 +212,6 @@
 		font-weight: 900;
 		margin-top: 1.5rem;
 		letter-spacing: 1px;
-	}
-	.btn-link {
-		background: none;
-		border: none;
-		color: #f472b6;
-		cursor: pointer;
-		font-weight: 900;
-		font-size: 0.75rem;
-		padding: 0 5px;
-		text-decoration: underline;
-	}
-	.btn-link:hover {
-		color: #fff;
 	}
 
 	.divider {

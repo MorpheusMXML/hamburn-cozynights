@@ -29,6 +29,13 @@ If the database schema changes, you may need to run these scripts:
   ```bash
   npx tsx scripts/encrypt_db_migration.ts
   ```
+- **Lock down admin signup (run once):** Blocks public/OAuth2 self-registration on the `users`
+  collection and points PocketBase's password-reset email at our own invite-acceptance page.
+  Pass your own email to also send yourself the first invite. See
+  [Admin Invitations](./SECURITY.md#4-admin-invitations-invite-only-login) for how the flow works.
+  ```bash
+  npm run invite:setup -- you@example.com
+  ```
 
 _Note: These scripts automatically detect if you are using PocketBase v0.23+ (Superusers) or an older version._
 

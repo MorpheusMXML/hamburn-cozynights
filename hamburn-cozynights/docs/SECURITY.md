@@ -26,9 +26,22 @@ We use field-level encryption to ensure that even if the database is compromised
 | **Viewing the Map**  | Allowed if a valid `bookingCode` cookie is present.                                                                               |
 | **Booking a Bed**    | Server verifies the order exists and that the user doesn't already have another active booking.                                   |
 | **Releasing a Spot** | Server performs a strict lookup using the `order_id` from the session cookie. A user can **only** release their own assigned bed. |
-| **Admin Actions**    | Restricted to users authenticated via the PocketBase Admin/Superuser login (e.g., using GitHub or password).                      |
+| **Admin Actions**    | Restricted to `users` records that have completed an invite (see below) and are marked `verified`.                               |
 
-## 4. Bed Locking
+## 4. Admin Invitations (Invite-Only Login)
+
+There is no public sign-up. The `users` collection's `createRule` is locked (`null`, superuser-only), so the only way a new admin account can ever be created is:
+
+1. An existing verified admin opens **Access Control** (`/admin/users`) and invites an email.
+2. This creates a `users` record server-side (via `locals.adminPb`, the Master Key) with a random, never-shared password, and calls PocketBase's built-in `requestPasswordReset(email)`.
+3. PocketBase emails the invitee a link to `/admin/reset-password/[token]`, where they choose their own passphrase via `confirmPasswordReset`. This also marks the account `verified` — PocketBase's stock behavior for a completed password reset.
+4. From then on they log in normally with email + passphrase.
+
+This also closes the OAuth2 self sign-up path: PocketBase evaluates `createRule` for OAuth2 account creation too, so a first-time GitHub/Google login for an email that wasn't invited fails instead of silently creating an account.
+
+Run `npm run invite:setup -- you@example.com` once (see [Development](./DEVELOPMENT.md)) to apply the lockdown and send yourself the first invite. SMTP must be configured in the PocketBase dashboard (**Settings → Mail settings**) for invite emails to actually deliver.
+
+## 5. Bed Locking
 
 Admins have the power to **Lock 🔒** individual beds. A locked bed:
 

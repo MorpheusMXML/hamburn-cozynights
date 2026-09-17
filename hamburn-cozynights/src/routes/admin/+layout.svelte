@@ -26,6 +26,16 @@
 			</div>
 
 			<div class="user-area">
+				{#if data.isVerified}
+					<a
+						href="/admin/users"
+						class="nav-link"
+						class:active={$page.url.pathname === '/admin/users'}
+					>
+						Access 🔑
+					</a>
+				{/if}
+
 				<div class="user-info">
 					<span class="user-label">Burner:</span>
 					<span class="user-email">{data.user?.email}</span>
@@ -129,6 +139,26 @@
 		display: flex;
 		align-items: center;
 		gap: 2rem;
+	}
+
+	.nav-link {
+		color: #888;
+		text-decoration: none;
+		font-size: 0.8rem;
+		font-weight: bold;
+		padding: 0.5rem 0.9rem;
+		border-radius: 8px;
+		border: 1px solid transparent;
+		transition: all 0.2s;
+	}
+	.nav-link:hover {
+		color: #fff;
+		border-color: #333;
+	}
+	.nav-link.active {
+		color: #2dd4bf;
+		border-color: rgba(45, 212, 191, 0.3);
+		background: rgba(45, 212, 191, 0.08);
 	}
 
 	.user-info {

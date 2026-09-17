@@ -1,7 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { Actions, PageServerLoad } from './$types';
-import type { ClientResponseError } from 'pocketbase';
 
 // Custom type for cleaner code
 interface SafeAuthProvider {
@@ -28,7 +27,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 		return {
 			providers: providers,
-			// Email login is almost always available if we offer registration 👤
 			enableEmail: true
 		};
 	} catch {
@@ -53,44 +51,7 @@ export const actions: Actions = {
 		throw redirect(303, '/admin');
 	},
 
-	// ACTION 2: Register (Create User + Login) ✨
-	register: async ({ locals, request }) => {
-		const data = await request.formData();
-		const email = data.get('email')?.toString();
-		const password = data.get('password')?.toString();
-		const passwordConfirm = data.get('passwordConfirm')?.toString();
-
-		if (!email || !password || !passwordConfirm) {
-			return fail(400, { register: true, message: 'The playa needs all info.' });
-		}
-		if (password !== passwordConfirm) {
-			return fail(400, { register: true, message: 'Passphrases do not match.' });
-		}
-
-		try {
-			// 1. Create user (Default: verified = false) 🗝️
-			await locals.pb.collection('users').create({
-				email,
-				password,
-				passwordConfirm,
-				verified: false
-			});
-
-			// 2. Login immediately 🚀
-			await locals.pb.collection('users').authWithPassword(email, password);
-		} catch (error) {
-			const err = error as ClientResponseError;
-			return fail(400, {
-				register: true,
-				message: err.message || 'Registration turned into dust.'
-			});
-		}
-
-		// Redirect to admin -> layout will block because verified=false 🛡️
-		throw redirect(303, '/admin');
-	},
-
-	// ACTION 3: OAuth (GitHub/Google) 🔗
+	// ACTION 2: OAuth (GitHub/Google) 🔗
 	oauth2: async ({ locals, cookies, url, request }) => {
 		const formData = await request.formData();
 		const providerName = formData.get('provider')?.toString();
