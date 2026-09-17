@@ -11,7 +11,7 @@ services:
     command: ['--http=0.0.0.0:8090', '--automigrate=false']
     environment:
       # Google OAuth client for the admin login (auth collection `admins`),
-      # interpolated from .env — see .env.example and docs/DEPLOYMENT.md.
+      # interpolated from .env — see .env.example and docs/develop/deployment.md.
       PB_GOOGLE_CLIENT_ID: ${PB_GOOGLE_CLIENT_ID:?set PB_GOOGLE_CLIENT_ID in .env}
       PB_GOOGLE_CLIENT_SECRET: ${PB_GOOGLE_CLIENT_SECRET:?set PB_GOOGLE_CLIENT_SECRET in .env}
       # Optional: chat webhook notified about new admin access requests

@@ -1,6 +1,6 @@
 /// <reference path="../pb_data/types.d.ts" />
 //
-// Admin access model (see docs/SECURITY.md "Admin access"):
+// Admin access model (see docs/admin/access.md and docs/reference/security.md):
 //
 // - `admins` is a dedicated auth collection. Signing in is Google OAuth2 only
 //   (password/OTP login disabled). Records are created either by a superuser
