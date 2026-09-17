@@ -1,13 +1,13 @@
 # Staging-Deploy aus Git (per Knopfdruck)
 
-Ziel: `https://test-cozynights.hamburn.de` wird **nur auf Knopfdruck** aus einem
-beliebigen Branch dieses Repos deployt. Die bestehenden PocketBase-Daten
+Ziel: `https://test-cozynights.hamburn.de` wird **nur auf Knopfdruck** aus `main`
+deployt. Die bestehenden PocketBase-Daten
 bleiben erhalten, vor jedem Deploy wird automatisch ein Backup gezogen.
 
 ## Ablauf eines Deploys
 
 ```text
-GitHub Actions „Deploy staging“ → Run workflow (Branch wählen)
+GitHub Actions „Deploy staging“ → Run workflow (main) → Freigabe durch Reviewer
   1. verify: npm ci, npm test, docker build  (scheitert hier, nicht auf dem Server)
   2. deploy: SSH als `deploy` → Forced Command /usr/local/bin/deploy-cozynights-staging
      a) Commit-SHA auschecken (nur die SHA wird aus dem SSH-Befehl gelesen)
@@ -111,7 +111,7 @@ install -d -o deploy -g deploy -m 700 "$DEPLOY_HOME/.ssh"
 echo "command=\"/usr/local/bin/deploy-cozynights-staging\",restrict $PUBKEY" >> "$DEPLOY_HOME/.ssh/authorized_keys"
 chown deploy:deploy "$DEPLOY_HOME/.ssh/authorized_keys"
 chmod 600 "$DEPLOY_HOME/.ssh/authorized_keys"
-ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub   # Fingerprint für Schritt 4
+ssh-keygen -lf /etc/ssh/ssh_host_ecdsa_key.pub     # ECDSA-Fingerprint für Schritt 4
 ```
 
 Test vom Mac. Der Key darf **nur** das Skript starten, hier ohne SHA, also
@@ -128,19 +128,24 @@ Erwartet: `usage: deploy <40-char commit sha>` (statt `deploy`).
 ```bash
 gh secret set STAGING_SSH_HOST --env staging --body "<server-ip-oder-hostname>"
 gh secret set STAGING_DEPLOY_SSH_KEY --env staging < ~/deploy_staging
-gh secret set STAGING_SSH_FINGERPRINT --env staging --body "SHA256:..."   # aus Schritt 3
+gh secret set STAGING_SSH_FINGERPRINT --env staging --body "SHA256:..."   # ECDSA aus Schritt 3
 # nur falls SSH nicht auf Port 22 läuft:
 # gh secret set STAGING_SSH_PORT --env staging --body "2222"
 rm ~/deploy_staging ~/deploy_staging.pub
 ```
 
-Optional unter GitHub → Settings → Environments → `staging`:
+Der Fingerprint muss der **ECDSA**-Host-Key sein: Der Go-SSH-Client der
+Action handelt ECDSA vor ED25519 aus, mit dem ED25519-Wert schlägt der Deploy
+mit `host key fingerprint mismatch` fehl.
+
+Unter GitHub → Settings → Environments → `staging`:
 **Required reviewers** (Deploy erst nach Freigabe) und **Deployment branches**
-(z. B. nur `main` während des Live-Tests).
+→ nur `main`.
 
 ## Deployen
 
-GitHub → Actions → **Deploy staging** → **Run workflow** → Branch wählen.
+GitHub → Actions → **Deploy staging** → **Run workflow** → `main` →
+nach Tests und Build unter **Review deployments** freigeben.
 Oder vom Mac:
 
 ```bash
@@ -148,12 +153,17 @@ gh workflow run deploy-staging.yml --ref main
 gh run watch
 ```
 
-Der Branch muss diesen Workflow enthalten, also auf einem `main` ab diesem
-Stand basieren.
-
 ## Rollback
 
-**Code:** Den Workflow auf einem älteren Branch oder Commit erneut starten.
+**Code, regulär:** Den fehlerhaften Merge per Revert-PR rückgängig machen,
+mergen, dann den Workflow erneut starten.
+
+**Code, sofort** (auf dem Server, deployt einen beliebigen älteren Commit):
+
+```bash
+sudo -u deploy git -C /opt/hamburn-cozynights-staging log --oneline -10 origin/main
+sudo -u deploy /usr/local/bin/deploy-cozynights-staging "deploy <volle-40-stellige-sha>"
+```
 
 **Daten** (nur wenn nötig, stellt den Stand vor einem Deploy wieder her):
 

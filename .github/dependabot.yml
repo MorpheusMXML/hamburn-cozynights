@@ -10,7 +10,7 @@ updates:
     ignore:
       # SvelteKit, svelte-check and typescript-eslint support TypeScript <= 6.
       - dependency-name: typescript
-        versions: ['>=7']
+        versions: [">=7"]
 
   - package-ecosystem: docker
     directory: /hamburn-cozynights
@@ -28,4 +28,4 @@ updates:
       interval: weekly
     groups:
       actions:
-        patterns: ['*']
+        patterns: ["*"]
