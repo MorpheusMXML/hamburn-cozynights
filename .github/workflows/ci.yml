@@ -1,0 +1,51 @@
+name: CI
+
+# Every pull request and every push to main runs the full verification
+# (hamburn-cozynights/docs/TESTING.md). The staging deploy calls this workflow
+# too (workflow_call), so nothing is deployed that did not pass here.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call: {}
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # A newer push to the same pull request makes the older run pointless.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: hamburn-cozynights
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hamburn-cozynights/package-lock.json
+      - run: npm ci
+
+      - name: Type check
+        run: npm run check
+
+      - name: Unit tests
+        run: npm test
+
+      # Empty PocketBase + committed migrations and hooks (Docker is
+      # preinstalled on the runner).
+      - name: Integration tests (real PocketBase)
+        run: npm run test:integration
+
+      # Builds the same Dockerfile the server builds and drives the running
+      # app over HTTP: guest login, booking, admin protection.
+      - name: Smoke tests (app image + PocketBase)
+        run: npm run test:smoke
