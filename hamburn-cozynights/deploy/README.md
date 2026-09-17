@@ -25,7 +25,7 @@ Compose-Datei des deployten Commits.
 
 ## Einrichtung (einmalig)
 
-Alle Server-Befehle als `root`. Die Anleitung geht davon aus, dass der Checkout
+Alle Server-Befehle als `root` (vorher `sudo -i`; ohne root verweigert Docker den Zugriff). Die Anleitung geht davon aus, dass der Checkout
 unter `/opt/hamburn-cozynights-staging` liegt und dem User `deploy` gehört.
 Schritt 0 prüft das.
 
@@ -43,9 +43,13 @@ docker inspect -f '{{range .Mounts}}{{if eq .Destination "/pb_data"}}volume={{.N
 
 Prüfen:
 
-- `status` zeigt **keine** geänderten Dateien (`M ...`). Sonst erst klären:
-  in einen Branch committen oder verwerfen. Das Deploy-Skript verweigert
-  sonst den Deploy.
+- `status` zeigt **keine** geänderten Dateien (`M ...`). Sonst erst klären,
+  denn das Deploy-Skript verweigert sonst den Deploy:
+  `sudo -u deploy git -C "$APP_DIR" diff` ansehen. Ist die Änderung schon in
+  `origin/main` enthalten, verwerfen mit
+  `sudo -u deploy git -C "$APP_DIR" checkout -- <datei>`. Die laufenden
+  Container sind davon nicht betroffen. Sonst erst in einen Branch
+  committen.
 - `dir=` ist `$APP_DIR/hamburn-cozynights`.
 - `project=` notieren → wird in Schritt 1 **exakt** so eingetragen. Ein
   anderer Projektname würde ein neues, leeres PocketBase-Volume anlegen.
