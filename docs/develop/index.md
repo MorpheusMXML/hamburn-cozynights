@@ -113,6 +113,7 @@ Schema and API rules are code: `pb_migrations/*.js`, applied by PocketBase on st
 
 ## Conventions
 
+- **Never commit data.** The repository is public: `.env` files, `pb_data/` and database snapshots (encrypted or not) stay out of git. Share them through a private channel.
 - Format with Prettier and satisfy ESLint: `npm run lint` must pass.
 - Server-only code goes to `src/lib/server/`; it must never be imported by client components.
 - Every read of ticket data happens on the server, and page data is trimmed to what the page shows. See [Security & privacy](../reference/security).
