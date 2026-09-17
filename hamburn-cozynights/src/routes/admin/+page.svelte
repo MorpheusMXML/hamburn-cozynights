@@ -1,11 +1,12 @@
 <script lang="ts">
 	import type { PageData, SubmitFunction } from './$types';
+	import type { ActionResult } from '@sveltejs/kit';
 	import Map from '$lib/components/Map.svelte';
 	import HouseEditor from '$lib/components/HouseEditor.svelte';
 	import IntelDashboard from '$lib/components/admin/IntelDashboard.svelte';
 	import SanityChecks from '$lib/components/admin/SanityChecks.svelte';
 	import { invalidateAll } from '$app/navigation';
-	import { enhance } from '$app/forms';
+	import { enhance, deserialize } from '$app/forms';
 	import { fade, fly, slide } from 'svelte/transition';
 	import { isoToBerlinLocal } from '$lib/time';
 
@@ -72,8 +73,12 @@
 					return async ({ result, update }) => {
 						if (result.type === 'success') {
 							const formData = new FormData();
-							await submitAction('?/clearAllBookings', formData);
-							alert('✨ PLAYA PURGED: All spots are vacant once more.');
+							const purge = await submitAction('?/clearAllBookings', formData);
+							alert(
+								purge.type === 'success'
+									? '✨ PLAYA PURGED: All spots are vacant once more.'
+									: `❌ PURGE FAILED: ${actionErrorMessage(purge) || 'Could not clear all bookings.'}`
+							);
 						}
 						await update();
 					};
@@ -85,7 +90,7 @@
 		};
 	};
 
-	async function submitAction(actionUrl: string, formData: FormData) {
+	async function submitAction(actionUrl: string, formData: FormData): Promise<ActionResult> {
 		try {
 			const response = await fetch(actionUrl, {
 				method: 'POST',
@@ -95,12 +100,26 @@
 					accept: 'application/json'
 				}
 			});
-			const result = await response.json();
-			return result;
+			// The `data` of an action response is devalue-encoded: response.json()
+			// would leave it a string, so the real error message never showed up.
+			return deserialize(await response.text());
 		} catch (err: any) {
 			console.error(`[Action Error] Fetch failed for ${actionUrl}:`, err);
-			return { type: 'error', error: err.message };
+			return { type: 'error', error: err };
 		}
+	}
+
+	/** Server-provided reason of a failed action: fail(…, { error | message }) or error(…). */
+	function actionErrorMessage(result: ActionResult): string | undefined {
+		if (result.type === 'failure') {
+			const data = result.data as { error?: unknown; message?: unknown } | undefined;
+			const reason = data?.error ?? data?.message;
+			return typeof reason === 'string' ? reason : undefined;
+		}
+		if (result.type === 'error') {
+			return typeof result.error?.message === 'string' ? result.error.message : undefined;
+		}
+		return undefined;
 	}
 
 	// When clicking empty space on the map in editor mode
@@ -136,7 +155,7 @@
 
 		if (result.type !== 'success') {
 			alert(
-				`🔥 THE PLAYA PROTECTS! 🛡️ ${result.data?.error || 'This house has active bookings and cannot be moved.'}`
+				`🔥 THE PLAYA PROTECTS! 🛡️ ${actionErrorMessage(result) || 'This house has active bookings and cannot be moved.'}`
 			);
 			editingHouse = null;
 			selectedHouseId = null;
@@ -183,7 +202,9 @@
 			const result = await submitAction('?/deleteHouse', formData);
 
 			if (result.type !== 'success') {
-				alert(`❌ VANISH FAILED! ${result.data?.error || 'The playa protects this sanctuary.'}`);
+				alert(
+					`❌ VANISH FAILED! ${actionErrorMessage(result) || 'The playa protects this sanctuary.'}`
+				);
 			}
 			invalidateAll();
 		}
@@ -210,7 +231,9 @@
 			formData.append('id', editingHouse.id);
 			const result = await submitAction('?/renameHouse', formData);
 			if (result.type !== 'success')
-				alert(`❌ RENAME FAILED! ${result.data?.error || 'The desert winds are too strong.'}`);
+				alert(
+					`❌ RENAME FAILED! ${actionErrorMessage(result) || 'The desert winds are too strong.'}`
+				);
 		} else {
 			formData.append('x', editingHouse?.x.toString() || '0');
 			formData.append('y', editingHouse?.y.toString() || '0');
@@ -218,7 +241,9 @@
 
 			const result = await submitAction('/admin/house/new?/create', formData);
 			if (result.type !== 'success')
-				alert(`❌ CREATION FAILED! ${result.data?.error || 'The dust has clogged the gears.'}`);
+				alert(
+					`❌ CREATION FAILED! ${actionErrorMessage(result) || 'The dust has clogged the gears.'}`
+				);
 		}
 
 		editingHouse = null;
@@ -256,7 +281,9 @@
 				console.error('[Dashboard] Vanish FAILED:', result);
 				if (card) card.classList.remove('disintegrating');
 				if (sidebar) sidebar.classList.remove('disintegrating');
-				alert(`❌ VANISH FAILED: ${result.data?.error || 'The playa protects this sanctuary.'}`);
+				alert(
+					`❌ VANISH FAILED: ${actionErrorMessage(result) || 'The playa protects this sanctuary.'}`
+				);
 			} else {
 				console.log('[Dashboard] Vanish SUCCESS. Clearing state...');
 				selectedHouseId = null;
@@ -308,7 +335,7 @@
 	const handleImportTemplate: SubmitFunction = ({ cancel }) => {
 		if (
 			!confirm(
-				'☢️ NUCLEAR WARNING ☢️\n\nImporting a template will PERMANENTLY ERASE:\n- All current Houses\n- All current Rooms\n- All current Beds\n- ALL ACTIVE BOOKINGS AND ORDERS\n\nThis cannot be undone. Are you absolutely sure the playa is ready for a reset?'
+				'☢️ NUCLEAR WARNING ☢️\n\nImporting a template will PERMANENTLY ERASE:\n- All current Houses\n- All current Rooms\n- All current Beds and the bookings on them\n\nTicket codes are kept, so guests can book again afterwards.\n\nThis cannot be undone. Are you absolutely sure the playa is ready for a reset?'
 			)
 		) {
 			cancel();
