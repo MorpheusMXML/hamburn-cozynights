@@ -79,6 +79,8 @@ Since `pb_data` is ignored by Git, use these scripts to manage your database sta
 
 **Important:** `pb_data.tar.gz.gpg` is git-ignored and must never be committed — the repository is public. Share it privately (e.g. as a Vaultwarden attachment) and use a long random passphrase.
 
+These scripts are for local development only. Staging and production are backed up on the server itself (hourly PocketBase backups plus an encrypted off-site copy), see [DEPLOYMENT.md, section 8](DEPLOYMENT.md#8-backups-and-where-data-lives).
+
 ## 5. Auto-Documentation Generation
 
 We maintain technical documentation through automated extraction from source code comments.

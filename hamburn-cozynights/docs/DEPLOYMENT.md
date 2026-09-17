@@ -185,6 +185,7 @@ target only.
   and test-restores the databases weekly.
 
 Setup, restore and the emergency sheet: [`deploy/backup/README.md`](../deploy/backup/README.md).
+Collections, integrity rules and the template format: [DATA.md](DATA.md).
 Without an environment's `ENCRYPTION_KEY`, a restored database is useless
 (burner names can't be decrypted, ticket codes no longer match), so keep that
 key outside the server as well.

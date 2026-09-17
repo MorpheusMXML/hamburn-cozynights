@@ -37,6 +37,7 @@ For detailed information on how the system works and how to manage it, please re
 - [🛠️ Development & Operations](./docs/DEVELOPMENT.md): Testing, Migrations, and Backups.
 - [🎪 Operational Workflow](./docs/WORKFLOW.md): Staging vs. Live modes and the booking lifecycle.
 - [🚀 Deployment & Environments](./docs/DEPLOYMENT.md): How dev/staging/production stay isolated, and the CI pipeline.
+- [🗄️ Data Model & Location Templates](./docs/DATA.md): Collections, integrity rules, and the template format.
 
 ## 🗺 Core Features
 
