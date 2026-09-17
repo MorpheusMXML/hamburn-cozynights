@@ -24,6 +24,13 @@ set -euo pipefail
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="${COZY_COMPOSE_FILE:-$APP_DIR/docker-compose.staging.yml}"
 ENV_FILE="${COZY_ENV_FILE:-$APP_DIR/.env}"
+# Same compose project as the deploy script (deploy/README.md), otherwise
+# `docker compose` would not find the running containers.
+DEPLOY_CONF=/etc/cozynights/deploy-staging.conf
+if [[ -z "${COMPOSE_PROJECT_NAME:-}" && -z "${COZY_COMPOSE_FILE:-}" && -r "$DEPLOY_CONF" ]]; then
+	COMPOSE_PROJECT_NAME="$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' "$DEPLOY_CONF" | tail -n1 | tr -d "'\"")"
+	if [[ -n "$COMPOSE_PROJECT_NAME" ]]; then export COMPOSE_PROJECT_NAME; fi
+fi
 # Always explicit: without --dir the binary silently uses an empty database
 # next to itself, and the cozy-admin command from pb_hooks isn't loaded.
 PB_FLAGS=(--dir=/pb_data --hooksDir=/pb_hooks --migrationsDir=/pb_migrations)

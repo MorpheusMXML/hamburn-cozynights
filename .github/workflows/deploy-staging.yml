@@ -1,24 +1,53 @@
 name: Deploy staging
 
+# Manual only: Actions → "Deploy staging" → Run workflow. Pick the branch in
+# "Use workflow from"; its current head commit is what gets deployed.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'hamburn-cozynights/**'
   workflow_dispatch: {}
 
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 jobs:
-  deploy:
+  verify:
+    name: Test & build image
     runs-on: ubuntu-latest
-    environment: staging
+    defaults:
+      run:
+        working-directory: hamburn-cozynights
     steps:
-      - name: Trigger deploy on server
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hamburn-cozynights/package-lock.json
+      - run: npm ci
+      - run: npm test
+      # Same Dockerfile the server builds — fail here, not on the server.
+      - run: docker build -t cozynights-ci .
+
+  deploy:
+    name: Deploy ${{ github.ref_name }}@${{ github.sha }}
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://test-cozynights.hamburn.de
+    steps:
+      - name: Deploy on server
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.STAGING_SSH_HOST }}
+          port: ${{ secrets.STAGING_SSH_PORT || 22 }}
           username: deploy
           key: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
-          # The deploy user's key is restricted to a single forced command on the
-          # server side (see deploy/README.md), so what we send here is ignored —
-          # it only exists because the action requires a script to run.
-          script: echo "triggering forced deploy command"
+          fingerprint: ${{ secrets.STAGING_SSH_FINGERPRINT }}
+          command_timeout: 20m
+          # The deploy key is a forced command on the server; only the commit
+          # SHA in this string is used (see hamburn-cozynights/deploy/).
+          script: deploy ${{ github.sha }}
