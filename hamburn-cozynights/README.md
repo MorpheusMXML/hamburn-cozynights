@@ -32,6 +32,7 @@ npm run dev            # http://localhost:5173
 | Setup, tests, schema changes           | [Local development](https://morpheusmxml.github.io/hamburn-cozynights/develop/)                   |
 | Staging, production, deploy pipeline   | [Environments & deployment](https://morpheusmxml.github.io/hamburn-cozynights/develop/deployment) |
 | Request flow, data model, routes       | [Architecture](https://morpheusmxml.github.io/hamburn-cozynights/reference/architecture)          |
+| Collections, integrity rules, templates | [Data model & templates](https://morpheusmxml.github.io/hamburn-cozynights/reference/data-model) |
 | Protections for guests and admins      | [Security & privacy](https://morpheusmxml.github.io/hamburn-cozynights/reference/security)        |
 | Google sign-in, access requests, roles | [Admin access & roles](https://morpheusmxml.github.io/hamburn-cozynights/admin/access)            |
 | Server setup and rollback (German)     | [`deploy/README.md`](deploy/README.md)                                                            |

@@ -134,6 +134,7 @@ export default defineConfig({
 					text: 'Under the hood',
 					items: [
 						{ text: 'Architecture', link: '/reference/architecture' },
+						{ text: 'Data model & templates', link: '/reference/data-model' },
 						{ text: 'Security & privacy', link: '/reference/security' }
 					]
 				}
