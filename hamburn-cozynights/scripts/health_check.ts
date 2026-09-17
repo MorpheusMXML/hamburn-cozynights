@@ -12,7 +12,8 @@ dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 const PB_URL = process.env.PB_URL || process.env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
 const PB_ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL;
 const PB_ADMIN_PASSWORD = process.env.PB_ADMIN_PASSWORD;
-const ADMIN_RULE = '@request.auth.collectionName = "admins"';
+const ADMIN_RULE =
+	'@request.auth.collectionName = "admins" && (@request.auth.role = "admin" || @request.auth.role = "superuser")';
 
 async function run() {
 	console.log('🩺 Running Hamburn Cozynights Health Check...');
@@ -58,7 +59,10 @@ async function run() {
 		if (!admins) {
 			problems.push('collection "admins" is missing');
 		} else {
-			if (admins.createRule !== null) problems.push('admins.createRule must be null');
+			if (admins.createRule !== '@request.context = "oauth2"') {
+				problems.push('admins.createRule must only allow the oauth2 sign-in');
+			}
+			if (admins.updateRule !== null) problems.push('admins.updateRule must be null');
 			if (!admins.oauth2?.enabled) {
 				console.warn(
 					'⚠️  Google admin login is disabled (set PB_GOOGLE_CLIENT_ID/PB_GOOGLE_CLIENT_SECRET for PocketBase).'

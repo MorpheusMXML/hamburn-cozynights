@@ -7,16 +7,18 @@ import {
 	ADMIN_OAUTH_COOKIE_PATH,
 	ADMIN_OAUTH_PROVIDER,
 	checkGoogleIdentity,
+	isAdminAccount,
 	toAdminSession,
 	type AdminLoginError
 } from '$lib/server/admin-auth';
 
+/** Resolves to where the browser goes next: an error reason, or the admin area / pending page. */
 async function completeSignIn(
 	locals: App.Locals,
 	url: URL,
 	providerParam: string,
 	flowCookie: string | undefined
-): Promise<AdminLoginError | null> {
+): Promise<AdminLoginError | 'approved' | 'pending'> {
 	if (providerParam !== ADMIN_OAUTH_PROVIDER) return 'failed';
 	// e.g. access_denied when the user cancels on Google's consent screen
 	if (url.searchParams.get('error')) return 'cancelled';
@@ -45,8 +47,10 @@ async function completeSignIn(
 		// The PocketBase guard hook already enforced all of this; re-check anyway.
 		const identityError = checkGoogleIdentity(auth.meta);
 		if (identityError) return identityError;
-		if (!locals.pb.authStore.isValid || !toAdminSession(auth.record)) return 'not_authorized';
-		return null;
+		if (!locals.pb.authStore.isValid || !isAdminAccount(auth.record)) return 'not_authorized';
+		// A new access request (or one not approved yet) keeps its session, so the
+		// login page can show that it is waiting for a superuser.
+		return toAdminSession(auth.record) ? 'approved' : 'pending';
 	} catch (err) {
 		if (err instanceof ClientResponseError && err.status === 403) {
 			// Rejected by the guard hook (not invited / wrong domain) or createRule.
@@ -67,12 +71,12 @@ export const GET: RequestHandler = async ({ locals, url, cookies, params }) => {
 	const flowCookie = cookies.get(ADMIN_OAUTH_COOKIE);
 	cookies.delete(ADMIN_OAUTH_COOKIE, { path: ADMIN_OAUTH_COOKIE_PATH });
 
-	const loginError = await completeSignIn(locals, url, params.provider, flowCookie);
-	if (loginError) {
-		locals.pb.authStore.clear();
-		throw redirect(303, `/admin/login?error=${loginError}`);
-	}
+	const outcome = await completeSignIn(locals, url, params.provider, flowCookie);
 
-	// hooks.server.ts writes the session cookie on the way out.
-	throw redirect(303, '/admin');
+	// hooks.server.ts writes (or clears) the session cookie on the way out.
+	if (outcome === 'approved') throw redirect(303, '/admin');
+	if (outcome === 'pending') throw redirect(303, '/admin/login');
+
+	locals.pb.authStore.clear();
+	throw redirect(303, `/admin/login?error=${outcome}`);
 };

@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
 # Admin access management for CozyNights — run on the server as root.
 #
-# This is the ONLY way to grant access to the admin area: there is no invite
-# or sign-up flow in the app. Admins sign in with Google (verified
-# @mauersegler.art Workspace accounts only); this script just puts their email
-# on the allowlist (PocketBase auth collection `admins`).
+# Admins sign in to /admin with Google (verified @mauersegler.art Workspace
+# accounts only). Access is granted here, never in the app: either invite
+# someone up front (`add`), or approve the access request their first Google
+# sign-in created (`approve`; or change the role in the PocketBase dashboard).
 #
 # Usage:
-#   scripts/cozy-admin.sh add <email> [<email> ...]   invite admin(s)
-#   scripts/cozy-admin.sh superuser <email>           PocketBase superuser (prompts for a
-#                                                     password) + app role superuser
-#   scripts/cozy-admin.sh remove <email>              revoke app access + PocketBase superuser
-#   scripts/cozy-admin.sh list                        show admins and superusers
-#   scripts/cozy-admin.sh service-account             create/rotate the app's service superuser
-#                                                     (PB_ADMIN_EMAIL/PASSWORD in .env) and
-#                                                     recreate the app container
+#   scripts/cozy-admin.sh list                          pending requests, admins, superusers
+#   scripts/cozy-admin.sh approve <email> [admin|superuser]  approve an access request
+#   scripts/cozy-admin.sh add <email> [<email> ...]     invite admin(s) up front
+#   scripts/cozy-admin.sh superuser <email>             PocketBase superuser (prompts for a
+#                                                       password) + app role superuser
+#   scripts/cozy-admin.sh remove <email>                reject/revoke app access + superuser
+#   scripts/cozy-admin.sh service-account               create/rotate the app's service superuser
+#                                                       (PB_ADMIN_EMAIL/PASSWORD in .env) and
+#                                                       recreate the app container
 #
 # Targets docker-compose.staging.yml next to this script's parent folder;
 # override with COZY_COMPOSE_FILE=/path/to/docker-compose.<env>.yml (and COZY_ENV_FILE).
@@ -34,7 +35,7 @@ die() {
 }
 
 usage() {
-	sed -n '2,23p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+	sed -n '2,/^set -euo pipefail$/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'
 	exit "${1:-0}"
 }
 
@@ -50,7 +51,8 @@ cozy() {
 		shift
 	done
 	shift
-	compose exec -T ${exec_opts[@]+"${exec_opts[@]}"} pocketbase /usr/local/bin/pocketbase cozy-admin "$@" "${PB_FLAGS[@]}"
+	# The console command prints to stderr; merge it so output can be piped.
+	compose exec -T ${exec_opts[@]+"${exec_opts[@]}"} pocketbase /usr/local/bin/pocketbase cozy-admin "$@" "${PB_FLAGS[@]}" 2>&1
 }
 
 require_running() {
@@ -99,6 +101,11 @@ case "$cmd" in
 		export COZY_SU_PASSWORD
 		cozy -e COZY_SU_PASSWORD -- superuser "$1"
 		unset COZY_SU_PASSWORD
+		;;
+	approve)
+		[[ $# -ge 1 && $# -le 2 ]] || die "usage: $0 approve <email> [admin|superuser]"
+		require_running
+		cozy -- approve "$@"
 		;;
 	remove)
 		[[ $# -eq 1 ]] || die "usage: $0 remove <email>"

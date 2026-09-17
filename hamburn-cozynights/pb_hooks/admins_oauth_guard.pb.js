@@ -10,10 +10,14 @@
 //
 // Only allowed through:
 //  - provider google,
-//  - a Google-verified email of the Workspace domain (email + `hd` claim),
-//  - that matches an admin record provisioned with scripts/cozy-admin.sh.
-// Never creates records: uninvited accounts are rejected here (createRule is
-// null as a second barrier).
+//  - a Google-verified email of the Workspace domain (email + `hd` claim).
+// Then either
+//  - the account matches an existing admin record (invited with
+//    scripts/cozy-admin.sh, or an earlier access request), or
+//  - a new record is created as an ACCESS REQUEST with role `pending`, which
+//    has no rights anywhere until a superuser approves it (PocketBase
+//    dashboard, or `scripts/cozy-admin.sh approve`). Whatever the client sent
+//    as `createData` is discarded, so nobody can request a role for themselves.
 //
 // Handlers run in isolated VMs, so everything they need is declared inside.
 
@@ -56,27 +60,35 @@ onRecordAuthWithOAuth2Request((e) => {
 		);
 	}
 
-	// PocketBase links by exact (case-sensitive) email; invites are stored
+	// PocketBase links by exact (case-sensitive) email; records are stored
 	// lowercased, so retry the lookup with the normalized address.
 	if (!e.record) {
 		try {
 			e.record = e.app.findAuthRecordByEmail('admins', email);
 			e.isNewRecord = false;
 		} catch (_) {
-			/* not invited */
+			/* no record yet: access request */
 		}
 	}
-	if (!e.record || e.isNewRecord) {
-		reject('not invited', 'This account has not been invited as an admin.');
-	}
-	// An already linked Google account (matched by its stable id) whose email
-	// has changed since must not keep access to the old invite.
-	if (String(e.record.email()).toLowerCase() !== email) {
-		reject(
-			'linked account email changed',
-			'Google account email does not match the invited admin.'
-		);
+
+	if (e.record && !e.isNewRecord) {
+		// An already linked Google account (matched by its stable id) whose email
+		// has changed since must not keep access to the old record.
+		if (String(e.record.email()).toLowerCase() !== email) {
+			reject(
+				'linked account email changed',
+				'Google account email does not match the admin account.'
+			);
+		}
+	} else {
+		e.createData = { email: email, emailVisibility: false, role: 'pending' };
 	}
 
 	e.next();
+
+	// Belt and braces: a record created by this request is never more than pending.
+	if (e.isNewRecord && e.record && e.record.getString('role') !== 'pending') {
+		e.record.set('role', 'pending');
+		e.app.save(e.record);
+	}
 }, 'admins');

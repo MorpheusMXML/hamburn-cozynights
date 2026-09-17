@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs on the server as the restricted `deploy` user (forced command via
-# authorized_keys — see docs/DEPLOYMENT.md). Deploys the `main` branch to staging.
+# authorized_keys — see deploy/README.md). Deploys the `main` branch to staging.
 set -euo pipefail
 
 cd /opt/hamburn-cozynights-staging

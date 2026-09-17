@@ -1,6 +1,6 @@
 // src/app.d.ts
 import type { TypedPocketBase } from '$lib/pocketbase-types'; // <--- IMPORTANT: Your generated types 🛠️
-import type { AdminSession } from '$lib/server/admin-auth';
+import type { AdminSession, PendingAdmin } from '$lib/server/admin-auth';
 
 declare global {
 	namespace App {
@@ -16,8 +16,10 @@ declare global {
 			// Optional field for storing the guest name session-wide 📛
 			burner_Name?: string;
 
-			// Signed-in admin (Google, invited via scripts/cozy-admin.sh), else null 🔐
+			// Signed-in, approved admin (Google sign-in), else null 🔐
 			admin: AdminSession | null;
+			// Signed in with Google, access request not approved yet (no rights) ⏳
+			pendingAdmin: PendingAdmin | null;
 		}
 
 		// interface PageData {}

@@ -8,7 +8,7 @@
 	const ERROR_MESSAGES: Record<string, { title: string; text: string }> = {
 		not_authorized: {
 			title: 'NO ACCESS 🛑',
-			text: 'This Google account has not been granted access to the control center. Ask a superuser to add you.'
+			text: 'This Google account cannot access the control center.'
 		},
 		wrong_domain: {
 			title: 'WRONG ACCOUNT 🛑',
@@ -47,7 +47,22 @@
 			<p class="subtitle">Secure access to the Hamburn Control Center</p>
 		</header>
 
-		{#if form?.message || loginError || data.backendError}
+		{#if data.pendingAdmin}
+			<div class="pending-banner" in:fade>
+				<span class="icon">⏳</span>
+				<div class="msg-content">
+					<strong>ACCESS REQUESTED</strong>
+					<p>
+						Signed in as {data.pendingAdmin.email}. A superuser has to approve your access before
+						you can enter the control center. Reload this page once you have been approved.
+					</p>
+				</div>
+			</div>
+
+			<form action="/admin/logout" method="POST" class="oauth-form">
+				<button type="submit" class="btn-secondary">USE ANOTHER ACCOUNT</button>
+			</form>
+		{:else if form?.message || loginError || data.backendError}
 			<div class="error-banner" in:fade>
 				<span class="icon">🛑</span>
 				<div class="msg-content">
@@ -64,7 +79,9 @@
 			</div>
 		{/if}
 
-		{#if data.googleEnabled}
+		{#if data.pendingAdmin}
+			<!-- waiting for approval: see banner above -->
+		{:else if data.googleEnabled}
 			<form action="?/google" method="POST" class="oauth-form">
 				<button type="submit" class="btn-ignite">SIGN IN WITH GOOGLE ⚡️</button>
 			</form>
@@ -73,7 +90,8 @@
 		{/if}
 
 		<p class="hint">
-			Access is limited to invited <strong>@{data.adminDomain}</strong> Google Workspace accounts.
+			Sign in with your <strong>@{data.adminDomain}</strong> Google Workspace account. New accounts need
+			to be approved by a superuser.
 		</p>
 	</div>
 </div>
@@ -146,6 +164,34 @@
 		margin: 0.25rem 0 0 0;
 		font-size: 0.8rem;
 		opacity: 0.8;
+	}
+
+	.pending-banner {
+		background: rgba(45, 212, 191, 0.08);
+		border: 1px solid rgba(45, 212, 191, 0.3);
+		border-radius: 12px;
+		padding: 1rem;
+		margin-bottom: 1.5rem;
+		display: flex;
+		gap: 1rem;
+		align-items: center;
+		color: #5eead4;
+	}
+
+	.btn-secondary {
+		background: transparent;
+		color: #aaa;
+		border: 1px solid #333;
+		padding: 0.75rem;
+		border-radius: 8px;
+		font-weight: 900;
+		cursor: pointer;
+		font-size: 0.8rem;
+		letter-spacing: 1px;
+	}
+	.btn-secondary:hover {
+		border-color: #666;
+		color: #fff;
 	}
 
 	.oauth-form {

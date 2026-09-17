@@ -72,21 +72,29 @@ like production.)
   and the dashboard (`/_/`) is only reachable through an SSH tunnel:
   `ssh -N -L 8091:127.0.0.1:8091 root@<server>`, then http://127.0.0.1:8091/_/.
 - **The admin area** (`/admin`) is protected by the app's own Google sign-in,
-  limited to invited `@mauersegler.art` Workspace accounts. See
+  limited to approved `@mauersegler.art` Workspace accounts. See
   [SECURITY.md](SECURITY.md#2-admin-access) for the full model.
 
 ### Admin access (run on the server as root)
 
-Admins are managed only with `scripts/cozy-admin.sh`, next to the compose file:
+Team members sign in at `/admin/login` with Google. Their first sign-in
+creates an access request (role `pending`, no rights). Approve or manage
+access with `scripts/cozy-admin.sh`, next to the compose file — or in the
+PocketBase dashboard (collection `admins`, field `role`):
 
 ```bash
 cd /opt/hamburn-cozynights-staging/hamburn-cozynights
-./scripts/cozy-admin.sh superuser max@mauersegler.art   # prompts for a password
-./scripts/cozy-admin.sh add someone@mauersegler.art     # invite an admin
-./scripts/cozy-admin.sh list
-./scripts/cozy-admin.sh remove someone@mauersegler.art  # revoke immediately
-./scripts/cozy-admin.sh service-account                 # create/rotate PB_ADMIN_* in .env
+./scripts/cozy-admin.sh list                               # pending requests, admins, superusers
+./scripts/cozy-admin.sh approve someone@mauersegler.art    # approve a request (role admin)
+./scripts/cozy-admin.sh add someone@mauersegler.art        # or invite up front
+./scripts/cozy-admin.sh superuser max@mauersegler.art      # prompts for a password
+./scripts/cozy-admin.sh remove someone@mauersegler.art     # reject/revoke immediately
+./scripts/cozy-admin.sh service-account                    # create/rotate PB_ADMIN_* in .env
 ```
+
+New requests can be announced in a chat: set `COZY_ADMIN_WEBHOOK_URL`
+(Telegram, Slack, Google Chat or Discord webhook, see `.env.example`) and run
+`docker compose -f docker-compose.staging.yml up -d pocketbase`.
 
 - `superuser` sets a PocketBase superuser (dashboard login with that password)
   **and** grants the app role `superuser`. In the app, everyone signs in with

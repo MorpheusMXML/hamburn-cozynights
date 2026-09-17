@@ -11,6 +11,7 @@ services:
       # Ohne Werte startet PocketBase normal, nur der Google-Login ist dann aus.
       PB_GOOGLE_CLIENT_ID: ${PB_GOOGLE_CLIENT_ID:-}
       PB_GOOGLE_CLIENT_SECRET: ${PB_GOOGLE_CLIENT_SECRET:-}
+      COZY_ADMIN_WEBHOOK_URL: ${COZY_ADMIN_WEBHOOK_URL:-}
     ports:
       # Nur lokal erreichbar (Docker umgeht sonst ufw)
       - '127.0.0.1:8090:8090'

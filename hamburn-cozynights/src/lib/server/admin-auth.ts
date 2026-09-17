@@ -1,11 +1,13 @@
 /**
  * Admin access model.
  *
- * The admin area is only for records of the PocketBase auth collection
- * `admins`, which are provisioned exclusively on the server with
- * `scripts/cozy-admin.sh` (no invite or sign-up flow exists in the app).
- * Sign-in is Google OAuth2 only, restricted to verified Google Workspace
- * accounts of {@link ADMIN_EMAIL_DOMAIN}. PocketBase enforces the same rules in
+ * The admin area is only for approved records (role `admin` or `superuser`)
+ * of the PocketBase auth collection `admins`. Sign-in is Google OAuth2 only,
+ * restricted to verified Google Workspace accounts of {@link ADMIN_EMAIL_DOMAIN}.
+ * A first sign-in without an invite creates an access request (role
+ * `pending`) that a superuser approves on the server — with
+ * `scripts/cozy-admin.sh approve` or in the PocketBase dashboard; there is no
+ * approval or invite UI in the app. PocketBase enforces the same rules in
  * `pb_hooks/admins_oauth_guard.pb.js`; the checks here are defense in depth
  * and also reject sessions of any other auth collection (`users`,
  * `_superusers`).
@@ -21,6 +23,12 @@ export const ADMIN_OAUTH_COOKIE = 'admin_oauth';
 export const ADMIN_OAUTH_COOKIE_PATH = '/auth/callback';
 
 export type AdminRole = 'superuser' | 'admin';
+
+/** A signed-in account that requested access and awaits approval. */
+export interface PendingAdmin {
+	email: string;
+	name: string;
+}
 
 export interface AdminSession {
 	id: string;
@@ -40,22 +48,31 @@ export type AdminLoginError =
 	| 'unavailable'
 	| 'failed';
 
-const ROLES: readonly string[] = ['superuser', 'admin'];
+const APPROVED_ROLES: readonly string[] = ['superuser', 'admin'];
+const PENDING_ROLE = 'pending';
 
 export function isAdminDomainEmail(email: unknown): boolean {
 	return typeof email === 'string' && email.trim().toLowerCase().endsWith(`@${ADMIN_EMAIL_DOMAIN}`);
 }
 
+type AuthRecord = { [key: string]: any } | null | undefined;
+
+/** An `admins` record of the allowed domain (approved or pending). */
+export function isAdminAccount(record: AuthRecord): boolean {
+	return (
+		!!record &&
+		record.collectionName === ADMIN_COLLECTION &&
+		isAdminDomainEmail(record.email) &&
+		(APPROVED_ROLES.includes(record.role) || record.role === PENDING_ROLE)
+	);
+}
+
 /**
  * Derives the admin session from an authenticated PocketBase record, or null if
- * the record is not an admin of the allowed domain with a known role.
+ * the record is not an approved admin of the allowed domain.
  */
-export function toAdminSession(
-	record: { [key: string]: any } | null | undefined
-): AdminSession | null {
-	if (!record || record.collectionName !== ADMIN_COLLECTION) return null;
-	if (!isAdminDomainEmail(record.email)) return null;
-	if (!ROLES.includes(record.role)) return null;
+export function toAdminSession(record: AuthRecord): AdminSession | null {
+	if (!record || !isAdminAccount(record) || !APPROVED_ROLES.includes(record.role)) return null;
 
 	const role = record.role as AdminRole;
 	return {
@@ -64,6 +81,15 @@ export function toAdminSession(
 		name: typeof record.name === 'string' ? record.name : '',
 		role,
 		isSuperuser: role === 'superuser'
+	};
+}
+
+/** The access request behind a signed-in, not yet approved admin account. */
+export function toPendingAdmin(record: AuthRecord): PendingAdmin | null {
+	if (!record || !isAdminAccount(record) || record.role !== PENDING_ROLE) return null;
+	return {
+		email: String(record.email).toLowerCase(),
+		name: typeof record.name === 'string' ? record.name : ''
 	};
 }
 

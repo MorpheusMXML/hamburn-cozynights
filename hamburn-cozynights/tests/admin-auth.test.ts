@@ -17,7 +17,7 @@ vi.mock('$lib/server/pocketbase', () => ({
 	getAdminPb: vi.fn(async () => ({ authStore: { isValid: true } }))
 }));
 
-import { checkGoogleIdentity, toAdminSession } from '../src/lib/server/admin-auth';
+import { checkGoogleIdentity, toAdminSession, toPendingAdmin } from '../src/lib/server/admin-auth';
 import { handle } from '../src/hooks.server';
 import { actions as loginActions } from '../src/routes/admin/login/+page.server';
 import { GET as oauthCallback } from '../src/routes/auth/callback/[provider]/+server';
@@ -81,6 +81,18 @@ describe('toAdminSession', () => {
 		expect(toAdminSession({ ...ADMIN_RECORD, email: 'max@mauersegler.art.evil.com' })).toBeNull();
 		expect(toAdminSession({ ...ADMIN_RECORD, role: '' })).toBeNull();
 		expect(toAdminSession(null)).toBeNull();
+	});
+});
+
+describe('access requests (role pending)', () => {
+	const pending = { ...ADMIN_RECORD, role: 'pending' };
+
+	it('are not admin sessions but are recognized as pending', () => {
+		expect(toAdminSession(pending)).toBeNull();
+		expect(toPendingAdmin(pending)).toEqual({ email: 'max@mauersegler.art', name: 'Max' });
+		expect(toPendingAdmin(ADMIN_RECORD)).toBeNull();
+		expect(toPendingAdmin({ ...pending, collectionName: 'users' })).toBeNull();
+		expect(toPendingAdmin({ ...pending, email: 'x@gmail.com' })).toBeNull();
 	});
 });
 
@@ -196,6 +208,39 @@ describe('hooks.server handle', () => {
 		const setCookie = response.headers.get('set-cookie') || '';
 		expect(setCookie).toContain('pb_auth=');
 		expect(setCookie).toContain('HttpOnly');
+	});
+
+	it('keeps a pending session (for the waiting page) without any admin rights', async () => {
+		const pending = { ...ADMIN_RECORD, role: 'pending' };
+		refreshSpy.mockImplementation(async function (this: any) {
+			this.client.authStore.save(fakeToken(), pending);
+			return { token: '', record: pending } as any;
+		});
+		const resolve = vi.fn(async () => new Response('ok'));
+
+		const post = makeEvent('/admin', { method: 'POST', cookie: authCookie(pending) });
+		expect((await handle({ event: post, resolve })).status).toBe(403);
+		expect(post.locals.admin).toBeNull();
+		expect(post.locals.pendingAdmin?.email).toBe('max@mauersegler.art');
+
+		const page = makeEvent('/admin/login', { cookie: authCookie(pending) });
+		const response = await handle({ event: page, resolve });
+		expect(response.headers.get('set-cookie')).toContain('pb_auth=%7B');
+	});
+
+	it('lets an approval take effect on the next request (role re-read on refresh)', async () => {
+		refreshSpy.mockImplementation(async function (this: any) {
+			this.client.authStore.save(fakeToken(), { ...ADMIN_RECORD, role: 'admin' });
+			return {} as any;
+		});
+		const event = makeEvent('/admin', {
+			method: 'POST',
+			cookie: authCookie({ ...ADMIN_RECORD, role: 'pending' })
+		});
+		const resolve = vi.fn(async () => new Response('ok'));
+		await handle({ event, resolve });
+		expect(event.locals.admin?.role).toBe('admin');
+		expect(resolve).toHaveBeenCalled();
 	});
 
 	it('drops the session when PocketBase rejects the token (e.g. admin removed)', async () => {
@@ -317,6 +362,25 @@ describe('Google sign-in flow', () => {
 		);
 		expect(cookies.delete).toHaveBeenCalledWith('admin_oauth', { path: '/auth/callback' });
 		expect(locals.pb.authStore.isValid).toBe(true);
+	});
+
+	it('keeps a new access request signed in and sends it to the waiting page', async () => {
+		const pendingLocals = makeLocals({
+			authWithOAuth2Code: vi.fn(async function () {
+				pendingLocals.locals.pb.authStore.isValid = true;
+				return {
+					record: { ...ADMIN_RECORD, role: 'pending' },
+					meta: {
+						email: 'max@mauersegler.art',
+						rawUser: { email_verified: true, hd: 'mauersegler.art' }
+					}
+				};
+			})
+		});
+		expect(
+			await callback(pendingLocals.locals, 'state=state-123&code=abc', flowCookie).result
+		).toEqual({ status: 303, location: '/admin/login' });
+		expect(pendingLocals.locals.pb.authStore.isValid).toBe(true);
 	});
 
 	it('rejects a state mismatch or a missing flow cookie', async () => {

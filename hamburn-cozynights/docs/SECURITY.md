@@ -7,21 +7,26 @@ The Hamburn Cozynights system is designed with a **Privacy-First** approach to p
 Since the app uses booking codes instead of traditional user accounts for guests, we use a "Trusted Proxy" pattern to manage permissions.
 
 - **Guest Context (`locals.pb`):** Represents an unauthenticated public visitor. This connection has very limited rights and can only see non-sensitive data (like house names and map coordinates).
-- **Admin Context (`locals.pb` with an admin token):** After Google sign-in, the same per-request connection carries the admin's PocketBase token. Its rights come from the collection rules (`@request.auth.collectionName = "admins"`).
+- **Admin Context (`locals.pb` with an admin token):** After Google sign-in, the same per-request connection carries the admin's PocketBase token. Its rights come from the collection rules (approved `admins` records only, see section 2).
 - **System Context (`locals.adminPb`):** A dedicated service-account superuser connection on the server side, authenticated with `PB_ADMIN_EMAIL` / `PB_ADMIN_PASSWORD` from `.env`. It is used for orders (ticket codes, PII) and guest bookings.
 
 **Why it's safe:** PocketBase is never exposed to the browser or the internet (no public `/pb/` route; the dashboard is only reachable via SSH tunnel). The "Master Key" (`adminPb`) never leaves the server. The browser only receives the final HTML or specific success/error messages, and page data is mapped to the fields the page needs (e.g. the room page never ships other guests' orders).
 
 ## 2. Admin access
 
-- **Who:** only records of the PocketBase auth collection `admins`, with role `superuser` or `admin`.
-- **How they get there:** only on the server, with `scripts/cozy-admin.sh` (`add`, `superuser`, `remove`, `list`). There is **no** sign-up, invite or password login in the app, and the collection's `createRule` is `null`, so the PocketBase API cannot create admins either (not even via OAuth2).
-- **Sign-in:** Google OAuth2 only. Allowed are Google-verified accounts of the Workspace domain `mauersegler.art` (email domain + `hd` claim) that match an invited record. Enforced three times:
-  1. `pb_hooks/admins_oauth_guard.pb.js` rejects everything else before PocketBase issues a token,
+- **Who:** only records of the PocketBase auth collection `admins` with role `superuser` or `admin`.
+- **How they get there** (never through the app):
+  - invited up front on the server: `scripts/cozy-admin.sh add <email>`, or
+  - **access request**: the first Google sign-in of a verified `@mauersegler.art` Workspace account creates a record with role `pending`, which has **no rights anywhere**. A superuser approves it with `scripts/cozy-admin.sh approve <email>` or by changing the role in the PocketBase dashboard. Optionally a chat webhook (`COZY_ADMIN_WEBHOOK_URL`) announces new requests.
+  - The collection's `createRule` only allows the OAuth2 sign-in context (the records API cannot create admins), the guard hook discards any client-supplied `createData` and forces `pending`, and `updateRule` is `null`, so nobody can approve themselves.
+- **Sign-in:** Google OAuth2 only. Allowed are Google-verified accounts of the Workspace domain `mauersegler.art` (email domain + `hd` claim). Enforced three times:
+  1. `pb_hooks/admins_oauth_guard.pb.js` rejects everything else before PocketBase issues a token (and rejects a linked Google account whose email changed),
   2. the OAuth callback re-checks the Google identity and the record (`src/lib/server/admin-auth.ts`),
-  3. `hooks.server.ts` accepts only `admins` sessions, re-validates the token against PocketBase on every request and refuses admin form actions/API calls without one.
+  3. `hooks.server.ts` accepts only approved `admins` sessions, re-reads the role from PocketBase on every request and refuses admin form actions/API calls without one. Pending accounts only see a "waiting for approval" page.
+- **API rules:** structural writes require `@request.auth.collectionName = "admins" && (@request.auth.role = "admin" || @request.auth.role = "superuser")`.
 - **CSRF:** the OAuth `state` is checked against an httpOnly cookie (PocketBase itself does not check it); form actions use SvelteKit's origin check.
-- **Session:** `pb_auth` cookie, `HttpOnly`, `Secure`, `SameSite=Lax`; token lifetime 3 days, refreshed on every request. `cozy-admin.sh remove` invalidates the session on the next request.
+- **Session:** `pb_auth` cookie, `HttpOnly`, `Secure`, `SameSite=Lax`; token lifetime 3 days, refreshed on every request. Approvals, role changes and `cozy-admin.sh remove` take effect on the next request.
+- **E-mail:** not needed for admin login (Google verifies the address, admins have no password). The PocketBase dashboard password of a superuser is reset with `cozy-admin.sh superuser` on the server.
 - **Roles:** `superuser` additionally may clear all bookings and import a location template. A `superuser` also has a PocketBase dashboard login (password set via the script).
 - **Default `users` collection:** public sign-up is disabled (`createRule` null); its records have no rights.
 
@@ -43,7 +48,7 @@ We use field-level encryption to ensure that even if the database is compromised
 | **Entering a ticket code**          | The code must match an existing order. Failed attempts are rate limited per IP. The code is kept in an httpOnly cookie.            |
 | **Booking a Bed**                   | One ticket code = one booking: booking another bed moves the booking. Serialized per ticket and per bed, so parallel requests can't double-book. |
 | **Releasing a Spot**                | Server looks up the order from the session cookie. A guest can **only** release their own bed.                                    |
-| **Admin Actions**                   | Invited `admins` via Google sign-in (see section 2).                                                                              |
+| **Admin Actions**                   | Approved `admins` (role `admin`/`superuser`) via Google sign-in (see section 2).                                                  |
 | **Clear all bookings / import template** | `superuser` role only. Ticket codes (orders) are never deleted by these actions.                                             |
 
 ## 5. Bed Locking & Deactivation

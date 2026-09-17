@@ -8,8 +8,10 @@ import {
 	ADMIN_COLLECTION,
 	AUTH_COOKIE,
 	isAdminPath,
+	isAdminAccount,
 	isPublicAdminPath,
-	toAdminSession
+	toAdminSession,
+	toPendingAdmin
 } from '$lib/server/admin-auth';
 
 export const handle: Handle = async ({ event, resolve }) => {
@@ -23,9 +25,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.orderNumber = event.cookies.get('bookingCode') || null;
 
 	// 3. Admin session. Only records of the `admins` collection count; the token
-	//    is re-validated against PocketBase on every request, so revoking an
-	//    admin (scripts/cozy-admin.sh remove) takes effect immediately.
+	//    is re-validated against PocketBase on every request, so approving,
+	//    changing or revoking an account (scripts/cozy-admin.sh, PocketBase
+	//    dashboard) takes effect on the next request. A pending access request
+	//    keeps its session (to show "waiting for approval") but has no rights.
 	event.locals.admin = null;
+	event.locals.pendingAdmin = null;
 	const hadAuthCookie = event.cookies.get(AUTH_COOKIE) !== undefined;
 
 	if (hadAuthCookie) {
@@ -34,16 +39,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 			AUTH_COOKIE
 		);
 
-		if (event.locals.pb.authStore.isValid && toAdminSession(event.locals.pb.authStore.record)) {
+		if (event.locals.pb.authStore.isValid && isAdminAccount(event.locals.pb.authStore.record)) {
 			try {
 				await event.locals.pb.collection(ADMIN_COLLECTION).authRefresh();
 				event.locals.admin = toAdminSession(event.locals.pb.authStore.record);
+				event.locals.pendingAdmin = toPendingAdmin(event.locals.pb.authStore.record);
 			} catch {
 				// revoked, expired or PocketBase unreachable
 			}
 		}
 
-		if (!event.locals.admin) event.locals.pb.authStore.clear();
+		if (!event.locals.admin && !event.locals.pendingAdmin) event.locals.pb.authStore.clear();
 	}
 
 	// 4. The admin area requires an admin session. Page and data requests reach

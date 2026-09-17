@@ -1,21 +1,28 @@
 /// <reference path="../pb_data/types.d.ts" />
 //
-// 1. `cozy-admin` console command: the ONLY way to grant admin access.
-//    There is intentionally no API or UI for inviting admins or signing up.
+// 1. `cozy-admin` console command to grant and revoke admin access on the
+//    server. Access is granted either up front (`add`) or by approving an
+//    access request that a @mauersegler.art Google sign-in created (`approve`;
+//    alternatively change the record's role in the PocketBase dashboard).
+//    There is intentionally no invite/approval UI in the app.
 //    Use it through the host wrapper scripts/cozy-admin.sh, which also takes
 //    care of the required --dir/--hooksDir flags and of reading passwords.
 //
-//      cozy-admin add <email>              invite an admin (Google login)
-//      cozy-admin superuser <email>        PocketBase superuser (password from
-//                                          $COZY_SU_PASSWORD) + app role superuser
-//      cozy-admin remove <email>           revoke app access and PocketBase superuser
-//      cozy-admin list                     show admins and PocketBase superusers
-//      cozy-admin service-account <email>  create/rotate the app's service superuser
-//                                          (password from $COZY_SU_PASSWORD)
+//      cozy-admin add <email>                     invite (or approve) an admin
+//      cozy-admin approve <email> [admin|superuser]  approve an access request
+//      cozy-admin superuser <email>               PocketBase superuser (password from
+//                                                 $COZY_SU_PASSWORD) + app role superuser
+//      cozy-admin remove <email>                  revoke/reject: app access + PocketBase superuser
+//      cozy-admin list                            show pending requests, admins, superusers
+//      cozy-admin service-account <email>         create/rotate the app's service superuser
+//                                                 (password from $COZY_SU_PASSWORD)
 //
 // 2. On every start, sync the Google OAuth client of the `admins` collection
 //    from PB_GOOGLE_CLIENT_ID / PB_GOOGLE_CLIENT_SECRET (so rotating the secret
 //    is an .env change + restart, not a new migration).
+//
+// 3. When a sign-in creates an access request, post a notification to
+//    COZY_ADMIN_WEBHOOK_URL (optional; Telegram, Slack, Google Chat, Discord).
 
 const ADMIN_DOMAIN = 'mauersegler.art';
 const MIN_SUPERUSER_PASSWORD = 12;
@@ -104,14 +111,14 @@ const cozyAdmin = new Command({
 cozyAdmin.addCommand(
 	new Command({
 		use: 'add <email>',
-		short: 'Invite an admin (signs in with Google)',
+		short: 'Invite an admin (signs in with Google); approves a pending request',
 		run: (cmd, args) => {
 			if (args.length !== 1) cozyFail(cmd, 'usage: cozy-admin add <email>');
 			const collection = cozyAdminsCollection(cmd);
 			const email = cozyNormalizeEmail(cmd, args[0], true);
 
 			const existing = cozyFind('admins', email);
-			if (existing) {
+			if (existing && existing.getString('role') !== 'pending') {
 				cmd.println(
 					'unchanged: ' + email + ' already has access (role ' + existing.getString('role') + ')'
 				);
@@ -119,8 +126,38 @@ cozyAdmin.addCommand(
 			}
 			cozyUpsertAdmin(collection, email, 'admin');
 			cmd.println(
-				'invited: ' + email + ' (role admin) — can now sign in at /admin/login with Google'
+				(existing ? 'approved: ' : 'invited: ') +
+					email +
+					' (role admin) — can sign in at /admin/login with Google'
 			);
+		}
+	})
+);
+
+cozyAdmin.addCommand(
+	new Command({
+		use: 'approve <email> [admin|superuser]',
+		short: 'Approve an access request (default role admin)',
+		run: (cmd, args) => {
+			if (args.length < 1 || args.length > 2) {
+				cozyFail(cmd, 'usage: cozy-admin approve <email> [admin|superuser]');
+			}
+			const collection = cozyAdminsCollection(cmd);
+			const email = cozyNormalizeEmail(cmd, args[0], true);
+			const role = args.length > 1 ? String(args[1]) : 'admin';
+			if (role !== 'admin' && role !== 'superuser') {
+				cozyFail(cmd, 'role must be admin or superuser');
+			}
+			if (!cozyFind('admins', email)) {
+				cozyFail(cmd, 'no access request from ' + email + ' (use `add` to invite)');
+			}
+			cozyUpsertAdmin(collection, email, role);
+			cmd.println('approved: ' + email + ' (role ' + role + ')');
+			if (role === 'superuser' && !cozyFind('_superusers', email)) {
+				cmd.println(
+					'  note: no PocketBase dashboard login — use `superuser ' + email + '` to set a password'
+				);
+			}
 		}
 	})
 );
@@ -200,28 +237,35 @@ cozyAdmin.addCommand(
 cozyAdmin.addCommand(
 	new Command({
 		use: 'list',
-		short: 'List admins and PocketBase superusers',
+		short: 'List access requests, admins and PocketBase superusers',
 		run: (cmd, args) => {
 			cozyAdminsCollection(cmd);
 			const admins = $app.findAllRecords('admins');
 			const superusers = $app.findAllRecords('_superusers');
 			const superuserEmails = superusers.map((s) => s.email());
+			const describe = (a) =>
+				'  ' +
+				a.email() +
+				(a.getString('name') ? ' (' + a.getString('name') + ')' : '') +
+				'  role=' +
+				a.getString('role') +
+				'  google=' +
+				($app.findAllExternalAuthsByRecord(a).length > 0 ? 'linked' : 'not signed in yet') +
+				'  pb-superuser=' +
+				(superuserEmails.indexOf(a.email()) >= 0 ? 'yes' : 'no') +
+				'  since=' +
+				String(a.getDateTime('created').string()).slice(0, 16);
+
+			const pending = admins.filter((a) => a.getString('role') === 'pending');
+			const approved = admins.filter((a) => a.getString('role') !== 'pending');
+
+			cmd.println('PENDING ACCESS REQUESTS (approve: cozy-admin.sh approve <email>)');
+			if (pending.length === 0) cmd.println('  (none)');
+			for (const a of pending) cmd.println(describe(a));
 
 			cmd.println('APP ADMINS (Google login at /admin/login)');
-			if (admins.length === 0) cmd.println('  (none)');
-			for (const a of admins) {
-				const linked = $app.findAllExternalAuthsByRecord(a).length > 0;
-				cmd.println(
-					'  ' +
-						a.email() +
-						'  role=' +
-						a.getString('role') +
-						'  google=' +
-						(linked ? 'linked' : 'not signed in yet') +
-						'  pb-superuser=' +
-						(superuserEmails.indexOf(a.email()) >= 0 ? 'yes' : 'no')
-				);
-			}
+			if (approved.length === 0) cmd.println('  (none)');
+			for (const a of approved) cmd.println(describe(a));
 
 			const adminEmails = admins.map((a) => a.email());
 			const others = superusers.filter((s) => adminEmails.indexOf(s.email()) < 0);
@@ -241,7 +285,7 @@ cozyAdmin.addCommand(
 				cozyFail(cmd, 'usage: COZY_SU_PASSWORD=... cozy-admin service-account <email>');
 			cozyAdminsCollection(cmd);
 			const email = cozyNormalizeEmail(cmd, args[0], false);
-			if (cozyFind('admins', email)) {
+			if (email.endsWith('@' + ADMIN_DOMAIN) || cozyFind('admins', email)) {
 				cozyFail(cmd, email + ' is a personal admin account — use a dedicated service email');
 			}
 			const created = cozyUpsertSuperuser(email, cozyPasswordFromEnv(cmd));
@@ -302,3 +346,44 @@ onBootstrap((e) => {
 	e.app.save(collection);
 	console.log('[cozy-admin] Google OAuth client for admins updated from environment');
 });
+
+onRecordAfterCreateSuccess((e) => {
+	e.next();
+
+	const url = $os.getenv('COZY_ADMIN_WEBHOOK_URL');
+	if (!url || e.record.getString('role') !== 'pending') return;
+
+	const email = e.record.email();
+	const name = e.record.getString('name');
+	const text =
+		'🛎️ CozyNights: neue Admin-Zugangsanfrage von ' +
+		(name ? name + ' <' + email + '>' : email) +
+		'\nFreigeben: ./scripts/cozy-admin.sh approve ' +
+		email +
+		'\n(oder PocketBase-Dashboard → admins → role)';
+
+	// Payload shape per service; Google Chat rejects unknown fields.
+	let body = { text: text };
+	if (url.indexOf('https://api.telegram.org/') === 0) {
+		const match = /[?&]chat_id=([^&]+)/.exec(url);
+		body = { chat_id: match ? decodeURIComponent(match[1]) : '', text: text };
+	} else if (/^https:\/\/(discord|discordapp)\.com\//.test(url)) {
+		body = { content: text };
+	}
+
+	try {
+		const res = $http.send({
+			url: url,
+			method: 'POST',
+			body: JSON.stringify(body),
+			headers: { 'content-type': 'application/json' },
+			timeout: 5
+		});
+		if (res.statusCode >= 300) {
+			console.warn('[cozy-admin] access request webhook answered HTTP ' + res.statusCode);
+		}
+	} catch (err) {
+		// A notification problem must never break the sign-in.
+		console.warn('[cozy-admin] access request webhook failed: ' + err);
+	}
+}, 'admins');

@@ -9,9 +9,10 @@ import {
 	ADMIN_OAUTH_PROVIDER
 } from '$lib/server/admin-auth';
 
-// Admin sign-in is Google only. There is deliberately no password login, no
-// registration and no invite flow here: admins are provisioned on the server
-// with scripts/cozy-admin.sh.
+// Admin sign-in is Google only. There is deliberately no password login and no
+// invite/approval UI here: a first sign-in of a @mauersegler.art Workspace
+// account creates an access request, which a superuser approves on the server
+// (scripts/cozy-admin.sh approve, or the PocketBase dashboard).
 
 async function getGoogleProvider(locals: App.Locals) {
 	const methods = await locals.pb.collection(ADMIN_COLLECTION).listAuthMethods();
@@ -32,6 +33,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		googleEnabled,
 		backendError,
 		adminDomain: ADMIN_EMAIL_DOMAIN,
+		pendingAdmin: locals.pendingAdmin,
 		error: url.searchParams.get('error')
 	};
 };

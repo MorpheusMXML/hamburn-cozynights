@@ -14,6 +14,9 @@ services:
       # interpolated from .env — see .env.example and docs/DEPLOYMENT.md.
       PB_GOOGLE_CLIENT_ID: ${PB_GOOGLE_CLIENT_ID:?set PB_GOOGLE_CLIENT_ID in .env}
       PB_GOOGLE_CLIENT_SECRET: ${PB_GOOGLE_CLIENT_SECRET:?set PB_GOOGLE_CLIENT_SECRET in .env}
+      # Optional: chat webhook notified about new admin access requests
+      # (Telegram / Slack / Google Chat / Discord), see .env.example.
+      COZY_ADMIN_WEBHOOK_URL: ${COZY_ADMIN_WEBHOOK_URL:-}
       # NOTE: never pass PB_ADMIN_EMAIL/PB_ADMIN_PASSWORD to this container —
       # the image's entrypoint would re-upsert that superuser on every start,
       # which revokes the app's cached service-account token.
