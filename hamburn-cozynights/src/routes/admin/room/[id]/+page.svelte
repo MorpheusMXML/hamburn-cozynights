@@ -413,6 +413,7 @@
 		border-radius: 12px;
 		padding: 1.5rem;
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 1rem;
 		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -483,9 +484,15 @@
 		color: #444;
 	}
 
+	/* Own row below the label: the four buttons don't fit next to it in a card of
+	   the grid's minimum width, and the card would clip them. */
 	.bed-actions {
 		display: flex;
 		gap: 0.75rem;
+		flex-basis: 100%;
+		justify-content: flex-end;
+		padding-top: 1rem;
+		border-top: 1px solid #222;
 	}
 	.btn-icon {
 		background: #1a1a1a;

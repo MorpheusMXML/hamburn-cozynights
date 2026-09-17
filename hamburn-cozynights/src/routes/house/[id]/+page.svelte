@@ -17,7 +17,7 @@
 			{/if}
 		</div>
 		<h1>{data.house.name}</h1>
-		<p class="subtitle">Choose a house for your night</p>
+		<p class="subtitle">Choose a room for your night</p>
 	</header>
 
 	{#if data.userBedId}

@@ -67,7 +67,7 @@ Every house as a card with its occupancy badge (*n spots free*, *Fully booked* o
 
 - Click a card to manage its rooms.
 - <kbd>VANISH 🌪️</kbd> deletes the house after a confirmation.
-- <kbd>RENAME ✏️</kbd> and the **Ignite New House** card prepare the editor sidebar, which appears once you switch to <kbd>🗺️ MAP VIEW</kbd>. A new house starts in the middle of the map (500/350), ready to be dragged into place.
+- <kbd>RENAME ✏️</kbd> and the **Ignite New House** card switch to the map view and open the editor sidebar there. A new house starts in the middle of the map (500/350), ready to be dragged into place.
 
 ## During Live Booking
 

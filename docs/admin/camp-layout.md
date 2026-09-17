@@ -10,7 +10,7 @@ The camp is a simple tree: **houses** on the map contain **rooms**, and rooms co
 ### Create a house
 
 - **Map view:** click an empty place on the map. In the *GENERATE SANCTUARY* sidebar enter a name (**UNIT DESIGNATION**) and the **INITIAL CAPACITY (BEDS)**, then press <kbd>IGNITE HOUSE ✨</kbd>.
-- **List view:** click **Ignite New House**, then switch to <kbd>🗺️ MAP VIEW</kbd> where the same sidebar is waiting. The house starts in the middle of the map; drag it into place afterwards.
+- **List view:** click **Ignite New House**. CozyNights switches to the map view and opens the same sidebar. The house starts in the middle of the map; drag it into place afterwards.
 
 CozyNights creates the house, a first room called **Main Module** (#1), and spots **B1 … Bn** for the capacity you entered. These first spots are **active right away**.
 
@@ -19,7 +19,7 @@ CozyNights creates the house, a first room called **Main Module** (#1), and spot
 | Task | How |
 | --- | --- |
 | Move | Drag the pin in map view. Saved when you let go. Houses keep a small distance from each other. |
-| Rename | Click the house in map view → change the name → <kbd>SYNC MODULE ✨</kbd>. |
+| Rename | Click the house in map view, or <kbd>RENAME ✏️</kbd> on its card in list view → change the name → <kbd>SYNC MODULE ✨</kbd>. |
 | Delete | <kbd>VANISH FROM PLAYA 🌪️</kbd> in the sidebar or <kbd>VANISH 🌪️</kbd> on the card, then confirm. |
 
 > [!CAUTION] Deleting is final
