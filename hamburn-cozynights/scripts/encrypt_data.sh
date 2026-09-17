@@ -9,4 +9,4 @@ cd "$(dirname "$0")/.."
 tar -cz pb_data | gpg -c -o pb_data.tar.gz.gpg
 
 echo "Sensitive data encrypted to $(pwd)/pb_data.tar.gz.gpg"
-echo "Remember: The physical pb_data folder is ignored by git, but the encrypted .gpg file is not (yet)."
+echo "Do NOT commit it (public repo). Share it privately, e.g. as a Vaultwarden attachment."

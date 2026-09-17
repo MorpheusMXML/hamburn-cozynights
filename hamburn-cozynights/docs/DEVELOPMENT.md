@@ -69,7 +69,7 @@ Since `pb_data` is ignored by Git, use these scripts to manage your database sta
   ./scripts/decrypt_data.sh
   ```
 
-**Important:** Always run the backup script and commit the resulting `.gpg` file before finishing your session if you've made database changes you want to save.
+**Important:** `pb_data.tar.gz.gpg` is git-ignored and must never be committed — the repository is public. Share it privately (e.g. as a Vaultwarden attachment) and use a long random passphrase.
 
 ## 5. Auto-Documentation Generation
 

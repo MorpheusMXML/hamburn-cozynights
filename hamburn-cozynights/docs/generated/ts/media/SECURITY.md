@@ -17,7 +17,7 @@ We use field-level encryption to ensure that even if the database is compromised
 
 - **AES-256-GCM Encryption:** Personal data like `burner_name` and `customer_name` are stored as encrypted ciphertext in the `orders` collection.
 - **Deterministic Hashing:** We use `order_hash` (a SHA-256 HMAC of the booking code salted with your `ENCRYPTION_KEY`) for database lookups. This allows us to find an order without storing the raw booking code in a searchable way or exposing it in the database schema.
-- **GPG Backups:** The local database folder (`pb_data`) is ignored by Git. We use GPG-encrypted archives (`pb_data.tar.gz.gpg`) for backups and sharing the database state between developers.
+- **GPG Backups:** The local database folder (`pb_data`) is ignored by Git. GPG-encrypted archives (`pb_data.tar.gz.gpg`) are used to back up and share database state between developers — **never commit them** (the repository is public; anyone could brute-force the passphrase offline). Share them through a private channel instead, e.g. a Vaultwarden attachment.
 
 ## 3. Rights Management
 
