@@ -64,8 +64,8 @@ Open a room by clicking its card on the house page.
 | --- | --- |
 | 🟢 **VACANT ✨** | *Available*: they can book it. |
 | 🔴 **CLAIMED 👥** | *Occupied* with the guest's burner name. |
-| **LOCKED 🔒** | *Not available · Reserved by the crew*. |
-| ⚪️ **INACTIVE 🧊** | *Not available · Reserved by the crew* in its room. It isn't counted as a spot on the map or the house page, the roulette never picks it, and nobody can book it. |
+| **LOCKED 🔒** | *Not available · Reserved by the crew*. It still counts as a spot, but never as a free one. |
+| ⚪️ **INACTIVE 🧊** | *Not available · Reserved by the crew* in its room. It isn't counted in any occupancy numbers (map, Control Center, house pages), the roulette never picks it, and nobody can book it. |
 
 ### Spot actions
 

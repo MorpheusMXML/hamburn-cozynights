@@ -2,6 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
 import { getBookingSettings } from '$lib/server/settings';
+import { countSpots } from '$lib/occupancy';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	// Security check 🛡️ (runs in parallel with the layout load)
@@ -27,20 +28,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		// 4. Fetch app settings for booking status
 		const settings = await getBookingSettings(locals.pb);
 
-		// 5. Map statistics 📊
-		const roomsWithStats = rooms.map((room) => {
-			const roomBeds = beds.filter((b) => b.room === room.id && b.enabled !== false);
-			const occupied = roomBeds.filter((b) => b.occupied).length;
-
-			return {
-				...room,
-				stats: {
-					total: roomBeds.length,
-					occupied: occupied,
-					free: roomBeds.length - occupied
-				}
-			};
-		});
+		// 5. Map statistics 📊 (deactivated spots don't count, locked ones aren't free)
+		const roomsWithStats = rooms.map((room) => ({
+			...room,
+			stats: countSpots(beds.filter((b) => b.room === room.id))
+		}));
 
 		return { house, rooms: roomsWithStats, isBookingActive: settings.isBookingActive };
 	} catch (err) {

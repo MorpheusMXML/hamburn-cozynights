@@ -9,6 +9,7 @@ import type {
 import { APP_SETTINGS_ID } from '$lib/server/constants';
 import { getBookingSettings } from '$lib/server/settings';
 import { berlinLocalToIso } from '$lib/time';
+import { countSpots } from '$lib/occupancy';
 
 /** Clears the burner names of all orders (they only describe bookings). */
 async function clearBurnerNames(pb: TypedPocketBase) {
@@ -382,16 +383,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 			return b.expand?.room?.house === house.id;
 		});
 
-		const totalBeds = bedsInHouse.length;
-		const occupiedBeds = bedsInHouse.filter((b: BedsResponse) => b.occupied === true).length;
-		const freeBeds = Math.max(0, totalBeds - occupiedBeds);
-		const occupancyRate = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
+		// Same counting as the house page: deactivated spots don't count, locked
+		// ones aren't free.
+		const spots = countSpots(bedsInHouse);
+		const occupancyRate = spots.total > 0 ? Math.round((spots.occupied / spots.total) * 100) : 0;
 
 		return {
 			...structuredClone(house),
-			totalBeds,
-			occupiedBeds,
-			freeBeds,
+			totalBeds: spots.total,
+			occupiedBeds: spots.occupied,
+			freeBeds: spots.free,
 			occupancyRate
 		};
 	});

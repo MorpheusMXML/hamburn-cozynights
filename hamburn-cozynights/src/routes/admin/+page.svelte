@@ -22,10 +22,11 @@
 	$: freeBeds = totalBeds - occupiedBeds;
 	$: occupancyRate = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
 
+	// "Full" means nothing left to book, like the cards' "Fully booked" badge.
 	$: houseStats = {
-		empty: houses.filter((h) => h.occupiedBeds === 0 && h.totalBeds > 0).length,
-		partial: houses.filter((h) => h.occupiedBeds > 0 && h.occupiedBeds < h.totalBeds).length,
-		full: houses.filter((h) => h.occupiedBeds >= h.totalBeds && h.totalBeds > 0).length,
+		empty: houses.filter((h) => h.occupiedBeds === 0 && h.freeBeds > 0).length,
+		partial: houses.filter((h) => h.occupiedBeds > 0 && h.freeBeds > 0).length,
+		full: houses.filter((h) => h.totalBeds > 0 && h.freeBeds === 0).length,
 		unconfigured: houses.filter((h) => h.totalBeds === 0).length
 	};
 

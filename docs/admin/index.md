@@ -32,7 +32,7 @@ Times are Europe/Berlin (CET/CEST). How the timer interacts with the phase switc
 | --- | --- |
 | **LOAD** | Doughnut chart: share of all spots that are taken. |
 | **New Bookings · Last 7 Days** | New ticket orders per day over the last week, counted in event time. |
-| **EMPTY HOUSES · FILLING · FULL** | How many houses have no, some or no more free spots. |
+| **EMPTY HOUSES · FILLING · FULL** | How many houses have no bookings yet, some bookings, or no free spot left. |
 | **PLAYA PROTOCOLS** | Quick reminders of the editor gestures below. |
 
 ## Red alert: sanity checks
@@ -51,6 +51,8 @@ When the layout has gaps, a red **RED ALERT: ARCHITECTURAL DEVIATIONS** panel li
 
 In Staging Mode the map is a live editor. A status bar reads *🛠 EDITOR ACTIVE*; during Live Booking it switches to *🔒 LOCKDOWN* and the map becomes read-only.
 
+Pins are teal while a house has free spots, red when none is left, and grey while it has no active spots at all.
+
 | Gesture | Result |
 | --- | --- |
 | **Click an empty place** | Sidebar *GENERATE SANCTUARY*: name the new house and set its initial number of beds, then <kbd>IGNITE HOUSE ✨</kbd>. |
@@ -63,7 +65,7 @@ In Staging Mode the map is a live editor. A status bar reads *🛠 EDITOR ACTIVE
 
 ![House cards in list view](../assets/screenshots/admin-list-view.webp)
 
-Every house as a card with its occupancy badge (*n spots free*, *Fully booked* or *Not setup*), **Spots Claimed** with a progress bar, and its map coordinates.
+Every house as a card with its occupancy badge (*n spots free*, *Fully booked* or *Not setup*), **Spots Claimed** with a progress bar, and its map coordinates. Locked spots never count as free, and deactivated spots don't count at all.
 
 - Click a card to manage its rooms.
 - <kbd>VANISH 🌪️</kbd> deletes the house after a confirmation.

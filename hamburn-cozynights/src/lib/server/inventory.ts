@@ -1,5 +1,6 @@
 import type { TypedPocketBase } from '$lib/pocketbase-types';
 import type { HouseData } from '$lib/types';
+import { countSpots } from '$lib/occupancy';
 
 export class InventoryService {
 	constructor(private pb: TypedPocketBase) {}
@@ -48,10 +49,11 @@ export class InventoryService {
 						};
 					});
 
-				// Calculate stats for the house
+				// Calculate stats for the house (locked beds already count as taken here)
 				const allBedsInHouse = houseRooms.flatMap((r) => r.beds);
 				const totalBeds = allBedsInHouse.length;
 				const occupiedBeds = allBedsInHouse.filter((b) => b.occupied).length;
+				const freeBeds = totalBeds - occupiedBeds;
 
 				// A house is bookable ONLY if it has at least one room AND at least one bed
 				const isBookable = houseRooms.length > 0 && totalBeds > 0;
@@ -61,6 +63,7 @@ export class InventoryService {
 					rooms: houseRooms,
 					totalBeds,
 					occupiedBeds,
+					freeBeds,
 					isBookable
 				};
 			});
@@ -98,14 +101,14 @@ export class InventoryService {
 				};
 			});
 
-			const totalBeds = bedsRaw.length;
-			const occupiedBeds = bedsRaw.filter((b) => b.occupied).length;
+			const spots = countSpots(bedsRaw);
 
 			return {
 				...houseRaw,
 				rooms: houseRooms,
-				totalBeds,
-				occupiedBeds
+				totalBeds: spots.total,
+				occupiedBeds: spots.occupied,
+				freeBeds: spots.free
 			};
 		} catch (error) {
 			console.error(`Error fetching house ${houseId}:`, error);

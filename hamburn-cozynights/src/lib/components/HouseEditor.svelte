@@ -68,7 +68,8 @@
 				}
 			],
 			totalBeds: bedCount,
-			occupiedBeds: 0
+			occupiedBeds: 0,
+			freeBeds: bedCount
 		};
 		dispatch('save', newHouse);
 	}
