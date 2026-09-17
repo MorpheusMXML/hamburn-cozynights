@@ -1,7 +1,7 @@
 name: Deploy staging
 
-# Manual only: Actions → "Deploy staging" → Run workflow. Pick the branch in
-# "Use workflow from"; its current head commit is what gets deployed.
+# Manual only: Actions → "Deploy staging" → Run workflow. The `staging`
+# environment only accepts `main` and requires reviewer approval.
 on:
   workflow_dispatch: {}
 
@@ -20,10 +20,12 @@ jobs:
       run:
         working-directory: hamburn-cozynights
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: hamburn-cozynights/.nvmrc
           cache: npm
           cache-dependency-path: hamburn-cozynights/package-lock.json
       - run: npm ci
@@ -35,17 +37,18 @@ jobs:
     name: Deploy ${{ github.ref_name }}@${{ github.sha }}
     needs: verify
     runs-on: ubuntu-latest
-    environment:
-      name: staging
-      url: https://test-cozynights.hamburn.de
+    environment: staging
     steps:
       - name: Deploy on server
-        uses: appleboy/ssh-action@v1.2.0
+        # Pinned to a commit: this step receives the deploy key.
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ secrets.STAGING_SSH_HOST }}
           port: ${{ secrets.STAGING_SSH_PORT || 22 }}
           username: deploy
           key: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
+          # ECDSA host key fingerprint — the Go SSH client negotiates ECDSA
+          # before ED25519 (see hamburn-cozynights/deploy/README.md).
           fingerprint: ${{ secrets.STAGING_SSH_FINGERPRINT }}
           command_timeout: 20m
           # The deploy key is a forced command on the server; only the commit
