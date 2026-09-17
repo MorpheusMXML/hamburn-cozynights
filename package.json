@@ -11,8 +11,5 @@
     "test:setup": "npm run test:setup --prefix hamburn-cozynights",
     "db:up": "docker-compose -f hamburn-cozynights/docker-compose.yml up -d",
     "db:down": "docker-compose -f hamburn-cozynights/docker-compose.yml down"
-  },
-  "dependencies": {
-    "pocketbase": "^0.26.6"
   }
 }

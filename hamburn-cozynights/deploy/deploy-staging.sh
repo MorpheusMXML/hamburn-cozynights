@@ -64,7 +64,7 @@ build_and_start() {
 
 healthy() {
 	for _ in $(seq 1 30); do
-		if curl -fsS -o /dev/null --max-time 5 "$HEALTH_URL"; then return 0; fi
+		if curl -fs -o /dev/null --max-time 5 "$HEALTH_URL"; then return 0; fi
 		sleep 2
 	done
 	return 1
@@ -72,6 +72,9 @@ healthy() {
 
 # Build first: the running containers keep serving until `up -d`.
 git checkout --quiet --detach "$sha"
+if ! cmp -s "$0" "$APP_DIR/hamburn-cozynights/deploy/deploy-staging.sh"; then
+	log "WARNING: installed $0 differs from deploy/deploy-staging.sh at $sha — reinstall it (deploy/README.md, Wartung)"
+fi
 log "building app image"
 if ! compose build app; then
 	git checkout --quiet --detach "$prev"
