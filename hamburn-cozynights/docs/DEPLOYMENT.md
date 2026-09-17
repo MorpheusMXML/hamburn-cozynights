@@ -111,13 +111,14 @@ New requests can be announced in a chat: set `COZY_ADMIN_WEBHOOK_URL`
 
 ### Staging secrets
 
-The server's `.env` is created from `deploy/staging.env.template`: fill it
-locally (`openssl rand -hex 32` for `ENCRYPTION_KEY`, `openssl rand -hex 24`
-for `PB_ADMIN_PASSWORD`, the Google OAuth client below, optionally the
-webhook), keep a copy in Vaultwarden, then install it on the server as
-`deploy:deploy` with mode `600`. After the first deploy,
-`scripts/cozy-admin.sh service-account` creates the service superuser with
-exactly that password.
+The server's `.env` follows `deploy/staging.env.template`. Only three things
+come from a human: `ENCRYPTION_KEY` (`openssl rand -hex 32`, keep a copy in
+Vaultwarden) and the Google OAuth client id/secret below. The service
+account password is left empty — `scripts/cozy-admin.sh service-account`
+generates it after the deploy and writes it into `.env`. The superuser
+password for the PocketBase dashboard is typed in by
+`scripts/cozy-admin.sh superuser` and never stored in `.env`. The file must
+be `deploy:deploy` with mode `600`.
 
 ### Google OAuth client
 
