@@ -88,16 +88,23 @@ function cozyUpsertSuperuser(email, password) {
 	return created;
 }
 
+// New admin records always start as `pending` (enforced below), so creating
+// with a role is a create + an update.
+function cozyNewPendingAdmin(app, collection, email) {
+	const rec = new Record(collection);
+	rec.setEmail(email);
+	// Password login is disabled for this collection; auth records still
+	// need a (never used) password.
+	rec.setRandomPassword();
+	rec.set('role', 'pending');
+	app.save(rec);
+	return rec;
+}
+
 function cozyUpsertAdmin(collection, email, role) {
 	let rec = cozyFind('admins', email);
 	const created = !rec;
-	if (created) {
-		rec = new Record(collection);
-		rec.setEmail(email);
-		// Password login is disabled for this collection; auth records still
-		// need a (never used) password.
-		rec.setRandomPassword();
-	}
+	if (created) rec = cozyNewPendingAdmin($app, collection, email);
 	rec.set('role', role);
 	$app.save(rec);
 	return created;
@@ -189,9 +196,7 @@ cozyAdmin.addCommand(
 				try {
 					rec = txApp.findAuthRecordByEmail('admins', email);
 				} catch (_) {
-					rec = new Record(collection);
-					rec.setEmail(email);
-					rec.setRandomPassword();
+					rec = cozyNewPendingAdmin(txApp, collection, email);
 				}
 				rec.set('role', 'superuser');
 				txApp.save(rec);
@@ -386,4 +391,21 @@ onRecordAfterCreateSuccess((e) => {
 		// A notification problem must never break the sign-in.
 		console.warn('[cozy-admin] access request webhook failed: ' + err);
 	}
+}, 'admins');
+
+// Second barrier, independent of pb_hooks/admins_oauth_guard.pb.js: however a
+// record gets created (OAuth2 sign-in, dashboard, CLI), it must belong to the
+// Workspace domain and start without rights. Approval is always a later update
+// by a superuser (updateRule is null). If the guard file ever failed to load,
+// this still keeps foreign or self-elevated accounts out.
+onRecordCreate((e) => {
+	const domain = 'mauersegler.art';
+	const email = String(e.record.email() || '').toLowerCase();
+	if (!email.endsWith('@' + domain)) {
+		throw new BadRequestError('Admin accounts must use an @' + domain + ' address.');
+	}
+	if (e.record.getString('role') !== 'pending') {
+		throw new BadRequestError('New admin accounts start as pending and are approved afterwards.');
+	}
+	e.next();
 }, 'admins');
