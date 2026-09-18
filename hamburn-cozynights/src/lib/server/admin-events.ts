@@ -9,6 +9,9 @@ export type AdminEventAction =
 	| 'ticket_updated'
 	| 'tickets_imported';
 
+/** admin_events.actor and .subject (pb_migrations/1759000000_notifications.js). */
+const MAX_TEXT = 320;
+
 /**
  * Adds an entry to the audit log (collection admin_events); PocketBase posts
  * it to the crew Telegram chat. Admin access and booking phase changes are
@@ -27,8 +30,10 @@ export async function logAdminEvent(
 	try {
 		await adminPb.collection('admin_events').create({
 			action,
-			actor: admin?.email ?? '',
-			subject,
+			// The fields hold at most 320 characters: a longer template name must
+			// not cost the whole entry.
+			actor: (admin?.email ?? '').slice(0, MAX_TEXT),
+			subject: subject.slice(0, MAX_TEXT),
 			details
 		});
 	} catch (err) {

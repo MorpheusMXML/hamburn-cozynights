@@ -22,6 +22,9 @@ RUN npm run build:app
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+# Request bodies up to 2 MB (adapter-node's default is 512 KB): layout
+# templates may be 1 MB, a ticket list sends up to 5000 rows. nginx allows 10 MB.
+ENV BODY_SIZE_LIMIT=2M
 ENV DOCS_DIR=/app/docs-dist
 COPY hamburn-cozynights/package*.json ./
 RUN npm ci --omit=dev

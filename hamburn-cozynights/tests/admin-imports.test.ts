@@ -486,6 +486,16 @@ describe('who may do what', () => {
 		});
 	});
 
+	it('keeps the audit entry of a template with a very long name', async () => {
+		const long = { ...layout(), name: 'L'.repeat(400) };
+		const applied: any = await dashboardActions.importTemplate({
+			locals: locals(boss),
+			request: templateUpload(long, { selection: '["h:tent"]', skipBackup: '1' })
+		} as any);
+		expect(applied.applied.created.houses).toBe(1);
+		expect(db.data.admin_events.at(-1)?.subject).toHaveLength(320);
+	});
+
 	it('refuses an import without the list of chosen changes', async () => {
 		const refused: any = await dashboardActions.importTemplate({
 			locals: locals(boss),

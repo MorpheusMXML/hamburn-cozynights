@@ -416,8 +416,9 @@ Staging Mode. Unchanged spots keep their bookings.
 						{#each applied.problems as problem}<span class="alarm">{problem}</span>{/each}
 						{#if !applied.namesCleared}
 							<span class="alarm">
-								The burner names of the released bookings could not all be cleared. Use "Clear all
-								bookings" on the dashboard to finish that.
+								Some burner names of the released bookings could not be deleted. They are not shown
+								anywhere, but should go: apply the file again, or ask an operator (server log:
+								"[Template import]").
 							</span>
 						{/if}
 					</div>

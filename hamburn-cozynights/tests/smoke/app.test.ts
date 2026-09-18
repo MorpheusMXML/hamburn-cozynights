@@ -324,6 +324,17 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 
 		const crew = adminCookie((await createAdmin(su, 'admin')).client);
 		expect((await upload('previewTemplate', crew)).status).toBe(200);
+		// Templates may be up to 1 MB: more than adapter-node's default body limit.
+		const big = new FormData();
+		const padded = { ...layout, name: 'x'.repeat(700 * 1024) };
+		big.set('template', new Blob([JSON.stringify(padded)], { type: 'application/json' }), 'b.json');
+		const bigPreview = await fetch(`${BASE}/admin?/previewTemplate`, {
+			method: 'POST',
+			redirect: 'manual',
+			headers: { accept: 'text/html', origin: BASE, cookie: crew },
+			body: big
+		});
+		expect(bigPreview.status).toBe(200);
 		expect((await upload('importTemplate', crew, chosen)).status).toBe(403);
 
 		const boss = adminCookie((await createAdmin(su, 'superuser')).client);
