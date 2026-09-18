@@ -33,8 +33,8 @@ A guest hears from CozyNights when their spot changes:
 
 | When | Message |
 | --- | --- |
-| A spot is booked | **Your CozyNights spot:** house, room and spot, with a link to the room |
-| The spot changes (the guest moves, or the crew moves them) | **Your CozyNights spot changed**, with the old and the new spot |
+| A spot is booked | **Your CozyNights spot:** house, room and spot, with links to the room and to the [booking pass](./passes) |
+| The spot changes (the guest moves, or the crew moves them) | **Your CozyNights spot changed**, with the old and the new spot and the pass link |
 | The spot is gone (released by the guest, freed by an admin, its room or house deleted, **Clear all bookings**, a template import) | **Your CozyNights spot was released**, with a link to the map |
 
 - **One message per change.** A move is one "changed" message, never "released" plus "booked". Changes within about ten seconds are combined, and two messages about the same ticket are at least two minutes apart.

@@ -30,6 +30,7 @@ In `tests/integration/`:
 - **Guests** – can read the map data, can never read tickets or write anything, cannot sign up anywhere.
 - **Admin access model** – no password login; admin records can't be created through the API; every new record is born `pending` and `@mauersegler.art`; a pending account has no rights and can't approve itself; an approved admin can manage the structure but not read tickets or change roles; approval and removal take effect on the very next request.
 - **Booking** – ticket-code login incl. imported tickets, one ticket = one bed, taken / locked / deactivated beds, two guests racing for one bed, release.
+- **Booking passes** – a code appears when a ticket gets a spot and stays with the ticket through moves and releases, codes are unique, only the service account may request one, and the confirmation e-mail and Telegram message carry the pass link.
 - **Notifications** – confirmation e-mails (booked, one "changed" for a move, released by the guest or with a deleted room), no mail for tickets without an address, a newly imported address, retries and the crew alert after the last one; Telegram link, `/stop`, blocked bot, unknown links; crew alerts for access changes, phase switches with the admin's name, an outage of Telegram, and a real OAuth2 sign-in through the admin guard; `cozy-admin tickets import` (dry run, broken file, stdin) and `notify status` / `test`.
 
 ### What the smoke tests cover

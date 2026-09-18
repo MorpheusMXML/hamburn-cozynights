@@ -11,6 +11,8 @@ import {
 	startTelegramLink,
 	type GuestNotifyStatus
 } from '$lib/server/notifications';
+import { ensurePassCode } from '$lib/server/pass';
+import { formatPassCode } from '$lib/pass';
 
 const burnerNames = [
 	'Dusty Nomad',
@@ -97,17 +99,27 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			};
 		});
 
-		// Where confirmations go. Optional: the page works without it.
+		// Where confirmations go, and the booking pass. Optional: the page works without them.
 		let notify: GuestNotifyStatus | null = null;
+		let passCode: string | null = null;
 		if (userBed) {
-			notify = await getGuestNotifyStatus(locals.adminPb, order, settings).catch((err) => {
-				console.error('[Room] Notification status failed:', (err as Error)?.message);
-				return null;
-			});
+			[notify, passCode] = await Promise.all([
+				getGuestNotifyStatus(locals.adminPb, order, settings).catch((err) => {
+					console.error('[Room] Notification status failed:', (err as Error)?.message);
+					return null;
+				}),
+				ensurePassCode(locals.adminPb, order)
+					.then(formatPassCode)
+					.catch((err) => {
+						console.error('[Room] Booking pass failed:', (err as Error)?.message);
+						return null;
+					})
+			]);
 		}
 
 		return {
 			notify,
+			passCode,
 			room: { id: room.id, name: room.name, room_number: room.room_number, house: room.house },
 			beds: safeBeds,
 			userBedId: userBed?.id || null,

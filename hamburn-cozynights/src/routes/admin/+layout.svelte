@@ -25,6 +25,7 @@
 			</div>
 
 			<div class="user-area">
+				<a href="/admin/check" class="check-link" title="Check booking passes">🎫 Check passes</a>
 				<div class="user-info">
 					<span class="user-label">Burner:</span>
 					<span class="user-email" title={data.admin.email}>{data.admin.email}</span>
@@ -90,6 +91,22 @@
 		top: 0;
 		z-index: 100;
 		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+	}
+
+	.check-link {
+		display: inline-flex;
+		align-items: center;
+		min-height: 40px;
+		padding: 0 0.9rem;
+		border-radius: 10px;
+		border: 1px solid #2dd4bf;
+		color: #2dd4bf;
+		font-weight: 800;
+		text-decoration: none;
+		white-space: nowrap;
+	}
+	.check-link:hover {
+		background: rgba(45, 212, 191, 0.1);
 	}
 
 	/* Logo Area */

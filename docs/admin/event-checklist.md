@@ -44,6 +44,8 @@ timeline
 
 ## During the event
 
+- [ ] **Check booking passes at arrival** where needed: phone camera on the guest's QR code, or 🎫 **Check passes** in the admin header (type the code or use a USB scanner). See [Booking passes](./passes).
+
 - [ ] **Broken bed?** Lock it 🔒 on its room page. That works during Live Booking.
 - [ ] **Resist restructuring.** Adding rooms or moving houses means switching back to staging, which freezes all guests' bookings meanwhile. Do it only when really needed, and switch back quickly.
 

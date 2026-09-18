@@ -149,6 +149,7 @@ export type OrdersRecord = {
 	email?: string;
 	id: string;
 	order_number: string;
+	pass_code?: string;
 	order_hash?: string;
 	updated: IsoAutoDateString;
 };

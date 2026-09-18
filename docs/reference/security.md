@@ -36,6 +36,12 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 - **The mail password** is in the server configuration, and PocketBase keeps a copy in its settings, so it is part of the database and its backups. It belongs to a send-only SMTP user of a sending service (one per environment), never to a mailbox.
 - **Deleted after the event** with `tickets forget-contacts`.
 
+### Booking passes
+
+- **A separate, random code.** The pass code (12 characters) can only show a booking; the ticket code, which can change bookings, never appears on a pass, in a QR code or in a message.
+- **Minimal content.** Anyone with a pass link sees the spot and the burner name (visible to other guests anyway). The name on the ticket and the shortened e-mail only appear for signed-in admins.
+- **Private links.** Pass pages send `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex` and `Cache-Control: no-store`; many unknown codes from one connection are blocked for a while. Only PocketBase creates pass codes, so two writers can't hand out different codes for one ticket.
+
 ## Admin sign-in
 
 - **Google only.** No passwords in the app, no sign-up form, no invitation or approval screens that could be abused from a browser.

@@ -104,6 +104,15 @@ describe('any deployment (read-only)', () => {
 		expect((await get('/admin', cookie)).status).toBe(303);
 		expect((await post('/admin?/renameHouse', {}, cookie)).status).toBe(403);
 	});
+
+	it('answers unknown booking passes with 404 and keeps the pass check for admins', async () => {
+		const unknown = await get('/pass/AAAA-BBBB-CCCC');
+		expect(unknown.status).toBe(404);
+		expect(unknown.headers.get('referrer-policy')).toBe('no-referrer');
+		expect((await get('/pass/not-a-pass')).status).toBe(404);
+		expect((await get('/admin/check')).status).toBe(303);
+		expect((await post('/admin/check?/check', { code: 'AAAA-BBBB-CCCC' })).status).toBe(403);
+	});
 });
 
 // Skipped against a real site on purpose: these tests write data (tickets,
@@ -184,6 +193,39 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		expect((await post(`/room/${room.id}?/unbookBed`, {}, firstCookie)).status).toBe(200);
 		bed = await su.collection('beds').getOne(beds[0].id);
 		expect(bed.occupied).toBe(false);
+	});
+
+	it('shows the guest a booking pass that the crew can check', async () => {
+		const { room, beds } = await seedHouse(su, 1);
+		const ticket = await seedTicket(su);
+		const cookie = await guestLogin(ticket.code);
+		await setBookingOpen(true);
+		await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[0].id, guestName: 'Pass Tester' },
+			cookie
+		);
+
+		const code = (await su.collection('orders').getOne(ticket.order.id)).pass_code as string;
+		const shown = code.replace(/(.{4})(?=.)/g, '$1-');
+		expect(await (await get(`/room/${room.id}`, cookie)).text()).toContain(`/pass/${shown}`);
+
+		// anyone with the link: spot and burner name, never whose ticket it is
+		const guestView = await (await get(`/pass/${shown}`)).text();
+		expect(guestView).toContain(beds[0].label);
+		expect(guestView).toContain('Pass Tester');
+		expect(guestView).not.toContain('Test Guest');
+		expect(guestView).not.toContain(ticket.code);
+		const gif = await get(`/pass/${shown}/qr.gif`);
+		expect(gif.headers.get('content-type')).toBe('image/gif');
+
+		// the crew: the same link shows the check result, so does the check page
+		const admin = await createAdmin(su, 'admin');
+		const crewView = await (await get(`/pass/${shown}`, adminCookie(admin.client))).text();
+		expect(crewView).toContain('VALID');
+		expect(crewView).toContain('Test Guest');
+		const checked = await post('/admin/check?/check', { code: shown }, adminCookie(admin.client));
+		expect(checked.status).toBe(200);
 	});
 
 	it('opens the admin area for approved admins only', async () => {

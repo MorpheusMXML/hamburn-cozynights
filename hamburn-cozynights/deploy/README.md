@@ -203,3 +203,29 @@ COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME docker compose -f docker-compose.stag
 
 - Tickets mit E-Mail-Adressen laden: `./scripts/cozy-admin.sh tickets import liste.csv --dry-run`,
   danach ohne `--dry-run`. Nach dem Event: `./scripts/cozy-admin.sh tickets forget-contacts --yes`.
+
+## Staging testen: Benachrichtigungen und Buchungsnachweis
+
+Nach einem Deploy mit gesetzten `.env`-Werten (Abschnitt oben), auf dem Server:
+
+```bash
+source /etc/cozynights/deploy-staging.conf
+cd "$APP_DIR/hamburn-cozynights"
+./scripts/cozy-admin.sh notify status
+./scripts/cozy-admin.sh notify test --email du@mauersegler.art
+./scripts/cozy-admin.sh tickets add TEST-PASS-1 --email du@mauersegler.art --name "Test"
+```
+
+Dann im Browser (Live Booking muss an sein):
+
+1. `https://test-cozynights.hamburn.de` → Code `TEST-PASS-1` → einen Platz buchen.
+2. Mail kommt nach ca. 15 s (Betreff mit `[STAGING]`, Link zum Buchungsnachweis).
+3. Im Zimmer „Get updates on Telegram“ → im Bot START → der Bot bestätigt den Platz.
+4. „🎫 Show booking pass“ → QR-Code und Code.
+5. Als Admin: den QR-Code mit der Handy-Kamera scannen (im selben Browser bei `/admin`
+   angemeldet) oder im Admin-Kopf „🎫 Check passes“ → Code eintippen → ✅ VALID.
+6. Platz wechseln → eine Mail „changed“; Platz freigeben → Mail „released“, der Pass zeigt
+   ⚠️ NO SPOT.
+7. Die Crew-Gruppe hat Meldungen zu Anmeldungen und Phasenwechseln bekommen.
+
+Nach den Tests: Testbuchungen freigeben und `./scripts/cozy-admin.sh tickets remove TEST-PASS-1`.

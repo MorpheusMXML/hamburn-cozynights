@@ -42,6 +42,10 @@ Only with their ticket code. On a shared device, entering another code switches 
 It goes to the address that belongs to your ticket, usually within a minute. Check your spam folder. Your room page shows where confirmations go; if that address is wrong or missing, ask the crew to fix it in the ticket list.
 :::
 
+::: details Where is my booking pass?
+On your room page (<kbd>🎫 Show booking pass</kbd>) and behind the link in your confirmation e-mail or Telegram message. It only exists while your ticket holds a spot. A screenshot of it is fine.
+:::
+
 ::: details How do I stop the Telegram messages?
 Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page, or send `/stop` to the bot.
 :::

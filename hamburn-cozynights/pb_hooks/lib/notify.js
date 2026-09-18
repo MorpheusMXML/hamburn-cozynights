@@ -541,11 +541,15 @@ function spotLines(spot) {
 	].filter((row) => !!row[1]);
 }
 
-/** Subject, plain text and HTML of a guest e-mail. kind: booked | changed | released */
-function guestMail(cfg, kind, spot, previousLabel, name) {
+/**
+ * Subject, plain text and HTML of a guest e-mail. kind: booked | changed |
+ * released. pass: { code, url } of the ticket's booking pass, or null.
+ */
+function guestMail(cfg, kind, spot, previousLabel, name, pass) {
 	const hello = name ? 'Hi ' + name + ',' : 'Hi,';
 	const mapUrl = cfg.appUrl + '/map';
 	const roomUrl = spot ? cfg.appUrl + '/room/' + spot.roomId : mapUrl;
+	const passUrl = pass && kind !== 'released' ? pass.url : '';
 	let subject;
 	let intro;
 	let after = [];
@@ -566,6 +570,15 @@ function guestMail(cfg, kind, spot, previousLabel, name) {
 		if (kind === 'changed' && previousLabel) after.push('Before: ' + previousLabel);
 		if (kind === 'changed')
 			after.push("If you didn't change it yourself, the crew had to move you.");
+		if (passUrl) {
+			after.push(
+				'Your booking pass (code ' +
+					pass.code +
+					'): ' +
+					passUrl +
+					' — show it when you arrive, if the crew asks.'
+			);
+		}
 		after.push(
 			'To change or release it, open ' +
 				roomUrl +
@@ -583,11 +596,19 @@ function guestMail(cfg, kind, spot, previousLabel, name) {
 		.join('\n');
 
 	const link = (url) => '<a href="' + esc(url) + '" style="color:#7a3cff">' + esc(url) + '</a>';
-	// Each line holds at most one of the two links; link it once.
+	// Each line holds at most one link; link its first URL once.
+	const urls = [passUrl, roomUrl, mapUrl].filter((u) => !!u);
 	const linkify = (line) => {
-		const url = line.indexOf(roomUrl) >= 0 ? roomUrl : line.indexOf(mapUrl) >= 0 ? mapUrl : '';
+		let at = -1;
+		let url = '';
+		for (const u of urls) {
+			const i = line.indexOf(u);
+			if (i >= 0 && (at < 0 || i < at)) {
+				at = i;
+				url = u;
+			}
+		}
 		if (!url) return esc(line);
-		const at = line.indexOf(url);
 		return esc(line.slice(0, at)) + link(url) + esc(line.slice(at + url.length));
 	};
 	const html =
@@ -624,16 +645,17 @@ function guestMail(cfg, kind, spot, previousLabel, name) {
 	return { subject: prefixed(cfg, subject), text: text, html: html };
 }
 
-/** kind: connected | booked | changed | released */
-function guestTelegram(cfg, kind, spot, previousLabel) {
+/** kind: connected | booked | changed | released; pass: { code, url } or null */
+function guestTelegram(cfg, kind, spot, previousLabel, pass) {
 	const mapUrl = cfg.appUrl + '/map';
 	const roomUrl = spot ? cfg.appUrl + '/room/' + spot.roomId : mapUrl;
+	const passLine = pass && spot ? '\n\n🎫 Booking pass ' + pass.code + ':\n' + pass.url : '';
 	let text;
 	if (kind === 'connected') {
 		text =
 			"✅ Connected! You'll get news about your CozyNights spot here.\n\n" +
 			(spot
-				? 'Your spot: ' + spot.label + '\n' + roomUrl
+				? 'Your spot: ' + spot.label + '\n' + roomUrl + passLine
 				: "You don't have a spot yet — you'll get a message here when you book one.") +
 			'\n\nSend /stop to disconnect.';
 	} else if (kind === 'released') {
@@ -648,10 +670,15 @@ function guestTelegram(cfg, kind, spot, previousLabel) {
 			spot.label +
 			(previousLabel ? '\nBefore: ' + previousLabel : '') +
 			"\n\nIf you didn't change it yourself, the crew had to move you.\n" +
-			roomUrl;
+			roomUrl +
+			passLine;
 	} else {
 		text =
-			'✨ Your CozyNights spot is booked\n' + spot.label + '\n\nChange or release it: ' + roomUrl;
+			'✨ Your CozyNights spot is booked\n' +
+			spot.label +
+			'\n\nChange or release it: ' +
+			roomUrl +
+			passLine;
 	}
 	return prefixed(cfg, text);
 }
@@ -685,6 +712,20 @@ function takeMailSlot(app, cfg) {
 		return w;
 	});
 	return ok;
+}
+
+/** { code, url } of the ticket's booking pass (pb_hooks/lib/pass.js), or null. */
+function bookingPass(app, cfg, order) {
+	try {
+		const passLib = require(`${__hooks}/lib/pass.js`);
+		const code = order.getString('pass_code') || passLib.ensurePassCode(app, order.id);
+		return code
+			? { code: passLib.formatPassCode(code), url: passLib.passUrl(cfg.appUrl, code) }
+			: null;
+	} catch (err) {
+		console.error('[cozy-notify] booking pass of ' + order.id + ': ' + safeError(err));
+		return null;
+	}
 }
 
 function kindOf(lastKey, key) {
@@ -724,6 +765,7 @@ function deliverOne(app, cfg, rec, force) {
 	const spot = currentSpot(app, order.id);
 	const key = spot ? spot.bedId : '';
 	const label = spot ? spot.label : '';
+	const pass = spot ? bookingPass(app, cfg, order) : null;
 	const problems = [];
 	const channels = [];
 	let deferred = false;
@@ -752,7 +794,8 @@ function deliverOne(app, cfg, rec, force) {
 							kind,
 							spot,
 							known ? rec.getString('mail_label') : '',
-							greetingName(order)
+							greetingName(order),
+							pass
 						)
 					);
 					mailDone = { to: email, key: key, label: label, sent: pbDate(now) };
@@ -775,7 +818,7 @@ function deliverOne(app, cfg, rec, force) {
 				'sendMessage',
 				{
 					chat_id: chat,
-					text: guestTelegram(cfg, kind, spot, rec.getString('tg_label')),
+					text: guestTelegram(cfg, kind, spot, rec.getString('tg_label'), pass),
 					disable_web_page_preview: true
 				},
 				10

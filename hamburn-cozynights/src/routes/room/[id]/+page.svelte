@@ -211,6 +211,13 @@
 						Spot <strong>{myBed.label}</strong> in this room is yours.
 						{#if data.isBookingActive}Tap it to change your burner name or to release it.{/if}
 					</p>
+					{#if data.passCode}
+						<p class="pass-line">
+							<a class="btn-pass" href="/pass/{data.passCode}">
+								<span class="notify-icon" aria-hidden="true">🎫</span> Show booking pass
+							</a>
+						</p>
+					{/if}
 					{#if data.notify && (data.notify.email || data.notify.telegram)}
 						<div class="notify-box">
 							{#if data.notify.email}
@@ -665,6 +672,21 @@
 	}
 	.notify-icon {
 		margin-right: 0.35em;
+	}
+	.success-content .pass-line {
+		margin: 1rem 0 0;
+	}
+	.btn-pass {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2em;
+		min-height: 44px;
+		padding: 0 1.25rem;
+		border-radius: 10px;
+		background: #2dd4bf;
+		color: #000;
+		font-weight: 800;
+		text-decoration: none;
 	}
 	.notify-telegram {
 		display: flex;
