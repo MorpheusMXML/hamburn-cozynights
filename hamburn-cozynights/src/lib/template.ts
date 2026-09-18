@@ -275,7 +275,7 @@ export function validateTemplate(data: unknown): TemplateParseResult {
 		);
 	} else if (data.houses.length === 0) {
 		errors.push(
-			'houses: the list is empty. Importing replaces the whole layout, so a template without houses is refused. To remove houses, delete them in the editor.'
+			'houses: the list is empty. A template needs at least one house. To remove houses from the camp, delete them in the editor.'
 		);
 	} else if (data.houses.length > TEMPLATE_LIMITS.houses) {
 		errors.push(

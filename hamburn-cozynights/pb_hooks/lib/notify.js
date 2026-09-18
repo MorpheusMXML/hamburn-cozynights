@@ -373,22 +373,76 @@ function eventText(ev) {
 				(d.released || 0) +
 				' spot(s) released, tickets kept'
 			);
-		case 'template_imported':
+		case 'template_imported': {
+			if (!d.created && !d.updated && !d.removed) {
+				// events from before the review import (the whole layout was replaced)
+				return (
+					'🗺️ Layout template "' +
+					subject +
+					'" imported' +
+					by +
+					': ' +
+					(d.houses || 0) +
+					' houses, ' +
+					(d.rooms || 0) +
+					' rooms, ' +
+					(d.beds || 0) +
+					' spots; ' +
+					(d.releasedBookings || 0) +
+					' booking(s) released; backup ' +
+					(d.backup || 'skipped')
+				);
+			}
+			const levels = (c) =>
+				[
+					c && c.houses ? c.houses + ' house(s)' : '',
+					c && c.rooms ? c.rooms + ' room(s)' : '',
+					c && c.spots ? c.spots + ' spot(s)' : ''
+				]
+					.filter((part) => !!part)
+					.join(', ');
+			const steps = [
+				levels(d.created) ? 'new ' + levels(d.created) : '',
+				levels(d.updated) ? 'changed ' + levels(d.updated) : '',
+				levels(d.removed) ? 'removed ' + levels(d.removed) : ''
+			].filter((part) => !!part);
 			return (
 				'🗺️ Layout template "' +
 				subject +
-				'" imported' +
+				'" applied' +
 				by +
 				': ' +
-				(d.houses || 0) +
-				' houses, ' +
-				(d.rooms || 0) +
-				' rooms, ' +
-				(d.beds || 0) +
-				' spots; ' +
+				(steps.join('; ') || 'nothing changed') +
+				'; ' +
 				(d.releasedBookings || 0) +
-				' booking(s) released; backup ' +
+				' booking(s) released' +
+				(d.problems ? '; ' + d.problems + ' step(s) failed' : '') +
+				'; backup ' +
 				(d.backup || 'skipped')
+			);
+		}
+		case 'ticket_updated': {
+			const parts = [];
+			if (d.emailFrom !== d.emailTo) {
+				parts.push('e-mail ' + (d.emailFrom || '(none)') + ' → ' + (d.emailTo || '(none)'));
+			}
+			if (d.nameChanged) parts.push('name');
+			if (d.newHolder) parts.push('passed on: Telegram disconnected, new booking pass');
+			return (
+				'🎟️ Ticket ' + (d.ticket || subject) + ' changed' + by + ': ' + (parts.join('; ') || '-')
+			);
+		}
+		case 'tickets_imported':
+			return (
+				'📥 Ticket list imported' +
+				by +
+				': ' +
+				(d.created || 0) +
+				' new, ' +
+				(d.updated || 0) +
+				' updated' +
+				(d.newHolders ? ' (' + d.newHolders + ' passed on)' : '') +
+				(d.failed ? ', ' + d.failed + ' failed' : '')
 			);
 		case 'house_deleted':
 			return (

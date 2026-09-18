@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { fly } from 'svelte/transition';
+	import { page } from '$app/state';
 
 	// Get data from server (admin session; null on the login page)
 	export let data;
@@ -25,7 +26,20 @@
 			</div>
 
 			<div class="user-area">
-				<a href="/admin/check" class="check-link" title="Check booking passes">🎫 Check passes</a>
+				<nav class="admin-nav" aria-label="Admin pages">
+					<a
+						href="/admin/tickets"
+						class="nav-link"
+						class:active={page.url.pathname === '/admin/tickets'}
+						title="Find tickets, change e-mail addresses, load the ticket list">🎟️ Tickets</a
+					>
+					<a
+						href="/admin/check"
+						class="nav-link"
+						class:active={page.url.pathname === '/admin/check'}
+						title="Check booking passes">🎫 Check passes</a
+					>
+				</nav>
 				<div class="user-info">
 					<span class="user-label">Burner:</span>
 					<span class="user-email" title={data.admin.email}>{data.admin.email}</span>
@@ -93,7 +107,12 @@
 		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 	}
 
-	.check-link {
+	.admin-nav {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+	.nav-link {
 		display: inline-flex;
 		align-items: center;
 		min-height: 40px;
@@ -105,8 +124,12 @@
 		text-decoration: none;
 		white-space: nowrap;
 	}
-	.check-link:hover {
+	.nav-link:hover {
 		background: rgba(45, 212, 191, 0.1);
+	}
+	.nav-link.active {
+		background: #2dd4bf;
+		color: #000;
 	}
 
 	/* Logo Area */

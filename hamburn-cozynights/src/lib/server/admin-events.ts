@@ -2,7 +2,12 @@ import type { TypedPocketBase } from '$lib/pocketbase-types';
 import type { AdminSession } from '$lib/server/admin-auth';
 
 /** Admin actions the app records itself (the crew chat text is in pb_hooks/lib/notify.js). */
-export type AdminEventAction = 'bookings_cleared' | 'template_imported' | 'house_deleted';
+export type AdminEventAction =
+	| 'bookings_cleared'
+	| 'template_imported'
+	| 'house_deleted'
+	| 'ticket_updated'
+	| 'tickets_imported';
 
 /**
  * Adds an entry to the audit log (collection admin_events); PocketBase posts

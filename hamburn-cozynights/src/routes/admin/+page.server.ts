@@ -12,15 +12,18 @@ import { berlinLocalToIso } from '$lib/time';
 import { countSpots } from '$lib/occupancy';
 import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
 import { parseTemplate, TEMPLATE_LIMITS, type TemplateParseResult } from '$lib/template';
-import { getCampCounts, importTemplate, TemplateImportError } from '$lib/server/template';
+import { defaultSelection } from '$lib/template-diff';
+import { applyTemplate, compareTemplate, TemplateImportError } from '$lib/server/template';
 import { logAdminEvent } from '$lib/server/admin-events';
 
+/** Keys of the chosen changes; a real layout has far fewer. */
+const MAX_SELECTED_CHANGES = 20000;
+
 /**
- * Shared first half of the template preview and import: both are superuser-only,
- * Staging-only, and both validate the uploaded file themselves.
+ * The uploaded template file, validated. Shared by the review (every admin,
+ * any phase: it changes nothing) and the import (superusers, Staging only).
  */
 async function readTemplateUpload(
-	locals: App.Locals,
 	request: Request
 ): Promise<
 	| { refused: ActionFailure<{ error: string; errors: string[] }> }
@@ -29,19 +32,6 @@ async function readTemplateUpload(
 	const refuse = (status: number, ...errors: string[]) => ({
 		refused: fail(status, { error: errors[0], errors })
 	});
-
-	if (!locals.admin?.isSuperuser) {
-		return refuse(403, 'Only superusers can import a template.');
-	}
-
-	const { isBookingActive } = await getBookingSettings(locals.pb);
-	if (isBookingActive) {
-		console.warn('[Import Template] BLOCKED: layout is locked during LIVE mode.');
-		return refuse(
-			403,
-			'Templates cannot be imported during Live Booking — this would erase live bookings. Switch to Staging Mode first. 🔒'
-		);
-	}
 
 	const form = await request.formData().catch(() => null);
 	const file = form?.get('template');
@@ -59,6 +49,17 @@ async function readTemplateUpload(
 	const parsed = parseTemplate(await file.text());
 	if (!parsed.ok) return refuse(400, ...parsed.errors);
 	return { parsed, form };
+}
+
+/** The `selection` field of the import: a JSON list of change keys. */
+function readSelection(form: FormData): string[] | null {
+	try {
+		const value = JSON.parse(String(form.get('selection') ?? ''));
+		if (!Array.isArray(value) || value.length > MAX_SELECTED_CHANGES) return null;
+		return value.filter((key): key is string => typeof key === 'string' && key.length <= 1000);
+	} catch {
+		return null;
+	}
 }
 
 /** Clears the burner names of all orders (they only describe bookings). */
@@ -321,13 +322,33 @@ export const actions: Actions = {
 		}
 	},
 	previewTemplate: async ({ locals, request }) => {
-		const upload = await readTemplateUpload(locals, request);
+		if (!locals.admin) return fail(403, { error: 'Unauthorized', errors: ['Unauthorized'] });
+		const upload = await readTemplateUpload(request);
 		if ('refused' in upload) return upload.refused;
 
+		const { template, summary, warnings } = upload.parsed;
 		try {
-			const current = await getCampCounts(locals.adminPb);
-			const { summary, warnings } = upload.parsed;
-			return { preview: { summary, warnings, current } };
+			const [diff, { isBookingActive }] = await Promise.all([
+				compareTemplate(locals.adminPb, template),
+				getBookingSettings(locals.pb)
+			]);
+			let lockedReason = '';
+			if (!locals.admin.isSuperuser) {
+				lockedReason = 'Only superusers can apply a template. You can compare files with the camp.';
+			} else if (isBookingActive) {
+				lockedReason =
+					'Live Booking is active, so the layout is locked. Switch to Staging Mode to apply changes.';
+			}
+			return {
+				review: {
+					name: template.name,
+					summary,
+					warnings: [...warnings, ...diff.warnings],
+					diff,
+					selection: [...defaultSelection(diff)],
+					lockedReason
+				}
+			};
 		} catch (err) {
 			console.error('[Preview Template] FAILED:', err);
 			const error = 'The current layout could not be read from the database. Try again.';
@@ -335,42 +356,55 @@ export const actions: Actions = {
 		}
 	},
 	importTemplate: async ({ locals, request }) => {
-		// Validates the file again: the preview is only a courtesy of the UI.
-		const upload = await readTemplateUpload(locals, request);
-		if ('refused' in upload) return upload.refused;
+		const refuse = (status: number, error: string) => fail(status, { error, errors: [error] });
+		if (!locals.admin?.isSuperuser) {
+			return refuse(403, 'Only superusers can import a template.');
+		}
+		const { isBookingActive } = await getBookingSettings(locals.pb);
+		if (isBookingActive) {
+			console.warn('[Import Template] BLOCKED: layout is locked during LIVE mode.');
+			return refuse(
+				403,
+				'Templates cannot be imported during Live Booking — the layout is locked. Switch to Staging Mode first. 🔒'
+			);
+		}
 
-		const { template, summary } = upload.parsed;
+		// Validates the file again: the review is only a courtesy of the UI.
+		const upload = await readTemplateUpload(request);
+		if ('refused' in upload) return upload.refused;
+		const selected = readSelection(upload.form);
+		if (!selected) {
+			return refuse(400, 'The list of chosen changes did not arrive. Check the file again.');
+		}
+
+		const { template } = upload.parsed;
 		const pb = locals.adminPb;
 		console.log(
-			`[Import Template] ${locals.admin?.email} imports "${template.name}": ${summary.houses} houses, ${summary.rooms} rooms, ${summary.beds} spots.`
+			`[Import Template] ${locals.admin.email} applies ${selected.length} change(s) from "${template.name}".`
 		);
 
 		try {
-			const outcome = await importTemplate(pb, template, {
+			const outcome = await applyTemplate(pb, template, selected, {
 				skipBackup: upload.form.get('skipBackup') === '1'
 			});
-
-			// No booking survives an import, so the names chosen for them go too.
-			// The orders themselves (the ticket roster) stay.
-			let namesCleared = true;
-			try {
-				await clearBurnerNames(pb);
-			} catch (err) {
-				namesCleared = false;
-				console.error('[Import Template] Layout imported, but clearing burner names failed:', err);
-			}
-
 			console.log(
-				`[Import Template] SUCCESS. Backup: ${outcome.backup ?? 'skipped'}, released bookings: ${outcome.releasedBookings}, leftovers: ${outcome.leftovers}.`
+				`[Import Template] DONE. Backup: ${outcome.backup ?? 'none'}, created ${JSON.stringify(outcome.created)}, updated ${JSON.stringify(outcome.updated)}, removed ${JSON.stringify(outcome.removed)}, released bookings: ${outcome.releasedBookings}, problems: ${outcome.problems.length}.`
 			);
-			await logAdminEvent(pb, locals.admin, 'template_imported', template.name, {
-				houses: summary.houses,
-				rooms: summary.rooms,
-				beds: summary.beds,
-				releasedBookings: outcome.releasedBookings,
-				backup: outcome.backup ?? 'skipped'
-			});
-			return { success: true, summary, ...outcome, namesCleared };
+			const touched =
+				Object.values(outcome.created).some(Boolean) ||
+				Object.values(outcome.updated).some(Boolean) ||
+				Object.values(outcome.removed).some(Boolean);
+			if (touched) {
+				await logAdminEvent(pb, locals.admin, 'template_imported', template.name, {
+					created: outcome.created,
+					updated: outcome.updated,
+					removed: outcome.removed,
+					releasedBookings: outcome.releasedBookings,
+					problems: outcome.problems.length,
+					backup: outcome.backup ?? 'skipped'
+				});
+			}
+			return { applied: outcome };
 		} catch (err) {
 			if (err instanceof TemplateImportError) {
 				return fail(err.status, {
