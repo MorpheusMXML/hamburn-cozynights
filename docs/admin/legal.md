@@ -15,7 +15,7 @@ The texts are a careful starting point that matches what CozyNights really does.
 | Page             | Content                                                                                                                                                                                                                                              |
 | :--------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/legal-notice`  | Provider details under § 5 DDG, contact, register entry, VAT ID if set, a disclaimer (content, links, availability, booking a bed, copyright)                                                                                                        |
-| `/privacy`       | Controller, hosting, server logs, the brake on guessing ticket codes, ticket codes, e-mail addresses and bookings, crew sign-in with Google, browser storage, the docs on GitHub Pages, e-mail contact, recipients, rights incl. the right to object |
+| `/privacy`       | Controller, hosting, server logs, the brake on guessing ticket codes, ticket codes, e-mail addresses, bookings and booking passes, crew sign-in with Google, browser storage, the docs on GitHub Pages, e-mail contact, recipients, rights incl. the right to object. Once they are set up, also the booking e-mails, the Telegram option for guests and the crew group ([Notifications](./notifications)) |
 | `/booking-rules` | Only Indoor memberships include a bed, when and how to book, no claim to a particular bed (the crew may move people and writes to them), burner names, fair play, consent and Leave No Trace in the houses                                           |
 
 Left out on purpose:
@@ -36,6 +36,7 @@ The details are `LEGAL_*` variables in the environment's `.env`, next to the oth
 | `LEGAL_ADDRESS`               | **yes**         | A street address where letters can be served, no P.O. box, e.g. `'Musterstraße 1\|20095 Hamburg\|Germany'`     |
 | `LEGAL_EMAIL`                 | **yes**         | General contact address                                                                                        |
 | `LEGAL_HOSTER`                | **yes**         | The hosting company, e.g. `'Hetzner Online GmbH\|Industriestr. 25\|91710 Gunzenhausen\|Germany'`               |
+| `LEGAL_MAIL_PROVIDER`         | with e-mail     | The service that sends the booking e-mails (your processor), e.g. `'Name\|Address\|Country'`                   |
 | `LEGAL_PHONE`                 | recommended     | A second fast way to reach you                                                                                 |
 | `LEGAL_REPRESENTATIVE`        | associations    | The board members who represent it (§ 26 BGB), e.g. `'the board: Erika Muster (chair)'`                        |
 | `LEGAL_REGISTER`              | if registered   | e.g. `'Register of associations: Amtsgericht Hamburg, VR 12345'`                                               |
@@ -48,7 +49,9 @@ The details are `LEGAL_*` variables in the environment's `.env`, next to the oth
 | `LEGAL_TERMS_URL`             | once published  | Link to the membership terms at the ticket shop; `https://` only                                               |
 | `LEGAL_CODE_OF_CONDUCT_URL`   | recommended     | Link to the event's code of conduct (Hamburn: `https://hamburn.de/code-of-conduct`); the booking rules link it |
 
-While a required value is missing, the pages show a red note for the operators and the app log names the missing variables on the first visit.
+While a required value is missing, the pages show a red note for the operators and the app log names the missing variables on the first visit. `LEGAL_MAIL_PROVIDER` counts as required as soon as the server sends e-mail.
+
+The privacy policy asks PocketBase which messages this server sends: the sections on booking e-mails, on Telegram for guests and on the crew group only appear once e-mail or the Telegram bot is set up. Telegram runs outside the EU, so guests only get messages there after their own consent (they press START in the bot's chat).
 
 The app reads `.env` only when its container is created. After editing it, deploy again or recreate just the app container (as root on the server):
 
@@ -70,6 +73,8 @@ The ticket list holds the ticket codes and the buyers' e-mail addresses, so the 
 
 - [ ] **Every public environment is filled in**, staging included: it is reachable from the internet too. No red note on the legal pages.
 - [ ] **Data processing agreement with the hoster.** The privacy policy says one exists. Hetzner offers it in the account settings of its console.
+- [ ] **Data processing agreement with the mail service**, which is named in `LEGAL_MAIL_PROVIDER`.
+- [ ] **Telegram sections checked**: consent for guests, and the crew group, which gets admins' e-mail addresses on sign-ins and access changes.
 - [ ] **Server location.** The privacy policy says the server is in the EU.
 - [ ] **Log retention matches.** nginx rotates its logs after as many days as `LEGAL_LOG_RETENTION_DAYS` says (Debian default: 14 days, `/etc/logrotate.d/nginx`).
 - [ ] **Deletion after the event is planned** within the period the privacy policy names. See [After the burn](./event-checklist#after-the-burn).

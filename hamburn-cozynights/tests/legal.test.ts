@@ -23,6 +23,15 @@ describe('legal page settings (LEGAL_* in .env)', () => {
 		expect(info.hoster).toHaveLength(3);
 	});
 
+	it('reads the mail service as an optional multi-line value', () => {
+		expect(parseLegalEnv({}).mailProvider).toEqual([]);
+		expect(
+			parseLegalEnv({ LEGAL_MAIL_PROVIDER: 'Mailversand GmbH|Postweg 3|12345 Briefstadt' })
+				.mailProvider
+		).toEqual(['Mailversand GmbH', 'Postweg 3', '12345 Briefstadt']);
+		expect(parseLegalEnv({}).missing).not.toContain('LEGAL_MAIL_PROVIDER');
+	});
+
 	it('uses the general address for privacy requests unless one is set', () => {
 		expect(parseLegalEnv({ LEGAL_EMAIL: 'a@example.org' }).privacyEmail).toBe('a@example.org');
 		expect(

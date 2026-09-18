@@ -6,7 +6,7 @@
  * in its history. Every environment (staging, production) sets its own; the
  * variables are listed in deploy/staging.env.template and docs/admin/legal.md.
  *
- * Multi-line values (address, hoster) separate their lines with "|".
+ * Multi-line values (address, hoster, mail provider) separate their lines with "|".
  */
 import { env } from '$env/dynamic/private';
 
@@ -26,6 +26,8 @@ export interface LegalInfo {
 	/** Contact for privacy requests; falls back to `email`. */
 	privacyEmail: string;
 	hoster: string[];
+	/** The service that sends the booking e-mails for us (a processor), if any. */
+	mailProvider: string[];
 	supervisoryAuthority: string;
 	logRetentionDays: number;
 	/** When bookings, burner names and the ticket list are deleted. */
@@ -69,6 +71,7 @@ export function parseLegalEnv(source: Record<string, string | undefined>): Legal
 		contentResponsible: lines(get('LEGAL_CONTENT_RESPONSIBLE')),
 		privacyEmail: get('LEGAL_PRIVACY_EMAIL') || get('LEGAL_EMAIL'),
 		hoster: lines(get('LEGAL_HOSTER')),
+		mailProvider: lines(get('LEGAL_MAIL_PROVIDER')),
 		supervisoryAuthority: get('LEGAL_SUPERVISORY_AUTHORITY'),
 		logRetentionDays: days > 0 ? days : DEFAULT_LOG_RETENTION_DAYS,
 		deletionPeriod: get('LEGAL_DELETION_PERIOD') || DEFAULT_DELETION_PERIOD,

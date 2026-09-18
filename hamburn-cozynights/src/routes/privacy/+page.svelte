@@ -14,8 +14,10 @@ variables in the server's .env (`$lib/server/legal`).
 	const GOOGLE_PRIVACY = 'https://policies.google.com/privacy?hl=en';
 	const GITHUB_PRIVACY =
 		'https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement';
+	const TELEGRAM_PRIVACY = 'https://telegram.org/privacy';
 
 	$: legal = data.legal;
+	$: notify = data.notify;
 </script>
 
 <svelte:head>
@@ -98,6 +100,10 @@ variables in the server's .env (`$lib/server/legal`).
 		</li>
 		<li>the <strong>bed</strong> you choose and when you booked it;</li>
 		<li>
+			the <strong>pass code</strong> of your booking pass. Anyone with your pass link or its QR code can
+			see your bed and burner name; the crew checks the pass when you arrive;
+		</li>
+		<li>
 			your <strong>burner name</strong>, if you enter one. This is voluntary: leave the field empty
 			and the app rolls a made-up name. Other guests with a ticket code and the crew see the name on
 			the room page next to your bed.
@@ -116,9 +122,47 @@ variables in the server's .env (`$lib/server/legal`).
 		necessary (§ 25(2) no. 2 TDDDG).
 	</p>
 	<p>
-		We delete bookings, burner names and the ticket list as soon as we no longer need them,
-		{legal.deletionPeriod}.
+		We delete bookings, burner names and the ticket list with its email addresses{#if notify.telegram}
+			and linked Telegram chats{/if} as soon as we no longer need them, {legal.deletionPeriod}.
 	</p>
+
+	{#if notify.mail || notify.telegram}
+		<h2>Messages about your bed</h2>
+		{#if notify.mail}
+			<h3>Email</h3>
+			<p>
+				When you book or release a bed, or the crew changes it, we send a short message to the email
+				address of your order (Art. 6(1)(b) GDPR). It names your bed and links to your booking pass,
+				never to your ticket code.
+				{#if legal.mailProvider.length}
+					A mail service sends these emails on our behalf, as our processor under a data processing
+					agreement (Art. 28 GDPR):
+				{:else}
+					<span class="missing">Mail service missing (LEGAL_MAIL_PROVIDER)</span>
+				{/if}
+			</p>
+			{#if legal.mailProvider.length}
+				<address>
+					{#each legal.mailProvider as line}
+						{line}<br />
+					{/each}
+				</address>
+			{/if}
+		{/if}
+		{#if notify.telegram}
+			<h3>Telegram, if you ask for it</h3>
+			<p>
+				On your room page you can also get these messages on Telegram. Only when you open the link
+				to our bot and press Start do we store the ID of that Telegram chat with your booking.
+				Telegram is operated from outside the European Union, where the level of data protection may
+				be lower than in the EU; see <a href={TELEGRAM_PRIVACY} rel="noopener"
+					>Telegram's privacy policy</a
+				>. We therefore only use it with your consent (Art. 6(1)(a) and Art. 49(1)(a) GDPR). You can
+				withdraw it at any time: <kbd>Turn off</kbd> on your room page or <code>/stop</code> in the chat
+				ends it, and we delete the chat ID.
+			</p>
+		{/if}
+	{/if}
 
 	<h2>Crew sign-in</h2>
 	<p>
@@ -129,12 +173,20 @@ variables in the server's .env (`$lib/server/legal`).
 		LLC in the USA. Google is certified under the EU-U.S. Data Privacy Framework.
 	</p>
 	<p>
-		For crew accounts we store the email address, where applicable a name, and the role. After
-		sign-in a session cookie (<code>pb_auth</code>, three days, extended while in use) keeps the
-		crew member signed in; during sign-in a second cookie (<code>admin_oauth</code>, ten minutes)
-		protects against forged sign-ins. The legal basis is our legitimate interest in secure access to
-		the administration (Art. 6(1)(f) GDPR). We delete crew accounts when someone leaves the crew.
+		For crew accounts we store the email address, where applicable a name, the role and the time of
+		the last sign-in: crew members sign in with Google again every seven days. After sign-in a
+		session cookie (<code>pb_auth</code>, three days, extended while in use) keeps the crew member
+		signed in; during sign-in a second cookie (<code>admin_oauth</code>, ten minutes) protects
+		against forged sign-ins. The legal basis is our legitimate interest in secure access to the
+		administration (Art. 6(1)(f) GDPR). We delete crew accounts when someone leaves the crew.
 	</p>
+	{#if notify.telegram}
+		<p>
+			Crew sign-ins and changes to crew access are also reported to the crew's private Telegram
+			group, so that misuse is noticed quickly (Art. 6(1)(f) GDPR). These messages contain the crew
+			member's email address. Telegram is operated from outside the European Union, see above.
+		</p>
+	{/if}
 
 	<h2>Settings in your browser</h2>
 	<p>
@@ -162,9 +214,11 @@ variables in the server's .env (`$lib/server/legal`).
 	<h2>Recipients and security</h2>
 	<p>
 		We don't sell data and don't pass it on to third parties. Only the crew members who organize the
-		beds and the hosting provider, as our processor, have access. The connection to the website is
-		encrypted with TLS. We back up the database regularly; backups are overwritten when their
-		retention time is over. There is no automated decision-making or profiling.
+		beds and our processors (the hosting provider{#if notify.mail}
+			and the mail service{/if}) have access.{#if notify.telegram}
+			Telegram only gets the messages described above.{/if} The connection to the website is encrypted
+		with TLS. We back up the database regularly; backups are overwritten when their retention time is
+		over. There is no automated decision-making or profiling.
 	</p>
 	<p>Without a ticket code you can't pick a bed; everything else is voluntary.</p>
 
