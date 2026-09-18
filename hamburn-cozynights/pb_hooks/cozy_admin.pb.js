@@ -23,18 +23,27 @@
 //    (BookingService.getOrderByNumber). The hash needs the app's
 //    ENCRYPTION_KEY, which this container never sees.
 //
-//      cozy-admin tickets add <code> [<code> ...] [--name <label>]   create ticket codes
+//      cozy-admin tickets add <code> [<code> ...] [--name <label>] [--email <address>]
+//                                                 create ticket codes (--email: one code only)
+//      cozy-admin tickets import <file.csv|->     create/update tickets with e-mail addresses
+//                                                 from a CSV roster (code, email, name)
 //      cozy-admin tickets generate <count> [--prefix TEST] [--name <label>]
 //                                                 create random codes like TEST-7F3K9Q
-//      cozy-admin tickets list                    ticket codes, sign-ins, booked beds
+//      cozy-admin tickets list                    ticket codes, sign-ins, booked beds, contacts
 //      cozy-admin tickets remove <code> [<code> ...]  delete tickets that hold no bed
+//      cozy-admin tickets forget-contacts --yes   after the event: delete all guest e-mail
+//                                                 addresses and Telegram links
+//
+//    Notifications (pb_hooks/cozy_notify.pb.js):
+//
+//      cozy-admin notify status                   what is configured, what is queued
+//      cozy-admin notify test [--email <address>] crew chat test message (+ test e-mail)
 //
 // 2. On every start, sync the Google OAuth client of the `admins` collection
 //    from PB_GOOGLE_CLIENT_ID / PB_GOOGLE_CLIENT_SECRET (so rotating the secret
 //    is an .env change + restart, not a new migration).
 //
-// 3. When a sign-in creates an access request, post a notification to
-//    COZY_ADMIN_WEBHOOK_URL (optional; Telegram, Slack, Google Chat, Discord).
+// Notifications about access requests and admin changes: pb_hooks/cozy_notify.pb.js.
 
 const ADMIN_DOMAIN = 'mauersegler.art';
 const MIN_SUPERUSER_PASSWORD = 12;
@@ -46,6 +55,10 @@ const TICKET_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const TICKET_RANDOM_LENGTH = 6;
 const MAX_GENERATED_TICKETS = 500;
 const MAX_TICKET_LABEL = 100;
+// Close to what PocketBase's email field accepts (orders.email).
+const GUEST_EMAIL_PATTERN =
+	/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+const MAX_IMPORT_PROBLEMS_SHOWN = 20;
 
 function cozyFail(cmd, message) {
 	// cmd.printErrln is a silent no-op in the JSVM; println writes to stderr.
@@ -80,6 +93,9 @@ function cozyCollection(cmd, name) {
 }
 
 function cozyAdminsCollection(cmd) {
+	// Read by pb_hooks/cozy_notify.pb.js in this process: admin changes made
+	// here are reported as done by "cozy-admin".
+	$app.store().set('cozy_cli', true);
 	return cozyCollection(cmd, 'admins');
 }
 
@@ -123,6 +139,8 @@ function cozyNewPendingAdmin(app, collection, email) {
 	// need a (never used) password.
 	rec.setRandomPassword();
 	rec.set('role', 'pending');
+	// An invite, not an access request (pb_hooks/cozy_notify.pb.js).
+	$app.store().set('cozy_cli_created', email);
 	app.save(rec);
 	return rec;
 }
@@ -355,11 +373,25 @@ function cozyFindTicketsIgnoringCase(app, code) {
 	);
 }
 
-function cozyNewTicket(app, collection, code, label) {
+function cozyNewTicket(app, collection, code, label, email) {
 	const rec = new Record(collection);
 	rec.set('order_number', code);
 	rec.set('customer_name', label || 'Ticket ' + code);
+	if (email) rec.set('email', email);
 	app.save(rec);
+}
+
+function cozyValidGuestEmail(email) {
+	return email.length <= 254 && GUEST_EMAIL_PATTERN.test(email);
+}
+
+/** --email of `tickets add`: lower case, checked; '' when not given. */
+function cozyTicketEmail(cmd) {
+	const email = String(cmd.flags().getString('email') || '')
+		.trim()
+		.toLowerCase();
+	if (email && !cozyValidGuestEmail(email)) cozyFail(cmd, 'invalid e-mail address: ' + email);
+	return email;
 }
 
 function cozyBedOfTicket(app, ticketId) {
@@ -382,9 +414,9 @@ function cozyDescribeBed(app, bed) {
 
 const cozyTickets = new Command({
 	use: 'tickets',
-	short: 'Manage ticket codes (collection orders): add, generate, list, remove',
+	short: 'Manage ticket codes (collection orders): add, import, generate, list, remove',
 	run: (cmd, args) => {
-		cozyFail(cmd, 'usage: cozy-admin tickets add|generate|list|remove ...');
+		cozyFail(cmd, 'usage: cozy-admin tickets add|import|generate|list|remove|forget-contacts ...');
 	}
 });
 
@@ -393,11 +425,21 @@ const cozyTicketsAdd = new Command({
 	short: 'Create tickets for the given codes (existing codes are left unchanged)',
 	run: (cmd, args) => {
 		if (args.length < 1) {
-			cozyFail(cmd, 'usage: cozy-admin tickets add <code> [<code> ...] [--name <label>]');
+			cozyFail(
+				cmd,
+				'usage: cozy-admin tickets add <code> [<code> ...] [--name <label>] [--email <address>]'
+			);
 		}
 		const collection = cozyCollection(cmd, 'orders');
 		const label = cozyTicketLabel(cmd);
+		const email = cozyTicketEmail(cmd);
 		const codes = args.map((a) => String(a));
+		if (email && codes.length !== 1) {
+			cozyFail(
+				cmd,
+				'--email belongs to one ticket: give exactly one code (a roster: tickets import)'
+			);
+		}
 		const invalid = codes.filter((code) => !TICKET_CODE_PATTERN.test(code));
 		if (invalid.length > 0) {
 			cozyFail(
@@ -417,17 +459,23 @@ const cozyTicketsAdd = new Command({
 					// Also catches a code that is given twice.
 					const twins = cozyFindTicketsIgnoringCase(txApp, code);
 					if (twins.length === 0) {
-						cozyNewTicket(txApp, collection, code, label);
+						cozyNewTicket(txApp, collection, code, label, email);
 						const mixedCase = code !== code.toUpperCase() && code !== code.toLowerCase();
 						report.push(
 							'created: ' +
 								code +
+								(email ? ' (e-mail ' + email + ')' : '') +
 								(mixedCase
 									? ' (note: mixes upper and lower case — guests have to type it exactly like this)'
 									: '')
 						);
 					} else if (twins.filter((t) => t.getString('order_number') === code).length > 0) {
-						report.push('unchanged: ' + code + ' already exists');
+						report.push(
+							'unchanged: ' +
+								code +
+								' already exists' +
+								(email ? ' (to change its e-mail address: tickets import)' : '')
+						);
 					} else {
 						conflict =
 							code +
@@ -447,7 +495,296 @@ const cozyTicketsAdd = new Command({
 cozyTicketsAdd
 	.flags()
 	.string('name', '', 'customer_name of the new tickets (default "Ticket <code>")');
+cozyTicketsAdd
+	.flags()
+	.string('email', '', "the ticket holder's e-mail address for booking confirmations");
 cozyTickets.addCommand(cozyTicketsAdd);
+
+// --- tickets import: the roster with e-mail addresses -------------------------
+
+/** A CSV file as rows of fields; the delimiter (, ; or tab) is taken from the header. */
+function cozyParseCsv(text) {
+	const src = String(text).replace(/^﻿/, '');
+	const header = src.split(/\r?\n/, 1)[0] || '';
+	const counts = { ',': 0, ';': 0, '\t': 0 };
+	let quoted = false;
+	for (let i = 0; i < header.length; i++) {
+		const c = header.charAt(i);
+		if (c === '"') quoted = !quoted;
+		else if (!quoted && counts[c] !== undefined) counts[c]++;
+	}
+	let delimiter = ',';
+	if (counts[';'] > counts[delimiter]) delimiter = ';';
+	if (counts['\t'] > counts[delimiter]) delimiter = '\t';
+
+	const rows = [];
+	let row = [];
+	let field = '';
+	quoted = false;
+	for (let i = 0; i < src.length; i++) {
+		const c = src.charAt(i);
+		if (quoted) {
+			if (c === '"' && src.charAt(i + 1) === '"') {
+				field += '"';
+				i++;
+			} else if (c === '"') {
+				quoted = false;
+			} else {
+				field += c;
+			}
+		} else if (c === '"') {
+			quoted = true;
+		} else if (c === delimiter) {
+			row.push(field);
+			field = '';
+		} else if (c === '\n') {
+			row.push(field);
+			rows.push(row);
+			row = [];
+			field = '';
+		} else if (c !== '\r') {
+			field += c;
+		}
+	}
+	if (field !== '' || row.length > 0) {
+		row.push(field);
+		rows.push(row);
+	}
+	return rows.filter((r) => r.some((f) => String(f).trim() !== ''));
+}
+
+const CSV_COLUMNS = {
+	code: [
+		'code',
+		'ticket',
+		'ticket code',
+		'ticketcode',
+		'order',
+		'order code',
+		'order number',
+		'secret'
+	],
+	email: ['email', 'e-mail', 'mail', 'email address', 'e-mail address', 'attendee email'],
+	name: ['name', 'customer name', 'attendee', 'attendee name', 'full name']
+};
+
+function cozyCsvColumns(header) {
+	const names = header.map((h) =>
+		String(h)
+			.trim()
+			.toLowerCase()
+			.replace(/[_\s]+/g, ' ')
+	);
+	const columns = {};
+	for (const key of Object.keys(CSV_COLUMNS)) {
+		columns[key] = names.findIndex((n) => CSV_COLUMNS[key].indexOf(n) >= 0);
+	}
+	return columns;
+}
+
+const cozyTicketsImport = new Command({
+	use: 'import <file.csv|->',
+	short: 'Create or update tickets from a CSV roster: columns code, email and optionally name',
+	run: (cmd, args) => {
+		if (args.length !== 1)
+			cozyFail(cmd, 'usage: cozy-admin tickets import <file.csv|-> [--dry-run]');
+		const collection = cozyCollection(cmd, 'orders');
+		const fromStdin = String(args[0]) === '-';
+		let text;
+		try {
+			text = toString($os.readFile(fromStdin ? '/dev/stdin' : String(args[0])));
+		} catch (err) {
+			cozyFail(cmd, 'cannot read ' + (fromStdin ? 'the standard input' : args[0]) + ': ' + err);
+		}
+
+		const rows = cozyParseCsv(text);
+		if (rows.length < 2) cozyFail(cmd, 'the file needs a header row and at least one ticket');
+		const cols = cozyCsvColumns(rows[0]);
+		if (cols.code < 0 || cols.email < 0) {
+			cozyFail(
+				cmd,
+				'the header needs a ticket code column ("code") and an e-mail column ("email"), found: ' +
+					rows[0].join(' | ')
+			);
+		}
+
+		// Check everything first: nothing is imported from a file with problems.
+		const problems = [];
+		const entries = [];
+		const lineOfCode = {};
+		for (let r = 1; r < rows.length; r++) {
+			const line = r + 1;
+			const cell = (idx) => (idx >= 0 && idx < rows[r].length ? String(rows[r][idx]).trim() : '');
+			const code = cell(cols.code).replace(/[​-‍﻿]/g, '');
+			const email = cell(cols.email).toLowerCase();
+			const name = cell(cols.name);
+			if (!TICKET_CODE_PATTERN.test(code)) {
+				problems.push('line ' + line + ': invalid ticket code "' + code + '"');
+			} else if (email && !cozyValidGuestEmail(email)) {
+				problems.push('line ' + line + ': invalid e-mail address "' + email + '"');
+			} else if (name.length > MAX_TICKET_LABEL) {
+				problems.push('line ' + line + ': name longer than ' + MAX_TICKET_LABEL + ' characters');
+			} else if (lineOfCode[code.toLowerCase()]) {
+				problems.push(
+					'line ' +
+						line +
+						': ticket code ' +
+						code +
+						' is also on line ' +
+						lineOfCode[code.toLowerCase()]
+				);
+			} else {
+				lineOfCode[code.toLowerCase()] = line;
+				entries.push({ line: line, code: code, email: email, name: name });
+			}
+		}
+		if (problems.length > 0) {
+			for (const p of problems.slice(0, MAX_IMPORT_PROBLEMS_SHOWN)) cmd.println(p);
+			if (problems.length > MAX_IMPORT_PROBLEMS_SHOWN) {
+				cmd.println('… and ' + (problems.length - MAX_IMPORT_PROBLEMS_SHOWN) + ' more');
+			}
+			cozyFail(cmd, problems.length + ' problem(s) in the file — nothing was imported');
+		}
+
+		const dryRun = cmd.flags().getBool('dry-run');
+		const counts = { created: 0, updated: 0, unchanged: 0, confirmations: 0, withoutEmail: 0 };
+		let conflict = '';
+		try {
+			$app.runInTransaction((txApp) => {
+				for (const entry of entries) {
+					if (!entry.email) counts.withoutEmail++;
+					const twins = cozyFindTicketsIgnoringCase(txApp, entry.code);
+					const exact = twins.filter((t) => t.getString('order_number') === entry.code)[0];
+					if (!exact && twins.length > 0) {
+						conflict =
+							'line ' +
+							entry.line +
+							': ' +
+							entry.code +
+							' differs only in upper/lower case from the existing ticket ' +
+							twins[0].getString('order_number');
+						throw new Error(conflict);
+					}
+					if (!exact) {
+						cozyNewTicket(txApp, collection, entry.code, entry.name, entry.email);
+						counts.created++;
+						continue;
+					}
+					// Empty cells leave the stored value alone.
+					let changed = false;
+					if (entry.email && exact.getString('email') !== entry.email) {
+						exact.set('email', entry.email);
+						changed = true;
+						if (cozyBedOfTicket(txApp, exact.id)) counts.confirmations++;
+					}
+					if (entry.name && exact.getString('customer_name') !== entry.name) {
+						exact.set('customer_name', entry.name);
+						changed = true;
+					}
+					if (changed) {
+						txApp.save(exact);
+						counts.updated++;
+					} else {
+						counts.unchanged++;
+					}
+				}
+				if (dryRun) throw new Error('cozy-dry-run');
+			});
+		} catch (err) {
+			if (String(err).indexOf('cozy-dry-run') < 0) {
+				cozyFail(cmd, 'nothing was imported: ' + (conflict || err));
+			}
+		}
+
+		cmd.println(
+			(dryRun ? 'DRY RUN, nothing changed — would have ' : '') +
+				'created ' +
+				counts.created +
+				', updated ' +
+				counts.updated +
+				', unchanged ' +
+				counts.unchanged +
+				' ticket(s)'
+		);
+		if (counts.confirmations > 0) {
+			cmd.println(
+				'  ' +
+					counts.confirmations +
+					' of the updated tickets hold a spot: their new address gets a confirmation'
+			);
+		}
+		if (counts.withoutEmail > 0) {
+			cmd.println('  ' + counts.withoutEmail + ' line(s) without an e-mail address');
+		}
+		const codesByEmail = {};
+		for (const entry of entries) {
+			if (entry.email)
+				(codesByEmail[entry.email] = codesByEmail[entry.email] || []).push(entry.code);
+		}
+		const shared = Object.keys(codesByEmail).filter((e) => codesByEmail[e].length > 1);
+		if (shared.length > 0) {
+			cmd.println(
+				'  note: ' +
+					shared.length +
+					' address(es) belong to more than one ticket (each ticket gets its own messages), e.g. ' +
+					shared[0] +
+					': ' +
+					codesByEmail[shared[0]].join(', ')
+			);
+		}
+		const others =
+			$app.countRecords('orders') - (dryRun ? counts.updated + counts.unchanged : entries.length);
+		if (others > 0) {
+			cmd.println(
+				'  ' + others + ' ticket(s) in the database are not in this file (left unchanged)'
+			);
+		}
+	}
+});
+cozyTicketsImport
+	.flags()
+	.bool('dry-run', false, 'check the file and show what would change, without changing anything');
+cozyTickets.addCommand(cozyTicketsImport);
+
+cozyTickets.addCommand(
+	(() => {
+		const forget = new Command({
+			use: 'forget-contacts',
+			short: 'After the event: delete every e-mail address and Telegram link of the tickets',
+			run: (cmd, args) => {
+				if (args.length !== 0 || !cmd.flags().getBool('yes')) {
+					cozyFail(
+						cmd,
+						'this deletes the e-mail address of every ticket and every Telegram link (ticket codes stay) — run it with --yes'
+					);
+				}
+				cozyCollection(cmd, 'guest_notify');
+				let emails = 0;
+				let links = 0;
+				$app.runInTransaction((txApp) => {
+					for (const t of txApp.findRecordsByFilter('orders', "email != ''", '', 0, 0)) {
+						t.set('email', '');
+						txApp.save(t);
+						emails++;
+					}
+					for (const n of txApp.findRecordsByFilter('guest_notify', "id != ''", '', 0, 0)) {
+						if (n.getString('tg_chat')) links++;
+						txApp.delete(n);
+					}
+				});
+				cmd.println(
+					'deleted ' +
+						emails +
+						' e-mail address(es) and ' +
+						links +
+						' Telegram link(s); the ticket codes are kept'
+				);
+			}
+		});
+		forget.flags().bool('yes', false, 'really delete them');
+		return forget;
+	})()
+);
 
 const cozyTicketsGenerate = new Command({
 	use: 'generate <count>',
@@ -522,6 +859,15 @@ cozyTickets.addCommand(
 				booked[bed.getString('order')] = true;
 			}
 
+			const telegram = {};
+			try {
+				for (const n of $app.findRecordsByFilter('guest_notify', "tg_chat != ''", '', 0, 0)) {
+					telegram[n.getString('order')] = true;
+				}
+			} catch (_) {
+				// before the notifications migration
+			}
+
 			const readable = tickets.filter((t) => t.getString('order_number') !== '');
 			// Capped, so that one very long code doesn't push all columns off screen.
 			let width = 0;
@@ -536,7 +882,11 @@ cozyTickets.addCommand(
 					tickets.filter((t) => booked[t.id]).length +
 					' hold a bed, ' +
 					tickets.filter((t) => t.getString('order_hash') !== '').length +
-					' used'
+					' used, ' +
+					tickets.filter((t) => t.getString('email') !== '').length +
+					' with e-mail, ' +
+					Object.keys(telegram).length +
+					' with Telegram'
 			);
 			cmd.println('CODES (used = signed in at least once, i.e. the lookup hash is stored)');
 			if (readable.length === 0) cmd.println('  (none)');
@@ -548,8 +898,11 @@ cozyTickets.addCommand(
 						(t.getString('order_hash') !== '' ? 'yes' : 'no ') +
 						'  bed=' +
 						(booked[t.id] ? 'yes' : 'no ') +
+						'  tg=' +
+						(telegram[t.id] ? 'yes' : 'no ') +
 						'  ' +
-						t.getString('customer_name')
+						t.getString('customer_name') +
+						(t.getString('email') ? '  <' + t.getString('email') + '>' : '')
 				);
 			}
 			if (readable.length < tickets.length) {
@@ -611,6 +964,176 @@ cozyTickets.addCommand(
 
 cozyAdmin.addCommand(cozyTickets);
 
+// --- notifications -------------------------------------------------------------
+
+function cozyNotifyModule() {
+	return require(`${__hooks}/lib/notify.js`);
+}
+
+function cozyCount(collection, filter) {
+	try {
+		return $app.findRecordsByFilter(collection, filter, '', 0, 0).length;
+	} catch (_) {
+		return 0; // before the notifications migration
+	}
+}
+
+const cozyNotify = new Command({
+	use: 'notify',
+	short: 'Notifications (guest e-mail, Telegram): status and test messages',
+	run: (cmd, args) => {
+		cozyFail(cmd, 'usage: cozy-admin notify status|test');
+	}
+});
+
+cozyNotify.addCommand(
+	new Command({
+		use: 'status',
+		short: 'Show what is configured, what is queued and the latest admin events',
+		run: (cmd, args) => {
+			const notify = cozyNotifyModule();
+			const cfg = notify.config($app);
+			const settings = $app.settings();
+			cmd.println(
+				'E-MAIL TO GUESTS   ' +
+					(cfg.mail.enabled
+						? 'on: ' +
+							settings.smtp.host +
+							':' +
+							settings.smtp.port +
+							', from "' +
+							settings.meta.senderName +
+							'" <' +
+							settings.meta.senderAddress +
+							'>'
+						: 'off (SMTP_HOST / MAIL_FROM_ADDRESS not set)')
+			);
+			let crew = 'off (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID not set)';
+			if (cfg.telegram.token && cfg.telegram.chatId) {
+				crew =
+					'Telegram chat ' +
+					cfg.telegram.chatId +
+					(cfg.telegram.threadId ? ' (topic ' + cfg.telegram.threadId + ')' : '');
+			} else if (cfg.legacyWebhook) {
+				crew = 'webhook COZY_ADMIN_WEBHOOK_URL';
+			}
+			cmd.println('CREW CHAT          ' + crew);
+			if (cfg.telegram.token) {
+				const me = notify.telegramCall(cfg, 'getMe', {}, 10);
+				cmd.println(
+					'TELEGRAM BOT       ' +
+						(me.ok ? '@' + me.result.username : 'FAILED: ' + me.status + ' ' + me.description) +
+						', guest updates ' +
+						(cfg.telegram.guests ? 'on' : 'off (TELEGRAM_GUEST_UPDATES=off)')
+				);
+				const hook = notify.telegramCall(cfg, 'getWebhookInfo', {}, 10);
+				if (hook.ok && hook.result && hook.result.url) {
+					cmd.println(
+						'  WARNING: this bot has a webhook, so the server cannot read guest messages — remove it (Bot API deleteWebhook)'
+					);
+				}
+			}
+			cmd.println('APP URL IN LINKS   ' + (cfg.appUrl || '(not set: set COZY_APP_URL)'));
+			cmd.println(
+				'GUESTS             ' +
+					cozyCount('orders', "email != ''") +
+					' ticket(s) with e-mail, ' +
+					cozyCount('guest_notify', "tg_chat != ''") +
+					' with Telegram; queued ' +
+					cozyCount('guest_notify', "due != ''") +
+					', retrying ' +
+					cozyCount('guest_notify', "due != '' && attempts > 0")
+			);
+			cmd.println(
+				'CREW ALERTS        ' +
+					cozyCount('admin_events', "alert_status = 'pending'") +
+					' queued, ' +
+					cozyCount('admin_events', "alert_status = 'failed'") +
+					' failed'
+			);
+			let events = [];
+			try {
+				events = $app.findRecordsByFilter('admin_events', "id != ''", '-created', 8, 0);
+			} catch (_) {
+				// before the notifications migration
+			}
+			cmd.println('LATEST ADMIN EVENTS');
+			if (events.length === 0) cmd.println('  (none)');
+			for (const ev of events) {
+				cmd.println(
+					'  ' +
+						String(ev.getString('created')).slice(0, 16) +
+						'  ' +
+						ev.getString('action').padEnd(22) +
+						' ' +
+						(ev.getString('actor') || '-') +
+						(ev.getString('subject') ? ' → ' + ev.getString('subject') : '') +
+						'  [alert ' +
+						ev.getString('alert_status') +
+						']'
+				);
+			}
+		}
+	})
+);
+
+const cozyNotifyTest = new Command({
+	use: 'test',
+	short: 'Send a test message to the crew chat and, with --email, a test e-mail',
+	run: (cmd, args) => {
+		const notify = cozyNotifyModule();
+		const cfg = notify.config($app);
+		let failed = 0;
+
+		if (notify.crewConfigured(cfg)) {
+			const r = notify.crewSend(
+				cfg,
+				'🧪 Test message from cozy-admin notify test' + (cfg.appUrl ? ' (' + cfg.appUrl + ')' : '')
+			);
+			if (r.ok) {
+				cmd.println('crew chat: sent');
+			} else {
+				failed++;
+				cmd.println('crew chat: FAILED — ' + r.error);
+				if (/^401\b/.test(r.error)) {
+					cmd.println('  the bot token is wrong (TELEGRAM_BOT_TOKEN)');
+				} else if (/chat not found|^403\b/.test(r.error)) {
+					cmd.println('  the bot is not a member of that chat, or TELEGRAM_CHAT_ID is wrong');
+				}
+			}
+		} else {
+			cmd.println('crew chat: not configured (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)');
+		}
+
+		const to = String(cmd.flags().getString('email') || '')
+			.trim()
+			.toLowerCase();
+		if (to) {
+			if (!cfg.mail.enabled) {
+				failed++;
+				cmd.println('e-mail: not configured (SMTP_HOST, MAIL_FROM_ADDRESS)');
+			} else {
+				try {
+					notify.sendMail($app, cfg, to, {
+						subject: (cfg.label ? '[' + cfg.label + '] ' : '') + 'CozyNights test e-mail',
+						text: 'This is a test e-mail from cozy-admin notify test. Guest confirmations look different.',
+						html: '<p>This is a test e-mail from <code>cozy-admin notify test</code>. Guest confirmations look different.</p>'
+					});
+					cmd.println('e-mail: sent to ' + to);
+				} catch (err) {
+					failed++;
+					cmd.println('e-mail: FAILED — ' + notify.safeError(err));
+				}
+			}
+		}
+		if (failed > 0) $os.exit(1);
+	}
+});
+cozyNotifyTest.flags().string('email', '', 'also send a test e-mail to this address');
+cozyNotify.addCommand(cozyNotifyTest);
+
+cozyAdmin.addCommand(cozyNotify);
+
 $app.rootCmd.addCommand(cozyAdmin);
 
 onBootstrap((e) => {
@@ -663,47 +1186,6 @@ onBootstrap((e) => {
 	e.app.save(collection);
 	console.log('[cozy-admin] Google OAuth client for admins updated from environment');
 });
-
-onRecordAfterCreateSuccess((e) => {
-	e.next();
-
-	const url = $os.getenv('COZY_ADMIN_WEBHOOK_URL');
-	if (!url || e.record.getString('role') !== 'pending') return;
-
-	const email = e.record.email();
-	const name = e.record.getString('name');
-	const text =
-		'🛎️ CozyNights: neue Admin-Zugangsanfrage von ' +
-		(name ? name + ' <' + email + '>' : email) +
-		'\nFreigeben: ./scripts/cozy-admin.sh approve ' +
-		email +
-		'\n(oder PocketBase-Dashboard → admins → role)';
-
-	// Payload shape per service; Google Chat rejects unknown fields.
-	let body = { text: text };
-	if (url.indexOf('https://api.telegram.org/') === 0) {
-		const match = /[?&]chat_id=([^&]+)/.exec(url);
-		body = { chat_id: match ? decodeURIComponent(match[1]) : '', text: text };
-	} else if (/^https:\/\/(discord|discordapp)\.com\//.test(url)) {
-		body = { content: text };
-	}
-
-	try {
-		const res = $http.send({
-			url: url,
-			method: 'POST',
-			body: JSON.stringify(body),
-			headers: { 'content-type': 'application/json' },
-			timeout: 5
-		});
-		if (res.statusCode >= 300) {
-			console.warn('[cozy-admin] access request webhook answered HTTP ' + res.statusCode);
-		}
-	} catch (err) {
-		// A notification problem must never break the sign-in.
-		console.warn('[cozy-admin] access request webhook failed: ' + err);
-	}
-}, 'admins');
 
 // Second barrier, independent of pb_hooks/admins_oauth_guard.pb.js: however a
 // record gets created (OAuth2 sign-in, dashboard, CLI), it must belong to the

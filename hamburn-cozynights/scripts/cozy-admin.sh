@@ -18,15 +18,27 @@
 #                                                       (generates the password if missing) and
 #                                                       recreate the app container
 #
-# Ticket codes (the guests' logins, collection `orders`); the app has no import for them:
+# Ticket codes (the guests' logins, collection `orders`) and the ticket holders'
+# e-mail addresses for booking confirmations; the app has no import for them:
+#   scripts/cozy-admin.sh tickets import <roster.csv> [--dry-run]
+#                                                       create/update tickets from a CSV file with
+#                                                       the columns code, email (and name); checks
+#                                                       the whole file first
+#   scripts/cozy-admin.sh tickets add <code> [<code> ...] [--name <label>] [--email <address>]
+#                                                       create tickets for known codes (--email:
+#                                                       one code only)
 #   scripts/cozy-admin.sh tickets generate <count> [--prefix TEST] [--name <label>]
 #                                                       create random codes like TEST-7F3K9Q
 #                                                       and print them, one per line
-#   scripts/cozy-admin.sh tickets add <code> [<code> ...] [--name <label>]
-#                                                       create tickets for known codes; a whole
-#                                                       roster: xargs scripts/cozy-admin.sh tickets add <codes.txt
-#   scripts/cozy-admin.sh tickets list                  codes with sign-in and booking state
+#   scripts/cozy-admin.sh tickets list                  codes with sign-in, booking and contact state
 #   scripts/cozy-admin.sh tickets remove <code> [<code> ...]  delete tickets that hold no bed
+#   scripts/cozy-admin.sh tickets forget-contacts --yes after the event: delete all guest e-mail
+#                                                       addresses and Telegram links
+#
+# Notifications (guest e-mail and Telegram, crew chat; settings in .env):
+#   scripts/cozy-admin.sh notify status                 what is configured, queued, the last events
+#   scripts/cozy-admin.sh notify test [--email <address>]
+#                                                       test message to the crew chat (+ test e-mail)
 #
 # Targets docker-compose.staging.yml next to this script's parent folder;
 # override with COZY_COMPOSE_FILE=/path/to/docker-compose.<env>.yml (and COZY_ENV_FILE).
@@ -136,8 +148,8 @@ case "$cmd" in
 		;;
 	tickets)
 		case "${1:-}" in
-			add | generate | list | remove) ;;
-			*) die "usage: $0 tickets add|generate|list|remove ... (details: $0 --help)" ;;
+			add | import | generate | list | remove | forget-contacts) ;;
+			*) die "usage: $0 tickets add|import|generate|list|remove|forget-contacts ... (details: $0 --help)" ;;
 		esac
 		# --help in front of the PocketBase flags would keep the binary from
 		# loading pb_hooks ("unknown command cozy-admin").
@@ -145,7 +157,23 @@ case "$cmd" in
 			if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then usage 0; fi
 		done
 		require_running
-		cozy -- tickets "$@"
+		if [[ "$1" == "import" ]]; then
+			# The file lives on the host; the command reads it from stdin.
+			[[ $# -ge 2 && -f "$2" ]] || die "usage: $0 tickets import <roster.csv> [--dry-run]"
+			file="$2"
+			shift 2
+			cozy -- tickets import - "$@" <"$file"
+		else
+			cozy -- tickets "$@"
+		fi
+		;;
+	notify)
+		case "${1:-}" in
+			status | test) ;;
+			*) die "usage: $0 notify status|test [--email <address>]" ;;
+		esac
+		require_running
+		cozy -- notify "$@"
 		;;
 	service-account)
 		require_running

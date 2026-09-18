@@ -11,7 +11,8 @@
 #
 # KEEP_STACK=1 leaves the stack running afterwards (debugging); the generated
 # connection details are printed so you can re-run vitest by hand.
-# TEST_PB_PORT / TEST_APP_PORT change the local ports (default 8290 / 3290).
+# TEST_PB_PORT / TEST_APP_PORT / TEST_MOCK_PORT / TEST_MAILPIT_PORT change the
+# local ports (default 8290 / 3290 / 8292 / 8293).
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,6 +20,8 @@ cd "$APP_DIR"
 
 export TEST_PB_PORT="${TEST_PB_PORT:-8290}"
 export TEST_APP_PORT="${TEST_APP_PORT:-3290}"
+export TEST_MOCK_PORT="${TEST_MOCK_PORT:-8292}"
+export TEST_MAILPIT_PORT="${TEST_MAILPIT_PORT:-8293}"
 PB_FLAGS=(--dir=/pb_data --hooksDir=/pb_hooks --migrationsDir=/pb_migrations)
 
 compose() { docker compose -f "$APP_DIR/docker-compose.test.yml" "$@"; }
@@ -49,17 +52,19 @@ cleanup() {
 	fi
 	if [[ "${KEEP_STACK:-0}" == 1 ]]; then
 		log "KEEP_STACK=1 — stack left running (remove it with: scripts/test-stack.sh down)"
-		echo "  PB_TEST_URL=$PB_TEST_URL SMOKE_BASE_URL=${SMOKE_BASE_URL:-} PB_ADMIN_EMAIL=$PB_ADMIN_EMAIL PB_ADMIN_PASSWORD=$PB_ADMIN_PASSWORD"
+		echo "  PB_TEST_URL=$PB_TEST_URL MOCK_URL=${MOCK_URL:-} MAILPIT_URL=${MAILPIT_URL:-} SMOKE_BASE_URL=${SMOKE_BASE_URL:-} PB_ADMIN_EMAIL=$PB_ADMIN_EMAIL PB_ADMIN_PASSWORD=$PB_ADMIN_PASSWORD"
 	else
 		compose --profile app down --volumes --remove-orphans >/dev/null 2>&1 || true
 	fi
 }
 trap 'status=$?; cleanup' EXIT
 
-log "starting an empty PocketBase on 127.0.0.1:$TEST_PB_PORT"
+log "starting an empty PocketBase on 127.0.0.1:$TEST_PB_PORT (+ mail catcher and service stand-ins)"
 compose --profile app down --volumes --remove-orphans >/dev/null 2>&1 || true
-compose up -d --wait pocketbase
+compose up -d --wait mailpit mocks pocketbase
 export PB_TEST_URL="http://127.0.0.1:$TEST_PB_PORT"
+export MOCK_URL="http://127.0.0.1:$TEST_MOCK_PORT"
+export MAILPIT_URL="http://127.0.0.1:$TEST_MAILPIT_PORT"
 
 # Same path as on a server (scripts/cozy-admin.sh service-account). It only
 # works if pb_hooks/cozy_admin.pb.js loaded and the migrations have run.
