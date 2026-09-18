@@ -31,7 +31,9 @@ async function run() {
 	// 2. Check Credentials
 	if (!PB_ADMIN_EMAIL || !PB_ADMIN_PASSWORD) {
 		console.error('❌ Missing PB_ADMIN_EMAIL or PB_ADMIN_PASSWORD in .env');
-		console.error('💡 Fix: Add them to your .env file. See docs/DEVELOPMENT.md for instructions.');
+		console.error(
+			'💡 Fix: Add them to your .env file. See https://morpheusmxml.github.io/hamburn-cozynights/develop/ for instructions.'
+		);
 		process.exit(1);
 	}
 

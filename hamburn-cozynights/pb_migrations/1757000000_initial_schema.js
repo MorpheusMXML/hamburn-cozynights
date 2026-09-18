@@ -19,7 +19,7 @@
 // - orders: no public rules at all (null/superuser-only). Orders hold PII
 //   (customer_name, burner_name) and are only ever read or written through
 //   the privileged adminPb connection via BookingService — see
-//   src/lib/server/booking.ts and docs/SECURITY.md.
+//   src/lib/server/booking.ts and docs/reference/security.md.
 
 migrate(
 	(app) => {

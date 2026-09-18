@@ -1,8 +1,9 @@
 name: CI
 
 # Every pull request and every push to main runs the full verification
-# (hamburn-cozynights/docs/TESTING.md). The staging deploy calls this workflow
-# too (workflow_call), so nothing is deployed that did not pass here.
+# (docs/develop/testing.md, "Testing & release checks" on the docs site). The
+# staging deploy calls this workflow too (workflow_call), so nothing is
+# deployed that did not pass here.
 on:
   pull_request:
   push:

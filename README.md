@@ -1,101 +1,92 @@
-# 🔥 Hamburn CozyNights
+<div align="center">
 
-**A streamlined accommodation booking and camp management tool designed for regional Burning Man events.**
+<img src="docs/public/swift.png" alt="" width="150" />
 
-![Status](https://img.shields.io/badge/status-active-success.svg)
-![Tech](https://img.shields.io/badge/built%20with-SvelteKit%20%2B%20PocketBase-orange)
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+# Hamburn CozyNights
 
-## 📖 Overview
+**Beds, not spreadsheets.**<br />
+Ticket holders pick their own bed on the Hamburn camp map. The crew builds the camp, decides when booking opens and keeps an eye on every spot from one Control Center.
 
-**Hamburn CozyNights** is a specialized web application built to simplify the chaotic process of assigning sleeping quarters at Burner events. It replaces spreadsheets with an interactive visual interface.
+[![Documentation](https://img.shields.io/badge/docs-read%20the%20guide-f472b6?style=for-the-badge&logo=readthedocs&logoColor=white)](https://morpheusmxml.github.io/hamburn-cozynights/)
 
-Organizers can map out the event site, define houses/structures, and manage room capacities. Participants (or camp leads) can reserve specific beds using unique booking codes, ensuring everyone has a cozy place to crash after a long night on the playa (or the pasture).
+![SvelteKit](https://img.shields.io/badge/SvelteKit-2-ff3e00?logo=svelte&logoColor=white)
+![PocketBase](https://img.shields.io/badge/PocketBase-0.40-b8dbe4?logo=pocketbase&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ed?logo=docker&logoColor=white)
 
-### ✨ Key Features
+[How booking works](https://morpheusmxml.github.io/hamburn-cozynights/guide/booking) ·
+[Admin guide](https://morpheusmxml.github.io/hamburn-cozynights/admin/) ·
+[Architecture](https://morpheusmxml.github.io/hamburn-cozynights/reference/architecture) ·
+[Local development](https://morpheusmxml.github.io/hamburn-cozynights/develop/)
 
-* **🗺️ Interactive Map Interface:** Visualize the event layout with a custom map (e.g., *Hamburn 2025*).
-* **🏠 House & Room Management:** Admins can visually place houses on the map and configure room layouts.
-* **🛏️ Bed Reservation System:**
-    * Granular control over bed availability.
-    * **Booking Codes:** Secure access allows users to claim beds based on generated codes.
-* **📱 Modern UI:** Built with **SvelteKit** for a snappy, reactive user experience.
-* **💾 Robust Backend:** Powered by **PocketBase** for real-time data and easy administration.
+</div>
 
----
+![The camp map during Live Booking](docs/assets/screenshots/guest-map-live.webp)
 
-## 🛠️ Tech Stack
+## ✨ What it does
 
-* **Frontend:** [SvelteKit](https://kit.svelte.dev/) (TypeScript, Vite)
-* **Backend & Database:** [PocketBase](https://pocketbase.io/) (SQLite embedded)
-* **Styling:** CSS / Svelte native styling
-* **Deployment:** Docker & Docker Compose
+|     |                                |                                                                                                        |
+| --- | ------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| 🗺️  | **Interactive camp map**       | Every house sits on the real site plan; guests see at a glance where beds are free.                    |
+| 🎫  | **One ticket, one bed**        | No accounts or passwords for guests. The ticket code is the key, and it holds exactly one spot.        |
+| 🎰  | **Destiny Roulette**           | A random free bed plus a random burner name, for the undecided.                                        |
+| 🛠️  | **Staging, then Live**         | The crew builds the layout in staging; going live freezes it and opens booking, by switch or by timer. |
+| 🔐  | **Google Workspace sign-in**   | Admins use their `@mauersegler.art` account. Newcomers request access, a superuser approves.          |
+| 💾  | **Layout templates**           | Export the whole camp as JSON and rebuild it for the next burn in one step.                            |
+| 🛡️  | **Privacy first**              | Server-side rendering only, encrypted burner names, hashed ticket lookups, strict database rules.      |
 
----
+## 🧭 How it works
 
-## 🚀 Quick Start Guide
+```mermaid
+flowchart LR
+  build["🛠️ Crew builds the camp"] --> open["⏱️ Booking opens"]
+  open --> code["🎫 Guest enters ticket code"]
+  code --> pick["🛏️ Picks a bed"]
+  pick --> night["🔥 Cozy night"]
+```
 
-You can get the project up and running quickly using Docker.
+## 🚀 Quick start
 
-### Prerequisites
-* [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/) installed.
-* [Git](https://git-scm.com/) installed.
+You need Node.js 22+ and Docker.
 
-### Installation
+```bash
+git clone https://github.com/MorpheusMXML/hamburn-cozynights.git
+cd hamburn-cozynights/hamburn-cozynights
+cp .env.example .env     # fill it in, the comments explain every value
+docker compose up -d     # PocketBase on 127.0.0.1:8090
+npm ci
+npm run dev              # http://localhost:5173
+```
 
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/morpheusmxml/hamburn-cozynights.git](https://github.com/morpheusmxml/hamburn-cozynights.git)
-    cd hamburn-cozynights
-    ```
+The full walkthrough, including admin sign-in on your machine, is in [Local development](https://morpheusmxml.github.io/hamburn-cozynights/develop/).
 
-2.  **Start with Docker Compose:**
-    The project includes a `docker-compose.yml` for easy orchestration.
-    ```bash
-    docker-compose up -d
-    ```
+## 📚 Documentation
 
-3.  **Access the Application:**
-    * **Web App:** Open `http://localhost:5173` (or the port defined in your docker config).
-    * **PocketBase Admin:** Open `http://localhost:8090/_/` to manage the database, booking codes, and map data.
+The documentation lives in [`docs/`](docs/) and is published at **[morpheusmxml.github.io/hamburn-cozynights](https://morpheusmxml.github.io/hamburn-cozynights/)**.
 
----
+| Guide                                                                                    | Admin                                                                                           | Under the hood                                                                                 | Develop                                                                                                |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [What is CozyNights?](https://morpheusmxml.github.io/hamburn-cozynights/guide/)          | [Control Center](https://morpheusmxml.github.io/hamburn-cozynights/admin/)                      | [Architecture](https://morpheusmxml.github.io/hamburn-cozynights/reference/architecture)       | [Local development](https://morpheusmxml.github.io/hamburn-cozynights/develop/)                        |
+| [Booking a bed](https://morpheusmxml.github.io/hamburn-cozynights/guide/booking)         | [Admin access & roles](https://morpheusmxml.github.io/hamburn-cozynights/admin/access)          | [Security & privacy](https://morpheusmxml.github.io/hamburn-cozynights/reference/security)     | [Environments & deployment](https://morpheusmxml.github.io/hamburn-cozynights/develop/deployment)      |
+| [Staging & Live Booking](https://morpheusmxml.github.io/hamburn-cozynights/guide/phases) | [Houses, rooms & spots](https://morpheusmxml.github.io/hamburn-cozynights/admin/camp-layout)    |                                                                                                | [Working on these docs](https://morpheusmxml.github.io/hamburn-cozynights/develop/docs)                |
+| [FAQ](https://morpheusmxml.github.io/hamburn-cozynights/guide/faq)                       | [Layout templates](https://morpheusmxml.github.io/hamburn-cozynights/admin/templates)           |                                                                                                |                                                                                                        |
+|                                                                                          | [Event checklist](https://morpheusmxml.github.io/hamburn-cozynights/admin/event-checklist)      |                                                                                                |                                                                                                        |
 
-## 💻 Local Development
-
-If you prefer to run the frontend and backend manually for development purposes:
-
-1.  **Install Dependencies:**
-    ```bash
-    npm install
-    ```
-
-2.  **Start PocketBase:**
-    Make sure you have the PocketBase executable or run it via the provided scripts if available.
-    ```bash
-    # Example command (adjust path to your pocketbase binary)
-    ./pocketbase serve
-    ```
-
-3.  **Start SvelteKit (Dev Mode):**
-    ```bash
-    npm run dev
-    ```
-
----
-
-## 📂 Project Structure
+## 🗂️ Repository
 
 ```text
-hamburn-cozynights/
-├── src/
-│   ├── lib/
-│   │   ├── components/    # UI Components (Map, HouseEditor, etc.)
-│   │   ├── server/        # Server-side logic (Inventory, etc.)
-│   │   └── pocketbase.ts  # PB Client configuration
-│   └── routes/            # SvelteKit Pages & API endpoints
-├── static/                # Static assets (Maps, Logos, Favicons)
-├── pb_data/               # PocketBase database files (SQLite)
-├── pb_hooks/              # Server-side PocketBase hooks
-├── docker-compose.yml     # Docker orchestration
-└── package.json           # Project dependencies
+.
+├── docs/                   documentation site (VitePress → GitHub Pages)
+├── .github/workflows/      staging deploy, docs deploy
+└── hamburn-cozynights/     the app: SvelteKit + PocketBase
+    ├── src/                routes, components, server logic
+    ├── pb_migrations/      database schema and API rules
+    ├── pb_hooks/           PocketBase hooks
+    ├── scripts/            admin tool, health check, test setup
+    ├── deploy/             deploy script, nginx vhost, server runbook
+    └── tests/              Vitest and Playwright
+```
+
+<div align="center">
+<sub>Made with 🔥 for Hamburn by the Mauersegler* crew.</sub>
+</div>

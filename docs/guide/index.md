@@ -1,0 +1,63 @@
+# What is CozyNights?
+
+CozyNights is the bed booking app for **Hamburn**, a regional burn in the spirit of Burning Man. It replaces the spreadsheet that used to decide who sleeps where. Every sleeping spot at the venue lives on an interactive camp map, and guests claim their own bed with the ticket code they already have.
+
+> [!TIP] Just here to book a bed?
+> Go straight to [Booking a bed](./booking). It takes about a minute.
+
+![The live camp map with house pins](../assets/screenshots/guest-map-live.webp)
+
+## Who uses it
+
+| | Who | What they do |
+| --- | --- | --- |
+| 🎫 | **Guests** | Everyone with a ticket. They sign in with their ticket code, pick a spot and choose a burner name. |
+| 🛠️ | **Admins** | The crew, signed in with their `@mauersegler.art` Google account. They build the camp layout, open booking and look after the spots during the event. |
+| ⚡ | **Superusers** | A few admins with extra powers: they approve new admins, clear all bookings and import layout templates. |
+
+## The building blocks
+
+```mermaid
+flowchart TB
+  map["🗺️ Camp map"]
+  map --> h1["🛖 House: Neon Cave"]
+  map --> h2["🛖 House: Dust Lodge"]
+  h1 --> r1["🚪 Room #1"]
+  h1 --> r2["🚪 Room #2"]
+  r1 --> s1["🛏️ Spot B1"]
+  r1 --> s2["🛏️ Spot B2"]
+  r2 --> s3["🛏️ Spot B1"]
+  ticket["🎫 Ticket code"] -. "books exactly one" .-> s2
+```
+
+| Term | Meaning |
+| --- | --- |
+| **Camp map** | The site plan of the venue. Every house is a pin on it. |
+| **House** | A building or sleeping area on the map, such as a lodge, a barn or a big tent. |
+| **Room** | A room inside a house, with a name and a room number. |
+| **Spot** | A single bed in a room ("B1", "Top Bunk"). A spot is free, taken, locked or inactive. |
+| **Ticket code** | The code on a guest's ticket. It is the guest's key to CozyNights, and it can hold **one** spot at a time. |
+| **Burner name** | The optional playa name shown on a booked spot. Other guests see this name, never the name on the ticket. |
+| **Phase** | Either *Staging* (the crew is building, guests can only look) or *Live Booking* (guests book, the layout is frozen). |
+
+> [!NOTE] Where do ticket codes come from?
+> The organizers load the ticket list into CozyNights' database, one entry per ticket. CozyNights never creates, changes or deletes tickets itself: even the most destructive admin action leaves every ticket code working.
+
+## A season with CozyNights
+
+<div class="steps">
+
+1. **Build the camp.** In staging, admins place houses on the map and add rooms and spots, or import last year's layout template. See [Houses, rooms & spots](../admin/camp-layout).
+2. **Load the tickets.** The ticket list goes into the database, so every ticket code can sign in.
+3. **Announce the opening.** An admin schedules the go-live time. Guests who look at the map see a countdown.
+4. **Booking opens.** Guests pick their beds; the layout is now frozen. See [Staging & Live Booking](./phases).
+5. **During the event.** Admins watch occupancy and lock single spots if something breaks.
+6. **After the burn.** Export the layout as a template, switch back to staging and clear the bookings for next time.
+
+</div>
+
+The [event checklist](../admin/event-checklist) walks through all of this in detail.
+
+## What's under the hood?
+
+A SvelteKit web app backed by a PocketBase database, running in Docker behind nginx. Guests never talk to the database directly, ticket codes are looked up by keyed hashes and never logged, and burner names are encrypted. Curious? Read [Architecture](../reference/architecture) and [Security & privacy](../reference/security).

@@ -1,69 +1,42 @@
-# Hamburn Cozynights 🔥🛌
+# CozyNights app 🔥🛌
 
-Welcome to the **Hamburn Cozynights** house management system! This is where we ensure every burner has a soft spot to land after a long day on the playa. 🏜️✨
+The SvelteKit + PocketBase app behind **Hamburn CozyNights**: ticket holders pick their own bed on the camp map, the crew runs the camp from the Control Center.
 
-## 🚀 Mission Objective
+📖 **Documentation: [morpheusmxml.github.io/hamburn-cozynights](https://morpheusmxml.github.io/hamburn-cozynights/)** (sources in [`../docs`](../docs))
 
-Automate the chaos of house, room, and bed assignments with a sleek, real-time map and booking system. No more double-booked houses! 🛖⚡️
-
-## 🛠 Quick Start
-
-### 1. The House Backend (PocketBase)
-
-Start the backend using Docker:
+## Quick start
 
 ```bash
-npm run db:up
+cp .env.example .env   # fill it in, the comments explain every value
+docker compose up -d   # PocketBase on 127.0.0.1:8090
+npm ci
+npm run dev            # http://localhost:5173
 ```
 
-Access the Admin UI at [http://localhost:8090/\_/](http://localhost:8090/_/).
+## Commands
 
-### 2. The Frontend Portal
+| Command                    | What it does                                                      |
+| -------------------------- | ----------------------------------------------------------------- |
+| `npm run dev`              | Dev server with hot reload, after a health check                  |
+| `npm run check`            | Svelte and TypeScript type check                                  |
+| `npm run lint`             | Prettier and ESLint                                               |
+| `npm test`                 | Vitest unit and security tests                                    |
+| `npm run test:integration` | Integration tests against a real, empty PocketBase (Docker)       |
+| `npm run test:smoke`       | Smoke tests against the staging Docker image (Docker)             |
+| `npm run verify`           | Everything CI runs: type check, unit, integration and smoke tests |
+| `npm run smoke:remote`     | Read-only smoke tests against a deployed site                     |
+| `npm run test:e2e`         | Playwright end-to-end tests                                       |
+| `npm run build`            | Production build (`adapter-node`)                                 |
+| `npm run typegen`          | Regenerate PocketBase types from the local schema                 |
 
-Install dependencies and ignite the dev server:
+## Where to read on
 
-```bash
-npm install
-npm run dev
-```
-
-Open your browser at [http://localhost:5173](http://localhost:5173).
-
-## 📖 Documentation
-
-For detailed information on how the system works and how to manage it, please refer to our documentation:
-
-- [🛡️ Security Architecture](./docs/SECURITY.md): Encryption, Trusted Proxy, and Rights Management.
-- [🛠️ Development & Operations](./docs/DEVELOPMENT.md): Testing, Migrations, and Backups.
-- [🎪 Operational Workflow](./docs/WORKFLOW.md): Staging vs. Live modes and the booking lifecycle.
-- [🚀 Deployment & Environments](./docs/DEPLOYMENT.md): How dev/staging/production stay isolated, and the CI pipeline.
-
-## 🗺 Core Features
-
-- **Laser Design System**: A cohesive high-contrast neon aesthetic with deep blurs and 32px rounded corners across the entire portal. ⚡️💎
-- **Interactive Map**: Visualize houses across the camp with real-time occupancy. 🛰️
-- **Real-time Booking**: Grab a spot using your unique booking code. 🎫
-- **Admin Dashboard**: Drag-and-drop map editor, house management, and global booking toggles. 🛠️
-- **Location Template Manager**: Admins can export/import structural JSON layouts to quickly rebuild the playa structure. 💾🌀
-- **Privacy First**: Field-level encryption and secure server-side processing for all burner data. 🔐
-- **High-Energy UI**:
-  - **Ignite Loading**: Digital letter-explosion sequence on landing. 🔥
-  - **Disco Hover**: Celebration particle effects and laser gradients on key interactions. 🎰
-  - **Hybrid Mouse Trail**: A vibrant rainbow stripe with neon spark spray follows your journey. 🌈✨
-  - **Destiny Roulette**: Let the playa decide your burner identity with snappy 2s random name generation. 🎰⚡️
-
-## 📚 Auto-Documentation
-
-This project uses a hybrid auto-documentation system:
-- **TypeDoc**: For core TypeScript logic and server-side functions.
-- **Svelte-Doc**: For UI component API references (Props, Slots, Events).
-
-To generate the latest documentation locally:
-```bash
-npm run docs:generate
-```
-The output will be available in `/docs/generated`.
-
----
-
-_Made with 🔥 by the Hamburn Crew._
+| Topic                                    | Page                                                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Setup, tests, schema changes             | [Local development](https://morpheusmxml.github.io/hamburn-cozynights/develop/)                   |
+| Test layers, test stack, release routine | [Testing & release checks](https://morpheusmxml.github.io/hamburn-cozynights/develop/testing)     |
+| Staging, production, deploy pipeline     | [Environments & deployment](https://morpheusmxml.github.io/hamburn-cozynights/develop/deployment) |
+| Request flow, data model, routes         | [Architecture](https://morpheusmxml.github.io/hamburn-cozynights/reference/architecture)          |
+| Protections for guests and admins        | [Security & privacy](https://morpheusmxml.github.io/hamburn-cozynights/reference/security)        |
+| Google sign-in, access requests, roles   | [Admin access & roles](https://morpheusmxml.github.io/hamburn-cozynights/admin/access)            |
+| Server setup and rollback (German)       | [`deploy/README.md`](deploy/README.md)                                                            |

@@ -27,3 +27,6 @@ pb_data/
 
 # Test reports
 html/
+
+# Generated API docs (npm run docs:generate), published nowhere
+docs/generated/

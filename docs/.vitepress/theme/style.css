@@ -1,0 +1,341 @@
+/*
+ * CozyNights docs theme: the app's "laser" palette (pink, teal, orange, purple
+ * on near-black) mapped onto VitePress' theme variables.
+ */
+
+:root {
+	--cozy-pink: #f472b6;
+	--cozy-teal: #2dd4bf;
+	--cozy-orange: #fb923c;
+	--cozy-purple: #a855f7;
+	--cozy-gradient: linear-gradient(120deg, #fb923c 0%, #f472b6 45%, #a855f7 100%);
+	--cozy-laser: linear-gradient(90deg, transparent, #2dd4bf 25%, #f472b6 75%, transparent);
+
+	/* Light mode: darker shades keep text contrast on white. */
+	--vp-c-brand-1: #be185d;
+	--vp-c-brand-2: #db2777;
+	--vp-c-brand-3: #db2777;
+	--vp-c-brand-soft: rgba(236, 72, 153, 0.12);
+
+	--vp-c-tip-1: #0f766e;
+	--vp-c-tip-2: #0d9488;
+	--vp-c-tip-3: #14b8a6;
+	--vp-c-tip-soft: rgba(20, 184, 166, 0.12);
+
+	--vp-c-note-1: #0f766e;
+	--vp-c-note-2: #0d9488;
+	--vp-c-note-3: #14b8a6;
+	--vp-c-note-soft: rgba(20, 184, 166, 0.1);
+
+	--vp-c-important-1: #7e22ce;
+	--vp-c-important-2: #9333ea;
+	--vp-c-important-3: #a855f7;
+	--vp-c-important-soft: rgba(168, 85, 247, 0.12);
+
+	--vp-c-warning-1: #c2410c;
+	--vp-c-warning-2: #ea580c;
+	--vp-c-warning-3: #f97316;
+	--vp-c-warning-soft: rgba(249, 115, 22, 0.12);
+
+	--vp-button-brand-bg: #db2777;
+	--vp-button-brand-hover-bg: #be185d;
+	--vp-button-brand-active-bg: #9d174d;
+
+	--vp-home-hero-name-color: transparent;
+	--vp-home-hero-name-background: var(--cozy-gradient);
+	--vp-home-hero-image-background-image: linear-gradient(
+		-45deg,
+		rgba(244, 114, 182, 0.75) 30%,
+		rgba(45, 212, 191, 0.75) 70%
+	);
+	--vp-home-hero-image-filter: blur(56px);
+}
+
+.dark {
+	--vp-c-bg: #0c0b11;
+	--vp-c-bg-alt: #08070c;
+	--vp-c-bg-elv: #16141d;
+	--vp-c-bg-soft: #16141d;
+	--vp-c-divider: #25222f;
+	--vp-c-gutter: #050408;
+
+	--vp-c-brand-1: #f9a8d4;
+	--vp-c-brand-2: #f472b6;
+	--vp-c-brand-3: #db2777;
+	--vp-c-brand-soft: rgba(244, 114, 182, 0.16);
+
+	--vp-c-tip-1: #5eead4;
+	--vp-c-tip-2: #2dd4bf;
+	--vp-c-tip-3: #14b8a6;
+	--vp-c-tip-soft: rgba(45, 212, 191, 0.13);
+
+	--vp-c-note-1: #5eead4;
+	--vp-c-note-2: #2dd4bf;
+	--vp-c-note-3: #14b8a6;
+	--vp-c-note-soft: rgba(45, 212, 191, 0.09);
+
+	--vp-c-important-1: #d8b4fe;
+	--vp-c-important-2: #c084fc;
+	--vp-c-important-3: #a855f7;
+	--vp-c-important-soft: rgba(168, 85, 247, 0.16);
+
+	--vp-c-warning-1: #fdba74;
+	--vp-c-warning-2: #fb923c;
+	--vp-c-warning-3: #f97316;
+	--vp-c-warning-soft: rgba(251, 146, 60, 0.14);
+
+	--vp-button-brand-bg: #db2777;
+	--vp-button-brand-hover-bg: #ec4899;
+	--vp-button-brand-active-bg: #be185d;
+
+	--vp-home-hero-image-background-image: linear-gradient(
+		-45deg,
+		rgba(244, 114, 182, 0.55) 30%,
+		rgba(45, 212, 191, 0.55) 70%
+	);
+}
+
+/* A thin laser line under the top bar, like the app's panels. */
+.VPNavBar::after {
+	content: '';
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: -1px;
+	height: 1px;
+	background: var(--cozy-laser);
+	opacity: 0.55;
+	pointer-events: none;
+}
+
+/* Home: gradient hero title, glowing feature cards. */
+.VPHero .name .clip {
+	-webkit-background-clip: text;
+	background-clip: text;
+}
+
+.VPHome .VPFeature {
+	transition:
+		border-color 0.25s,
+		box-shadow 0.25s,
+		transform 0.25s;
+}
+
+.VPHome .VPFeature:hover {
+	border-color: rgba(244, 114, 182, 0.55);
+	box-shadow:
+		0 0 0 1px rgba(244, 114, 182, 0.15),
+		0 12px 36px -12px rgba(244, 114, 182, 0.35);
+	transform: translateY(-2px);
+}
+
+.VPHome .VPFeature .icon {
+	background: linear-gradient(135deg, rgba(251, 146, 60, 0.18), rgba(168, 85, 247, 0.18));
+}
+
+/* Callouts: a coloured edge per type, like the app's laser borders. */
+.vp-doc .custom-block {
+	border-left: 3px solid transparent;
+}
+
+.vp-doc .custom-block.tip {
+	border-left-color: var(--vp-c-tip-2);
+}
+
+.vp-doc .custom-block.note,
+.vp-doc .custom-block.info {
+	border-left-color: var(--vp-c-text-3);
+}
+
+.vp-doc .custom-block.important {
+	border-left-color: var(--vp-c-important-2);
+}
+
+.vp-doc .custom-block.warning {
+	border-left-color: var(--vp-c-warning-2);
+}
+
+.vp-doc .custom-block.danger,
+.vp-doc .custom-block.caution {
+	border-left-color: var(--vp-c-danger-2);
+}
+
+.vp-doc .custom-block.details {
+	border-left-color: var(--vp-c-brand-2);
+}
+
+/* Screenshots: framed like app windows, zoomable. */
+.vp-doc img {
+	border-radius: 12px;
+	border: 1px solid var(--vp-c-divider);
+	box-shadow: 0 18px 48px -24px rgba(0, 0, 0, 0.45);
+	cursor: zoom-in;
+}
+
+.vp-doc img.no-zoom {
+	border: none;
+	box-shadow: none;
+	cursor: default;
+}
+
+.medium-zoom-overlay,
+.medium-zoom-image--opened {
+	z-index: 100;
+}
+
+/* Figure captions: an emphasised line directly after an image. */
+.vp-doc p:has(> img) + p > em:only-child {
+	display: block;
+	margin-top: -8px;
+	font-size: 0.875rem;
+	font-style: normal;
+	color: var(--vp-c-text-2);
+	text-align: center;
+}
+
+/* Keyboard-ish "UI label" look for button names written as <kbd>. */
+.vp-doc kbd {
+	display: inline-block;
+	padding: 0 0.45em;
+	border: 1px solid var(--vp-c-divider);
+	border-bottom-width: 2px;
+	border-radius: 6px;
+	background: var(--vp-c-bg-soft);
+	font-family: var(--vp-font-family-mono);
+	font-size: 0.82em;
+	line-height: 1.6;
+	white-space: nowrap;
+}
+
+/* Step lists: numbered badges instead of plain numbers. */
+.vp-doc .steps > ol {
+	counter-reset: step;
+	list-style: none;
+	padding-left: 0;
+}
+
+.vp-doc .steps > ol > li {
+	counter-increment: step;
+	position: relative;
+	padding-left: 2.6rem;
+	margin-bottom: 1.1rem;
+}
+
+.vp-doc .steps > ol > li::before {
+	content: counter(step);
+	position: absolute;
+	left: 0;
+	top: 0.1rem;
+	width: 1.8rem;
+	height: 1.8rem;
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+	font-size: 0.85rem;
+	font-weight: 700;
+	color: #fff;
+	background: var(--cozy-gradient);
+	box-shadow: 0 0 14px rgba(244, 114, 182, 0.35);
+}
+
+/* Mermaid diagrams. */
+.mermaid-diagram {
+	position: relative;
+	margin: 1.25rem 0;
+	padding: 1.25rem;
+	border: 1px solid var(--vp-c-divider);
+	border-radius: 12px;
+	background: var(--vp-c-bg-soft);
+	overflow-x: auto;
+	text-align: center;
+}
+
+.mermaid-diagram svg {
+	max-width: 100%;
+	height: auto;
+}
+
+.mermaid-diagram .mermaid-loading {
+	min-height: 160px;
+}
+
+.mermaid-diagram .mermaid-sandbox {
+	position: absolute;
+	inset: 0;
+	visibility: hidden;
+	pointer-events: none;
+	overflow: hidden;
+}
+
+/* Labels are HTML paragraphs; keep the docs' paragraph spacing out of them. */
+.vp-doc .mermaid-diagram p {
+	margin: 0;
+	line-height: 1.5;
+}
+
+/* Checklists ("- [ ] item"). */
+.vp-doc li.task-list-item {
+	list-style: none;
+	margin-left: -1.25rem;
+}
+
+.vp-doc input.task-list-item-checkbox {
+	width: 1.05rem;
+	height: 1.05rem;
+	margin: 0 0.5rem 0 0;
+	vertical-align: -0.15rem;
+	accent-color: var(--vp-c-brand-2);
+	cursor: pointer;
+}
+
+.vp-doc li.task-list-item:has(> p > input:checked),
+.vp-doc li.task-list-item:has(> input:checked) {
+	color: var(--vp-c-text-3);
+}
+
+/* Home page: two screenshots side by side. */
+.home-shots {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1.25rem;
+	margin: 1.5rem 0 0.5rem;
+}
+
+.home-shots p {
+	margin: 0;
+}
+
+.home-shots img {
+	width: 100%;
+	aspect-ratio: 16 / 10;
+	object-fit: cover;
+	object-position: top;
+}
+
+.home-shots .shot-caption {
+	margin-top: 0.6rem;
+	font-size: 0.875rem;
+	color: var(--vp-c-text-2);
+	text-align: center;
+}
+
+@media (max-width: 640px) {
+	.home-shots {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* Role / capability matrices. */
+.vp-doc table td:has(> .yes),
+.vp-doc table td:has(> .no) {
+	text-align: center;
+}
+
+.vp-doc .yes {
+	color: var(--vp-c-tip-1);
+	font-weight: 700;
+}
+
+.vp-doc .no {
+	color: var(--vp-c-text-3);
+}
