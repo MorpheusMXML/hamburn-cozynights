@@ -17,6 +17,18 @@
 //      cozy-admin service-account <email>         create/rotate the app's service superuser
 //                                                 (password from $COZY_SU_PASSWORD)
 //
+//    The same command manages the ticket roster (collection `orders`), because
+//    the app has no import for it. A ticket needs only its code in
+//    `order_number`: the app stores the keyed lookup hash on the first sign-in
+//    (BookingService.getOrderByNumber). The hash needs the app's
+//    ENCRYPTION_KEY, which this container never sees.
+//
+//      cozy-admin tickets add <code> [<code> ...] [--name <label>]   create ticket codes
+//      cozy-admin tickets generate <count> [--prefix TEST] [--name <label>]
+//                                                 create random codes like TEST-7F3K9Q
+//      cozy-admin tickets list                    ticket codes, sign-ins, booked beds
+//      cozy-admin tickets remove <code> [<code> ...]  delete tickets that hold no bed
+//
 // 2. On every start, sync the Google OAuth client of the `admins` collection
 //    from PB_GOOGLE_CLIENT_ID / PB_GOOGLE_CLIENT_SECRET (so rotating the secret
 //    is an .env change + restart, not a new migration).
@@ -26,6 +38,14 @@
 
 const ADMIN_DOMAIN = 'mauersegler.art';
 const MIN_SUPERUSER_PASSWORD = 12;
+// Must match the guest login form (src/routes/+page.server.ts), otherwise a
+// stored code could never be typed in.
+const TICKET_CODE_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+// Generated codes get typed on phones and read out loud: no 0/O, 1/I/L.
+const TICKET_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const TICKET_RANDOM_LENGTH = 6;
+const MAX_GENERATED_TICKETS = 500;
+const MAX_TICKET_LABEL = 100;
 
 function cozyFail(cmd, message) {
 	// cmd.printErrln is a silent no-op in the JSVM; println writes to stderr.
@@ -46,15 +66,21 @@ function cozyNormalizeEmail(cmd, value, requireAdminDomain) {
 	return email;
 }
 
-function cozyAdminsCollection(cmd) {
+function cozyCollection(cmd, name) {
 	try {
-		return $app.findCollectionByNameOrId('admins');
+		return $app.findCollectionByNameOrId(name);
 	} catch (_) {
 		cozyFail(
 			cmd,
-			'collection "admins" not found — the migrations have not run yet (start the server once, or run `pocketbase migrate up --dir=/pb_data`)'
+			'collection "' +
+				name +
+				'" not found — the migrations have not run yet (start the server once, or run `pocketbase migrate up --dir=/pb_data`)'
 		);
 	}
+}
+
+function cozyAdminsCollection(cmd) {
+	return cozyCollection(cmd, 'admins');
 }
 
 function cozyFind(collection, email) {
@@ -112,7 +138,8 @@ function cozyUpsertAdmin(collection, email, role) {
 
 const cozyAdmin = new Command({
 	use: 'cozy-admin',
-	short: 'Manage CozyNights admin access (admins collection + PocketBase superusers)'
+	short:
+		'Manage CozyNights admin access (admins collection + PocketBase superusers) and ticket codes'
 });
 
 cozyAdmin.addCommand(
@@ -298,6 +325,291 @@ cozyAdmin.addCommand(
 		}
 	})
 );
+
+// --- ticket roster (collection `orders`) -------------------------------------
+
+function cozyTicketLabel(cmd) {
+	const label = String(cmd.flags().getString('name') || '').trim();
+	if (label.length > MAX_TICKET_LABEL) {
+		cozyFail(cmd, '--name must be at most ' + MAX_TICKET_LABEL + ' characters');
+	}
+	return label;
+}
+
+// The helpers take the app so that they also work on a transaction.
+function cozyFindTicket(app, code) {
+	try {
+		return app.findFirstRecordByData('orders', 'order_number', code);
+	} catch (_) {
+		return null;
+	}
+}
+
+// The sign-in field shows every code in capitals, and the login also tries the
+// typed code in upper and lower case (src/routes/+page.server.ts): two codes
+// that differ only in case would let one guest end up in the other's ticket.
+function cozyFindTicketsIgnoringCase(app, code) {
+	return app.findAllRecords(
+		'orders',
+		$dbx.exp('LOWER([[order_number]]) = {:code}', { code: code.toLowerCase() })
+	);
+}
+
+function cozyNewTicket(app, collection, code, label) {
+	const rec = new Record(collection);
+	rec.set('order_number', code);
+	rec.set('customer_name', label || 'Ticket ' + code);
+	app.save(rec);
+}
+
+function cozyBedOfTicket(app, ticketId) {
+	const beds = app.findRecordsByFilter('beds', 'order = {:order}', '', 1, 0, { order: ticketId });
+	return beds.length > 0 ? beds[0] : null;
+}
+
+function cozyDescribeBed(app, bed) {
+	let where = 'bed "' + bed.getString('label') + '"';
+	try {
+		const room = app.findRecordById('rooms', bed.getString('room'));
+		where += ' in room "' + room.getString('name') + '"';
+		const house = app.findRecordById('houses', room.getString('house'));
+		where += ', house "' + house.getString('name') + '"';
+	} catch (_) {
+		// A dangling relation must not hide the refusal; the label has to do.
+	}
+	return where;
+}
+
+const cozyTickets = new Command({
+	use: 'tickets',
+	short: 'Manage ticket codes (collection orders): add, generate, list, remove',
+	run: (cmd, args) => {
+		cozyFail(cmd, 'usage: cozy-admin tickets add|generate|list|remove ...');
+	}
+});
+
+const cozyTicketsAdd = new Command({
+	use: 'add <code> [<code> ...]',
+	short: 'Create tickets for the given codes (existing codes are left unchanged)',
+	run: (cmd, args) => {
+		if (args.length < 1) {
+			cozyFail(cmd, 'usage: cozy-admin tickets add <code> [<code> ...] [--name <label>]');
+		}
+		const collection = cozyCollection(cmd, 'orders');
+		const label = cozyTicketLabel(cmd);
+		const codes = args.map((a) => String(a));
+		const invalid = codes.filter((code) => !TICKET_CODE_PATTERN.test(code));
+		if (invalid.length > 0) {
+			cozyFail(
+				cmd,
+				'invalid ticket code: ' +
+					invalid.join(', ') +
+					' — allowed are letters, digits, "-" and "_", 1 to 64 characters (nothing was created)'
+			);
+		}
+
+		// Reported only after the commit: a failed save rolls everything back.
+		const report = [];
+		let conflict = '';
+		try {
+			$app.runInTransaction((txApp) => {
+				for (const code of codes) {
+					// Also catches a code that is given twice.
+					const twins = cozyFindTicketsIgnoringCase(txApp, code);
+					if (twins.length === 0) {
+						cozyNewTicket(txApp, collection, code, label);
+						const mixedCase = code !== code.toUpperCase() && code !== code.toLowerCase();
+						report.push(
+							'created: ' +
+								code +
+								(mixedCase
+									? ' (note: mixes upper and lower case — guests have to type it exactly like this)'
+									: '')
+						);
+					} else if (twins.filter((t) => t.getString('order_number') === code).length > 0) {
+						report.push('unchanged: ' + code + ' already exists');
+					} else {
+						conflict =
+							code +
+							' differs only in upper/lower case from the existing ticket ' +
+							twins[0].getString('order_number') +
+							' (the sign-in could mix them up)';
+						throw new Error(conflict);
+					}
+				}
+			});
+		} catch (err) {
+			cozyFail(cmd, 'nothing was created: ' + (conflict || err));
+		}
+		for (const line of report) cmd.println(line);
+	}
+});
+cozyTicketsAdd
+	.flags()
+	.string('name', '', 'customer_name of the new tickets (default "Ticket <code>")');
+cozyTickets.addCommand(cozyTicketsAdd);
+
+const cozyTicketsGenerate = new Command({
+	use: 'generate <count>',
+	short: 'Create <count> tickets with random codes like TEST-7F3K9Q and print the codes',
+	run: (cmd, args) => {
+		if (args.length !== 1) {
+			cozyFail(cmd, 'usage: cozy-admin tickets generate <count> [--prefix TEST] [--name <label>]');
+		}
+		const count = /^[0-9]{1,4}$/.test(String(args[0])) ? parseInt(args[0], 10) : 0;
+		if (count < 1 || count > MAX_GENERATED_TICKETS) {
+			cozyFail(cmd, '<count> must be a number from 1 to ' + MAX_GENERATED_TICKETS);
+		}
+		// All capitals, like the sign-in form shows them.
+		const prefix = String(cmd.flags().getString('prefix')).toUpperCase();
+		if (!/^[A-Z0-9][A-Z0-9_-]{0,19}$/.test(prefix)) {
+			cozyFail(
+				cmd,
+				'--prefix must be 1 to 20 letters, digits, "-" or "_" and start with a letter or digit'
+			);
+		}
+		const collection = cozyCollection(cmd, 'orders');
+		const label = cozyTicketLabel(cmd);
+
+		const codes = [];
+		try {
+			$app.runInTransaction((txApp) => {
+				// Collisions are practically impossible (31^6 codes per prefix);
+				// the cap only keeps a bug from looping forever.
+				let attempts = 0;
+				while (codes.length < count) {
+					if (++attempts > count * 10) {
+						throw new Error('could not find enough unused codes for prefix ' + prefix);
+					}
+					const code =
+						prefix +
+						'-' +
+						$security.randomStringWithAlphabet(TICKET_RANDOM_LENGTH, TICKET_ALPHABET);
+					if (cozyFindTicketsIgnoringCase(txApp, code).length > 0) continue;
+					cozyNewTicket(txApp, collection, code, label);
+					codes.push(code);
+				}
+			});
+		} catch (err) {
+			cozyFail(cmd, 'nothing was created: ' + err);
+		}
+		cmd.println(
+			'created ' +
+				codes.length +
+				' ticket(s), customer_name ' +
+				(label ? '"' + label + '"' : '"Ticket <code>"') +
+				' — the code is all a guest needs to sign in:'
+		);
+		for (const code of codes) cmd.println(code);
+	}
+});
+cozyTicketsGenerate.flags().string('prefix', 'TEST', 'first part of every code (in capitals)');
+cozyTicketsGenerate
+	.flags()
+	.string('name', '', 'customer_name of the new tickets (default "Ticket <code>")');
+cozyTickets.addCommand(cozyTicketsGenerate);
+
+cozyTickets.addCommand(
+	new Command({
+		use: 'list',
+		short: 'List ticket codes with sign-in and booking state (never burner names)',
+		run: (cmd, args) => {
+			if (args.length !== 0) cozyFail(cmd, 'usage: cozy-admin tickets list');
+			cozyCollection(cmd, 'orders');
+			const tickets = $app.findRecordsByFilter('orders', "id != ''", 'order_number', 0, 0);
+			const booked = {};
+			for (const bed of $app.findRecordsByFilter('beds', "order != ''", '', 0, 0)) {
+				booked[bed.getString('order')] = true;
+			}
+
+			const readable = tickets.filter((t) => t.getString('order_number') !== '');
+			// Capped, so that one very long code doesn't push all columns off screen.
+			let width = 0;
+			for (const t of readable) {
+				width = Math.min(24, Math.max(width, t.getString('order_number').length));
+			}
+
+			cmd.println(
+				'TICKETS: ' +
+					tickets.length +
+					' total, ' +
+					tickets.filter((t) => booked[t.id]).length +
+					' hold a bed, ' +
+					tickets.filter((t) => t.getString('order_hash') !== '').length +
+					' used'
+			);
+			cmd.println('CODES (used = signed in at least once, i.e. the lookup hash is stored)');
+			if (readable.length === 0) cmd.println('  (none)');
+			for (const t of readable) {
+				cmd.println(
+					'  ' +
+						t.getString('order_number').padEnd(width) +
+						'  used=' +
+						(t.getString('order_hash') !== '' ? 'yes' : 'no ') +
+						'  bed=' +
+						(booked[t.id] ? 'yes' : 'no ') +
+						'  ' +
+						t.getString('customer_name')
+				);
+			}
+			if (readable.length < tickets.length) {
+				cmd.println(
+					'  (+ ' +
+						(tickets.length - readable.length) +
+						' stored as hash only: their codes cannot be shown)'
+				);
+			}
+		}
+	})
+);
+
+cozyTickets.addCommand(
+	new Command({
+		use: 'remove <code> [<code> ...]',
+		short: 'Delete tickets that hold no bed',
+		run: (cmd, args) => {
+			if (args.length < 1) cozyFail(cmd, 'usage: cozy-admin tickets remove <code> [<code> ...]');
+			cozyCollection(cmd, 'orders');
+
+			let kept = 0;
+			for (const arg of args) {
+				const code = String(arg);
+				let outcome = '';
+				try {
+					// Check and delete together: a guest could book in between.
+					$app.runInTransaction((txApp) => {
+						const ticket = cozyFindTicket(txApp, code);
+						if (!ticket) {
+							outcome = 'not found: ' + code;
+							return;
+						}
+						const bed = cozyBedOfTicket(txApp, ticket.id);
+						if (bed) {
+							outcome =
+								'refused: ' +
+								code +
+								' holds ' +
+								cozyDescribeBed(txApp, bed) +
+								' — free it in the admin area first (room page, or "clear all bookings")';
+							return;
+						}
+						txApp.delete(ticket);
+					});
+				} catch (err) {
+					outcome = 'failed: ' + code + ' — ' + err;
+				}
+				if (outcome) kept++;
+				cmd.println(outcome || 'removed: ' + code);
+			}
+			if (kept > 0) {
+				cmd.println('error: ' + kept + ' of ' + args.length + ' ticket(s) were not removed');
+				$os.exit(1);
+			}
+		}
+	})
+);
+
+cozyAdmin.addCommand(cozyTickets);
 
 $app.rootCmd.addCommand(cozyAdmin);
 

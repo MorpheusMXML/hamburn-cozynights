@@ -89,6 +89,8 @@ Approving, inviting and removing admins deliberately happens **outside the web a
 
 Changes apply on the **next click**: CozyNights re-checks the role on every request, so an approved admin gets in with a reload, and a removed admin is out immediately.
 
+The same tool creates the guests' ticket codes (`tickets generate`, `add`, `list`, `remove`), see [Ticket codes](./event-checklist#ticket-codes).
+
 ::: info Crew chat notifications
 The server can post a message to a crew chat (Telegram, Slack, Google Chat or Discord) whenever someone requests access, so requests don't go unnoticed.
 :::

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Admin access management for CozyNights — run on the server as root.
+# Admin access and ticket code management for CozyNights — run on the server as root.
 #
 # Admins sign in to /admin with Google (verified @mauersegler.art Workspace
 # accounts only). Access is granted here, never in the app: either invite
@@ -17,6 +17,16 @@
 #                                                       from PB_ADMIN_EMAIL/PASSWORD in .env
 #                                                       (generates the password if missing) and
 #                                                       recreate the app container
+#
+# Ticket codes (the guests' logins, collection `orders`); the app has no import for them:
+#   scripts/cozy-admin.sh tickets generate <count> [--prefix TEST] [--name <label>]
+#                                                       create random codes like TEST-7F3K9Q
+#                                                       and print them, one per line
+#   scripts/cozy-admin.sh tickets add <code> [<code> ...] [--name <label>]
+#                                                       create tickets for known codes; a whole
+#                                                       roster: xargs scripts/cozy-admin.sh tickets add <codes.txt
+#   scripts/cozy-admin.sh tickets list                  codes with sign-in and booking state
+#   scripts/cozy-admin.sh tickets remove <code> [<code> ...]  delete tickets that hold no bed
 #
 # Targets docker-compose.staging.yml next to this script's parent folder;
 # override with COZY_COMPOSE_FILE=/path/to/docker-compose.<env>.yml (and COZY_ENV_FILE).
@@ -123,6 +133,19 @@ case "$cmd" in
 	list)
 		require_running
 		cozy -- list
+		;;
+	tickets)
+		case "${1:-}" in
+			add | generate | list | remove) ;;
+			*) die "usage: $0 tickets add|generate|list|remove ... (details: $0 --help)" ;;
+		esac
+		# --help in front of the PocketBase flags would keep the binary from
+		# loading pb_hooks ("unknown command cozy-admin").
+		for arg in "$@"; do
+			if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then usage 0; fi
+		done
+		require_running
+		cozy -- tickets "$@"
 		;;
 	service-account)
 		require_running
