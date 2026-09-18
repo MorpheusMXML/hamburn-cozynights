@@ -41,6 +41,9 @@ services:
       # keep 72), see pb_hooks/cozy_backups.pb.js. Off-site: deploy/backup/.
       PB_BACKUP_CRON: ${PB_BACKUP_CRON:-}
       PB_BACKUP_KEEP: ${PB_BACKUP_KEEP:-}
+      # Sending pace (defaults: the loop runs 50 s per minute, 20 mails/minute).
+      COZY_NOTIFY_LOOP_SECONDS: ${COZY_NOTIFY_LOOP_SECONDS:-}
+      COZY_MAILS_PER_MINUTE: ${COZY_MAILS_PER_MINUTE:-}
       # NOTE: never pass PB_ADMIN_EMAIL/PB_ADMIN_PASSWORD to this container —
       # the image's entrypoint would re-upsert that superuser on every start,
       # which revokes the app's cached service-account token.

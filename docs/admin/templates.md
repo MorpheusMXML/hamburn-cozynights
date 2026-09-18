@@ -15,28 +15,38 @@ Press <kbd>DOWNLOAD JSON 💾</kbd>. Your browser saves `burn-template-YYYY-MM-D
 
 ## Import <Badge type="danger" text="superuser · staging only" />
 
-Choose a file with <kbd>CHOOSE TEMPLATE FILE</kbd>, then press <kbd>APPLY TEMPLATE 🔥</kbd> and confirm.
+Choose a file with <kbd>CHOOSE TEMPLATE FILE</kbd> and press <kbd>CHECK TEMPLATE 🔍</kbd>. Nothing changes yet: the preview lists the houses, rooms and spots in the file, how many spots are active, locked or deactivated, and any warnings. Then <kbd>REPLACE LAYOUT 🔥</kbd> asks once more (_Replace the whole layout?_) and rebuilds the camp.
 
 ```mermaid
 flowchart LR
-  file["📄 template.json"] --> check{"Valid JSON with<br/>a houses list?"}
+  file["📄 template.json"] --> check{"CHECK TEMPLATE 🔍<br/>valid file?"}
   check -- no --> stop["❌ Rejected,<br/>nothing changes"]
-  check -- yes --> wipe["🌪️ Delete houses, rooms, spots<br/>🧹 forget burner names<br/>🏗️ rebuild from the file"]
-  wipe --> done["✨ PLAYA<br/>REBORN"]
+  check -- yes --> preview["👀 Preview: counts,<br/>spot states, warnings"]
+  preview --> confirm{"REPLACE LAYOUT 🔥<br/>confirmed?"}
+  confirm -- yes --> backup["💾 PocketBase backup"]
+  backup --> build["🏗️ Create the new layout"]
+  build --> swap["🌪️ Delete the old houses, rooms, spots<br/>🧹 forget burner names"]
+  swap --> done["✨ PLAYA<br/>REBORN"]
 ```
 
 > [!CAUTION] Import replaces everything
-> The current layout is deleted and every booking disappears with it. **Ticket codes survive**, so guests can book again in the new layout once booking opens. Export the current layout first if you might want it back.
+> The current layout is deleted and every booking disappears with it. **Ticket codes survive**, so guests can book again in the new layout once booking opens. Before anything is deleted the app takes a PocketBase backup (the last ten are kept; an operator restores one in the PocketBase dashboard under _Settings → Backups_). If that backup can't be written, the import stops and offers to go on without one.
 
-Importing is refused during Live Booking and for regular admins; they see the import card with a lock 🔒.
+The new layout is created first and the old one removed only afterwards. If creating it fails halfway, the new records are removed again and the message says how many are stuck, so nothing is half-built without you knowing. Importing is refused during Live Booking and for regular admins; they see the import card with a lock 🔒.
+
+### Starting from scratch
+
+For a new installation the Template Manager shows _How to build a starting layout_: download the example `brahmsee-starter.json`, adjust names and positions in a text editor, check and import it, then fine-tune on the map. The example is the Brahmsee layout with the houses in place and no bookings.
 
 ## File format
 
 ```json [burn-template-2026-09-17.json]
 {
+	"format": "cozynights-layout",
+	"version": "2.0",
 	"name": "Burn Location Template",
 	"exported_at": "2026-09-17T15:04:05.000Z",
-	"version": "1.0",
+	"map": { "image": "/lageplan-brahmsee.jpg", "width": 1000, "height": 700 },
 	"houses": [
 		{
 			"name": "Neon Cave",
@@ -61,16 +71,18 @@ Importing is refused during Live Booking and for regular admins; they see the im
 
 | Field | Meaning |
 | --- | --- |
+| `format`, `version` | `cozynights-layout` and `2.0` for files the app writes today. Files with `"version": "1.0"` (no `format`, no `map`) are still accepted. |
+| `map` | The map image and its size in map units, so a file from another installation shows where its coordinates belong. |
 | `houses[]` | **Required.** Everything else is optional. |
 | `name`, `x`, `y` | House name and pin position. The map is 1000 × 700 units, `0/0` is the top-left corner. |
 | `rooms[]` | Rooms of the house: `name`, `room_number`, `amount_beds`. |
 | `beds[]` | Spots of the room: `label`, `enabled` (active), `is_locked`. |
 
 > [!NOTE]
-> Only spots listed in `beds` are created. `amount_beds` is stored as information but does not create spots on import. `name`, `exported_at` and `version` describe the file and are not imported.
+> Only spots listed in `beds` are created. `amount_beds` is stored as information but does not create spots on import. `name`, `exported_at`, `format`, `version` and `map` describe the file and are not imported.
 
 ::: warning Hand-editing templates
 Templates are plain JSON, so you can prepare a layout in a text editor: copy a house block, adjust names and coordinates, import. Houses and rooms need a `name`.
 
-A file that isn't valid JSON or has no `houses` list is rejected before anything changes. But if a single entry inside is broken, for example a room without a name, the import stops halfway, **after** the old layout was deleted. Keep the last good export at hand and import it again to recover.
+The check before the import validates every entry (names, numbers, positions, duplicate names), so a broken file is rejected before anything changes. Keep the last good export at hand anyway: it is the quickest way back to a layout you liked.
 :::

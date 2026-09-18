@@ -2,27 +2,27 @@
 
 ## For guests
 
-::: details "This booking code was not found."
+::: details "We could not find this ticket code. Check it for typos (0 vs. O, 1 vs. I) and try again…"
 Check the code for typos: it's on your ticket and contains only letters, digits, `-` and `_`. Copy and paste works best. Only **Indoor memberships** include a bed, so only their codes work here; Camper memberships don't need CozyNights. Still not working? Contact the Hamburn crew; your ticket may not be in the ticket list yet.
 :::
 
-::: details "Invalid booking code format."
+::: details "Ticket codes only contain letters, digits, - and _. Check for spaces or typos."
 The code contains a character that can't be part of a ticket code, often a space or a stray punctuation mark from copy and paste. Only letters, digits, `-` and `_` are allowed.
 :::
 
-::: details "Too many invalid codes. Please wait a few minutes."
+::: details "Too many wrong ticket codes from your connection. Please wait up to 10 minutes…"
 After many wrong codes from the same network, CozyNights pauses sign-in attempts for a while to stop people from guessing codes. Wait a few minutes (at most ten) and try again. Correct codes never count towards this limit.
 :::
 
-::: details "The booking system is temporarily unavailable."
+::: details "The booking system is not reachable right now. Your code was not checked…"
 CozyNights couldn't reach its database for a moment. Your code is fine. Try again shortly.
 :::
 
-::: details The map is blurry and houses don't open ("PATIENCE, BURNER!")
-Booking hasn't opened yet. The countdown shows when it starts. <kbd>📡 RELOAD SENSORS</kbd> refreshes the page state.
+::: details The map is blurry and houses don't open ("Booking is not open yet.")
+Booking hasn't opened yet. The **IGNITION IN** countdown shows when it starts. <kbd>📡 RELOAD SENSORS</kbd> refreshes the page state.
 :::
 
-::: details I can't click a free spot, it says "Release other spot first"
+::: details I can't click a free spot, it says "Release your other spot first"
 Your ticket already holds a spot somewhere else. One ticket code = one spot. Release the old spot first, then book the new one. See [Changing your mind](./booking#changing-your-mind).
 :::
 
@@ -78,7 +78,7 @@ Admins sign in with Google again every 7 days, even when they use the admin area
 You picked a Google account outside the `@mauersegler.art` Workspace (for example a private Gmail address). Sign in again and choose your Workspace account, or use <kbd>USE ANOTHER ACCOUNT</kbd>.
 :::
 
-::: details "Management locked during live booking."
+::: details "🔒 Locked during Live Booking"
 Structural changes only work in Staging Mode. Switch back to staging first, or, if you only want to take a spot out of service, lock it: that works during Live Booking too. See [Staging & Live Booking](./phases).
 :::
 

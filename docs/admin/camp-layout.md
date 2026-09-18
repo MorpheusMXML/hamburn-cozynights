@@ -27,7 +27,7 @@ CozyNights creates the house, a first room called **Main Module** (#1), and spot
 
 ## Rooms
 
-Open a house with <kbd>MANAGE ROOMS ⚙️</kbd>, by clicking its card, or via <kbd>EXPAND ➕</kbd> in the red alert panel.
+Open a house with <kbd>MANAGE ROOMS ⚙️</kbd>, by clicking its card, or via <kbd>ADD ROOMS ➕</kbd> in the red alert panel.
 
 ![House page with the add-room form and room cards](../assets/screenshots/admin-house.webp)
 

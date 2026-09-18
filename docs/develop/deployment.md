@@ -66,7 +66,7 @@ The old containers keep serving while the new image builds.
 
 - **`verify`** reuses [`.github/workflows/ci.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/ci.yml), the workflow behind the `Verify` check on every pull request, for exactly the commit being deployed. What it runs is described in [Testing & release checks](./testing).
 - **`deploy`** waits for approval in the `staging` GitHub environment, then runs the deploy script on the server.
-- **`smoke`** runs `npm run smoke:remote` against the live site: pages are served, a ticket lookup reaches the database, the admin login page offers Google sign-in, the admin area is closed. Read-only, no credentials.
+- **`smoke`** runs `npm run smoke:remote` against the live site: pages are served, `/api/health` confirms the service account, a ticket lookup reaches the database, the admin login page offers Google sign-in, the admin area is closed, the security headers are present and PocketBase is not reachable from outside. Read-only, no credentials.
 - The script **refuses to deploy** and changes nothing if the server checkout has local changes, the build fails, or the backup can't be written.
 - The **PocketBase version** comes from the compose file of the deployed commit. It is pinned and never updated implicitly.
 - The one-time server setup, restoring a data backup, and maintenance are in the operator runbook [`hamburn-cozynights/deploy/README.md`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md) (German).
@@ -145,7 +145,8 @@ Production, for example:
 2. **Configuration.** Create the environment's `.env` on the server, following `deploy/staging.env.template`. Never commit it. It also holds the operator details for the Impressum and the privacy policy (`LEGAL_*`, see [Legal pages](../admin/legal)).
 3. **Domain.** Add an nginx vhost for the domain (see `deploy/nginx/`), issue a certificate, and add the redirect URI to the Google OAuth client.
 4. **Pipeline.** Add a workflow mirroring `deploy-staging.yml`, with its own GitHub environment and required approval, and a deploy user scoped to that environment only.
-5. **First admins.** Invite the crew with the admin tool, pointed at the new compose file (`COZY_COMPOSE_FILE=docker-compose.<env>.yml`). See [Admin access & roles](../admin/access#managing-admins).
+5. **First admins.** Invite the crew with the admin tool, pointed at the new stack: `COZY_COMPOSE_FILE=docker-compose.<env>.yml COMPOSE_PROJECT_NAME=<project of that stack>` (or `COZY_DEPLOY_CONF=/etc/cozynights/<env>.conf`). The tool refuses to guess the project name, because a guess would silently target the staging containers. See [Admin access & roles](../admin/access#managing-admins).
+6. **Keep the stacks apart.** Give the new compose file a fixed volume name and its own `container_name`s and ports; the deploy script gets its own config in `/etc/cozynights/` and its own backup folder; the forced-command deploy key is a second key. Both stacks share one Docker daemon, so never prune images while the other stack builds.
 
 </div>
 

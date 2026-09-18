@@ -67,6 +67,8 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 - **Isolated environments.** Staging and production run as separate stacks: own containers, network, database and encryption key.
 - **Careful deploys.** Deploys are started by hand and need an approval. The deploy key can run exactly one command on the server. Every deploy backs up the database first and returns to the previous version automatically if the health check fails. See [Environments & deployment](../develop/deployment).
 - **Pinned database version.** The PocketBase image is pinned; upgrades are deliberate and come after a backup.
+- **Response headers.** Every page is sent with `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'` (the app can't be embedded in other sites), `Referrer-Policy: strict-origin-when-cross-origin` (booking passes: `no-referrer`), a `Permissions-Policy` that allows the camera only for the pass scanner, and HSTS from the web server. A full Content-Security-Policy runs in report-only mode for now: enforcing it needs nonces for SvelteKit's inline bootstrap script (`kit.csp`) and is a planned follow-up.
+- **Readiness, not just liveness.** `/api/health` answers 200 only when the app's service account is signed in to the database. The deploy script and the smoke tests use it, so a deploy with a broken service account is rolled back instead of serving error pages.
 
 ## Privacy policy
 

@@ -38,19 +38,19 @@ Times are Europe/Berlin (CET/CEST). How the timer interacts with the phase switc
 
 ## Red alert: sanity checks
 
-When the layout has gaps, a red **RED ALERT: ARCHITECTURAL DEVIATIONS** panel lists them, each with a shortcut to fix it:
+When the layout has gaps, a red **RED ALERT: THE CAMP LAYOUT IS INCOMPLETE** panel (with the number of issues) lists them, each with a shortcut to fix it:
 
 | Warning | Fix button | Where it takes you |
 | --- | --- | --- |
-| 🛖 **NO ROOMS DETECTED** | <kbd>EXPAND ➕</kbd> | The house page, to add rooms |
-| 🚪 **EMPTY MODULE (NO BEDS)** | <kbd>ADD SPOTS 🛌</kbd> | The room page, to add spots |
+| **This house has no rooms yet.** | <kbd>ADD ROOMS ➕</kbd> | The house page, to add rooms |
+| **This room has no spots yet.** | <kbd>ADD SPOTS 🛌</kbd> | The room page, to add spots |
 
 > [!TIP]
 > During Live Booking, houses without any active spot don't appear on the guest map. Clear the red alert before you go live.
 
 ## Map view: the editor
 
-In Staging Mode the map is a live editor. A status bar reads *🛠 EDITOR ACTIVE*; during Live Booking it switches to *🔒 LOCKDOWN* and the map becomes read-only.
+In Staging Mode the map is a live editor. A status bar reads *🛠 EDITOR ACTIVE*; during Live Booking it reads *🔒 LOCKED: Live Booking is active. Switch to 🛠 STAGING MODE to add, move or delete houses.* and the map becomes read-only.
 
 Pins are teal while a house has free spots, red when none is left, and grey while it has no active spots at all.
 
