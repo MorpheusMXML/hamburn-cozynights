@@ -2,3 +2,5 @@ hamburn-cozynights/pb_data/
 .env
 .env.local
 .env.*.local
+# SSH keys must never be committed (some checkouts keep a local folder)
+.ssh-keys/
