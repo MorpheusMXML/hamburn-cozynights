@@ -34,8 +34,9 @@ services:
       TELEGRAM_API_BASE: http://mocks:8081
       COZY_APP_URL: http://127.0.0.1:${TEST_APP_PORT:-3290}
       COZY_ENV_LABEL: TEST
-      # one short pass per minute; the tests trigger runs themselves
-      COZY_NOTIFY_LOOP_SECONDS: '0'
+      # one short pass per minute (the tests trigger runs themselves);
+      # TEST_NOTIFY_LOOP_SECONDS=50 runs it like a server does
+      COZY_NOTIFY_LOOP_SECONDS: ${TEST_NOTIFY_LOOP_SECONDS:-0}
     ports:
       - '127.0.0.1:${TEST_PB_PORT:-8290}:8090'
     volumes:
