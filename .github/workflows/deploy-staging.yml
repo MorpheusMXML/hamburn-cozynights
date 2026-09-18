@@ -13,23 +13,11 @@ permissions:
   contents: read
 
 jobs:
+  # The same verification every pull request gets (type check, unit,
+  # integration and smoke tests incl. the Docker build) — fail here, not on
+  # the server.
   verify:
-    name: Test & build image
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: hamburn-cozynights
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: hamburn-cozynights/package-lock.json
-      - run: npm ci
-      - run: npm test
-      # Same Dockerfile the server builds — fail here, not on the server.
-      - run: docker build -t cozynights-ci .
+    uses: ./.github/workflows/ci.yml
 
   deploy:
     name: Deploy ${{ github.ref_name }}@${{ github.sha }}
@@ -51,3 +39,26 @@ jobs:
           # The deploy key is a forced command on the server; only the commit
           # SHA in this string is used (see hamburn-cozynights/deploy/).
           script: deploy ${{ github.sha }}
+
+  # The server-side health check only proves that the app answers. This asks
+  # the deployed site from the outside: pages, app → PocketBase → service
+  # account, Google login configured, admin area closed. Read-only.
+  smoke:
+    name: Smoke test staging
+    needs: deploy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hamburn-cozynights
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hamburn-cozynights/package-lock.json
+      - run: npm ci
+      - run: npm run smoke:remote
+        env:
+          SMOKE_BASE_URL: https://test-cozynights.hamburn.de
+          SMOKE_EXPECT_GOOGLE: '1'
