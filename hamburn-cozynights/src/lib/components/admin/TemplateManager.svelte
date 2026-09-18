@@ -372,7 +372,8 @@ a template file and then replace the layout with it.
 								<span>{layoutLine(preview.summary)}</span>
 								<span class="dim">
 									{preview.summary.activeBeds} active · {preview.summary.lockedBeds} locked ·
-									{preview.summary.deactivatedBeds} deactivated
+									{#if preview.summary.specialBeds}{preview.summary.specialBeds} special-needs ·
+									{/if}{preview.summary.deactivatedBeds} deactivated
 								</span>
 								<strong>Your camp now</strong>
 								<span>{layoutLine(preview.current)}</span>

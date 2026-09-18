@@ -55,6 +55,20 @@ decided.
 		<li>Beds the crew has locked ("Reserved by the crew") can't be booked.</li>
 	</ul>
 
+	<h2>Special-needs spots</h2>
+	<ul>
+		<li>
+			Some beds are kept for guests with special needs. They show as "Reserved by the crew" and
+			can't be booked directly.
+		</li>
+		<li>
+			While the crew accepts requests, you can ask for such a spot on the page
+			<a href="/special-needs">Special-needs spot</a>, also before booking opens. Tell the crew what
+			you need; the crew decides and books a fitting spot for you.
+		</li>
+		<li>A spot the crew booked for you can only be changed by the crew.</li>
+	</ul>
+
 	<h2>No claim to a particular bed</h2>
 	<p>
 		For organizational reasons, for example safety, accessibility or a broken bed, the crew may move

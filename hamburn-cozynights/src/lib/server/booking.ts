@@ -34,14 +34,42 @@ function isNotFound(err: unknown): boolean {
 	return (err as ClientResponseError | undefined)?.status === 404;
 }
 
-/** Whether a guest may book this bed at all (independent of occupancy). */
+/**
+ * Whether a guest may book this bed at all (independent of occupancy).
+ * Locked spots and special-needs spots are for the crew to hand out: guests
+ * see both as "Reserved by the crew".
+ */
 export function isBedBookable(
-	bed: Pick<BedsResponse, 'enabled' | 'is_locked'>,
+	bed: Pick<BedsResponse, 'enabled' | 'is_locked'> & { is_special?: boolean },
 	options: { allowLocked?: boolean } = {}
 ): boolean {
 	if (bed.enabled === false) return false;
-	if (bed.is_locked && !options.allowLocked) return false;
+	if ((bed.is_locked || bed.is_special) && !options.allowLocked) return false;
 	return true;
+}
+
+const BURNER_NAMES = [
+	'Dusty Nomad',
+	'Neon Shaman',
+	'Sparkle Pony',
+	'Fire Weaver',
+	'LED Lizard',
+	'Gifting Goblin',
+	'Moop Master',
+	'Temple Guardian',
+	'Solar Sprite',
+	'Disco Druid',
+	'Radical Robot',
+	'Dust Bunny',
+	'Prism Pilot',
+	'Bass Beast',
+	'Infinite Improviser'
+];
+
+/** A burner name for a booking made without one, e.g. "Disco Druid #417". */
+export function randomBurnerName(): string {
+	const name = BURNER_NAMES[Math.floor(Math.random() * BURNER_NAMES.length)];
+	return `${name} #${Math.floor(100 + Math.random() * 900)}`;
 }
 
 /**
@@ -122,7 +150,8 @@ export class BookingService {
 	 * @param order The order record of the user making the booking.
 	 * @param bedId The ID of the bed to be claimed.
 	 * @param guestName The burner name chosen by the user.
-	 * @param options.allowLocked Admins may book beds that are locked for guests.
+	 * @param options.allowLocked Admins may book beds that are locked for guests
+	 *   (locked or special-needs spots).
 	 * @throws {BedUnavailableError} if the bed is taken, locked, or deactivated.
 	 */
 	async bookBed(
@@ -139,7 +168,10 @@ export class BookingService {
 				if (bed.occupied && bed.order !== order.id) {
 					throw new BedUnavailableError('This spot is already claimed.');
 				}
-				if (!isBedBookable(bed, options)) {
+				// Availability is about claiming a spot. Renaming the one the ticket
+				// already holds stays possible, e.g. a special-needs spot the crew
+				// booked for the guest.
+				if (bed.order !== order.id && !isBedBookable(bed, options)) {
 					throw new BedUnavailableError('This spot is not available.');
 				}
 

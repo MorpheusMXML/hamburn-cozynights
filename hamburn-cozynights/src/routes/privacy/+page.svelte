@@ -122,8 +122,46 @@ variables in the server's .env (`$lib/server/legal`).
 		necessary (§ 25(2) no. 2 TDDDG).
 	</p>
 	<p>
-		We delete bookings, burner names and the ticket list with its email addresses{#if notify.telegram}
+		We delete bookings, burner names, special-needs requests and the ticket list with its email
+		addresses{#if notify.telegram}
 			and linked Telegram chats{/if} as soon as we no longer need them, {legal.deletionPeriod}.
+	</p>
+
+	<h2 id="special-needs">Special-needs requests</h2>
+	<p>
+		If you need a special spot, for example a lower bunk, step-free access, a quiet room or a socket
+		for a medical device, you can ask the crew for one on the page
+		<a href="/special-needs">Special-needs spot</a> while the crew accepts requests. For a request we
+		process:
+	</p>
+	<ul>
+		<li>
+			what you <strong>tick</strong> as your needs and what you <strong>write</strong> about them;
+		</li>
+		<li>the <strong>burner name</strong> for the spot, if you enter one;</li>
+		<li>when you sent or changed the request and gave your consent;</li>
+		<li>
+			the crew's <strong>decision</strong> (approved or declined, by which crew member, when) and the
+			spot the crew books for you.
+		</li>
+	</ul>
+	<p>
+		What you write may be information about your health, a special category of personal data (Art. 9
+		GDPR). We therefore only process it with your explicit consent (Art. 6(1)(a) and Art. 9(2)(a)
+		GDPR), which you give with the checkbox in the form. We ask what you need, not why: please don't
+		tell us diagnoses. Booking the spot for you is part of allocating the beds (Art. 6(1)(b) GDPR).
+	</p>
+	<p>
+		Only crew members with access to the administration can read your request. What you write and
+		the burner name are stored encrypted. They are never part of an email{#if notify.telegram}
+			or Telegram message{/if}: those only say that your request arrived and what the crew decided.
+		The crew{#if notify.telegram}'s Telegram group{/if} only learns that a request arrived or was decided,
+		without your name or what you wrote.
+	</p>
+	<p>
+		You can withdraw your request, and with it your consent, at any time on the same page; we then
+		delete it right away. A spot the crew already booked for you stays yours. All other requests are
+		deleted after the event, {legal.deletionPeriod}.
 	</p>
 
 	{#if notify.mail || notify.telegram}
@@ -231,7 +269,7 @@ variables in the server's .env (`$lib/server/legal`).
 		<li>data portability (Art. 20 GDPR),</li>
 		<li>
 			withdraw your consent at any time with effect for the future (Art. 7(3) GDPR), for example by
-			deleting your burner name or writing to us.
+			deleting your burner name, withdrawing a special-needs request or writing to us.
 		</li>
 	</ul>
 	<p class="callout">

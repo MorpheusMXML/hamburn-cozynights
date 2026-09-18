@@ -19,6 +19,31 @@
 	// Only admins reach this page (hooks + layout); superusers additionally get
 	// the destructive tools (clear all bookings, template import).
 	$: ({ houses, sanityWarnings, history, isSuperuser, isBookingActive, bookingUnlockAt } = data);
+	// Special-needs requests (/admin/requests): own switch, independent of the phase.
+	$: ({ requestsOpen, openRequests } = data);
+	let requestsSaving = false;
+
+	const handleToggleRequests: SubmitFunction = () => {
+		requestsSaving = true;
+		return async ({ result, update }) => {
+			requestsSaving = false;
+			if (result.type === 'success') {
+				const open = (result.data as { requestsOpen?: boolean } | undefined)?.requestsOpen;
+				toast(
+					open
+						? '♿ Special-needs requests are open: guests see a link on the map.'
+						: '♿ Special-needs requests are closed.',
+					'success'
+				);
+			} else {
+				await alertDialog(
+					`${actionErrorMessage(result) || 'The server could not be reached.'} Requests were not opened or closed. Reload the page and try again.`,
+					{ title: 'Switch not changed', tone: 'danger' }
+				);
+			}
+			await update();
+		};
+	};
 
 	// Management Summary Calculations
 	$: totalBeds = houses.reduce((sum, h) => sum + (h.totalBeds || 0), 0);
@@ -96,7 +121,7 @@
 
 			if (occupiedBeds > 0 && isSuperuser) {
 				clearBookings = await confirmDialog(
-					`There are ${occupiedBeds} booked spots right now. Do you also want to clear ALL bookings? Every guest loses their spot and has to book again. Ticket codes stay valid. This cannot be undone.`,
+					`There are ${occupiedBeds} booked spots right now. Do you also want to clear ALL bookings? Every guest loses their spot and has to book again. Spots the crew assigned for special-needs requests stay. Ticket codes stay valid. This cannot be undone.`,
 					{
 						title: 'Also clear all bookings?',
 						tone: 'danger',
@@ -127,7 +152,13 @@
 				if (clearBookings && !nowLive) {
 					const purge = await submitAction('?/clearAllBookings', new FormData());
 					if (purge.type === 'success') {
-						toast('✨ All bookings were cleared. Every spot is free again.', 'success');
+						const kept = Number((purge.data as { kept?: number } | undefined)?.kept) || 0;
+						toast(
+							kept > 0
+								? `✨ All bookings were cleared, except ${kept} special-needs spot${kept === 1 ? '' : 's'} assigned by the crew.`
+								: '✨ All bookings were cleared. Every spot is free again.',
+							'success'
+						);
 					} else {
 						await alertDialog(
 							`${actionErrorMessage(purge) || 'The server could not be reached.'} No bookings were changed by this step; the app is in Staging Mode. Check the spots before you try again.`,
@@ -558,6 +589,21 @@
 		{/if}
 	</section>
 
+	<section class="requests-panel" class:open={requestsOpen}>
+		<span class="timer-icon" aria-hidden="true">♿</span>
+		<span class="timer-text">
+			Special-needs requests: <strong>{requestsOpen ? 'OPEN' : 'CLOSED'}</strong>
+			{#if openRequests}· {openRequests} waiting for a decision{/if}
+		</span>
+		<form method="POST" action="/admin/requests?/toggleRequests" use:enhance={handleToggleRequests}>
+			<input type="hidden" name="open" value={String(!requestsOpen)} />
+			<button type="submit" class="btn-requests" disabled={requestsSaving}>
+				{requestsOpen ? 'Close requests' : 'Open requests'}
+			</button>
+		</form>
+		<a class="requests-review" href="/admin/requests">Review requests →</a>
+	</section>
+
 	{#if showTemplates}
 		<TemplateManager {isSuperuser} on:close={() => (showTemplates = false)} />
 	{/if}
@@ -969,6 +1015,54 @@
 	.btn-timer-cancel:hover {
 		border-color: #ef4444;
 		color: #f87171;
+	}
+
+	.requests-panel {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		font-size: 0.8rem;
+		font-weight: 800;
+		letter-spacing: 0.5px;
+		background: rgba(115, 115, 115, 0.05);
+		border: 1px solid #333;
+		border-radius: 12px;
+		padding: 0.6rem 1.5rem;
+		color: #a3a3a3;
+	}
+	.requests-panel.open {
+		background: rgba(244, 114, 182, 0.05);
+		border-color: rgba(244, 114, 182, 0.3);
+	}
+	.requests-panel strong {
+		color: #f472b6;
+	}
+	.btn-requests {
+		min-height: 44px;
+		padding: 0.5rem 1rem;
+		border-radius: 8px;
+		border: 1px solid #f472b6;
+		background: transparent;
+		color: #f472b6;
+		font-weight: 900;
+		font-size: 0.75rem;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.btn-requests:hover {
+		background: rgba(244, 114, 182, 0.12);
+	}
+	.btn-requests:disabled {
+		opacity: 0.5;
+		cursor: progress;
+	}
+	.requests-review {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		color: #2dd4bf;
+		text-decoration: none;
 	}
 
 	.intel-panel {

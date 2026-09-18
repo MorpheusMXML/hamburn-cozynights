@@ -3,7 +3,12 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { RoomsResponse, BedsResponse, OrdersResponse } from '$lib/pocketbase-types';
 import { decrypt } from '$lib/server/crypto';
-import { BookingService, BedUnavailableError, isBedBookable } from '$lib/server/booking';
+import {
+	BookingService,
+	BedUnavailableError,
+	isBedBookable,
+	randomBurnerName
+} from '$lib/server/booking';
 import { getBookingSettings } from '$lib/server/settings';
 import {
 	disconnectTelegram,
@@ -12,31 +17,8 @@ import {
 	type GuestNotifyStatus
 } from '$lib/server/notifications';
 import { ensurePassCode } from '$lib/server/pass';
+import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
 import { formatPassCode } from '$lib/pass';
-
-const burnerNames = [
-	'Dusty Nomad',
-	'Neon Shaman',
-	'Sparkle Pony',
-	'Fire Weaver',
-	'LED Lizard',
-	'Gifting Goblin',
-	'Moop Master',
-	'Temple Guardian',
-	'Solar Sprite',
-	'Disco Druid',
-	'Radical Robot',
-	'Dust Bunny',
-	'Prism Pilot',
-	'Bass Beast',
-	'Infinite Improviser'
-];
-
-function getRandomName(): string {
-	const randomIndex = Math.floor(Math.random() * burnerNames.length);
-	const randomSuffix = Math.floor(100 + Math.random() * 900);
-	return `${burnerNames[randomIndex]} #${randomSuffix}`;
-}
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 const SIGNED_OUT =
@@ -99,11 +81,13 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			};
 		});
 
-		// Where confirmations go, and the booking pass. Optional: the page works without them.
+		// Where confirmations go, the booking pass, and whether the crew picked the
+		// spot (special-needs request). Optional: the page works without them.
 		let notify: GuestNotifyStatus | null = null;
 		let passCode: string | null = null;
+		let spotFixed = false;
 		if (userBed) {
-			[notify, passCode] = await Promise.all([
+			[notify, passCode, spotFixed] = await Promise.all([
 				getGuestNotifyStatus(locals.adminPb, order, settings).catch((err) => {
 					console.error('[Room] Notification status failed:', (err as Error)?.message);
 					return null;
@@ -113,13 +97,18 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 					.catch((err) => {
 						console.error('[Room] Booking pass failed:', (err as Error)?.message);
 						return null;
-					})
+					}),
+				isSpotFixed(locals.adminPb, order.id).catch((err) => {
+					console.error('[Room] Special-needs request lookup failed:', (err as Error)?.message);
+					return false;
+				})
 			]);
 		}
 
 		return {
 			notify,
 			passCode,
+			spotFixed,
 			room: { id: room.id, name: room.name, room_number: room.room_number, house: room.house },
 			beds: safeBeds,
 			userBedId: userBed?.id || null,
@@ -155,7 +144,7 @@ export const actions: Actions = {
 
 		const formData = await request.formData();
 		const bedId = formData.get('bedId') as string;
-		const guestName = cleanBurnerName(formData.get('guestName')) || getRandomName();
+		const guestName = cleanBurnerName(formData.get('guestName')) || randomBurnerName();
 
 		if (!locals.orderNumber) return fail(401, { error: SIGNED_OUT });
 		if (!bedId) {
@@ -169,6 +158,13 @@ export const actions: Actions = {
 			if (!order) {
 				console.warn('[Security] bookBed: unknown ticket code in cookie.');
 				return fail(404, { error: CODE_UNKNOWN });
+			}
+
+			// A spot the crew picked for a special-needs request stays where it is;
+			// giving it a new burner name is fine.
+			const currentBed = await bookingService.getBedForOrder(order.id);
+			if (currentBed && currentBed.id !== bedId && (await isSpotFixed(locals.adminPb, order.id))) {
+				return fail(409, { error: SPOT_FIXED_MESSAGE });
 			}
 
 			// Availability (free, enabled, not locked unless admin) is checked
@@ -256,6 +252,9 @@ export const actions: Actions = {
 		try {
 			const order = await bookingService.getOrderByNumber(locals.orderNumber);
 			if (!order) return fail(404, { error: CODE_UNKNOWN });
+			if (await isSpotFixed(locals.adminPb, order.id)) {
+				return fail(409, { error: SPOT_FIXED_MESSAGE });
+			}
 
 			await bookingService.unbookOrder(order.id);
 			return { success: true, released: true };

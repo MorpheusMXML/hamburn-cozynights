@@ -2,6 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { getBookingSettings } from '$lib/server/settings';
 import { BookingService, BedUnavailableError } from '$lib/server/booking';
+import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
 import type { BedsResponse, RoomsResponse, HousesResponse } from '$lib/pocketbase-types';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
@@ -40,14 +41,15 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 
 		// Only fetch the (possibly large) free-bed list when the user doesn't
 		// already have a spot — they can't roll again without releasing first.
-		// Deactivated and locked beds are never part of the roulette.
+		// Deactivated, locked and special-needs beds are never part of the roulette.
 		const freeBeds = userBed
 			? []
 			: (
 					await locals.pb
 						.collection('beds')
 						.getFullList<BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>>({
-							filter: 'occupied = false && enabled = true && is_locked = false',
+							filter:
+								'occupied = false && enabled = true && is_locked = false && is_special = false',
 							expand: 'room,room.house',
 							sort: 'label'
 						})
@@ -63,9 +65,20 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 					}
 				}));
 
+		const spotFixed = userBed
+			? await isSpotFixed(locals.adminPb, order.id).catch((err) => {
+					console.error(
+						'[RandomBed] Special-needs request lookup failed:',
+						(err as Error)?.message
+					);
+					return false;
+				})
+			: false;
+
 		return {
 			freeBeds,
 			isBookingActive,
+			spotFixed,
 			userBed: userBed
 				? {
 						id: userBed.id,
@@ -170,6 +183,9 @@ export const actions: Actions = {
 		try {
 			const order = await bookingService.getOrderByNumber(locals.orderNumber);
 			if (!order) return fail(404, { error: CODE_UNKNOWN });
+			if (await isSpotFixed(locals.adminPb, order.id)) {
+				return fail(409, { error: SPOT_FIXED_MESSAGE });
+			}
 
 			await bookingService.unbookOrder(order.id);
 			return { success: true };

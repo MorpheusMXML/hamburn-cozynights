@@ -61,6 +61,20 @@
 			<div class="debug-counter">
 				SENSORS: {houses?.length || 0}
 			</div>
+			{#if isBookingActive && (data.specialNeeds.open || data.specialNeeds.requestSent)}
+				<a
+					class="help-link special-link"
+					href="/special-needs"
+					aria-label={data.specialNeeds.requestSent
+						? 'My special-needs request'
+						: 'Ask for a special-needs spot'}
+				>
+					<span class="help-icon" aria-hidden="true">♿</span>
+					<span class="help-text"
+						>{data.specialNeeds.requestSent ? 'My request' : 'Special-needs spot'}</span
+					>
+				</a>
+			{/if}
 			<a
 				class="help-link"
 				href="/docs/guide/"
@@ -106,6 +120,16 @@
 						? 'This page unlocks by itself when the countdown ends.'
 						: 'The crew is still setting up the houses. Check back soon.'}
 				</p>
+
+				{#if data.specialNeeds.requestSent}
+					<a class="special-needs-cta" href="/special-needs">
+						<span aria-hidden="true">♿</span> See your special-needs request
+					</a>
+				{:else if data.specialNeeds.open}
+					<a class="special-needs-cta" href="/special-needs">
+						<span aria-hidden="true">♿</span> Need a special-needs spot? Ask the crew now
+					</a>
+				{/if}
 
 				<button class="reload-button" class:smashed={isShaking} on:click={handleReloadSensors}>
 					<span class="icon">📡</span>
@@ -399,6 +423,31 @@
 		font-size: 0.95rem;
 		line-height: 1.5;
 		color: #d4d4d4;
+	}
+
+	.special-needs-cta {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-height: 44px;
+		padding: 0.5rem 1.25rem;
+		border-radius: 12px;
+		border: 1px solid #f472b6;
+		background: rgba(10, 10, 10, 0.85);
+		color: #f9a8d4;
+		font-weight: 800;
+		text-align: center;
+		text-decoration: none;
+	}
+	.special-needs-cta:hover,
+	.special-needs-cta:focus-visible {
+		background: #f472b6;
+		color: #111;
+	}
+
+	.special-link {
+		border-color: #f472b6;
+		color: #f9a8d4;
 	}
 
 	.timer-wrapper {

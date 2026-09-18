@@ -111,6 +111,7 @@ export async function disconnectTelegram(adminPb: TypedPocketBase, orderId: stri
 		tg_new: false,
 		tg_spot: '',
 		tg_label: '',
+		tg_req: '',
 		tg_token_hash: '',
 		tg_token_exp: ''
 	});

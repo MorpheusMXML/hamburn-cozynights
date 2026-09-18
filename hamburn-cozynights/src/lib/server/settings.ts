@@ -8,6 +8,8 @@ export interface BookingSettings {
 	notifyMail: boolean;
 	/** The bot guests can link for updates ("" = no Telegram updates). */
 	telegramBot: string;
+	/** Guests can send special-needs requests (own switch, independent of the phase). */
+	requestsOpen: boolean;
 }
 
 /**
@@ -27,7 +29,8 @@ export async function getBookingSettings(pb: TypedPocketBase): Promise<BookingSe
 			is_booking_active: false,
 			booking_unlock_at: '',
 			notify_mail: false,
-			telegram_bot: ''
+			telegram_bot: '',
+			special_requests_open: false
 		}));
 
 	const bookingUnlockAt = settings.booking_unlock_at || '';
@@ -46,6 +49,7 @@ export async function getBookingSettings(pb: TypedPocketBase): Promise<BookingSe
 		bookingUnlockAt,
 		notifyMail: !!settings.notify_mail,
 		// Telegram usernames: 5–32 letters, digits and underscores
-		telegramBot: /^[A-Za-z0-9_]{5,32}$/.test(telegramBot) ? telegramBot : ''
+		telegramBot: /^[A-Za-z0-9_]{5,32}$/.test(telegramBot) ? telegramBot : '',
+		requestsOpen: !!settings.special_requests_open
 	};
 }
