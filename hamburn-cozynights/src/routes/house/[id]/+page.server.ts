@@ -55,6 +55,7 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			rooms: roomsWithStats,
 			userBedId: userBed?.id || null,
 			isBookingActive: settings.isBookingActive,
+			phase: settings.phase,
 			bookingUnlockAt: settings.bookingUnlockAt
 		};
 	} catch (err) {

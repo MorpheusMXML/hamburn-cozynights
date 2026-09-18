@@ -8,7 +8,7 @@
 	export let data: PageData;
 	export let form: { message?: string } | null = null;
 	// Only admins reach this page (hooks + layout)
-	$: ({ house, rooms, isBookingActive } = data);
+	$: ({ house, rooms, isLayoutLocked, phase } = data);
 
 	type RoomCard = PageData['rooms'][number];
 
@@ -80,20 +80,21 @@
 		<div class="error-banner" role="alert" in:fade>⚠️ {form.message}</div>
 	{/if}
 
-	{#if isBookingActive}
+	{#if isLayoutLocked}
 		<div class="lockdown-notice" role="status">
-			🔒 Live Booking is active, so rooms cannot be added or deleted. Switch to Staging Mode in the
-			<a href="/admin">Control Center</a> to change this house.
+			🔒 {phase === 'closed' ? 'Booking is closed' : 'Live Booking is active'}, so rooms cannot be
+			added or deleted. A superuser can switch back to Staging Mode in the
+			<a href="/admin">Control Center</a>.
 		</div>
 	{/if}
 
-	<section class="form-section" in:fade={{ delay: 200 }} class:disabled={isBookingActive}>
+	<section class="form-section" in:fade={{ delay: 200 }} class:disabled={isLayoutLocked}>
 		<header class="section-header">
 			<span class="laser-dot turquoise"></span>
 			<h3>ADD ROOM ➕</h3>
 		</header>
 		<div class="form-wrapper">
-			<AddRoomForm houseId={house.id} disabled={isBookingActive} />
+			<AddRoomForm houseId={house.id} disabled={isLayoutLocked} />
 		</div>
 	</section>
 
@@ -141,8 +142,8 @@
 						<button
 							type="submit"
 							class="btn-vanish"
-							class:disabled={isBookingActive}
-							disabled={isBookingActive}
+							class:disabled={isLayoutLocked}
+							disabled={isLayoutLocked}
 						>
 							VANISH ROOM 🌪️
 						</button>

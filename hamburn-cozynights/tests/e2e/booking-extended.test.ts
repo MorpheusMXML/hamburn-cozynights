@@ -165,7 +165,7 @@ test.describe('Extended Booking & Admin Flow', () => {
 		await expect(page.locator('input[name="password"]')).toHaveCount(0);
 		await expect(page.getByText(/create account/i)).toHaveCount(0);
 
-		const response = await page.request.post('/admin?/togglePhase', {
+		const response = await page.request.post('/admin?/setPhase', {
 			form: {},
 			headers: { origin: APP_URL }
 		});

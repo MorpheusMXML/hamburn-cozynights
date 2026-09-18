@@ -61,6 +61,7 @@
 		"vitest": "^4.1.4"
 	},
 	"dependencies": {
+		"@number-flow/svelte": "^0.4.2",
 		"chart.js": "^4.5.1",
 		"pocketbase": "^0.28.1",
 		"qr": "^0.7.0",

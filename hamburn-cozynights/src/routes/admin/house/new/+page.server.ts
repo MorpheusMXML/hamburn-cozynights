@@ -1,6 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { getBookingSettings } from '$lib/server/settings';
+import { lockedDuring } from '$lib/booking-phase';
 import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
 import { TEMPLATE_LIMITS } from '$lib/template';
 
@@ -8,9 +9,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	// Runs in parallel with the layout load, so it guards itself too.
 	if (!locals.admin) throw error(403, 'Unauthorized');
 
-	const { isBookingActive } = await getBookingSettings(locals.pb);
+	const { isLayoutLocked, phase } = await getBookingSettings(locals.pb);
 	return {
-		isBookingActive,
+		isLayoutLocked,
+		phase,
 		// Without (valid) coordinates in the URL the house starts in the middle of the map.
 		x: parseMapCoordinate(url.searchParams.get('x'), MAP_WIDTH) ?? MAP_WIDTH / 2,
 		y: parseMapCoordinate(url.searchParams.get('y'), MAP_HEIGHT) ?? MAP_HEIGHT / 2
@@ -22,12 +24,11 @@ export const actions: Actions = {
 	create: async ({ request, locals }) => {
 		if (!locals.admin) return fail(403, { error: 'Only admins can create houses.' });
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive) {
-			console.warn('[Action] BLOCKED: cannot create a house during LIVE mode.');
+		const { isLayoutLocked, phase } = await getBookingSettings(locals.pb);
+		if (isLayoutLocked) {
+			console.warn(`[Action] BLOCKED: cannot create a house (${phase}).`);
 			return fail(403, {
-				error:
-					'Houses cannot be added while Live Booking is active. Switch to Staging Mode in the Control Center first.'
+				error: `Houses cannot be added ${lockedDuring(phase)}. A superuser can switch back to Staging Mode in the Control Center.`
 			});
 		}
 

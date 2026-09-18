@@ -14,6 +14,79 @@ import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
 import { parseTemplate, TEMPLATE_LIMITS, type TemplateParseResult } from '$lib/template';
 import { getCampCounts, importTemplate, TemplateImportError } from '$lib/server/template';
 import { logAdminEvent } from '$lib/server/admin-events';
+import {
+	checkWindowEdit,
+	effectivePhase,
+	isArmed,
+	lockedDuring,
+	saveTimesEdit,
+	switchPhase,
+	windowFromRecord,
+	windowToRecord,
+	type BookingPhase,
+	type BookingWindow,
+	type WindowEdit
+} from '$lib/booking-phase';
+
+const isBookingPhase = (value: string): value is BookingPhase =>
+	value === 'staging' || value === 'live' || value === 'closed';
+
+/** The stored booking window (defaults when the settings record is missing). */
+async function readWindow(pb: TypedPocketBase) {
+	const record = await pb
+		.collection('app_settings')
+		.getOne(APP_SETTINGS_ID, { requestKey: null })
+		.catch((err) => {
+			if (err?.status === 404) return null;
+			throw err;
+		});
+	return { exists: !!record, window: windowFromRecord(record) };
+}
+
+/**
+ * Written with the admin's own token: PocketBase then knows who it was (crew
+ * alert) and refuses a phase switch by a non-superuser (pb_hooks/cozy_phase.pb.js).
+ */
+async function writeWindow(pb: TypedPocketBase, exists: boolean, next: BookingWindow) {
+	const data = windowToRecord(next);
+	if (exists) await pb.collection('app_settings').update(APP_SETTINGS_ID, data);
+	else await pb.collection('app_settings').create({ id: APP_SETTINGS_ID, ...data });
+}
+
+function phaseFailure(action: string, err: unknown, unchanged: string) {
+	const status = (err as { status?: number })?.status;
+	const message = (err as { response?: { message?: unknown } })?.response?.message;
+	console.error(`[Action:${action}] FAILED:`, err);
+	if (status === 403) {
+		return fail(403, {
+			error: `${typeof message === 'string' && message ? message : 'Not allowed.'} ${unchanged}`
+		});
+	}
+	return fail(500, { error: `The server could not save it. ${unchanged}` });
+}
+
+/** Changes of the booking window by any admin, checked by the rules in $lib/booking-phase. */
+async function editWindow(
+	locals: App.Locals,
+	action: string,
+	makeEdit: (current: BookingWindow) => WindowEdit,
+	precondition: (current: BookingWindow) => string = () => ''
+) {
+	try {
+		const { exists, window } = await readWindow(locals.pb);
+		const refused = precondition(window);
+		if (refused) return fail(400, { error: refused });
+		const check = checkWindowEdit(window, makeEdit(window), {
+			isSuperuser: !!locals.admin?.isSuperuser
+		});
+		if (check.error) return fail(400, { error: check.error });
+		await writeWindow(locals.pb, exists, check.next);
+		console.log(`[Action:${action}] SUCCESS. Phase ${check.phaseBefore} → ${check.phaseAfter}`);
+		return { success: true, phase: check.phaseAfter, phaseBefore: check.phaseBefore };
+	} catch (err) {
+		return phaseFailure(action, err, 'The booking window was not changed.');
+	}
+}
 
 /**
  * Shared first half of the template preview and import: both are superuser-only,
@@ -34,12 +107,12 @@ async function readTemplateUpload(
 		return refuse(403, 'Only superusers can import a template.');
 	}
 
-	const { isBookingActive } = await getBookingSettings(locals.pb);
-	if (isBookingActive) {
-		console.warn('[Import Template] BLOCKED: layout is locked during LIVE mode.');
+	const { isLayoutLocked, phase } = await getBookingSettings(locals.pb);
+	if (isLayoutLocked) {
+		console.warn(`[Import Template] BLOCKED: layout is locked (${phase}).`);
 		return refuse(
 			403,
-			'Templates cannot be imported during Live Booking — this would erase live bookings. Switch to Staging Mode first. 🔒'
+			`Templates cannot be imported ${lockedDuring(phase)} — this would erase the guests' bookings. Switch to Staging Mode first. 🔒`
 		);
 	}
 
@@ -80,47 +153,74 @@ type HouseStats = HousesResponse & {
 };
 
 export const actions: Actions = {
-	togglePhase: async ({ locals }) => {
-		console.log(`[Action:togglePhase] Admin: ${locals.admin?.email}`);
+	/** The superuser's override: Staging, Live or Closed, right now. */
+	setPhase: async ({ locals, request }) => {
+		console.log(`[Action:setPhase] Admin: ${locals.admin?.email}`);
 		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
+		if (!locals.admin.isSuperuser) {
+			return fail(403, {
+				error:
+					'Only superusers can switch the booking phase right now. Plan it with the booking window and arm the timer instead.'
+			});
+		}
+		const to = String((await request.formData().catch(() => null))?.get('phase') ?? '');
+		if (!isBookingPhase(to)) return fail(400, { error: 'Unknown booking phase.' });
 
 		try {
-			const raw = await locals.pb
-				.collection('app_settings')
-				.getOne(APP_SETTINGS_ID)
-				.catch(() => null);
-			// Toggle relative to the *effective* state (raw flag OR an elapsed
-			// timer) so the button does what the admin sees, not just the flag.
-			const { isBookingActive: effectivelyActive } = await getBookingSettings(locals.pb);
-			const nextStatus = !effectivelyActive;
+			const { exists, window } = await readWindow(locals.pb);
+			const now = Date.now();
+			const phaseBefore = effectivePhase(window, now);
+			if (phaseBefore === to) return { success: true, phase: to, phaseBefore, pausedTimer: false };
 
-			const update: Record<string, unknown> = { is_booking_active: nextStatus };
-			if (!nextStatus && raw?.booking_unlock_at) {
-				// Going back to staging: an already-elapsed timer would just make
-				// the system effectively live again on the next request, so clear
-				// it. A timer still in the future is left alone.
-				const unlockTime = new Date(raw.booking_unlock_at).getTime();
-				if (!Number.isNaN(unlockTime) && Date.now() >= unlockTime) {
-					update.booking_unlock_at = '';
-				}
-			}
-
-			if (raw) {
-				console.log(`[Action:togglePhase] Effective: ${effectivelyActive}, Target: ${nextStatus}`);
-				await locals.pb.collection('app_settings').update(APP_SETTINGS_ID, update);
-			} else {
-				console.log('[Action:togglePhase] Creating initial settings.');
-				await locals.pb.collection('app_settings').create({
-					id: APP_SETTINGS_ID,
-					is_booking_active: true
-				});
-			}
-			console.log('[Action:togglePhase] SUCCESS.');
-			return { success: true, isBookingActive: nextStatus };
+			const next = switchPhase(window, to, now);
+			await writeWindow(locals.pb, exists, next);
+			console.log(`[Action:setPhase] SUCCESS: ${phaseBefore} → ${to}`);
+			return {
+				success: true,
+				phase: to,
+				phaseBefore,
+				pausedTimer: next.paused && !window.paused
+			};
 		} catch (err) {
-			console.error('[Action:togglePhase] FAILED:', err);
-			return fail(500, { error: 'Toggle failed' });
+			return phaseFailure('setPhase', err, 'The booking phase was not changed.');
 		}
+	},
+	/** Opening and closing time of the booking window; keeps the timer armed or paused. */
+	saveWindow: async ({ locals, request }) => {
+		console.log(`[Action:saveWindow] Admin: ${locals.admin?.email}`);
+		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
+		const form = await request.formData().catch(() => null);
+		const opensLocal = String(form?.get('opensAt') ?? '').trim();
+		const closesLocal = String(form?.get('closesAt') ?? '').trim();
+		// The form's datetime-local values have no timezone; the UI presents them
+		// as event time (Europe/Berlin), independent of the server's timezone.
+		const opensAt = opensLocal ? berlinLocalToIso(opensLocal) : '';
+		const closesAt = closesLocal ? berlinLocalToIso(closesLocal) : '';
+		if (opensLocal && !opensAt) {
+			return fail(400, { error: 'The opening time is not a complete date and time.' });
+		}
+		if (closesLocal && !closesAt) {
+			return fail(400, { error: 'The closing time is not a complete date and time.' });
+		}
+		return editWindow(locals, 'saveWindow', (w) => saveTimesEdit(w, opensAt, closesAt));
+	},
+	armTimer: async ({ locals }) => {
+		console.log(`[Action:armTimer] Admin: ${locals.admin?.email}`);
+		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
+		return editWindow(
+			locals,
+			'armTimer',
+			(w) => ({ ...w, paused: false }),
+			(w) =>
+				isArmed({ ...w, paused: false })
+					? ''
+					: 'Plan the booking window first: it has no times yet.'
+		);
+	},
+	pauseTimer: async ({ locals }) => {
+		console.log(`[Action:pauseTimer] Admin: ${locals.admin?.email}`);
+		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
+		return editWindow(locals, 'pauseTimer', (w) => ({ ...w, paused: true }));
 	},
 	clearAllBookings: async ({ locals }) => {
 		if (!locals.admin?.isSuperuser) {
@@ -159,40 +259,6 @@ export const actions: Actions = {
 			return fail(500, { error: 'Purge failed' });
 		}
 	},
-	setUnlockTimer: async ({ locals, request }) => {
-		console.log(`[Action:setUnlockTimer] Admin: ${locals.admin?.email}`);
-		if (!locals.admin) return fail(403);
-		const data = await request.formData();
-		const date = data.get('unlockAt') as string;
-
-		// The form's datetime-local value has no timezone; the UI presents it as
-		// event time (Europe/Berlin), independent of the server's own timezone.
-		const unlockAt = date ? berlinLocalToIso(date) : '';
-		if (date && !unlockAt) return fail(400, { error: 'Invalid date.' });
-
-		try {
-			await locals.pb.collection('app_settings').update(APP_SETTINGS_ID, {
-				booking_unlock_at: unlockAt
-			});
-			console.log(`[Action:setUnlockTimer] SUCCESS. Target: ${date}`);
-		} catch (err) {
-			console.error('[Action:setUnlockTimer] FAILED:', err);
-			return fail(500);
-		}
-	},
-	cancelUnlockTimer: async ({ locals }) => {
-		console.log(`[Action:cancelUnlockTimer] Admin: ${locals.admin?.email}`);
-		if (!locals.admin) return fail(403);
-		try {
-			await locals.pb.collection('app_settings').update(APP_SETTINGS_ID, {
-				booking_unlock_at: ''
-			});
-			console.log('[Action:cancelUnlockTimer] SUCCESS.');
-		} catch (err) {
-			console.error('[Action:cancelUnlockTimer] FAILED:', err);
-			return fail(500);
-		}
-	},
 	updateHouseCoords: async ({ locals, request }) => {
 		const data = await request.formData();
 		const id = data.get('id') as string;
@@ -211,10 +277,10 @@ export const actions: Actions = {
 		}
 
 		try {
-			const { isBookingActive } = await getBookingSettings(locals.pb);
-			if (isBookingActive) {
-				console.warn(`[Action:updateHouseCoords] BLOCKED: LIVE mode — map layout is locked.`);
-				return fail(403, { error: 'Map layout is locked during Live Booking. 🔒' });
+			const { isLayoutLocked, phase } = await getBookingSettings(locals.pb);
+			if (isLayoutLocked) {
+				console.warn(`[Action:updateHouseCoords] BLOCKED: ${phase} — map layout is locked.`);
+				return fail(403, { error: `Map layout is locked ${lockedDuring(phase)}. 🔒` });
 			}
 
 			await locals.pb.collection('houses').update(id, { x, y });
@@ -234,11 +300,11 @@ export const actions: Actions = {
 		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
 
 		try {
-			const { isBookingActive } = await getBookingSettings(locals.pb);
-			if (isBookingActive) {
-				console.warn(`[Action:deleteHouse] BLOCKED: LIVE mode — structure is locked.`);
+			const { isLayoutLocked, phase } = await getBookingSettings(locals.pb);
+			if (isLayoutLocked) {
+				console.warn(`[Action:deleteHouse] BLOCKED: ${phase} — structure is locked.`);
 				return fail(403, {
-					error: 'The playa says NO! 🛑 Houses cannot be vanished during Live Booking.'
+					error: `The playa says NO! 🛑 Houses cannot be vanished ${lockedDuring(phase)}.`
 				});
 			}
 
@@ -306,10 +372,10 @@ export const actions: Actions = {
 		if (!name) return fail(400, { error: 'Name is required' });
 
 		try {
-			const { isBookingActive } = await getBookingSettings(locals.pb);
-			if (isBookingActive) {
-				console.warn(`[Action:renameHouse] BLOCKED: LIVE mode — structure is locked.`);
-				return fail(403, { error: 'House names are locked during Live Booking. 🔒' });
+			const { isLayoutLocked, phase } = await getBookingSettings(locals.pb);
+			if (isLayoutLocked) {
+				console.warn(`[Action:renameHouse] BLOCKED: ${phase} — structure is locked.`);
+				return fail(403, { error: `House names are locked ${lockedDuring(phase)}. 🔒` });
 			}
 
 			await locals.pb.collection('houses').update(id, { name });
@@ -482,7 +548,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		houses: housesWithStats,
 		sanityWarnings,
 		history,
+		phase: settings.phase,
 		isBookingActive: settings.isBookingActive,
-		bookingUnlockAt: settings.bookingUnlockAt
+		isLayoutLocked: settings.isLayoutLocked,
+		bookingWindow: settings.window
 	};
 };

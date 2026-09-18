@@ -70,8 +70,8 @@
 	}
 
 	.admin-layout {
-		min-height: 100vh;
-		min-height: 100dvh;
+		min-height: calc(100vh - var(--booking-bar-height, 0px));
+		min-height: calc(100dvh - var(--booking-bar-height, 0px));
 		display: flex;
 		flex-direction: column;
 		background: radial-gradient(circle at top right, #111, #050505);
@@ -88,7 +88,8 @@
 		backdrop-filter: blur(12px);
 		border-bottom: 1px solid #222;
 		position: sticky;
-		top: 0;
+		/* below the booking countdown bar, if shown (+layout.svelte) */
+		top: var(--booking-bar-height, 0px);
 		z-index: 100;
 		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 	}

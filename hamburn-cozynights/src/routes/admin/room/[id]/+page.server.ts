@@ -25,9 +25,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			sort: 'label'
 		});
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
+		const { isLayoutLocked, phase } = await getBookingSettings(locals.pb);
 
-		return { room, beds, isBookingActive };
+		return { room, beds, isLayoutLocked, phase };
 	} catch (err) {
 		console.error('Error fetching house spots:', err);
 		throw error(404, 'House room lost in the dust.');
@@ -35,15 +35,15 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 };
 
 const LOCKED_MESSAGE =
-	'Spots are locked while Live Booking is active. Switch to Staging Mode in the Control Center to add, delete or change spots. Only locking 🔒 works during Live Booking.';
+	"Spots are locked while booking is live or closed: the layout holds the guests' bookings. Only locking 🔒 still works. A superuser can switch back to Staging Mode in the Control Center.";
 const SERVER_ERROR = 'The server could not save the change. Reload the page and try again.';
 
 export const actions: Actions = {
 	createBed: async ({ request, params, locals }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can add spots.' });
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive) return fail(403, { message: LOCKED_MESSAGE });
+		const { isLayoutLocked } = await getBookingSettings(locals.pb);
+		if (isLayoutLocked) return fail(403, { message: LOCKED_MESSAGE });
 
 		console.log(`[Action:createBed] Admin: ${locals.admin.email}, Room: ${params.id}`);
 
@@ -96,8 +96,8 @@ export const actions: Actions = {
 	deleteBed: async ({ request, locals }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can delete spots.' });
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive) return fail(403, { message: LOCKED_MESSAGE });
+		const { isLayoutLocked } = await getBookingSettings(locals.pb);
+		if (isLayoutLocked) return fail(403, { message: LOCKED_MESSAGE });
 
 		console.log(`[Action:deleteBed] Admin: ${locals.admin.email}`);
 
@@ -118,8 +118,8 @@ export const actions: Actions = {
 	toggleOccupied: async ({ request, locals }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive) return fail(403, { message: LOCKED_MESSAGE });
+		const { isLayoutLocked } = await getBookingSettings(locals.pb);
+		if (isLayoutLocked) return fail(403, { message: LOCKED_MESSAGE });
 
 		const data = await request.formData();
 		const id = data.get('id') as string;
@@ -146,8 +146,8 @@ export const actions: Actions = {
 	toggleEnabled: async ({ request, locals }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive) return fail(403, { message: LOCKED_MESSAGE });
+		const { isLayoutLocked } = await getBookingSettings(locals.pb);
+		if (isLayoutLocked) return fail(403, { message: LOCKED_MESSAGE });
 
 		const data = await request.formData();
 		const id = data.get('id') as string;

@@ -389,7 +389,9 @@ describe('crew alerts', () => {
 	});
 
 	it('report booking phase changes with the name of the admin', async () => {
-		const admin = await createAdmin(su, 'admin');
+		// Switching the phase right now is a superuser's call (pb_hooks/cozy_phase.pb.js);
+		// tests/integration/booking-window.test.ts covers what admins may do.
+		const admin = await createAdmin(su, 'superuser');
 		const settings = admin.client.collection('app_settings');
 		const original = await su.collection('app_settings').getOne(APP_SETTINGS_ID);
 		const opensAt = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString();
@@ -414,14 +416,16 @@ describe('crew alerts', () => {
 		expect(texts).toContain(
 			`[TEST] 🎪 LIVE BOOKING switched ON by ${admin.email} — guests can book now`
 		);
-		expect(texts).toContain(`[TEST] 🛠 Booking closed (STAGING MODE) by ${admin.email}`);
+		expect(texts).toContain(
+			`[TEST] 🛠 Back to STAGING MODE by ${admin.email} — booking is off, the layout can be edited again`
+		);
 		expect(
-			texts.some((t) =>
-				t.startsWith(`[TEST] ⏰ Go-live timer set by ${admin.email}: booking opens `)
-			)
+			texts.some((t) => t.startsWith(`[TEST] ⏰ Booking timer armed by ${admin.email}: opens `))
 		).toBe(true);
 		expect(
-			texts.some((t) => t.startsWith(`[TEST] ⏰ Go-live timer removed by ${admin.email}`))
+			texts.some((t) =>
+				t.startsWith(`[TEST] ⏰ Booking timer removed by ${admin.email} (was opens `)
+			)
 		).toBe(true);
 	});
 

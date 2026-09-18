@@ -242,7 +242,7 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		expect(await (await get('/admin/login', adminCookie(pending.client))).text()).toContain(
 			'ACCESS REQUESTED'
 		);
-		expect((await post('/admin?/togglePhase', {}, adminCookie(pending.client))).status).toBe(403);
+		expect((await post('/admin?/setPhase', {}, adminCookie(pending.client))).status).toBe(403);
 	});
 
 	it('drops an admin session as soon as the account is removed', async () => {

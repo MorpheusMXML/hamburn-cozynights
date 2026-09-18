@@ -7,14 +7,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 	try {
 		const inventory = new InventoryService(locals.pb);
 		let houses = await inventory.getFullTree();
-		const { isBookingActive, bookingUnlockAt } = await getBookingSettings(locals.pb);
+		const { isBookingActive, phase, bookingUnlockAt } = await getBookingSettings(locals.pb);
 
-		if (isBookingActive) {
-			// Filter out unconfigured houses from public map during live booking
+		if (phase !== 'staging') {
+			// The layout is final: leave out unconfigured houses (live and closed).
 			houses = houses.filter((h) => h.isBookable);
 		}
 
-		return { houses, isBookingActive, bookingUnlockAt };
+		return { houses, isBookingActive, phase, bookingUnlockAt };
 	} catch (err) {
 		console.error('[Map] Load failed:', (err as Error)?.message);
 		throw error(503, 'The map could not be loaded right now. Please try again in a minute.');

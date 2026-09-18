@@ -1,8 +1,6 @@
 <script lang="ts">
 	import type { PageData, ActionData } from './$types';
 	import { enhance } from '$app/forms';
-	import { invalidateAll } from '$app/navigation';
-	import CountdownTimer from '$lib/components/CountdownTimer.svelte';
 	import { confirmDialog, toast } from '$lib/dialogs';
 
 	export let data: PageData;
@@ -21,19 +19,20 @@
 	<header>
 		<div class="header-nav">
 			<a href="/map" class="back-link">← Map</a>
-			{#if !data.isBookingActive && data.bookingUnlockAt}
-				<CountdownTimer
-					compact
-					targetDate={data.bookingUnlockAt}
-					on:elapsed={() => invalidateAll()}
-				/>
-			{/if}
 		</div>
 		<h1>{data.house.name}</h1>
 		<p class="subtitle">Choose a room for your night</p>
 	</header>
 
-	{#if !data.isBookingActive}
+	{#if data.phase === 'closed'}
+		<div class="info-banner" role="status">
+			<div class="banner-icon" aria-hidden="true">🔒</div>
+			<div class="banner-content">
+				<h3>Booking is closed</h3>
+				<p>Spots are final now: nothing can be booked, changed or released anymore.</p>
+			</div>
+		</div>
+	{:else if !data.isBookingActive}
 		<div class="info-banner" role="status">
 			<div class="banner-icon" aria-hidden="true">🎪</div>
 			<div class="banner-content">

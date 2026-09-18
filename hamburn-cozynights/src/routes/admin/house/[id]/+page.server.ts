@@ -35,7 +35,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			stats: countSpots(beds.filter((b) => b.room === room.id))
 		}));
 
-		return { house, rooms: roomsWithStats, isBookingActive: settings.isBookingActive };
+		return {
+			house,
+			rooms: roomsWithStats,
+			isLayoutLocked: settings.isLayoutLocked,
+			phase: settings.phase
+		};
 	} catch (err) {
 		console.error(err);
 		throw error(404, 'House not found.');
@@ -43,7 +48,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 };
 
 const LOCKED_MESSAGE =
-	'Rooms are locked while Live Booking is active. Switch to Staging Mode in the Control Center to add or delete rooms.';
+	"Rooms are locked while booking is live or closed: the layout holds the guests' bookings. A superuser can switch back to Staging Mode in the Control Center.";
 
 /** "12" -> 12; anything that is not a plain whole number -> null. */
 function parseWholeNumber(value: string): number | null {
@@ -54,8 +59,8 @@ export const actions: Actions = {
 	createRoom: async ({ request, locals, params }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can create rooms.' });
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive) return fail(403, { message: LOCKED_MESSAGE });
+		const { isLayoutLocked } = await getBookingSettings(locals.pb);
+		if (isLayoutLocked) return fail(403, { message: LOCKED_MESSAGE });
 
 		console.log(`[Action:createRoom] Admin: ${locals.admin.email}, House: ${params.id}`);
 
@@ -139,8 +144,8 @@ export const actions: Actions = {
 	deleteRoom: async ({ request, locals }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can delete rooms.' });
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive) return fail(403, { message: LOCKED_MESSAGE });
+		const { isLayoutLocked } = await getBookingSettings(locals.pb);
+		if (isLayoutLocked) return fail(403, { message: LOCKED_MESSAGE });
 
 		console.log(`[Action:deleteRoom] Admin: ${locals.admin.email}`);
 

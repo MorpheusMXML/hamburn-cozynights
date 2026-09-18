@@ -1,114 +1,62 @@
 <script lang="ts">
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import { fade } from 'svelte/transition';
-	import { EVENT_TIME_ZONE } from '$lib/time';
+	import { browser } from '$app/environment';
+	import CountdownDigits from './CountdownDigits.svelte';
+	import { formatBerlin, resyncDelay, toMs } from '$lib/booking-phase';
 
+	/** The big countdown on the guest map until booking opens. */
 	export let targetDate: string;
-	/** One small line for page headers instead of the big panel. */
-	export let compact = false;
 
 	const dispatch = createEventDispatcher<{ elapsed: void }>();
 
-	let timeLeft = '';
+	let now = Date.now();
 	let interval: ReturnType<typeof setInterval> | undefined;
 	let elapsedFor = '';
-
-	function calculateTimeLeft() {
-		const difference = new Date(targetDate).getTime() - Date.now();
-
-		if (Number.isNaN(difference)) {
-			timeLeft = '';
-			return;
-		}
-
-		if (difference <= 0) {
-			timeLeft = 'ANY MOMENT NOW...';
-			// Tell the page once, so it can reload its data and open the booking.
-			if (elapsedFor !== targetDate) {
-				elapsedFor = targetDate;
-				dispatch('elapsed');
-			}
-			return;
-		}
-
-		const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-		const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-		const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-		const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-
-		const parts = [];
-		if (days > 0) parts.push(`${days}d`);
-		if (hours > 0 || days > 0) parts.push(`${hours}h`);
-		parts.push(`${minutes}m`);
-		parts.push(`${seconds}s`);
-
-		timeLeft = parts.join(' ');
-	}
+	let attempts = 0;
+	let lastElapsed = 0;
 
 	onMount(() => {
-		calculateTimeLeft();
-		interval = setInterval(calculateTimeLeft, 1000);
+		interval = setInterval(() => (now = Date.now()), 1000);
 	});
 
 	onDestroy(() => {
 		if (interval) clearInterval(interval);
 	});
 
-	// Own English names instead of Intl month/weekday names: those differ
-	// between ICU versions ("Sep" vs "Sept"), i.e. between server and browser.
-	const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-	const MONTHS = [
-		'Jan',
-		'Feb',
-		'Mar',
-		'Apr',
-		'May',
-		'Jun',
-		'Jul',
-		'Aug',
-		'Sep',
-		'Oct',
-		'Nov',
-		'Dec'
-	];
-	const berlinClock = new Intl.DateTimeFormat('en-GB', {
-		timeZone: EVENT_TIME_ZONE,
-		hourCycle: 'h23',
-		year: 'numeric',
-		month: 'numeric',
-		day: 'numeric',
-		hour: '2-digit',
-		minute: '2-digit'
-	});
-
-	/** e.g. "Mon, 21 Sep 2026 · 18:00" in the event's timezone. */
-	function formatTarget(value: string): string {
-		const date = new Date(value);
-		if (Number.isNaN(date.getTime())) return '';
-		const p: Record<string, number> = {};
-		for (const part of berlinClock.formatToParts(date)) {
-			if (part.type !== 'literal') p[part.type] = Number(part.value);
+	$: target = toMs(targetDate);
+	$: remaining = target === null ? 0 : target - now;
+	// Tell the page, so it can reload its data and open the booking; again
+	// after a while if the server hasn't opened yet (this clock runs ahead).
+	$: if (browser && target !== null && remaining <= 0) {
+		if (elapsedFor !== targetDate) {
+			elapsedFor = targetDate;
+			attempts = 0;
+			lastElapsed = 0;
 		}
-		const weekday = WEEKDAYS[new Date(Date.UTC(p.year, p.month - 1, p.day)).getUTCDay()];
-		const pad = (n: number) => String(n).padStart(2, '0');
-		return `${weekday}, ${p.day} ${MONTHS[p.month - 1]} ${p.year} · ${pad(p.hour)}:${pad(p.minute)}`;
+		if (now - lastElapsed >= resyncDelay(attempts)) {
+			lastElapsed = now;
+			attempts += 1;
+			dispatch('elapsed');
+		}
 	}
 
-	$: targetLabel = formatTarget(targetDate);
+	$: targetLabel = formatBerlin(targetDate);
 </script>
 
-{#if compact}
-	<div class="countdown-compact" title="Booking opens {targetLabel} (Berlin time)">
-		<span class="compact-label">Booking opens in</span>
-		<span class="compact-timer">{timeLeft || '…'}</span>
-	</div>
-{:else}
-	<div class="countdown-wrapper" in:fade>
-		<div class="timezone-badge">BERLIN TIME</div>
-		<span class="label">BOOKING OPENS {targetLabel.toUpperCase()}</span>
-		<span class="timer" role="timer" aria-live="off">{timeLeft}</span>
-	</div>
-{/if}
+<div class="countdown-wrapper" in:fade>
+	<div class="timezone-badge">BERLIN TIME</div>
+	<span class="label">BOOKING OPENS {targetLabel.toUpperCase()}</span>
+	<span class="timer" role="timer" aria-live="off">
+		{#if target === null}
+			…
+		{:else if remaining <= 0}
+			ANY MOMENT NOW...
+		{:else}
+			<CountdownDigits ms={remaining} />
+		{/if}
+	</span>
+</div>
 
 <style>
 	.countdown-wrapper {
@@ -157,33 +105,6 @@
 		color: #fb923c;
 		font-family: 'JetBrains Mono', monospace;
 		text-shadow: 0 0 15px rgba(251, 146, 60, 0.6);
-		white-space: nowrap;
-	}
-
-	.countdown-compact {
-		display: inline-flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		justify-content: flex-end;
-		gap: 0.15rem 0.5rem;
-		padding: 0.4rem 0.85rem;
-		border-radius: 12px;
-		border: 1px solid rgba(251, 146, 60, 0.5);
-		background: rgba(0, 0, 0, 0.6);
-		max-width: 100%;
-	}
-	.compact-label {
-		font-size: 0.7rem;
-		font-weight: 900;
-		color: #b0b0b0;
-		letter-spacing: 1px;
-		text-transform: uppercase;
-	}
-	.compact-timer {
-		font-size: 0.95rem;
-		font-weight: 900;
-		color: #fb923c;
-		font-family: 'JetBrains Mono', monospace;
 		white-space: nowrap;
 	}
 </style>
