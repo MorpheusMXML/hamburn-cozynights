@@ -10,6 +10,7 @@ import {
 	randomBurnerName
 } from '$lib/server/booking';
 import { getBookingSettings } from '$lib/server/settings';
+import { bookingRefusal } from '$lib/booking-phase';
 import {
 	disconnectTelegram,
 	getGuestNotifyStatus,
@@ -115,6 +116,7 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			beds: safeBeds,
 			userBedId: userBed?.id || null,
 			isBookingActive: settings.isBookingActive,
+			phase: settings.phase,
 			bookingUnlockAt: settings.bookingUnlockAt
 		};
 	} catch (err: any) {
@@ -137,12 +139,8 @@ export const actions: Actions = {
 			});
 		}
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (!isBookingActive) {
-			return fail(403, {
-				error: 'Booking is not open yet. Nothing was booked. Come back when Live Booking starts.'
-			});
-		}
+		const { isBookingActive, phase } = await getBookingSettings(locals.pb);
+		if (!isBookingActive) return fail(403, { error: bookingRefusal(phase) });
 
 		const formData = await request.formData();
 		const bedId = formData.get('bedId') as string;

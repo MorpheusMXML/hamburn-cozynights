@@ -53,10 +53,10 @@ features:
     link: /guide/special-needs
     linkText: Ask for a spot
   - icon: 🛠️
-    title: Staging, then Live
-    details: The crew builds the layout in staging. Going live freezes the structure and opens booking, by switch or on a timer.
+    title: Staging, Live, Closed
+    details: The crew builds the layout in staging, then a timer opens booking and closes it again. A countdown on every page shows when.
     link: /guide/phases
-    linkText: The two phases
+    linkText: The booking window
   - icon: 🔐
     title: Google Workspace sign-in
     details: Admins sign in with their @mauersegler.art Google account. Newcomers request access and a superuser approves.
@@ -74,7 +74,7 @@ features:
 ```mermaid
 flowchart LR
   build["🛠️ Crew builds the camp<br/><small>houses · rooms · spots</small>"]
-  open["⏱️ Booking opens<br/><small>switch or timer</small>"]
+  open["⏱️ Booking opens<br/><small>on the timer, closes on it too</small>"]
   code["🎫 Guest enters<br/>ticket code"]
   pick["🛏️ Picks a bed<br/><small>or rolls the roulette</small>"]
   night["🔥 Cozy night<br/>at Hamburn"]

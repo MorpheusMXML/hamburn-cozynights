@@ -12,10 +12,17 @@
 	import { toast } from '$lib/dialogs';
 	import { goto } from '$app/navigation';
 	import { createEventDispatcher } from 'svelte';
+	import type { BookingPhase } from '$lib/booking-phase';
 
 	export let houses: any[] = [];
 	export let isEditorMode = false;
 	export let isBookingActive = false;
+	/** Guests: houses can be opened in Live Booking and after booking closed (read-only). */
+	export let phase: BookingPhase | null = null;
+	/** Editor: the layout is locked (live or closed). Defaults to isBookingActive. */
+	export let layoutLocked: boolean | null = null;
+
+	$: browsable = phase ? phase !== 'staging' : isBookingActive;
 
 	// Calculate label positions to avoid overlaps
 	$: labelPositions = (houses || []).reduce(
@@ -33,8 +40,8 @@
 		{} as Record<string, 'top' | 'bottom'>
 	);
 
-	// The layout can only be edited in the admin's editor while booking is closed.
-	$: canEditLayout = isEditorMode && !isBookingActive;
+	// The layout can only be edited in the admin's editor during Staging.
+	$: canEditLayout = isEditorMode && !(layoutLocked ?? isBookingActive);
 
 	const dispatch = createEventDispatcher();
 
@@ -210,7 +217,7 @@
 			}
 			return;
 		}
-		if (!isBookingActive) {
+		if (!browsable) {
 			toast('Booking is not open yet. You can look around once Live Booking starts.', 'info');
 			return;
 		}
@@ -328,7 +335,7 @@
 			width={MAP_WIDTH}
 			height={MAP_HEIGHT}
 			class="map-image"
-			class:blurred={!isBookingActive && !isEditorMode}
+			class:blurred={!browsable && !isEditorMode}
 		/>
 
 		<!-- Dynamic Mouse Glow -->

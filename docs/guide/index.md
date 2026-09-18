@@ -38,7 +38,7 @@ flowchart TB
 | **Spot** | A single bed in a room ("B1", "Top Bunk"). A spot is free, taken, locked or inactive. |
 | **Ticket code** | The code on a guest's ticket. It is the guest's key to CozyNights, and it can hold **one** spot at a time. |
 | **Burner name** | The optional playa name shown on a booked spot. Other guests see this name, never the name on the ticket. |
-| **Phase** | Either *Staging* (the crew is building, guests can only look) or *Live Booking* (guests book, the layout is frozen). |
+| **Phase** | *Staging* (the crew is building, guests can only look), *Live Booking* (guests book, the layout is frozen) or *Closed* (the booking window is over, spots are final). |
 
 > [!NOTE] Where do ticket codes come from?
 > The organizers load the ticket list into CozyNights' database, one entry per ticket. CozyNights never creates, changes or deletes tickets itself: even the most destructive admin action leaves every ticket code working.
@@ -52,10 +52,11 @@ flowchart TB
    See [Houses, rooms & spots](../admin/camp-layout).
    <!-- /audience -->
 2. **Load the tickets.** The ticket list goes into the database, so every ticket code can sign in.
-3. **Announce the opening.** An admin schedules the go-live time. Guests who look at the map see a countdown.
-4. **Booking opens.** Guests pick their beds; the layout is now frozen. See [Staging & Live Booking](./phases).
-5. **During the event.** Admins watch occupancy and lock single spots if something breaks.
-6. **After the burn.** Export the layout as a template, switch back to staging and clear the bookings for next time.
+3. **Announce the booking window.** An admin plans when booking opens and when it closes, and arms the timer. Guests see a countdown.
+4. **Booking opens.** Guests pick their beds; the layout is now frozen. A countdown at the top of every page shows when booking closes. See [Staging, Live Booking & Closed](./phases).
+5. **Booking closes.** At the closing time the spots are final. Guests keep their spot and their booking pass.
+6. **During the event.** Admins watch occupancy and lock single spots if something breaks.
+7. **After the burn.** Export the layout as a template; a superuser switches back to staging and clears the bookings for next time.
 
 </div>
 

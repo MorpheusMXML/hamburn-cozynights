@@ -230,38 +230,53 @@ onRecordAuthWithOAuth2Request((e) => {
 // --- 3. crew: booking phase ------------------------------------------------------
 //
 // The admin area changes app_settings with the admin's own token, so the
-// request knows who it was (e.auth). Compared on the *effective* state, like
-// src/lib/server/settings.ts: an elapsed timer means live.
+// request knows who it was (e.auth). Compared on the *effective* phase, like
+// src/lib/server/settings.ts: an armed timer whose time has passed counts.
+// (Who may switch at all: pb_hooks/cozy_phase.pb.js.)
 
 onRecordUpdateRequest((e) => {
-	const old = e.record.original();
-	const before = {
-		active: old.getBool('is_booking_active'),
-		timer: old.getString('booking_unlock_at'),
-		requests: old.getBool('special_requests_open')
-	};
+	let before = null;
+	try {
+		const old = e.record.original();
+		before = require(`${__hooks}/lib/phase.js`).windowOf(old);
+		// the special-needs switch lives in the same record (its own alert below)
+		before.requests = old.getBool('special_requests_open');
+	} catch (err) {
+		console.error('[cozy-notify] booking phase alert: ' + err);
+	}
 	e.next();
+	if (!before) return;
 	try {
 		const notify = require(`${__hooks}/lib/notify.js`);
+		const phase = require(`${__hooks}/lib/phase.js`);
 		const now = Date.now();
-		const live = (active, timer) => active || (!!timer && notify.toMs(timer) <= now);
-		const after = {
-			active: e.record.getBool('is_booking_active'),
-			timer: e.record.getString('booking_unlock_at'),
-			requests: e.record.getBool('special_requests_open')
-		};
+		const after = phase.windowOf(e.record);
+		after.requests = e.record.getBool('special_requests_open');
 		const actor = e.auth ? e.auth.email() : 'unknown';
-		const wasLive = live(before.active, before.timer);
-		const isLive = live(after.active, after.timer);
-		if (wasLive !== isLive) {
-			notify.logEvent(e.app, isLive ? 'booking_live' : 'booking_closed', { actor: actor });
+		const was = phase.effectivePhase(before, now);
+		const is = phase.effectivePhase(after, now);
+		if (was !== is) {
+			const action = { live: 'booking_live', staging: 'booking_staging', closed: 'booking_frozen' };
+			notify.logEvent(e.app, action[is], { actor: actor, details: { from: was } });
 		}
-		if (before.timer !== after.timer) {
-			if (after.timer && notify.toMs(after.timer) > now) {
-				notify.logEvent(e.app, 'timer_set', { actor: actor, subject: after.timer });
-			} else if (!after.timer && before.timer && notify.toMs(before.timer) > now) {
-				notify.logEvent(e.app, 'timer_removed', { actor: actor, subject: before.timer });
-			}
+
+		// The timer: armed, paused, or its times changed while armed.
+		const armedBefore = phase.isArmed(before);
+		const armedAfter = phase.isArmed(after);
+		const times = { opens: after.opensAt, closes: after.closesAt };
+		const same = (a, b) => phase.toMs(a) === phase.toMs(b);
+		if (armedAfter && !armedBefore) {
+			notify.logEvent(e.app, 'window_armed', { actor: actor, details: times });
+		} else if (armedBefore && !armedAfter) {
+			notify.logEvent(e.app, after.paused ? 'window_paused' : 'window_removed', {
+				actor: actor,
+				details: { opens: before.opensAt, closes: before.closesAt }
+			});
+		} else if (
+			armedAfter &&
+			(!same(before.opensAt, after.opensAt) || !same(before.closesAt, after.closesAt))
+		) {
+			notify.logEvent(e.app, 'window_changed', { actor: actor, details: times });
 		}
 		if (before.requests !== after.requests) {
 			notify.logEvent(e.app, after.requests ? 'requests_opened' : 'requests_closed', {

@@ -1,6 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { getBookingSettings } from '$lib/server/settings';
+import { bookingRefusal } from '$lib/booking-phase';
 import { BookingService, BedUnavailableError } from '$lib/server/booking';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
 import type { BedsResponse, RoomsResponse, HousesResponse } from '$lib/pocketbase-types';
@@ -29,7 +30,7 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 	}
 
 	try {
-		const { isBookingActive } = await getBookingSettings(locals.pb);
+		const { isBookingActive, phase } = await getBookingSettings(locals.pb);
 
 		const userBed = await locals.adminPb
 			.collection('beds')
@@ -79,6 +80,7 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 			freeBeds,
 			isBookingActive,
 			spotFixed,
+			phase,
 			userBed: userBed
 				? {
 						id: userBed.id,
@@ -105,12 +107,8 @@ export const actions: Actions = {
 			});
 		}
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (!isBookingActive) {
-			return fail(403, {
-				error: 'Booking is not open yet. Nothing was booked. Come back when Live Booking starts.'
-			});
-		}
+		const { isBookingActive, phase } = await getBookingSettings(locals.pb);
+		if (!isBookingActive) return fail(403, { error: bookingRefusal(phase) });
 
 		const formData = await request.formData();
 		const bedId = formData.get('bedId') as string;

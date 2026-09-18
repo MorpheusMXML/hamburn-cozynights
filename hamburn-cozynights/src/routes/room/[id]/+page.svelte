@@ -5,7 +5,6 @@
 	import { onDestroy, tick } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import type { PageData, ActionData } from './$types';
-	import CountdownTimer from '$lib/components/CountdownTimer.svelte';
 	import SlotMachine from '$lib/components/SlotMachine.svelte';
 	import { confirmDialog, dialogQueue, toast } from '$lib/dialogs';
 
@@ -124,18 +123,19 @@
 	<header>
 		<div class="header-nav">
 			<a href="/house/{data.room.house}" class="back-link">← Back to House</a>
-			{#if !data.isBookingActive && data.bookingUnlockAt}
-				<CountdownTimer
-					compact
-					targetDate={data.bookingUnlockAt}
-					on:elapsed={() => invalidateAll()}
-				/>
-			{/if}
 		</div>
 		<h1>{data.room.name || 'Room'} <small>#{data.room.room_number}</small></h1>
 	</header>
 
-	{#if !data.isBookingActive}
+	{#if data.phase === 'closed'}
+		<div class="booking-locked-banner" role="status">
+			<div class="locked-icon" aria-hidden="true">🔒</div>
+			<div class="locked-content">
+				<h3>Booking is closed</h3>
+				<p>Spots are final now: nothing can be booked, changed or released anymore.</p>
+			</div>
+		</div>
+	{:else if !data.isBookingActive}
 		<div class="booking-locked-banner" role="status">
 			<div class="locked-icon" aria-hidden="true">🎪</div>
 			<div class="locked-content">
@@ -351,11 +351,19 @@
 					<span class="label">{bed.label}</span>
 					<div class="status-box free">
 						<span
-							>{isLocked ? 'Not open yet' : iHaveAnotherBooking ? 'Unavailable' : 'Available'}</span
+							>{isLocked
+								? data.phase === 'closed'
+									? 'Booking closed'
+									: 'Not open yet'
+								: iHaveAnotherBooking
+									? 'Unavailable'
+									: 'Available'}</span
 						>
 						<small
 							>{isLocked
-								? 'Booking opens soon'
+								? data.phase === 'closed'
+									? 'Spots are final'
+									: 'Booking opens soon'
 								: iHaveAnotherBooking
 									? 'Release your other spot first'
 									: 'Grab it now!'}</small

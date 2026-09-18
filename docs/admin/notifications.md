@@ -53,9 +53,9 @@ Every message here is also kept in the audit log (collection `admin_events` in t
 | 🛎️ Admin access request | Someone signs in to `/admin` for the first time, with the command to approve them |
 | ✉️ Admin invited · ✅ approved · 🔁 role changed · 🚫 removed | Access changes, with `cozy-admin` or in the PocketBase dashboard |
 | 🔐 Admin sign-in | An approved admin signs in with Google (at least once a week, see [Sessions](./access#sessions)) |
-| 🎪 LIVE BOOKING switched ON · 🛠 Booking closed | Somebody flips the phase switch, with their name |
-| ⏰ Go-live timer set · removed | With the opening time and who set it |
-| 🎪 Booking is LIVE now | The go-live timer fired |
+| 🎪 LIVE BOOKING switched ON · 🔒 Booking CLOSED · 🛠 Back to STAGING MODE | The phase changed right now (a superuser's switch), with their name |
+| ⏰ Booking timer armed · window changed · ⏸️ paused · removed | With the opening and closing time and who did it |
+| 🎪 Booking is LIVE now · 🔒 Booking is CLOSED now | The armed timer reached the opening or the closing time |
 | 🧨 All bookings cleared | With the number of released spots, and of special-needs spots kept |
 | 🗺️ Layout template applied | What was created, changed and removed, released bookings and the backup |
 | 🎟️ Ticket changed | A new address, a new name or a hand-over on the Tickets page, with the code and addresses shortened (`H•••`, `a•••@example.org`) |

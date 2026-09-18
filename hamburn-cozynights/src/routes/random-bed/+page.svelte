@@ -178,7 +178,11 @@
 		{:else if !isBookingActive}
 			<div class="empty-state">
 				<span class="icon" aria-hidden="true">🔒</span>
-				<p>Booking is not open yet. Come back when Live Booking starts.</p>
+				<p>
+					{data.phase === 'closed'
+						? 'Booking is closed. The roulette is resting until the next burn.'
+						: 'Booking is not open yet. Come back when Live Booking starts.'}
+				</p>
 			</div>
 		{:else if freeBeds.length === 0 && !showBookingSuccess}
 			<div class="empty-state">

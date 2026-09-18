@@ -21,19 +21,20 @@ export const load: PageServerLoad = async ({ locals }) => {
 	try {
 		const inventory = new InventoryService(locals.pb);
 		let houses = await inventory.getFullTree();
-		const [{ isBookingActive, bookingUnlockAt, requestsOpen }, requestSent] = await Promise.all([
+		const [{ isBookingActive, phase, bookingUnlockAt, requestsOpen }, requestSent] = await Promise.all([
 			getBookingSettings(locals.pb),
 			hasRequest(locals)
 		]);
 
-		if (isBookingActive) {
-			// Filter out unconfigured houses from public map during live booking
+		if (phase !== 'staging') {
+			// The layout is final: leave out unconfigured houses (live and closed).
 			houses = houses.filter((h) => h.isBookable);
 		}
 
 		return {
 			houses,
 			isBookingActive,
+			phase,
 			bookingUnlockAt,
 			// the "special-needs spot" link: while requests are open, or to see one's own
 			specialNeeds: { open: requestsOpen, requestSent }

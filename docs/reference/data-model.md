@@ -13,7 +13,7 @@ data lives and how it is backed up: [Backups and where data lives](../develop/de
 | `rooms`        | `name`, `room_number`, `house`, `amount_beds`                                            | no            | admins                                               | public read, admin write              |
 | `beds`         | `label`, `room`, `occupied`, `order`, `is_locked`, `enabled`, `is_special` (special-needs spot) | no      | admins; guest bookings via the app's service account | public read, admin write              |
 | `orders`       | `order_number`, `order_hash`, `customer_name`, `burner_name` (encrypted), `email`, `pass_code` (booking pass, unique), `booking_date` | yes | the app's service account, `scripts/cozy-admin.sh tickets`; `pass_code` only by PocketBase | none (superusers only) |
-| `app_settings` | `is_booking_active`, `booking_unlock_at`, `notify_mail`, `telegram_bot`, `special_requests_open` (single record `appsettings0123`) | no | admins; PocketBase keeps the two notification flags current | public read, admin write |
+| `app_settings` | the phase set by hand: `is_booking_active` (live), `booking_closed` (closed); the booking window: `booking_unlock_at`, `booking_close_at`, `booking_timer_paused`; `notify_mail`, `telegram_bot`, `special_requests_open` (single record `appsettings0123`) | no | admins (a phase switch right now: superusers only); PocketBase keeps the two notification flags current | public read, admin write |
 | `admins`       | `email`, `name`, `role` (`pending`, `admin`, `superuser`), `last_sign_in`                | yes (email)   | Google sign-in, `scripts/cozy-admin.sh`              | none (sign-in creates `pending` only) |
 | `guest_notify` | per ticket: what was last confirmed by mail / Telegram (spot and special-needs request), when the next message is due, retries, the linked Telegram chat and a one-time link token (hashed) | yes (chat id) | PocketBase hooks; the app's service account (Telegram link) | none (superusers only) |
 | `special_requests` | per ticket at most one: `order`, `status` (`pending`, `approved`, `declined`), `needs`, `reason` and `burner_name` (all three encrypted), `consent_at`, `decided_by`, `decided_at`, `bed` (the spot the crew booked for it) | yes (often health data) | the app's service account | none (superusers only) |
@@ -38,10 +38,17 @@ write" means an approved `admins` record (see [Security & privacy](./security)).
   bookings" and the template import only release beds and clear burner names,
   so every guest's code keeps working. A ticket handed over to a new holder
   (Tickets page) keeps its bed and code; its `pass_code` and `burner_name`
-  are cleared and its Telegram link is removed.
-- **While booking is live**, the structure is locked on the server: houses
-  and rooms can't be added, moved, renamed or deleted, beds can't be added or
-  deleted, and templates can't be imported (see [Staging & Live Booking](../guide/phases)).
+  are cleared, its Telegram link and its special-needs request are removed.
+- **While booking is live or closed**, the structure is locked on the server:
+  houses and rooms can't be added, moved, renamed or deleted, beds can't be
+  added or deleted, and templates can't be imported (see
+  [Staging, Live Booking & Closed](../guide/phases)).
+- **The phase is computed, not scheduled.** An armed timer (not
+  `booking_timer_paused`) whose `booking_close_at` has passed means closed,
+  one whose `booking_unlock_at` has passed means live; otherwise the phase
+  set by hand counts. `src/lib/booking-phase.ts` and
+  `pb_hooks/lib/phase.js` hold the same rule. An update by an admin who isn't
+  a superuser must leave that phase as it is (`pb_hooks/cozy_phase.pb.js`).
 
 ## Location templates
 

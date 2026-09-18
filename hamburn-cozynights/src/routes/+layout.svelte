@@ -5,9 +5,11 @@
 	import BurnerTrail from '$lib/components/BurnerTrail.svelte';
 	import DialogHost from '$lib/components/DialogHost.svelte';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
+	import BookingCountdownBar from '$lib/components/BookingCountdownBar.svelte';
+	import { countdownKind } from '$lib/booking-phase';
 	import { page } from '$app/state';
 
-	let { children } = $props();
+	let { children, data } = $props();
 
 	// Full-screen pages place the legal links and the credit themselves.
 	const OWN_LEGAL_LINKS = new Set(['/', '/map']);
@@ -18,6 +20,13 @@
 	// to a QR code) for a while: no WebGL context and no 19 endless animations.
 	const PLAIN_PAGES = /^\/(legal-notice|privacy|booking-rules|pass|admin\/check)(\/|$)/;
 	let ambient = $derived(!PLAIN_PAGES.test(page.url.pathname));
+	// The map shows the big "IGNITION IN" countdown itself before booking opens.
+	const OWN_OPENING_COUNTDOWN = new Set(['/map']);
+	let countdown = $derived(countdownKind(data.booking?.phase ?? 'staging', data.booking?.next));
+	let bar = $derived(
+		countdown === 'closes' ||
+			(countdown === 'opens' && !OWN_OPENING_COUNTDOWN.has(page.url.pathname))
+	);
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
@@ -27,7 +36,10 @@
 	<BurnerTrail />
 {/if}
 
-<div class="app-root">
+<div class="app-root" class:has-booking-bar={bar}>
+	{#if bar && data.booking}
+		<BookingCountdownBar phase={data.booking.phase} next={data.booking.next} />
+	{/if}
 	{@render children()}
 	{#if footer}
 		<SiteFooter />
@@ -40,5 +52,10 @@
 	.app-root {
 		position: relative;
 		z-index: 1;
+		/* Full-screen pages subtract it: calc(100dvh - var(--booking-bar-height)). */
+		--booking-bar-height: 0px;
+	}
+	.app-root.has-booking-bar {
+		--booking-bar-height: 40px;
 	}
 </style>

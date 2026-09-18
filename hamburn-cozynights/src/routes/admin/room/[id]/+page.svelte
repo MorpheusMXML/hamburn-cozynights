@@ -9,7 +9,7 @@
 	export let data: PageData;
 	export let form: { message?: string } | null = null;
 	// Only admins reach this page (hooks + layout)
-	$: ({ room, beds, isBookingActive } = data);
+	$: ({ room, beds, isLayoutLocked, phase } = data);
 	$: house = room.expand?.house;
 	$: roomTitle = room.name || `Room ${room.room_number}`;
 
@@ -123,11 +123,11 @@
 		<div class="error-banner" role="alert" in:fade>⚠️ {form.message}</div>
 	{/if}
 
-	{#if isBookingActive}
+	{#if isLayoutLocked}
 		<div class="lockdown-notice" role="status">
-			🔒 Live Booking is active. You can still lock 🔒 and unlock 🔓 spots. To add, delete,
-			deactivate or free spots, switch to Staging Mode in the
-			<a href="/admin">Control Center</a>.
+			🔒 {phase === 'closed' ? 'Booking is closed' : 'Live Booking is active'}. You can still lock
+			🔒 and unlock 🔓 spots. To add, delete, deactivate or free spots, a superuser has to switch
+			back to Staging Mode in the <a href="/admin">Control Center</a>.
 		</div>
 	{/if}
 
@@ -149,13 +149,13 @@
 				</div>
 			</div>
 
-			<section class="form-panel orange" class:disabled={isBookingActive}>
+			<section class="form-panel orange" class:disabled={isLayoutLocked}>
 				<header class="panel-header">
 					<span class="laser-dot orange"></span>
 					<h3>ADD SPOT ➕</h3>
 				</header>
 				<p class="hint">Define spot label (e.g. "Upper Deck")</p>
-				<AddBedForm roomId={room.id} disabled={isBookingActive} />
+				<AddBedForm roomId={room.id} disabled={isLayoutLocked} />
 			</section>
 		</aside>
 
@@ -170,7 +170,7 @@
 					<div
 						class="bed-card"
 						class:occupied={bed.occupied}
-						class:disabled={isBookingActive}
+						class:disabled={isLayoutLocked}
 						class:inactive={bed.enabled === false}
 						class:disintegrating={deletingBedId === bed.id}
 						in:fade
@@ -250,8 +250,8 @@
 								<button
 									class="btn-icon"
 									class:orange={bed.enabled === false}
-									class:disabled={isBookingActive}
-									disabled={isBookingActive}
+									class:disabled={isLayoutLocked}
+									disabled={isLayoutLocked}
 									title={bed.enabled === false
 										? 'Activate: the spot counts and can be booked'
 										: 'Deactivate: the spot is not in use and does not count'}
@@ -269,8 +269,8 @@
 									title={bed.occupied
 										? 'Free this spot'
 										: 'Mark this spot as taken without a ticket'}
-									disabled={isBookingActive || bed.enabled === false}
-									class:disabled={isBookingActive || bed.enabled === false}
+									disabled={isLayoutLocked || bed.enabled === false}
+									class:disabled={isLayoutLocked || bed.enabled === false}
 								>
 									<span class="btn-emoji">🔄</span>
 									<span class="btn-text">{bed.occupied ? 'FREE' : 'TAKEN'}</span>
@@ -282,8 +282,8 @@
 								<button
 									class="btn-icon vanish"
 									title="Delete this spot"
-									disabled={isBookingActive}
-									class:disabled={isBookingActive}
+									disabled={isLayoutLocked}
+									class:disabled={isLayoutLocked}
 								>
 									<span class="btn-emoji">🗑</span>
 									<span class="btn-text">DELETE</span>

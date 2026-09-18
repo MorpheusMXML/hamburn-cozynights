@@ -7,7 +7,7 @@
 	import { invalidateAll } from '$app/navigation';
 
 	export let data: PageData;
-	$: ({ houses, isBookingActive, bookingUnlockAt } = data);
+	$: ({ houses, isBookingActive, phase, bookingUnlockAt } = data);
 
 	onMount(() => {
 		// Force a fresh fetch when entering the page
@@ -51,8 +51,10 @@
 			<span class="tagline">Interactive Map</span>
 		</div>
 
-		{#if isBookingActive}
+		{#if phase === 'live'}
 			<div class="phase-badge live">🎪 LIVE BOOKING</div>
+		{:else if phase === 'closed'}
+			<div class="phase-badge closed">🔒 BOOKING CLOSED</div>
 		{:else}
 			<div class="phase-badge staging">🛠 STAGING MODE</div>
 		{/if}
@@ -90,7 +92,12 @@
 
 	{#if data.houses}
 		<div class="map-container">
-			<Map houses={data.houses} isEditorMode={false} isBookingActive={data.isBookingActive} />
+			<Map
+				houses={data.houses}
+				isEditorMode={false}
+				isBookingActive={data.isBookingActive}
+				phase={data.phase}
+			/>
 		</div>
 
 		{#if isBookingActive}
@@ -105,7 +112,16 @@
 		<div class="loading">Igniting Sensors...</div>
 	{/if}
 
-	{#if !isBookingActive}
+	{#if phase === 'closed'}
+		<div class="closed-note" role="status">
+			<span class="closed-icon" aria-hidden="true">🔒</span>
+			<span
+				><strong>Booking is closed.</strong> Spots are final now. Tap a house to look around.</span
+			>
+		</div>
+	{/if}
+
+	{#if phase === 'staging'}
 		<div class="staging-overlay">
 			<div class="staging-center-content">
 				{#if bookingUnlockAt}
@@ -147,8 +163,9 @@
 <style>
 	.page-container {
 		width: 100%;
-		height: 100vh;
-		height: 100dvh;
+		/* minus the booking countdown bar on top, if shown (+layout.svelte) */
+		height: calc(100vh - var(--booking-bar-height, 0px));
+		height: calc(100dvh - var(--booking-bar-height, 0px));
 		background: #050505;
 		overflow: hidden;
 		position: relative;
@@ -382,6 +399,43 @@
 		color: #2dd4bf;
 		border-color: #2dd4bf33;
 		box-shadow: 0 0 15px rgba(45, 212, 191, 0.2);
+	}
+
+	.phase-badge.closed {
+		color: #d4d4d4;
+		border-color: #ffffff26;
+		box-shadow: 0 0 15px rgba(255, 255, 255, 0.08);
+	}
+
+	.closed-note {
+		position: absolute;
+		/* Where the roulette button sits during Live Booking. */
+		bottom: calc(max(8px, env(safe-area-inset-bottom)) + 36px);
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 100;
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		width: max-content;
+		max-width: calc(100% - 24px);
+		box-sizing: border-box;
+		padding: 0.75rem 1.1rem;
+		border-radius: 14px;
+		border: 1px solid #333;
+		background: rgba(10, 10, 10, 0.85);
+		backdrop-filter: blur(10px);
+		-webkit-backdrop-filter: blur(10px);
+		color: #b5b5b5;
+		font-size: 0.85rem;
+		line-height: 1.4;
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+	}
+	.closed-note strong {
+		color: #fff;
+	}
+	.closed-icon {
+		font-size: 1.1rem;
 	}
 
 	.map-container {

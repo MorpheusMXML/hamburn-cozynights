@@ -5,7 +5,7 @@
 	import { toast } from '$lib/dialogs';
 
 	export let data: PageData;
-	$: ({ x, y, isBookingActive } = data);
+	$: ({ x, y, isLayoutLocked, phase } = data);
 
 	type Failure = { error?: string; field?: string };
 	// Without JavaScript the failed action's result arrives here.
@@ -76,10 +76,10 @@
 	<p class="coords-display">Location: 📍 X: {x} / Y: {y}</p>
 	<p class="hint">You can drag the pin to another place on the Control Center map afterwards.</p>
 
-	{#if isBookingActive}
+	{#if isLayoutLocked}
 		<div class="lockdown-notice" role="status">
-			🔒 Live Booking is active, so houses cannot be added. Switch to Staging Mode in the
-			<a href="/admin">Control Center</a> first.
+			🔒 {phase === 'closed' ? 'Booking is closed' : 'Live Booking is active'}, so houses cannot be
+			added. A superuser can switch back to Staging Mode in the <a href="/admin">Control Center</a>.
 		</div>
 	{/if}
 
@@ -101,7 +101,7 @@
 				aria-invalid={!!nameError}
 				aria-describedby={nameError ? 'name-error' : undefined}
 				on:input={() => (nameError = '')}
-				disabled={isBookingActive}
+				disabled={isLayoutLocked}
 			/>
 			{#if nameError}
 				<p class="field-error" id="name-error" role="alert">⚠️ {nameError}</p>
@@ -122,7 +122,7 @@
 				aria-invalid={!!bedCountError}
 				aria-describedby={bedCountError ? 'bedcount-error' : 'bedcount-hint'}
 				on:input={() => (bedCountError = '')}
-				disabled={isBookingActive}
+				disabled={isLayoutLocked}
 			/>
 			<p class="hint" id="bedcount-hint">
 				Creates a first room "Main Module" with this many active spots. Enter 0 to add rooms later.
@@ -138,7 +138,7 @@
 
 		<div class="actions">
 			<a href="/admin" class="btn-cancel">Cancel</a>
-			<button type="submit" class="btn-save" disabled={isBookingActive || submitting}>
+			<button type="submit" class="btn-save" disabled={isLayoutLocked || submitting}>
 				{submitting ? 'Saving…' : 'Save House'}
 			</button>
 		</div>

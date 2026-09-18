@@ -3,7 +3,7 @@
 The camp is a simple tree: **houses** on the map contain **rooms**, and rooms contain **spots**, one per bed.
 
 > [!IMPORTANT] Staging only
-> All structural changes need Staging Mode. During Live Booking the server refuses them. Only locking and unlocking spots still works. See [Staging & Live Booking](../guide/phases).
+> All structural changes need Staging Mode. During Live Booking and after booking closed the server refuses them. Only locking and unlocking spots still works. See [Staging, Live Booking & Closed](../guide/phases).
 
 ## Houses
 
@@ -70,7 +70,7 @@ Open a room by clicking its card on the house page.
 
 ### Spot actions
 
-| Button | Action | During Live Booking |
+| Button | Action | Live Booking or Closed |
 | :---: | --- | :---: |
 | 🔒 / 🔓 | **Lock** (block guests) / unlock | <span class="yes">✓</span> allowed |
 | ♿ | **Special** / **normal**: keep the spot for [special-needs requests](./special-needs), or give it back to all guests | <span class="yes">✓</span> allowed |

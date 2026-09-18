@@ -64,6 +64,7 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			userBedId: userBed?.id || null,
 			spotFixed,
 			isBookingActive: settings.isBookingActive,
+			phase: settings.phase,
 			bookingUnlockAt: settings.bookingUnlockAt
 		};
 	} catch (err) {

@@ -326,6 +326,14 @@ function eventDetails(ev) {
 	}
 }
 
+/** "opens Mon 21 Sep 18:00 · closes Sun 27 Sep 23:59" for window events. */
+function windowText(d) {
+	const parts = [];
+	if (d.opens) parts.push('opens ' + berlinTime(d.opens));
+	if (d.closes) parts.push('closes ' + berlinTime(d.closes));
+	return parts.length ? parts.join(' · ') : 'no times';
+}
+
 /** The crew chat text of an admin_events record. cfg (optional) adds links. */
 function eventText(ev, cfg) {
 	const action = ev.getString('action');
@@ -359,6 +367,23 @@ function eventText(ev, cfg) {
 			return '🔐 Admin sign-in: ' + who + (d.role ? ' (' + d.role + ')' : '');
 		case 'booking_live':
 			return '🎪 LIVE BOOKING switched ON' + by + ' — guests can book now';
+		case 'booking_staging':
+			return '🛠 Back to STAGING MODE' + by + ' — booking is off, the layout can be edited again';
+		case 'booking_frozen':
+			return '🔒 Booking CLOSED' + by + ' — bookings are frozen, the layout stays locked';
+		case 'booking_closed_by_timer':
+			return (
+				'🔒 Booking is CLOSED now — closing time ' + berlinTime(subject) + '. Bookings are frozen.'
+			);
+		case 'window_armed':
+			return '⏰ Booking timer armed' + by + ': ' + windowText(d);
+		case 'window_changed':
+			return '⏰ Booking window changed' + by + ': ' + windowText(d);
+		case 'window_paused':
+			return '⏸️ Booking timer paused' + by + ' (times kept: ' + windowText(d) + ')';
+		case 'window_removed':
+			return '⏰ Booking timer removed' + by + ' (was ' + windowText(d) + ')';
+		// Older events (before the booking window had a closing time).
 		case 'booking_closed':
 			return '🛠 Booking closed (STAGING MODE)' + by;
 		case 'timer_set':
@@ -1402,7 +1427,11 @@ function refreshCapabilities(app, cfg, offline) {
 	}
 }
 
-/** Announces a go-live timer that just fired (once per timer value). */
+/**
+ * Announces an opening or closing time the armed timer just reached (once per
+ * time). Not when an admin already switched to that phase by hand after the
+ * time (that has its own alert), and not for times older than 15 minutes.
+ */
 function announceTimer(app) {
 	let settings;
 	try {
@@ -1410,18 +1439,30 @@ function announceTimer(app) {
 	} catch (_) {
 		return;
 	}
-	if (settings.getBool('is_booking_active')) return;
-	const at = settings.getString('booking_unlock_at');
-	const ms = toMs(at);
-	if (!ms || ms > Date.now() || Date.now() - ms > 15 * 60000) return;
-	if (
-		findOne(app, 'admin_events', "action = 'booking_opened_by_timer' && subject = {:at}", {
-			at: at
-		})
-	) {
-		return;
+	const phase = require(`${__hooks}/lib/phase.js`);
+	const w = phase.windowOf(settings);
+	if (w.paused) return;
+	const now = Date.now();
+	const current = phase.effectivePhase(w, now);
+	const just = (value) => {
+		const ms = phase.toMs(value);
+		return ms !== null && ms <= now && now - ms <= 15 * 60000;
+	};
+	const announce = (at, timerAction, handAction) => {
+		const done = findOne(
+			app,
+			'admin_events',
+			'(action = {:timer} && subject = {:at}) || (action = {:hand} && created >= {:at})',
+			{ timer: timerAction, hand: handAction, at: at }
+		);
+		if (!done) logEvent(app, timerAction, { actor: 'timer', subject: at });
+	};
+	if (current === 'live' && just(w.opensAt)) {
+		announce(w.opensAt, 'booking_opened_by_timer', 'booking_live');
 	}
-	logEvent(app, 'booking_opened_by_timer', { actor: 'timer', subject: at });
+	if (current === 'closed' && just(w.closesAt)) {
+		announce(w.closesAt, 'booking_closed_by_timer', 'booking_frozen');
+	}
 }
 
 // --- SMTP settings from the environment --------------------------------------

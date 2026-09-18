@@ -185,6 +185,9 @@ export type AppSettingsRecord = {
 	id: string;
 	is_booking_active?: boolean;
 	booking_unlock_at?: IsoDateString;
+	booking_close_at?: IsoDateString;
+	booking_timer_paused?: boolean;
+	booking_closed?: boolean;
 	notify_mail?: boolean;
 	telegram_bot?: string;
 	special_requests_open?: boolean;

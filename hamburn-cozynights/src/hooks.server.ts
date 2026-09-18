@@ -58,6 +58,10 @@ const SECURITY_HEADERS: Record<string, string> = {
 export const handle: Handle = async ({ event, resolve }) => {
 	// 1. Initialize PocketBase instances
 	event.locals.pb = new PocketBase(PB_URL) as TypedPocketBase;
+	// Auto-cancellation is meant for a browser deduping its own requests. Here
+	// the layout and the page load run in parallel and both read app_settings:
+	// the SDK would cancel one of them, and that page would fall back to Staging.
+	event.locals.pb.autoCancellation(false);
 
 	// Use the singleton service-account instance (Master Key)
 	event.locals.adminPb = await getAdminPb();

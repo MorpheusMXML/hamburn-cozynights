@@ -236,8 +236,9 @@
 <style>
 	.hero {
 		position: relative;
-		min-height: 100vh;
-		min-height: 100dvh;
+		/* minus the booking countdown bar on top, if shown (+layout.svelte) */
+		min-height: calc(100vh - var(--booking-bar-height, 0px));
+		min-height: calc(100dvh - var(--booking-bar-height, 0px));
 		width: 100%;
 		display: flex;
 		flex-direction: column;

@@ -6,9 +6,11 @@ From an empty map to the morning after: everything the crew does in CozyNights f
 timeline
   section 🛠 Staging
     Weeks before : Build or import the layout : Check spot states, clear the red alert : Mark special-needs spots, open requests
-    Days before : Load tickets, test with a code : Book special-needs spots : Schedule the go-live
+    Days before : Load tickets, test with a code : Book special-needs spots : Plan the booking window, arm the timer
   section 🎪 Live Booking
     Opening day : Guests book their beds
+  section 🔒 Closed
+    Closing time : Spots are final
     During the event : Watch occupancy : Lock broken beds
   section 🌅 After the burn
     Morning after : Export the layout : Back to staging, clear bookings
@@ -35,14 +37,15 @@ timeline
 - [ ] **Test bookings removed.** If you booked in staging, release those spots again.
 - [ ] **Legal pages complete.** The legal notice, the privacy policy and the booking rules show no red note. See [Legal pages](./legal).
 - [ ] **Special-needs requests decided.** Every request at ♿ **Special needs** is approved with a spot or declined before booking opens. Close requests when you want no more, and switch unneeded ♿ spots back to normal.
-- [ ] **Go-live scheduled.** Set the timer in the Control Center (Europe/Berlin time) and announce the same time to guests.
+- [ ] **Booking window planned.** In the Control Center's 🎟 BOOKING WINDOW panel, set when booking opens and when it closes (Europe/Berlin time), save, and arm the timer. Admins need at least one day ahead and one day open. Announce the same times to guests. See [The booking window](../guide/phases#the-booking-window).
 
 > [!TIP] Announce the ticket code, not a password
 > Guests only need the link to CozyNights and their ticket code. Nobody needs to register.
 
 ## Opening day
 
-- [ ] **Watch the switch.** At the scheduled time the header shows 🎪 LIVE BOOKING ACTIVE on the next reload.
+- [ ] **Watch the switch.** At the opening time the panel turns 🎪 LIVE BOOKING by itself, and guests see the countdown to the closing time at the top of every page. The crew group gets *Booking is LIVE now*.
+- [ ] **Need more time?** Move the closing time in the panel (at least one day from now for admins; a superuser can do anything).
 - [ ] **Keep an eye on the Intel panel.** The LOAD chart and the house counters show how fast the camp fills up.
 - [ ] **Be reachable.** Typical guest questions are answered in the [FAQ](../guide/faq).
 
@@ -50,16 +53,16 @@ timeline
 
 - [ ] **Check booking passes at arrival** where needed: phone camera on the guest's QR code, or 🎫 **Check passes** in the admin header (type the code or use a USB scanner). See [Booking passes](./passes).
 
-- [ ] **Broken bed?** Lock it 🔒 on its room page. That works during Live Booking.
-- [ ] **Resist restructuring.** Adding rooms or moving houses means switching back to staging, which freezes all guests' bookings meanwhile. Do it only when really needed, and switch back quickly.
+- [ ] **Broken bed?** Lock it 🔒 on its room page. That works in every phase.
+- [ ] **Resist restructuring.** Adding rooms or moving houses means a superuser switches back to staging, which freezes all guests' bookings meanwhile. Do it only when really needed, and switch back quickly.
 
 ## After the burn
 
 - [ ] **Export the final layout** as a template for next year.
-- [ ] **Switch back to staging.** Confirm the dialog.
+- [ ] **Switch back to staging** (superuser: ⚡ Switch right now → 🛠 Staging). Confirm the dialog; the timer is paused.
 - [ ] **Clear all bookings** (superuser). Offered right after switching back. Spots become free, burner names are forgotten, ticket codes stay. Spots the crew booked for special-needs requests stay as long as their requests exist: clear once more after **Forget the guests' contacts** below.
 - [ ] **Delete the ticket list** within the period the [privacy policy](./legal) promises (default: four weeks after the event). An operator removes the codes on the server, see [Check and tidy up](#check-and-tidy-up).
-- [ ] **Cancel leftover timers**, so booking doesn't open again by accident.
+- [ ] **No timer left armed**, so booking doesn't open again by accident: the panel's summary shows NO TIMER or NOT ARMED.
 - [ ] **Tidy up admin access.** Remove accounts of people who have left the crew.
 - [ ] **Forget the guests' contacts.** `./scripts/cozy-admin.sh tickets forget-contacts --yes` deletes every guest e-mail address, Telegram link and special-needs request; the ticket codes stay.
 

@@ -1,24 +1,28 @@
 <script lang="ts">
-	import type { PageData, SubmitFunction } from './$types';
+	import type { PageData } from './$types';
 	import type { ActionResult } from '@sveltejs/kit';
+	import type { SubmitFunction } from '@sveltejs/kit';
+	import { enhance } from '$app/forms';
 	import Map from '$lib/components/Map.svelte';
 	import HouseEditor from '$lib/components/HouseEditor.svelte';
 	import IntelDashboard from '$lib/components/admin/IntelDashboard.svelte';
 	import SanityChecks from '$lib/components/admin/SanityChecks.svelte';
 	import TemplateManager from '$lib/components/admin/TemplateManager.svelte';
+	import BookingWindowPanel from '$lib/components/admin/BookingWindowPanel.svelte';
 	import { invalidateAll } from '$app/navigation';
-	import { enhance, deserialize } from '$app/forms';
 	import { fade, fly, slide } from 'svelte/transition';
-	import { berlinLocalToIso, isoToBerlinLocal } from '$lib/time';
 	import { MAP_WIDTH, MAP_HEIGHT, clampToMap, isTooCloseToOtherHouse } from '$lib/map-geometry';
 	import { tick } from 'svelte';
 	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
+	import { actionErrorMessage, submitAction } from '$lib/admin-actions';
+	import { lockedDuring } from '$lib/booking-phase';
 
 	export let data: PageData;
 
 	// Only admins reach this page (hooks + layout); superusers additionally get
 	// the destructive tools (clear all bookings, template import).
-	$: ({ houses, sanityWarnings, history, isSuperuser, isBookingActive, bookingUnlockAt } = data);
+	$: ({ houses, sanityWarnings, history, isSuperuser, phase, isLayoutLocked, bookingWindow } =
+		data);
 	// Special-needs requests (/admin/requests): own switch, independent of the phase.
 	$: ({ requestsOpen, openRequests } = data);
 	let requestsSaving = false;
@@ -61,25 +65,6 @@
 	let showMap = true;
 	let showGuide = false;
 	let selectedHouseId: string | null = null;
-	let unlockDateInput = bookingUnlockAt ? isoToBerlinLocal(bookingUnlockAt) : '';
-	let timerError = '';
-
-	const unlockTimeFormat = new Intl.DateTimeFormat('en-GB', {
-		timeZone: 'Europe/Berlin',
-		weekday: 'short',
-		day: 'numeric',
-		month: 'short',
-		year: 'numeric',
-		hour: '2-digit',
-		minute: '2-digit',
-		hourCycle: 'h23'
-	});
-
-	function formatUnlockTime(iso: string) {
-		const date = new Date(iso);
-		return Number.isNaN(date.getTime()) ? iso : unlockTimeFormat.format(date);
-	}
-
 	// Editor Sidebar State
 	let editingHouse: { id?: string; x: number; y: number; name: string } | null = null;
 
@@ -100,173 +85,23 @@
 		return `${free} spots free`;
 	}
 
-	const handleTogglePhase: SubmitFunction = async ({ cancel }) => {
-		const goingLive = !isBookingActive;
-		let clearBookings = false;
-
-		if (!goingLive) {
-			const proceed = await confirmDialog(
-				'Guests will no longer be able to book or change their spot until you go live again. Existing bookings stay as they are.',
-				{
-					title: 'Switch to Staging Mode?',
-					tone: 'warning',
-					confirmLabel: 'Switch to Staging',
-					cancelLabel: 'Stay live'
-				}
-			);
-			if (!proceed) {
-				cancel();
-				return;
-			}
-
-			if (occupiedBeds > 0 && isSuperuser) {
-				clearBookings = await confirmDialog(
-					`There are ${occupiedBeds} booked spots right now. Do you also want to clear ALL bookings? Every guest loses their spot and has to book again. Spots the crew assigned for special-needs requests stay. Ticket codes stay valid. This cannot be undone.`,
-					{
-						title: 'Also clear all bookings?',
-						tone: 'danger',
-						confirmLabel: 'Clear all bookings',
-						cancelLabel: 'Keep bookings'
-					}
-				);
-			}
-		}
-
-		return async ({ result, update }) => {
-			if (result.type === 'success') {
-				// The server toggles the phase it sees, which can differ from this
-				// page's when the go-live timer ran out or another admin was faster.
-				const nowLive =
-					(result.data as { isBookingActive?: boolean } | undefined)?.isBookingActive ?? goingLive;
-				const phaseMessage = nowLive
-					? '🎪 Live Booking is active. Guests can book now, the layout is locked.'
-					: '🛠 Staging Mode is active. Booking is closed, the layout can be edited.';
-				if (nowLive === goingLive) {
-					toast(phaseMessage, 'success');
-				} else {
-					await alertDialog(
-						`The booking phase had already changed before your click (the go-live timer ran out, or another admin switched it). ${phaseMessage} Press the button again if that is not what you want.`,
-						{ title: 'Check the booking phase', tone: 'warning' }
-					);
-				}
-				if (clearBookings && !nowLive) {
-					const purge = await submitAction('?/clearAllBookings', new FormData());
-					if (purge.type === 'success') {
-						const kept = Number((purge.data as { kept?: number } | undefined)?.kept) || 0;
-						toast(
-							kept > 0
-								? `✨ All bookings were cleared, except ${kept} special-needs spot${kept === 1 ? '' : 's'} assigned by the crew.`
-								: '✨ All bookings were cleared. Every spot is free again.',
-							'success'
-						);
-					} else {
-						await alertDialog(
-							`${actionErrorMessage(purge) || 'The server could not be reached.'} No bookings were changed by this step; the app is in Staging Mode. Check the spots before you try again.`,
-							{ title: 'Bookings were not cleared', tone: 'danger' }
-						);
-					}
-				}
-			} else if (result.type === 'failure' || result.type === 'error') {
-				await alertDialog(
-					`${actionErrorMessage(result) || 'The server could not be reached.'} The booking phase was not changed. Reload the page and try again.`,
-					{ title: 'Phase not changed', tone: 'danger' }
-				);
-			}
-			await update();
-		};
-	};
-
-	const handleSetTimer: SubmitFunction = ({ cancel }) => {
-		timerError = '';
-		const iso = berlinLocalToIso(unlockDateInput || '');
-		if (!unlockDateInput) {
-			timerError = 'Pick a date and time first.';
-		} else if (!iso) {
-			timerError = 'That is not a complete date and time. Use the format YYYY-MM-DD HH:MM.';
-		} else if (new Date(iso).getTime() <= Date.now()) {
-			timerError =
-				'That time is already in the past (Berlin time). Pick a later time, or go live right now with the STAGING MODE button.';
-		}
-		if (timerError) {
-			cancel();
-			return;
-		}
-
-		return async ({ result, update }) => {
-			if (result.type === 'success') {
-				toast(
-					`⏱ Timer set: Live Booking opens on ${formatUnlockTime(iso)} (Berlin time).`,
-					'success'
-				);
-			} else if (result.type === 'failure' || result.type === 'error') {
-				timerError = `The timer was not saved: ${actionErrorMessage(result) || 'the server did not accept it.'} Check the date and try again.`;
-			}
-			await update({ reset: false });
-		};
-	};
-
-	const handleCancelTimer: SubmitFunction = () => {
-		return async ({ result, update }) => {
-			if (result.type === 'success') {
-				toast('⏱ Timer cancelled. Live Booking only opens when you switch it on.', 'success');
-			} else if (result.type === 'failure' || result.type === 'error') {
-				await alertDialog(
-					`${actionErrorMessage(result) || 'The server could not be reached.'} The timer is still set. Reload the page and try again.`,
-					{ title: 'Timer not cancelled', tone: 'danger' }
-				);
-			}
-			await update();
-		};
-	};
-
-	async function submitAction(actionUrl: string, formData: FormData): Promise<ActionResult> {
-		try {
-			const response = await fetch(actionUrl, {
-				method: 'POST',
-				body: formData,
-				headers: {
-					'x-sveltekit-action': 'true',
-					accept: 'application/json'
-				}
-			});
-			// The `data` of an action response is devalue-encoded: response.json()
-			// would leave it a string, so the real error message never showed up.
-			return deserialize(await response.text());
-		} catch (err: any) {
-			console.error(`[Action Error] Fetch failed for ${actionUrl}:`, err);
-			return { type: 'error', error: err };
-		}
-	}
-
-	/** Server-provided reason of a failed action: fail(…, { error | message }) or error(…). */
-	function actionErrorMessage(result: ActionResult): string | undefined {
-		if (result.type === 'failure') {
-			const data = result.data as { error?: unknown; message?: unknown } | undefined;
-			const reason = data?.error ?? data?.message;
-			return typeof reason === 'string' ? reason : undefined;
-		}
-		if (result.type === 'error') {
-			return typeof result.error?.message === 'string' ? result.error.message : undefined;
-		}
-		return undefined;
-	}
-
-	const LAYOUT_LOCKED_MESSAGE =
-		'The layout is locked while Live Booking is active. Switch to Staging Mode to add or move houses.';
 	let lastLockedToast = 0;
 
 	function handleLayoutLocked() {
 		// One hint per gesture is enough.
 		if (Date.now() - lastLockedToast < 2500) return;
 		lastLockedToast = Date.now();
-		toast(`🔒 ${LAYOUT_LOCKED_MESSAGE}`, 'warning');
+		toast(
+			`🔒 The layout is locked ${lockedDuring(phase)}. Only a superuser can switch back to Staging Mode to add or move houses.`,
+			'warning'
+		);
 	}
 
-	/** Explains why a structural action is refused during Live Booking. */
+	/** Explains why a structural action is refused while booking is live or closed. */
 	function explainLocked(action: string) {
 		return alertDialog(
-			`Live Booking is active, so the camp layout is locked. Switch to Staging Mode (the 🎪 LIVE BOOKING ACTIVE button) to ${action}.`,
-			{ title: '🔒 Locked during Live Booking', tone: 'warning' }
+			`The camp layout is locked ${lockedDuring(phase)}: it holds the guests' bookings. A superuser can switch back to Staging Mode in the 🎟 BOOKING WINDOW panel to ${action}.`,
+			{ title: `🔒 Locked ${lockedDuring(phase)}`, tone: 'warning' }
 		);
 	}
 
@@ -289,7 +124,7 @@
 	}
 
 	async function handleHouseMoved(event: CustomEvent) {
-		if (isBookingActive) {
+		if (isLayoutLocked) {
 			handleLayoutLocked();
 			invalidateAll();
 			return;
@@ -352,7 +187,7 @@
 	}
 
 	function handleRenameHouse(house: any) {
-		if (isBookingActive) {
+		if (isLayoutLocked) {
 			explainLocked('rename houses');
 			return;
 		}
@@ -379,7 +214,7 @@
 	}
 
 	function handleIgniteFromList() {
-		if (isBookingActive) {
+		if (isLayoutLocked) {
 			explainLocked('add houses');
 			return;
 		}
@@ -412,7 +247,7 @@
 	}
 
 	async function handleDeleteHouse(house: any) {
-		if (isBookingActive) {
+		if (isLayoutLocked) {
 			explainLocked('delete houses');
 			return;
 		}
@@ -437,7 +272,7 @@
 	}
 
 	async function handleSaveHouse(event: CustomEvent) {
-		if (isBookingActive) {
+		if (isLayoutLocked) {
 			explainLocked('add or rename houses');
 			return;
 		}
@@ -480,7 +315,7 @@
 	}
 
 	async function handleDeleteActiveHouse() {
-		if (isBookingActive) {
+		if (isLayoutLocked) {
 			explainLocked('delete houses');
 			return;
 		}
@@ -534,64 +369,17 @@
 				{showGuide ? 'CLOSE INTEL 📡' : 'SHOW INTEL 📊'}
 			</button>
 
-			<form method="POST" action="?/togglePhase" use:enhance={handleTogglePhase}>
-				<button type="submit" class="btn-laser" class:live={isBookingActive}>
-					{isBookingActive ? '🎪 LIVE BOOKING ACTIVE' : '🛠 STAGING MODE'}
-					<div class="laser-glow"></div>
-				</button>
-			</form>
-
 			<button class="btn-toggle" on:click={() => (showMap = !showMap)}>
 				{showMap ? '🛰️ LIST VIEW' : '🗺️ MAP VIEW'}
 			</button>
 		</div>
 	</header>
 
-	<section class="timer-panel">
-		{#if bookingUnlockAt}
-			<div class="timer-active">
-				<span class="timer-icon">⏱</span>
-				<span class="timer-text"
-					>Auto-opens live booking on <strong>{formatUnlockTime(bookingUnlockAt)}</strong> (CET/CEST)</span
-				>
-				<form method="POST" action="?/cancelUnlockTimer" use:enhance={handleCancelTimer}>
-					<button type="submit" class="btn-timer-cancel">Cancel Timer ✕</button>
-				</form>
-			</div>
-		{:else}
-			<form
-				method="POST"
-				action="?/setUnlockTimer"
-				use:enhance={handleSetTimer}
-				class="timer-set-form"
-				novalidate
-			>
-				<span class="timer-icon">⏱</span>
-				<label class="timer-label" for="unlock-at">Schedule automatic go-live:</label>
-				<input
-					id="unlock-at"
-					type="datetime-local"
-					name="unlockAt"
-					placeholder="YYYY-MM-DD HH:MM"
-					bind:value={unlockDateInput}
-					class:error={!!timerError}
-					aria-describedby="unlock-at-hint"
-					on:input={() => (timerError = '')}
-				/>
-				<button type="submit" class="btn-timer-set">Schedule ✨</button>
-				<span class="timer-hint" id="unlock-at-hint"
-					>Berlin time (CET/CEST), no matter where you or the server are.</span
-				>
-				{#if timerError}
-					<p class="timer-error" role="alert">⚠️ {timerError}</p>
-				{/if}
-			</form>
-		{/if}
-	</section>
+	<BookingWindowPanel {phase} {bookingWindow} {isSuperuser} {occupiedBeds} />
 
 	<section class="requests-panel" class:open={requestsOpen}>
-		<span class="timer-icon" aria-hidden="true">♿</span>
-		<span class="timer-text">
+		<span class="requests-icon" aria-hidden="true">♿</span>
+		<span class="requests-text">
 			Special-needs requests: <strong>{requestsOpen ? 'OPEN' : 'CLOSED'}</strong>
 			{#if openRequests}· {openRequests} waiting for a decision{/if}
 		</span>
@@ -659,8 +447,8 @@
 							<p>Click house for House Intel sidebar.</p>
 						</div>
 						<div class="intel-card green">
-							<span class="icon">🎪</span>
-							<p>Go LIVE to lock layout & allow bookings.</p>
+							<span class="icon">🎟</span>
+							<p>Plan the booking window, arm the timer: it opens & closes by itself.</p>
 						</div>
 					</div>
 				</div>
@@ -673,11 +461,11 @@
 	<main class="view-container">
 		{#if showMap}
 			<div class="map-view" in:fade={{ duration: 300 }}>
-				<div class="map-status-bar" class:live={isBookingActive}>
-					{#if isBookingActive}
+				<div class="map-status-bar" class:live={phase === 'live'} class:closed={phase === 'closed'}>
+					{#if isLayoutLocked}
 						<span class="status-msg"
-							>🔒 LOCKED: Live Booking is active. Switch to 🛠 STAGING MODE to add, move or delete
-							houses.</span
+							>🔒 LOCKED: {phase === 'closed' ? 'Booking is closed' : 'Live Booking is active'}.
+							Only a superuser can switch back to 🛠 STAGING MODE to add, move or delete houses.</span
 						>
 					{:else}
 						<span class="status-msg"
@@ -690,7 +478,7 @@
 						<Map
 							{houses}
 							isEditorMode={true}
-							{isBookingActive}
+							layoutLocked={isLayoutLocked}
 							on:locationSelected={(e) => handleLocationSelected(e.detail)}
 							on:houseMoved={handleHouseMoved}
 							on:layoutLocked={handleLayoutLocked}
@@ -738,7 +526,7 @@
 										<button
 											class="btn-vanish-big"
 											on:click={handleDeleteActiveHouse}
-											class:disabled={isBookingActive}
+											class:disabled={isLayoutLocked}
 										>
 											VANISH FROM PLAYA 🌪️
 										</button>
@@ -786,12 +574,12 @@
 							<button
 								class="btn-action-small"
 								on:click={() => handleRenameHouse(house)}
-								class:disabled={isBookingActive}>RENAME ✏️</button
+								class:disabled={isLayoutLocked}>RENAME ✏️</button
 							>
 							<button
 								class="btn-action-small vanish"
 								on:click={() => handleDeleteHouse(house)}
-								class:disabled={isBookingActive}>VANISH 🌪️</button
+								class:disabled={isLayoutLocked}>VANISH 🌪️</button
 							>
 						</div>
 					</div>
@@ -800,7 +588,7 @@
 				<button
 					class="add-house-card"
 					on:click={handleIgniteFromList}
-					class:disabled={isBookingActive}
+					class:disabled={isLayoutLocked}
 				>
 					<span class="plus">+</span>
 					<span>Ignite New House</span>
@@ -852,45 +640,10 @@
 		gap: 0.75rem;
 		align-items: center;
 	}
-	.header-right form {
-		display: flex;
-	}
 	.header-right button,
 	.header-right a {
 		min-height: 44px;
 		white-space: nowrap;
-	}
-
-	.btn-laser {
-		background: #111;
-		border: 1px solid #333;
-		color: #fff;
-		padding: 0.75rem 1.5rem;
-		border-radius: 8px;
-		font-weight: 900;
-		cursor: pointer;
-		position: relative;
-		overflow: hidden;
-		transition: all 0.3s;
-		font-size: 0.8rem;
-		letter-spacing: 1px;
-	}
-	.btn-laser.live {
-		border-color: #f472b6;
-		color: #f472b6;
-	}
-	.btn-laser.live .laser-glow {
-		background: rgba(244, 114, 182, 0.2);
-		box-shadow: 0 0 20px rgba(244, 114, 182, 0.2);
-	}
-
-	.laser-glow {
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		pointer-events: none;
 	}
 
 	.btn-toggle,
@@ -925,98 +678,6 @@
 		border-color: #2dd4bf;
 	}
 
-	.timer-panel {
-		background: rgba(251, 146, 60, 0.05);
-		border: 1px solid rgba(251, 146, 60, 0.2);
-		border-radius: 12px;
-		padding: 0.85rem 1.5rem;
-	}
-	.timer-active,
-	.timer-set-form {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-		font-size: 0.8rem;
-		color: #888;
-		font-weight: 700;
-	}
-	.timer-text {
-		flex: 1 1 12rem;
-		min-width: 0;
-	}
-	.timer-active form {
-		display: flex;
-		margin-left: auto;
-	}
-	.timer-hint {
-		color: #777;
-		font-weight: 600;
-	}
-	.timer-error {
-		flex-basis: 100%;
-		margin: 0;
-		color: #f87171;
-		line-height: 1.4;
-	}
-	.timer-icon {
-		font-size: 1rem;
-	}
-	.timer-active strong {
-		color: #fb923c;
-	}
-	.timer-label {
-		color: #888;
-	}
-	.timer-set-form input[type='datetime-local'] {
-		background: #050505;
-		border: 1px solid #333;
-		color: #fff;
-		color-scheme: dark;
-		padding: 0.5rem 0.75rem;
-		border-radius: 8px;
-		/* 16px: iOS Safari zooms into smaller fields */
-		font-size: 1rem;
-		font-family: inherit;
-		min-height: 44px;
-		min-width: 0;
-		max-width: 100%;
-		box-sizing: border-box;
-	}
-	.timer-set-form input.error {
-		border-color: #f87171;
-	}
-	.btn-timer-set,
-	.btn-timer-cancel {
-		background: #fb923c;
-		border: none;
-		color: #000;
-		min-height: 44px;
-		padding: 0.5rem 1rem;
-		border-radius: 8px;
-		font-weight: 900;
-		font-size: 0.75rem;
-		cursor: pointer;
-		transition: all 0.2s;
-		white-space: nowrap;
-	}
-	.btn-timer-set:hover:not(:disabled) {
-		transform: scale(1.05);
-	}
-	.btn-timer-set:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-	.btn-timer-cancel {
-		background: transparent;
-		border: 1px solid #444;
-		color: #888;
-	}
-	.btn-timer-cancel:hover {
-		border-color: #ef4444;
-		color: #f87171;
-	}
-
 	.requests-panel {
 		display: flex;
 		align-items: center;
@@ -1037,6 +698,13 @@
 	}
 	.requests-panel strong {
 		color: #f472b6;
+	}
+	.requests-icon {
+		font-size: 1rem;
+	}
+	.requests-text {
+		flex: 1 1 12rem;
+		min-width: 0;
 	}
 	.btn-requests {
 		min-height: 44px;
@@ -1219,6 +887,11 @@
 		color: #f472b6;
 		background: rgba(244, 114, 182, 0.05);
 		border-color: rgba(244, 114, 182, 0.1);
+	}
+	.map-status-bar.closed {
+		color: #d4d4d4;
+		background: rgba(255, 255, 255, 0.03);
+		border-color: rgba(255, 255, 255, 0.08);
 	}
 
 	.map-layout-split {
@@ -1660,26 +1333,6 @@
 			font-size: 0.7rem;
 			letter-spacing: 0.5px;
 			white-space: normal;
-		}
-		.header-right form {
-			grid-column: 1 / -1;
-		}
-		.timer-panel {
-			padding: 0.85rem 1rem;
-		}
-		.timer-set-form input[type='datetime-local'] {
-			flex: 1 1 100%;
-			width: 100%;
-		}
-		.btn-timer-set {
-			flex: 1 1 100%;
-		}
-		.timer-active form {
-			margin-left: 0;
-			flex: 1 1 100%;
-		}
-		.btn-timer-cancel {
-			width: 100%;
 		}
 		.intel-panel {
 			padding: 1rem;
