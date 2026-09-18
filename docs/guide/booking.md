@@ -4,8 +4,8 @@ All you need is the **ticket code** from your Hamburn ticket. There is no accoun
 
 Beds come with **Indoor memberships** only. Camper memberships (camper or tent) don't include a bed and don't need CozyNights.
 
-> [!NOTE] Booking opens at a set time
-> Before that the map stays blurred and a countdown shows when booking starts. You can already sign in with your code.
+> [!NOTE] Booking opens and closes at set times
+> Before booking opens, the map stays blurred and a countdown shows when it starts. You can already sign in with your code. While booking is open, a slim countdown at the top of every page shows when it closes; after that, spots are final.
 
 ## At a glance
 
@@ -66,7 +66,8 @@ That's it: the spot now shows **Your Spot** with your burner name. 🎉
 | **Occupied** · *a burner name* | Taken by another guest (*Mystery Burner* if they didn't pick a name). |
 | **Not available** · *Reserved by the crew* | Held back by the crew, for example a broken bed or a spot that isn't in use. |
 | **Locked** · *Release other spot first* | You already have a spot somewhere else. |
-| **Locked** · *Phase: Staging Mode* | Booking hasn't opened yet. |
+| **Not open yet** · *Booking opens soon* | Booking hasn't opened yet. |
+| **Booking closed** · *Spots are final* | The booking window is over. |
 
 ![A booked room: your spot, other guests' burner names and spots reserved by the crew](../assets/screenshots/guest-room.webp)
 

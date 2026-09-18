@@ -19,7 +19,11 @@ CozyNights couldn't reach its database for a moment. Your code is fine. Try agai
 :::
 
 ::: details The map is blurry and houses don't open ("PATIENCE, BURNER!")
-Booking hasn't opened yet. The countdown shows when it starts. <kbd>📡 RELOAD SENSORS</kbd> refreshes the page state.
+Booking hasn't opened yet. The countdown shows when it starts; the map unlocks by itself when it ends. <kbd>📡 RELOAD SENSORS</kbd> refreshes the page state.
+:::
+
+::: details I can't book or change my spot any more ("Booking has closed")
+The booking window is over, so spots are final. Your spot stays yours and your booking pass keeps working. If something has to change, ask the crew.
 :::
 
 ::: details I can't click a free spot, it says "Release other spot first"
@@ -79,7 +83,7 @@ You picked a Google account outside the `@mauersegler.art` Workspace (for exampl
 :::
 
 ::: details "Management locked during live booking."
-Structural changes only work in Staging Mode. Switch back to staging first, or, if you only want to take a spot out of service, lock it: that works during Live Booking too. See [Staging & Live Booking](./phases).
+Structural changes only work in Staging Mode. During Live Booking and after booking closed, only a superuser can switch back to staging. If you only want to take a spot out of service, lock it: that works in every phase. See [Staging, Live Booking & Closed](./phases).
 :::
 
 ::: details Guests can't book a spot
@@ -87,7 +91,7 @@ Check the spot on its room page. Guests can't book **LOCKED 🔒** or ⚪️ **I
 :::
 
 ::: details A house won't move when I drag it
-Either Live Booking is active (dragging is switched off while the layout is locked), or you are pushing it right on top of another house: houses keep a small distance from each other. Switch to staging, or drop it a little further away.
+Either the layout is locked (Live Booking, or booking closed: dragging is switched off), or you are pushing it right on top of another house: houses keep a small distance from each other. Wait for Staging, or drop it a little further away.
 :::
 
 ::: details I can't find "Clear all bookings" or the template import

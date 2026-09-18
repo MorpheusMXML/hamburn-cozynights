@@ -1,80 +1,103 @@
-# Staging & Live Booking
+# Staging, Live Booking & Closed
 
-CozyNights always runs in one of two phases. The phase decides what guests can do and what admins may change.
+CozyNights is always in one of three phases. The phase decides what guests can do and what admins may change.
 
 ```mermaid
 stateDiagram-v2
   direction LR
-  state "🛠 Staging Mode" as Staging
+  state "🛠 Staging" as Staging
   state "🎪 Live Booking" as Live
+  state "🔒 Closed" as Closed
   [*] --> Staging
-  Staging --> Live: admin flips the switch<br/>or the go-live timer is reached
-  Live --> Staging: admin switches back
+  Staging --> Live: opening time
+  Live --> Closed: closing time
+  Closed --> Live: a new window opens
+  Live --> Staging: superuser, right now
+  Closed --> Staging: superuser, right now
 ```
 
-- **🛠 Staging Mode** is for building. Admins shape the camp; guests can sign in and look at the (blurred) map, but can't book.
-- **🎪 Live Booking** is for booking. Guests claim spots; the camp's structure is frozen so nothing moves under their feet.
+- **🛠 Staging** is for building. Admins shape the camp; guests can sign in and look at the (blurred) map, but can't book.
+- **🎪 Live Booking** is for booking. Guests claim spots; the camp's structure is frozen so nothing moves under their feet. A slim countdown at the top of every page shows when booking closes.
+- **🔒 Closed** follows the booking window. Spots are final: guests still see their spot and their booking pass, but can't book, change or release anything. The layout stays frozen, because it holds the bookings.
 
 ## Who can do what
 
-| | 🛠 Staging | 🎪 Live |
-| --- | :---: | :---: |
-| Guests: sign in and see the map | <span class="yes">✓</span> blurred, with countdown | <span class="yes">✓</span> |
-| Guests: book, rename, release a spot | <span class="no">✗</span> | <span class="yes">✓</span> |
-| Admins: add, rename, move, delete houses | <span class="yes">✓</span> | <span class="no">✗</span> |
-| Admins: add or delete rooms and spots | <span class="yes">✓</span> | <span class="no">✗</span> |
-| Admins: activate / deactivate spots, mark as taken | <span class="yes">✓</span> | <span class="no">✗</span> |
-| Admins: **lock / unlock a spot** | <span class="yes">✓</span> | <span class="yes">✓</span> |
-| Admins: export a layout template | <span class="yes">✓</span> | <span class="yes">✓</span> |
-| Superusers: import a layout template | <span class="yes">✓</span> | <span class="no">✗</span> |
+| | 🛠 Staging | 🎪 Live | 🔒 Closed |
+| --- | :---: | :---: | :---: |
+| Guests: sign in and see the map | <span class="yes">✓</span> blurred, with countdown | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| Guests: book, rename, release a spot | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="no">✗</span> |
+| Admins: add, rename, move, delete houses | <span class="yes">✓</span> | <span class="no">✗</span> | <span class="no">✗</span> |
+| Admins: add or delete rooms and spots | <span class="yes">✓</span> | <span class="no">✗</span> | <span class="no">✗</span> |
+| Admins: activate / deactivate spots, mark as taken | <span class="yes">✓</span> | <span class="no">✗</span> | <span class="no">✗</span> |
+| Admins: **lock / unlock a spot** | <span class="yes">✓</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| Admins: export a layout template | <span class="yes">✓</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| Superusers: import a layout template | <span class="yes">✓</span> | <span class="no">✗</span> | <span class="no">✗</span> |
 
 > [!IMPORTANT] Enforced by the server
 > The lockdown is not just hidden buttons. Every structural change is checked on the server against the *current* phase, so an old browser tab can't sneak a change in after going live.
 
-During Live Booking, houses without any active spot don't appear on the guest map.
+During Live Booking and after booking closed, houses without any active spot don't appear on the guest map.
 
-## Going live
+## The booking window
 
 ![Staging map with the countdown](../assets/screenshots/guest-map-staging.webp)
 
 <!-- audience:public -->
-The crew opens booking either by hand or on a timer. With a timer, guests see the moment as a countdown: **IGNITION IN** on the map, and a small timer on house and room pages.
+The crew plans when booking opens and when it closes. Guests see both moments as countdowns: **IGNITION IN** on the map before booking opens, and a slim bar at the top of every page. Tap the bar for the exact time. While booking is live, the bar counts down to the closing time, and it turns red in the last hour. When a countdown ends, the page opens or locks by itself; there's no need to reload.
 <!-- /audience -->
 <!-- audience:admin -->
-There are two ways to open booking, both in the [Control Center](../admin/):
+Everything about the phase sits in one panel of the [Control Center](../admin/), right under the header: **🎟 BOOKING WINDOW**. Its summary line shows the phase, the next switch with a countdown, and whether the timer is armed. Click it to unfold:
 
-### Flip the switch
+- a timeline (before opening → live → closed) with the opening and closing time and a dot for *now*,
+- the **timer switch** and <kbd>✎ Edit window</kbd> (<kbd>＋ Plan window</kbd> while nothing is planned),
+- for superusers, <kbd>⚡ Switch right now</kbd>.
 
-Press <kbd>🛠 STAGING MODE</kbd> in the header. It turns into <kbd>🎪 LIVE BOOKING ACTIVE</kbd> and guests can book immediately.
+### Plan the window
 
-### Schedule it
+<kbd>＋ Plan window</kbd> unfolds two fields, **Booking opens** and **Booking closes**. Under each field you see how far ahead it is and how long booking stays open; problems show up right there, before you save. <kbd>Save window ✨</kbd> stores the times. A new window starts **not armed**: saving and arming are two steps. <kbd>Clear times</kbd> empties both fields, and saving that removes the window.
 
-Under the header, next to **Schedule automatic go-live**, pick a date and time and press <kbd>Schedule ✨</kbd>. The panel then reads *Auto-opens live booking on …* with a <kbd>Cancel Timer ✕</kbd> button.
+### Arm or pause the timer
 
-- Guests see the same moment as a countdown: **IGNITION IN** on the map, and a small timer on house and room pages.
-- When the time has come, booking is open. No background job needs to run for that: every request compares the clock with the timer.
+Flip the switch to **Timer armed**. The confirmation repeats both times. From then on booking opens and closes by itself. No background job has to run for that: every page load compares the clock with the window.
 
+Flip it back to pause. The times stay saved and nothing switches until you arm the timer again. Pausing during Live Booking keeps booking open, now without an end.
+
+### Rules for admins
+
+Admins who are not superusers plan ahead:
+
+- Booking opens **at least one day** from now.
+- It stays open for **at least one day**. That also applies when you move the closing time during Live Booking.
+- Nothing they save or arm may switch the phase **right now**.
+
+Times the armed timer already has don't have to be a day ahead again, so you can still move the closing time when the opening is only hours away. Arming a paused timer checks everything again. A paused window can be saved with any times; the panel says early if it couldn't be armed that way.
+
+### Switch right now (superusers only)
+
+<kbd>⚡ Switch right now</kbd> unfolds 🛠 Staging · 🎪 Live Booking · 🔒 Closed. Every switch asks first and says what happens to the timer:
+
+- **Live Booking:** a planned opening time is dropped (booking opened now). A future closing time stays and closes booking as planned.
+- **Closed:** the closing time of the current window is dropped (booking closed now).
+- **Staging:** the timer is paused, so nothing switches by itself. Existing bookings stay. If there are some, a second dialog offers to **clear all bookings**: every spot becomes free again and all burner names are forgotten. Ticket codes keep working. This can't be undone.
+
+A window planned for later (its opening time still ahead) stays armed when a superuser closes booking or goes back to Staging. The confirmation warns about it.
+
+> [!NOTE] Checked twice
+> The Control Center checks these rules, and the server checks them again. PocketBase itself also refuses a change to the booking settings by an admin who isn't a superuser if it would switch the phase at that moment, even when the change comes straight through its API.
 <!-- /audience -->
 
 > [!IMPORTANT] Event time
-> The go-live time is always **Europe/Berlin** time (CET/CEST), no matter which timezone your laptop or the server is in.
+> Opening and closing times are always **Europe/Berlin** time (CET/CEST), no matter which timezone your laptop or the server is in.
 
 ## During Live Booking
 
 Almost everything structural is locked. The one exception is **locking and unlocking single spots**, so the crew can take a broken bed out of service mid-event. Guests then see it as *Not available · Reserved by the crew*.
 
-## Switching back to staging
+## After booking closed
 
 <!-- audience:public -->
-The crew can switch back to staging at any time. Guests can then no longer book, rename or release a spot. **Existing bookings stay.**
+Your spot stays yours, and your booking pass keeps working. Nothing can be booked, changed or released any more. If something has to change, ask the crew.
 <!-- /audience -->
 <!-- audience:admin -->
-Press <kbd>🎪 LIVE BOOKING ACTIVE</kbd>. After a confirmation, guests can no longer book, rename or release. **Existing bookings stay.**
-
-- If you are a **superuser** and there are bookings, a second dialog offers to **clear all bookings**. Every spot becomes free again and all burner names are forgotten. Ticket codes keep working. This can't be undone.
-- If the go-live timer had already passed, it is removed as well, otherwise the next page load would open booking again right away. A timer that is still in the future stays scheduled.
-
-> [!CAUTION] Mind the timer
-> Switched back to staging but a future go-live timer is still set? Booking will open again at that time. Cancel the timer if that's not what you want.
-
+The layout stays locked; locking and unlocking single spots still works. For another booking round, plan a new window: the camp stays closed until its opening time. Only a superuser can switch back to Staging, for example to rebuild the layout.
 <!-- /audience -->

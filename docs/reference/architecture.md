@@ -105,8 +105,11 @@ erDiagram
     select alert_status "crew group"
   }
   APP_SETTINGS {
-    bool is_booking_active
-    date booking_unlock_at "go-live timer"
+    bool is_booking_active "live, set by hand"
+    bool booking_closed "closed, set by hand"
+    date booking_unlock_at "booking opens"
+    date booking_close_at "booking closes"
+    bool booking_timer_paused "timer not armed"
     bool notify_mail "e-mail is set up"
     text telegram_bot "bot for guest updates"
   }
@@ -120,7 +123,7 @@ erDiagram
 
 - **`orders`** is the ticket list: one record per ticket. CozyNights only reads it and writes the burner name. No admin action deletes orders.
 - **Spots are called `beds`** in the database. A booking is simply a bed with `occupied` set and a link to its order.
-- **`app_settings`** is a single record holding the phase switch and the go-live timer.
+- **`app_settings`** is a single record holding the phase set by hand and the booking window (opening and closing time, armed or paused).
 - **`admins`** is its own auth collection for Google sign-in. PocketBase's default `users` collection is unused and closed for sign-up.
 - **`guest_notify`** holds what each ticket was last told and where (e-mail, linked Telegram chat); **`admin_events`** is the audit log that feeds the crew group. Neither has API rules: only PocketBase itself and the app server use them.
 - **`pass_code`** is created by PocketBase when a ticket gets a spot. It is not the ticket code: the pass shows the booking, never lets anyone book.
@@ -131,7 +134,7 @@ erDiagram
 | Route | Who | What |
 | --- | --- | --- |
 | `/` | everyone | Start page, ticket code sign-in |
-| `/map` | everyone | Camp map, blurred with countdown in staging |
+| `/map` | everyone | Camp map, blurred with countdown in staging; read-only after booking closed |
 | `/house/:id` | guests with a code | Rooms of a house with free spots |
 | `/room/:id` | guests with a code | Spots of a room, booking dialog |
 | `/random-bed` | guests with a code | Destiny Roulette |
@@ -177,7 +180,7 @@ sequenceDiagram
 - **One ticket, one spot.** Even parallel requests from the same ticket end with a single booked spot.
 - **Claim first, then release.** If something fails midway, a guest keeps their old spot rather than ending up with none.
 - **Single instance.** The queue lives in the app process, which matches the deployment of exactly one app container per environment.
-- **Go-live without a scheduler.** "Booking is open" means *the switch is on, or the timer has passed*. It is evaluated on every request, so nothing has to run at the go-live moment. Admins enter the timer in Europe/Berlin time.
+- **A booking window without a scheduler.** The phase is *the one set by hand, unless the armed timer's opening or closing time has passed* (`src/lib/booking-phase.ts`). It is evaluated on every request, so nothing has to run at the opening or closing moment; open pages reload their data when their countdown ends. Admins enter the times in Europe/Berlin time. PocketBase's notification loop only *announces* a reached time to the crew group.
 
 ## Repository layout
 

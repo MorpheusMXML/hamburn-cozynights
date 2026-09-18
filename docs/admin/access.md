@@ -67,7 +67,8 @@ A request can also be approved straight to superuser.
 | --- | :---: | :---: | :---: |
 | See the Control Center, statistics and occupancy | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | Build the camp: houses, rooms, spots | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
-| Switch phases, schedule the go-live timer | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| Plan the booking window, arm and pause the timer (at least a day ahead) | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| **Switch the phase right now** (Staging, Live Booking, Closed) | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
 | Lock and unlock spots | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | Export a layout template | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | **Import a layout template** | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
