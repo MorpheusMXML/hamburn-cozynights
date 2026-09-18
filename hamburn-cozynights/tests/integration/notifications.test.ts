@@ -25,6 +25,8 @@ import {
 const MOCK_URL = process.env.MOCK_URL || '';
 const MAILPIT_URL = process.env.MAILPIT_URL || '';
 const CREW_CHAT = '-1001234567890'; // docker-compose.test.yml
+// COZY_APP_URL in docker-compose.test.yml; scripts/test-stack.sh exports the port
+const APP_URL = `http://127.0.0.1:${process.env.TEST_APP_PORT || '3290'}`;
 const COMPOSE_FILE = path.resolve(__dirname, '../../docker-compose.test.yml');
 
 let su: PocketBase;
@@ -200,7 +202,7 @@ describe('booking confirmations by e-mail', () => {
 		expect(released.Text).toContain('the crew had to change the camp layout');
 		// one clean link to the map (room and map link are the same URL here)
 		expect(released.HTML.match(/<a href=/g)).toHaveLength(1);
-		expect(released.HTML).toContain('<a href="http://127.0.0.1:3290/map"');
+		expect(released.HTML).toContain(`<a href="${APP_URL}/map"`);
 		expect(released.HTML).not.toContain('&lt;a');
 	});
 
