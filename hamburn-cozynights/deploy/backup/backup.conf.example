@@ -4,9 +4,27 @@
 # Paths are either absolute host paths or "volume:<docker volume>:<path inside
 # the volume>" (the script resolves the volume's mountpoint itself).
 
-# restic repository on the Storage Box. "storagebox" is the host alias from
-# /root/.ssh/config; the path is relative to the Storage Box home directory.
-RESTIC_REPOSITORY="sftp:storagebox:restic/$(hostname)"
+# === Where the backup goes: exactly one of A or B ===========================
+
+# --- A) Local repository (start here) ----------------------------------------
+# A directory on this server, created root-only by "server-backup --init".
+# Protects against mistakes, bad deploys and broken databases, NOT against
+# losing or compromising the server (README: „Was lokal NICHT schützt“).
+RESTIC_REPOSITORY="/var/backups/restic/$(hostname)"
+# Warn and alert when the disk of the repository has less free space than this
+# (whichever is hit first; 0 disables a limit). The live databases share it.
+MIN_FREE_GB=5
+MIN_FREE_PERCENT=15
+
+# --- B) Hetzner Storage Box (later; README „Stufe 2“) ------------------------
+# "storagebox" is the host alias from /root/.ssh/config; the path is relative
+# to the home directory of the Storage Box. To switch: comment out
+# RESTIC_REPOSITORY in A, activate this line and add /root/.ssh/config to
+# BACKUP_PATHS below. Nothing else changes.
+# RESTIC_REPOSITORY="sftp:storagebox:restic/$(hostname)"
+
+# ==============================================================================
+
 RESTIC_PASSWORD_FILE=/etc/server-backup/restic-password
 
 # Live SQLite databases, copied consistently while the apps keep running:
@@ -24,16 +42,17 @@ PG_DUMPS=(
 )
 
 # Everything else needed to rebuild the server: configuration, certificates,
-# secrets and uploaded files.
+# secrets and uploaded files. A path that does not exist is an error. A local
+# repository is never part of its own backup, even below one of these paths.
 BACKUP_PATHS=(
 	/etc/nginx
 	/etc/letsencrypt
 	/etc/cozynights
-	/root/.ssh/config
 	/opt/hamburn-cozynights-staging/hamburn-cozynights/.env
 	# /opt/hamburn-cozynights-prod/hamburn-cozynights/.env
 	/path/to/vaultwarden/data
 	/opt/docker-compose.yml
+	# /root/.ssh/config   # with B
 )
 
 # Excluded from BACKUP_PATHS (restic --exclude patterns). The live SQLite

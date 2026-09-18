@@ -86,11 +86,22 @@ Then sign in to `/admin` once and open the camp map with a test ticket code.
 
 The live database stays on the server's local disk. SQLite must not run on a network share: file locking over the network is unreliable and can corrupt the database. A Storage Box is a backup target only.
 
-- **Local, hourly:** PocketBase writes ZIP backups into its volume (`pb_hooks/cozy_backups.pb.js`, `PB_BACKUP_CRON` / `PB_BACKUP_KEEP`). A quick undo from the dashboard, but no protection against losing the server.
-- **Before every deploy:** the deploy script archives the volume.
-- **Off-site, hourly:** `deploy/backup/server-backup.sh` copies all live databases of the server consistently and stores them, together with configuration and certificates, encrypted with restic on a Hetzner Storage Box. It alerts on failure and test-restores the databases weekly.
+Backups come in layers. The first two need no setup:
 
-Setup, restore and the emergency sheet are in the operator runbook [`hamburn-cozynights/deploy/backup/README.md`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/backup/README.md) (German).
+- **Hourly ZIPs:** PocketBase writes ZIP backups into its volume (`pb_hooks/cozy_backups.pb.js`, `PB_BACKUP_CRON` / `PB_BACKUP_KEEP`; default: hourly, keep 72). A quick undo from the dashboard.
+- **Before every deploy:** the deploy script archives the volume.
+- **Versioned server backup, hourly:** `deploy/backup/server-backup.sh` copies all live databases of the server consistently and stores them, together with configuration and certificates, in an encrypted [restic](https://restic.net) repository (24 hourly, 14 daily, 8 weekly and 12 monthly snapshots). It alerts on failure and on a disk running full, and test-restores the databases weekly.
+
+The restic repository is set up in two stages that differ by one line of configuration:
+
+| Stage | Repository | Survives |
+| --- | --- | --- |
+| **1, now** | a root-only directory on the server | mistakes, bad deploys, a broken database |
+| **2, later** | a Hetzner Storage Box (off-site) | also losing or compromising the server |
+
+During stage 1 every layer shares the server's disk. Until the Storage Box is there, a weekly pull of the encrypted repository to a laptop and Hetzner's server backups bridge that gap.
+
+Setup, restore, the move to the Storage Box and the emergency sheet are in the operator runbook [`hamburn-cozynights/deploy/backup/README.md`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/backup/README.md) (German).
 
 ::: warning Keep the encryption key outside the server too
 Without an environment's `ENCRYPTION_KEY`, a restored database is useless: burner names can't be decrypted and ticket codes no longer match.

@@ -1,5 +1,5 @@
 [Unit]
-Description=Hourly off-site server backup
+Description=Hourly server backup with restic
 
 [Timer]
 # PocketBase's own local auto-backups run at minute 5 (pb_hooks/cozy_backups.pb.js).
