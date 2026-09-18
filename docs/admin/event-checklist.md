@@ -27,7 +27,8 @@ timeline
 
 ## Days before: get ready to open
 
-- [ ] **Ticket codes created.** Test codes for a trial run with testers, the real roster for the event. An operator does this on the server, see [Ticket codes](#ticket-codes).
+- [ ] **Ticket codes created.** Test codes for a trial run with testers, the real roster for the event, **with the ticket holders' e-mail addresses** for the confirmations. An operator does this on the server, see [Ticket codes](#ticket-codes).
+- [ ] **Notifications checked.** `./scripts/cozy-admin.sh notify test --email you@mauersegler.art` reaches the crew group and your inbox; one booking with a test code brings a confirmation. See [Notifications](./notifications).
 - [ ] **Test run.** Sign in with a real test ticket code in a private browser window. The map shows the countdown, rooms show the right spots.
 - [ ] **Test bookings removed.** If you booked in staging, release those spots again.
 - [ ] **Go-live scheduled.** Set the timer in the Control Center (Europe/Berlin time) and announce the same time to guests.
@@ -53,6 +54,7 @@ timeline
 - [ ] **Clear all bookings** (superuser). Offered right after switching back. Spots become free, burner names are forgotten, ticket codes stay.
 - [ ] **Cancel leftover timers**, so booking doesn't open again by accident.
 - [ ] **Tidy up admin access.** Remove accounts of people who have left the crew.
+- [ ] **Forget the guests' contacts.** `./scripts/cozy-admin.sh tickets forget-contacts --yes` deletes every guest e-mail address and Telegram link; the ticket codes stay.
 
 ## Ticket codes
 
@@ -67,6 +69,15 @@ A ticket code is a guest's whole login, and the list of valid codes lives in the
 This creates ten tickets with random codes like `UT-7F3K9Q` and prints them one per line, ready to paste into a spreadsheet or a message. The codes leave out look-alike characters (no `0` or `O`, no `1`, `I` or `L`). `--name` is a label that tells batches apart later.
 
 ### The real roster
+
+The ticket shop's export, with e-mail addresses for the booking confirmations:
+
+```bash
+./scripts/cozy-admin.sh tickets import roster.csv --dry-run   # check first, change nothing
+./scripts/cozy-admin.sh tickets import roster.csv
+```
+
+The file format and what an import changes: [Notifications](./notifications#ticket-codes-with-e-mail-addresses). Codes without addresses work as well:
 
 ```bash
 ./scripts/cozy-admin.sh tickets add HB-1001 HB-1002 --name "Early bird"  # a few known codes

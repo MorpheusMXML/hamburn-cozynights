@@ -179,3 +179,27 @@ COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME docker compose -f docker-compose.stag
   Checkouts, damit ein Deploy nicht den eigenen Befehl umschreiben kann.
 - Logs eines Deploys: im GitHub-Actions-Run. App-Logs:
   `docker logs --tail 100 cozynights-staging-app`.
+
+## Benachrichtigungen (optional)
+
+Buchungsbestätigungen per E-Mail, Telegram-Updates für Gäste und die
+Crew-Gruppe (Doku: `docs/admin/notifications.md`). Einstellungen stehen in der
+`.env` des Checkouts (Beschreibung jedes Werts: `deploy/staging.env.template`,
+Abschnitt 4); `docker-compose.staging.yml` reicht sie an PocketBase weiter.
+
+- **Ein eigener Telegram-Bot nur für Staging.** Der Server liest die
+  Nachrichten an den Bot selbst ab (kein Webhook); zwei Server mit demselben
+  Bot stehlen sich gegenseitig die Nachrichten.
+- Nach einer Änderung der `.env` PocketBase neu erzeugen (die Variablen werden
+  nur beim Anlegen des Containers gelesen), dann prüfen:
+
+```bash
+source /etc/cozynights/deploy-staging.conf
+cd "$APP_DIR/hamburn-cozynights"
+COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME docker compose -f docker-compose.staging.yml up -d --no-deps --force-recreate pocketbase
+./scripts/cozy-admin.sh notify status
+./scripts/cozy-admin.sh notify test --email du@mauersegler.art
+```
+
+- Tickets mit E-Mail-Adressen laden: `./scripts/cozy-admin.sh tickets import liste.csv --dry-run`,
+  danach ohne `--dry-run`. Nach dem Event: `./scripts/cozy-admin.sh tickets forget-contacts --yes`.

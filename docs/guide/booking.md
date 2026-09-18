@@ -1,6 +1,6 @@
 # Booking a bed
 
-All you need is the **ticket code** from your Hamburn ticket. There is no account to create, no password and no confirmation e-mail: your ticket code *is* your registration.
+All you need is the **ticket code** from your Hamburn ticket. There is no account to create and no password: your ticket code *is* your registration. Confirmations go to the e-mail address that belongs to your ticket.
 
 > [!NOTE] Booking opens at a set time
 > Before that the map stays blurred and a countdown shows when booking starts. You can already sign in with your code.
@@ -95,6 +95,14 @@ One ticket holds one spot, so release your current spot first: <kbd>Release</kbd
 
 Bookings can only be changed while booking is open. If the crew switches back to staging, your booking stays but is frozen.
 
+## Confirmations
+
+When your spot is booked, changes or is released, CozyNights sends an e-mail to the **address of your ticket**. You don't enter it anywhere; your room page shows where confirmations go, shortened like `m•••@example.com`. If the crew ever has to change the camp layout and your spot goes with it, you hear about it the same way, so you can pick a new one.
+
+::: tip Updates on Telegram
+Prefer Telegram? On your room page press <kbd>Get updates on Telegram</kbd>, then <kbd>START</kbd> in Telegram. The CozyNights bot confirms your spot right away and tells you about every change. <kbd>Turn off</kbd> on the room page, or `/stop` in the chat, ends it.
+:::
+
 ## On your phone
 
 CozyNights works in any mobile browser, no app needed. If you booked on your laptop and now use your phone, enter your ticket code again on the start page.
@@ -106,6 +114,7 @@ CozyNights works in any mobile browser, no app needed. If you booked on your lap
 - Other guests see **which spots are taken** and the **burner name** on them. Nothing else.
 - Other guests never see your ticket code or the name on your ticket.
 - Your burner name is stored encrypted, and your ticket code is never written to logs.
+- Your e-mail address is only used for messages about your spot and is deleted after the event. Messages never contain your ticket code.
 
 <!-- audience:admin -->
 More details in [Security & privacy](../reference/security).

@@ -11,7 +11,28 @@ services:
       # Ohne Werte startet PocketBase normal, nur der Google-Login ist dann aus.
       PB_GOOGLE_CLIENT_ID: ${PB_GOOGLE_CLIENT_ID:-}
       PB_GOOGLE_CLIENT_SECRET: ${PB_GOOGLE_CLIENT_SECRET:-}
+      # Notifications (pb_hooks/cozy_notify.pb.js, docs/admin/notifications.md):
+      # booking confirmations by e-mail, Telegram for guests and the crew.
+      # All optional; without SMTP_HOST / TELEGRAM_BOT_TOKEN nothing is sent.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_TLS: ${SMTP_TLS:-}
+      SMTP_AUTH: ${SMTP_AUTH:-}
+      SMTP_LOCAL_NAME: ${SMTP_LOCAL_NAME:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      TELEGRAM_THREAD_ID: ${TELEGRAM_THREAD_ID:-}
+      TELEGRAM_GUEST_UPDATES: ${TELEGRAM_GUEST_UPDATES:-}
+      # Older crew webhook (Telegram URL, Slack, Google Chat, Discord); used when
+      # TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID are not set.
       COZY_ADMIN_WEBHOOK_URL: ${COZY_ADMIN_WEBHOOK_URL:-}
+      COZY_APP_URL: ${COZY_APP_URL:-http://localhost:5173}
+      COZY_ENV_LABEL: ${COZY_ENV_LABEL:-LOCAL}
     ports:
       # Nur lokal erreichbar (Docker umgeht sonst ufw)
       - '127.0.0.1:8090:8090'

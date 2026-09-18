@@ -12,9 +12,11 @@ data lives and how it is backed up: [Backups and where data lives](../develop/de
 | `houses`       | `name`, `x`, `y` (map position)                                                          | no            | admins                                               | public read, admin write              |
 | `rooms`        | `name`, `room_number`, `house`, `amount_beds`                                            | no            | admins                                               | public read, admin write              |
 | `beds`         | `label`, `room`, `occupied`, `order`, `is_locked`, `enabled`                             | no            | admins; guest bookings via the app's service account | public read, admin write              |
-| `orders`       | `order_number`, `order_hash`, `customer_name`, `burner_name` (encrypted), `booking_date` | yes           | the app's service account only                       | none (superusers only)                |
-| `app_settings` | `is_booking_active`, `booking_unlock_at` (single record `appsettings0123`)               | no            | admins                                               | public read, admin write              |
-| `admins`       | `email`, `name`, `role` (`pending`, `admin`, `superuser`)                                | yes (email)   | Google sign-in, `scripts/cozy-admin.sh`              | none (sign-in creates `pending` only) |
+| `orders`       | `order_number`, `order_hash`, `customer_name`, `burner_name` (encrypted), `email`, `booking_date` | yes | the app's service account, `scripts/cozy-admin.sh tickets` | none (superusers only) |
+| `app_settings` | `is_booking_active`, `booking_unlock_at`, `notify_mail`, `telegram_bot` (single record `appsettings0123`) | no | admins; PocketBase keeps the two notification flags current | public read, admin write |
+| `admins`       | `email`, `name`, `role` (`pending`, `admin`, `superuser`), `last_sign_in`                | yes (email)   | Google sign-in, `scripts/cozy-admin.sh`              | none (sign-in creates `pending` only) |
+| `guest_notify` | per ticket: what was last confirmed by mail / Telegram, when the next message is due, retries, the linked Telegram chat and a one-time link token (hashed) | yes (chat id) | PocketBase hooks; the app's service account (Telegram link) | none (superusers only) |
+| `admin_events` | audit log: `action`, `actor`, `subject`, `details`, crew alert state                      | yes (admin emails) | PocketBase hooks; the app's service account      | none (superusers only)                |
 
 Deleting a house in the dashboard also deletes its rooms and beds. "Admin
 write" means an approved `admins` record (see [Security & privacy](./security)).
@@ -28,6 +30,8 @@ write" means an approved `admins` record (see [Security & privacy](./security)).
 - **A bed is taken** when `occupied` is true; `order` points to the order.
   Guest bookings and releases write both fields together. The admin toggle in
   the room view only flips `occupied`, so the two fields can drift apart.
+- **Guest messages follow the beds.** Every change of a bed's `order` (a booking, a move, a release, a deleted room) marks the ticket in `guest_notify` as due; PocketBase then sends one message per settled state. See [Notifications](../admin/notifications).
+- **Contact data is temporary.** `orders.email` and the Telegram links are deleted after the event with `scripts/cozy-admin.sh tickets forget-contacts --yes`.
 - **Orders are the ticket roster.** No admin action deletes them: "clear all
   bookings" and the template import only release beds and clear burner names,
   so every guest's code keeps working.

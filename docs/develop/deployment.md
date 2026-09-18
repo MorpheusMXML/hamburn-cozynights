@@ -120,7 +120,19 @@ Each environment needs the Google OAuth client to know its address:
 - Authorized redirect URI: `https://<domain>/auth/callback/google`.
 - The client ID and secret are part of the environment's server configuration. PocketBase picks up changes on restart.
 
-Optionally, a crew-chat webhook (Telegram, Slack, Google Chat or Discord) announces new admin access requests.
+## Notifications per environment
+
+Booking confirmations and crew alerts are sent by PocketBase (`pb_hooks/cozy_notify.pb.js`); what and when is described in [Notifications](../admin/notifications). All settings are optional values in the environment's `.env`, passed to the PocketBase container by the compose file:
+
+| Setting | For |
+| --- | --- |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_TLS`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `MAIL_REPLY_TO` | E-mail to guests. Applied to PocketBase's mail settings on every start. |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (`TELEGRAM_THREAD_ID`) | The crew group, and guests' Telegram updates (off: `TELEGRAM_GUEST_UPDATES=off`). |
+| `COZY_ADMIN_WEBHOOK_URL` | Older crew webhook (Slack, Google Chat, Discord, Telegram URL), used when `TELEGRAM_*` are empty. |
+| `COZY_APP_URL`, `COZY_ENV_LABEL` | Links in messages and the `[STAGING]` marker. Set in the compose file, not in `.env`. |
+
+- **One Telegram bot per environment.** The server reads the bot's messages by polling; two environments with the same bot would steal each other's messages.
+- **Check after setting it up**, on the server: `./scripts/cozy-admin.sh notify status` and `./scripts/cozy-admin.sh notify test --email <you>`.
 
 ## Adding an environment
 

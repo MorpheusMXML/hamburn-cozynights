@@ -91,13 +91,14 @@ Changes apply on the **next click**: CozyNights re-checks the role on every requ
 
 The same tool creates the guests' ticket codes (`tickets generate`, `add`, `list`, `remove`), see [Ticket codes](./event-checklist#ticket-codes).
 
-::: info Crew chat notifications
-The server can post a message to a crew chat (Telegram, Slack, Google Chat or Discord) whenever someone requests access, so requests don't go unnoticed.
+::: info Crew group
+Access requests, approvals, role changes, removals and every admin sign-in show up in the crew's Telegram group, so nothing goes unnoticed. See [Notifications](./notifications#crew-group).
 :::
 
 ## Sessions
 
 - A session lasts **three days** and is renewed every time you use the admin area.
+- **Once a week you sign in with Google again**, even if you use the admin area every day (**WEEKLY CHECK 🔐**). That's when Google applies what the Workspace decided: a suspended account is out, required 2-Step Verification is asked for.
 - <kbd>Eject 🚀</kbd> in the top-right corner signs you out.
 - The session cookie can't be read by scripts on the page and is only sent over HTTPS.
 
@@ -109,6 +110,7 @@ The server can post a message to a crew chat (Telegram, Slack, Google Chat or Di
 | **NO ACCESS 🛑** | This Google account can't access the Control Center. | Ask a superuser. |
 | **SIGN-IN CANCELLED** | You cancelled on Google's page. | Try again whenever you're ready. |
 | **SIGN-IN EXPIRED ⏳** | The sign-in took longer than 10 minutes, or was started in another tab. | Start again at `/admin/login`. |
+| **WEEKLY CHECK 🔐** | Your last Google sign-in was more than 7 days ago. | Sign in with Google again. |
 | **BACKEND UNREACHABLE 📡** | CozyNights can't reach its database right now. | Try again shortly; tell the operators if it persists. |
 | **SIGN-IN FAILED** | Google didn't complete the sign-in. | Try again. |
 | *Google sign-in is not configured on this server yet.* | This installation has no Google sign-in set up, typical for a fresh local install. | Operators: see [Local development](../develop/#admin-sign-in-locally). |
@@ -116,7 +118,8 @@ The server can post a message to a crew chat (Telegram, Slack, Google Chat or Di
 ## Why Google only?
 
 - **No passwords** that could leak, be reused or need resetting.
-- **Leaving the Workspace means losing access.** Offboarding happens in one place.
+- **Leaving the Workspace means losing access,** at the latest at the next weekly sign-in. To end it at once, also run `./scripts/cozy-admin.sh remove`.
+- **2-Step Verification comes from Google.** Make it mandatory for the Workspace in the Google Admin console (Security → Authentication → 2-Step Verification), ideally with passkeys or security keys for superusers. CozyNights has no second factor of its own on purpose: Google's is stronger than a code by e-mail or chat, and the weekly sign-in makes sure it applies.
 - **Checked twice, independently.** Both the database and the app verify the domain, the verified address and the Workspace membership, and a new account can never start with more than *pending*.
 
 More in [Security & privacy](../reference/security#admin-sign-in).

@@ -27,6 +27,14 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 - **No double bookings.** Simultaneous clicks on the same spot are serialized; exactly one guest gets it.
 - **Locked and inactive spots** are refused by the server, not just hidden in the interface.
 
+### Messages to guests
+
+- **Addresses come from the ticket list.** Guests never type one, so nobody can make CozyNights write to a stranger. The room page shows the address shortened (`m•••@example.com`).
+- **Only about the spot.** Messages contain house, room, spot and a link — never the ticket code — and are only sent when the spot of that ticket changes.
+- **Telegram is opt-in** through a one-time link that works for 30 minutes; only its hash is stored. `/stop` or <kbd>Turn off</kbd> removes the link, and a blocked bot is noticed and forgotten.
+- **No inbound endpoint.** The server fetches the bot's messages itself; there is no public webhook to attack. Bot token and mail password live in the server configuration only and never appear in logs.
+- **Deleted after the event** with `tickets forget-contacts`.
+
 ## Admin sign-in
 
 - **Google only.** No passwords in the app, no sign-up form, no invitation or approval screens that could be abused from a browser.
@@ -35,6 +43,9 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 - **Checked on every request.** The role is re-read with each click, so removing someone takes effect immediately. Admin form actions and API calls without an approved session are refused centrally.
 - **Protected sign-in flow.** The OAuth `state` is bound to the browser with a short-lived cookie and PKCE is used for the code exchange; forms are protected by SvelteKit's origin check against cross-site requests.
 - **Session cookie** is `HttpOnly`, `Secure`, `SameSite=Lax`, valid for three days and renewed while in use.
+- **Weekly Google sign-in.** However active a session is, after 7 days the app asks Google again. A suspended Workspace account or newly required 2-Step Verification reaches every admin within a week.
+- **2-Step Verification is Google's job.** It is enforced for the Workspace in the Google Admin console; CozyNights deliberately adds no weaker second factor of its own.
+- **Crew alerts.** Access requests, approvals, role changes, removals, admin sign-ins, phase switches and bulk actions are logged (`admin_events`) and posted to the crew's Telegram group, see [Notifications](../admin/notifications#crew-group).
 - **Least privilege.** Clearing all bookings and importing templates are superuser-only, and no admin action ever deletes the ticket list.
 
 ## Database

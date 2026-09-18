@@ -38,6 +38,14 @@ Enter your ticket code on the start page of the new device. Your booking is atta
 Only with their ticket code. On a shared device, entering another code switches that browser to the other ticket, so switch back to your own code afterwards.
 :::
 
+::: details I didn't get a confirmation e-mail
+It goes to the address that belongs to your ticket, usually within a minute. Check your spam folder. Your room page shows where confirmations go; if that address is wrong or missing, ask the crew to fix it in the ticket list.
+:::
+
+::: details How do I stop the Telegram messages?
+Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page, or send `/stop` to the bot.
+:::
+
 ::: details A spot says "Not available · Reserved by the crew"
 The crew has locked or deactivated it, for example because the bed is broken, kept free on purpose or not in use. Pick another spot.
 :::
@@ -48,6 +56,10 @@ The crew has locked or deactivated it, for example because the bed is broken, ke
 
 ::: details I'm stuck on "ACCESS REQUESTED"
 Your Google sign-in worked, and your access request is waiting for a superuser. Ask one of them to approve it, then reload the page. See [Admin access & roles](../admin/access).
+:::
+
+::: details "WEEKLY CHECK 🔐" at sign-in
+Admins sign in with Google again every 7 days, even when they use the admin area every day. Press the Google button once and you're back. See [Sessions](../admin/access#sessions).
 :::
 
 ::: details "WRONG ACCOUNT 🛑" at sign-in

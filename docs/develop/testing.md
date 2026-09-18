@@ -30,6 +30,7 @@ In `tests/integration/`:
 - **Guests** – can read the map data, can never read tickets or write anything, cannot sign up anywhere.
 - **Admin access model** – no password login; admin records can't be created through the API; every new record is born `pending` and `@mauersegler.art`; a pending account has no rights and can't approve itself; an approved admin can manage the structure but not read tickets or change roles; approval and removal take effect on the very next request.
 - **Booking** – ticket-code login incl. imported tickets, one ticket = one bed, taken / locked / deactivated beds, two guests racing for one bed, release.
+- **Notifications** – confirmation e-mails (booked, one "changed" for a move, released by the guest or with a deleted room), no mail for tickets without an address, a newly imported address, retries and the crew alert after the last one; Telegram link, `/stop`, blocked bot, unknown links; crew alerts for access changes, phase switches with the admin's name, an outage of Telegram, and a real OAuth2 sign-in through the admin guard; `cozy-admin tickets import` (dry run, broken file, stdin) and `notify status` / `test`.
 
 ### What the smoke tests cover
 
@@ -47,12 +48,14 @@ The Google consent screen itself. Everything around it is tested (who may get an
 
 ## The test stack
 
-`scripts/test-stack.sh` starts `docker-compose.test.yml`: PocketBase with an in-memory database (always empty at start) and, for the smoke tests, the app image. Credentials are random per run and thrown away with the stack. It uses its own compose project (`cozynights-verify`) and ports (8290 / 3290), so it can't collide with a dev or staging stack on the same machine.
+`scripts/test-stack.sh` starts `docker-compose.test.yml`: PocketBase with an in-memory database (always empty at start) and, for the smoke tests, the app image. Two stand-ins replace the outside world: **Mailpit** catches every e-mail (web UI on port 8293) and `tests/fixtures/mock-services.mjs` plays the Telegram Bot API and Google's OAuth2 endpoints (port 8292). Credentials are random per run and thrown away with the stack. It uses its own compose project (`cozynights-verify`) and ports (8290 / 3290 / 8292 / 8293), so it can't collide with a dev or staging stack on the same machine.
+
+Admin sessions in tests are PocketBase impersonation tokens. They need a recent `last_sign_in` on the `admins` record (what a real Google sign-in stores), otherwise the app asks for a fresh sign-in — `createAdmin` in `tests/stack-helpers.ts` sets it.
 
 ```bash
 KEEP_STACK=1 npm run test:smoke      # leave it running to poke around
 bash scripts/test-stack.sh down      # remove it again
-TEST_PB_PORT=8390 TEST_APP_PORT=3390 npm run verify   # ports already taken?
+TEST_PB_PORT=8390 TEST_APP_PORT=3390 TEST_MOCK_PORT=8392 TEST_MAILPIT_PORT=8393 npm run verify   # ports already taken?
 ```
 
 Check a deployment by hand (read-only, no credentials needed):
