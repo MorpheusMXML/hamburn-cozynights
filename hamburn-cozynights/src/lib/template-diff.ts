@@ -129,7 +129,7 @@ const byAge = (a: { id: string; created?: string }, b: { id: string; created?: s
 
 /**
  * Records with their keys, oldest first: of two houses with the same name the
- * older one is compared with the file, a later copy gets "~2", "~3", … The
+ * older one is compared with the file, a later copy gets "#2", "#3", … The
  * order is stable, so the same data always gives the same keys (the import
  * compares again and must find the same items).
  */
@@ -142,7 +142,8 @@ function keyed<T extends { id: string; created?: string }>(
 		const base = baseOf(item);
 		const n = (seen.get(base) ?? 0) + 1;
 		seen.set(base, n);
-		return { item, base, key: n === 1 ? base : `${base}~${n}`, duplicate: n > 1 };
+		// "#" never occurs in a base: nameKey encodes it (unlike "~").
+		return { item, base, key: n === 1 ? base : `${base}#${n}`, duplicate: n > 1 };
 	});
 }
 

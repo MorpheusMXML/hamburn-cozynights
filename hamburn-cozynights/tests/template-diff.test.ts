@@ -172,6 +172,17 @@ describe('diffLayout', () => {
 		});
 	});
 
+	it('never gives a file house the key of a duplicate in the camp', () => {
+		const records = camp([neonCave()]);
+		records.houses.push({ id: 'zz-copy', name: 'Neon Cave', x: 1, y: 1 });
+		const tricky: TemplateHouse = { name: 'Neon Cave~2', x: 5, y: 5, rooms: [] };
+		const diff = diffLayout(records, template([neonCave(), tricky]));
+		const keys = changeKeys(diff);
+		expect(new Set(keys).size).toBe(keys.length);
+		expect(find(diff, 'h:neon%20cave~2')).toMatchObject({ own: 'new', name: 'Neon Cave~2' });
+		expect(find(diff, 'h:neon%20cave#2')).toMatchObject({ own: 'removed', id: 'zz-copy' });
+	});
+
 	it('gives the same keys however the records are ordered', () => {
 		const records = camp([neonCave(), villa()]);
 		const shuffled: CampRecords = {
@@ -210,13 +221,13 @@ describe('diffLayout', () => {
 		expect(diff.warnings).toHaveLength(3);
 		const keys = changeKeys(diff);
 		expect(new Set(keys).size).toBe(keys.length);
-		expect(keys).toContain('h:neon%20cave~2');
-		expect(keys).toContain('h:neon%20cave/r:1~2');
-		expect(keys).toContain('h:neon%20cave/r:1/s:b1~2');
+		expect(keys).toContain('h:neon%20cave#2');
+		expect(keys).toContain('h:neon%20cave/r:1#2');
+		expect(keys).toContain('h:neon%20cave/r:1/s:b1#2');
 		// the originals still match
 		expect(find(diff, 'h:neon%20cave')).toMatchObject({ own: null, id: 'house0' });
 		expect(find(diff, 'h:neon%20cave/r:1')).toMatchObject({ own: null, id: 'house0room0' });
-		expect(find(diff, 'h:neon%20cave/r:1/s:b1~2')).toMatchObject({ own: 'removed', id: 'a-bed' });
+		expect(find(diff, 'h:neon%20cave/r:1/s:b1#2')).toMatchObject({ own: 'removed', id: 'a-bed' });
 	});
 });
 
