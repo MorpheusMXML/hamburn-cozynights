@@ -21,7 +21,7 @@ timeline
 - [ ] **Houses on the map.** Every house is placed where it really is. See [Houses, rooms & spots](./camp-layout).
 - [ ] **Rooms and spots complete.** Room names and numbers match the signs on the doors.
 - [ ] **Spot states checked.** New spots are active right away. Deactivate ❄️ the ones that aren't in use; after a template import, look for ⚪️ INACTIVE spots that should be bookable.
-- [ ] **Red alert gone.** No *NO ROOMS DETECTED* or *EMPTY MODULE* warnings in the Control Center.
+- [ ] **Red alert gone.** No _NO ROOMS DETECTED_ or _EMPTY MODULE_ warnings in the Control Center.
 - [ ] **Crew beds locked.** Beds that guests shouldn't book are locked 🔒.
 - [ ] **Backup.** Export a template of the finished layout.
 
@@ -31,6 +31,7 @@ timeline
 - [ ] **Notifications checked.** `./scripts/cozy-admin.sh notify test --email you@mauersegler.art` reaches the crew group and your inbox; one booking with a test code brings a confirmation. See [Notifications](./notifications).
 - [ ] **Test run.** Sign in with a real test ticket code in a private browser window. The map shows the countdown, rooms show the right spots.
 - [ ] **Test bookings removed.** If you booked in staging, release those spots again.
+- [ ] **Legal pages complete.** The legal notice, the privacy policy and the booking rules show no red note. See [Legal pages](./legal).
 - [ ] **Go-live scheduled.** Set the timer in the Control Center (Europe/Berlin time) and announce the same time to guests.
 
 > [!TIP] Announce the ticket code, not a password
@@ -54,6 +55,7 @@ timeline
 - [ ] **Export the final layout** as a template for next year.
 - [ ] **Switch back to staging.** Confirm the dialog.
 - [ ] **Clear all bookings** (superuser). Offered right after switching back. Spots become free, burner names are forgotten, ticket codes stay.
+- [ ] **Delete the ticket list** within the period the [privacy policy](./legal) promises (default: four weeks after the event). An operator removes the codes on the server, see [Check and tidy up](#check-and-tidy-up).
 - [ ] **Cancel leftover timers**, so booking doesn't open again by accident.
 - [ ] **Tidy up admin access.** Remove accounts of people who have left the crew.
 - [ ] **Forget the guests' contacts.** `./scripts/cozy-admin.sh tickets forget-contacts --yes` deletes every guest e-mail address and Telegram link; the ticket codes stay.
@@ -85,6 +87,16 @@ The file format and what an import changes: [Notifications](./notifications#tick
 ./scripts/cozy-admin.sh tickets add HB-1001 HB-1002 --name "Early bird"  # a few known codes
 xargs ./scripts/cozy-admin.sh tickets add < codes.txt                     # a whole list, one code per line
 ```
+
+**Only Indoor memberships.** Load the codes of Indoor memberships only: they include a bed, Camper memberships don't.
+
+**With e-mail addresses.** To reach guests about their spot, for example when the crew has to move them, store each ticket's e-mail address as its label. From a file with one `code,email` pair per line and no header row (about a second per ticket):
+
+```bash
+tr -d '\r' < tickets.csv | while IFS=, read -r code email; do ./scripts/cozy-admin.sh tickets add "$code" --name "$email" < /dev/null; done
+```
+
+`< /dev/null` matters: the admin tool would otherwise read the rest of the file as its input. Delete `tickets.csv` from the server afterwards. `tickets list` then shows the address next to each code. Guests never see it; the privacy policy names it, and it goes with the ticket list after the event (see [After the burn](#after-the-burn)).
 
 Codes may contain letters, digits, `-` and `_`, up to 64 characters. Stick to capitals and digits, because the sign-in field shows every code in capitals. Two codes that differ only in upper and lower case are refused. Codes that already exist are left alone, so the same list can be loaded again after late ticket sales.
 

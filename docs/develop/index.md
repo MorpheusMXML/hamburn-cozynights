@@ -112,10 +112,18 @@ npm run test:e2e
 :::
 
 - **`npm run verify`** runs the type check and the unit, integration and smoke tests — the same checks GitHub runs on every pull request. It needs Docker and nothing else, and it never touches your dev database.
-- **Vitest** (`tests/*.test.ts`) covers booking rules, the admin sign-in checks, encryption and hashing, and UI helpers. It runs without a database.
+- **Vitest** (`tests/*.test.ts`) covers booking rules, the admin sign-in checks, encryption and hashing, UI helpers, the [start page title](./effigy-title) and the legal page settings. It runs without a database.
 - **Integration tests** (`tests/integration/`) start a real, empty PocketBase in Docker, apply the migrations and hooks, and check the schema, API rules, admin roles and the booking service.
 - **Smoke tests** (`tests/smoke/`) build the same Docker image staging builds and drive it over HTTP. `npm run smoke:remote` runs their read-only part against a deployed site.
 - **Playwright** (`tests/e2e/`) walks through the real guest journey in Chromium against your local stack: sign in with a code, open the map, book and release a spot. Optional and local only.
+- **Start page title and legal pages** (`tests/e2e/landing.test.ts`, `tests/e2e/legal.test.ts`) need no PocketBase. Start the dev server without the health check, then run them in a second terminal:
+
+  ```bash
+  npx vite dev
+  npx playwright test tests/e2e/landing.test.ts tests/e2e/legal.test.ts
+  ```
+
+  They run in Chromium and in WebKit on an emulated iPhone (`npx playwright install webkit` once).
 
 The layers, the throwaway test stack and the release routine are described in [Testing & release checks](./testing).
 

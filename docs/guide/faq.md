@@ -3,7 +3,7 @@
 ## For guests
 
 ::: details "This booking code was not found."
-Check the code for typos: it's on your ticket and contains only letters, digits, `-` and `_`. Copy and paste works best. Still not working? Contact the Hamburn crew; your ticket may not be in the ticket list yet.
+Check the code for typos: it's on your ticket and contains only letters, digits, `-` and `_`. Copy and paste works best. Only **Indoor memberships** include a bed, so only their codes work here; Camper memberships don't need CozyNights. Still not working? Contact the Hamburn crew; your ticket may not be in the ticket list yet.
 :::
 
 ::: details "Invalid booking code format."
@@ -27,7 +27,7 @@ Your ticket already holds a spot somewhere else. One ticket code = one spot. Rel
 :::
 
 ::: details Someone grabbed the bed I wanted at the same moment
-First come, first served. If two people click the same spot at the same time, exactly one of them gets it; the other sees *This spot is already claimed.* Pick another one.
+First come, first served. If two people click the same spot at the same time, exactly one of them gets it; the other sees _This spot is already claimed._ Pick another one.
 :::
 
 ::: details I booked on another device
@@ -52,6 +52,14 @@ Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page
 
 ::: details A spot says "Not available · Reserved by the crew"
 The crew has locked or deactivated it, for example because the bed is broken, kept free on purpose or not in use. Pick another spot.
+:::
+
+::: details The burning title is too much for me
+Press the pause button ⏸ next to the title; your browser remembers it. If your device is set to reduce motion (for example on iPhone: Settings → Accessibility → Motion → Reduce Motion), the title doesn't move at all. And if you like it: move the cursor over the standing letters or tap them to set them on fire yourself.
+:::
+
+::: details Who runs CozyNights, and what happens with my data?
+Every page of CozyNights links the **legal notice** (who runs it and how to reach them), the **privacy policy** and the **booking rules** at the bottom. In short: your ticket code, the e-mail address of your order, your spot and the burner name you choose; no tracking, no ads, no cookie banner needed.
 :::
 
 <!-- audience:admin -->

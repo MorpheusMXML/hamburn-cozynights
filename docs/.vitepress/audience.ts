@@ -55,7 +55,8 @@ const sections: Section[] = [
 					{ text: 'Booking passes', link: '/admin/passes' },
 					{ text: 'Houses, rooms & spots', link: '/admin/camp-layout' },
 					{ text: 'Layout templates', link: '/admin/templates' },
-					{ text: 'Event checklist', link: '/admin/event-checklist' }
+					{ text: 'Event checklist', link: '/admin/event-checklist' },
+					{ text: 'Legal pages', link: '/admin/legal' }
 				]
 			},
 			{
@@ -97,6 +98,7 @@ const sections: Section[] = [
 					{ text: 'Local development', link: '/develop/' },
 					{ text: 'Testing & release checks', link: '/develop/testing' },
 					{ text: 'Environments & deployment', link: '/develop/deployment' },
+					{ text: 'Landing page title', link: '/develop/effigy-title' },
 					{ text: 'Working on these docs', link: '/develop/docs' }
 				]
 			}

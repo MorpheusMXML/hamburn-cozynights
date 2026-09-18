@@ -2,6 +2,8 @@
 
 All you need is the **ticket code** from your Hamburn ticket. There is no account to create and no password: your ticket code *is* your registration. Confirmations go to the e-mail address that belongs to your ticket.
 
+Beds come with **Indoor memberships** only. Camper memberships (camper or tent) don't include a bed and don't need CozyNights.
+
 > [!NOTE] Booking opens at a set time
 > Before that the map stays blurred and a countdown shows when booking starts. You can already sign in with your code.
 
@@ -116,11 +118,13 @@ CozyNights works in any mobile browser, no app needed. If you booked on your lap
 ## Privacy: what others see
 
 - Other guests see **which spots are taken** and the **burner name** on them. Nothing else.
-- Other guests never see your ticket code or the name on your ticket.
+- Other guests never see your ticket code or the e-mail address from your ticket order. The crew only uses that address to reach you about your spot, for example if they have to move you.
 - Your burner name is stored encrypted, and your ticket code is never written to logs.
 - Your e-mail address is only used for messages about your spot and is deleted after the event. Messages never contain your ticket code.
 
 <!-- audience:admin -->
 More details in [Security & privacy](../reference/security).
 <!-- /audience -->
+The **booking rules**, the privacy policy and the legal notice are linked at the bottom of every CozyNights page.
+
 Something not working? See [FAQ & troubleshooting](./faq).

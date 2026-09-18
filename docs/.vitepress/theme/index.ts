@@ -2,12 +2,16 @@ import DefaultTheme from 'vitepress/theme';
 import type { Theme } from 'vitepress';
 import { useRoute } from 'vitepress';
 import mediumZoom, { type Zoom } from 'medium-zoom';
-import { nextTick, onMounted, watch } from 'vue';
+import { h, nextTick, onMounted, watch } from 'vue';
+import LegalLinks from './LegalLinks.vue';
 import Mermaid from './Mermaid.vue';
 import './style.css';
 
 export default {
 	extends: DefaultTheme,
+	// Impressum and privacy policy under every doc page (the default footer
+	// only appears on pages without a sidebar).
+	Layout: () => h(DefaultTheme.Layout, null, { 'doc-after': () => h(LegalLinks) }),
 	enhanceApp({ app }) {
 		app.component('Mermaid', Mermaid);
 	},

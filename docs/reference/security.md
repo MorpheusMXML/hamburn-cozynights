@@ -46,7 +46,7 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 
 - **Google only.** No passwords in the app, no sign-up form, no invitation or approval screens that could be abused from a browser.
 - **Workspace accounts only.** The address must end in `@mauersegler.art`, be verified by Google, and belong to the Google Workspace. This is checked by the database before a session is issued, and checked again by the app.
-- **New accounts have no rights.** A first sign-in creates an access request with the role *pending*. Nobody can approve themselves; approvals happen outside the web app.
+- **New accounts have no rights.** A first sign-in creates an access request with the role _pending_. Nobody can approve themselves; approvals happen outside the web app.
 - **Checked on every request.** The role is re-read with each click, so removing someone takes effect immediately. Admin form actions and API calls without an approved session are refused centrally.
 - **Protected sign-in flow.** The OAuth `state` is bound to the browser with a short-lived cookie and PKCE is used for the code exchange; forms are protected by SvelteKit's origin check against cross-site requests.
 - **Session cookie** is `HttpOnly`, `Secure`, `SameSite=Lax`, valid for three days and renewed while in use.
@@ -67,6 +67,10 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 - **Isolated environments.** Staging and production run as separate stacks: own containers, network, database and encryption key.
 - **Careful deploys.** Deploys are started by hand and need an approval. The deploy key can run exactly one command on the server. Every deploy backs up the database first and returns to the previous version automatically if the health check fails. See [Environments & deployment](../develop/deployment).
 - **Pinned database version.** The PocketBase image is pinned; upgrades are deliberate and come after a backup.
+
+## Privacy policy
+
+What guests are told is on the app's `/privacy` page. It has to stay true to this page and to the code; what to update when something changes is listed in [Legal pages](../admin/legal#keeping-the-privacy-policy-true).
 
 ## Found a problem?
 

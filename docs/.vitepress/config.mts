@@ -1,10 +1,12 @@
 import { spawnSync } from 'node:child_process';
-import { defineConfig, type HeadConfig } from 'vitepress';
+import { defineConfigWithTheme, type DefaultTheme, type HeadConfig } from 'vitepress';
 import { audienceBlocksPlugin, audienceSite, readAudience } from './audience';
 
 const repo = 'https://github.com/MorpheusMXML/hamburn-cozynights';
 const pagesBase = '/hamburn-cozynights/';
 const pagesUrl = 'https://morpheusmxml.github.io/hamburn-cozynights/';
+// Until production has a domain, the public docs point to staging for the legal pages.
+const stagingAppUrl = 'https://test-cozynights.hamburn.de';
 
 // One source tree, two sites (see develop/docs.md): DOCS_AUDIENCE picks who the
 // build is for, DOCS_BASE where it is served from. The defaults are what you
@@ -18,6 +20,25 @@ if (!base.startsWith('/') || !base.endsWith('/')) {
 // Absolute URL of the published site, for the sitemap and link previews. Only
 // known for GitHub Pages; the app serves the docs under whatever domain it runs on.
 const siteUrl = process.env.DOCS_SITE_URL || (base === pagesBase ? pagesUrl : '');
+// The legal notice, privacy policy and booking rules are pages of the app, not of the docs
+// (the operator's details live in the app server's .env). Served by the app,
+// the docs link them on the same domain; on GitHub Pages they need the app's
+// address: DOCS_APP_URL, set as a repository variable for the Pages build.
+const appUrl = (process.env.DOCS_APP_URL || (base === pagesBase ? stagingAppUrl : '')).replace(
+	/\/$/,
+	''
+);
+const legal = {
+	notice: `${appUrl}/legal-notice`,
+	privacy: `${appUrl}/privacy`,
+	rules: `${appUrl}/booking-rules`
+};
+
+/** Theme settings of this site on top of VitePress' default theme (see theme/LegalLinks.vue). */
+export interface CozyThemeConfig extends DefaultTheme.Config {
+	legal: { notice: string; privacy: string; rules: string };
+}
+
 // "Last updated" comes from git, which the Docker build has neither as a
 // command nor as history; VitePress would crash there.
 const hasGitHistory = spawnSync('git', ['rev-parse', '--is-inside-work-tree']).status === 0;
@@ -43,7 +64,7 @@ if (siteUrl) {
 // The admin site sits behind the admin login; nothing of it belongs in a search engine.
 if (audience === 'admin') head.push(['meta', { name: 'robots', content: 'noindex' }]);
 
-export default defineConfig({
+export default defineConfigWithTheme<CozyThemeConfig>({
 	lang: 'en-US',
 	title: 'Hamburn CozyNights',
 	titleTemplate: ':title · CozyNights',
@@ -148,8 +169,11 @@ export default defineConfig({
 			linkText: 'Back to camp'
 		},
 
+		legal,
+
 		footer: {
-			message: 'Made with 🔥 for Hamburn by the Mauersegler* crew.',
+			// Only shown on pages without a sidebar; doc pages get theme/LegalLinks.vue.
+			message: `Made with 🔥 for Hamburn by the Mauersegler* crew. · <a href="${legal.notice}" target="_self">Legal notice</a> · <a href="${legal.privacy}" target="_self">Privacy</a> · <a href="${legal.rules}" target="_self">Booking rules</a>`,
 			copyright: `<a href="${repo}">Source on GitHub</a>`
 		}
 	}

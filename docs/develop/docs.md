@@ -37,7 +37,7 @@ VitePress prints the local address, usually `http://localhost:5173/hamburn-cozyn
 
 Every build **fails on broken internal links**, and a link from a guide page into the admin guide is broken in the public build. `npm run preview` and `npm run preview:public` serve the finished builds.
 
-Two more variables exist for special cases: `DOCS_BASE` is the path the site is served under (default `/hamburn-cozynights/`), `DOCS_SITE_URL` its full public address for the sitemap and link previews (only known for GitHub Pages).
+Three more variables exist for special cases: `DOCS_BASE` is the path the site is served under (default `/hamburn-cozynights/`), `DOCS_SITE_URL` its full public address for the sitemap and link previews (only known for GitHub Pages), and `DOCS_APP_URL` the address of the app, whose legal pages every page links (see [Legal links](#legal-links)).
 
 ## Pages for both audiences
 
@@ -109,6 +109,19 @@ Screenshots show demo data only, never real guests or tickets. Take them from a 
 The repository's Pages source has to be set to **GitHub Actions** (Settings → Pages) once.
 
 **The app** gets both builds with every [deployment](./deployment): the Docker image build runs `npm run build:app` and copies the result into the image, where the app serves it at `/docs/` and `/admin/docs/`. A docs change therefore reaches the app with the next deploy, not with the merge. "Last updated" dates only appear on GitHub Pages and in local builds, because the image is built without the git history.
+
+## Legal links
+
+Every page links the app's legal notice, privacy policy and booking rules: the home page in its footer, doc pages under their content (`.vitepress/theme/LegalLinks.vue`, because VitePress shows its footer only on pages without a sidebar). The pages themselves belong to the app, see [Legal pages](../admin/legal).
+
+- **Served by the app** (`/docs/`, `/admin/docs/`), the links point to `/legal-notice`, `/privacy` and `/booking-rules` on the same domain.
+- **On GitHub Pages** they need the app's address. The Pages build reads it from the repository variable `DOCS_APP_URL`; without it they point to staging. Once production has its domain:
+
+  ```bash
+  gh variable set DOCS_APP_URL --body "https://<production-domain>"
+  ```
+
+  The next docs deploy (a push to `main` that touches `docs/`, or **Run workflow** on *Docs*) picks it up.
 
 ## What doesn't belong here
 
