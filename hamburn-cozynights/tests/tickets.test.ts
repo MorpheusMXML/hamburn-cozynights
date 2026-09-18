@@ -59,6 +59,24 @@ describe('parseCsv', () => {
 		expect(rows[2]).toEqual(['B', 'two\nlines']);
 	});
 
+	it('treats a quote inside a field as a character, so it cannot swallow rows', () => {
+		const rows = parseCsv(
+			'code,email,name\nHB-1,a@b.de,Max "Mad\nHB-2,c@d.de,Eva\nHB-3,e@f.de,Ina'
+		);
+		expect(rows).toHaveLength(4);
+		expect(rows[1]).toEqual(['HB-1', 'a@b.de', 'Max "Mad']);
+		expect(rows[3]).toEqual(['HB-3', 'e@f.de', 'Ina']);
+	});
+
+	it('takes the delimiter from the first line with content, or from a sep= line', () => {
+		expect(parseCsv('\n\ncode;email\nA;a@x.de')[3]).toEqual(['A', 'a@x.de']);
+		const excel = parseCsv('sep=;\ncode;email\nA;a@x.de');
+		expect(excel[0]).toEqual(['']);
+		expect(excel[1]).toEqual(['code', 'email']);
+		expect(excel[2]).toEqual(['A', 'a@x.de']);
+		expect(parseCsv('"sep=|"\ncode|email\nA|a@x.de')[2]).toEqual(['A', 'a@x.de']);
+	});
+
 	it('copes with Windows line ends and a byte order mark', () => {
 		expect(parseCsv(`${BOM}code,email\r\nA,a@x.de\r\n`)).toEqual([
 			['code', 'email'],
@@ -152,6 +170,15 @@ describe('checkRosterRows', () => {
 		]);
 		expect(problems).toEqual([]);
 		expect(entries).toEqual([{ line: 2, code: 'HB-1', email: 'ada@example.org', name: 'Ada' }]);
+	});
+
+	it('refuses a cell that spans several lines (an unclosed quote swallowed rows)', () => {
+		const file = parseRoster('code,email,name\nHB-1,a@b.de,"Max Mad\nHB-2,c@d.de,Eva');
+		if (!file.ok) throw new Error(file.error);
+		expect(file.entries).toEqual([]);
+		expect(file.problems).toHaveLength(1);
+		expect(file.problems[0]).toMatchObject({ line: 2, code: 'HB-1' });
+		expect(file.problems[0].message).toContain('several lines');
 	});
 
 	it('lists broken rows as problems and keeps the rest', () => {
@@ -273,11 +300,16 @@ describe('diffRoster', () => {
 });
 
 describe('maskTicketCode', () => {
-	it('keeps enough to tell tickets apart, not enough to sign in', () => {
-		expect(maskTicketCode('HB-1001-XYZ')).toBe('HB-•••YZ');
-		expect(maskTicketCode('ABCDE')).toBe('ABC•••DE');
-		expect(maskTicketCode('ABCD')).toBe('A•••');
+	it('shows at most a third of a code, and only the first character of a short one', () => {
+		expect(maskTicketCode('Q7ZQ2')).toBe('Q•••'); // a pretix order code
+		expect(maskTicketCode('HB-1001')).toBe('H•••');
+		expect(maskTicketCode('HB-1001-XYZ')).toBe('HB•••Z');
+		expect(maskTicketCode('q7x2k9m4p8w3r6t5')).toBe('q7x•••t5'); // a pretix ticket secret
 		expect(maskTicketCode('')).toBe('');
+		for (const code of ['A', 'AB12345', 'ABCDEFGH1', 'ABCDEFGHIJKLMNO', 'x'.repeat(64)]) {
+			const shown = maskTicketCode(code).replace('•••', '').length;
+			expect(shown).toBeLessThanOrEqual(Math.max(1, Math.floor(code.length / 3)));
+		}
 	});
 });
 

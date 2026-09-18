@@ -423,7 +423,10 @@ function eventText(ev) {
 		}
 		case 'ticket_updated': {
 			const parts = [];
-			if (d.emailFrom !== d.emailTo) {
+			// emailChanged: masked addresses can look the same (max@… → mia@…)
+			const emailChanged =
+				d.emailChanged === undefined ? d.emailFrom !== d.emailTo : !!d.emailChanged;
+			if (emailChanged) {
 				parts.push('e-mail ' + (d.emailFrom || '(none)') + ' → ' + (d.emailTo || '(none)'));
 			}
 			if (d.nameChanged) parts.push('name');

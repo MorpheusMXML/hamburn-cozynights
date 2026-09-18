@@ -57,7 +57,7 @@ Every message here is also kept in the audit log (collection `admin_events` in t
 | 🎪 Booking is LIVE now | The go-live timer fired |
 | 🧨 All bookings cleared | With the number of released spots |
 | 🗺️ Layout template applied | What was created, changed and removed, released bookings and the backup |
-| 🎟️ Ticket changed | A new address, a new name or a hand-over on the Tickets page, with the code and addresses shortened (`HB-•••01`, `a•••@example.org`) |
+| 🎟️ Ticket changed | A new address, a new name or a hand-over on the Tickets page, with the code and addresses shortened (`H•••`, `a•••@example.org`) |
 | 📥 Ticket list imported | How many tickets were created, updated and handed over |
 | 🏚️ House deleted | Only when bookings went with it |
 | 📭 Could not notify ticket | A guest message failed for good |

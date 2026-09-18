@@ -243,7 +243,11 @@ describe('parseTemplate: refused files', () => {
 		],
 		['missing houses', { version: '1.0' }, /^houses: is missing/],
 		['houses that are not a list', v2({ a: 1 }), /^houses: must be a list/],
-		['an empty houses list', v2([]), /^houses: the list is empty\. A template needs at least one house/],
+		[
+			'an empty houses list',
+			v2([]),
+			/^houses: the list is empty\. A template needs at least one house/
+		],
 		[
 			'too many houses',
 			v2(many(201, (i) => house(`H${i}`, i, i))),

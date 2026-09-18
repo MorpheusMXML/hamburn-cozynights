@@ -11,6 +11,8 @@ export interface MemoryPb {
 	data: Record<string, Row[]>;
 	/** Every write, in order: "create beds", "update orders/abc", … */
 	log: string[];
+	/** Every read with a filter, as it would go into the request URL. */
+	queries: string[];
 	backups: string[];
 	/** Makes the next matching write fail: (collection, action, data) => true. */
 	failWhen: ((collection: string, action: string, data: Row) => boolean) | null;
@@ -49,6 +51,7 @@ export function memoryPb(seed: Record<string, Row[]> = {}): MemoryPb {
 			Object.entries(seed).map(([k, rows]) => [k, rows.map((r) => ({ ...r }))])
 		),
 		log: [],
+		queries: [],
 		backups: [],
 		failWhen: null,
 		pb: null
@@ -93,6 +96,7 @@ export function memoryPb(seed: Record<string, Row[]> = {}): MemoryPb {
 	const service = (name: string) => ({
 		async getFullList(options: Row = {}) {
 			const { expr, params } = decode(options.filter);
+			if (expr) state.queries.push(`${name}: ${expr} ${JSON.stringify(params)}`);
 			return table(name)
 				.filter((row) => matches(row, expr, params))
 				.map((row) => expand(name, { ...row }, options.expand));
@@ -103,6 +107,7 @@ export function memoryPb(seed: Record<string, Row[]> = {}): MemoryPb {
 		},
 		async getFirstListItem(filter: unknown) {
 			const { expr, params } = decode(filter);
+			state.queries.push(`${name}: ${expr} ${JSON.stringify(params)}`);
 			const row = table(name).find((r) => matches(r, expr, params));
 			if (!row) throw notFound();
 			return { ...row };

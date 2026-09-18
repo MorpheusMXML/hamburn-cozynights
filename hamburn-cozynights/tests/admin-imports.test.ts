@@ -114,12 +114,20 @@ describe('finding tickets', () => {
 		const found = await searchTickets(db.pb, 'ADA@example.org');
 		expect(found.by).toBe('email');
 		expect(found.tickets.map((t) => [t.code, t.codeMasked])).toEqual([
-			['HB-•••01', true],
-			['HB-•••02', true]
+			['H•••', true],
+			['H•••', true]
 		]);
 		// the default label would give the code away
 		expect(found.tickets[1].name).toBe('');
 		expect(JSON.stringify(found)).not.toContain('HB-1002');
+	});
+
+	it('keeps codes and addresses out of database queries (they end up in logs)', async () => {
+		await searchTickets(db.pb, 'HB-1001');
+		await searchTickets(db.pb, 'ada@example.org');
+		const queries = db.queries.join('\n');
+		expect(queries).not.toContain('HB-1001');
+		expect(queries.toLowerCase()).not.toContain('ada@');
 	});
 
 	it('explains what it can not search for', async () => {
@@ -143,7 +151,7 @@ describe('changing a ticket', () => {
 			nameChanged: false,
 			newHolder: false,
 			confirmation: true,
-			maskedCode: 'HB-•••01'
+			maskedCode: 'H•••'
 		});
 		// Telegram stays: same holder
 		expect(db.data.guest_notify[0].tg_chat).toBe('4711');
@@ -166,7 +174,7 @@ describe('changing a ticket', () => {
 		// the spot stays with the ticket
 		expect(db.data.beds.find((b) => b.id === 'b1')?.order).toBe('o1');
 		expect(outcome.ticket).toMatchObject({
-			code: 'HB-•••01', // never the full code in an answer
+			code: 'H•••', // never the full code in an answer
 			codeMasked: true,
 			name: '',
 			burnerName: '',
@@ -380,7 +388,8 @@ describe('who may do what', () => {
 			actor: 'crew@mauersegler.art',
 			subject: 'o1',
 			details: {
-				ticket: 'HB-•••01',
+				ticket: 'H•••',
+				emailChanged: true,
 				emailFrom: 'a•••@example.org',
 				emailTo: 'b•••@example.org',
 				nameChanged: true,
@@ -409,11 +418,7 @@ describe('who may do what', () => {
 		} as any);
 		expect(preview.roster.diff.changes.map((c: any) => c.code)).toEqual(['HB-3000']);
 		// the stored tickets that are not in the file: shortened codes only
-		expect(preview.roster.diff.notInFile.map((t: any) => t.code)).toEqual([
-			'HB-•••01',
-			'HB-•••02',
-			'HB-•••03'
-		]);
+		expect(preview.roster.diff.notInFile.map((t: any) => t.code)).toEqual(['H•••', 'H•••', 'H•••']);
 		expect(JSON.stringify(preview)).not.toContain('HB-1001');
 		const done: any = await ticketActions.importRoster({
 			locals: locals(boss),

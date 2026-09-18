@@ -28,9 +28,13 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 	let saving = false;
 	let error = '';
 
-	// A fresh ticket (saved, or found again): start from what is stored.
-	$: reset(ticket);
+	// A fresh ticket (saved, or found again): start from what is stored. The
+	// page hands every card a new object when any card saves, so compare the
+	// content: typing in this card must survive a save in another one.
+	let shownTicket = '';
+	$: if (JSON.stringify(ticket) !== shownTicket) reset(ticket);
 	function reset(fresh: TicketView) {
+		shownTicket = JSON.stringify(fresh);
 		email = fresh.email;
 		name = fresh.name;
 		newHolder = false;
@@ -56,7 +60,10 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 		ticket.telegram ? 'Telegram updates to the old holder stop.' : '',
 		ticket.pass ? 'The booking pass gets a new code: the old pass link stops working.' : '',
 		ticket.burnerName ? `The burner name "${ticket.burnerName}" is forgotten.` : '',
-		ticket.spot && cleanEmail && !emailProblem
+		!emailChanged && cleanEmail
+			? "The address is still the old one: no e-mail goes out, and later updates would reach the old holder. Enter the new holder's address."
+			: '',
+		emailChanged && ticket.spot && cleanEmail && !emailProblem
 			? `${cleanEmail} gets a confirmation with the spot and the new pass.`
 			: '',
 		ticket.signedIn
@@ -93,6 +100,8 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 				const outcome = result.data?.updated as TicketChangeOutcome | undefined;
 				if (!outcome) return;
 				toast(savedMessage(outcome), 'success', 7000);
+				// Also when the stored ticket looks the same as before (nothing to forget).
+				reset({ ...outcome.ticket, code: ticket.code, codeMasked: ticket.codeMasked });
 				dispatch('saved', outcome.ticket);
 			} else if (result.type === 'failure') {
 				error =

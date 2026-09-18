@@ -15,7 +15,8 @@ import {
 	searchTickets
 } from '$lib/server/tickets';
 
-const UNAVAILABLE = 'The ticket list could not be read or written right now. Try again in a minute.';
+const UNAVAILABLE =
+	'The ticket list could not be read or written right now. Try again in a minute.';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	// Runs in parallel with the layout load, so it guards itself too.
@@ -72,6 +73,8 @@ export const actions: Actions = {
 				// Masked: the audit log and the crew chat need no full address or code.
 				await logAdminEvent(locals.adminPb, locals.admin, 'ticket_updated', id, {
 					ticket: outcome.maskedCode,
+					// Both masked addresses can look the same (max@… → mia@…): say it.
+					emailChanged: outcome.emailChanged,
 					emailFrom: maskEmail(outcome.emailBefore),
 					emailTo: maskEmail(outcome.ticket.email),
 					nameChanged: outcome.nameChanged,

@@ -122,6 +122,19 @@ async function describeTicket(
 }
 
 /**
+ * Every ticket with what the search needs. The roster is small (hundreds), and
+ * matching here keeps codes and addresses out of request URLs: PocketBase
+ * logs those, and so do errors.
+ */
+async function loadSearchIndex(adminPb: TypedPocketBase): Promise<OrdersResponse[]> {
+	return adminPb.collection('orders').getFullList<OrdersResponse>({
+		fields: 'id,order_number,order_hash,customer_name,email,burner_name,pass_code',
+		batch: 1000,
+		requestKey: null
+	});
+}
+
+/**
  * Finds tickets by their code (exact, in any upper and lower case) or by their
  * e-mail address (exact). Codes of tickets found by their address are masked:
  * an address must not reveal somebody's sign-in.
@@ -130,63 +143,49 @@ export async function searchTickets(adminPb: TypedPocketBase, raw: unknown): Pro
 	const text = cleanTicketCode(raw);
 	if (!text) throw new TicketError('Type a ticket code or an e-mail address.');
 
+	let by: TicketSearch['by'];
+	let query: string;
+	let matches: (order: OrdersResponse) => boolean;
 	if (text.includes('@')) {
 		const email = normalizeEmail(text);
 		if (!isValidGuestEmail(email)) {
 			throw new TicketError(`"${text.slice(0, 80)}" is not a complete e-mail address.`);
 		}
-		// "~" ignores upper/lower case (addresses typed into the dashboard);
-		// "_" and "%" are wildcards there, so compare exactly afterwards.
-		const rows = await adminPb.collection('orders').getFullList<OrdersResponse>({
-			filter: adminPb.filter('email ~ {:email}', { email }),
-			sort: 'order_number',
-			requestKey: null
-		});
-		const matches = rows.filter((order) => (order.email ?? '').toLowerCase() === email);
-		const shown = matches.slice(0, MAX_RESULTS);
-		return {
-			by: 'email',
-			query: email,
-			tickets: await Promise.all(shown.map((order) => describeTicket(adminPb, order, true))),
-			more: matches.length > shown.length
-		};
+		by = 'email';
+		query = email;
+		matches = (order) => (order.email ?? '').toLowerCase() === email;
+	} else {
+		if (!TICKET_CODE_PATTERN.test(text)) {
+			throw new TicketError(
+				'Ticket codes only contain letters, digits, "-" and "_" (at most 64). For an e-mail address, type the whole address.'
+			);
+		}
+		// Any upper/lower case: stored codes never differ only in case (the CLI
+		// and the import refuse that), so this can't mix two tickets up. The
+		// hashes find tickets whose code is only stored as the sign-in hash.
+		const lower = text.toLowerCase();
+		const hashes = [...new Set([text, text.toUpperCase(), lower])].map(createLookupHash);
+		by = 'code';
+		query = text;
+		matches = (order) =>
+			(order.order_number ?? '').toLowerCase() === lower || hashes.includes(order.order_hash ?? '');
 	}
 
-	if (!TICKET_CODE_PATTERN.test(text)) {
-		throw new TicketError(
-			'Ticket codes only contain letters, digits, "-" and "_" (at most 64). For an e-mail address, type the whole address.'
-		);
-	}
-	// Any upper/lower case: stored codes never differ only in case (the CLI and
-	// the import refuse that), so this can't mix two tickets up. "~" is a
-	// case-insensitive LIKE; "_" is a wildcard there, so compare exactly after.
-	// The hashes find tickets whose code is only stored as the sign-in hash.
-	const variants = [...new Set([text, text.toUpperCase(), text.toLowerCase()])];
-	const hashes = variants.map((variant) => createLookupHash(variant));
-	const params: Record<string, string> = { code: text };
-	const parts = ['order_number ~ {:code}'];
-	hashes.forEach((hash, i) => {
-		params[`h${i}`] = hash;
-		parts.push(`order_hash = {:h${i}}`);
-	});
-	const candidates = await adminPb.collection('orders').getFullList<OrdersResponse>({
-		filter: adminPb.filter(parts.join(' || '), params),
-		sort: 'order_number',
-		requestKey: null
-	});
-	const lower = text.toLowerCase();
-	const rows = candidates.filter(
-		(order) =>
-			(order.order_number ?? '').toLowerCase() === lower || hashes.includes(order.order_hash ?? '')
+	const found = (await loadSearchIndex(adminPb)).filter(matches).sort((a, b) =>
+		// The exact spelling first, then by code.
+		by === 'code'
+			? Number(b.order_number === text) - Number(a.order_number === text) ||
+				(a.order_number ?? '').localeCompare(b.order_number ?? '')
+			: (a.order_number ?? '').localeCompare(b.order_number ?? '')
 	);
-	// The exact spelling first.
-	rows.sort((a, b) => Number(b.order_number === text) - Number(a.order_number === text));
-	const shown = rows.slice(0, MAX_RESULTS);
+	const shown = found.slice(0, MAX_RESULTS);
 	return {
-		by: 'code',
-		query: text,
-		tickets: await Promise.all(shown.map((order) => describeTicket(adminPb, order, false))),
-		more: rows.length > shown.length
+		by,
+		query,
+		tickets: await Promise.all(
+			shown.map((order) => describeTicket(adminPb, order, by === 'email'))
+		),
+		more: found.length > shown.length
 	};
 }
 

@@ -69,36 +69,55 @@ export function defaultTicketName(code: string): string {
 	return `Ticket ${code}`;
 }
 
-/** "HB-1001-XYZ" → "HB-•••YZ": enough to tell tickets apart in a log, not to sign in with. */
+/**
+ * A code shortened for logs, the crew chat and lists of tickets the admin
+ * didn't type: enough to tell tickets apart, never enough to guess one. At
+ * most a third of the code shows; short codes (pretix order codes have five
+ * characters) keep only their first one. "HB-1001" → "H•••".
+ */
 export function maskTicketCode(code: string): string {
 	const value = String(code || '');
-	if (value.length <= 4) return value ? `${value.charAt(0)}•••` : '';
-	return `${value.slice(0, 3)}•••${value.slice(-2)}`;
+	if (!value) return '';
+	if (value.length >= 15) return `${value.slice(0, 3)}•••${value.slice(-2)}`;
+	if (value.length >= 9) return `${value.slice(0, 2)}•••${value.slice(-1)}`;
+	return `${value.charAt(0)}•••`;
 }
 
 // --- reading the CSV file -------------------------------------------------------
 
 /**
- * A CSV text as records of fields; the delimiter (, ; or tab) is taken from the
- * header line. Blank lines stay in, so record n is row n of a spreadsheet.
+ * A CSV text as records of fields. The delimiter (, ; or tab) is taken from the
+ * first line that isn't blank, or from Excel's "sep=;" line in front. Blank
+ * lines stay in, so record n is row n of the file. A quote only opens a quoted
+ * field at the start of the field; elsewhere it is an ordinary character, so a
+ * stray quote in a name can't swallow the following rows.
  */
 export function parseCsv(text: string): string[][] {
-	const src = String(text).replace(/^\uFEFF/, '');
-	const header = src.split(/\r?\n/, 1)[0] || '';
-	const counts: Record<string, number> = { ',': 0, ';': 0, '\t': 0 };
-	let quoted = false;
-	for (const c of header) {
-		if (c === '"') quoted = !quoted;
-		else if (!quoted && counts[c] !== undefined) counts[c]++;
-	}
+	const lines = String(text)
+		.replace(/^\uFEFF/, '')
+		.split(/\r?\n/);
+	const first = lines.findIndex((line) => line.trim() !== '');
 	let delimiter = ',';
-	if (counts[';'] > counts[delimiter]) delimiter = ';';
-	if (counts['\t'] > counts[delimiter]) delimiter = '\t';
+	const directive = first >= 0 ? /^\s*"?sep=([^"\r\n])"?\s*$/i.exec(lines[first]) : null;
+	if (directive) {
+		delimiter = directive[1];
+		lines[first] = '';
+	} else if (first >= 0) {
+		const counts: Record<string, number> = { ',': 0, ';': 0, '\t': 0 };
+		let quoted = false;
+		for (const c of lines[first]) {
+			if (c === '"') quoted = !quoted;
+			else if (!quoted && counts[c] !== undefined) counts[c]++;
+		}
+		if (counts[';'] > counts[delimiter]) delimiter = ';';
+		if (counts['\t'] > counts[delimiter]) delimiter = '\t';
+	}
+	const src = lines.join('\n');
 
 	const rows: string[][] = [];
 	let row: string[] = [];
 	let field = '';
-	quoted = false;
+	let quoted = false;
 	for (let i = 0; i < src.length; i++) {
 		const c = src.charAt(i);
 		if (quoted) {
@@ -110,7 +129,7 @@ export function parseCsv(text: string): string[][] {
 			} else {
 				field += c;
 			}
-		} else if (c === '"') {
+		} else if (c === '"' && field === '') {
 			quoted = true;
 		} else if (c === delimiter) {
 			row.push(field);
@@ -265,7 +284,13 @@ export function checkRosterRows(rows: RosterRow[]): {
 		const email = clean(row.email).toLowerCase();
 		const name = clean(row.name);
 
-		if (!code) {
+		if (/[\r\n]/.test(`${row.code}${row.email}${row.name}`)) {
+			problems.push({
+				line,
+				code: code.split(/\s/)[0] ?? '',
+				message: 'a cell spans several lines (a quote in the file that is never closed?)'
+			});
+		} else if (!code) {
 			problems.push({ line, code, message: 'no ticket code' });
 		} else if (!TICKET_CODE_PATTERN.test(code)) {
 			problems.push({

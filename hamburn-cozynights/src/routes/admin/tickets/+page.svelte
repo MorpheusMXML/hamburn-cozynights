@@ -89,8 +89,11 @@
 		};
 	};
 
-	function ticketSaved(index: number, fresh: TicketView) {
+	function ticketSaved(fresh: TicketView) {
 		if (!search) return;
+		// By id: a newer search may have replaced the list meanwhile.
+		const index = search.tickets.findIndex((ticket) => ticket.id === fresh.id);
+		if (index < 0) return;
 		// The server answers with the code hidden; keep showing what was shown.
 		const shown = search.tickets[index];
 		search.tickets[index] = { ...fresh, code: shown.code, codeMasked: shown.codeMasked };
@@ -154,25 +157,32 @@
 		await check();
 	}
 
+	/** Only the answer to the newest check counts (quick column changes). */
+	let checkSeq = 0;
+
 	/** Reads the file with the chosen columns and asks the server what would change. */
 	async function check(chosen?: Partial<ColumnMap>) {
 		const read = readRosterFile(fileText, chosen);
 		header = read.header ?? header;
+		const seq = ++checkSeq;
 		if (!read.ok) {
 			fileError = read.error;
 			preview = null;
+			checking = false;
 			return;
 		}
 		fileError = '';
-		columns = read.columns;
-		rows = read.rows;
 
 		checking = true;
 		const form = new FormData();
-		form.set('rows', JSON.stringify(rows));
+		form.set('rows', JSON.stringify(read.rows));
 		const result = await post('previewRoster', form);
+		if (seq !== checkSeq) return;
 		checking = false;
 		if (result.type === 'success') {
+			// The review and what Import sends always belong together.
+			columns = read.columns;
+			rows = read.rows;
 			preview = result.data?.roster as RosterPreview;
 			const start = defaultRosterSelection(preview.diff);
 			selected = new Set(start.selected);
@@ -326,8 +336,8 @@
 						{search.by === 'code' ? 'with the code' : 'with the address'}
 						<strong>{search.query}</strong>{search.more ? ' (only the first ones are shown)' : ''}
 					</p>
-					{#each search.tickets as ticket, index (ticket.id)}
-						<TicketCard {ticket} on:saved={(event) => ticketSaved(index, event.detail)} />
+					{#each search.tickets as ticket (ticket.id)}
+						<TicketCard {ticket} on:saved={(event) => ticketSaved(event.detail)} />
 					{/each}
 				{/if}
 			</div>
@@ -387,6 +397,7 @@
 					<label>
 						<span>Ticket code</span>
 						<select
+							disabled={checking || importing}
 							value={String(columns.code)}
 							on:change={(e) => setColumn('code', e.currentTarget.value)}
 						>
@@ -398,6 +409,7 @@
 					<label>
 						<span>E-mail</span>
 						<select
+							disabled={checking || importing}
 							value={String(columns.email)}
 							on:change={(e) => setColumn('email', e.currentTarget.value)}
 						>
@@ -410,6 +422,7 @@
 					<label>
 						<span>Name</span>
 						<select
+							disabled={checking || importing}
 							value={String(columns.name)}
 							on:change={(e) => setColumn('name', e.currentTarget.value)}
 						>

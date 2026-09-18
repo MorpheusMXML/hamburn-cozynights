@@ -13,7 +13,7 @@ Type a ticket code or a complete e-mail address and press <kbd>Enter</kbd>.
 | You type | You get |
 | --- | --- |
 | A ticket code, in any upper and lower case | That ticket |
-| A complete e-mail address | Every ticket with that address. Their codes are shown hidden (`HB-•••01`): an address must not reveal somebody's sign-in. |
+| A complete e-mail address | Every ticket with that address. Their codes are shown shortened (`HB-1001` as `H•••`): an address must not reveal somebody's sign-in. |
 
 Each ticket shows whether its code was used to sign in, its spot (a link to the room page), the burner name, and whether Telegram updates are on. Codes and addresses are sent in the request body, never in the page address, so they don't end up in logs or the browser history. The server only ever answers with shortened codes; the full code is shown only where you typed it.
 
@@ -27,7 +27,7 @@ Edit the address or the name right in the ticket and press <kbd>Save</kbd>. Chan
 
 ## A ticket passed on to someone else <Badge type="tip" text="all admins" />
 
-When a ticket was swapped or sold on, tick <kbd>🔁 Ticket passed on to someone else</kbd>, enter the new holder's address and name, and press <kbd>Save & hand over</kbd>. The ticket then forgets what belonged to the old holder:
+When a ticket was swapped or sold on, tick <kbd>🔁 Ticket passed on to someone else</kbd>, enter the new holder's address and name, and press <kbd>Save & hand over</kbd>. If the address stays the same, no e-mail goes out and later updates would reach the old holder, so the card reminds you to change it. The ticket then forgets what belonged to the old holder:
 
 | | After the hand-over |
 | --- | --- |
@@ -64,7 +64,7 @@ flowchart LR
 - **Empty cells keep what is stored,** so a list without names never wipes the names.
 - **Load the same list again any time,** for example after late ticket sales: the review only shows what changed.
 
-Every change goes to the audit log and the [crew group](./notifications#crew-group), with codes and addresses shortened (`HB-•••01`, `a•••@example.org`).
+Every change goes to the audit log and the [crew group](./notifications#crew-group), with codes and addresses shortened (`H•••`, `a•••@example.org`).
 
 ::: details On the server
 Operators can load the same CSV on the server with `cozy-admin.sh tickets import roster.csv` (`--dry-run` first). It checks the same rules, but refuses the whole file when one row is broken and has no per-row choice. See [Ticket codes](./event-checklist#ticket-codes).
