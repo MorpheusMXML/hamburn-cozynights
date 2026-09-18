@@ -1,4 +1,4 @@
-// tests/fake-pb.ts — a small in-memory stand-in for the PocketBase SDK, for
+// tests/memory-pb.ts — a small in-memory stand-in for the PocketBase SDK, for
 // unit tests of server code that reads and writes several collections. It
 // understands the filters this app writes (field = value, !=, ~, && and ||
 // with {:params}) — not PocketBase's full syntax. Real PocketBase behaviour
@@ -7,7 +7,7 @@ import { ClientResponseError } from 'pocketbase';
 
 type Row = Record<string, any>;
 
-export interface FakePb {
+export interface MemoryPb {
 	data: Record<string, Row[]>;
 	/** Every write, in order: "create beds", "update orders/abc", … */
 	log: string[];
@@ -29,7 +29,7 @@ function matches(row: Row, filter: string, params: Row): boolean {
 	return filter.split(' || ').some((part) =>
 		part.split(' && ').every((clause) => {
 			const match = /^\s*([\w.]+)\s*(!=|=|~)\s*(.+?)\s*$/.exec(clause);
-			if (!match) throw new Error(`fake-pb: unsupported filter clause "${clause}"`);
+			if (!match) throw new Error(`memory-pb: unsupported filter clause "${clause}"`);
 			const [, field, op, raw] = match;
 			let value: unknown;
 			if (raw.startsWith('{:')) value = params[raw.slice(2, -1)];
@@ -43,8 +43,8 @@ function matches(row: Row, filter: string, params: Row): boolean {
 	);
 }
 
-export function fakePb(seed: Record<string, Row[]> = {}): FakePb {
-	const state: FakePb = {
+export function memoryPb(seed: Record<string, Row[]> = {}): MemoryPb {
+	const state: MemoryPb = {
 		data: Object.fromEntries(
 			Object.entries(seed).map(([k, rows]) => [k, rows.map((r) => ({ ...r }))])
 		),

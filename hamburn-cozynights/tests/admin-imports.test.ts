@@ -1,10 +1,10 @@
 // tests/admin-imports.test.ts — the server side of the ticket page and of the
 // template review: finding and changing tickets, importing the ticket list,
 // applying chosen template changes, and who may do what. PocketBase is the
-// in-memory stand-in of tests/fake-pb.ts; the real database, its hooks and the
+// in-memory stand-in of tests/memory-pb.ts; the real database, its hooks and the
 // e-mails are covered by tests/integration/imports.test.ts.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { fakePb, type FakePb } from './fake-pb';
+import { memoryPb, type MemoryPb } from './memory-pb';
 import { encrypt } from '../src/lib/server/crypto';
 import {
 	TicketError,
@@ -36,8 +36,8 @@ const boss = {
 };
 
 /** A small camp: one house, one room with two spots, one of them booked by HB-1001. */
-function seed(): FakePb {
-	return fakePb({
+function seed(): MemoryPb {
+	return memoryPb({
 		houses: [{ id: 'h1', name: 'Neon Cave', x: 100, y: 200 }],
 		rooms: [{ id: 'r1', house: 'h1', name: 'Bunks', room_number: 1 }],
 		beds: [
@@ -84,7 +84,7 @@ function seed(): FakePb {
 	});
 }
 
-let db: FakePb;
+let db: MemoryPb;
 beforeEach(() => {
 	db = seed();
 });
