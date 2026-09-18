@@ -1,30 +1,34 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { page } from '$app/stores';
-	import { tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
+	import EffigyTitle from '$lib/components/EffigyTitle.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	export let data: PageData;
 	export let form: ActionData;
 
 	const neonColors = ['#f472b6', '#2dd4bf', '#fb923c', '#a855f7', '#fff'];
-
-	// Fixed per-letter values instead of Math.random(): the title is part of the
-	// server-rendered page and must not differ after hydration.
-	let letterIndex = 0;
-	const titleWords = ['HAMBURN', 'COZYNIGHTS'].map((word) =>
-		word.split('').map((char) => {
-			const i = letterIndex++;
-			return {
-				char,
-				color: neonColors[(i * 7 + 3) % neonColors.length],
-				delay: (i * 137) % 800,
-				offset: ((i * 53) % 40) - 20
-			};
-		})
-	);
 	let isHovering = false;
+
+	// The title's pause button stops the background video as well; visitors who
+	// prefer reduced motion don't get it playing in the first place.
+	let motionPaused = false;
+	let reducedMotion = false;
+	let video: HTMLVideoElement;
+
+	onMount(() => {
+		reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	});
+
+	$: syncVideo(video, motionPaused || reducedMotion);
+
+	function syncVideo(element: HTMLVideoElement | undefined, stop: boolean) {
+		if (!element) return;
+		if (stop) element.pause();
+		else element.play().catch(() => {});
+	}
 
 	// Keep in sync with the server-side check in +page.server.ts.
 	const TICKET_CODE_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -70,6 +74,7 @@
 
 <section class="hero">
 	<video
+		bind:this={video}
 		class="background-video"
 		autoplay
 		muted
@@ -90,19 +95,7 @@
 		</div>
 
 		<div class="title-container">
-			<div class="laser-scanner"></div>
-			<h1 class="burning-laser-title" aria-label="Hamburn CozyNights">
-				{#each titleWords as word}
-					<span class="word" aria-hidden="true">
-						{#each word as { char, color, delay, offset }}
-							<span
-								class="letter"
-								style="--color: {color}; --delay: {delay}ms; --offset: {offset}px">{char}</span
-							>
-						{/each}
-					</span>
-				{/each}
-			</h1>
+			<EffigyTitle bind:paused={motionPaused} />
 		</div>
 
 		<div class="login-module" in:fly={{ y: 30, delay: 900, duration: 600 }}>
@@ -281,99 +274,12 @@
 		opacity: 0.8;
 	}
 
+	/* The effigy's flames and smoke rise above this box (the canvas reaches
+	   beyond it); the space below holds the pause button. */
 	.title-container {
 		position: relative;
-		margin-bottom: clamp(2rem, 8vh, 5rem);
-		padding: clamp(1rem, 4vw, 2rem);
-		max-width: 100%;
-	}
-
-	.burning-laser-title {
-		font-size: clamp(2rem, 10.5vw, 5rem);
-		font-weight: 950;
-		line-height: 1.15;
-		color: #fff;
-		font-family: 'JetBrains Mono', monospace;
-		letter-spacing: -0.05em;
-		margin: 0;
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: center;
-		column-gap: 0.6em;
-	}
-
-	/* The title only breaks between the two words, never inside one. */
-	.word {
-		display: inline-flex;
-		white-space: nowrap;
-	}
-
-	.letter {
-		display: inline-block;
-		opacity: 0;
-		transform: translateY(var(--offset)) scale(1.5);
-		filter: blur(10px);
-		animation: letter-ignite 0.6s cubic-bezier(0.215, 0.61, 0.355, 1) forwards;
-		animation-delay: var(--delay);
-		color: var(--color);
-		text-shadow: 0 0 20px var(--color);
-	}
-
-	@keyframes letter-ignite {
-		0% {
-			opacity: 0;
-			transform: translateY(var(--offset)) scale(2);
-			filter: blur(20px);
-		}
-		70% {
-			opacity: 1;
-			transform: translateY(-5px) scale(0.9);
-			filter: blur(0);
-		}
-		100% {
-			opacity: 1;
-			transform: translateY(0) scale(1);
-			filter: blur(0);
-			color: #fff;
-			text-shadow:
-				0 0 10px rgba(255, 255, 255, 0.8),
-				0 0 30px var(--color);
-		}
-	}
-
-	.laser-scanner {
-		position: absolute;
-		top: 0;
-		left: 0;
 		width: 100%;
-		height: 100%;
-		border-top: 2px solid #2dd4bf;
-		border-bottom: 2px solid #f472b6;
-		background: rgba(45, 212, 191, 0.05);
-		opacity: 0;
-		animation: scan-pulse 2s ease-in-out forwards;
-		animation-delay: 1.2s;
-		z-index: -1;
-		transform: scaleX(0);
-	}
-
-	@keyframes scan-pulse {
-		0% {
-			transform: scaleX(0);
-			opacity: 0;
-		}
-		20% {
-			transform: scaleX(1);
-			opacity: 1;
-		}
-		80% {
-			transform: scaleX(1);
-			opacity: 0.5;
-		}
-		100% {
-			transform: scaleX(1.1);
-			opacity: 0;
-		}
+		margin: clamp(0.5rem, 4vw, 2.5rem) 0 clamp(3.75rem, 9vh, 5.5rem);
 	}
 
 	.login-module {

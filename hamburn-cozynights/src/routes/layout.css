@@ -76,3 +76,11 @@
 		opacity: 0;
 	}
 }
+
+/* The pause button of the landing page title (EffigyTitle) also stops the
+   decorative CSS animations while it is pressed (WCAG 2.2.2). */
+:root[data-motion='paused'] *,
+:root[data-motion='paused'] *::before,
+:root[data-motion='paused'] *::after {
+	animation-play-state: paused !important;
+}
