@@ -96,12 +96,8 @@ in the server's .env (`$lib/server/legal`); this file only holds the wording.
 
 	<h3>Booking a bed</h3>
 	<p>
-		Picking a bed follows the <a href="/booking-rules">booking rules</a>
-		{#if legal.termsUrl}
-			and the <a href={legal.termsUrl} rel="noopener">terms of your membership</a>.
-		{:else}
-			and the terms you accepted when you bought your membership.
-		{/if}
+		Picking a bed follows the <a href="/booking-rules">booking rules</a>{#if legal.termsUrl}
+			and the <a href={legal.termsUrl} rel="noopener">membership terms</a>{/if}.
 	</p>
 
 	<h3>Copyright</h3>

@@ -40,6 +40,16 @@ describe('legal page settings (LEGAL_* in .env)', () => {
 		expect(parseLegalEnv({ LEGAL_TERMS_URL: 'example.org/tb' }).termsUrl).toBe('');
 	});
 
+	it('reads the code of conduct link the same way', () => {
+		expect(parseLegalEnv({}).codeOfConductUrl).toBe('');
+		expect(
+			parseLegalEnv({ LEGAL_CODE_OF_CONDUCT_URL: 'https://example.org/coc' }).codeOfConductUrl
+		).toBe('https://example.org/coc');
+		expect(
+			parseLegalEnv({ LEGAL_CODE_OF_CONDUCT_URL: 'ftp://example.org/coc' }).codeOfConductUrl
+		).toBe('');
+	});
+
 	it('falls back to 14 days for an invalid log retention', () => {
 		expect(parseLegalEnv({ LEGAL_LOG_RETENTION_DAYS: '7' }).logRetentionDays).toBe(7);
 		expect(parseLegalEnv({ LEGAL_LOG_RETENTION_DAYS: 'zwei' }).logRetentionDays).toBe(14);

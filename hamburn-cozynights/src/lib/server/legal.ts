@@ -30,8 +30,10 @@ export interface LegalInfo {
 	logRetentionDays: number;
 	/** When bookings, burner names and the ticket list are deleted. */
 	deletionPeriod: string;
-	/** The event's participation terms (published with the ticket shop), if any. */
+	/** The membership terms (published with the ticket shop), if there are any. */
 	termsUrl: string;
+	/** The event's code of conduct, if it has one online. */
+	codeOfConductUrl: string;
 	/** Required variables that are not set yet. */
 	missing: string[];
 }
@@ -71,6 +73,7 @@ export function parseLegalEnv(source: Record<string, string | undefined>): Legal
 		logRetentionDays: days > 0 ? days : DEFAULT_LOG_RETENTION_DAYS,
 		deletionPeriod: get('LEGAL_DELETION_PERIOD') || DEFAULT_DELETION_PERIOD,
 		termsUrl: webUrl(get('LEGAL_TERMS_URL')),
+		codeOfConductUrl: webUrl(get('LEGAL_CODE_OF_CONDUCT_URL')),
 		missing: REQUIRED_LEGAL_VARS.filter((key) => !get(key))
 	};
 }

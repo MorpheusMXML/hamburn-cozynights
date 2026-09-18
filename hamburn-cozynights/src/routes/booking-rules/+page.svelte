@@ -25,13 +25,14 @@ decided.
 <LegalDocument title="Booking rules" updated={UPDATED} {missing}>
 	<p class="lead">
 		CozyNights is where holders of an Indoor membership for Hamburn pick their bed. These rules
-		apply to picking a bed; the
+		apply to picking a bed.
 		{#if legal.termsUrl}
-			<a href={legal.termsUrl} rel="noopener">terms of your membership</a>
-		{:else}
-			terms you accepted when you bought your membership
+			The <a href={legal.termsUrl} rel="noopener">membership terms</a> apply as well.
 		{/if}
-		apply as well.
+		{#if legal.codeOfConductUrl}
+			In the houses, as everywhere at Hamburn, the
+			<a href={legal.codeOfConductUrl} rel="noopener">Code of Conduct</a> applies.
+		{/if}
 	</p>
 
 	<h2>Who can book</h2>
@@ -74,8 +75,8 @@ decided.
 			for people without an Indoor membership. In case of abuse the crew may cancel bookings.
 		</li>
 		<li>
-			If you pass on your Indoor membership as its terms allow, the bed goes with the ticket code.
-			Let us know, so we can update the email address.
+			The bed belongs to the ticket code: whoever holds the code holds the bed. If a membership
+			changes hands, let us know, so we can update the email address.
 		</li>
 	</ul>
 
@@ -84,7 +85,7 @@ decided.
 		<li>Follow the crew's instructions and the house rules of the venue.</li>
 		<li>
 			<strong>Consent:</strong> only enter other people's sleeping areas with the consent of the people
-			sleeping there.
+			sleeping there. Only a clear yes means yes.
 		</li>
 		<li><strong>Leave No Trace:</strong> leave your bed the way you found it.</li>
 		<li>

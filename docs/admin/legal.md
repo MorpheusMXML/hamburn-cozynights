@@ -30,22 +30,23 @@ Left out on purpose:
 
 The details are `LEGAL_*` variables in the environment's `.env`, next to the other settings. `deploy/staging.env.template` has the block with comments. Write the values in English, like the pages. Put values with spaces or special characters in 'single quotes'; multi-line values separate their lines with `|`.
 
-| Variable                      | Needed          | What goes in                                                                                                 |
-| :---------------------------- | :-------------- | :----------------------------------------------------------------------------------------------------------- |
-| `LEGAL_NAME`                  | **yes**         | The provider incl. legal form, e.g. `'Musterverein e.V.'`                                                    |
-| `LEGAL_ADDRESS`               | **yes**         | A street address where letters can be served, no P.O. box, e.g. `'Musterstraße 1\|20095 Hamburg\|Germany'`   |
-| `LEGAL_EMAIL`                 | **yes**         | General contact address                                                                                      |
-| `LEGAL_HOSTER`                | **yes**         | The hosting company, e.g. `'Hetzner Online GmbH\|Industriestr. 25\|91710 Gunzenhausen\|Germany'`             |
-| `LEGAL_PHONE`                 | recommended     | A second fast way to reach you                                                                               |
-| `LEGAL_REPRESENTATIVE`        | associations    | The board members who represent it (§ 26 BGB), e.g. `'the board: Erika Muster (chair)'`                      |
-| `LEGAL_REGISTER`              | if registered   | e.g. `'Register of associations: Amtsgericht Hamburg, VR 12345'`                                             |
-| `LEGAL_VAT_ID`                | if you have one | VAT identification number (USt-IdNr.); a tax number (Steuernummer) is not needed                             |
-| `LEGAL_CONTENT_RESPONSIBLE`   | rarely          | Only for journalistic-editorial content (§ 18 Abs. 2 MStV): `'Name\|Address'`                                |
-| `LEGAL_PRIVACY_EMAIL`         | optional        | A separate address for privacy requests; otherwise `LEGAL_EMAIL`                                             |
-| `LEGAL_SUPERVISORY_AUTHORITY` | optional        | The data protection authority of the provider's state                                                        |
-| `LEGAL_LOG_RETENTION_DAYS`    | optional        | How long nginx keeps access logs; default `14`                                                               |
-| `LEGAL_DELETION_PERIOD`       | optional        | When bookings and the ticket list are deleted; default _at the latest four weeks after the end of the event_ |
-| `LEGAL_TERMS_URL`             | once published  | Link to the membership terms at the ticket shop; `https://` only                                             |
+| Variable                      | Needed          | What goes in                                                                                                   |
+| :---------------------------- | :-------------- | :------------------------------------------------------------------------------------------------------------- |
+| `LEGAL_NAME`                  | **yes**         | The provider incl. legal form, e.g. `'Musterverein e.V.'`                                                      |
+| `LEGAL_ADDRESS`               | **yes**         | A street address where letters can be served, no P.O. box, e.g. `'Musterstraße 1\|20095 Hamburg\|Germany'`     |
+| `LEGAL_EMAIL`                 | **yes**         | General contact address                                                                                        |
+| `LEGAL_HOSTER`                | **yes**         | The hosting company, e.g. `'Hetzner Online GmbH\|Industriestr. 25\|91710 Gunzenhausen\|Germany'`               |
+| `LEGAL_PHONE`                 | recommended     | A second fast way to reach you                                                                                 |
+| `LEGAL_REPRESENTATIVE`        | associations    | The board members who represent it (§ 26 BGB), e.g. `'the board: Erika Muster (chair)'`                        |
+| `LEGAL_REGISTER`              | if registered   | e.g. `'Register of associations: Amtsgericht Hamburg, VR 12345'`                                               |
+| `LEGAL_VAT_ID`                | if you have one | VAT identification number (USt-IdNr.); a tax number (Steuernummer) is not needed                               |
+| `LEGAL_CONTENT_RESPONSIBLE`   | rarely          | Only for journalistic-editorial content (§ 18 Abs. 2 MStV): `'Name\|Address'`                                  |
+| `LEGAL_PRIVACY_EMAIL`         | optional        | A separate address for privacy requests; otherwise `LEGAL_EMAIL`                                               |
+| `LEGAL_SUPERVISORY_AUTHORITY` | optional        | The data protection authority of the provider's state                                                          |
+| `LEGAL_LOG_RETENTION_DAYS`    | optional        | How long nginx keeps access logs; default `14`                                                                 |
+| `LEGAL_DELETION_PERIOD`       | optional        | When bookings and the ticket list are deleted; default _at the latest four weeks after the end of the event_   |
+| `LEGAL_TERMS_URL`             | once published  | Link to the membership terms at the ticket shop; `https://` only                                               |
+| `LEGAL_CODE_OF_CONDUCT_URL`   | recommended     | Link to the event's code of conduct (Hamburn: `https://hamburn.de/code-of-conduct`); the booking rules link it |
 
 While a required value is missing, the pages show a red note for the operators and the app log names the missing variables on the first visit.
 
@@ -61,7 +62,7 @@ COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME docker compose -f docker-compose.stag
 
 Hamburn is sold as memberships in the ticket shop. **Only Indoor memberships include a bed**; Camper memberships (camper or tent) don't. So only Indoor memberships go into the ticket list, and the booking rules say so.
 
-The bed is part of the membership, so the booking rules are rules of use, not a contract of their own. The contract is the purchase in the ticket shop: the **membership terms** belong there, where buyers accept them before paying. Once they are published, set `LEGAL_TERMS_URL`; the booking rules and the legal notice then link them.
+The bed is part of the membership, so the booking rules are rules of use, not a contract of their own. The contract is the purchase in the ticket shop: **membership terms** belong there, where buyers accept them before paying. As of September 2026 none are published, so the app doesn't mention them; once they are, set `LEGAL_TERMS_URL` and the booking rules and the legal notice link them. The Hamburn Code of Conduct already exists: set `LEGAL_CODE_OF_CONDUCT_URL`, and the booking rules point to it instead of repeating it.
 
 The ticket list holds the ticket codes and the buyers' e-mail addresses, so the crew can reach guests about their bed. Importing them is described in the [event checklist](./event-checklist#ticket-codes).
 
