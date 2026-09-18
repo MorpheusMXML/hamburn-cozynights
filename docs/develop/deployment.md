@@ -51,17 +51,22 @@ gh run watch
 
 ```mermaid
 flowchart TD
-  run(["▶ Run workflow on a branch"]) --> verify["CI: npm ci · npm test · docker build"]
+  run(["▶ Run workflow on a branch"]) --> verify["🧪 verify — the same checks as every pull request:<br/>type check · unit tests<br/>integration tests against an empty PocketBase<br/>smoke tests against the staging Docker image"]
   verify -- fails --> stop1["❌ Server untouched"]
   verify --> approve{"Reviewer<br/>approval"}
-  approve --> server["🖥️ On the server, via a key that can only start the deploy script:<br/>check out the commit · build the image · back up PocketBase · restart"]
+  approve --> server["🖥️ deploy — on the server, via a key that can only start the deploy script:<br/>check out the commit · build the image · back up PocketBase · restart"]
   server --> health{"Health check<br/>within 60 s"}
-  health -- ok --> done["✅ Deployed"]
   health -- fails --> rollback["↩ Previous commit restarted,<br/>job turns red"]
+  health -- ok --> smoke["🔎 smoke — read-only checks against<br/>test-cozynights.hamburn.de from the outside"]
+  smoke -- ok --> done["✅ Deployed"]
+  smoke -- fails --> red["❌ Run turns red; the new version stays up,<br/>look at the site"]
 ```
 
 The old containers keep serving while the new image builds.
 
+- **`verify`** reuses [`.github/workflows/ci.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/ci.yml), the workflow behind the `Verify` check on every pull request, for exactly the commit being deployed. What it runs is described in [Testing & release checks](./testing).
+- **`deploy`** waits for approval in the `staging` GitHub environment, then runs the deploy script on the server.
+- **`smoke`** runs `npm run smoke:remote` against the live site: pages are served, a ticket lookup reaches the database, the admin login page offers Google sign-in, the admin area is closed. Read-only, no credentials.
 - The script **refuses to deploy** and changes nothing if the server checkout has local changes, the build fails, or the backup can't be written.
 - The **PocketBase version** comes from the compose file of the deployed commit. It is pinned and never updated implicitly.
 - The one-time server setup, restoring a data backup, and maintenance are in the operator runbook [`hamburn-cozynights/deploy/README.md`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md) (German).
@@ -74,7 +79,7 @@ Check that all migrations went through:
 docker compose -f docker-compose.staging.yml logs pocketbase | grep -iE 'failed to (apply|execute)' || echo ok
 ```
 
-Then sign in to `/admin` once and open the camp map with a test ticket code.
+The `smoke` job has already confirmed that pages are served and the app reaches its database. Then sign in to `/admin` once and open the camp map with a test ticket code.
 
 ## Backups and where data lives
 

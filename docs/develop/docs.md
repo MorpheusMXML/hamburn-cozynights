@@ -67,7 +67,7 @@ docs/
 ├── guide/                    for everyone: overview, booking, phases, FAQ
 ├── admin/                    admins only: Control Center, access, layout, templates, checklist
 ├── reference/                admins only: architecture, data model, security
-├── develop/                  admins only: local setup, deployment, this page
+├── develop/                  admins only: local setup, testing, deployment, this page
 ├── assets/screenshots/       app screenshots (WebP)
 ├── public/                   logo, favicons, social preview image
 └── .vitepress/

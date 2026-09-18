@@ -93,6 +93,7 @@ const sections: Section[] = [
 				text: 'Develop',
 				items: [
 					{ text: 'Local development', link: '/develop/' },
+					{ text: 'Testing & release checks', link: '/develop/testing' },
 					{ text: 'Environments & deployment', link: '/develop/deployment' },
 					{ text: 'Working on these docs', link: '/develop/docs' }
 				]

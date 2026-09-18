@@ -8,7 +8,8 @@ bleiben erhalten, vor jedem Deploy wird automatisch ein Backup gezogen.
 
 ```text
 GitHub Actions „Deploy staging“ → Run workflow (Branch wählen)
-  1. verify: npm ci, npm test, docker build  (scheitert hier, nicht auf dem Server)
+  1. verify: Typprüfung, Unit-, Integrations- und Smoke-Tests (npm run verify,
+     dieselbe Prüfung wie bei jedem Pull Request) – scheitert hier, nicht auf dem Server
   2. deploy: SSH als `deploy` → Forced Command /usr/local/bin/deploy-cozynights-staging
      a) Commit-SHA auschecken (nur die SHA wird aus dem SSH-Befehl gelesen)
      b) App-Image bauen — alte Container laufen weiter
@@ -16,6 +17,8 @@ GitHub Actions „Deploy staging“ → Run workflow (Branch wählen)
      d) docker compose up -d --remove-orphans
      e) Health-Check auf http://127.0.0.1:3001/ (max. 60 s)
         → fehlgeschlagen: vorherigen Commit wieder bauen und starten, Job rot
+  3. smoke: npm run smoke:remote gegen https://test-cozynights.hamburn.de
+     (nur lesend: Seiten, Ticket-Abfrage, Admin-Login-Seite, Admin-Bereich zu)
 ```
 
 Das Skript bricht **ohne Änderung** ab, wenn der Checkout lokale Änderungen
