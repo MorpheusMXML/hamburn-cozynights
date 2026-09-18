@@ -15,7 +15,7 @@ GitHub Actions „Deploy staging“ → Run workflow (Branch wählen)
      b) App-Image bauen — alte Container laufen weiter
      c) PocketBase kurz stoppen, Volume nach /var/backups/cozynights-staging sichern
      d) docker compose up -d --remove-orphans
-     e) Health-Check auf http://127.0.0.1:3001/ (max. 60 s)
+     e) Health-Check auf http://127.0.0.1:3001/api/health (max. 60 s; 200 nur, wenn die App bei PocketBase angemeldet ist)
         → fehlgeschlagen: vorherigen Commit wieder bauen und starten, Job rot
   3. smoke: npm run smoke:remote gegen https://test-cozynights.hamburn.de
      (nur lesend: Seiten, Ticket-Abfrage, Admin-Login-Seite, Admin-Bereich zu)
@@ -83,7 +83,7 @@ rm /tmp/deploy-staging.sh
 
 Optionale Werte in `deploy-staging.conf` (Defaults in Klammern):
 `BACKUP_DIR` (`/var/backups/cozynights-staging`), `BACKUP_KEEP` (`10`),
-`HEALTH_URL` (`http://127.0.0.1:3001/`), `PB_CONTAINER`
+`HEALTH_URL` (`http://127.0.0.1:3001/api/health`), `PB_CONTAINER`
 (`cozynights-staging-pocketbase`), `COMPOSE_FILE` (`docker-compose.staging.yml`).
 
 ### 2. Probelauf auf dem Server

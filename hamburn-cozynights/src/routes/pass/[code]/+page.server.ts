@@ -6,12 +6,8 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { formatPassCode, normalizePassInput } from '$lib/pass';
-import { findPass, passQrSvg, passUrl } from '$lib/server/pass';
+import { findPass, passQrSvg, passUrl, unknownPassCodes } from '$lib/server/pass';
 import { maskEmail } from '$lib/server/notifications';
-import { FailureRateLimiter } from '$lib/server/rate-limit';
-
-// Codes can't be guessed (31^12), but nobody needs to try thousands either.
-const unknownCodes = new FailureRateLimiter(30, 10 * 60 * 1000);
 
 export const load: PageServerLoad = async ({
 	params,
@@ -37,7 +33,7 @@ export const load: PageServerLoad = async ({
 	} catch {
 		/* no address header (e.g. a direct local request) */
 	}
-	if (!locals.admin && unknownCodes.isBlocked(client)) {
+	if (!locals.admin && unknownPassCodes.isBlocked(client)) {
 		throw error(429, 'Too many unknown passes from your connection. Please wait a few minutes.');
 	}
 
@@ -52,7 +48,7 @@ export const load: PageServerLoad = async ({
 		);
 	}
 	if (!pass) {
-		unknownCodes.recordFailure(client);
+		unknownPassCodes.recordFailure(client);
 		throw error(404, 'This booking pass is unknown. Check the code, or ask the crew.');
 	}
 

@@ -105,6 +105,43 @@ describe('any deployment (read-only)', () => {
 		expect((await post('/admin?/renameHouse', {}, cookie)).status).toBe(403);
 	});
 
+	it('sends the security headers on every page', async () => {
+		for (const path of ['/', '/legal-notice', '/admin/login']) {
+			const res = await get(path);
+			expect(res.headers.get('x-content-type-options'), path).toBe('nosniff');
+			expect(res.headers.get('x-frame-options'), path).toBe('DENY');
+			expect(res.headers.get('content-security-policy'), path).toContain("frame-ancestors 'none'");
+			expect(res.headers.get('referrer-policy'), path).toBe('strict-origin-when-cross-origin');
+		}
+		// Only the TLS terminator sends HSTS, so it is checked on real sites only.
+		if (BASE.startsWith('https://')) {
+			const res = await get('/');
+			expect(res.headers.get('strict-transport-security') || '').toContain('max-age=');
+		}
+	});
+
+	it('reports readiness only with a working service account', async () => {
+		const res = await get('/api/health');
+		expect(res.status, 'app → PocketBase → service account').toBe(200);
+		expect(await res.json()).toEqual({ status: 'ok' });
+		expect(res.headers.get('cache-control')).toContain('no-store');
+	});
+
+	it('does not expose PocketBase on the public host', async () => {
+		// The browser never talks to PocketBase; its API and dashboard must not
+		// be reachable through the site (they would answer with JSON / the UI).
+		for (const path of [
+			'/_/',
+			'/api/collections',
+			'/api/collections/orders/records',
+			'/pb/api/health'
+		]) {
+			const res = await get(path);
+			expect(res.status, path).toBe(404);
+			expect(res.headers.get('content-type') || '', path).not.toContain('application/json');
+		}
+	});
+
 	it('answers unknown booking passes with 404 and keeps the pass check for admins', async () => {
 		const unknown = await get('/pass/AAAA-BBBB-CCCC');
 		expect(unknown.status).toBe(404);

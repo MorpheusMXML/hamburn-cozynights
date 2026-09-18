@@ -1,4 +1,5 @@
 import encodeQR from 'qr';
+import { FailureRateLimiter } from '$lib/server/rate-limit';
 import type { ClientResponseError } from 'pocketbase';
 import type {
 	BedsResponse,
@@ -121,3 +122,9 @@ export function passQrSvg(url: string): string {
 export function passQrGif(url: string): Uint8Array<ArrayBuffer> {
 	return encodeQR(url, 'gif', { ecc: 'medium', border: 4, scale: 8 });
 }
+
+/**
+ * Unknown pass codes per client, shared by the pass page and its QR image:
+ * codes can't be guessed (31^12), but nobody needs to try thousands either.
+ */
+export const unknownPassCodes = new FailureRateLimiter(30, 10 * 60 * 1000);
