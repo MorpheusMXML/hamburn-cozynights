@@ -30,7 +30,7 @@ timeline
 - [ ] **Ticket codes created.** Test codes for a trial run with testers, the real roster for the event. An operator does this on the server, see [Ticket codes](#ticket-codes).
 - [ ] **Test run.** Sign in with a real test ticket code in a private browser window. The map shows the countdown, rooms show the right spots.
 - [ ] **Test bookings removed.** If you booked in staging, release those spots again.
-- [ ] **Legal pages complete.** The Impressum and the privacy policy show no red note. See [Legal pages](./legal).
+- [ ] **Legal pages complete.** The legal notice, the privacy policy and the booking rules show no red note. See [Legal pages](./legal).
 - [ ] **Go-live scheduled.** Set the timer in the Control Center (Europe/Berlin time) and announce the same time to guests.
 
 > [!TIP] Announce the ticket code, not a password
@@ -74,6 +74,8 @@ This creates ten tickets with random codes like `UT-7F3K9Q` and prints them one 
 ./scripts/cozy-admin.sh tickets add HB-1001 HB-1002 --name "Early bird"  # a few known codes
 xargs ./scripts/cozy-admin.sh tickets add < codes.txt                     # a whole list, one code per line
 ```
+
+**Only Indoor memberships.** Load the codes of Indoor memberships only: they include a bed, Camper memberships don't.
 
 **With e-mail addresses.** To reach guests about their spot, for example when the crew has to move them, store each ticket's e-mail address as its label. From a file with one `code,email` pair per line and no header row (about a second per ticket):
 

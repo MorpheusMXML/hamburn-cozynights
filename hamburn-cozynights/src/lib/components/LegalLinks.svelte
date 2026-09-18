@@ -1,17 +1,16 @@
 <!--
 @component
-Links to the legal notice (Impressum), the privacy policy
-(Datenschutzerklärung) and the booking rules (Buchungsregeln). German law wants
-the first two clearly labelled and reachable
-from every page; the root layout shows them in the footer, full-screen pages
-place them themselves.
+Links to the legal notice (Impressum), the privacy policy and the booking
+rules. German law wants the first two clearly labelled and reachable from
+every page; the root layout shows them in the footer, full-screen pages place
+them themselves.
 -->
 <nav class="legal-links" aria-label="Legal">
-	<a href="/impressum" lang="de">Impressum</a>
+	<a href="/legal-notice">Legal notice</a>
 	<span aria-hidden="true">·</span>
-	<a href="/datenschutz" lang="de">Datenschutz</a>
+	<a href="/privacy">Privacy</a>
 	<span aria-hidden="true">·</span>
-	<a href="/buchungsregeln" lang="de">Buchungsregeln</a>
+	<a href="/booking-rules">Booking rules</a>
 </nav>
 
 <style>

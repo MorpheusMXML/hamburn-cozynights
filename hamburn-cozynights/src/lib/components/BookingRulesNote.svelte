@@ -1,14 +1,10 @@
 <!--
 @component
-One line under a booking button: the booking rules (German, /buchungsregeln)
-apply. Opens in a new tab, so an open booking dialog stays as it is.
+One line under a booking button: the booking rules (/booking-rules) apply.
+Opens in a new tab, so an open booking dialog stays as it is.
 -->
 <p class="booking-rules">
-	The
-	<a href="/buchungsregeln" lang="de" target="_blank" rel="noopener"
-		>booking rules (Buchungsregeln)</a
-	>
-	apply.
+	The <a href="/booking-rules" target="_blank" rel="noopener">booking rules</a> apply.
 </p>
 
 <style>

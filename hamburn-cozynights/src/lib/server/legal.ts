@@ -1,5 +1,5 @@
 /**
- * Operator details for the legal pages (/impressum, /datenschutz, /buchungsregeln).
+ * Operator details for the legal pages (/legal-notice, /privacy, /booking-rules).
  *
  * They come from LEGAL_* variables in the server's .env, not from the
  * repository: the repository is public, and a postal address doesn't belong
@@ -39,7 +39,7 @@ export interface LegalInfo {
 export const REQUIRED_LEGAL_VARS = ['LEGAL_NAME', 'LEGAL_ADDRESS', 'LEGAL_EMAIL', 'LEGAL_HOSTER'];
 
 const DEFAULT_LOG_RETENTION_DAYS = 14;
-const DEFAULT_DELETION_PERIOD = 'spätestens vier Wochen nach dem Ende der Veranstaltung';
+const DEFAULT_DELETION_PERIOD = 'at the latest four weeks after the end of the event';
 
 /** Only plain web links; anything else (e.g. `javascript:`) is dropped. */
 function webUrl(value: string): string {

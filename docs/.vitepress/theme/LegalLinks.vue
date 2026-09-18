@@ -15,11 +15,11 @@ const { theme } = useData<CozyThemeConfig>();
 
 <template>
 	<nav v-if="theme.legal" class="legal-links" aria-label="Legal">
-		<a :href="theme.legal.impressum" target="_self" lang="de">Impressum</a>
+		<a :href="theme.legal.notice" target="_self">Legal notice</a>
 		<span aria-hidden="true">·</span>
-		<a :href="theme.legal.privacy" target="_self" lang="de">Datenschutz</a>
+		<a :href="theme.legal.privacy" target="_self">Privacy</a>
 		<span aria-hidden="true">·</span>
-		<a :href="theme.legal.rules" target="_self" lang="de">Buchungsregeln</a>
+		<a :href="theme.legal.rules" target="_self">Booking rules</a>
 	</nav>
 </template>
 

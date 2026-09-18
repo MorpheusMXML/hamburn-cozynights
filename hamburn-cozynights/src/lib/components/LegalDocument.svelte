@@ -1,33 +1,32 @@
 <!--
 @component
-Frame of the legal pages (/impressum, /datenschutz): a readable German text
-column on the app's dark background. The texts live in the routes; operator
-details come from the server's .env (see `$lib/server/legal`).
+Frame of the legal pages (/legal-notice, /privacy, /booking-rules): a readable
+text column on the app's dark background. The texts live in the routes;
+operator details come from the server's .env (see `$lib/server/legal`).
 
-These pages are German on purpose, unlike the rest of the app: they are
-written for German law. `translate="yes"` lets visitors have them
-translated, which the rest of the app blocks.
+Like the whole app they are in English. `translate="yes"` lets visitors have
+them translated (for example into German), which the rest of the app blocks.
 -->
 <script lang="ts">
 	export let title: string;
-	/** Date of the current version ("Stand"). */
+	/** Date of the current version. */
 	export let updated = '';
 	/** Required LEGAL_* variables still missing on this server. */
 	export let missing: string[] = [];
 </script>
 
-<main class="legal" lang="de" translate="yes">
-	<a class="back" href="/">← Zur Startseite</a>
+<main class="legal" lang="en" translate="yes">
+	<a class="back" href="/">← Back to CozyNights</a>
 	<article>
 		<h1>{title}</h1>
 		{#if updated}
-			<p class="updated">Stand: {updated}</p>
+			<p class="updated">Last updated: {updated}</p>
 		{/if}
 		{#if missing.length}
 			<p class="config-warning" role="note">
-				<strong>Hinweis für die Betreiber:</strong> Auf diesem Server fehlen noch Angaben ({missing.join(
+				<strong>Note for the operators:</strong> details are missing on this server ({missing.join(
 					', '
-				)}). Sie gehören in die .env des Servers, siehe die Admin-Doku „Legal pages“.
+				)}). They belong in the server's .env, see "Legal pages" in the admin docs.
 			</p>
 		{/if}
 		<slot />

@@ -7,7 +7,7 @@ describe('legal page settings (LEGAL_* in .env)', () => {
 		expect(info.missing).toEqual(REQUIRED_LEGAL_VARS);
 		expect(info.address).toEqual([]);
 		expect(info.logRetentionDays).toBe(14);
-		expect(info.deletionPeriod).toMatch(/vier Wochen/);
+		expect(info.deletionPeriod).toMatch(/four weeks/);
 	});
 
 	it('splits multi-line values at "|" and trims them', () => {

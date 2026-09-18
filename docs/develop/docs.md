@@ -112,9 +112,9 @@ The repository's Pages source has to be set to **GitHub Actions** (Settings → 
 
 ## Legal links
 
-Every page links the app's Impressum, privacy policy and booking rules: the home page in its footer, doc pages under their content (`.vitepress/theme/LegalLinks.vue`, because VitePress shows its footer only on pages without a sidebar). The pages themselves belong to the app, see [Legal pages](../admin/legal).
+Every page links the app's legal notice, privacy policy and booking rules: the home page in its footer, doc pages under their content (`.vitepress/theme/LegalLinks.vue`, because VitePress shows its footer only on pages without a sidebar). The pages themselves belong to the app, see [Legal pages](../admin/legal).
 
-- **Served by the app** (`/docs/`, `/admin/docs/`), the links point to `/impressum` and `/datenschutz` on the same domain.
+- **Served by the app** (`/docs/`, `/admin/docs/`), the links point to `/legal-notice`, `/privacy` and `/booking-rules` on the same domain.
 - **On GitHub Pages** they need the app's address. The Pages build reads it from the repository variable `DOCS_APP_URL`; without it they point to staging. Once production has its domain:
 
   ```bash

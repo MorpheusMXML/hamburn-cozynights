@@ -3,7 +3,7 @@
 ## For guests
 
 ::: details "This booking code was not found."
-Check the code for typos: it's on your ticket and contains only letters, digits, `-` and `_`. Copy and paste works best. Still not working? Contact the Hamburn crew; your ticket may not be in the ticket list yet.
+Check the code for typos: it's on your ticket and contains only letters, digits, `-` and `_`. Copy and paste works best. Only **Indoor memberships** include a bed, so only their codes work here; Camper memberships don't need CozyNights. Still not working? Contact the Hamburn crew; your ticket may not be in the ticket list yet.
 :::
 
 ::: details "Invalid booking code format."
@@ -47,7 +47,7 @@ Press the pause button ⏸ next to the title; your browser remembers it. If your
 :::
 
 ::: details Who runs CozyNights, and what happens with my data?
-Every page of CozyNights links the **Impressum** (who runs it and how to reach them) and the **Datenschutzerklärung** (privacy policy) at the bottom. In short: your ticket code, your spot and the burner name you choose; no tracking, no ads, no cookie banner needed.
+Every page of CozyNights links the **legal notice** (who runs it and how to reach them), the **privacy policy** and the **booking rules** at the bottom. In short: your ticket code, the e-mail address of your order, your spot and the burner name you choose; no tracking, no ads, no cookie banner needed.
 :::
 
 <!-- audience:admin -->

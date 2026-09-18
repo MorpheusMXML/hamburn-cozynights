@@ -203,7 +203,7 @@
 
 			<p class="privacy-note">
 				Signing in keeps your ticket code in a cookie on this device. No tracking.
-				<a href="/datenschutz" lang="de">Datenschutzerklärung</a>
+				<a href="/privacy">Privacy policy</a>
 			</p>
 		</div>
 	</div>

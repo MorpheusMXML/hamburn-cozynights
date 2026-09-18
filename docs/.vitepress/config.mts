@@ -29,14 +29,14 @@ const appUrl = (process.env.DOCS_APP_URL || (base === pagesBase ? stagingAppUrl 
 	''
 );
 const legal = {
-	impressum: `${appUrl}/impressum`,
-	privacy: `${appUrl}/datenschutz`,
-	rules: `${appUrl}/buchungsregeln`
+	notice: `${appUrl}/legal-notice`,
+	privacy: `${appUrl}/privacy`,
+	rules: `${appUrl}/booking-rules`
 };
 
 /** Theme settings of this site on top of VitePress' default theme (see theme/LegalLinks.vue). */
 export interface CozyThemeConfig extends DefaultTheme.Config {
-	legal: { impressum: string; privacy: string; rules: string };
+	legal: { notice: string; privacy: string; rules: string };
 }
 
 // "Last updated" comes from git, which the Docker build has neither as a
@@ -173,7 +173,7 @@ export default defineConfigWithTheme<CozyThemeConfig>({
 
 		footer: {
 			// Only shown on pages without a sidebar; doc pages get theme/LegalLinks.vue.
-			message: `Made with 🔥 for Hamburn by the Mauersegler* crew. · <a href="${legal.impressum}" target="_self" lang="de">Impressum</a> · <a href="${legal.privacy}" target="_self" lang="de">Datenschutz</a> · <a href="${legal.rules}" target="_self" lang="de">Buchungsregeln</a>`,
+			message: `Made with 🔥 for Hamburn by the Mauersegler* crew. · <a href="${legal.notice}" target="_self">Legal notice</a> · <a href="${legal.privacy}" target="_self">Privacy</a> · <a href="${legal.rules}" target="_self">Booking rules</a>`,
 			copyright: `<a href="${repo}">Source on GitHub</a>`
 		}
 	}

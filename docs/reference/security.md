@@ -52,7 +52,7 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 
 ## Privacy policy
 
-What guests are told is on the app's `/datenschutz` page. It has to stay true to this page and to the code; what to update when something changes is listed in [Legal pages](../admin/legal#keeping-the-privacy-policy-true).
+What guests are told is on the app's `/privacy` page. It has to stay true to this page and to the code; what to update when something changes is listed in [Legal pages](../admin/legal#keeping-the-privacy-policy-true).
 
 ## Found a problem?
 

@@ -112,9 +112,9 @@ erDiagram
 | `/house/:id` | guests with a code | Rooms of a house with free spots |
 | `/room/:id` | guests with a code | Spots of a room, booking dialog |
 | `/random-bed` | guests with a code | Destiny Roulette |
-| `/impressum` | everyone | Legal notice (German), details from the server's `.env` |
-| `/datenschutz` | everyone | Privacy policy (German) |
-| `/buchungsregeln` | everyone | Booking rules (German), linked from every booking dialog |
+| `/legal-notice` | everyone | Legal notice (Impressum), details from the server's `.env`; `/impressum` redirects here |
+| `/privacy` | everyone | Privacy policy; `/datenschutz` redirects here |
+| `/booking-rules` | everyone | Booking rules, linked from every booking dialog |
 | `/admin/login` | everyone | Google sign-in and the *access requested* page |
 | `/auth/callback/google` | – | Where Google sends admins back to |
 | `/admin` | admins | Control Center |
