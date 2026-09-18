@@ -163,7 +163,10 @@
 
 		return async ({ result, update }) => {
 			if (result.type === 'success') {
-				toast(`⏱ Timer set: Live Booking opens on ${formatUnlockTime(iso)} (Berlin time).`, 'success');
+				toast(
+					`⏱ Timer set: Live Booking opens on ${formatUnlockTime(iso)} (Berlin time).`,
+					'success'
+				);
 			} else if (result.type === 'failure' || result.type === 'error') {
 				timerError = `The timer was not saved: ${actionErrorMessage(result) || 'the server did not accept it.'} Check the date and try again.`;
 			}

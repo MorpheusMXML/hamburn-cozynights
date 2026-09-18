@@ -26,10 +26,10 @@
 			result.type === 'failure'
 				? (result.data as { message?: string } | undefined)?.message
 				: undefined;
-		await alertDialog(
-			`${reason || 'The server could not be reached.'} Nothing was changed.`,
-			{ title, tone: 'danger' }
-		);
+		await alertDialog(`${reason || 'The server could not be reached.'} Nothing was changed.`, {
+			title,
+			tone: 'danger'
+		});
 	}
 
 	/** Lock, activate and occupancy switches: no question asked, failures are explained. */
@@ -199,7 +199,11 @@
 						</div>
 
 						<div class="bed-actions">
-							<form action="?/toggleLocked" method="POST" use:enhance={toggleSpot('Lock not changed')}>
+							<form
+								action="?/toggleLocked"
+								method="POST"
+								use:enhance={toggleSpot('Lock not changed')}
+							>
 								<input type="hidden" name="id" value={bed.id} />
 								<input type="hidden" name="is_locked" value={bed.is_locked?.toString()} />
 								<button

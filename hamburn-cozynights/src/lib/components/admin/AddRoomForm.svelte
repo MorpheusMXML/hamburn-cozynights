@@ -77,7 +77,13 @@
 </script>
 
 <div class="form-card">
-	<form method="POST" action="?/createRoom" class="admin-form" novalidate use:enhance={handleSubmit}>
+	<form
+		method="POST"
+		action="?/createRoom"
+		class="admin-form"
+		novalidate
+		use:enhance={handleSubmit}
+	>
 		<input type="hidden" name="houseId" value={houseId} />
 
 		<div class="form-group">
