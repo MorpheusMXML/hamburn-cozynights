@@ -129,7 +129,8 @@ test.describe('Extended Booking & Admin Flow', () => {
 		page
 	}) => {
 		await page.goto(`/room/${testRoomId}`);
-		await expect(page).toHaveURL('/');
+		// The start page explains why the guest landed there.
+		await expect(page).toHaveURL(/\/(\?login=required)?$/);
 	});
 
 	test('Negative: Booking Locked in Staging Mode', async ({ page }) => {
@@ -185,13 +186,15 @@ test.describe('Extended Booking & Admin Flow', () => {
 
 		// Helper to ensure we are in List View (stats cards are visible).
 		// TRACE: adminPage.reload() resets the UI state to default (Map View).
+		// Retried: a click before the page has hydrated does nothing.
 		const ensureListView = async () => {
-			const btn = adminPage.locator('button', { hasText: 'LIST VIEW' });
-			if (await btn.isVisible()) {
-				await btn.click();
-				// Confirm toggle worked
-				await expect(adminPage.locator('button', { hasText: 'MAP VIEW' })).toBeVisible();
-			}
+			await expect(async () => {
+				const btn = adminPage.locator('button', { hasText: 'LIST VIEW' });
+				if (await btn.isVisible()) await btn.click();
+				await expect(adminPage.locator('button', { hasText: 'MAP VIEW' })).toBeVisible({
+					timeout: 1500
+				});
+			}).toPass({ timeout: 15000 });
 		};
 
 		await ensureListView();
@@ -240,6 +243,8 @@ test.describe('Extended Booking & Admin Flow', () => {
 		// 5. User Cancellation
 		await userPage.locator('.bed-card.mine').click();
 		await userPage.click('.btn-unbook');
+		// The app's own confirmation dialog (no browser confirm()).
+		await userPage.locator('[role="alertdialog"] button.primary').click();
 		await expect(userPage.locator('.bed-card.free').filter({ hasText: bedLabel })).toBeVisible();
 
 		// 6. Final DB & Dashboard Check

@@ -84,7 +84,7 @@ describe('Interactions & Registration', () => {
 		} as any)) as any;
 
 		expect(result.status).toBe(404);
-		expect(result.data.error).toContain('not found');
+		expect(result.data.error).toContain('could not find this ticket code');
 	});
 });
 
@@ -230,7 +230,7 @@ describe('Room Load & Booking Logic', () => {
 			request: makeRequest(),
 			locals: mockLocals
 		} as any)) as any;
-		expect(guest.status).toBe(400);
+		expect(guest.status).toBe(409);
 		expect(mockAdminPb.update).not.toHaveBeenCalled();
 
 		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true });
@@ -254,7 +254,7 @@ describe('Room Load & Booking Logic', () => {
 		const request = { formData: async () => formData } as any;
 
 		const result = (await roomActions.bookBed({ request, locals: mockLocals } as any)) as any;
-		expect(result.status).toBe(400);
+		expect(result.status).toBe(409);
 		expect(mockAdminPb.update).not.toHaveBeenCalled();
 	});
 
@@ -279,6 +279,7 @@ describe('Admin Management Actions', () => {
 		mockPb = {
 			collection: vi.fn().mockReturnThis(),
 			getOne: vi.fn(),
+			getFullList: vi.fn().mockResolvedValue([]),
 			create: vi.fn(),
 			delete: vi.fn(),
 			update: vi.fn(),
