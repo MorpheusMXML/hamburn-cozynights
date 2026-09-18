@@ -1,4 +1,4 @@
-import { redirect, error, fail } from '@sveltejs/kit';
+import { redirect, error, fail, type ActionFailure } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type {
 	HousesResponse,
@@ -11,6 +11,54 @@ import { getBookingSettings } from '$lib/server/settings';
 import { berlinLocalToIso } from '$lib/time';
 import { countSpots } from '$lib/occupancy';
 import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
+import { parseTemplate, TEMPLATE_LIMITS, type TemplateParseResult } from '$lib/template';
+import { getCampCounts, importTemplate, TemplateImportError } from '$lib/server/template';
+
+/**
+ * Shared first half of the template preview and import: both are superuser-only,
+ * Staging-only, and both validate the uploaded file themselves.
+ */
+async function readTemplateUpload(
+	locals: App.Locals,
+	request: Request
+): Promise<
+	| { refused: ActionFailure<{ error: string; errors: string[] }> }
+	| { parsed: Extract<TemplateParseResult, { ok: true }>; form: FormData }
+> {
+	const refuse = (status: number, ...errors: string[]) => ({
+		refused: fail(status, { error: errors[0], errors })
+	});
+
+	if (!locals.admin?.isSuperuser) {
+		return refuse(403, 'Only superusers can import a template.');
+	}
+
+	const { isBookingActive } = await getBookingSettings(locals.pb);
+	if (isBookingActive) {
+		console.warn('[Import Template] BLOCKED: layout is locked during LIVE mode.');
+		return refuse(
+			403,
+			'Templates cannot be imported during Live Booking — this would erase live bookings. Switch to Staging Mode first. 🔒'
+		);
+	}
+
+	const form = await request.formData().catch(() => null);
+	const file = form?.get('template');
+	// A form sent without a chosen file carries an empty, nameless one.
+	if (!form || !(file instanceof Blob) || (file.size === 0 && !(file as File).name)) {
+		return refuse(400, 'No template file arrived. Choose a .json template file first.');
+	}
+	if (file.size > TEMPLATE_LIMITS.fileBytes) {
+		return refuse(
+			400,
+			`The file is ${Math.ceil(file.size / 1024)} KB, templates are limited to ${TEMPLATE_LIMITS.fileBytes / 1024} KB. A layout file is usually far smaller, so this is probably the wrong file.`
+		);
+	}
+
+	const parsed = parseTemplate(await file.text());
+	if (!parsed.ok) return refuse(400, ...parsed.errors);
+	return { parsed, form };
+}
 
 /** Clears the burner names of all orders (they only describe bookings). */
 async function clearBurnerNames(pb: TypedPocketBase) {
@@ -253,93 +301,62 @@ export const actions: Actions = {
 			return fail(500, { error: 'Update failed.' });
 		}
 	},
-	importTemplate: async ({ locals, request }) => {
-		if (!locals.admin?.isSuperuser) {
-			return fail(403, { error: 'Only superusers can import a template.' });
-		}
-
-		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive) {
-			console.warn('[Import Template] BLOCKED: cannot nuke the database during LIVE mode.');
-			return fail(403, {
-				error:
-					'Templates cannot be imported during Live Booking — this would erase live bookings. Switch to Staging first. 🔒'
-			});
-		}
-
-		const formData = await request.formData();
-		const file = formData.get('template') as File;
-
-		if (!file || file.size === 0) {
-			return fail(400, { error: 'No template file provided' });
-		}
+	previewTemplate: async ({ locals, request }) => {
+		const upload = await readTemplateUpload(locals, request);
+		if ('refused' in upload) return upload.refused;
 
 		try {
-			const text = await file.text();
-			const template = JSON.parse(text);
+			const current = await getCampCounts(locals.adminPb);
+			const { summary, warnings } = upload.parsed;
+			return { preview: { summary, warnings, current } };
+		} catch (err) {
+			console.error('[Preview Template] FAILED:', err);
+			const error = 'The current layout could not be read from the database. Try again.';
+			return fail(500, { error, errors: [error] });
+		}
+	},
+	importTemplate: async ({ locals, request }) => {
+		// Validates the file again: the preview is only a courtesy of the UI.
+		const upload = await readTemplateUpload(locals, request);
+		if ('refused' in upload) return upload.refused;
 
-			if (!template.houses || !Array.isArray(template.houses)) {
-				return fail(400, { error: 'Invalid template structure: Missing houses array' });
+		const { template, summary } = upload.parsed;
+		const pb = locals.adminPb;
+		console.log(
+			`[Import Template] ${locals.admin?.email} imports "${template.name}": ${summary.houses} houses, ${summary.rooms} rooms, ${summary.beds} spots.`
+		);
+
+		try {
+			const outcome = await importTemplate(pb, template, {
+				skipBackup: upload.form.get('skipBackup') === '1'
+			});
+
+			// No booking survives an import, so the names chosen for them go too.
+			// The orders themselves (the ticket roster) stay.
+			let namesCleared = true;
+			try {
+				await clearBurnerNames(pb);
+			} catch (err) {
+				namesCleared = false;
+				console.error('[Import Template] Layout imported, but clearing burner names failed:', err);
 			}
-
-			console.log(`[Import Template] Starting Nuke Phase...`);
-
-			// 1. Fetch and delete the whole structure. Orders (the ticket roster)
-			//    stay: only the bookings attached to the deleted beds disappear.
-			const pb = locals.adminPb;
-			const houses = await pb.collection('houses').getFullList();
-			const rooms = await pb.collection('rooms').getFullList();
-			const beds = await pb.collection('beds').getFullList();
 
 			console.log(
-				`[Import Template] ${locals.admin.email} deletes ${houses.length} houses, ${rooms.length} rooms, ${beds.length} beds.`
+				`[Import Template] SUCCESS. Backup: ${outcome.backup ?? 'skipped'}, released bookings: ${outcome.releasedBookings}, leftovers: ${outcome.leftovers}.`
 			);
-
-			// Delete in reverse order of dependency
-			for (const bed of beds) await pb.collection('beds').delete(bed.id);
-			for (const room of rooms) await pb.collection('rooms').delete(room.id);
-			for (const house of houses) await pb.collection('houses').delete(house.id);
-			await clearBurnerNames(pb);
-
-			console.log(`[Import Template] Nuke Complete. Rebuilding...`);
-
-			// 2. Rebuild from template
-			for (const h of template.houses) {
-				const houseRecord = await pb.collection('houses').create({
-					name: h.name,
-					x: h.x,
-					y: h.y
+			return { success: true, summary, ...outcome, namesCleared };
+		} catch (err) {
+			if (err instanceof TemplateImportError) {
+				return fail(err.status, {
+					error: err.message,
+					errors: [err.message],
+					backupFailed: err.backupFailed
 				});
-
-				if (h.rooms && Array.isArray(h.rooms)) {
-					for (const r of h.rooms) {
-						const roomRecord = await pb.collection('rooms').create({
-							name: r.name,
-							room_number: r.room_number,
-							amount_beds: r.amount_beds,
-							house: houseRecord.id
-						});
-
-						if (r.beds && Array.isArray(r.beds)) {
-							for (const b of r.beds) {
-								await pb.collection('beds').create({
-									label: b.label,
-									enabled: b.enabled,
-									is_locked: b.is_locked,
-									room: roomRecord.id,
-									occupied: false
-								});
-							}
-						}
-					}
-				}
 			}
-
-			console.log(`[Import Template] Rebuild Complete. SUCCESS.`);
-			return { success: true };
-		} catch (err: any) {
 			console.error('[Import Template] FAILED:', err);
-			return fail(500, { error: 'Import failed. Check the template file and the server log.' });
+			const error =
+				'The import stopped with an unexpected error. Check the layout on the map before you try again. The server log has the details.';
+			return fail(500, { error, errors: [error] });
 		}
 	}
 };

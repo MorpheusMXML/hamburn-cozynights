@@ -1,65 +1,25 @@
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { exportTemplate } from '$lib/server/template';
+import { stringifyTemplate } from '$lib/template';
 
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.admin) throw error(403, 'Unauthorized');
 
+	let template;
 	try {
-		const houses = await locals.pb.collection('houses').getFullList({
-			sort: 'name'
-		});
-
-		const templateHouses = [];
-
-		for (const house of houses) {
-			const rooms = await locals.pb.collection('rooms').getFullList({
-				filter: locals.pb.filter('house = {:id}', { id: house.id }),
-				sort: 'room_number'
-			});
-
-			const templateRooms = [];
-
-			for (const room of rooms) {
-				const beds = await locals.pb.collection('beds').getFullList({
-					filter: locals.pb.filter('room = {:id}', { id: room.id }),
-					sort: 'label'
-				});
-
-				templateRooms.push({
-					name: room.name,
-					room_number: room.room_number,
-					amount_beds: room.amount_beds,
-					beds: beds.map((bed) => ({
-						label: bed.label,
-						enabled: bed.enabled,
-						is_locked: bed.is_locked
-					}))
-				});
-			}
-
-			templateHouses.push({
-				name: house.name,
-				x: house.x,
-				y: house.y,
-				rooms: templateRooms
-			});
-		}
-
-		const template = {
-			name: 'Burn Location Template',
-			exported_at: new Date().toISOString(),
-			version: '1.0',
-			houses: templateHouses
-		};
-
-		return new Response(JSON.stringify(template, null, 2), {
-			headers: {
-				'Content-Type': 'application/json',
-				'Content-Disposition': `attachment; filename="burn-template-${new Date().toISOString().slice(0, 10)}.json"`
-			}
-		});
-	} catch (err: any) {
+		template = await exportTemplate(locals.pb);
+	} catch (err) {
 		console.error('[Export API] Failed:', err);
-		throw error(500, 'Export failed');
+		throw error(500, 'The layout could not be read from the database. Try again.');
 	}
+
+	const day = new Date().toISOString().slice(0, 10);
+	return new Response(stringifyTemplate(template), {
+		headers: {
+			'Content-Type': 'application/json',
+			'Content-Disposition': `attachment; filename="cozynights-layout-${day}.json"`,
+			'Cache-Control': 'no-store'
+		}
+	});
 };
