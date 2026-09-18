@@ -2,6 +2,19 @@
 
 CozyNights can tell **guests** about their booking by e-mail and, if they want, on Telegram, and it keeps the **crew** in the loop through a Telegram group. Everything is optional: without mail or Telegram settings nothing is sent and the app works as before.
 
+## Who talks to the bot
+
+One Telegram bot per environment, two kinds of chats:
+
+| Chat | Who is in it | What happens there |
+| --- | --- | --- |
+| **Crew group** (private) | the admins | The bot **reports**: access requests, approvals, sign-ins, phase switches, bulk actions, failed guest messages. It takes no commands. Nobody can approve or change anything from Telegram. |
+| **A guest's own chat** | one guest and the bot, nobody else | Only if the guest connects it on their room page: the booking confirmation and every change of their spot. Guests never join a group and see nothing about other guests. |
+
+::: tip Why approvals stay on the server
+A Telegram account isn't your Google Workspace account: it has no enforced 2-Step Verification and could be lost or taken over. Approving admins therefore stays where the Google identity is checked: `./scripts/cozy-admin.sh approve <email>` on the server. The group message tells you who is waiting and shows the command.
+:::
+
 ## At a glance
 
 ```mermaid
@@ -28,7 +41,7 @@ A guest hears from CozyNights when their spot changes:
 - **E-mail goes to the address of the ticket.** Guests never type an address: it comes with the [ticket import](#ticket-codes-with-e-mail-addresses). On their room page they see where confirmations go, shortened to `m•••@example.com`.
 - **Telegram is the guest's choice.** On their room page, <kbd>Get updates on Telegram</kbd> opens a chat with the CozyNights bot. After <kbd>START</kbd> the bot confirms the current spot and sends every change from then on. <kbd>Turn off</kbd> on the room page or `/stop` in the chat ends it. The link works once and for 30 minutes.
 - **No secrets in messages.** They show the spot and a link, never the ticket code. Messages are in English. On staging every subject and message starts with `[STAGING]`.
-- **Delivery problems are retried** after 1, 5, 15 and 60 minutes. After that the crew group gets 📭 *Could not notify ticket …* with the reason.
+- **Delivery problems are retried** for about two days (after 1, 5 and 15 minutes, then after 1, 4, 12 and 24 hours), so a daily sending limit on opening day only delays messages. After that the crew group gets 📭 *Could not notify ticket …* with the reason.
 
 ## Crew group
 
@@ -78,7 +91,7 @@ A single ticket: `./scripts/cozy-admin.sh tickets add HB-1003 --email linus@exam
 Operators put the settings into the server's `.env` (the template `deploy/staging.env.template` describes each value) and deploy again. Two rules:
 
 - **One Telegram bot per environment.** The server reads the bot's messages itself (no public webhook), and two servers can't read the same bot. Add the bot to a **private** crew group, and turn off "Allow groups" for it in @BotFather afterwards, so nobody can add it elsewhere.
-- **E-mail from an address of your own domain**, through that domain's mail provider, so the messages don't end up in spam.
+- **E-mail through a sending service, from a crew address.** Recommended: a Google group of the Workspace (for example `cozynights@mauersegler.art`, anyone on the web may post, members are the crew) as the sender, so guests' replies reach the crew; sending through a transactional mail service such as SMTP2GO with its **own SMTP user per environment** (send-only, revocable without touching other apps), the sender domain verified there (DKIM), open and click tracking off. Avoid a personal mailbox with an app password: that password would open the whole mailbox.
 
 Then check on the server:
 

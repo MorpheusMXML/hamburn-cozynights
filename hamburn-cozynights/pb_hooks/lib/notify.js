@@ -30,8 +30,10 @@ const SETTLE_SECONDS = 10;
 // Minimum gap between two messages about the same ticket (one message per
 // settled state, but no flood when somebody keeps clicking).
 const COOLDOWN_SECONDS = 120;
-// Guest delivery: retry after 1, 5, 15, 60 minutes, then give up and alert.
-const RETRY_MINUTES = [1, 5, 15, 60];
+// Guest delivery: retry after 1, 5, 15 minutes, 1, 4, 12 and 24 hours (about two
+// days in all, so a provider's daily limit on opening day only delays mail),
+// then give up and alert the crew.
+const RETRY_MINUTES = [1, 5, 15, 60, 240, 720, 1440];
 // Crew alerts: attempts and the wait before each retry.
 const ALERT_RETRY_SECONDS = [0, 60, 300, 900, 3600];
 const TG_LINK_MINUTES = 30;

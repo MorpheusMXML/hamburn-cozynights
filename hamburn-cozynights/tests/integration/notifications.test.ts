@@ -246,11 +246,12 @@ describe('booking confirmations by e-mail', () => {
 		expect(rec?.due).not.toBe('');
 		expect(rec?.last_error).toMatch(/^mail: /);
 
-		await su.collection('guest_notify').update(rec!.id, { attempts: 4 });
+		// the last retry (see RETRY_MINUTES in pb_hooks/lib/notify.js)
+		await su.collection('guest_notify').update(rec!.id, { attempts: 7 });
 		await flush();
 
 		rec = await notifyRecord(guest.order.id);
-		expect(rec?.attempts).toBe(5);
+		expect(rec?.attempts).toBe(8);
 		expect(rec?.due).toBe(''); // given up
 		const alerts = await telegramTo(CREW_CHAT);
 		expect(

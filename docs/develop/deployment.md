@@ -132,7 +132,7 @@ Booking confirmations and crew alerts are sent by PocketBase (`pb_hooks/cozy_not
 | `COZY_APP_URL`, `COZY_ENV_LABEL` | Links in messages and the `[STAGING]` marker. Set in the compose file, not in `.env`. |
 
 - **One Telegram bot per environment.** The server reads the bot's messages by polling; two environments with the same bot would steal each other's messages.
-- **The mail password is stored twice.** PocketBase keeps its own copy of the SMTP settings in its database, so it is also in every database backup. Use an account (or app password) that can only send mail, or a relay that allows the server's IP address without a password.
+- **The mail password is stored twice.** PocketBase keeps its own copy of the SMTP settings in its database, so it is also in every database backup. Use credentials that can only send mail — an SMTP user of a sending service, one per environment — never the password of a mailbox.
 - **Check after setting it up**, on the server: `./scripts/cozy-admin.sh notify status` and `./scripts/cozy-admin.sh notify test --email <you>`.
 
 ## Adding an environment
