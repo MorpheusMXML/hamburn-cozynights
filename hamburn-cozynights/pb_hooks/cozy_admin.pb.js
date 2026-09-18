@@ -32,7 +32,8 @@
 //      cozy-admin tickets list                    ticket codes, sign-ins, booked beds, contacts
 //      cozy-admin tickets remove <code> [<code> ...]  delete tickets that hold no bed
 //      cozy-admin tickets forget-contacts --yes   after the event: delete all guest e-mail
-//                                                 addresses and Telegram links
+//                                                 addresses, Telegram links and
+//                                                 special-needs requests
 //
 //    Notifications (pb_hooks/cozy_notify.pb.js):
 //
@@ -750,22 +751,30 @@ cozyTickets.addCommand(
 	(() => {
 		const forget = new Command({
 			use: 'forget-contacts',
-			short: 'After the event: delete every e-mail address and Telegram link of the tickets',
+			short:
+				'After the event: delete every e-mail address, Telegram link and special-needs request of the tickets',
 			run: (cmd, args) => {
 				if (args.length !== 0 || !cmd.flags().getBool('yes')) {
 					cozyFail(
 						cmd,
-						'this deletes the e-mail address of every ticket and every Telegram link (ticket codes stay) — run it with --yes'
+						'this deletes the e-mail address of every ticket, every Telegram link and every special-needs request (ticket codes and bookings stay) — run it with --yes'
 					);
 				}
 				cozyCollection(cmd, 'guest_notify');
+				cozyCollection(cmd, 'special_requests');
 				let emails = 0;
 				let links = 0;
+				let requests = 0;
 				$app.runInTransaction((txApp) => {
 					for (const t of txApp.findRecordsByFilter('orders', "email != ''", '', 0, 0)) {
 						t.set('email', '');
 						txApp.save(t);
 						emails++;
+					}
+					// What guests wrote about their needs (often health data) goes too.
+					for (const r of txApp.findRecordsByFilter('special_requests', "id != ''", '', 0, 0)) {
+						txApp.delete(r);
+						requests++;
 					}
 					for (const n of txApp.findRecordsByFilter('guest_notify', "id != ''", '', 0, 0)) {
 						if (n.getString('tg_chat')) links++;
@@ -775,9 +784,11 @@ cozyTickets.addCommand(
 				cmd.println(
 					'deleted ' +
 						emails +
-						' e-mail address(es) and ' +
+						' e-mail address(es), ' +
 						links +
-						' Telegram link(s); the ticket codes are kept'
+						' Telegram link(s) and ' +
+						requests +
+						' special-needs request(s); the ticket codes and bookings are kept'
 				);
 			}
 		});
