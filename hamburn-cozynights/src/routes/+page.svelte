@@ -5,6 +5,7 @@
 	import { fade, fly } from 'svelte/transition';
 	import EffigyTitle from '$lib/components/EffigyTitle.svelte';
 	import LegalLinks from '$lib/components/LegalLinks.svelte';
+	import MadeInHamburg from '$lib/components/MadeInHamburg.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	export let data: PageData;
@@ -18,9 +19,16 @@
 	let motionPaused = false;
 	let reducedMotion = false;
 	let video: HTMLVideoElement;
+	// The background video is decoration under a 40 % overlay: phones and
+	// small windows get the poster only (data volume, battery), and so does
+	// anyone who prefers reduced motion. The source is attached after mount,
+	// so the server never sends it to a browser that won't play it.
+	let videoSrc: string | undefined;
 
 	onMount(() => {
 		reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		const wide = window.matchMedia('(min-width: 768px)').matches;
+		videoSrc = wide && !reducedMotion ? '/background.mp4' : undefined;
 	});
 
 	$: syncVideo(video, motionPaused || reducedMotion);
@@ -48,7 +56,9 @@
 			? 'Your ticket code is not valid on this device (anymore). Please enter it again.'
 			: $page.url.searchParams.get('login') === 'required'
 				? 'Please enter your ticket code first. After that you can open the map and pick your spot.'
-				: '';
+				: $page.url.searchParams.get('login') === 'out'
+					? 'Your ticket code was removed from this device. Enter it again whenever you want to change your spot.'
+					: '';
 
 	function checkTicketCode(value: string): string {
 		if (!value) return 'Please enter your ticket code.';
@@ -77,16 +87,16 @@
 	<video
 		bind:this={video}
 		class="background-video"
+		src={videoSrc}
 		autoplay
 		muted
 		loop
 		playsinline
+		preload="metadata"
 		poster="/background.jpg"
 		aria-hidden="true"
 		tabindex="-1"
-	>
-		<source src="/background.mp4" type="video/mp4" />
-	</video>
+	></video>
 
 	<div class="scan-overlay"></div>
 
@@ -159,7 +169,7 @@
 					autocorrect="off"
 					spellcheck="false"
 					enterkeyhint="go"
-					maxlength="80"
+					maxlength="64"
 				/>
 				<div class="button-container">
 					{#if isHovering}
@@ -196,9 +206,14 @@
 			{/if}
 
 			{#if data.hasTicket}
-				<a class="continue-link" href="/map"
-					>Already signed in on this device? Continue to the map →</a
-				>
+				<div class="continue-row">
+					<a class="continue-link" href="/map"
+						>Already signed in on this device? Continue to the map →</a
+					>
+					<form method="POST" action="?/signOut" class="sign-out-form" use:enhance>
+						<button type="submit" class="sign-out">Not your ticket? Sign out</button>
+					</form>
+				</div>
 			{/if}
 
 			<p class="privacy-note">
@@ -215,6 +230,7 @@
 			<span aria-hidden="true">🔒</span> Crew
 		</a>
 	</footer>
+	<div class="hero-credit"><MadeInHamburg /></div>
 </section>
 
 <style>
@@ -442,7 +458,15 @@
 		justify-content: space-between;
 		align-items: center;
 		gap: 1rem;
-		padding: 0 20px max(16px, env(safe-area-inset-bottom));
+		padding: 0 20px 8px;
+	}
+
+	.hero-credit {
+		position: relative;
+		z-index: 10;
+		display: flex;
+		justify-content: center;
+		padding: 0 20px max(12px, env(safe-area-inset-bottom));
 	}
 
 	/* Phones: help and crew on one row, the legal links centered below. */
@@ -557,5 +581,35 @@
 		.party-zone {
 			display: none;
 		}
+	}
+
+	.continue-row {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		align-items: center;
+		gap: 0.25rem 1rem;
+		margin: 0;
+	}
+
+	.sign-out-form {
+		display: inline;
+	}
+
+	.sign-out {
+		background: none;
+		border: 0;
+		padding: 0.4rem 0.2rem;
+		min-height: 44px;
+		color: #a3a3a3;
+		font: inherit;
+		font-size: 0.85rem;
+		text-decoration: underline;
+		text-underline-offset: 3px;
+		cursor: pointer;
+	}
+
+	.sign-out:hover {
+		color: #fff;
 	}
 </style>
