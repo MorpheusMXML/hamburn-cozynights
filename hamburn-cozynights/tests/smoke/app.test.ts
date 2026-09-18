@@ -63,6 +63,10 @@ describe('any deployment (read-only)', () => {
 		const res = await get('/room/doesnotexist000');
 		expect(res.status).toBe(303);
 		expect(res.headers.get('location')).toBe('/?login=required');
+
+		const request = await get('/special-needs');
+		expect(request.status).toBe(303);
+		expect(request.headers.get('location')).toBe('/?login=required');
 	});
 
 	it('shows the admin login page, with the backend reachable', async () => {
@@ -83,6 +87,12 @@ describe('any deployment (read-only)', () => {
 		// (renameHouse without a name) — this part also runs against real data.
 		expect((await post('/admin?/renameHouse')).status).toBe(403);
 		expect((await get('/admin/api/export-template')).status).toBe(403);
+
+		// special-needs requests: what guests wrote is for admins only
+		const requests = await get('/admin/requests');
+		expect(requests.status).toBe(303);
+		expect(requests.headers.get('location')).toBe('/admin/login');
+		expect((await post('/admin/requests?/approve', { id: 'doesnotexist000' })).status).toBe(403);
 	});
 
 	it('ignores a forged admin cookie', async () => {
@@ -252,6 +262,55 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 
 		await su.collection('admins').delete(admin.id);
 		expect((await get('/admin', cookie)).status).toBe(303);
+	});
+
+	it('takes a special-needs request while booking is closed, and lets an admin book the spot', async () => {
+		await setBookingOpen(false);
+		await su.collection('app_settings').update(APP_SETTINGS_ID, { special_requests_open: true });
+		try {
+			const { room, beds } = await seedHouse(su, 1);
+			await su.collection('beds').update(beds[0].id, { is_special: true });
+			const ticket = await seedTicket(su);
+			const cookie = await guestLogin(ticket.code);
+
+			const sent = await post(
+				'/special-needs?/save',
+				{ needs: 'step_free', text: 'Smoke: step-free access please.', consent: 'yes' },
+				cookie
+			);
+			expect(sent.status).toBe(200);
+			const request = await su
+				.collection('special_requests')
+				.getFirstListItem(su.filter('order = {:id}', { id: ticket.order.id }));
+			expect(request.status).toBe('pending');
+			expect(request.reason).not.toContain('Smoke');
+
+			// the guest's own page shows it; other guests' pages never mark special spots
+			expect(await (await get('/special-needs', cookie)).text()).toContain('Waiting for the crew');
+			const otherGuest = await guestLogin((await seedTicket(su)).code);
+			const roomHtml = await (await get(`/room/${room.id}`, otherGuest)).text();
+			expect(roomHtml).toContain('Reserved by the crew');
+			expect(roomHtml).not.toContain('is_special');
+
+			const admin = await createAdmin(su, 'admin');
+			const list = await (await get('/admin/requests', adminCookie(admin.client))).text();
+			expect(list).toContain('Smoke: step-free access please.');
+			const assigned = await post(
+				'/admin/requests?/assign',
+				{ id: request.id, bedId: beds[0].id },
+				adminCookie(admin.client)
+			);
+			expect(assigned.status).toBe(200);
+			expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
+			expect((await su.collection('special_requests').getOne(request.id)).status).toBe('approved');
+
+			// the crew picked it: once booking opens, the guest can't release it
+			await setBookingOpen(true);
+			expect((await post(`/room/${room.id}?/unbookBed`, {}, cookie)).status).toBe(409);
+			expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
+		} finally {
+			await su.collection('app_settings').update(APP_SETTINGS_ID, { special_requests_open: false });
+		}
 	});
 
 	it('reserves "clear all bookings" for superusers and keeps the tickets', async () => {
