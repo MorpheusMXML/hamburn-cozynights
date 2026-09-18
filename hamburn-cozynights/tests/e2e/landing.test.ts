@@ -30,7 +30,8 @@ test.describe('Landing page title', () => {
 	test('the cursor (or a finger) lights the standing letters', async ({ page, isMobile }) => {
 		await page.goto('/');
 		const title = page.locator('.effigy');
-		await expect(title).toHaveAttribute('data-phase', 'stand', { timeout: 10_000 });
+		// Magic balls build the title first.
+		await expect(title).toHaveAttribute('data-phase', 'stand', { timeout: 15_000 });
 
 		// The left leg of the first letter.
 		const box = (await title.boundingBox())!;

@@ -47,11 +47,24 @@ export interface LetterDef {
 	index: number;
 	char: string;
 	line: number;
+	/** Position within its line (0 = first letter) and the line's letter count. */
+	slot: number;
+	slots: number;
+	/** Neighbours in the same line (letter indices), or -1. */
+	left: number;
+	right: number;
 	x: number;
 	y: number;
 	width: number;
 	height: number;
 	beams: number[];
+	/**
+	 * The letter's outer skin: one shape per stroke, each shape one loop (open
+	 * stroke) or two (closed stroke: a ring). Loops are flat x,y lists; outer
+	 * loops run one way round, holes the other, so the skin is the nonzero
+	 * fill of all of them together.
+	 */
+	skin: Float32Array[][];
 }
 
 export interface LineDef {
@@ -272,6 +285,59 @@ function stationsOf(
 	});
 }
 
+/**
+ * The skin of one stroke: the area between its rails, grown by `pad` on every
+ * side (units). An open stroke is one loop, a closed stroke two (a ring).
+ */
+function skinOf(
+	stations: Station[],
+	segs: Segment[],
+	closed: boolean,
+	half: number,
+	pad: number,
+	toPx: (u: number, v: number) => [number, number]
+): Float32Array[] {
+	const grow = (half + pad) / half;
+	const side = (p: Station, sign: 1 | -1, shift: number, dir: Segment) => {
+		const mx = (p.lx + p.rx) / 2;
+		const my = (p.ly + p.ry) / 2;
+		return toPx(
+			mx + (p.lx - mx) * grow * sign + dir.dx * shift,
+			my + (p.ly - my) * grow * sign + dir.dy * shift
+		);
+	};
+	const last = stations.length - 1;
+	// Open strokes also reach `pad` past their ends.
+	const shiftOf = (k: number) => (closed ? 0 : k === 0 ? -pad : k === last ? pad : 0);
+	const dirOf = (k: number) => (k === last ? segs[segs.length - 1] : segs[0]);
+	const left = stations.map((p, k) => side(p, 1, shiftOf(k), dirOf(k)));
+	const right = stations.map((p, k) => side(p, -1, shiftOf(k), dirOf(k)));
+	const loops = closed
+		? [Float32Array.from(left.flat()), Float32Array.from(right.flat())]
+		: [Float32Array.from([...left, ...right.reverse()].flat())];
+	// The outer loop runs with positive area, the hole of a ring against it.
+	const areas = loops.map(signedArea);
+	const outer = areas.length > 1 && Math.abs(areas[1]) > Math.abs(areas[0]) ? 1 : 0;
+	return loops.map((loop, k) => (areas[k] > 0 !== (k === outer) ? reversed(loop) : loop));
+}
+
+function signedArea(loop: Float32Array): number {
+	let area = 0;
+	for (let i = 0, j = loop.length - 2; i < loop.length; j = i, i += 2) {
+		area += loop[j] * loop[i + 1] - loop[i] * loop[j + 1];
+	}
+	return area / 2;
+}
+
+function reversed(loop: Float32Array): Float32Array {
+	const out = new Float32Array(loop.length);
+	for (let i = 0; i < loop.length; i += 2) {
+		out[i] = loop[loop.length - 2 - i];
+		out[i + 1] = loop[loop.length - 1 - i];
+	}
+	return out;
+}
+
 // --- Builder -----------------------------------------------------------------
 
 interface NodeRec {
@@ -318,6 +384,8 @@ export function buildStructure(
 	const postWidth = Math.max(1.2, 0.022 * scale);
 	const braceWidth = Math.max(1, 0.017 * scale);
 	const crossBraces = scale >= 64;
+	// The skin reaches a little past the outer edge of the rails, so it hides them.
+	const skinPad = (railWidth / 2 + 0.006 * scale) / scale;
 
 	const letters: LetterDef[] = [];
 	const lineDefs: LineDef[] = [];
@@ -341,11 +409,16 @@ export function buildStructure(
 				index: letterIndex,
 				char,
 				line: lineIndex,
+				slot: 0,
+				slots: 0,
+				left: -1,
+				right: -1,
 				x: cursor,
 				y: top,
 				width: GLYPH_WIDTH * scale,
 				height: scale,
-				beams: []
+				beams: [],
+				skin: []
 			};
 			letters.push(letter);
 			const ox = cursor;
@@ -407,6 +480,7 @@ export function buildStructure(
 				const l = stations.map((p) => addNode(...toPx(p.lx, p.ly)));
 				const r = stations.map((p) => addNode(...toPx(p.rx, p.ry)));
 				strokeNodes.push({ l, r });
+				letter.skin.push(skinOf(stations, segs[si], !!st.closed, thickness / 2, skinPad, toPx));
 
 				const push = (kind: BeamKind, a: number, b: number, w: number) => {
 					raw.push({ kind, letter: letterIndex, line: lineIndex, a, b, width: w });
@@ -466,6 +540,15 @@ export function buildStructure(
 			prev = next;
 		}
 		lineDefs.push({ index: lineIndex, text, x0, x1, top, ground });
+
+		// Neighbours and position within the line.
+		const inLine = letters.filter((l) => l.line === lineIndex);
+		inLine.forEach((l, k) => {
+			l.slot = k;
+			l.slots = inLine.length;
+			l.left = k > 0 ? inLine[k - 1].index : -1;
+			l.right = k < inLine.length - 1 ? inLine[k + 1].index : -1;
+		});
 	});
 
 	// Coincident nodes of different strokes are one joint as well.
@@ -590,4 +673,30 @@ export function computeSupport(
 		}
 	}
 	return tail;
+}
+
+/** Is (x, y) on the letter's skin? Nonzero winding, like the renderer fills it. */
+export function pointInLetter(letter: LetterDef, x: number, y: number): boolean {
+	// The skin reaches a little beyond the letter box.
+	const margin = letter.height * 0.2;
+	if (x < letter.x - margin || x > letter.x + letter.width + margin) return false;
+	if (y < letter.y - margin || y > letter.y + letter.height + margin) return false;
+	let winding = 0;
+	for (const shape of letter.skin) {
+		for (const loop of shape) {
+			for (let i = 0, j = loop.length - 2; i < loop.length; j = i, i += 2) {
+				const x0 = loop[j];
+				const y0 = loop[j + 1];
+				const x1 = loop[i];
+				const y1 = loop[i + 1];
+				const side = (x1 - x0) * (y - y0) - (x - x0) * (y1 - y0);
+				if (y0 <= y) {
+					if (y1 > y && side > 0) winding++;
+				} else if (y1 <= y && side < 0) {
+					winding--;
+				}
+			}
+		}
+	}
+	return winding !== 0;
 }

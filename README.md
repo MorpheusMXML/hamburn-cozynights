@@ -34,8 +34,8 @@ Ticket holders pick their own bed on the Hamburn camp map. The crew builds the c
 | 🔐  | **Google Workspace sign-in** | Admins use their `@mauersegler.art` account. Newcomers request access, a superuser approves.           |
 | 💾  | **Layout templates**         | Export the whole camp as JSON and rebuild it for the next burn in one step.                            |
 | 🛡️  | **Privacy first**            | Server-side rendering only, encrypted burner names, hashed ticket lookups, strict database rules.      |
-| 🔥  | **Burning effigy title**     | The start page title is built from timber, burns down and rises again in neon. Light it yourself.      |
-| ⚖️  | **Legal pages**              | Legal notice, privacy policy and booking rules on every page; the operator's details stay out of git.             |
+| 🔥  | **Burning effigy title**     | Magic balls build rainbow timber letters, then fire eats them letter by letter. Light them yourself.   |
+| ⚖️  | **Legal pages**              | Legal notice, privacy policy and booking rules on every page; the operator's details stay out of git.  |
 
 ## 🧭 How it works
 

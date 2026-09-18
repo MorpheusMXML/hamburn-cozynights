@@ -1,8 +1,9 @@
 <!--
 @component
-The landing page title as a burning effigy: timber letters catch fire, burn
-down, collapse and rise again (see `$lib/fx/effigy`). The cursor or a finger
-can light them too.
+The landing page title as a burning effigy: magic balls build rainbow letters
+on a timber frame, a fire ball lights them, and the fire walks from letter to
+letter until everything has burnt down and is built anew (see
+`$lib/fx/effigy`). The cursor or a finger can light the letters too.
 
 The real heading stays in the page for screen readers and search engines; the
 canvas is decoration. Visitors who prefer reduced motion get the standing
@@ -130,10 +131,9 @@ browser.
 		line-height: 1.1;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
-		color: #e2ac74;
-		text-shadow:
-			0 0 18px rgba(255, 120, 40, 0.45),
-			0 2px 0 #3a2416;
+		color: #ffd27a;
+		/* Not text-shadow: it would shine through the transparent, gradient-filled letters. */
+		filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.2)) drop-shadow(0 2px 0 rgba(0, 0, 0, 0.7));
 		transition: opacity 0.8s ease;
 	}
 
@@ -146,6 +146,32 @@ browser.
 
 	.effigy-heading span {
 		display: block;
+	}
+
+	/* The same rainbow as the letters on the canvas, once per line. */
+	@supports (background-clip: text) or (-webkit-background-clip: text) {
+		.effigy-heading span {
+			background: linear-gradient(
+				90deg,
+				hsl(0 100% 64%),
+				hsl(48 100% 60%),
+				hsl(95 95% 55%),
+				hsl(143 90% 50%),
+				hsl(190 95% 56%),
+				hsl(238 90% 68%),
+				hsl(285 95% 66%)
+			);
+			-webkit-background-clip: text;
+			background-clip: text;
+			color: transparent;
+		}
+	}
+
+	@media (forced-colors: active) {
+		.effigy-heading span {
+			background: none;
+			color: CanvasText;
+		}
 	}
 
 	.effigy-canvas {

@@ -3,23 +3,28 @@
  *
  *   build → stand → burn → embers → rebuild → stand → …
  *
- * - Fire runs along each beam from where it caught, passes on to the beams
- *   bolted to the same joint, and jumps to anything close by through heat
- *   (upwards much more than sideways or down).
- * - Burning beams char, and once they are charred far enough they break.
- *   Whatever no longer connects to the ground falls, first swinging on the
- *   joint it hung from, then as one piece that shatters when it hits the pile.
- * - Debris tumbles with simple rigid-body contacts, piles up on the sill and
- *   burns down to embers.
- * - The rebuild lifts every beam back into place ("phoenix").
+ * - Build: magic rainbow balls fly in, one per line. Where one lands, that
+ *   letter's timber frame assembles and the build runs on from letter to
+ *   letter; every finished frame is painted over with its rainbow skin.
+ * - Burn: one spot catches fire (a fire ball, or the visitor's torch). Each letter then burns in stages: its skin burns
+ *   away from where the fire reached it, the timber frame shows, glows,
+ *   bursts into flames, collapses and smoulders. The fire walks on to the
+ *   neighbouring letters as the burn front reaches them, and to the other
+ *   line once the skin of the first letter has burnt away.
+ * - Flames on the frame run along the beams, pass on at joints and jump by
+ *   heat, but only to beams whose skin has already burnt away. The sills
+ *   catch fire from the debris that lands on them.
+ * - Burnt-through beams break; whatever loses its connection to the ground
+ *   falls, swinging on its last joint first, and shatters on the pile.
+ * - Debris tumbles with simple rigid-body contacts and burns down to embers.
  *
- * All state lives in typed arrays indexed by beam id. Randomness comes from a
- * seeded generator, so a run is reproducible (see tests/effigy.test.ts).
+ * State lives in typed arrays indexed by beam and letter id. Randomness comes
+ * from a seeded generator, so a run is reproducible (tests/effigy.test.ts).
  */
-import { computeSupport, type EffigyStructure } from './structure';
+import { computeSupport, pointInLetter, type EffigyStructure, type LetterDef } from './structure';
 
 export type Phase = 'build' | 'stand' | 'burn' | 'embers' | 'rebuild';
-export type IgnitionKind = 'fuse' | 'spark' | 'torch';
+export type IgnitionKind = 'spark' | 'torch';
 
 /** Beam states. */
 export const STANDING = 0;
@@ -27,16 +32,37 @@ export const FALLING = 1;
 export const RESTING = 2;
 export const FLYING = 3;
 
-/** Seconds the title stands before it is lit. */
-export const HOLD_SECONDS = 2.2;
+/** Seconds the finished title stands before it is lit. */
+export const HOLD_SECONDS = 2.8;
 /** Seconds the embers glow before the rebuild. */
 export const EMBER_SECONDS = 2.4;
-/** From here on the fire gets help, so no cycle drags on. */
-const BURN_ASSIST_AFTER = 5;
-/** Anything still standing then collapses. */
-const BURN_MAX = 10;
+/** How fast a letter's skin burns away, in letter heights per second. */
+export const SKIN_BURN_SPEED = 0.4;
+/** How fast the rainbow skin paints over a finished frame. */
+export const SKIN_PAINT_SPEED = 2.4;
+/** A beam starts glowing this long after its skin is gone … */
+export const GLOW_AFTER = 0.35;
+/** … and bursts into flames after this long (plus up to BLAZE_AFTER_SPREAD). */
+const BLAZE_AFTER_MIN = 1.3;
+const BLAZE_AFTER_SPREAD = 0.8;
+/** Seconds the fire needs to jump the gap to the neighbouring letter. */
+const GAP_DELAY = 0.35;
+/** After the skin of the first letter has burnt away, the other line catches this much later. */
+const CROSS_LINE_DELAY = 1.2;
+/** How fast the build runs through a letter from where it started. */
+const BUILD_SPEED = 1.6;
+/** Seconds the build needs to reach the next letter. */
+const BUILD_HOP = 0.3;
+/** How fast fire creeps along a sill. */
+const SILL_SPEED = 0.35;
+/** Safety nets: every letter gets built and lit eventually, every cycle ends. */
+const BUILD_MAX = 9;
+const BURN_ASSIST_AFTER = 32;
+const BURN_MAX = 48;
 const RADIATION_TICK = 0.1;
+const SKIN_TICK = 0.05;
 const MAX_STEP = 1 / 90;
+const MAX_ORIGINS = 3;
 
 export function mulberry32(seed: number): () => number {
 	let a = seed >>> 0;
@@ -56,6 +82,26 @@ const smoothstep = (e0: number, e1: number, x: number) => {
 };
 const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+/** Ragged outline of a burn front: its radius in the direction `angle`, relative to the mean. */
+export function frontShape(angle: number, seed: number): number {
+	return (
+		1 +
+		0.07 * Math.sin(3 * angle + seed) +
+		0.045 * Math.sin(7 * angle + seed * 1.7) +
+		0.03 * Math.sin(13 * angle + seed * 2.3)
+	);
+}
+
+/** Has a burn front of mean radius `r` from `origin` reached (x, y)? */
+export function insideFront(origin: Origin, r: number, x: number, y: number): boolean {
+	const dx = x - origin.x;
+	const dy = y - origin.y;
+	const d = Math.hypot(dx, dy);
+	if (d < r * 0.85) return true;
+	if (d > r * 1.15) return false;
+	return d < r * frontShape(Math.atan2(dy, dx), origin.seed);
+}
+
 const wrapAngle = (a: number) => {
 	a = (a + Math.PI) % (Math.PI * 2);
 	if (a < 0) a += Math.PI * 2;
@@ -63,13 +109,22 @@ const wrapAngle = (a: number) => {
 };
 
 export interface SimEvent {
-	kind: 'impact' | 'arrive' | 'crash';
+	kind: 'impact' | 'magic' | 'ignite' | 'arrive' | 'crash';
 	x: number;
 	y: number;
 	/** Letter index (for colors) or -1. */
 	letter: number;
 	/** 0..1 */
 	strength: number;
+}
+
+/** Where a letter's skin started to burn, or where its build started. */
+export interface Origin {
+	x: number;
+	y: number;
+	t: number;
+	/** Shapes the ragged burn front (renderer). */
+	seed: number;
 }
 
 interface Cluster {
@@ -90,6 +145,8 @@ interface Cluster {
 }
 
 export interface Projectile {
+	/** A fire ball lights a letter, a magic ball builds one. */
+	kind: 'fire' | 'magic';
 	active: boolean;
 	/** Launch time (simulation seconds); it waits off screen until then. */
 	launchAt: number;
@@ -99,12 +156,15 @@ export interface Projectile {
 	vy: number;
 	t: number;
 	duration: number;
-	target: number;
+	letter: number;
+	/** Impact point. */
+	tx: number;
+	ty: number;
 }
 
 export interface SimulationOptions {
 	seed?: number;
-	/** 'build' starts with sparks forming the letters, 'stand' with a finished title. */
+	/** 'build' starts with the magic balls, 'stand' with a finished title. */
 	start?: 'build' | 'stand';
 	/** Light the title automatically after it has stood for a while. */
 	autoIgnite?: boolean;
@@ -113,6 +173,7 @@ export interface SimulationOptions {
 export class EffigySimulation {
 	readonly structure: EffigyStructure;
 	readonly count: number;
+	readonly letterCount: number;
 	readonly rand: () => number;
 	readonly autoIgnite: boolean;
 
@@ -123,7 +184,7 @@ export class EffigySimulation {
 	/** Horizontal wind in px/s, changes every cycle. */
 	wind = 0;
 	lastIgnition: IgnitionKind | null = null;
-	/** Burning arrows of the 'spark' ignition, one per line of text. */
+	/** Fire balls and magic balls in the air. */
 	readonly projectiles: Projectile[] = [];
 
 	// Target pose per beam.
@@ -150,12 +211,14 @@ export class EffigySimulation {
 	private readonly spreadA: Uint8Array;
 	private readonly spreadB: Uint8Array;
 	readonly char: Float32Array;
+	/** When the skin over the beam burnt away (Infinity while covered). */
+	readonly exposeAt: Float32Array;
+	private readonly blazeAfter: Float32Array;
 	private readonly burnSeconds: Float32Array;
 	private readonly breakAt: Float32Array;
 	private readonly speed: Float32Array;
 	private readonly pendingAt: Float32Array;
 	private readonly pendingU: Float32Array;
-	/** Seconds a falling beam has been touching the ground / tumbling on its own. */
 	private readonly contactTime: Float32Array;
 	private readonly fallTime: Float32Array;
 	// Flight (build / rebuild).
@@ -171,6 +234,27 @@ export class EffigySimulation {
 	/** Length multiplier while a beam grows out of a spark. */
 	readonly grow: Float32Array;
 
+	// Per letter.
+	/** When the letter caught fire (-1 = not yet), and where its skin burns from. */
+	readonly litAt: Float32Array;
+	readonly burnOrigins: Origin[][];
+	/** Share of the skin still there, 0..1. */
+	readonly skinLeft: Float32Array;
+	/** When and where the build reached the letter (-1 = not yet). */
+	readonly buildAt: Float32Array;
+	readonly buildOrigin: Origin[];
+	/** When the rainbow paint started (-1) and how much of the skin is painted, 0..1. */
+	readonly paintAt: Float32Array;
+	readonly skinPaint: Float32Array;
+	private readonly litPendingAt: Float32Array;
+	private readonly litPendingX: Float32Array;
+	private readonly litPendingY: Float32Array;
+	private readonly buildPendingAt: Float32Array;
+	private readonly buildPendingX: Float32Array;
+	private readonly buildPendingY: Float32Array;
+	/** Points spread over each letter's skin, to measure burnt and painted shares. */
+	private readonly samples: Float32Array[];
+
 	private readonly standingMask: Uint8Array;
 	private readonly supported: Uint8Array;
 	private readonly queue: Int32Array;
@@ -181,9 +265,12 @@ export class EffigySimulation {
 	private clusters: Cluster[] = [];
 	private broken: number[] = [];
 	private supportDirty = false;
+	private crossLineDone = false;
 	private radiationClock = 0;
+	private skinClock = 0;
 	private idleClock = 0;
 	private assistClock = 0;
+	private letterAssistClock = 0;
 	private readonly gridSize: number;
 	private readonly gridCols: number;
 	private readonly gridRows: number;
@@ -196,9 +283,11 @@ export class EffigySimulation {
 	constructor(structure: EffigyStructure, options: SimulationOptions = {}) {
 		this.structure = structure;
 		this.count = structure.beams.length;
+		this.letterCount = structure.letters.length;
 		this.rand = mulberry32(options.seed ?? 1);
 		this.autoIgnite = options.autoIgnite ?? true;
 		const n = this.count;
+		const nl = this.letterCount;
 		const S = structure.scale;
 
 		this.tcx = new Float32Array(n);
@@ -227,6 +316,8 @@ export class EffigySimulation {
 		this.spreadA = new Uint8Array(n);
 		this.spreadB = new Uint8Array(n);
 		this.char = new Float32Array(n);
+		this.exposeAt = new Float32Array(n);
+		this.blazeAfter = new Float32Array(n);
 		this.burnSeconds = new Float32Array(n);
 		this.breakAt = new Float32Array(n);
 		this.speed = new Float32Array(n);
@@ -243,6 +334,26 @@ export class EffigySimulation {
 		this.flightGrow = new Uint8Array(n);
 		this.flight = new Float32Array(n).fill(1);
 		this.grow = new Float32Array(n).fill(1);
+
+		this.litAt = new Float32Array(nl).fill(-1);
+		this.burnOrigins = Array.from({ length: nl }, () => []);
+		this.skinLeft = new Float32Array(nl).fill(1);
+		this.buildAt = new Float32Array(nl).fill(-1);
+		this.buildOrigin = structure.letters.map((l) => ({
+			x: l.x + l.width / 2,
+			y: l.y + l.height / 2,
+			t: 0,
+			seed: 0
+		}));
+		this.paintAt = new Float32Array(nl).fill(-1);
+		this.skinPaint = new Float32Array(nl).fill(1);
+		this.litPendingAt = new Float32Array(nl).fill(-1);
+		this.litPendingX = new Float32Array(nl);
+		this.litPendingY = new Float32Array(nl);
+		this.buildPendingAt = new Float32Array(nl).fill(-1);
+		this.buildPendingX = new Float32Array(nl);
+		this.buildPendingY = new Float32Array(nl);
+		this.samples = structure.letters.map((l) => skinSamples(l));
 
 		this.standingMask = new Uint8Array(n);
 		this.supported = new Uint8Array(structure.jointCount);
@@ -268,7 +379,7 @@ export class EffigySimulation {
 		this.newCycleWeather();
 
 		if ((options.start ?? 'build') === 'build') {
-			this.startFlight(true);
+			this.startBuild(true);
 		} else {
 			this.enter('stand');
 		}
@@ -287,12 +398,13 @@ export class EffigySimulation {
 	}
 
 	/**
-	 * Light standing beams near (x, y) — the cursor or a finger acting as a
-	 * torch. Returns true when something caught fire.
+	 * The cursor or a finger as a torch at (x, y): lights the skin of a letter
+	 * it touches, or bare beams nearby. Returns true when something caught fire.
 	 */
 	torch(x: number, y: number, radius: number): boolean {
 		if (this.phase !== 'stand' && this.phase !== 'burn') return false;
 		let lit = false;
+		// Timber the fire has laid bare catches right away …
 		for (let i = 0; i < this.count; i++) {
 			if (
 				this.state[i] !== STANDING ||
@@ -301,6 +413,7 @@ export class EffigySimulation {
 			) {
 				continue;
 			}
+			if (this.exposeAt[i] > this.time) continue;
 			const reach = this.len[i] / 2 + radius + this.structure.beams[i].width;
 			if (Math.abs(this.cx[i] - x) > reach || Math.abs(this.cy[i] - y) > reach) continue;
 			const u = this.closestParam(i, x, y);
@@ -308,6 +421,19 @@ export class EffigySimulation {
 			if (Math.hypot(px - x, py - y) <= radius + this.structure.beams[i].width) {
 				this.ignite(i, u);
 				lit = true;
+			}
+		}
+		// … a skin starts burning where the torch touches it.
+		for (const letter of this.structure.letters) {
+			if (this.skinLeft[letter.index] <= 0) continue;
+			if (
+				pointInLetter(letter, x, y) ||
+				pointInLetter(letter, x - radius, y) ||
+				pointInLetter(letter, x + radius, y) ||
+				pointInLetter(letter, x, y - radius) ||
+				pointInLetter(letter, x, y + radius)
+			) {
+				if (this.igniteLetter(letter.index, x, y)) lit = true;
 			}
 		}
 		if (lit && this.phase === 'stand') {
@@ -325,11 +451,29 @@ export class EffigySimulation {
 		return smoothstep(0, 0.1, c) * (1 - smoothstep(0.55, 1, c));
 	}
 
+	/** How hot a beam glows that the burning skin has laid bare, 0..1 (0 once it burns). */
+	glow(i: number): number {
+		if (this.ignited[i] || this.structure.beams[i].kind === 'sill') return 0;
+		const since = this.time - this.exposeAt[i] - GLOW_AFTER;
+		if (!(since > 0)) return 0;
+		return clamp(since / this.blazeAfter[i], 0, 1);
+	}
+
+	/** Radius of a burn (or paint) front that started at `origin`, at `speed` letter heights per second. */
+	frontRadius(origin: Origin, speed: number): number {
+		return Math.max(0, (this.time - origin.t) * speed * this.structure.scale);
+	}
+
 	/** Point at parameter u (0 = end A, 1 = end B) of beam i, in its current pose. */
 	pointAt(i: number, u: number): [number, number] {
 		const half = this.len[i] * this.grow[i];
 		const k = (u - 0.5) * half;
 		return [this.cx[i] + Math.cos(this.ang[i]) * k, this.cy[i] + Math.sin(this.ang[i]) * k];
+	}
+
+	/** Has the flight of beam i begun (or is it no flight at all)? */
+	flightStarted(i: number): boolean {
+		return this.state[i] !== FLYING || this.time >= this.flightStart[i];
 	}
 
 	/** Beams still standing in the letters (not the sill). */
@@ -354,6 +498,7 @@ export class EffigySimulation {
 		this.phaseStart = this.time;
 		this.idleClock = 0;
 		this.assistClock = 0;
+		this.letterAssistClock = 0;
 	}
 
 	private newCycleWeather() {
@@ -368,6 +513,18 @@ export class EffigySimulation {
 		switch (this.phase) {
 			case 'build':
 			case 'rebuild':
+				if (since > BUILD_MAX) {
+					for (const letter of this.structure.letters) {
+						if (this.buildAt[letter.index] < 0) {
+							this.buildLetter(
+								letter.index,
+								this.buildOrigin[letter.index].x,
+								this.buildOrigin[letter.index].y
+							);
+						}
+					}
+				}
+				this.updateLetterSchedules();
 				if (this.updateFlight()) this.enter('stand');
 				break;
 			case 'stand':
@@ -376,79 +533,67 @@ export class EffigySimulation {
 				}
 				break;
 			case 'burn':
+				this.updateLetterSchedules();
 				if (since > BURN_ASSIST_AFTER) this.assist(dt);
 				if (since > BURN_MAX) this.collapseAll();
 				if (since > BURN_MAX + 3) this.settleAll();
 				if (this.nothingLeftStanding()) this.enter('embers');
 				break;
 			case 'embers':
-				if (since > EMBER_SECONDS) this.startFlight(false);
+				if (since > EMBER_SECONDS) this.startBuild(false);
 				break;
 		}
 
 		this.updateProjectiles(dt);
 		this.updateFire(dt);
 		this.updateBodies(dt);
+		this.skinClock += dt;
+		if (this.skinClock >= SKIN_TICK) {
+			this.skinClock = 0;
+			this.updateSkins();
+		}
 	}
 
+	/** One fire ball at one letter. */
 	private autoLight() {
-		this.lastIgnition = this.rand() < 0.5 ? 'fuse' : 'spark';
-		if (this.lastIgnition === 'fuse') {
-			this.structure.lines.forEach((line, index) => {
-				const sill = this.structure.beams.filter((b) => b.kind === 'sill' && b.line === index);
-				if (!sill.length) return;
-				const fromLeft = this.rand() < 0.6;
-				const first = fromLeft ? sill[0] : sill[sill.length - 1];
-				this.schedule(first.id, index * 0.5, fromLeft ? 0 : 1);
-			});
-		} else {
-			// One burning arrow per line, the second one a moment later.
-			const first = this.rand() < 0.5 ? 0 : 1;
-			this.structure.lines.forEach((_, index) => {
-				this.launchProjectile(index, index === first % this.structure.lines.length ? 0 : 0.55);
-			});
-		}
+		this.lastIgnition = 'spark';
+		this.launch('fire', Math.floor(this.rand() * this.letterCount), 0);
 		this.enter('burn');
 	}
 
-	private launchProjectile(line: number, delay: number) {
+	/** Throw a ball at a random point of the letter's frame. */
+	private launch(kind: Projectile['kind'], letterIndex: number, delay: number) {
+		const letter = this.structure.letters[letterIndex];
+		if (!letter) return;
 		const S = this.structure.scale;
-		const letters = this.structure.letters.filter((l) => l.line === line);
-		if (!letters.length) return;
-		const letter = letters[Math.floor(this.rand() * letters.length)];
-		const candidates = letter.beams.filter(
-			(id) => this.state[id] === STANDING && this.tcy[id] > letter.y + letter.height * 0.55
-		);
-		const pool = candidates.length ? candidates : letter.beams;
-		const target = pool[Math.floor(this.rand() * pool.length)];
-		const p: Projectile = {
-			active: true,
-			launchAt: this.time + delay,
-			x: 0,
-			y: 0,
-			vx: 0,
-			vy: 0,
-			t: 0,
-			duration: 1,
-			target
-		};
-		this.projectiles.push(p);
-		const fromLeft = this.tcx[target] > this.structure.width / 2;
+		const pool = letter.beams.filter((id) => this.structure.beams[id].kind !== 'brace');
+		const target = pool.length ? pool[Math.floor(this.rand() * pool.length)] : letter.beams[0];
+		const tx = target !== undefined ? this.tcx[target] : letter.x + letter.width / 2;
+		const ty = target !== undefined ? this.tcy[target] : letter.y + letter.height / 2;
+		const fromLeft = tx > this.structure.width / 2;
 		const sx = fromLeft ? -0.6 * S : this.structure.width + 0.6 * S;
 		const sy = -1.0 * S;
-		const duration = 0.85 + this.rand() * 0.3;
+		const duration = 0.9 + this.rand() * 0.3;
 		const g = 2.4 * S;
-		p.x = sx;
-		p.y = sy;
-		p.duration = duration;
-		p.vx = (this.tcx[target] - sx) / duration;
-		p.vy = (this.tcy[target] - sy - 0.5 * g * duration * duration) / duration;
+		this.projectiles.push({
+			kind,
+			active: true,
+			launchAt: this.time + delay,
+			x: sx,
+			y: sy,
+			vx: (tx - sx) / duration,
+			vy: (ty - sy - 0.5 * g * duration * duration) / duration,
+			t: 0,
+			duration,
+			letter: letterIndex,
+			tx,
+			ty
+		});
 	}
 
 	private updateProjectiles(dt: number) {
 		if (!this.projectiles.length) return;
-		const S = this.structure.scale;
-		const g = 2.4 * S;
+		const g = 2.4 * this.structure.scale;
 		for (const p of this.projectiles) {
 			if (!p.active || this.time < p.launchAt) continue;
 			p.vy += g * dt;
@@ -457,21 +602,33 @@ export class EffigySimulation {
 			p.t += dt;
 			if (p.t < p.duration) continue;
 			p.active = false;
-			for (let i = 0; i < this.count; i++) {
-				if (this.state[i] !== STANDING || this.ignited[i]) continue;
-				const reach = this.len[i] / 2 + 0.3 * S;
-				if (Math.abs(this.cx[i] - p.x) > reach || Math.abs(this.cy[i] - p.y) > reach) continue;
-				const u = this.closestParam(i, p.x, p.y);
-				const [px, py] = this.pointAt(i, u);
-				if (Math.hypot(px - p.x, py - p.y) < 0.28 * S) this.ignite(i, u);
+			p.x = p.tx;
+			p.y = p.ty;
+			if (p.kind === 'magic') {
+				this.buildLetter(p.letter, p.tx, p.ty);
+				this.emit('magic', p.tx, p.ty, p.letter, 1);
+			} else {
+				this.igniteLetter(p.letter, p.tx, p.ty);
+				this.emit('impact', p.tx, p.ty, p.letter, 1);
 			}
-			this.emit('impact', p.x, p.y, this.structure.beams[p.target]?.letter ?? -1, 1);
 		}
 		if (this.projectiles.every((p) => !p.active)) this.projectiles.length = 0;
 	}
 
 	/** Late in a burn: keep the fire going and bring down stubborn remains. */
 	private assist(dt: number) {
+		// A letter nobody lit yet catches from its foot.
+		this.letterAssistClock += dt;
+		if (this.letterAssistClock >= 1) {
+			this.letterAssistClock = 0;
+			const letter = this.structure.letters.find((l) => this.litAt[l.index] < 0);
+			if (letter)
+				this.igniteLetter(
+					letter.index,
+					letter.x + letter.width / 2,
+					letter.y + letter.height * 0.96
+				);
+		}
 		this.assistClock += dt;
 		if (this.assistClock < 0.3) return;
 		this.assistClock = 0;
@@ -480,6 +637,7 @@ export class EffigySimulation {
 			if (
 				this.state[i] === STANDING &&
 				!this.ignited[i] &&
+				this.exposeAt[i] <= this.time &&
 				this.structure.beams[i].kind !== 'sill'
 			) {
 				standing.push(i);
@@ -496,10 +654,12 @@ export class EffigySimulation {
 	}
 
 	private collapseAll() {
+		for (let l = 0; l < this.letterCount; l++) this.skinLeft[l] = 0;
 		for (let i = 0; i < this.count; i++) {
 			if (this.state[i] === STANDING && this.structure.beams[i].kind !== 'sill') {
+				this.exposeAt[i] = Math.min(this.exposeAt[i], this.time);
 				if (!this.ignited[i]) this.ignite(i, 0.5);
-				this.breakBeam(i);
+				this.breakBeam(i, true);
 			}
 		}
 	}
@@ -525,37 +685,199 @@ export class EffigySimulation {
 		return true;
 	}
 
+	// --- Letters: lighting and building ----------------------------------------
+
+	/** Scheduled letter ignitions and builds whose time has come. */
+	private updateLetterSchedules() {
+		for (let l = 0; l < this.letterCount; l++) {
+			if (this.litPendingAt[l] >= 0 && this.time >= this.litPendingAt[l]) {
+				this.litPendingAt[l] = -1;
+				this.igniteLetter(l, this.litPendingX[l], this.litPendingY[l]);
+			}
+			if (this.buildPendingAt[l] >= 0 && this.time >= this.buildPendingAt[l]) {
+				this.buildPendingAt[l] = -1;
+				this.buildLetter(l, this.buildPendingX[l], this.buildPendingY[l]);
+			}
+		}
+	}
+
+	/** The letter's skin catches fire at (x, y). Returns false if there was nothing to light. */
+	igniteLetter(l: number, x: number, y: number): boolean {
+		const letter = this.structure.letters[l];
+		if (!letter || this.skinLeft[l] <= 0) return false;
+		const origins = this.burnOrigins[l];
+		if (origins.length >= MAX_ORIGINS) return false;
+		// A spot the fire has already eaten doesn't start a new front.
+		if (origins.some((o) => insideFront(o, this.frontRadius(o, SKIN_BURN_SPEED), x, y)))
+			return false;
+		const now = this.time;
+		const origin: Origin = { x, y, t: now, seed: this.rand() * 100 };
+		origins.push(origin);
+		if (this.litAt[l] < 0) {
+			this.litAt[l] = now;
+			this.emit('ignite', x, y, l, 0.6);
+		}
+		const v = SKIN_BURN_SPEED * this.structure.scale;
+		for (const b of letter.beams) {
+			// A beam comes to light when the ragged front passes its middle.
+			const dx = this.tcx[b] - x;
+			const dy = this.tcy[b] - y;
+			const te = now + Math.hypot(dx, dy) / (v * frontShape(Math.atan2(dy, dx), origin.seed));
+			if (te < this.exposeAt[b]) {
+				this.exposeAt[b] = te;
+				this.schedule(b, te + this.blazeAfter[b] - now, this.closestParam(b, x, y));
+			}
+		}
+		// The burn front walks on to the neighbours in the line.
+		for (const [neighbour, edge] of [
+			[letter.left, letter.x],
+			[letter.right, letter.x + letter.width]
+		] as const) {
+			if (neighbour < 0 || this.litAt[neighbour] >= 0) continue;
+			const next = this.structure.letters[neighbour];
+			const t = now + Math.abs(edge - x) / v + GAP_DELAY * (0.8 + this.rand() * 0.5);
+			const tx =
+				neighbour === letter.left ? next.x + next.width * 0.97 : next.x + next.width * 0.03;
+			const ty = clamp(y, next.y + next.height * 0.15, next.y + next.height * 0.85);
+			this.scheduleLetter(neighbour, t, tx, ty);
+		}
+		return true;
+	}
+
+	private scheduleLetter(l: number, at: number, x: number, y: number) {
+		if (this.litPendingAt[l] < 0 || at < this.litPendingAt[l]) {
+			this.litPendingAt[l] = at;
+			this.litPendingX[l] = x;
+			this.litPendingY[l] = y;
+		}
+	}
+
+	/** The skin of the first letter has burnt away: the other line catches a little later. */
+	private crossLine(l: number) {
+		if (this.crossLineDone || this.structure.lines.length < 2) return;
+		this.crossLineDone = true;
+		const letter = this.structure.letters[l];
+		const centerX = letter.x + letter.width / 2;
+		let best: LetterDef | null = null;
+		for (const other of this.structure.letters) {
+			if (other.line === letter.line || this.litAt[other.index] >= 0) continue;
+			if (
+				!best ||
+				Math.abs(other.x + other.width / 2 - centerX) < Math.abs(best.x + best.width / 2 - centerX)
+			) {
+				best = other;
+			}
+		}
+		if (!best) return;
+		const below = best.line > letter.line;
+		this.scheduleLetter(
+			best.index,
+			this.time + CROSS_LINE_DELAY,
+			clamp(centerX, best.x + best.width * 0.15, best.x + best.width * 0.85),
+			below ? best.y + best.height * 0.04 : best.y + best.height * 0.96
+		);
+	}
+
+	/** The build reaches the letter at (x, y): its frame assembles from there. */
+	private buildLetter(l: number, x: number, y: number) {
+		if (this.buildAt[l] >= 0) return;
+		const letter = this.structure.letters[l];
+		const now = this.time;
+		this.buildAt[l] = now;
+		this.buildOrigin[l] = { x, y, t: now, seed: this.rand() * 100 };
+		const v = BUILD_SPEED * this.structure.scale;
+		for (const b of letter.beams) {
+			const d = Math.hypot(this.tcx[b] - x, this.tcy[b] - y);
+			this.flightStart[b] = now + d / v + this.rand() * 0.1;
+		}
+		for (const neighbour of [letter.left, letter.right]) {
+			if (neighbour < 0 || this.buildAt[neighbour] >= 0) continue;
+			const next = this.structure.letters[neighbour];
+			const at = now + BUILD_HOP * (0.8 + this.rand() * 0.4);
+			if (this.buildPendingAt[neighbour] < 0 || at < this.buildPendingAt[neighbour]) {
+				this.buildPendingAt[neighbour] = at;
+				this.buildPendingX[neighbour] =
+					neighbour === letter.left ? next.x + next.width * 0.9 : next.x + next.width * 0.1;
+				this.buildPendingY[neighbour] = clamp(
+					y,
+					next.y + next.height * 0.2,
+					next.y + next.height * 0.8
+				);
+			}
+		}
+	}
+
+	/** Burnt and painted shares of every skin, measured on its sample points. */
+	private updateSkins() {
+		const S = this.structure.scale;
+		for (let l = 0; l < this.letterCount; l++) {
+			const pts = this.samples[l];
+			const total = pts.length / 2;
+			// Burning.
+			const origins = this.burnOrigins[l];
+			if (origins.length && this.skinLeft[l] > 0) {
+				let left = 0;
+				for (let k = 0; k < pts.length; k += 2) {
+					let burnt = false;
+					for (const o of origins) {
+						if (insideFront(o, (this.time - o.t) * SKIN_BURN_SPEED * S, pts[k], pts[k + 1])) {
+							burnt = true;
+							break;
+						}
+					}
+					if (!burnt) left++;
+				}
+				this.skinLeft[l] = left / total;
+				if (left === 0 && this.phase === 'burn') this.crossLine(l);
+			}
+			// Painting.
+			if (this.paintAt[l] >= 0 && this.skinPaint[l] < 1) {
+				const o = this.buildOrigin[l];
+				const r = (this.time - this.paintAt[l]) * SKIN_PAINT_SPEED * S;
+				let painted = 0;
+				for (let k = 0; k < pts.length; k += 2) {
+					if (Math.hypot(pts[k] - o.x, pts[k + 1] - o.y) < r) painted++;
+				}
+				this.skinPaint[l] = painted / total;
+			}
+		}
+	}
+
 	// --- Flight (build / rebuild) -------------------------------------------
 
-	private startFlight(first: boolean) {
+	private startBuild(first: boolean) {
 		const S = this.structure.scale;
-		const beams = this.structure.beams;
 		this.clusters = [];
 		this.projectiles.length = 0;
+		this.crossLineDone = false;
 		for (const pile of this.piles) pile.fill(0);
+		for (let l = 0; l < this.letterCount; l++) {
+			this.litAt[l] = -1;
+			this.burnOrigins[l] = [];
+			this.skinLeft[l] = 1;
+			this.buildAt[l] = -1;
+			this.paintAt[l] = -1;
+			this.skinPaint[l] = 0;
+			this.litPendingAt[l] = -1;
+			this.buildPendingAt[l] = -1;
+		}
 
-		for (const beam of beams) {
+		for (const beam of this.structure.beams) {
 			const i = beam.id;
 			const line = this.structure.lines[beam.line];
 			this.inCluster[i] = 0;
 			this.vx[i] = this.vy[i] = this.av[i] = 0;
 			if (first) {
-				// Sparks rising from the sill grow into beams.
+				// Sparks at the sill grow into beams.
 				this.cx[i] = this.tcx[i] + (this.rand() - 0.5) * 0.5 * S;
 				this.cy[i] = line.ground + 0.02 * S;
 				this.ang[i] = this.tang[i] + (this.rand() - 0.5) * 2.4;
 				this.resetFire(i);
 			}
-			const relHeight = clamp((line.ground - this.tcy[i]) / S, 0, 1);
-			const letterOrder =
-				beam.letter >= 0 ? beam.letter / Math.max(1, this.structure.letters.length) : 0;
-			// Letter by letter from left to right, each one from the ground up.
-			const delay =
-				beam.kind === 'sill'
-					? this.rand() * 0.25
-					: 0.1 + letterOrder * 1.1 + relHeight * 0.45 + this.rand() * 0.12;
-			this.flightStart[i] = this.time + delay;
-			this.flightDur[i] = (beam.kind === 'sill' ? 0.55 : 0.7) + this.rand() * 0.25;
+			const sill = beam.kind === 'sill';
+			// Letters wait for the build to reach them; the sill heals right away.
+			this.flightStart[i] = sill ? this.time + this.rand() * 0.25 : Infinity;
+			this.flightDur[i] = (sill ? 0.55 : 0.6) + this.rand() * 0.25;
 			this.flightX[i] = this.cx[i];
 			this.flightY[i] = this.cy[i];
 			this.flightA[i] = this.ang[i];
@@ -565,21 +887,26 @@ export class EffigySimulation {
 			this.grow[i] = first ? 0 : 1;
 			this.state[i] = FLYING;
 		}
+		// One magic ball per line, the second a moment later.
+		this.structure.lines.forEach((line, index) => {
+			const letters = this.structure.letters.filter((l) => l.line === index);
+			if (!letters.length) return;
+			const pick = letters[Math.floor(this.rand() * letters.length)];
+			this.launch('magic', pick.index, 0.15 + index * 0.45);
+		});
 		this.cycle += first ? 0 : 1;
 		this.newCycleWeather();
 		this.enter(first ? 'build' : 'rebuild');
 	}
 
-	/** Returns true once every beam is back in place. */
+	/** Returns true once every beam is back in place and every skin painted. */
 	private updateFlight(): boolean {
 		let done = true;
 		for (let i = 0; i < this.count; i++) {
 			if (this.state[i] !== FLYING) continue;
+			done = false;
 			const raw = (this.time - this.flightStart[i]) / this.flightDur[i];
-			if (raw <= 0) {
-				done = false;
-				continue;
-			}
+			if (!(raw > 0)) continue;
 			if (this.flight[i] === 0 && this.ignited[i]) {
 				// Lifting off puts the fire out; the char fades into fresh wood.
 				this.ignited[i] = 0;
@@ -602,12 +929,21 @@ export class EffigySimulation {
 				this.flight[i] = 1;
 				this.grow[i] = 1;
 				const beam = this.structure.beams[i];
-				if (beam.kind === 'post' && this.rand() < 0.35) {
+				if (beam.kind === 'post' && this.rand() < 0.3) {
 					this.emit('arrive', this.cx[i], this.cy[i], beam.letter, 0.5);
 				}
-			} else {
-				done = false;
 			}
+		}
+		// A finished frame gets its rainbow skin.
+		for (const letter of this.structure.letters) {
+			const l = letter.index;
+			if (this.paintAt[l] >= 0) {
+				if (this.skinPaint[l] < 1) done = false;
+				continue;
+			}
+			done = false;
+			if (this.buildAt[l] < 0) continue;
+			if (letter.beams.every((b) => this.state[b] === STANDING)) this.paintAt[l] = this.time;
 		}
 		return done;
 	}
@@ -616,7 +952,8 @@ export class EffigySimulation {
 
 	private resetFire(i: number) {
 		const S = this.structure.scale;
-		const sill = this.structure.beams[i].kind === 'sill';
+		const beam = this.structure.beams[i];
+		const sill = beam.kind === 'sill';
 		this.heat[i] = 0;
 		this.ignited[i] = 0;
 		this.lo[i] = this.hi[i] = 0;
@@ -625,11 +962,13 @@ export class EffigySimulation {
 		this.pendingAt[i] = -1;
 		this.contactTime[i] = 0;
 		this.fallTime[i] = 0;
+		// The sill has no skin; letter beams are covered until their skin burns.
+		this.exposeAt[i] = sill ? 0 : Infinity;
+		this.blazeAfter[i] = BLAZE_AFTER_MIN + this.rand() * BLAZE_AFTER_SPREAD;
 		this.burnSeconds[i] = sill ? 3.4 + this.rand() * 1.2 : 2.6 + this.rand() * 1.6;
 		// Braces drop out early, rails and posts carry the burning frame for longer.
-		const brace = this.structure.beams[i].kind === 'brace';
-		this.breakAt[i] = brace ? 0.35 + this.rand() * 0.3 : 0.62 + this.rand() * 0.28;
-		this.speed[i] = (sill ? 2.6 : 0.9 + this.rand() * 0.6) * S;
+		this.breakAt[i] = beam.kind === 'brace' ? 0.35 + this.rand() * 0.3 : 0.62 + this.rand() * 0.28;
+		this.speed[i] = (sill ? SILL_SPEED : 0.9 + this.rand() * 0.6) * S;
 	}
 
 	private placeAtTarget(i: number) {
@@ -651,6 +990,7 @@ export class EffigySimulation {
 
 	ignite(i: number, u: number) {
 		if (this.ignited[i] || this.state[i] === FLYING) return;
+		const beam = this.structure.beams[i];
 		this.ignited[i] = 1;
 		this.pendingAt[i] = -1;
 		this.lo[i] = this.hi[i] = clamp(u, 0, 1);
@@ -658,12 +998,14 @@ export class EffigySimulation {
 		this.spreadA[i] = u <= 0 ? 1 : 0;
 		this.spreadB[i] = u >= 1 ? 1 : 0;
 		this.char[i] = Math.max(this.char[i], 0.001);
+		if (beam.letter >= 0) this.exposeAt[i] = Math.min(this.exposeAt[i], this.time);
 	}
 
 	private spreadFrom(i: number, joint: number) {
 		if (this.state[i] !== STANDING) return;
 		for (const k of this.structure.jointBeams[joint]) {
 			if (k === i || this.ignited[k] || this.state[k] !== STANDING) continue;
+			if (this.exposeAt[k] > this.time) continue;
 			const beam = this.structure.beams[k];
 			this.schedule(k, 0.02 + this.rand() * 0.12, beam.jointA === joint ? 0 : 1);
 		}
@@ -700,10 +1042,12 @@ export class EffigySimulation {
 				this.char[i] = Math.min(1, this.char[i] + dt / this.burnSeconds[i]);
 				anyBurning = true;
 			}
+			// A letter only comes down once its skin is gone.
 			if (
 				this.state[i] === STANDING &&
 				beams[i].kind !== 'sill' &&
-				this.char[i] >= this.breakAt[i]
+				this.char[i] >= this.breakAt[i] &&
+				this.skinLeft[beams[i].letter] <= 0
 			) {
 				this.breakBeam(i);
 			}
@@ -718,10 +1062,20 @@ export class EffigySimulation {
 		if (this.supportDirty) this.refreshSupport();
 
 		// A fire that went out before the title came down gets relit.
-		if (this.phase === 'burn' && !anyBurning && !anyPending && !this.projectiles.length) {
+		const lettersWaiting = this.litPendingAt.some((t) => t >= 0);
+		const skinsBurning = this.burnOrigins.some((o, l) => o.length > 0 && this.skinLeft[l] > 0);
+		if (
+			this.phase === 'burn' &&
+			!anyBurning &&
+			!anyPending &&
+			!lettersWaiting &&
+			!skinsBurning &&
+			!this.projectiles.length
+		) {
 			this.idleClock += dt;
-			if (this.idleClock > 0.8) {
+			if (this.idleClock > 1.5) {
 				this.idleClock = 0;
+				this.letterAssistClock = 1;
 				this.assistClock = 1;
 				this.assist(0);
 			}
@@ -730,12 +1084,11 @@ export class EffigySimulation {
 		}
 	}
 
-	/** Heat from burning beams reaches whatever is close, mostly above. */
+	/** Heat from burning beams reaches bare beams close by, mostly above. */
 	private radiate(dt: number) {
 		const S = this.structure.scale;
 		const R = 0.7 * S;
-		const rate =
-			(this.phase === 'burn' && this.time - this.phaseStart > BURN_ASSIST_AFTER ? 9 : 4.5) * dt;
+		const rate = 4.5 * dt;
 		const beams = this.structure.beams;
 		const size = this.gridSize;
 		const cols = this.gridCols;
@@ -743,10 +1096,10 @@ export class EffigySimulation {
 		const ox = 2 * S;
 		const oy = 2 * S;
 
-		// Bucket the beams that can still catch fire.
+		// Bucket the beams that can still catch fire: bare, not burning, not flying.
 		this.gridHead.fill(-1);
 		for (let i = 0; i < this.count; i++) {
-			if (this.ignited[i] || this.state[i] === FLYING) continue;
+			if (this.ignited[i] || this.state[i] === FLYING || this.exposeAt[i] > this.time) continue;
 			const gx = Math.floor((this.cx[i] + ox) / size);
 			const gy = Math.floor((this.cy[i] + oy) / size);
 			if (gx < 0 || gy < 0 || gx >= cols || gy >= rows) continue;
@@ -757,6 +1110,7 @@ export class EffigySimulation {
 
 		for (let i = 0; i < this.count; i++) {
 			if (!this.ignited[i] || this.state[i] === FLYING) continue;
+			const fromSill = beams[i].kind === 'sill';
 			const power = this.intensity(i) * (0.35 + 0.65 * (this.hi[i] - this.lo[i]));
 			if (power < 0.08) continue;
 			const [sx, sy] = this.pointAt(i, (this.lo[i] + this.hi[i]) / 2);
@@ -767,7 +1121,8 @@ export class EffigySimulation {
 				for (let x = gx - 1; x <= gx + 1; x++) {
 					if (x < 0 || x >= cols) continue;
 					for (let k = this.gridHead[y * cols + x]; k >= 0; k = this.gridNext[k]) {
-						if (this.ignited[k]) continue;
+						// Along a sill the fire only creeps from plank to plank.
+						if (this.ignited[k] || (fromSill && beams[k].kind === 'sill')) continue;
 						const dx = this.cx[k] - sx;
 						const dy = this.cy[k] - sy;
 						const d = Math.hypot(dx, dy);
@@ -777,18 +1132,17 @@ export class EffigySimulation {
 						// Debris lying on the sill sets it alight.
 						const fuel = beams[k].kind === 'sill' ? 3 : 1;
 						this.heat[k] += rate * power * falloff * upward * fuel;
-						if (this.heat[k] >= 1) {
-							const u = this.closestParam(k, sx, sy);
-							this.ignite(k, u);
-						}
+						if (this.heat[k] >= 1) this.ignite(k, this.closestParam(k, sx, sy));
 					}
 				}
 			}
 		}
 	}
 
-	private breakBeam(i: number) {
-		if (this.state[i] !== STANDING || this.structure.beams[i].kind === 'sill') return;
+	private breakBeam(i: number, force = false) {
+		const beam = this.structure.beams[i];
+		if (this.state[i] !== STANDING || beam.kind === 'sill') return;
+		if (!force && this.skinLeft[beam.letter] > 0) return;
 		this.state[i] = FALLING;
 		this.broken.push(i);
 		this.supportDirty = true;
@@ -1070,4 +1424,20 @@ export class EffigySimulation {
 		e.strength = strength;
 		this.eventPool[this.eventCount++] = e;
 	}
+}
+
+/** A grid of points on the letter's skin, to measure how much of it is burnt or painted. */
+function skinSamples(letter: LetterDef): Float32Array {
+	const pts: number[] = [];
+	const nx = 7;
+	const ny = 10;
+	for (let iy = 0; iy < ny; iy++) {
+		for (let ix = 0; ix < nx; ix++) {
+			const x = letter.x + ((ix + 0.5) / nx) * letter.width;
+			const y = letter.y + ((iy + 0.5) / ny) * letter.height;
+			if (pointInLetter(letter, x, y)) pts.push(x, y);
+		}
+	}
+	if (!pts.length) pts.push(letter.x + letter.width / 2, letter.y + letter.height / 2);
+	return Float32Array.from(pts);
 }

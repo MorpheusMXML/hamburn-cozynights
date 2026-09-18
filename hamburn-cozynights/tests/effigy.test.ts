@@ -6,6 +6,7 @@ import {
 	computeSupport,
 	effigyAspect,
 	layoutUnits,
+	pointInLetter,
 	type EffigyStructure
 } from '../src/lib/fx/effigy/structure';
 import {
@@ -109,6 +110,40 @@ describe('effigy structure', () => {
 		for (const id of top) expect(supported[s.beams[id].jointA]).toBe(0);
 	});
 
+	it('wraps every letter in a skin that hides its whole frame', () => {
+		const s = build();
+		for (const letter of s.letters) {
+			for (const id of letter.beams) {
+				const b = s.beams[id];
+				for (const [x, y] of [
+					[b.ax, b.ay],
+					[(b.ax + b.bx) / 2, (b.ay + b.by) / 2],
+					[b.bx, b.by]
+				]) {
+					expect(pointInLetter(letter, x, y), `${letter.char} beam ${id}`).toBe(true);
+				}
+			}
+			// Beside the letter and in the gap to its neighbour there is no skin.
+			expect(pointInLetter(letter, letter.x - 0.05 * SCALE, letter.y + letter.height / 2)).toBe(
+				false
+			);
+		}
+		const o = s.letters.find((l) => l.char === 'O')!;
+		expect(pointInLetter(o, o.x + o.width / 2, o.y + o.height / 2), 'the hole of the O').toBe(
+			false
+		);
+	});
+
+	it('knows the neighbours of every letter', () => {
+		const s = build();
+		const line = s.letters.filter((l) => l.line === 0);
+		expect(line.map((l) => l.slot)).toEqual(line.map((_, k) => k));
+		expect(line[0].left).toBe(-1);
+		expect(line[0].right).toBe(line[1].index);
+		expect(line[line.length - 1].right).toBe(-1);
+		expect(line.every((l) => l.slots === line.length)).toBe(true);
+	});
+
 	it('uses simpler bracing on small screens', () => {
 		const small = buildStructure(DEFAULT_LINES, 40, { rand: mulberry32(1) });
 		const large = buildStructure(DEFAULT_LINES, 100, { rand: mulberry32(1) });
@@ -122,11 +157,11 @@ describe('effigy simulation', () => {
 	it('builds, stands, burns down completely and rises again', () => {
 		const sim = new EffigySimulation(build(), { seed: 42 });
 		expect(sim.phase).toBe('build');
-		expect(runUntil(sim, 'stand', 6)).toBe(true);
+		expect(runUntil(sim, 'stand', 12)).toBe(true);
 		expect(sim.standingLetterBeams()).toBeGreaterThan(0);
 
 		expect(runUntil(sim, 'burn', 5)).toBe(true);
-		expect(runUntil(sim, 'embers', 25)).toBe(true);
+		expect(runUntil(sim, 'embers', 55)).toBe(true);
 		// Nothing of the letters is left standing or in the air.
 		for (let i = 0; i < sim.count; i++) {
 			if (sim.structure.beams[i].kind === 'sill') continue;
@@ -134,7 +169,7 @@ describe('effigy simulation', () => {
 		}
 
 		expect(runUntil(sim, 'rebuild', 5)).toBe(true);
-		expect(runUntil(sim, 'stand', 6)).toBe(true);
+		expect(runUntil(sim, 'stand', 12)).toBe(true);
 		expect(sim.cycle).toBe(1);
 		for (let i = 0; i < sim.count; i++) {
 			expect(sim.state[i]).toBe(STANDING);
@@ -142,18 +177,101 @@ describe('effigy simulation', () => {
 			expect(sim.cy[i]).toBeCloseTo(sim.tcy[i], 3);
 			expect(sim.ignited[i]).toBe(0);
 		}
+		// Every letter has a fresh skin again.
+		for (let l = 0; l < sim.letterCount; l++) {
+			expect(sim.skinPaint[l]).toBe(1);
+			expect(sim.skinLeft[l]).toBe(1);
+			expect(sim.burnOrigins[l]).toEqual([]);
+		}
+	});
+
+	it('builds letter by letter from where each magic ball lands, then paints the skin', () => {
+		const sim = new EffigySimulation(build(), { seed: 8 });
+		expect(sim.projectiles.map((p) => p.kind)).toEqual(['magic', 'magic']);
+		let landed = 0;
+		let paintedTooEarly = 0;
+		for (let t = 0; t < 12 && sim.phase === 'build'; t += 1 / 60) {
+			sim.step(1 / 60);
+			sim.drainEvents((e) => {
+				if (e.kind === 'magic') landed++;
+			});
+			for (const letter of sim.structure.letters) {
+				const painting = sim.paintAt[letter.index] >= 0;
+				if (painting && letter.beams.some((b) => sim.state[b] !== STANDING)) paintedTooEarly++;
+			}
+		}
+		expect(sim.phase).toBe('stand');
+		expect(landed).toBe(2);
+		expect(paintedTooEarly).toBe(0);
+		for (const line of sim.structure.lines) {
+			const letters = sim.structure.letters.filter((l) => l.line === line.index);
+			const first = letters.reduce((a, b) => (sim.buildAt[b.index] < sim.buildAt[a.index] ? b : a));
+			// Away from the letter the ball hit, each letter is built after its neighbour.
+			for (const l of letters) {
+				const toward = l.slot < first.slot ? l.right : l.slot > first.slot ? l.left : -1;
+				if (toward >= 0) expect(sim.buildAt[l.index]).toBeGreaterThan(sim.buildAt[toward]);
+				expect(sim.skinPaint[l.index]).toBe(1);
+			}
+		}
+	});
+
+	it('burns the skin first, then walks from letter to letter and line to line', () => {
+		const sim = new EffigySimulation(build(), { seed: 21, start: 'stand', autoIgnite: false });
+		const letters = sim.structure.letters;
+		const beams = sim.structure.beams;
+		const h = letters[0];
+		const leg = beams[h.beams[0]];
+		expect(sim.torch((leg.ax + leg.bx) / 2, (leg.ay + leg.by) / 2, 4)).toBe(true);
+		expect(Array.from(sim.ignited).some(Boolean)).toBe(false);
+
+		let burntUnderSkin = 0;
+		let fellWithSkin = 0;
+		let firstSkinGone = -1;
+		for (let t = 0; t < 50 && sim.phase === 'burn'; t += 1 / 60) {
+			sim.step(1 / 60);
+			if (firstSkinGone < 0 && sim.skinLeft[h.index] <= 0) firstSkinGone = sim.time;
+			for (let i = 0; i < sim.count; i++) {
+				const letter = beams[i].letter;
+				if (letter < 0) continue;
+				// Flames only on timber the burning skin has laid bare …
+				if (sim.ignited[i] && sim.exposeAt[i] > sim.time) burntUnderSkin++;
+				// … and nothing comes down while the letter still has skin.
+				if (sim.state[i] !== STANDING && sim.skinLeft[letter] > 0) fellWithSkin++;
+			}
+		}
+		expect(sim.phase).toBe('embers');
+		expect(burntUnderSkin).toBe(0);
+		expect(fellWithSkin).toBe(0);
+
+		// The first line caught fire letter by letter, starting at the H.
+		const first = letters.filter((l) => l.line === 0).map((l) => sim.litAt[l.index]);
+		expect(first[0]).toBe(0);
+		for (let k = 1; k < first.length; k++) expect(first[k]).toBeGreaterThan(first[k - 1] + 0.5);
+		// The second line only once the skin of the H had burnt away.
+		const second = letters
+			.filter((l) => l.line === 1)
+			.map((l) => sim.litAt[l.index])
+			.filter((t) => t >= 0);
+		expect(second.length).toBeGreaterThan(0);
+		expect(firstSkinGone).toBeGreaterThan(0);
+		expect(Math.min(...second)).toBeGreaterThan(firstSkinGone);
 	});
 
 	it('keeps debris on or above the ground of its line', () => {
 		const sim = new EffigySimulation(build(), { seed: 3, start: 'stand' });
-		for (let t = 0; t < 14; t += 1 / 60) {
+		let below = 0;
+		let resting = 0;
+		for (let t = 0; t < 24; t += 1 / 60) {
 			sim.step(1 / 60);
 			for (let i = 0; i < sim.count; i++) {
 				if (sim.state[i] !== RESTING && sim.state[i] !== FALLING) continue;
 				const line = sim.structure.lines[sim.structure.beams[i].line];
-				expect(sim.cy[i]).toBeLessThanOrEqual(line.ground + 2);
+				if (sim.cy[i] > line.ground + 2) below++;
+				if (sim.state[i] === RESTING) resting++;
 			}
 		}
+		expect(resting).toBeGreaterThan(0);
+		expect(below).toBe(0);
 	});
 
 	it('lights up where the torch touches a standing letter', () => {
@@ -164,6 +282,8 @@ describe('effigy simulation', () => {
 		expect(sim.torch((beam.ax + beam.bx) / 2, (beam.ay + beam.by) / 2, 4)).toBe(true);
 		expect(sim.phase).toBe('burn');
 		expect(sim.lastIgnition).toBe('torch');
+		expect(sim.litAt[h.index]).toBe(sim.time);
+		expect(sim.burnOrigins[h.index]).toHaveLength(1);
 		// Far away from every letter nothing happens.
 		expect(sim.torch(-500, -500, 4)).toBe(false);
 	});
