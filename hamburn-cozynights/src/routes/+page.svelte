@@ -1,57 +1,171 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
+	import { tick } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
+	import type { ActionData, PageData } from './$types';
 
-	export let form: { error?: string };
+	export let data: PageData;
+	export let form: ActionData;
 
-	let titleLetters: { char: string; color: string; delay: number; offset: number }[] = [];
-	const fullTitle = 'HAMBURN COZYNIGHTS';
 	const neonColors = ['#f472b6', '#2dd4bf', '#fb923c', '#a855f7', '#fff'];
+
+	// Fixed per-letter values instead of Math.random(): the title is part of the
+	// server-rendered page and must not differ after hydration.
+	let letterIndex = 0;
+	const titleWords = ['HAMBURN', 'COZYNIGHTS'].map((word) =>
+		word.split('').map((char) => {
+			const i = letterIndex++;
+			return {
+				char,
+				color: neonColors[(i * 7 + 3) % neonColors.length],
+				delay: (i * 137) % 800,
+				offset: ((i * 53) % 40) - 20
+			};
+		})
+	);
 	let isHovering = false;
 
-	onMount(() => {
-		titleLetters = fullTitle.split('').map((char, i) => ({
-			char,
-			color: neonColors[Math.floor(Math.random() * neonColors.length)],
-			delay: Math.random() * 800,
-			offset: (Math.random() - 0.5) * 40
-		}));
-	});
+	// Keep in sync with the server-side check in +page.server.ts.
+	const TICKET_CODE_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+	const SURROUNDING_BLANKS = /^[\s\u200B-\u200D\uFEFF]+|[\s\u200B-\u200D\uFEFF]+$/g;
+
+	let codeInput: HTMLInputElement;
+	let code = form?.code ?? '';
+	let clientError = '';
+	let isSubmitting = false;
+
+	$: errorMessage = clientError || (isSubmitting ? '' : (form?.error ?? ''));
+
+	// Guest pages send visitors here when the ticket-code cookie is missing or stale.
+	$: loginHint =
+		$page.url.searchParams.get('login') === 'expired'
+			? 'Your ticket code is not valid on this device (anymore). Please enter it again.'
+			: $page.url.searchParams.get('login') === 'required'
+				? 'Please enter your ticket code first. After that you can open the map and pick your spot.'
+				: '';
+
+	function checkTicketCode(value: string): string {
+		if (!value) return 'Please enter your ticket code.';
+		if (!TICKET_CODE_PATTERN.test(value)) {
+			return 'Ticket codes only contain letters, digits, - and _. Check for spaces or typos.';
+		}
+		return '';
+	}
+
+	async function showClientError(message: string) {
+		clientError = message;
+		await tick();
+		codeInput?.focus();
+	}
 </script>
 
+<svelte:head>
+	<title>CozyNights – Hamburn</title>
+	<meta
+		name="description"
+		content="CozyNights: pick your sleeping spot at Hamburn with your ticket code."
+	/>
+</svelte:head>
+
 <section class="hero">
-	<video class="background-video" autoplay muted loop playsinline poster="/background.jpg">
+	<video
+		class="background-video"
+		autoplay
+		muted
+		loop
+		playsinline
+		poster="/background.jpg"
+		aria-hidden="true"
+		tabindex="-1"
+	>
 		<source src="/background.mp4" type="video/mp4" />
 	</video>
 
 	<div class="scan-overlay"></div>
 
 	<div class="content-wrapper">
-		<div class="logo-area" in:fade={{ delay: 1500 }}>
-			<img src="/logo.png" alt="Logo" class="club-logo" />
+		<div class="logo-area" in:fade={{ delay: 600 }}>
+			<img src="/logo.png" alt="Mauersegler logo" class="club-logo" />
 		</div>
 
 		<div class="title-container">
 			<div class="laser-scanner"></div>
-			<h1 class="burning-laser-title">
-				{#each titleLetters as { char, color, delay, offset }, i}
-					<span class="letter" style="--color: {color}; --delay: {delay}ms; --offset: {offset}px">
-						{char === ' ' ? '\u00A0' : char}
+			<h1 class="burning-laser-title" aria-label="Hamburn CozyNights">
+				{#each titleWords as word}
+					<span class="word" aria-hidden="true">
+						{#each word as { char, color, delay, offset }}
+							<span
+								class="letter"
+								style="--color: {color}; --delay: {delay}ms; --offset: {offset}px">{char}</span
+							>
+						{/each}
 					</span>
 				{/each}
 			</h1>
 		</div>
 
-		<div class="login-module" in:fly={{ y: 30, delay: 2000, duration: 1000 }}>
-			<form method="POST" action="?/login" use:enhance class="input-group">
+		<div class="login-module" in:fly={{ y: 30, delay: 900, duration: 600 }}>
+			{#if loginHint && !errorMessage}
+				<p class="login-hint" role="status">{loginHint}</p>
+			{/if}
+
+			<!-- novalidate: the browser's own validation bubbles follow the browser
+			     language; the app checks the field itself and answers in English. -->
+			<form
+				method="POST"
+				action="?/login"
+				novalidate
+				class="input-group"
+				class:has-error={!!errorMessage}
+				use:enhance={({ formData, cancel }) => {
+					const cleaned = code.replace(SURROUNDING_BLANKS, '');
+					const problem = checkTicketCode(cleaned);
+					if (problem) {
+						cancel();
+						showClientError(problem);
+						return;
+					}
+					code = cleaned;
+					formData.set('bookingCode', cleaned);
+					clientError = '';
+					isSubmitting = true;
+
+					return async ({ result, update }) => {
+						isSubmitting = false;
+						if (result.type === 'error') {
+							// Network hiccup or server crash: stay on the form instead of
+							// swapping the whole page for an error screen.
+							showClientError(
+								'We could not reach the server. Check your internet connection and try again.'
+							);
+							return;
+						}
+						await update({ reset: false });
+						if (result.type === 'failure') {
+							await tick();
+							codeInput?.focus();
+						}
+					};
+				}}
+			>
 				<input
 					type="text"
 					name="bookingCode"
-					placeholder="ACCESS CODE"
-					required
+					id="ticket-code"
+					bind:this={codeInput}
+					bind:value={code}
+					on:input={() => (clientError = '')}
+					placeholder="TICKET CODE"
+					aria-label="Ticket code"
+					aria-invalid={errorMessage ? 'true' : undefined}
+					aria-describedby={errorMessage ? 'ticket-code-error' : undefined}
 					autocomplete="off"
+					autocapitalize="characters"
+					autocorrect="off"
+					spellcheck="false"
+					enterkeyhint="go"
+					maxlength="80"
 				/>
 				<div class="button-container">
 					{#if isHovering}
@@ -72,33 +186,46 @@
 					<button
 						type="submit"
 						class:disco-mode={isHovering}
+						disabled={isSubmitting}
 						on:mouseenter={() => (isHovering = true)}
 						on:mouseleave={() => (isHovering = false)}
 					>
-						ENTER THE DUST 🌵
+						{isSubmitting ? 'CHECKING…' : 'ENTER THE DUST 🌵'}
 					</button>
 				</div>
 			</form>
 
-			{#if form?.error}
-				<p class="error-msg" in:fade>{form.error}</p>
+			{#if errorMessage}
+				<p class="error-msg" id="ticket-code-error" role="alert" in:fade={{ duration: 150 }}>
+					{errorMessage}
+				</p>
+			{/if}
+
+			{#if data.hasTicket}
+				<a class="continue-link" href="/map"
+					>Already signed in on this device? Continue to the map →</a
+				>
 			{/if}
 		</div>
 	</div>
 
-	<button class="admin-btn" on:click={() => goto('/admin/login')}>
-		<span class="icon">🔒</span>
-	</button>
+	<footer class="hero-footer">
+		<a class="footer-link" href="/docs/guide/" target="_blank" rel="noopener">Help &amp; FAQ</a>
+		<a class="footer-link crew" href="/admin/login" aria-label="Crew login">
+			<span aria-hidden="true">🔒</span> Crew
+		</a>
+	</footer>
 </section>
 
 <style>
 	.hero {
 		position: relative;
 		min-height: 100vh;
+		min-height: 100dvh;
 		width: 100%;
 		display: flex;
+		flex-direction: column;
 		align-items: center;
-		justify-content: center;
 		font-family: 'Inter', sans-serif;
 		overflow: hidden;
 		background: #000;
@@ -132,9 +259,11 @@
 	}
 
 	.content-wrapper {
+		flex: 1;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
+		justify-content: center;
 		text-align: center;
 		width: 100%;
 		max-width: 900px;
@@ -154,20 +283,29 @@
 
 	.title-container {
 		position: relative;
-		margin-bottom: 5rem;
-		padding: 2rem;
+		margin-bottom: clamp(2rem, 8vh, 5rem);
+		padding: clamp(1rem, 4vw, 2rem);
+		max-width: 100%;
 	}
 
 	.burning-laser-title {
-		font-size: 5rem;
+		font-size: clamp(2rem, 10.5vw, 5rem);
 		font-weight: 950;
+		line-height: 1.15;
 		color: #fff;
 		font-family: 'JetBrains Mono', monospace;
-		letter-spacing: -4px;
+		letter-spacing: -0.05em;
 		margin: 0;
 		display: flex;
 		flex-wrap: wrap;
 		justify-content: center;
+		column-gap: 0.6em;
+	}
+
+	/* The title only breaks between the two words, never inside one. */
+	.word {
+		display: inline-flex;
+		white-space: nowrap;
 	}
 
 	.letter {
@@ -261,8 +399,14 @@
 		box-shadow: 0 0 50px rgba(45, 212, 191, 0.2);
 	}
 
+	.input-group.has-error {
+		border-color: #f87171;
+		box-shadow: 0 0 40px rgba(248, 113, 113, 0.25);
+	}
+
 	input {
 		flex: 1;
+		min-width: 0;
 		background: transparent;
 		padding: 1.2rem 2rem;
 		font-size: 1rem;
@@ -275,10 +419,12 @@
 	}
 
 	input::placeholder {
-		color: #222;
+		color: #8a8a8a;
+		opacity: 1;
 	}
 	input:focus {
 		outline: none;
+		box-shadow: none;
 	}
 
 	.button-container {
@@ -300,6 +446,18 @@
 		letter-spacing: 1px;
 		white-space: nowrap;
 		z-index: 5;
+	}
+
+	button:disabled {
+		opacity: 0.7;
+		cursor: progress;
+	}
+
+	button:focus-visible,
+	.footer-link:focus-visible,
+	.continue-link:focus-visible {
+		outline: 2px solid #fff;
+		outline-offset: 3px;
 	}
 
 	button.disco-mode {
@@ -361,42 +519,82 @@
 		}
 	}
 
-	.admin-btn {
-		position: absolute;
-		bottom: 30px;
-		right: 30px;
-		width: 45px;
-		height: 45px;
-		background: rgba(0, 0, 0, 0.6);
-		color: #333;
-		border: 1px solid #222;
-		border-radius: 50%;
-		cursor: pointer;
-		transition: all 0.2s;
+	/* In the normal flow below the content, so it can never sit on top of (or
+	   under) the form, whatever the screen height. */
+	.hero-footer {
+		position: relative;
+		z-index: 10;
+		width: 100%;
 		display: flex;
+		justify-content: space-between;
 		align-items: center;
-		justify-content: center;
+		gap: 1rem;
+		padding: 0 20px max(16px, env(safe-area-inset-bottom));
 	}
 
-	.admin-btn:hover {
+	.footer-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		min-height: 44px;
+		padding: 0 0.9rem;
+		border-radius: 999px;
+		border: 1px solid #333;
+		background: rgba(0, 0, 0, 0.6);
+		color: #b5b5b5;
+		font-size: 0.8rem;
+		font-weight: 700;
+		letter-spacing: 0.5px;
+		text-decoration: none;
+	}
+
+	.footer-link:hover {
 		color: #fff;
-		border-color: #444;
+		border-color: #2dd4bf;
+	}
+
+	.login-hint,
+	.error-msg {
+		margin: 1rem 0 0;
+		padding: 0.75rem 1rem;
+		border-radius: 14px;
+		background: rgba(0, 0, 0, 0.8);
+		font-size: 0.95rem;
+		font-weight: 600;
+		line-height: 1.45;
+		overflow-wrap: anywhere;
+	}
+
+	.login-hint {
+		margin: 0 0 1rem;
+		border: 1px solid #2dd4bf;
+		color: #d1faf5;
 	}
 
 	.error-msg {
-		color: #f87171;
-		font-weight: 900;
-		margin-top: 2rem;
-		font-size: 0.8rem;
-		text-transform: uppercase;
-		letter-spacing: 2px;
+		border: 1px solid #f87171;
+		color: #fecaca;
 		text-shadow: 0 0 10px rgba(248, 113, 113, 0.3);
 	}
 
+	.continue-link {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		margin-top: 0.75rem;
+		color: #2dd4bf;
+		font-size: 0.9rem;
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	.continue-link:hover {
+		color: #fff;
+	}
+
 	@media (max-width: 600px) {
-		.burning-laser-title {
-			font-size: 2.8rem;
-			letter-spacing: -2px;
+		.club-logo {
+			width: 84px;
 		}
 		.input-group {
 			flex-direction: column;

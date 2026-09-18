@@ -15,12 +15,30 @@
 	export let showButton = true;
 
 	const burnerNames = [
-		'Dusty Nomad', 'Neon Lizard', 'Spark Plug', 'Glow Worm',
-		'Cactus Jack', 'Desert Rose', 'Fire Starter', 'Solar Flare',
-		'Prism Pilot', 'Laser Lynx', 'Vortex Voyager', 'Cosmic Coyote',
-		'Quartz Queen', 'Mirage Maker', 'Zenith Zephyr', 'Oasis Owl',
-		'Stardust Scout', 'Thunder Thistle', 'Midnight Muse', 'Silver Streak',
-		'Neon Nebula', 'Plasma Puma', 'Quantum Quokka', 'Cyber Cipher'
+		'Dusty Nomad',
+		'Neon Lizard',
+		'Spark Plug',
+		'Glow Worm',
+		'Cactus Jack',
+		'Desert Rose',
+		'Fire Starter',
+		'Solar Flare',
+		'Prism Pilot',
+		'Laser Lynx',
+		'Vortex Voyager',
+		'Cosmic Coyote',
+		'Quartz Queen',
+		'Mirage Maker',
+		'Zenith Zephyr',
+		'Oasis Owl',
+		'Stardust Scout',
+		'Thunder Thistle',
+		'Midnight Muse',
+		'Silver Streak',
+		'Neon Nebula',
+		'Plasma Puma',
+		'Quantum Quokka',
+		'Cyber Cipher'
 	];
 
 	let isSpinning = false;
@@ -55,7 +73,7 @@
 			const finalResult = `${currentName} #${finalSuffix}`;
 			currentName = finalResult;
 			showConfetti = true;
-			
+
 			/**
 			 * @event select
 			 * Dispatched when a final name has been chosen.
@@ -78,7 +96,7 @@
 
 <div class="slot-machine" class:has-confetti={showConfetti}>
 	<div class="display" class:spinning={isSpinning} class:finished={showConfetti}>
-		<div class="name-box">
+		<div class="name-box" aria-live="polite" aria-busy={isSpinning}>
 			{currentName}
 		</div>
 		<div class="laser-line"></div>
@@ -119,7 +137,8 @@
 		background: #000;
 		border: 2px solid #222;
 		border-radius: 16px;
-		height: 90px;
+		min-height: 90px;
+		padding: 0.5rem 0.75rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -144,11 +163,15 @@
 	.name-box {
 		font-family: 'JetBrains Mono', monospace;
 		font-weight: 900;
-		font-size: 1.8rem;
+		/* "Thunder Thistle #123" has to fit into a 360px wide phone. */
+		font-size: clamp(1.05rem, 5.2vw, 1.8rem);
+		line-height: 1.2;
+		text-align: center;
 		color: #fff;
 		z-index: 2;
 		text-shadow: 0 0 15px rgba(255, 255, 255, 0.4);
 		letter-spacing: -0.5px;
+		overflow-wrap: anywhere;
 	}
 	.spinning .name-box {
 		animation: blur-text 0.12s infinite;
@@ -172,7 +195,8 @@
 	.spin-btn {
 		background: #0a0a0a;
 		border: 2px solid #222;
-		color: #555;
+		color: #b5b5b5;
+		min-height: 48px;
 		padding: 1rem;
 		border-radius: 12px;
 		font-size: 0.8rem;
