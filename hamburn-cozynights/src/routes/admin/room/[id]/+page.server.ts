@@ -2,6 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { RoomsResponse, BedsResponse, HousesResponse } from '$lib/pocketbase-types';
 import { getBookingSettings } from '$lib/server/settings';
+import { TEMPLATE_LIMITS } from '$lib/template';
 
 // 1. Define the type including "expand" for related records 🔗
 type RoomWithHouse = RoomsResponse<{ house: HousesResponse }>;
@@ -33,20 +34,51 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	}
 };
 
+const LOCKED_MESSAGE =
+	'Spots are locked while Live Booking is active. Switch to Staging Mode in the Control Center to add, delete or change spots. Only locking 🔒 works during Live Booking.';
+const SERVER_ERROR = 'The server could not save the change. Reload the page and try again.';
+
 export const actions: Actions = {
 	createBed: async ({ request, params, locals }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can add spots.' });
 
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: LOCKED_MESSAGE });
 
 		console.log(`[Action:createBed] Admin: ${locals.admin.email}, Room: ${params.id}`);
 
 		const data = await request.formData();
+		const label = String(data.get('label') ?? '').trim();
+
+		// Same rules as the template import, so an exported layout can always be
+		// imported again.
+		if (!label) {
+			return fail(400, { message: 'Enter a label for the spot, for example "B1" or "Top Bunk".' });
+		}
+		if (label.length > TEMPLATE_LIMITS.bedLabelLength) {
+			return fail(400, {
+				message: `The label is too long. Use at most ${TEMPLATE_LIMITS.bedLabelLength} characters.`
+			});
+		}
 
 		try {
+			const siblings = await locals.pb.collection('beds').getFullList<BedsResponse>({
+				filter: locals.pb.filter('room = {:id}', { id: params.id }),
+				fields: 'id,label'
+			});
+			if (siblings.length >= TEMPLATE_LIMITS.bedsPerRoom) {
+				return fail(400, {
+					message: `This room already has ${siblings.length} spots, the limit is ${TEMPLATE_LIMITS.bedsPerRoom}. Add the spot to another room.`
+				});
+			}
+			if (siblings.some((bed) => bed.label.trim().toLowerCase() === label.toLowerCase())) {
+				return fail(400, {
+					message: `This room already has a spot called "${label}". Pick another label.`
+				});
+			}
+
 			await locals.pb.collection('beds').create({
-				label: data.get('label'),
+				label,
 				room: params.id,
 				// New spots are active (bookable once booking opens), like a new
 				// room's or house's spots.
@@ -54,9 +86,10 @@ export const actions: Actions = {
 				occupied: false
 			});
 			console.log('[Action:createBed] SUCCESS.');
+			return { success: true };
 		} catch (err) {
 			console.error('[Action:createBed] FAILED:', err);
-			return fail(500, { message: 'Something went wrong. Please try again.' });
+			return fail(500, { message: SERVER_ERROR });
 		}
 	},
 
@@ -64,19 +97,21 @@ export const actions: Actions = {
 		if (!locals.admin) return fail(403, { message: 'Only admins can delete spots.' });
 
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: LOCKED_MESSAGE });
 
 		console.log(`[Action:deleteBed] Admin: ${locals.admin.email}`);
 
 		const data = await request.formData();
 		const id = data.get('id') as string;
+		if (!id) return fail(400, { message: 'No spot was selected. Reload the page and try again.' });
 
 		try {
-			if (id) await locals.pb.collection('beds').delete(id);
+			await locals.pb.collection('beds').delete(id);
 			console.log(`[Action:deleteBed] SUCCESS for ${id}`);
+			return { success: true };
 		} catch (err) {
 			console.error(`[Action:deleteBed] FAILED for ${id}:`, err);
-			return fail(500, { message: 'Something went wrong. Please try again.' });
+			return fail(500, { message: SERVER_ERROR });
 		}
 	},
 
@@ -84,7 +119,7 @@ export const actions: Actions = {
 		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
 
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: LOCKED_MESSAGE });
 
 		const data = await request.formData();
 		const id = data.get('id') as string;
@@ -95,11 +130,16 @@ export const actions: Actions = {
 		);
 
 		try {
-			await locals.pb.collection('beds').update(id, { occupied: !occupied });
+			// Freeing a spot also detaches the ticket that booked it. Otherwise the
+			// guest would keep "their" spot while everybody else sees it as free.
+			await locals.pb
+				.collection('beds')
+				.update(id, occupied ? { occupied: false, order: null } : { occupied: true });
 			console.log('[Action:toggleOccupied] SUCCESS.');
+			return { success: true };
 		} catch (err) {
 			console.error('[Action:toggleOccupied] FAILED:', err);
-			return fail(500, { message: 'Something went wrong. Please try again.' });
+			return fail(500, { message: SERVER_ERROR });
 		}
 	},
 
@@ -107,7 +147,7 @@ export const actions: Actions = {
 		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
 
 		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive) return fail(403, { message: 'Management locked during live booking.' });
+		if (isBookingActive) return fail(403, { message: LOCKED_MESSAGE });
 
 		const data = await request.formData();
 		const id = data.get('id') as string;
@@ -115,8 +155,10 @@ export const actions: Actions = {
 
 		try {
 			await locals.pb.collection('beds').update(id, { enabled: !enabled });
+			return { success: true };
 		} catch (err) {
-			return fail(500, { message: 'Something went wrong. Please try again.' });
+			console.error('[Action:toggleEnabled] FAILED:', err);
+			return fail(500, { message: SERVER_ERROR });
 		}
 	},
 
@@ -129,9 +171,10 @@ export const actions: Actions = {
 
 		try {
 			await locals.pb.collection('beds').update(id, { is_locked: !isLocked });
+			return { success: true };
 		} catch (err) {
 			console.error('[Action:toggleLocked] FAILED:', err);
-			return fail(500, { message: 'Something went wrong. Please try again.' });
+			return fail(500, { message: SERVER_ERROR });
 		}
 	}
 };

@@ -9,9 +9,10 @@
 	import { invalidateAll } from '$app/navigation';
 	import { enhance, deserialize } from '$app/forms';
 	import { fade, fly, slide } from 'svelte/transition';
-	import { isoToBerlinLocal } from '$lib/time';
+	import { berlinLocalToIso, isoToBerlinLocal } from '$lib/time';
+	import { MAP_WIDTH, MAP_HEIGHT, clampToMap, isTooCloseToOtherHouse } from '$lib/map-geometry';
 	import { tick } from 'svelte';
-	import { toast } from '$lib/dialogs';
+	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
 
 	export let data: PageData;
 
@@ -22,8 +23,6 @@
 	// Management Summary Calculations
 	$: totalBeds = houses.reduce((sum, h) => sum + (h.totalBeds || 0), 0);
 	$: occupiedBeds = houses.reduce((sum, h) => sum + (h.occupiedBeds || 0), 0);
-	$: freeBeds = totalBeds - occupiedBeds;
-	$: occupancyRate = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
 
 	// "Full" means nothing left to book, like the cards' "Fully booked" badge.
 	$: houseStats = {
@@ -38,6 +37,23 @@
 	let showGuide = false;
 	let selectedHouseId: string | null = null;
 	let unlockDateInput = bookingUnlockAt ? isoToBerlinLocal(bookingUnlockAt) : '';
+	let timerError = '';
+
+	const unlockTimeFormat = new Intl.DateTimeFormat('en-GB', {
+		timeZone: 'Europe/Berlin',
+		weekday: 'short',
+		day: 'numeric',
+		month: 'short',
+		year: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit',
+		hourCycle: 'h23'
+	});
+
+	function formatUnlockTime(iso: string) {
+		const date = new Date(iso);
+		return Number.isNaN(date.getTime()) ? iso : unlockTimeFormat.format(date);
+	}
 
 	// Editor Sidebar State
 	let editingHouse: { id?: string; x: number; y: number; name: string } | null = null;
@@ -59,10 +75,19 @@
 		return `${free} spots free`;
 	}
 
-	const handleTogglePhase: SubmitFunction = ({ cancel }) => {
-		if (isBookingActive) {
-			const proceed = confirm(
-				'⚠️ WARNING: You are about to DEACTIVATE Live Booking mode. Regular users will no longer be able to claim spots. Continue?'
+	const handleTogglePhase: SubmitFunction = async ({ cancel }) => {
+		const goingLive = !isBookingActive;
+		let clearBookings = false;
+
+		if (!goingLive) {
+			const proceed = await confirmDialog(
+				'Guests will no longer be able to book or change their spot until you go live again. Existing bookings stay as they are.',
+				{
+					title: 'Switch to Staging Mode?',
+					tone: 'warning',
+					confirmLabel: 'Switch to Staging',
+					cancelLabel: 'Stay live'
+				}
 			);
 			if (!proceed) {
 				cancel();
@@ -70,26 +95,92 @@
 			}
 
 			if (occupiedBeds > 0 && isSuperuser) {
-				const clear = confirm(
-					`📊 DETECTED: There are currently ${occupiedBeds} active bookings. Would you like to CLEAR ALL BOOKINGS now to reset the database? (This cannot be undone!)`
+				clearBookings = await confirmDialog(
+					`There are ${occupiedBeds} booked spots right now. Do you also want to clear ALL bookings? Every guest loses their spot and has to book again. Ticket codes stay valid. This cannot be undone.`,
+					{
+						title: 'Also clear all bookings?',
+						tone: 'danger',
+						confirmLabel: 'Clear all bookings',
+						cancelLabel: 'Keep bookings'
+					}
 				);
-				if (clear) {
-					return async ({ result, update }) => {
-						if (result.type === 'success') {
-							const formData = new FormData();
-							const purge = await submitAction('?/clearAllBookings', formData);
-							alert(
-								purge.type === 'success'
-									? '✨ PLAYA PURGED: All spots are vacant once more.'
-									: `❌ PURGE FAILED: ${actionErrorMessage(purge) || 'Could not clear all bookings.'}`
-							);
-						}
-						await update();
-					};
-				}
 			}
 		}
-		return async ({ update }) => {
+
+		return async ({ result, update }) => {
+			if (result.type === 'success') {
+				// The server toggles the phase it sees, which can differ from this
+				// page's when the go-live timer ran out or another admin was faster.
+				const nowLive =
+					(result.data as { isBookingActive?: boolean } | undefined)?.isBookingActive ?? goingLive;
+				const phaseMessage = nowLive
+					? '🎪 Live Booking is active. Guests can book now, the layout is locked.'
+					: '🛠 Staging Mode is active. Booking is closed, the layout can be edited.';
+				if (nowLive === goingLive) {
+					toast(phaseMessage, 'success');
+				} else {
+					await alertDialog(
+						`The booking phase had already changed before your click (the go-live timer ran out, or another admin switched it). ${phaseMessage} Press the button again if that is not what you want.`,
+						{ title: 'Check the booking phase', tone: 'warning' }
+					);
+				}
+				if (clearBookings && !nowLive) {
+					const purge = await submitAction('?/clearAllBookings', new FormData());
+					if (purge.type === 'success') {
+						toast('✨ All bookings were cleared. Every spot is free again.', 'success');
+					} else {
+						await alertDialog(
+							`${actionErrorMessage(purge) || 'The server could not be reached.'} No bookings were changed by this step; the app is in Staging Mode. Check the spots before you try again.`,
+							{ title: 'Bookings were not cleared', tone: 'danger' }
+						);
+					}
+				}
+			} else if (result.type === 'failure' || result.type === 'error') {
+				await alertDialog(
+					`${actionErrorMessage(result) || 'The server could not be reached.'} The booking phase was not changed. Reload the page and try again.`,
+					{ title: 'Phase not changed', tone: 'danger' }
+				);
+			}
+			await update();
+		};
+	};
+
+	const handleSetTimer: SubmitFunction = ({ cancel }) => {
+		timerError = '';
+		const iso = berlinLocalToIso(unlockDateInput || '');
+		if (!unlockDateInput) {
+			timerError = 'Pick a date and time first.';
+		} else if (!iso) {
+			timerError = 'That is not a complete date and time. Use the format YYYY-MM-DD HH:MM.';
+		} else if (new Date(iso).getTime() <= Date.now()) {
+			timerError =
+				'That time is already in the past (Berlin time). Pick a later time, or go live right now with the STAGING MODE button.';
+		}
+		if (timerError) {
+			cancel();
+			return;
+		}
+
+		return async ({ result, update }) => {
+			if (result.type === 'success') {
+				toast(`⏱ Timer set: Live Booking opens on ${formatUnlockTime(iso)} (Berlin time).`, 'success');
+			} else if (result.type === 'failure' || result.type === 'error') {
+				timerError = `The timer was not saved: ${actionErrorMessage(result) || 'the server did not accept it.'} Check the date and try again.`;
+			}
+			await update({ reset: false });
+		};
+	};
+
+	const handleCancelTimer: SubmitFunction = () => {
+		return async ({ result, update }) => {
+			if (result.type === 'success') {
+				toast('⏱ Timer cancelled. Live Booking only opens when you switch it on.', 'success');
+			} else if (result.type === 'failure' || result.type === 'error') {
+				await alertDialog(
+					`${actionErrorMessage(result) || 'The server could not be reached.'} The timer is still set. Reload the page and try again.`,
+					{ title: 'Timer not cancelled', tone: 'danger' }
+				);
+			}
 			await update();
 		};
 	};
@@ -126,14 +217,6 @@
 		return undefined;
 	}
 
-	// When clicking empty space on the map in editor mode
-	function handleLocationSelected(data: { x: number; y: number }) {
-		const { x, y } = data;
-		selectedHouseId = null; // Deselect existing
-		editingHouse = { x, y, name: '' };
-		console.log(`[Dashboard] Preparing new house deployment at (${x}, ${y})`);
-	}
-
 	const LAYOUT_LOCKED_MESSAGE =
 		'The layout is locked while Live Booking is active. Switch to Staging Mode to add or move houses.';
 	let lastLockedToast = 0;
@@ -143,6 +226,32 @@
 		if (Date.now() - lastLockedToast < 2500) return;
 		lastLockedToast = Date.now();
 		toast(`🔒 ${LAYOUT_LOCKED_MESSAGE}`, 'warning');
+	}
+
+	/** Explains why a structural action is refused during Live Booking. */
+	function explainLocked(action: string) {
+		return alertDialog(
+			`Live Booking is active, so the camp layout is locked. Switch to Staging Mode (the 🎪 LIVE BOOKING ACTIVE button) to ${action}.`,
+			{ title: '🔒 Locked during Live Booking', tone: 'warning' }
+		);
+	}
+
+	// Below the split breakpoint the sidebar sits under the map, possibly off
+	// screen: bring it into view when it opens.
+	async function revealSidebar() {
+		await tick();
+		if (!window.matchMedia('(max-width: 1100px)').matches) return;
+		document
+			.querySelector('.details-sidebar')
+			?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+	}
+
+	// When clicking empty space on the map in editor mode
+	function handleLocationSelected(data: { x: number; y: number }) {
+		const { x, y } = data;
+		selectedHouseId = null; // Deselect existing
+		editingHouse = { x, y, name: '' };
+		revealSidebar();
 	}
 
 	async function handleHouseMoved(event: CustomEvent) {
@@ -194,7 +303,7 @@
 		const house = event.detail;
 		selectedHouseId = house.id;
 		editingHouse = { id: house.id, x: house.x, y: house.y, name: house.name };
-		console.log(`[Dashboard] House selected: ${house.name}`);
+		revealSidebar();
 	}
 
 	// The editor sidebar belongs to the map view. List-view actions that open it
@@ -210,90 +319,127 @@
 
 	function handleRenameHouse(house: any) {
 		if (isBookingActive) {
-			alert(
-				'🔒 LOCKDOWN ACTIVE: House names are locked during Live Booking. Switch to Staging Mode to manage.'
-			);
+			explainLocked('rename houses');
 			return;
 		}
 		selectedHouseId = house.id;
 		editingHouse = { id: house.id, x: house.x, y: house.y, name: house.name };
-		console.log(`[Dashboard] House selected for rename: ${house.name}`);
 		showEditorOnMap();
+	}
+
+	/** The map centre, or the nearest place around it where no other pin sits. */
+	function freeSpotNearCentre() {
+		const centre = { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 };
+		for (let ring = 0; ring <= 6; ring++) {
+			const steps = Math.max(1, ring * 6);
+			for (let step = 0; step < steps; step++) {
+				const angle = (step / steps) * 2 * Math.PI;
+				const point = clampToMap({
+					x: centre.x + Math.cos(angle) * ring * 45,
+					y: centre.y + Math.sin(angle) * ring * 45
+				});
+				if (!isTooCloseToOtherHouse(houses, null, point, 40)) return point;
+			}
+		}
+		return centre;
 	}
 
 	function handleIgniteFromList() {
 		if (isBookingActive) {
-			alert('🔒 LOCKDOWN ACTIVE: Switch to 🛠 STAGING to ignite new sanctuaries.');
+			explainLocked('add houses');
 			return;
 		}
-		handleLocationSelected({ x: 500, y: 350 });
+		handleLocationSelected(freeSpotNearCentre());
 		showEditorOnMap();
+	}
+
+	function confirmDeleteHouse(house: { name: string; totalBeds?: number; occupiedBeds?: number }) {
+		const booked = house.occupiedBeds || 0;
+		return confirmDialog(
+			`"${house.name}" is removed from the map together with all its rooms and spots.` +
+				(booked > 0
+					? ` ${booked} booked ${booked === 1 ? 'spot is' : 'spots are'} released first; those guests have to book again.`
+					: '') +
+				' Ticket codes stay valid. This cannot be undone.',
+			{
+				title: 'Delete this house?',
+				tone: 'danger',
+				confirmLabel: 'Delete house',
+				cancelLabel: 'Keep it'
+			}
+		);
+	}
+
+	function showDeleteFailed(result: ActionResult) {
+		return alertDialog(
+			`${actionErrorMessage(result) || 'The server could not be reached.'} The house was not deleted. Reload the page and try again.`,
+			{ title: 'House not deleted', tone: 'danger' }
+		);
 	}
 
 	async function handleDeleteHouse(house: any) {
 		if (isBookingActive) {
-			alert(
-				'🔒 LOCKDOWN ACTIVE: You cannot vanish sanctuaries while bookings are live! Switch to Staging Mode first.'
-			);
+			explainLocked('delete houses');
 			return;
 		}
 		if (!house || !house.id) return;
+		if (!(await confirmDeleteHouse(house))) return;
 
-		if (
-			confirm(
-				`⚠️ DANGER! ⚠️ Are you sure you want to vanish "${house.name}"? This will evaporate all rooms and spots! 🌪️`
-			)
-		) {
-			const formData = new FormData();
-			formData.append('id', house.id);
+		const formData = new FormData();
+		formData.append('id', house.id);
 
-			const result = await submitAction('?/deleteHouse', formData);
+		const result = await submitAction('?/deleteHouse', formData);
 
-			if (result.type !== 'success') {
-				alert(
-					`❌ VANISH FAILED! ${actionErrorMessage(result) || 'The playa protects this sanctuary.'}`
-				);
+		if (result.type === 'success') {
+			toast(`🌪️ "${house.name}" was deleted.`, 'success');
+			if (selectedHouseId === house.id) {
+				selectedHouseId = null;
+				editingHouse = null;
 			}
-			invalidateAll();
+		} else {
+			await showDeleteFailed(result);
 		}
+		invalidateAll();
 	}
 
 	async function handleSaveHouse(event: CustomEvent) {
 		if (isBookingActive) {
-			alert('🔒 LOCKDOWN ACTIVE: House deployment is locked during Live Booking.');
-			editingHouse = null;
-			selectedHouseId = null;
+			explainLocked('add or rename houses');
 			return;
 		}
 		const newHouseData = event.detail;
+		const name = (newHouseData.name || '').trim();
 
-		if (!newHouseData.name || newHouseData.name.trim() === '') {
-			alert('⚠️ NAME REQUIRED! A sanctuary needs a name to exist in the dust.');
+		if (!name) {
+			toast('Enter a name for the house first.', 'warning');
 			return;
 		}
 
 		const formData = new FormData();
-		formData.append('name', newHouseData.name);
+		formData.append('name', name);
 
+		let result: ActionResult;
 		if (editingHouse?.id) {
 			formData.append('id', editingHouse.id);
-			const result = await submitAction('?/renameHouse', formData);
-			if (result.type !== 'success')
-				alert(
-					`❌ RENAME FAILED! ${actionErrorMessage(result) || 'The desert winds are too strong.'}`
-				);
+			result = await submitAction('?/renameHouse', formData);
 		} else {
 			formData.append('x', editingHouse?.x.toString() || '0');
 			formData.append('y', editingHouse?.y.toString() || '0');
 			formData.append('bedCount', newHouseData.totalBeds?.toString() || '0');
-
-			const result = await submitAction('/admin/house/new?/create', formData);
-			if (result.type !== 'success')
-				alert(
-					`❌ CREATION FAILED! ${actionErrorMessage(result) || 'The dust has clogged the gears.'}`
-				);
+			result = await submitAction('/admin/house/new?/create', formData);
 		}
 
+		if (result.type !== 'success') {
+			// Keep the sidebar open so the entry can be corrected.
+			await alertDialog(
+				`${actionErrorMessage(result) || 'The server could not be reached.'} Nothing was saved. Check your entry and try again.`,
+				{ title: editingHouse?.id ? 'House not renamed' : 'House not created', tone: 'danger' }
+			);
+			invalidateAll();
+			return;
+		}
+
+		toast(editingHouse?.id ? `✏️ Renamed to "${name}".` : `🛖 "${name}" was created.`, 'success');
 		editingHouse = null;
 		selectedHouseId = null;
 		invalidateAll();
@@ -301,47 +447,40 @@
 
 	async function handleDeleteActiveHouse() {
 		if (isBookingActive) {
-			alert('🔒 LOCKDOWN ACTIVE: You cannot vanish sanctuaries while bookings are live!');
+			explainLocked('delete houses');
 			return;
 		}
-		if (!activeHouse || !activeHouse.id) return;
+		const house = houses.find((h) => h.id === selectedHouseId);
+		if (!house) return;
+		if (!(await confirmDeleteHouse(house))) return;
 
-		if (
-			confirm(
-				`⚠️ DANGER! ⚠️ Are you sure you want to vanish "${activeHouse.name}"? This will evaporate all rooms and spots! 🌪️`
-			)
-		) {
-			console.log(`[Dashboard] Requesting VANISH for house ID: ${activeHouse.id}`);
+		const sidebar = document.querySelector('.details-sidebar');
+		if (sidebar) sidebar.classList.add('disintegrating');
 
-			const card = document.querySelector(`.house-card-wrapper:has([href*="${activeHouse.id}"])`);
-			if (card) card.classList.add('disintegrating');
-			const sidebar = document.querySelector('.details-sidebar');
-			if (sidebar) sidebar.classList.add('disintegrating');
+		const formData = new FormData();
+		formData.append('id', house.id);
 
-			const formData = new FormData();
-			formData.append('id', activeHouse.id);
+		await new Promise((resolve) => setTimeout(resolve, 500));
 
-			await new Promise((resolve) => setTimeout(resolve, 500));
+		const result = await submitAction('?/deleteHouse', formData);
 
-			const result = await submitAction('?/deleteHouse', formData);
-
-			if (result.type !== 'success') {
-				console.error('[Dashboard] Vanish FAILED:', result);
-				if (card) card.classList.remove('disintegrating');
-				if (sidebar) sidebar.classList.remove('disintegrating');
-				alert(
-					`❌ VANISH FAILED: ${actionErrorMessage(result) || 'The playa protects this sanctuary.'}`
-				);
-			} else {
-				console.log('[Dashboard] Vanish SUCCESS. Clearing state...');
-				selectedHouseId = null;
-				editingHouse = null;
-				await invalidateAll();
-			}
+		if (result.type !== 'success') {
+			if (sidebar) sidebar.classList.remove('disintegrating');
+			await showDeleteFailed(result);
+			invalidateAll();
+		} else {
+			toast(`🌪️ "${house.name}" was deleted.`, 'success');
+			selectedHouseId = null;
+			editingHouse = null;
+			await invalidateAll();
 		}
 	}
 	let showTemplates = false;
 </script>
+
+<svelte:head>
+	<title>Control Center · CozyNights</title>
+</svelte:head>
 
 <div class="dashboard-wrapper">
 	<header class="page-header">
@@ -351,6 +490,8 @@
 		</div>
 
 		<div class="header-right">
+			<a class="btn-docs" href="/admin/docs/" target="_blank" rel="noopener">ADMIN GUIDE 📖</a>
+
 			<button class="btn-secondary" on:click={() => (showTemplates = !showTemplates)}>
 				{showTemplates ? 'CLOSE TOOLS 🛠' : 'TEMPLATES 💾'}
 			</button>
@@ -376,27 +517,40 @@
 		{#if bookingUnlockAt}
 			<div class="timer-active">
 				<span class="timer-icon">⏱</span>
-				<span
-					>Auto-opens live booking on <strong
-						>{new Date(bookingUnlockAt).toLocaleString('de-DE', {
-							timeZone: 'Europe/Berlin',
-							dateStyle: 'medium',
-							timeStyle: 'short'
-						})}</strong
-					> (CET/CEST)</span
+				<span class="timer-text"
+					>Auto-opens live booking on <strong>{formatUnlockTime(bookingUnlockAt)}</strong> (CET/CEST)</span
 				>
-				<form method="POST" action="?/cancelUnlockTimer" use:enhance>
+				<form method="POST" action="?/cancelUnlockTimer" use:enhance={handleCancelTimer}>
 					<button type="submit" class="btn-timer-cancel">Cancel Timer ✕</button>
 				</form>
 			</div>
 		{:else}
-			<form method="POST" action="?/setUnlockTimer" use:enhance class="timer-set-form">
+			<form
+				method="POST"
+				action="?/setUnlockTimer"
+				use:enhance={handleSetTimer}
+				class="timer-set-form"
+				novalidate
+			>
 				<span class="timer-icon">⏱</span>
-				<span class="timer-label">Schedule automatic go-live:</span>
-				<input type="datetime-local" name="unlockAt" bind:value={unlockDateInput} required />
-				<button type="submit" class="btn-timer-set" disabled={!unlockDateInput}>
-					Schedule ✨
-				</button>
+				<label class="timer-label" for="unlock-at">Schedule automatic go-live:</label>
+				<input
+					id="unlock-at"
+					type="datetime-local"
+					name="unlockAt"
+					placeholder="YYYY-MM-DD HH:MM"
+					bind:value={unlockDateInput}
+					class:error={!!timerError}
+					aria-describedby="unlock-at-hint"
+					on:input={() => (timerError = '')}
+				/>
+				<button type="submit" class="btn-timer-set">Schedule ✨</button>
+				<span class="timer-hint" id="unlock-at-hint"
+					>Berlin time (CET/CEST), no matter where you or the server are.</span
+				>
+				{#if timerError}
+					<p class="timer-error" role="alert">⚠️ {timerError}</p>
+				{/if}
 			</form>
 		{/if}
 	</section>
@@ -473,7 +627,8 @@
 				<div class="map-status-bar" class:live={isBookingActive}>
 					{#if isBookingActive}
 						<span class="status-msg"
-							>🔒 LOCKDOWN: Map layout is locked. Switch to 🛠 STAGING to manage.</span
+							>🔒 LOCKED: Live Booking is active. Switch to 🛠 STAGING MODE to add, move or delete
+							houses.</span
 						>
 					{:else}
 						<span class="status-msg"
@@ -502,6 +657,7 @@
 								<h3>{selectedHouseId ? 'HOUSE INTEL' : 'NEW DEPLOYMENT'}</h3>
 								<button
 									class="btn-close-sidebar"
+									aria-label="Close sidebar"
 									on:click={() => {
 										selectedHouseId = null;
 										editingHouse = null;
@@ -599,7 +755,7 @@
 				>
 					<span class="plus">+</span>
 					<span>Ignite New House</span>
-					<small>Auto-centered at 500/350</small>
+					<small>Starts in the middle of the map</small>
 				</button>
 			</div>
 		{/if}
@@ -614,13 +770,16 @@
 		padding: 2rem;
 		background: #050505;
 		min-height: 100vh;
+		min-height: 100dvh;
 		color: #fff;
 	}
 
 	.page-header {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: center;
+		gap: 1rem 2rem;
 		border-bottom: 1px solid #1a1a1a;
 		padding-bottom: 1.5rem;
 	}
@@ -640,8 +799,17 @@
 
 	.header-right {
 		display: flex;
-		gap: 1rem;
+		flex-wrap: wrap;
+		gap: 0.75rem;
 		align-items: center;
+	}
+	.header-right form {
+		display: flex;
+	}
+	.header-right button,
+	.header-right a {
+		min-height: 44px;
+		white-space: nowrap;
 	}
 
 	.btn-laser {
@@ -677,7 +845,8 @@
 	}
 
 	.btn-toggle,
-	.btn-guide {
+	.btn-guide,
+	.btn-docs {
 		background: #111;
 		border: 1px solid #222;
 		color: #888;
@@ -688,8 +857,15 @@
 		font-size: 0.75rem;
 		transition: all 0.2s;
 	}
+	.btn-docs {
+		display: inline-flex;
+		align-items: center;
+		box-sizing: border-box;
+		text-decoration: none;
+	}
 	.btn-toggle:hover,
-	.btn-guide:hover {
+	.btn-guide:hover,
+	.btn-docs:hover {
 		background: rgba(45, 212, 191, 0.1);
 		color: #2dd4bf;
 		border-color: #2dd4bf;
@@ -716,6 +892,24 @@
 		color: #888;
 		font-weight: 700;
 	}
+	.timer-text {
+		flex: 1 1 12rem;
+		min-width: 0;
+	}
+	.timer-active form {
+		display: flex;
+		margin-left: auto;
+	}
+	.timer-hint {
+		color: #777;
+		font-weight: 600;
+	}
+	.timer-error {
+		flex-basis: 100%;
+		margin: 0;
+		color: #f87171;
+		line-height: 1.4;
+	}
 	.timer-icon {
 		font-size: 1rem;
 	}
@@ -729,16 +923,26 @@
 		background: #050505;
 		border: 1px solid #333;
 		color: #fff;
+		color-scheme: dark;
 		padding: 0.5rem 0.75rem;
 		border-radius: 8px;
-		font-size: 0.8rem;
+		/* 16px: iOS Safari zooms into smaller fields */
+		font-size: 1rem;
 		font-family: inherit;
+		min-height: 44px;
+		min-width: 0;
+		max-width: 100%;
+		box-sizing: border-box;
+	}
+	.timer-set-form input.error {
+		border-color: #f87171;
 	}
 	.btn-timer-set,
 	.btn-timer-cancel {
 		background: #fb923c;
 		border: none;
 		color: #000;
+		min-height: 44px;
 		padding: 0.5rem 1rem;
 		border-radius: 8px;
 		font-weight: 900;
@@ -758,7 +962,6 @@
 		background: transparent;
 		border: 1px solid #444;
 		color: #888;
-		margin-left: auto;
 	}
 	.btn-timer-cancel:hover {
 		border-color: #ef4444;
@@ -821,7 +1024,9 @@
 
 	.status-legend {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-around;
+		gap: 0.75rem 1.5rem;
 	}
 	.legend-item {
 		display: flex;
@@ -858,7 +1063,7 @@
 
 	.intel-grid {
 		display: grid;
-		grid-template-columns: repeat(2, 1fr);
+		grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
 		gap: 1rem;
 	}
 
@@ -911,6 +1116,7 @@
 		font-weight: 900;
 		color: #2dd4bf;
 		letter-spacing: 1px;
+		line-height: 1.5;
 	}
 	.map-status-bar.live {
 		color: #f472b6;
@@ -920,11 +1126,14 @@
 
 	.map-layout-split {
 		display: flex;
+		align-items: flex-start;
 		gap: 2rem;
-		height: 700px;
 	}
 	.map-frame {
 		flex: 1;
+		min-width: 0;
+		/* MAP_WIDTH / MAP_HEIGHT */
+		aspect-ratio: 1000 / 700;
 		background: #0a0a0a;
 		border: 2px solid #222;
 		border-radius: 16px;
@@ -935,6 +1144,8 @@
 
 	.details-sidebar {
 		width: 400px;
+		flex-shrink: 0;
+		box-sizing: border-box;
 		background: #0a0a0a;
 		border: 1px solid #222;
 		border-top: 2px solid #f472b6;
@@ -945,6 +1156,25 @@
 		gap: 1.5rem;
 		box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
 		animation: sidebarSlide 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+
+	/* Narrow screens: the sidebar goes below the map. revealSidebar() uses the
+	   same breakpoint. */
+	@media (max-width: 1100px) {
+		.map-layout-split {
+			flex-direction: column;
+			align-items: stretch;
+			gap: 1rem;
+		}
+		.map-frame {
+			flex: none;
+			width: 100%;
+			box-sizing: border-box;
+		}
+		.details-sidebar {
+			width: 100%;
+			scroll-margin-top: 6rem;
+		}
 	}
 
 	@keyframes sidebarSlide {
@@ -976,10 +1206,13 @@
 	.btn-close-sidebar {
 		background: none;
 		border: none;
-		color: #444;
+		color: #888;
 		font-size: 1.5rem;
 		cursor: pointer;
 		line-height: 1;
+		min-width: 44px;
+		min-height: 44px;
+		margin: -0.5rem -0.75rem -0.5rem 0;
 	}
 	.btn-close-sidebar:hover {
 		color: #fff;
@@ -1018,6 +1251,11 @@
 		font-size: 0.8rem;
 		letter-spacing: 1px;
 		transition: all 0.2s;
+		min-height: 44px;
+		box-sizing: border-box;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 	.btn-manage-link:hover {
 		background: #222;
@@ -1061,7 +1299,7 @@
 
 	.grid-view {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
 		gap: 2rem;
 	}
 
@@ -1069,6 +1307,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+		min-width: 0;
 	}
 
 	.card-admin-actions {
@@ -1079,6 +1318,7 @@
 
 	.btn-action-small {
 		flex: 1;
+		min-height: 44px;
 		background: #1a1a1a;
 		border: 1px solid #333;
 		color: #888;
@@ -1131,14 +1371,18 @@
 
 	.card-header {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: flex-start;
+		gap: 0.5rem 1rem;
 	}
 	.card-header h2 {
 		margin: 0;
 		font-size: 1.25rem;
 		font-weight: 900;
 		color: #fff;
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.badge {
@@ -1148,6 +1392,7 @@
 		font-weight: 900;
 		text-transform: uppercase;
 		letter-spacing: 1px;
+		white-space: nowrap;
 	}
 	.badge.green {
 		background: rgba(74, 222, 128, 0.1);
@@ -1223,6 +1468,7 @@
 		color: #444;
 		transition: all 0.3s;
 		min-height: 200px;
+		font-family: inherit;
 	}
 	.add-house-card:hover:not(.disabled) {
 		border-color: #2dd4bf;
@@ -1288,5 +1534,70 @@
 		background: rgba(255, 255, 255, 0.1);
 		color: #fff;
 		border-color: #666;
+	}
+
+	@media (max-width: 640px) {
+		.dashboard-wrapper {
+			gap: 1.25rem;
+			padding: 1rem 0.75rem;
+		}
+		.header-left h1 {
+			font-size: 1.6rem;
+		}
+		/* Two buttons per row, each as wide as its cell */
+		.header-right {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 0.5rem;
+			width: 100%;
+		}
+		.header-right > * {
+			min-width: 0;
+		}
+		.header-right button,
+		.header-right a {
+			width: 100%;
+			justify-content: center;
+			padding-left: 0.5rem;
+			padding-right: 0.5rem;
+			font-size: 0.7rem;
+			letter-spacing: 0.5px;
+			white-space: normal;
+		}
+		.header-right form {
+			grid-column: 1 / -1;
+		}
+		.timer-panel {
+			padding: 0.85rem 1rem;
+		}
+		.timer-set-form input[type='datetime-local'] {
+			flex: 1 1 100%;
+			width: 100%;
+		}
+		.btn-timer-set {
+			flex: 1 1 100%;
+		}
+		.timer-active form {
+			margin-left: 0;
+			flex: 1 1 100%;
+		}
+		.btn-timer-cancel {
+			width: 100%;
+		}
+		.intel-panel {
+			padding: 1rem;
+		}
+		.visual-progress {
+			padding: 1rem;
+		}
+		.map-status-bar {
+			padding: 0.75rem 1rem;
+		}
+		.details-sidebar {
+			padding: 1rem;
+		}
+		.grid-view {
+			gap: 1.25rem;
+		}
 	}
 </style>

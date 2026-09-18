@@ -1,7 +1,6 @@
 <script lang="ts">
-	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
-	import { fade, fly } from 'svelte/transition';
+	import { fly } from 'svelte/transition';
 
 	// Get data from server (admin session; null on the login page)
 	export let data;
@@ -28,11 +27,11 @@
 			<div class="user-area">
 				<div class="user-info">
 					<span class="user-label">Burner:</span>
-					<span class="user-email">{data.admin.email}</span>
+					<span class="user-email" title={data.admin.email}>{data.admin.email}</span>
 				</div>
 
-				<form action="/admin/logout" method="POST" style="display: inline;">
-					<button type="submit" class="logout-btn" title="Sign Out">
+				<form action="/admin/logout" method="POST" class="logout-form">
+					<button type="submit" class="logout-btn" title="Sign out">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							width="18"
@@ -71,6 +70,7 @@
 
 	.admin-layout {
 		min-height: 100vh;
+		min-height: 100dvh;
 		display: flex;
 		flex-direction: column;
 		background: radial-gradient(circle at top right, #111, #050505);
@@ -78,8 +78,10 @@
 
 	.admin-header {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: center;
+		gap: 0.5rem 1rem;
 		padding: 1rem 2rem;
 		background: rgba(15, 15, 15, 0.8);
 		backdrop-filter: blur(12px);
@@ -91,7 +93,15 @@
 	}
 
 	/* Logo Area */
+	.logo-area {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 1rem;
+		min-width: 0;
+	}
 	.logo-link {
+		min-height: 40px;
 		text-decoration: none;
 		display: flex;
 		align-items: center;
@@ -129,12 +139,19 @@
 		display: flex;
 		align-items: center;
 		gap: 2rem;
+		min-width: 0;
+		margin-left: auto;
 	}
 
 	.user-info {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
+		min-width: 0;
+	}
+	.logout-form {
+		display: flex;
+		flex-shrink: 0;
 	}
 
 	.user-label {
@@ -149,11 +166,17 @@
 		font-size: 0.85rem;
 		color: #2dd4bf;
 		font-family: monospace;
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.logout-btn {
 		background: transparent;
 		border: 1px solid #f87171;
+		min-height: 40px;
+		white-space: nowrap;
 		padding: 0.5rem 1.25rem;
 		border-radius: 8px;
 		cursor: pointer;
@@ -182,20 +205,8 @@
 		font-size: 0.7rem;
 		font-weight: 900;
 		border: 1px solid #2dd4bf;
-		margin-left: 1rem;
+		white-space: nowrap;
 		box-shadow: 0 0 10px rgba(45, 212, 191, 0.2);
-	}
-
-	@keyframes pulse {
-		0% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.6;
-		}
-		100% {
-			opacity: 1;
-		}
 	}
 
 	.admin-content {
@@ -204,6 +215,31 @@
 		margin: 0 auto;
 		width: 100%;
 		box-sizing: border-box;
+	}
+
+	@media (max-width: 640px) {
+		.admin-header {
+			padding: 0.6rem 1rem;
+		}
+		.logo-text {
+			font-size: 1.2rem;
+		}
+		.user-area {
+			gap: 0.75rem;
+		}
+		.user-label {
+			display: none;
+		}
+		.user-email {
+			font-size: 0.75rem;
+		}
+		.logout-btn {
+			min-height: 44px;
+			padding: 0.5rem 0.9rem;
+		}
+		.admin-content {
+			padding: 1rem;
+		}
 	}
 
 	/* Laser Line Effect */

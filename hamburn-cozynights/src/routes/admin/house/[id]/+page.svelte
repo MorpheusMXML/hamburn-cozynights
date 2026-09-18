@@ -1,47 +1,90 @@
 <script lang="ts">
-	import type { PageData } from './$types';
+	import type { PageData, SubmitFunction } from './$types';
 	import AddRoomForm from '$lib/components/admin/AddRoomForm.svelte';
 	import { fade, fly } from 'svelte/transition';
-	import { invalidateAll } from '$app/navigation';
 	import { enhance } from '$app/forms';
+	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
 
 	export let data: PageData;
 	export let form: { message?: string } | null = null;
 	// Only admins reach this page (hooks + layout)
 	$: ({ house, rooms, isBookingActive } = data);
 
-	function handleAction(roomId: string) {
-		if (isBookingActive) {
-			alert('🔒 LOCKDOWN ACTIVE: Configuration is locked during Live Booking.');
-			return;
-		}
-		return async ({ result, update }: { result: any; update: any }) => {
-			if (result.type === 'success') {
-				const card = document.querySelector(`.room-card:has([value="${roomId}"])`);
-				if (card) card.classList.add('disintegrating');
-				await new Promise((r) => setTimeout(r, 550));
+	type RoomCard = PageData['rooms'][number];
+
+	let deletingRoomId: string | null = null;
+
+	function deleteRoom(room: RoomCard): SubmitFunction {
+		return async ({ cancel }) => {
+			const spots = room.stats.total;
+			const booked = room.stats.occupied;
+			const confirmed = await confirmDialog(
+				`Room #${room.room_number} "${room.name}" is deleted together with its spots.` +
+					(booked > 0
+						? ` ${booked} of its ${spots} active spots ${booked === 1 ? 'is' : 'are'} booked: those bookings are deleted too and the guests have to book again.`
+						: '') +
+					' Ticket codes stay valid. This cannot be undone.',
+				{
+					title: 'Delete this room?',
+					tone: 'danger',
+					confirmLabel: 'Delete room',
+					cancelLabel: 'Keep it'
+				}
+			);
+			if (!confirmed) {
+				cancel();
+				return;
 			}
-			await update();
-			await invalidateAll();
+
+			return async ({ result, update }) => {
+				if (result.type === 'success') {
+					deletingRoomId = room.id;
+					await new Promise((r) => setTimeout(r, 550));
+					toast(`🌪️ Room "${room.name}" was deleted.`, 'success');
+				} else if (result.type === 'failure' || result.type === 'error') {
+					const reason =
+						result.type === 'failure'
+							? (result.data as { message?: string } | undefined)?.message
+							: undefined;
+					await alertDialog(
+						`${reason || 'The server could not be reached.'} The room was not deleted.`,
+						{ title: 'Room not deleted', tone: 'danger' }
+					);
+				}
+				// Reloads the room list; a failure was already explained above.
+				await update({ reset: false });
+				deletingRoomId = null;
+			};
 		};
 	}
 </script>
 
+<svelte:head>
+	<title>House {house.name} · CozyNights</title>
+</svelte:head>
+
 <div class="dashboard-container">
 	<div class="header-row" in:fly={{ y: -20, duration: 500 }}>
-		<nav class="breadcrumbs">
+		<nav class="breadcrumbs" aria-label="Breadcrumb">
 			<a href="/admin">Control Center</a> <span class="sep">/</span>
 			<span class="current">{house.name}</span>
 		</nav>
 		<h1>
 			<span class="house-icon">🛖</span>
-			{house.name}
+			<span class="house-name">{house.name}</span>
 			<span class="subtitle">SANCTUARY OVERSIGHT</span>
 		</h1>
 	</div>
 
 	{#if form?.message}
-		<div class="error-banner" in:fade>⚠️ {form.message}</div>
+		<div class="error-banner" role="alert" in:fade>⚠️ {form.message}</div>
+	{/if}
+
+	{#if isBookingActive}
+		<div class="lockdown-notice" role="status">
+			🔒 Live Booking is active, so rooms cannot be added or deleted. Switch to Staging Mode in the
+			<a href="/admin">Control Center</a> to change this house.
+		</div>
 	{/if}
 
 	<section class="form-section" in:fade={{ delay: 200 }} class:disabled={isBookingActive}>
@@ -49,9 +92,6 @@
 			<span class="laser-dot turquoise"></span>
 			<h3>ADD ROOM ➕</h3>
 		</header>
-		{#if isBookingActive}
-			<div class="lockdown-notice">🔒 MANAGEMENT LOCKED DURING LIVE BOOKING</div>
-		{/if}
 		<div class="form-wrapper">
 			<AddRoomForm houseId={house.id} disabled={isBookingActive} />
 		</div>
@@ -64,56 +104,59 @@
 
 	<div class="grid">
 		{#each rooms as room, i (room.id)}
-			<a
-				href="/admin/room/{room.id}"
+			<div
 				class="room-card"
+				class:disintegrating={deletingRoomId === room.id}
 				in:fly={{ y: 20, duration: 400, delay: i * 50 }}
 			>
 				<div class="card-edge pink"></div>
 
-				<header class="card-header">
-					<span class="room-number">#{room.room_number}</span>
-					<span class="room-name">{room.name}</span>
-				</header>
+				<a href="/admin/room/{room.id}" class="room-link">
+					<header class="card-header">
+						<span class="room-number">#{room.room_number}</span>
+						<span class="room-name">{room.name}</span>
+					</header>
 
-				<div class="card-body">
-					<div class="progress-container">
-						<div class="progress-track">
-							<div
-								class="progress-fill"
-								style="width: {(room.stats.occupied / (room.stats.total || 1)) * 100}%"
-								class:full={room.stats.occupied === room.stats.total && room.stats.total > 0}
-							></div>
-						</div>
-						<div class="stat-info">
-							<span class="label">SPOTS CLAIMED 📊</span>
-							<span class="value">{room.stats.occupied} / {room.stats.total}</span>
+					<div class="card-body">
+						<div class="progress-container">
+							<div class="progress-track">
+								<div
+									class="progress-fill"
+									style="width: {(room.stats.occupied / (room.stats.total || 1)) * 100}%"
+									class:full={room.stats.occupied === room.stats.total && room.stats.total > 0}
+								></div>
+							</div>
+							<div class="stat-info">
+								<span class="label">SPOTS CLAIMED 📊</span>
+								<span class="value">{room.stats.occupied} / {room.stats.total}</span>
+							</div>
 						</div>
 					</div>
-				</div>
+				</a>
 
 				<footer class="card-actions">
-					<div
-						on:click|stopPropagation
-						on:keydown|stopPropagation={(e) => e.key === 'Enter' && e.stopPropagation()}
-						role="presentation"
-					>
-						<form action="?/deleteRoom" method="POST" use:enhance={() => handleAction(room.id)}>
-							<input type="hidden" name="id" value={room.id} />
-							<button
-								type="submit"
-								class="btn-vanish"
-								title="Vanish Room"
-								class:disabled={isBookingActive}
-								disabled={isBookingActive}
-							>
-								VANISH ROOM 🌪️
-							</button>
-						</form>
-					</div>
+					<a href="/admin/room/{room.id}" class="btn-manage">MANAGE SPOTS 🛌</a>
+					<form action="?/deleteRoom" method="POST" use:enhance={deleteRoom(room)}>
+						<input type="hidden" name="id" value={room.id} />
+						<button
+							type="submit"
+							class="btn-vanish"
+							class:disabled={isBookingActive}
+							disabled={isBookingActive}
+						>
+							VANISH ROOM 🌪️
+						</button>
+					</form>
 				</footer>
-			</a>
+			</div>
 		{/each}
+
+		{#if rooms.length === 0}
+			<div class="empty-state">
+				This house has no rooms yet. Add the first one with the form above; guests can only book
+				spots inside rooms.
+			</div>
+		{/if}
 	</div>
 </div>
 
@@ -138,6 +181,8 @@
 		color: #666;
 		text-transform: uppercase;
 		margin-bottom: 1rem;
+		line-height: 1.8;
+		overflow-wrap: anywhere;
 	}
 	.breadcrumbs a {
 		color: #2dd4bf;
@@ -157,20 +202,26 @@
 	}
 
 	h1 {
-		font-size: 2.5rem;
+		font-size: clamp(1.6rem, 6vw, 2.5rem);
+		line-height: 1.15;
 		margin: 0;
 		color: #fff;
 		font-weight: 900;
 		letter-spacing: -1px;
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 1rem;
+		gap: 0.5rem 1rem;
 	}
 	.house-icon {
 		filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.2));
 	}
+	.house-name {
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
 	.subtitle {
-		color: #444;
+		color: #666;
 		font-size: 0.8rem;
 		font-weight: 900;
 		margin-left: auto;
@@ -236,13 +287,18 @@
 		pointer-events: none;
 	}
 	.lockdown-notice {
-		position: absolute;
-		top: 1.5rem;
-		right: 2rem;
+		background: rgba(251, 146, 60, 0.08);
+		border: 1px solid rgba(251, 146, 60, 0.3);
 		color: #fb923c;
-		font-size: 0.65rem;
-		font-weight: 900;
-		letter-spacing: 1px;
+		padding: 1rem 1.5rem;
+		border-radius: 12px;
+		font-weight: 700;
+		font-size: 0.85rem;
+		line-height: 1.5;
+		margin-bottom: 2rem;
+	}
+	.lockdown-notice a {
+		color: #fdba74;
 	}
 	.form-section h3 {
 		margin: 0;
@@ -255,8 +311,19 @@
 	/* Grid Layout */
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
 		gap: 2rem;
+	}
+	.empty-state {
+		grid-column: 1 / -1;
+		text-align: center;
+		color: #888;
+		padding: 2.5rem 1.5rem;
+		background: #0a0a0a;
+		border-radius: 16px;
+		border: 1px dashed #222;
+		font-weight: 700;
+		line-height: 1.5;
 	}
 
 	/* Room Card */
@@ -265,14 +332,21 @@
 		border: 1px solid #222;
 		border-radius: 12px;
 		padding: 1.5rem;
-		text-decoration: none;
 		color: inherit;
 		display: flex;
 		flex-direction: column;
 		gap: 1.5rem;
+		min-width: 0;
 		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 		position: relative;
 		overflow: hidden;
+	}
+	.room-link {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+		text-decoration: none;
+		color: inherit;
 	}
 	.room-card:hover {
 		transform: translateY(-5px);
@@ -295,6 +369,7 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+		gap: 1rem;
 	}
 	.room-number {
 		background: #222;
@@ -304,11 +379,15 @@
 		font-weight: 900;
 		font-size: 0.8rem;
 		border: 1px solid #333;
+		white-space: nowrap;
 	}
 	.room-name {
 		font-weight: bold;
 		font-size: 1.25rem;
 		color: #fff;
+		min-width: 0;
+		text-align: right;
+		overflow-wrap: anywhere;
 	}
 
 	/* Stats & Progress */
@@ -343,7 +422,7 @@
 	.label {
 		font-size: 0.65rem;
 		font-weight: 900;
-		color: #444;
+		color: #888;
 		letter-spacing: 1px;
 	}
 	.value {
@@ -358,12 +437,19 @@
 		padding-top: 1.5rem;
 		border-top: 1px solid #222;
 		display: flex;
-		justify-content: flex-end;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: 0.75rem;
 	}
+	.card-actions form {
+		display: flex;
+		margin-left: auto;
+	}
+	.btn-manage,
 	.btn-vanish {
 		background: transparent;
 		border: 1px solid #444;
-		color: #666;
+		color: #888;
 		cursor: pointer;
 		font-size: 0.7rem;
 		font-weight: 900;
@@ -371,8 +457,22 @@
 		padding: 0.5rem 1rem;
 		border-radius: 6px;
 		transition: all 0.2s;
+		min-height: 44px;
+		box-sizing: border-box;
+		white-space: nowrap;
 	}
-	.btn-vanish:hover {
+	.btn-manage {
+		display: inline-flex;
+		align-items: center;
+		text-decoration: none;
+		color: #2dd4bf;
+		border-color: rgba(45, 212, 191, 0.4);
+	}
+	.btn-manage:hover {
+		border-color: #2dd4bf;
+		background: rgba(45, 212, 191, 0.08);
+	}
+	.btn-vanish:hover:not(.disabled) {
 		color: #f87171;
 		border-color: #f87171;
 		background: rgba(248, 113, 113, 0.05);
@@ -380,5 +480,25 @@
 	.btn-vanish.disabled {
 		opacity: 0.3;
 		cursor: not-allowed;
+	}
+
+	@media (max-width: 640px) {
+		.header-row {
+			margin-bottom: 1.5rem;
+		}
+		.subtitle {
+			margin-left: 0;
+			flex-basis: 100%;
+		}
+		.form-section {
+			padding: 1.25rem 1rem;
+			margin-bottom: 2.5rem;
+		}
+		.grid {
+			gap: 1.25rem;
+		}
+		.room-card {
+			padding: 1.25rem 1rem 1rem 1.25rem;
+		}
 	}
 </style>
