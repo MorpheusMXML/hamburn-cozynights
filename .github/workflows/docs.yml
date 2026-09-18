@@ -48,6 +48,11 @@ jobs:
       - run: npm ci
       - name: Build the public site (guest guide)
         run: npm run build:public
+        env:
+          # Where the app runs: the Pages site links the app's Impressum and
+          # privacy policy (docs/admin/legal.md). Repository variable; empty
+          # falls back to staging (docs/.vitepress/config.mts).
+          DOCS_APP_URL: ${{ vars.DOCS_APP_URL }}
       - name: Build the full site (admin guide, reference, develop)
         if: github.event_name == 'pull_request'
         run: npm run build

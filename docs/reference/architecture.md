@@ -112,6 +112,8 @@ erDiagram
 | `/house/:id` | guests with a code | Rooms of a house with free spots |
 | `/room/:id` | guests with a code | Spots of a room, booking dialog |
 | `/random-bed` | guests with a code | Destiny Roulette |
+| `/impressum` | everyone | Legal notice (German), details from the server's `.env` |
+| `/datenschutz` | everyone | Privacy policy (German) |
 | `/admin/login` | everyone | Google sign-in and the *access requested* page |
 | `/auth/callback/google` | – | Where Google sends admins back to |
 | `/admin` | admins | Control Center |
@@ -160,7 +162,8 @@ hamburn-cozynights/                 repository root
     │   ├── hooks.server.ts         sessions and the admin gate for every request
     │   ├── routes/                 guest pages, /admin, OAuth callback
     │   └── lib/
-    │       ├── components/         map, markers, slot machine, admin widgets
+    │       ├── components/         map, markers, slot machine, effigy title, admin widgets
+    │       ├── fx/                 cursor trail, burning effigy title (canvas)
     │       └── server/             booking, inventory, settings, admin auth, crypto
     ├── pb_migrations/              database schema and API rules
     ├── pb_hooks/                   PocketBase hooks: admin sign-in guard, admin tool

@@ -21,7 +21,7 @@ timeline
 - [ ] **Houses on the map.** Every house is placed where it really is. See [Houses, rooms & spots](./camp-layout).
 - [ ] **Rooms and spots complete.** Room names and numbers match the signs on the doors.
 - [ ] **Spot states checked.** New spots are active right away. Deactivate ❄️ the ones that aren't in use; after a template import, look for ⚪️ INACTIVE spots that should be bookable.
-- [ ] **Red alert gone.** No *NO ROOMS DETECTED* or *EMPTY MODULE* warnings in the Control Center.
+- [ ] **Red alert gone.** No _NO ROOMS DETECTED_ or _EMPTY MODULE_ warnings in the Control Center.
 - [ ] **Crew beds locked.** Beds that guests shouldn't book are locked 🔒.
 - [ ] **Backup.** Export a template of the finished layout.
 
@@ -30,6 +30,7 @@ timeline
 - [ ] **Ticket codes created.** Test codes for a trial run with testers, the real roster for the event. An operator does this on the server, see [Ticket codes](#ticket-codes).
 - [ ] **Test run.** Sign in with a real test ticket code in a private browser window. The map shows the countdown, rooms show the right spots.
 - [ ] **Test bookings removed.** If you booked in staging, release those spots again.
+- [ ] **Legal pages complete.** The Impressum and the privacy policy show no red note. See [Legal pages](./legal).
 - [ ] **Go-live scheduled.** Set the timer in the Control Center (Europe/Berlin time) and announce the same time to guests.
 
 > [!TIP] Announce the ticket code, not a password
@@ -51,6 +52,7 @@ timeline
 - [ ] **Export the final layout** as a template for next year.
 - [ ] **Switch back to staging.** Confirm the dialog.
 - [ ] **Clear all bookings** (superuser). Offered right after switching back. Spots become free, burner names are forgotten, ticket codes stay.
+- [ ] **Delete the ticket list** within the period the [privacy policy](./legal) promises (default: four weeks after the event). An operator removes the codes on the server, see [Check and tidy up](#check-and-tidy-up).
 - [ ] **Cancel leftover timers**, so booking doesn't open again by accident.
 - [ ] **Tidy up admin access.** Remove accounts of people who have left the crew.
 

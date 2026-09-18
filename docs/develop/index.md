@@ -98,8 +98,16 @@ npm run test:e2e
 
 :::
 
-- **Vitest** (`tests/*.test.ts`) covers booking rules, the admin sign-in checks, encryption and hashing, and UI helpers. It runs without a database.
+- **Vitest** (`tests/*.test.ts`) covers booking rules, the admin sign-in checks, encryption and hashing, UI helpers, the [start page title](./effigy-title) and the legal page settings. It runs without a database.
 - **Playwright** (`tests/e2e/`) walks through the real guest journey in Chromium against your local stack: sign in with a code, open the map, book and release a spot.
+- **Start page title and legal pages** (`tests/e2e/landing.test.ts`, `tests/e2e/legal.test.ts`) need no PocketBase. Start the dev server without the health check, then run them in a second terminal:
+
+  ```bash
+  npx vite dev
+  npx playwright test tests/e2e/landing.test.ts tests/e2e/legal.test.ts
+  ```
+
+  They run in Chromium and in WebKit on an emulated iPhone (`npx playwright install webkit` once).
 
 ## Changing the database schema
 
