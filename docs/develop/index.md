@@ -76,6 +76,10 @@ Without a Google client the login page says *Google sign-in is not configured on
 | `npm run lint` | Prettier and ESLint |
 | `npm test` | Vitest unit and security tests |
 | `npm run test:ui` | Vitest with its browser UI |
+| `npm run test:integration` | Integration tests against a real, empty PocketBase in Docker |
+| `npm run test:smoke` | Smoke tests against the staging Docker image, driven over HTTP |
+| `npm run verify` | Type check, unit, integration and smoke tests — everything CI runs |
+| `npm run smoke:remote` | The read-only smoke tests against a deployed site (`SMOKE_BASE_URL`) |
 | `npm run test:e2e` | Playwright end-to-end tests; starts the dev server if needed |
 | `npm run test:e2e:ui` | Playwright in UI mode |
 | `npm run health` | Just the health check |
@@ -87,8 +91,17 @@ Without a Google client the login page says *Google sign-in is not configured on
 
 ::: code-group
 
+```bash [Everything CI runs]
+npm run verify
+```
+
 ```bash [Unit & security]
 npm test
+```
+
+```bash [Integration & smoke]
+npm run test:integration
+npm run test:smoke
 ```
 
 ```bash [End-to-end]
@@ -98,8 +111,13 @@ npm run test:e2e
 
 :::
 
+- **`npm run verify`** runs the type check and the unit, integration and smoke tests — the same checks GitHub runs on every pull request. It needs Docker and nothing else, and it never touches your dev database.
 - **Vitest** (`tests/*.test.ts`) covers booking rules, the admin sign-in checks, encryption and hashing, and UI helpers. It runs without a database.
-- **Playwright** (`tests/e2e/`) walks through the real guest journey in Chromium against your local stack: sign in with a code, open the map, book and release a spot.
+- **Integration tests** (`tests/integration/`) start a real, empty PocketBase in Docker, apply the migrations and hooks, and check the schema, API rules, admin roles and the booking service.
+- **Smoke tests** (`tests/smoke/`) build the same Docker image staging builds and drive it over HTTP. `npm run smoke:remote` runs their read-only part against a deployed site.
+- **Playwright** (`tests/e2e/`) walks through the real guest journey in Chromium against your local stack: sign in with a code, open the map, book and release a spot. Optional and local only.
+
+The layers, the throwaway test stack and the release routine are described in [Testing & release checks](./testing).
 
 ## Changing the database schema
 

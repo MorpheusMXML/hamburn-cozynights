@@ -22,7 +22,7 @@ docs/
 ├── guide/                    for everyone: overview, booking, phases, FAQ
 ├── admin/                    for the crew: Control Center, access, layout, templates, checklist
 ├── reference/                architecture, security
-├── develop/                  local setup, deployment, this page
+├── develop/                  local setup, testing, deployment, this page
 ├── assets/screenshots/       app screenshots (WebP)
 ├── public/                   logo, favicons, social preview image
 └── .vitepress/
