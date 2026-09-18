@@ -33,7 +33,7 @@ flowchart LR
 
 ## Deploying to staging
 
-Staging is deployed **on demand**, from any branch, with a button in GitHub Actions.
+Staging is deployed **on demand** with a button in GitHub Actions. It runs **`integration/staging`** (see [Branches, integration & releases](./integration)): deploying a single feature branch would drop every other feature from the server.
 
 ::: code-group
 

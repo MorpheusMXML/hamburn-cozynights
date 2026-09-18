@@ -142,6 +142,7 @@ Schema and API rules are code: `pb_migrations/*.js`, applied by PocketBase on st
 
 ## Conventions
 
+- **One feature per branch, merged into `integration/staging` with a signed merge commit**, released to `main` by pull request. See [Branches, integration & releases](./integration).
 - **Never commit data.** The repository is public: `.env` files, `pb_data/` and database snapshots (encrypted or not) stay out of git. Share them through a private channel.
 - Format with Prettier and satisfy ESLint: `npm run lint` must pass.
 - Server-only code goes to `src/lib/server/`; it must never be imported by client components.

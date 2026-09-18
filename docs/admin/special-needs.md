@@ -71,7 +71,7 @@ Messages say what the crew decided, never what the guest wrote. On `/special-nee
 - **One request per ticket**, taken from the guest's signed-in ticket code, never from the form. The database refuses a second one.
 - **A guest can change a request while it waits**, and **withdraw it at any time**. Withdrawing deletes it; a spot the crew already booked stays booked, but from then on it is an ordinary booking (the guest can change it, and clear all bookings frees it). The crew group hears about every withdrawal.
 - **A spot the crew booked is fixed.** The guest can rename it, but can't move or release it themselves: they ask the crew. You move or release it here. A spot the guest booked themselves stays theirs to change, also when the request is approved.
-- **Clear all bookings keeps the spots the crew booked**, with their burner names. The dialog says how many.
+- **Going back to Staging Mode (and Clear all bookings) keeps the spots the crew booked**, with their burner names; every other booking is released. The dialog says how many.
 - **A template import releases every booking**, these too. The requests stay approved and show *No spot yet*: book the spots again after the import.
 
 ## Privacy
@@ -82,6 +82,7 @@ What guests write is often **health data**. The app treats it that way; please d
 - **It never leaves the admin area:** not in e-mails, Telegram messages, the crew group, logs or the audit log.
 - **Don't copy it** into chats, e-mails or spreadsheets. Talk about a request in person, and decide based on what the guest needs, not why.
 - **Guests give explicit consent** with a checkbox when they send a request (Art. 9(2)(a) GDPR); the time is stored. The privacy policy (`/privacy`, section *Special-needs requests*) explains it; see [Legal pages](./legal).
+- **A ticket passed on** to a new holder (Tickets page, ticket list import) loses its request the same way; a spot the crew booked stays with the ticket as an ordinary booking.
 - **It is deleted after the event** together with the contact data: `./scripts/cozy-admin.sh tickets forget-contacts --yes` also deletes every request. See [After the event](./notifications#after-the-event).
 
 ## When something doesn't work

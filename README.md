@@ -30,7 +30,7 @@ Ticket holders pick their own bed on the Hamburn camp map. The crew builds the c
 | 🗺️  | **Interactive camp map**     | Every house sits on the real site plan; guests see at a glance where beds are free.                    |
 | 🎫  | **One ticket, one bed**      | No accounts or passwords for guests. The ticket code is the key, and it holds exactly one spot.        |
 | 🎰  | **Destiny Roulette**         | A random free bed plus a random burner name, for the undecided.                                        |
-| 🛠️  | **Staging, then Live**       | The crew builds the layout in staging; going live freezes it and opens booking, by switch or by timer. |
+| 🛠️  | **Staging, Live, Closed**    | The crew builds the layout in staging; a booking window opens and closes booking by timer, and closing freezes it. |
 | 🔐  | **Google Workspace sign-in** | Admins use their `@mauersegler.art` account. Newcomers request access, a superuser approves.           |
 | 💾  | **Layout templates**         | Export the camp as JSON; a file is compared with the camp and only the changes you pick are applied.   |
 | 📥  | **Ticket list with review**  | Load the ticket shop's list after a review; fix an address or hand a ticket over in a few clicks.      |

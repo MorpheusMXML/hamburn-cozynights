@@ -25,6 +25,7 @@ Right under the header, the **🎟 BOOKING WINDOW** panel holds everything about
 | Let it run by itself | Flip the switch to **Timer armed** | admins |
 | Hold it | Flip the switch back (paused, the times stay) | admins |
 | Open, close or go back to Staging now | <kbd>⚡ Switch right now</kbd> | superusers only |
+| Release every guest booking | Happens by itself when switching back to Staging; <kbd>🧨 Clear all bookings</kbd> (same place, Staging only) for what is left | superusers only |
 
 Times are Europe/Berlin (CET/CEST). The rules and what each switch does to the timer are in [The booking window](../guide/phases#the-booking-window).
 
@@ -37,7 +38,7 @@ Below it, **♿ Special-needs requests: OPEN / CLOSED** opens or closes requests
 | Widget | Shows |
 | --- | --- |
 | **LOAD** | Doughnut chart: share of all spots that are taken. |
-| **New Bookings · Last 7 Days** | New ticket orders per day over the last week, counted in event time. |
+| **New Bookings · Last 7 Days** | Spots booked per day over the last week, by the day the spot got its ticket (event time). A released spot drops out; a moved booking counts on the day of the move. |
 | **EMPTY HOUSES · FILLING · FULL** | How many houses have no bookings yet, some bookings, or no free spot left. |
 | **PLAYA PROTOCOLS** | Quick reminders of the editor gestures below. |
 

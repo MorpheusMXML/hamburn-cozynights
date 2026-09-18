@@ -59,8 +59,8 @@ timeline
 ## After the burn
 
 - [ ] **Export the final layout** as a template for next year.
-- [ ] **Switch back to staging** (superuser: ⚡ Switch right now → 🛠 Staging). Confirm the dialog; the timer is paused.
-- [ ] **Clear all bookings** (superuser). Offered right after switching back. Spots become free, burner names are forgotten, ticket codes stay. Spots the crew booked for special-needs requests stay as long as their requests exist: clear once more after **Forget the guests' contacts** below.
+- [ ] **Switch back to staging** (superuser: ⚡ Switch right now → 🛠 Staging). Confirm the dialog; the timer is paused and **every guest booking is released** (spots free, burner names forgotten, ticket codes stay). Spots the crew booked for special-needs requests stay as long as their requests exist.
+- [ ] **Clear all bookings** (superuser, in Staging Mode: 🎟 BOOKING WINDOW → ⚡ Switch right now → <kbd>🧨 Clear all bookings</kbd>) once more after **Forget the guests' contacts** below, so the special-needs spots are free too.
 - [ ] **Delete the ticket list** within the period the [privacy policy](./legal) promises (default: four weeks after the event). An operator removes the codes on the server, see [Check and tidy up](#check-and-tidy-up).
 - [ ] **No timer left armed**, so booking doesn't open again by accident: the panel's summary shows NO TIMER or NOT ARMED.
 - [ ] **Tidy up admin access.** Remove accounts of people who have left the crew.
