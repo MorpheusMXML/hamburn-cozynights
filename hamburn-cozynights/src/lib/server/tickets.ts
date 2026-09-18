@@ -217,7 +217,7 @@ function readNameInput(raw: unknown): string {
 /**
  * The fields that hand a ticket over to a new holder: a new booking pass (the
  * old link stops working; PocketBase creates the next code on demand) and no
- * burner name. The Telegram link goes separately (resetHolder).
+ * burner name. The Telegram link goes before them (disconnectTelegram).
  */
 const NEW_HOLDER_FIELDS = { pass_code: '', burner_name: '' } as const;
 
