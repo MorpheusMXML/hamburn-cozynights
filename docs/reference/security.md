@@ -32,7 +32,8 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 - **Addresses come from the ticket list.** Guests never type one, so nobody can make CozyNights write to a stranger. The room page shows the address shortened (`m•••@example.com`).
 - **Only about the spot.** Messages contain house, room, spot and a link — never the ticket code — and are only sent when the spot of that ticket changes.
 - **Telegram is opt-in** through a one-time link that works for 30 minutes; only its hash is stored. `/stop` or <kbd>Turn off</kbd> removes the link, and a blocked bot is noticed and forgotten.
-- **No inbound endpoint.** The server fetches the bot's messages itself; there is no public webhook to attack. Bot token and mail password live in the server configuration only and never appear in logs.
+- **No inbound endpoint.** The server fetches the bot's messages itself; there is no public webhook to attack. The bot token lives in the server configuration only and never appears in logs or stored errors.
+- **The mail password** is in the server configuration, and PocketBase keeps a copy in its settings, so it is part of the database and its backups. Use a sending-only account or app password.
 - **Deleted after the event** with `tickets forget-contacts`.
 
 ## Admin sign-in

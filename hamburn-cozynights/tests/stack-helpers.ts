@@ -60,7 +60,7 @@ export async function createAdmin(su: PocketBase, role: Role) {
 		passwordConfirm: password,
 		role: 'pending'
 	});
-	// A real Google sign-in records last_sign_in (pb_hooks/cozy_notify.pb.js);
+	// A real Google sign-in records last_sign_in (pb_hooks/admins_oauth_guard.pb.js);
 	// without it the app asks for a fresh sign-in (weekly check).
 	await su.collection('admins').update(record.id, {
 		...(role !== 'pending' ? { role } : {}),

@@ -36,6 +36,13 @@ const RETRY_MINUTES = [1, 5, 15, 60];
 const ALERT_RETRY_SECONDS = [0, 60, 300, 900, 3600];
 const TG_LINK_MINUTES = 30;
 const BOT_CACHE_SECONDS = 1800;
+// After a failed getUpdates (wrong token, a webhook, another server polling
+// the same bot): pause polling instead of retrying every pass.
+const TG_POLL_PAUSE_SECONDS = 60;
+// The delivery lock: renewed on every pass and before every delivery.
+const LOCK_SECONDS = 30;
+// guest_notify.mail_label / tg_label
+const LABEL_MAX = 400;
 
 function env(name) {
 	return String($os.getenv(name) || '').trim();
@@ -64,7 +71,7 @@ function config(app) {
 			guests: !!token && isOn(env('TELEGRAM_GUEST_UPDATES'), true)
 		},
 		legacyWebhook: env('COZY_ADMIN_WEBHOOK_URL'),
-		loopSeconds: loop >= 0 && loop <= 55 ? loop : 50,
+		loopSeconds: loop >= 0 && loop <= 50 ? loop : 50,
 		mailsPerMinute: perMinute > 0 ? perMinute : 20
 	};
 }
@@ -93,6 +100,19 @@ function safeError(err) {
 		.replace(/https?:\/\/[^\s"']+/g, '<url>')
 		.replace(/bot\d+:[A-Za-z0-9_-]+/g, 'bot<token>')
 		.slice(0, 500);
+}
+
+function clip(text, max) {
+	const s = String(text || '');
+	return s.length > max ? s.slice(0, max - 1) + '…' : s;
+}
+
+/** A warning at most every 15 minutes per key: a broken setup must not flood the log. */
+function warnOnce(app, key, message) {
+	const storeKey = 'cozy_warned_' + key;
+	if (Date.now() - (app.store().get(storeKey) || 0) < 15 * 60000) return;
+	app.store().set(storeKey, Date.now());
+	console.warn(message);
 }
 
 function maskEmail(email) {
@@ -225,7 +245,11 @@ function botUsername(app, cfg) {
 	if (cached && cached.at > Date.now() - BOT_CACHE_SECONDS * 1000) return cached.name;
 	const r = telegramCall(cfg, 'getMe', {}, 10);
 	if (!r.ok || !r.result || !r.result.username) {
-		console.warn('[cozy-notify] Telegram getMe failed: ' + r.description);
+		warnOnce(
+			app,
+			'getme',
+			'[cozy-notify] Telegram getMe failed: ' + r.status + ' ' + r.description
+		);
 		return cached ? cached.name : null;
 	}
 	app.store().set('cozy_tg_bot', { name: String(r.result.username), at: Date.now() });
@@ -445,8 +469,31 @@ function currentSpot(app, orderId) {
 	} catch (_) {
 		// a dangling relation: the spot label has to do
 	}
-	spot.label = [spot.spot, spot.room, spot.house].filter((s) => !!s).join(' · ');
+	spot.label = clip([spot.spot, spot.room, spot.house].filter((s) => !!s).join(' · '), LABEL_MAX);
 	return spot;
+}
+
+/**
+ * Changes a guest_notify record without losing concurrent writes (a new due
+ * mark from a booking, a Telegram link or "Turn off" from the app): re-reads
+ * it inside a transaction and lets `change(fresh)` set only what the caller
+ * decided. `change` returns false to leave the record alone. Returns whether
+ * it was saved.
+ */
+function updateNotify(app, id, change) {
+	let saved = false;
+	app.runInTransaction((tx) => {
+		let fresh;
+		try {
+			fresh = tx.findRecordById('guest_notify', id);
+		} catch (_) {
+			return; // deleted meanwhile (forget-contacts, ticket removed)
+		}
+		if (change(fresh) === false) return;
+		tx.save(fresh);
+		saved = true;
+	});
+	return saved;
 }
 
 /**
@@ -456,22 +503,25 @@ function currentSpot(app, orderId) {
 function markDue(app, orderId, options) {
 	if (!orderId) return;
 	const opts = options || {};
-	let rec = findOne(app, 'guest_notify', 'order = {:order}', { order: orderId });
-	if (!rec) {
-		let order;
-		try {
-			order = app.findRecordById('orders', orderId);
-		} catch (_) {
-			return;
+	const due = pbDate(Date.now() + (opts.now ? 0 : SETTLE_SECONDS * 1000));
+	app.runInTransaction((tx) => {
+		let rec = findOne(tx, 'guest_notify', 'order = {:order}', { order: orderId });
+		if (!rec) {
+			let order;
+			try {
+				order = tx.findRecordById('orders', orderId);
+			} catch (_) {
+				return;
+			}
+			// Nobody to tell. A Telegram link creates the record itself.
+			if (!order.getString('email')) return;
+			rec = new Record(tx.findCollectionByNameOrId('guest_notify'));
+			rec.set('order', orderId);
 		}
-		// Nobody to tell. A Telegram link creates the record itself.
-		if (!order.getString('email')) return;
-		rec = new Record(app.findCollectionByNameOrId('guest_notify'));
-		rec.set('order', orderId);
-	}
-	rec.set('due', pbDate(Date.now() + (opts.now ? 0 : SETTLE_SECONDS * 1000)));
-	rec.set('attempts', 0);
-	app.save(rec);
+		rec.set('due', due);
+		rec.set('attempts', 0);
+		tx.save(rec);
+	});
 }
 
 function greetingName(order) {
@@ -531,8 +581,13 @@ function guestMail(cfg, kind, spot, previousLabel, name) {
 		.join('\n');
 
 	const link = (url) => '<a href="' + esc(url) + '" style="color:#7a3cff">' + esc(url) + '</a>';
-	const linkify = (line) =>
-		esc(line).replace(esc(roomUrl), link(roomUrl)).replace(esc(mapUrl), link(mapUrl));
+	// Each line holds at most one of the two links; link it once.
+	const linkify = (line) => {
+		const url = line.indexOf(roomUrl) >= 0 ? roomUrl : line.indexOf(mapUrl) >= 0 ? mapUrl : '';
+		if (!url) return esc(line);
+		const at = line.indexOf(url);
+		return esc(line.slice(0, at)) + link(url) + esc(line.slice(at + url.length));
+	};
 	const html =
 		'<!doctype html><html><body style="margin:0;padding:24px;background:#f6f3ee;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1d1a24">' +
 		'<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;padding:24px">' +
@@ -636,9 +691,15 @@ function kindOf(lastKey, key) {
 	return key === lastKey ? '' : 'changed';
 }
 
-/** One delivery run for one guest_notify record. */
+/**
+ * One delivery run for one guest_notify record. Decides from the record as
+ * it was read, sends, then writes back only what it decided (updateNotify):
+ * if the ticket was marked again meanwhile, that newer mark stays and the next
+ * pass handles the newer state.
+ */
 function deliverOne(app, cfg, rec, force) {
 	const now = Date.now();
+	const loadedDue = rec.getString('due');
 	let order;
 	try {
 		order = app.findRecordById('orders', rec.getString('order'));
@@ -650,17 +711,22 @@ function deliverOne(app, cfg, rec, force) {
 	if (!force && !rec.getBool('tg_new')) {
 		const last = Math.max(toMs(rec.getString('mail_sent')), toMs(rec.getString('tg_sent')));
 		if (last && now - last < COOLDOWN_SECONDS * 1000) {
-			rec.set('due', pbDate(last + COOLDOWN_SECONDS * 1000));
-			app.save(rec);
+			const later = pbDate(last + COOLDOWN_SECONDS * 1000);
+			updateNotify(app, rec.id, (fresh) => {
+				fresh.set('due', later);
+			});
 			return 'cooldown';
 		}
 	}
 
 	const spot = currentSpot(app, order.id);
 	const key = spot ? spot.bedId : '';
+	const label = spot ? spot.label : '';
 	const problems = [];
 	const channels = [];
 	let deferred = false;
+	let mailDone = null; // what the address now knows: { to, key, label, sent }
+	let tgDone = ''; // 'sent' | 'gone'
 
 	// --- e-mail to the ticket's address
 	const email = order.getString('email');
@@ -669,9 +735,7 @@ function deliverOne(app, cfg, rec, force) {
 		const kind = kindOf(known ? rec.getString('mail_spot') : '', key);
 		if (!known && !key) {
 			// a new address and no spot: nothing to confirm
-			rec.set('mail_to', email);
-			rec.set('mail_spot', '');
-			rec.set('mail_label', '');
+			mailDone = { to: email, key: '', label: '', sent: '' };
 		} else if (kind) {
 			if (!takeMailSlot(app, cfg)) {
 				deferred = true;
@@ -689,10 +753,7 @@ function deliverOne(app, cfg, rec, force) {
 							greetingName(order)
 						)
 					);
-					rec.set('mail_to', email);
-					rec.set('mail_spot', key);
-					rec.set('mail_label', spot ? spot.label : '');
-					rec.set('mail_sent', pbDate(now));
+					mailDone = { to: email, key: key, label: label, sent: pbDate(now) };
 				} catch (err) {
 					problems.push('mail: ' + safeError(err));
 					channels.push('e-mail ' + maskEmail(email));
@@ -718,16 +779,9 @@ function deliverOne(app, cfg, rec, force) {
 				10
 			);
 			if (r.ok) {
-				rec.set('tg_spot', key);
-				rec.set('tg_label', spot ? spot.label : '');
-				rec.set('tg_sent', pbDate(now));
-				rec.set('tg_new', false);
+				tgDone = 'sent';
 			} else if (telegramChatGone(r)) {
-				// blocked the bot or deleted the chat: stop writing there
-				rec.set('tg_chat', '');
-				rec.set('tg_new', false);
-				rec.set('tg_spot', '');
-				rec.set('tg_label', '');
+				tgDone = 'gone'; // blocked the bot or deleted the chat: stop writing there
 			} else {
 				problems.push('telegram: ' + r.status + ' ' + r.description);
 				channels.push('Telegram');
@@ -735,34 +789,55 @@ function deliverOne(app, cfg, rec, force) {
 		}
 	}
 
-	if (problems.length > 0) {
-		const attempts = rec.getInt('attempts') + 1;
-		const error = problems.join(' | ').slice(0, 1000);
-		rec.set('attempts', attempts);
-		rec.set('last_error', error);
-		if (attempts > RETRY_MINUTES.length) {
-			rec.set('due', '');
-			logEvent(app, 'guest_notice_failed', {
-				actor: 'server',
-				subject: order.getString('customer_name') || order.id,
-				details: { channels: channels.join(', '), attempts: attempts, error: error }
-			});
-		} else {
-			rec.set('due', pbDate(now + RETRY_MINUTES[attempts - 1] * 60000));
+	const attempts = rec.getInt('attempts') + 1;
+	const error = problems.join(' | ').slice(0, 1000);
+	let gaveUp = false;
+	updateNotify(app, rec.id, (fresh) => {
+		if (mailDone) {
+			fresh.set('mail_to', mailDone.to);
+			fresh.set('mail_spot', mailDone.key);
+			fresh.set('mail_label', mailDone.label);
+			if (mailDone.sent) fresh.set('mail_sent', mailDone.sent);
 		}
-		app.save(rec);
-		return 'retry';
+		// Only for the chat this run wrote to: the guest may have turned
+		// updates off or linked another chat meanwhile.
+		if (tgDone && fresh.getString('tg_chat') === chat) {
+			const sent = tgDone === 'sent';
+			fresh.set('tg_chat', sent ? chat : '');
+			fresh.set('tg_new', false);
+			fresh.set('tg_spot', sent ? key : '');
+			fresh.set('tg_label', sent ? label : '');
+			if (sent) fresh.set('tg_sent', pbDate(now));
+		}
+		if (fresh.getString('due') !== loadedDue) return; // marked again meanwhile
+		if (problems.length > 0) {
+			gaveUp = attempts > RETRY_MINUTES.length;
+			fresh.set('attempts', attempts);
+			fresh.set('last_error', error);
+			fresh.set('due', gaveUp ? '' : pbDate(now + RETRY_MINUTES[attempts - 1] * 60000));
+		} else if (deferred) {
+			fresh.set('due', pbDate(now + 30000));
+		} else {
+			fresh.set('due', '');
+			fresh.set('attempts', 0);
+			fresh.set('last_error', '');
+		}
+	});
+
+	if (gaveUp) {
+		// after the save: a failing save must not repeat this alert every pass
+		logEvent(app, 'guest_notice_failed', {
+			actor: 'server',
+			subject: order.getString('customer_name') || order.id,
+			details: { channels: channels.join(', '), attempts: attempts, error: error }
+		});
 	}
-	rec.set('due', deferred ? pbDate(now + 30000) : '');
-	if (!deferred) {
-		rec.set('attempts', 0);
-		rec.set('last_error', '');
-	}
-	app.save(rec);
+	if (problems.length > 0) return 'retry';
 	return deferred ? 'deferred' : 'done';
 }
 
-function deliverDue(app, cfg, force, deadline) {
+/** Due guest messages. keepAlive() renews the loop's lock; false = stop. */
+function deliverDue(app, cfg, force, deadline, keepAlive) {
 	const rows = app.findRecordsByFilter(
 		'guest_notify',
 		force ? "due != ''" : "due != '' && due <= @now",
@@ -773,6 +848,7 @@ function deliverDue(app, cfg, force, deadline) {
 	const outcome = { done: 0, retry: 0, other: 0 };
 	for (const rec of rows) {
 		if (deadline && Date.now() > deadline) break;
+		if (keepAlive && !keepAlive()) break;
 		let result;
 		try {
 			result = deliverOne(app, cfg, rec, force);
@@ -780,6 +856,16 @@ function deliverDue(app, cfg, force, deadline) {
 			console.error(
 				'[cozy-notify] delivery for ' + rec.getString('order') + ' failed: ' + safeError(err)
 			);
+			// Not again on the next pass: the same error would repeat every few seconds.
+			try {
+				updateNotify(app, rec.id, (fresh) => {
+					if (fresh.getString('due') !== rec.getString('due')) return false;
+					fresh.set('due', pbDate(Date.now() + 5 * 60000));
+					fresh.set('last_error', ('run: ' + safeError(err)).slice(0, 1000));
+				});
+			} catch (_) {
+				// the database itself is in trouble; the next run tries again
+			}
 			result = 'other';
 		}
 		if (result === 'done') outcome.done++;
@@ -818,10 +904,23 @@ function handleUpdate(app, cfg, update) {
 
 	const start = /^\/start(?:@\w+)?(?:\s+(\S+))?$/.exec(text);
 	if (start && start[1]) {
+		const hash = $security.sha256(start[1]);
 		const rec = findOne(app, 'guest_notify', 'tg_token_hash = {:hash} && tg_token_exp > @now', {
-			hash: $security.sha256(start[1])
+			hash: hash
 		});
-		if (!rec) {
+		const linked =
+			!!rec &&
+			updateNotify(app, rec.id, (fresh) => {
+				if (fresh.getString('tg_token_hash') !== hash) return false; // replaced meanwhile
+				fresh.set('tg_chat', chatId);
+				fresh.set('tg_new', true);
+				fresh.set('tg_spot', '');
+				fresh.set('tg_label', '');
+				fresh.set('tg_token_hash', '');
+				fresh.set('tg_token_exp', '');
+				fresh.set('due', pbDate(Date.now()));
+			});
+		if (!linked) {
 			reply(
 				cfg,
 				chatId,
@@ -832,14 +931,6 @@ function handleUpdate(app, cfg, update) {
 			);
 			return;
 		}
-		rec.set('tg_chat', chatId);
-		rec.set('tg_new', true);
-		rec.set('tg_spot', '');
-		rec.set('tg_label', '');
-		rec.set('tg_token_hash', '');
-		rec.set('tg_token_exp', '');
-		rec.set('due', pbDate(Date.now()));
-		app.save(rec);
 		return; // the delivery run right after this sends "connected" with the spot
 	}
 
@@ -848,11 +939,13 @@ function handleUpdate(app, cfg, update) {
 			chat: chatId
 		});
 		for (const rec of linked) {
-			rec.set('tg_chat', '');
-			rec.set('tg_new', false);
-			rec.set('tg_spot', '');
-			rec.set('tg_label', '');
-			app.save(rec);
+			updateNotify(app, rec.id, (fresh) => {
+				if (fresh.getString('tg_chat') !== chatId) return false;
+				fresh.set('tg_chat', '');
+				fresh.set('tg_new', false);
+				fresh.set('tg_spot', '');
+				fresh.set('tg_label', '');
+			});
 		}
 		reply(
 			cfg,
@@ -885,13 +978,13 @@ function pollTelegram(app, cfg, timeoutSeconds) {
 		timeoutSeconds + 10
 	);
 	if (!r.ok) {
-		if (r.status === 409) {
-			console.warn(
-				'[cozy-notify] Telegram getUpdates: 409 — a webhook is set or another server polls this bot (use one bot per environment)'
-			);
-		} else {
-			console.warn('[cozy-notify] Telegram getUpdates failed: ' + r.status + ' ' + r.description);
-		}
+		warnOnce(
+			app,
+			'poll' + r.status,
+			r.status === 409
+				? '[cozy-notify] Telegram getUpdates: 409 — a webhook is set or another server polls this bot (use one bot per environment)'
+				: '[cozy-notify] Telegram getUpdates failed: ' + r.status + ' ' + r.description
+		);
 		return -1;
 	}
 	const updates = r.result || [];
@@ -926,30 +1019,39 @@ function pollTelegram(app, cfg, timeoutSeconds) {
  * while the server starts, where a slow Telegram must not delay anything).
  */
 function refreshCapabilities(app, cfg, offline) {
-	let settings;
-	try {
-		settings = app.findRecordById('app_settings', APP_SETTINGS_ID);
-	} catch (_) {
-		return; // fresh database: the migrations create it
-	}
-	if (!settings.collection().fields.getByName('notify_mail')) return;
-	let bot = '';
-	if (cfg.telegram.guests) {
-		const name = offline ? null : botUsername(app, cfg);
-		bot = name === null ? settings.getString('telegram_bot') : name;
-	}
-	if (
-		settings.getBool('notify_mail') !== cfg.mail.enabled ||
-		settings.getString('telegram_bot') !== bot
-	) {
+	// Ask Telegram first: nothing may wait on the network between reading and
+	// saving app_settings, or an admin's phase switch meanwhile would be undone.
+	let bot = null; // null: keep the stored name
+	if (!cfg.telegram.guests) bot = '';
+	else if (!offline) bot = botUsername(app, cfg);
+
+	let published = null;
+	app.runInTransaction((tx) => {
+		let settings;
+		try {
+			settings = tx.findRecordById('app_settings', APP_SETTINGS_ID);
+		} catch (_) {
+			return; // fresh database: the migrations create it
+		}
+		if (!settings.collection().fields.getByName('notify_mail')) return;
+		const name = bot === null ? settings.getString('telegram_bot') : bot;
+		if (
+			settings.getBool('notify_mail') === cfg.mail.enabled &&
+			settings.getString('telegram_bot') === name
+		) {
+			return;
+		}
 		settings.set('notify_mail', cfg.mail.enabled);
-		settings.set('telegram_bot', bot);
-		app.save(settings);
+		settings.set('telegram_bot', name);
+		tx.save(settings);
+		published = name;
+	});
+	if (published !== null) {
 		console.log(
 			'[cozy-notify] guest updates: e-mail ' +
 				(cfg.mail.enabled ? 'on' : 'off') +
 				', Telegram ' +
-				(bot ? '@' + bot : 'off')
+				(published ? '@' + published : 'off')
 		);
 	}
 }
@@ -1028,27 +1130,54 @@ function applyMailSettings(app) {
 
 // --- the delivery loop ------------------------------------------------------
 
+// The lock has an owner: only its holder renews or releases it, so a run that
+// outlived its lock can't cut short the next one.
 function takeLock(app, seconds) {
+	const owner = $security.randomString(16);
 	let ok = false;
-	app.store().setFunc('cozy_notify_lock', (until) => {
-		if (until && until > Date.now()) return until;
+	app.store().setFunc('cozy_notify_lock', (lock) => {
+		if (lock && lock.owner && lock.until > Date.now()) return lock;
 		ok = true;
-		return Date.now() + seconds * 1000;
+		return { owner: owner, until: Date.now() + seconds * 1000 };
+	});
+	return ok ? owner : '';
+}
+
+function renewLock(app, owner, seconds) {
+	let ok = false;
+	app.store().setFunc('cozy_notify_lock', (lock) => {
+		if (!lock || lock.owner !== owner) return lock;
+		ok = true;
+		return { owner: owner, until: Date.now() + seconds * 1000 };
 	});
 	return ok;
 }
 
-function releaseLock(app) {
-	app.store().remove('cozy_notify_lock');
+function releaseLock(app, owner) {
+	app
+		.store()
+		.setFunc('cozy_notify_lock', (lock) =>
+			lock && lock.owner === owner ? { owner: '', until: 0 } : lock
+		);
 }
 
 /** One pass: bot updates, due guest messages, crew alerts, timer. */
-function runPass(app, cfg, pollSeconds, force, deadline) {
+function runPass(app, cfg, pollSeconds, force, deadline, keepAlive) {
 	const result = { updates: 0, guests: null, alerts: 0 };
-	if (cfg.telegram.guests) result.updates = pollTelegram(app, cfg, pollSeconds);
-	else if (pollSeconds > 0) sleep(pollSeconds * 1000);
+	const store = app.store();
+	const paused = !force && Date.now() < (store.get('cozy_tg_pause_until') || 0);
+	if (cfg.telegram.guests && !paused) {
+		result.updates = pollTelegram(app, cfg, pollSeconds);
+		if (result.updates < 0) {
+			// wrong token, a webhook, another server: don't hammer Telegram
+			store.set('cozy_tg_pause_until', Date.now() + TG_POLL_PAUSE_SECONDS * 1000);
+			if (pollSeconds > 0) sleep(pollSeconds * 1000);
+		}
+	} else if (pollSeconds > 0) {
+		sleep(pollSeconds * 1000);
+	}
 	announceTimer(app);
-	result.guests = deliverDue(app, cfg, force, deadline);
+	result.guests = deliverDue(app, cfg, force, deadline, keepAlive);
 	result.alerts = sendPendingAlerts(app, cfg, force);
 	return result;
 }
@@ -1056,37 +1185,42 @@ function runPass(app, cfg, pollSeconds, force, deadline) {
 /** The cron job: repeats short passes for up to COZY_NOTIFY_LOOP_SECONDS. */
 function runLoop(app) {
 	const cfg = config(app);
-	if (!takeLock(app, 58)) return;
+	const owner = takeLock(app, LOCK_SECONDS);
+	if (!owner) return; // the previous run is still busy
+	const keepAlive = () => renewLock(app, owner, LOCK_SECONDS);
 	try {
 		refreshCapabilities(app, cfg);
 		const deadline = Date.now() + cfg.loopSeconds * 1000;
 		do {
+			if (!keepAlive()) break; // lost the lock (a very slow pass): the next run takes over
 			const left = Math.floor((deadline - Date.now()) / 1000);
 			try {
-				runPass(app, cfg, Math.max(0, Math.min(5, left)), false, deadline + 5000);
+				runPass(app, cfg, Math.max(0, Math.min(5, left)), false, deadline, keepAlive);
 			} catch (err) {
 				console.error('[cozy-notify] run failed: ' + safeError(err));
 				if (left > 5) sleep(5000);
 			}
 		} while (Date.now() < deadline - 1000);
 	} finally {
-		releaseLock(app);
+		releaseLock(app, owner);
 	}
 }
 
-/** One immediate pass (tests, `cozy-admin notify flush`); waits for a running loop. */
+/** One immediate pass (the tests); waits for a running loop to finish. */
 function flush(app, force) {
 	const cfg = config(app);
 	const waitUntil = Date.now() + 15000;
-	while (!takeLock(app, 30)) {
+	let owner = takeLock(app, LOCK_SECONDS);
+	while (!owner) {
 		if (Date.now() > waitUntil) throw new Error('the notification loop is busy, try again');
 		sleep(200);
+		owner = takeLock(app, LOCK_SECONDS);
 	}
 	try {
 		refreshCapabilities(app, cfg);
-		return runPass(app, cfg, 0, !!force, 0);
+		return runPass(app, cfg, 0, !!force, 0, () => renewLock(app, owner, LOCK_SECONDS));
 	} finally {
-		releaseLock(app);
+		releaseLock(app, owner);
 	}
 }
 

@@ -7,8 +7,9 @@
 // - Google OAuth2:     POST /oauth/token, GET /oauth/userinfo — the admins'
 //   google provider is pointed here by the tests, so a real PocketBase
 //   OAuth2 sign-in (hooks and guard included) runs without Google.
-// - Test control:      /_mock/... (read what was sent, inject bot updates,
-//   block a chat, take Telegram down, register OAuth users, reset)
+// - Test control:      /_mock/... (read what was sent and how often the Bot
+//   API was called, inject bot updates, block a chat, take Telegram down,
+//   slow it down or revoke the token, register OAuth users, reset)
 import http from 'node:http';
 
 const PORT = Number(process.env.PORT || 8081);
@@ -22,6 +23,9 @@ function reset() {
 		nextUpdateId: 1000,
 		blocked: new Set(),
 		down: false,
+		slowMs: 0, // sendMessage takes this long (a slow Telegram)
+		unauthorized: false, // every Bot API call answers 401 (a revoked token)
+		calls: {}, // Bot API calls per method
 		oauthUsers: new Map() // code → user info
 	};
 }
@@ -60,6 +64,7 @@ async function telegram(method, body, res) {
 		case 'getWebhookInfo':
 			return json(res, 200, { ok: true, result: { url: '', pending_update_count: 0 } });
 		case 'sendMessage': {
+			if (state.slowMs) await sleep(state.slowMs);
 			const chat = String(body.chat_id);
 			if (state.blocked.has(chat)) {
 				return json(res, 403, {
@@ -91,7 +96,8 @@ const server = http.createServer(async (req, res) => {
 
 	const bot = /^\/bot([^/]+)\/(\w+)$/.exec(url.pathname);
 	if (bot) {
-		if (bot[1] !== BOT_TOKEN) {
+		state.calls[bot[2]] = (state.calls[bot[2]] || 0) + 1;
+		if (bot[1] !== BOT_TOKEN || state.unauthorized) {
 			return json(res, 401, { ok: false, error_code: 401, description: 'Unauthorized' });
 		}
 		return telegram(bot[2], { ...Object.fromEntries(url.searchParams), ...body }, res);
@@ -144,6 +150,14 @@ const server = http.createServer(async (req, res) => {
 			return json(res, 200, { ok: true });
 		case 'POST /_mock/telegram/down':
 			state.down = !!body.down;
+			return json(res, 200, { ok: true });
+		case 'GET /_mock/telegram/calls':
+			return json(res, 200, state.calls);
+		case 'POST /_mock/telegram/unauthorized':
+			state.unauthorized = !!body.on;
+			return json(res, 200, { ok: true });
+		case 'POST /_mock/telegram/slow':
+			state.slowMs = Number(body.ms || 0);
 			return json(res, 200, { ok: true });
 		case 'POST /_mock/oauth/user':
 			// { code, sub, email, name, email_verified, hd }

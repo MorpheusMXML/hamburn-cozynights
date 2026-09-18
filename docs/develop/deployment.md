@@ -132,6 +132,7 @@ Booking confirmations and crew alerts are sent by PocketBase (`pb_hooks/cozy_not
 | `COZY_APP_URL`, `COZY_ENV_LABEL` | Links in messages and the `[STAGING]` marker. Set in the compose file, not in `.env`. |
 
 - **One Telegram bot per environment.** The server reads the bot's messages by polling; two environments with the same bot would steal each other's messages.
+- **The mail password is stored twice.** PocketBase keeps its own copy of the SMTP settings in its database, so it is also in every database backup. Use an account (or app password) that can only send mail, or a relay that allows the server's IP address without a password.
 - **Check after setting it up**, on the server: `./scripts/cozy-admin.sh notify status` and `./scripts/cozy-admin.sh notify test --email <you>`.
 
 ## Adding an environment
@@ -140,7 +141,7 @@ Production, for example:
 
 <div class="steps">
 
-1. **Compose file.** Copy `docker-compose.staging.yml` to `docker-compose.<env>.yml` and give containers, ports, volume and `ORIGIN` their own values, so nothing collides with other environments.
+1. **Compose file.** Copy `docker-compose.staging.yml` to `docker-compose.<env>.yml` and give containers, ports, volume and `ORIGIN` their own values, so nothing collides with other environments. Also set `COZY_APP_URL` (the links in guest messages) and `COZY_ENV_LABEL` (empty for production: no `[STAGING]` marker).
 2. **Configuration.** Create the environment's `.env` on the server, following `deploy/staging.env.template`. Never commit it.
 3. **Domain.** Add an nginx vhost for the domain (see `deploy/nginx/`), issue a certificate, and add the redirect URI to the Google OAuth client.
 4. **Pipeline.** Add a workflow mirroring `deploy-staging.yml`, with its own GitHub environment and required approval, and a deploy user scoped to that environment only.

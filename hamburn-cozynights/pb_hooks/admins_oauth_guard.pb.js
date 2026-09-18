@@ -91,4 +91,17 @@ onRecordAuthWithOAuth2Request((e) => {
 		e.record.set('role', 'pending');
 		e.app.save(e.record);
 	}
+
+	// When this account last signed in with Google: the app asks for a fresh
+	// sign-in once that is 7 days ago (src/lib/server/admin-auth.ts). Kept here,
+	// next to the sign-in itself, so it doesn't depend on any other hooks file.
+	// Never fails the sign-in: the next one writes it again.
+	if (e.record) {
+		try {
+			e.record.set('last_sign_in', new Date().toISOString().replace('T', ' '));
+			e.app.save(e.record);
+		} catch (err) {
+			console.error('[admins-guard] last_sign_in not saved: ' + err);
+		}
+	}
 }, 'admins');

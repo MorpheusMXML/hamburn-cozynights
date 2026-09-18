@@ -13,8 +13,7 @@
 //    So does a new e-mail address on a ticket.
 // 3. Crew: admin access changes, admin sign-ins and booking phase changes
 //    become admin_events; their Telegram alerts go out with the next run.
-//    Admins' sign-ins also record `last_sign_in` (weekly re-sign-in, see
-//    src/lib/server/admin-auth.ts).
+//    (last_sign_in for the weekly re-sign-in: pb_hooks/admins_oauth_guard.pb.js)
 // 4. A cron job delivers: e-mail, Telegram messages, crew alerts, and reads
 //    the bot's incoming messages (guests linking their chat).
 // 5. POST /api/cozy/notify/flush (superusers only): one run right now, for
@@ -167,24 +166,20 @@ onRecordDelete((e) => {
 	}
 }, 'admins');
 
-// Runs inside the guard of pb_hooks/admins_oauth_guard.pb.js (loaded first).
+// Runs inside the guard of pb_hooks/admins_oauth_guard.pb.js (loaded first),
+// which also records last_sign_in for the weekly re-sign-in.
 onRecordAuthWithOAuth2Request((e) => {
 	e.next();
 	if (!e.record) return;
+	const role = e.record.getString('role');
+	if (role !== 'admin' && role !== 'superuser') return;
 	try {
-		const notify = require(`${__hooks}/lib/notify.js`);
-		e.record.set('last_sign_in', notify.pbDate(Date.now()));
-		e.app.save(e.record);
-		const role = e.record.getString('role');
-		if (role === 'admin' || role === 'superuser') {
-			notify.logEvent(e.app, 'admin_sign_in', {
-				actor: e.record.email(),
-				subject: e.record.email(),
-				details: { name: e.record.getString('name'), role: role }
-			});
-		}
+		require(`${__hooks}/lib/notify.js`).logEvent(e.app, 'admin_sign_in', {
+			actor: e.record.email(),
+			subject: e.record.email(),
+			details: { name: e.record.getString('name'), role: role }
+		});
 	} catch (err) {
-		// The sign-in itself succeeded; the app asks again if last_sign_in is old.
 		console.error('[cozy-notify] sign-in of ' + e.record.email() + ': ' + err);
 	}
 }, 'admins');

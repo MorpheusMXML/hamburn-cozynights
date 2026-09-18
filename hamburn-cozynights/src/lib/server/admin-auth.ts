@@ -95,7 +95,7 @@ export function toAdminSession(record: AuthRecord): AdminSession | null {
 
 /**
  * Whether the account's last Google sign-in is recent enough. PocketBase
- * records it on every OAuth2 sign-in (`last_sign_in`, pb_hooks/cozy_notify.pb.js);
+ * records it on every OAuth2 sign-in (`last_sign_in`, pb_hooks/admins_oauth_guard.pb.js);
  * read it from the refreshed record, never from the cookie.
  */
 export function isSignInFresh(record: AuthRecord, now = Date.now()): boolean {

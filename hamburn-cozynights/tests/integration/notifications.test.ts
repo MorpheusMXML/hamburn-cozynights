@@ -196,9 +196,12 @@ describe('booking confirmations by e-mail', () => {
 			expect(mails).toHaveLength(2);
 			expect(mails[1].Subject).toBe('[TEST] Your CozyNights spot was released');
 		}
-		expect((await mailBody((await mailsTo(evicted.email))[1].ID)).Text).toContain(
-			'the crew had to change the camp layout'
-		);
+		const released = await mailBody((await mailsTo(evicted.email))[1].ID);
+		expect(released.Text).toContain('the crew had to change the camp layout');
+		// one clean link to the map (room and map link are the same URL here)
+		expect(released.HTML.match(/<a href=/g)).toHaveLength(1);
+		expect(released.HTML).toContain('<a href="http://127.0.0.1:3290/map"');
+		expect(released.HTML).not.toContain('&lt;a');
 	});
 
 	it('are not sent twice, and not at all for tickets without an address', async () => {
@@ -290,6 +293,37 @@ describe('booking updates on Telegram', () => {
 		await mock('/_mock/telegram/update', { chat_id: chatId(), text: `/start ${token}` });
 		await flush();
 		expect((await notifyRecord(guest.order.id))?.tg_chat).toBe(String(chat));
+	});
+
+	it('keep what happens while a message is on its way (a move, a new link)', async () => {
+		const { beds } = await seedHouse(su, 2);
+		const guest = await seedTicket(su);
+		const chat = chatId();
+		const token = await telegramLink(guest.order.id);
+		await mock('/_mock/telegram/update', { chat_id: chat, text: `/start ${token}` });
+		await flush(); // "Connected!"
+		await booking.bookBed(guest.order as any, beds[0].id, 'Racer');
+
+		await mock('/_mock/telegram/slow', { ms: 2500 });
+		let running: Promise<unknown>;
+		let newToken: string;
+		try {
+			running = flush(); // sends "booked" — slowly
+			await new Promise((r) => setTimeout(r, 1000));
+			await booking.bookBed(guest.order as any, beds[1].id, 'Racer'); // the guest moves
+			newToken = await telegramLink(guest.order.id); // and asks for a new link
+			await running;
+		} finally {
+			await mock('/_mock/telegram/slow', { ms: 0 });
+		}
+
+		const rec = await notifyRecord(guest.order.id);
+		expect(rec?.tg_token_hash).toBe(crypto.createHash('sha256').update(newToken!).digest('hex'));
+		expect(rec?.due).not.toBe(''); // the move is still due
+		await flush();
+		const messages = await telegramTo(chat);
+		expect(messages.at(-1)?.text).toContain('spot changed');
+		expect(messages.at(-1)?.text).toContain(beds[1].label);
 	});
 
 	it('stop on /stop, and when the guest blocks the bot', async () => {
