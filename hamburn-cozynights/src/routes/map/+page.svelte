@@ -2,7 +2,7 @@
 	import type { PageData } from './$types';
 	import Map from '$lib/components/Map.svelte';
 	import CountdownTimer from '$lib/components/CountdownTimer.svelte';
-	import LegalLinks from '$lib/components/LegalLinks.svelte';
+	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import { onMount } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 
@@ -117,7 +117,7 @@
 			</div>
 		</div>
 	{/if}
-	<div class="map-legal"><LegalLinks /></div>
+	<div class="map-legal"><SiteFooter compact /></div>
 </div>
 
 <style>
@@ -216,6 +216,7 @@
 		background: rgba(5, 5, 5, 0.7);
 		backdrop-filter: blur(8px);
 		white-space: nowrap;
+		border-radius: 14px;
 	}
 
 	.floating-action-bar {

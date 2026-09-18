@@ -4,6 +4,7 @@ import { type Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { TypedPocketBase } from '$lib/pocketbase-types';
 import { getAdminPb, PB_URL } from '$lib/server/pocketbase';
+import { assertEncryptionKey } from '$lib/server/crypto';
 import {
 	ADMIN_COLLECTION,
 	AUTH_COOKIE,
@@ -14,6 +15,45 @@ import {
 	toAdminSession,
 	toPendingAdmin
 } from '$lib/server/admin-auth';
+
+// Fail fast: without a valid ENCRYPTION_KEY the app could neither find ticket
+// codes (lookup hashes) nor read names. A container that starts with a wrong
+// key must not serve requests, so the deploy script rolls back instead.
+try {
+	assertEncryptionKey();
+} catch (err) {
+	console.error(`[startup] ${(err as Error).message}`);
+	if (!dev) throw err;
+}
+
+// Sent with every response unless a route sets a stricter value itself (the
+// pass pages send no-referrer). HSTS belongs to the TLS terminator
+// (deploy/nginx/*.conf). The Content-Security-Policy is deliberately narrow:
+// it only forbids embedding and plugins. The full policy runs in
+// report-only mode first: SvelteKit's inline bootstrap script and the
+// components' inline styles need nonces/hashes (kit.csp) before it can be
+// enforced, see docs/reference/security.md.
+const SECURITY_HEADERS: Record<string, string> = {
+	'x-content-type-options': 'nosniff',
+	'x-frame-options': 'DENY',
+	'referrer-policy': 'strict-origin-when-cross-origin',
+	'permissions-policy': 'camera=(self), microphone=(), geolocation=(), payment=(), usb=()',
+	'cross-origin-opener-policy': 'same-origin',
+	'content-security-policy': "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+	'content-security-policy-report-only': [
+		"default-src 'self'",
+		"script-src 'self' 'unsafe-inline'",
+		"style-src 'self' 'unsafe-inline'",
+		"img-src 'self' data: blob:",
+		"media-src 'self'",
+		"font-src 'self'",
+		"connect-src 'self'",
+		"form-action 'self'",
+		"frame-ancestors 'none'",
+		"base-uri 'self'",
+		"object-src 'none'"
+	].join('; ')
+};
 
 export const handle: Handle = async ({ event, resolve }) => {
 	// 1. Initialize PocketBase instances
@@ -77,6 +117,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	const response = await resolve(event);
+
+	for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+		if (!response.headers.has(name)) response.headers.set(name, value);
+	}
 
 	// 5. Persist (or clear) the admin session cookie. Guests never get one.
 	if (hadAuthCookie || event.locals.pb.authStore.isValid) {

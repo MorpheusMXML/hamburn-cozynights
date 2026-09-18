@@ -41,7 +41,8 @@
 #                                                       test message to the crew chat (+ test e-mail)
 #
 # Targets docker-compose.staging.yml next to this script's parent folder;
-# override with COZY_COMPOSE_FILE=/path/to/docker-compose.<env>.yml (and COZY_ENV_FILE).
+# override with COZY_COMPOSE_FILE=/path/to/docker-compose.<env>.yml plus COZY_ENV_FILE and
+# COMPOSE_PROJECT_NAME (or COZY_DEPLOY_CONF=/etc/cozynights/<env>.conf) for another stack.
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -49,10 +50,17 @@ COMPOSE_FILE="${COZY_COMPOSE_FILE:-$APP_DIR/docker-compose.staging.yml}"
 ENV_FILE="${COZY_ENV_FILE:-$APP_DIR/.env}"
 # Same compose project as the deploy script (deploy/README.md), otherwise
 # `docker compose` would not find the running containers.
-DEPLOY_CONF=/etc/cozynights/deploy-staging.conf
-if [[ -z "${COMPOSE_PROJECT_NAME:-}" && -z "${COZY_COMPOSE_FILE:-}" && -r "$DEPLOY_CONF" ]]; then
-	COMPOSE_PROJECT_NAME="$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' "$DEPLOY_CONF" | tail -n1 | tr -d "'\"")"
-	if [[ -n "$COMPOSE_PROJECT_NAME" ]]; then export COMPOSE_PROJECT_NAME; fi
+DEPLOY_CONF="${COZY_DEPLOY_CONF:-/etc/cozynights/deploy-staging.conf}"
+if [[ -z "${COMPOSE_PROJECT_NAME:-}" ]]; then
+	if [[ -n "${COZY_COMPOSE_FILE:-}" ]]; then
+		# Another environment (e.g. production): docker compose would otherwise
+		# guess the project from the folder name and hit the wrong stack.
+		echo "error: COZY_COMPOSE_FILE is set but COMPOSE_PROJECT_NAME is not — export the project name of that stack (or COZY_DEPLOY_CONF=/etc/cozynights/<env>.conf)" >&2
+		exit 1
+	elif [[ -r "$DEPLOY_CONF" ]]; then
+		COMPOSE_PROJECT_NAME="$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' "$DEPLOY_CONF" | tail -n1 | tr -d "'\"")"
+		if [[ -n "$COMPOSE_PROJECT_NAME" ]]; then export COMPOSE_PROJECT_NAME; fi
+	fi
 fi
 # Always explicit: without --dir the binary silently uses an empty database
 # next to itself, and the cozy-admin command from pb_hooks isn't loaded.

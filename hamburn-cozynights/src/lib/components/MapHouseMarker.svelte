@@ -30,7 +30,7 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 	const LABEL_PADDING = 9;
 	const LABEL_GAP = 18;
 
-	$: isOccupied = status === 'full' || status === 'besetzt';
+	$: isOccupied = status === 'full';
 	$: isEmpty = status === 'empty';
 	$: glowId = isOccupied ? 'full' : isEmpty ? 'empty' : 'available';
 	// Long names would cover half the map; the full name is the pin's aria-label

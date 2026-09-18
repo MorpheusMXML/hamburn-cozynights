@@ -34,3 +34,6 @@ docs/generated/
 # Playwright output
 test-results/
 playwright-report/
+
+# Encrypted database snapshots are never committed (the repo is public)
+*.gpg

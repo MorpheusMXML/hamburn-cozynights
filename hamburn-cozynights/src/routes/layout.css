@@ -1,9 +1,18 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/forms';
-@plugin '@tailwindcss/typography';
 
-/* Global Transition for all interactive elements */
-* {
+/* Transitions for interactive elements and cards. Not `*`: with hundreds of
+   spots on a room page every span would carry them, and a list re-render
+   would animate the whole list at once. */
+a,
+button,
+input,
+select,
+textarea,
+summary,
+[class$='-card'],
+[class$='-panel'],
+[class$='-section'] {
 	transition:
 		border-color 0.3s ease,
 		box-shadow 0.3s ease,
@@ -11,10 +20,10 @@
 		transform 0.2s ease;
 }
 
-/* Laser Glass Effect for Cards */
+/* Laser Glass Effect for the large surfaces. The card grids (one card per
+   room or spot) get the same look with a flat colour: a backdrop blur per
+   card is one compositing layer each, which phones feel. */
 .house-card,
-.room-card,
-.bed-card,
 .intel-card,
 .form-section,
 .status-card,
@@ -22,6 +31,14 @@
 	position: relative;
 	background: rgba(15, 15, 15, 0.7) !important;
 	backdrop-filter: blur(10px) !important;
+	border: 1px solid rgba(255, 255, 255, 0.1) !important;
+	overflow: hidden;
+}
+
+.room-card,
+.bed-card {
+	position: relative;
+	background: rgba(18, 18, 18, 0.88) !important;
 	border: 1px solid rgba(255, 255, 255, 0.1) !important;
 	overflow: hidden;
 }

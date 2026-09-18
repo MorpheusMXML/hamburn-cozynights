@@ -85,7 +85,6 @@ Without a Google client the login page says *Google sign-in is not configured on
 | `npm run health` | Just the health check |
 | `npm run build` / `npm run preview` | Production build and a local preview of it |
 | `npm run typegen` | Regenerates `src/lib/pocketbase-types.ts` from your local schema |
-| `npm run docs:generate` | Generates a TypeDoc API reference into `docs/generated/` (local only, git-ignored) |
 
 ## Tests
 

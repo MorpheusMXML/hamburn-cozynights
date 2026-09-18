@@ -11,10 +11,11 @@ const failedLogins = new FailureRateLimiter(20, RATE_LIMIT_WINDOW_MINUTES * 60 *
 
 // Keep in sync with the client-side check in +page.svelte.
 const TICKET_CODE_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+const SURROUNDING_BLANKS = /^[\s\u200B-\u200D\uFEFF]+|[\s\u200B-\u200D\uFEFF]+$/g;
 
 /** Copy-pasted codes often carry spaces, line breaks or zero-width characters around them. */
 function cleanTicketCode(raw: FormDataEntryValue | null): string {
-	return (typeof raw === 'string' ? raw : '').replace(/^[\s​-‍﻿]+|[\s​-‍﻿]+$/g, '');
+	return (typeof raw === 'string' ? raw : '').replace(SURROUNDING_BLANKS, '');
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -93,5 +94,15 @@ export const actions: Actions = {
 		});
 
 		throw redirect(303, '/map');
+	},
+
+	/**
+	 * Forgets the ticket code on this device. The code is the guest's key to
+	 * their booking (docs: Security & privacy), so a shared or borrowed phone
+	 * needs a way to give it back.
+	 */
+	signOut: async ({ cookies }) => {
+		cookies.delete('bookingCode', { path: '/' });
+		throw redirect(303, '/?login=out');
 	}
 };

@@ -1,7 +1,24 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { Chart, registerables } from 'chart.js';
-	Chart.register(...registerables);
+	import {
+		ArcElement,
+		BarController,
+		BarElement,
+		CategoryScale,
+		Chart,
+		DoughnutController,
+		LinearScale
+	} from 'chart.js';
+	// Only the parts of chart.js the two charts use (a doughnut and bars,
+	// no legend, tooltip or line charts): the rest would be ~30 KB for nothing.
+	Chart.register(
+		ArcElement,
+		BarController,
+		BarElement,
+		CategoryScale,
+		DoughnutController,
+		LinearScale
+	);
 
 	export let totalBeds: number;
 	export let occupiedBeds: number;

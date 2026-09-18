@@ -5,8 +5,10 @@
 # 40-char SHA is taken from the request, everything else is ignored.
 #
 # Steps: checkout SHA → build app image (old containers keep serving) →
-# stop PocketBase → back up its volume → up -d → health check.
-# If the health check fails, the previous commit is rebuilt and started again.
+# stop PocketBase → back up its volume → up -d → health check (/api/health:
+# 200 only when the app's service account can talk to PocketBase).
+# If the health check fails, the previous commit is rebuilt and started again;
+# the database is NOT rolled back (see the warning below).
 set -euo pipefail
 
 CONFIG=/etc/cozynights/deploy-staging.conf
@@ -17,7 +19,7 @@ source "$CONFIG"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.staging.yml}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/cozynights-staging}"
 BACKUP_KEEP="${BACKUP_KEEP:-10}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3001/}"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3001/api/health}"
 PB_CONTAINER="${PB_CONTAINER:-cozynights-staging-pocketbase}"
 export COMPOSE_PROJECT_NAME
 
@@ -110,6 +112,10 @@ fi
 
 log "health check failed on $HEALTH_URL — rolling back to $prev"
 compose logs --tail 40 app || true
+if [[ -n "$(git diff --name-only "$prev" "$sha" -- hamburn-cozynights/pb_migrations/ 2>/dev/null)" ]]; then
+	log "WARNING: $sha changed pb_migrations/ — the rollback restores the code, not the database."
+	log "If $prev fails on the new schema, restore the snapshot ${backup:-in $BACKUP_DIR} (deploy/README.md, Restore)."
+fi
 build_and_start "$prev"
 if healthy; then
 	log "rollback to $prev succeeded"

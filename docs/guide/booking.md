@@ -23,7 +23,7 @@ flowchart LR
 
 1. **Enter your ticket code**
 
-   Open the CozyNights start page, type your code into the **ACCESS CODE** field and press <kbd>ENTER THE DUST 🌵</kbd>.
+   Open the CozyNights start page, type your code into the **TICKET CODE** field and press <kbd>ENTER THE DUST 🌵</kbd>.
 
    ![Start page with the ticket code field](../assets/screenshots/guest-landing.webp)
 
