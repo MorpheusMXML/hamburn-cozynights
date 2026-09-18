@@ -72,9 +72,12 @@ export interface AdminRequestView extends GuestRequestView {
 	consentAt: string;
 	decidedBy: string;
 	decidedAt: string;
+	/** The guest sent the form again after the crew decided (a race with the decision). */
+	changedAfterDecision: boolean;
 	/** From the ticket list. The name is empty when it would show the ticket code. */
 	ticket: { name: string; email: string };
-	spot: SpotInfo | null;
+	/** The ticket's spot; `assigned` when the crew booked it for this request. */
+	spot: (SpotInfo & { assigned: boolean }) | null;
 }
 
 export interface RequestInput {

@@ -13,9 +13,11 @@ import {
 	setRequestsOpen
 } from '$lib/server/special-requests';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, setHeaders }) => {
 	// Runs in parallel with the layout load, so it guards itself too.
 	if (!locals.admin) throw error(403, 'Unauthorized');
+	// What guests wrote about their needs: never keep it in a cache.
+	setHeaders({ 'cache-control': 'no-store' });
 
 	try {
 		const [requests, spots, settings] = await Promise.all([
@@ -53,7 +55,7 @@ async function step(what: string, fn: () => Promise<void>) {
 			return fail(409, { error: `${err.message} Pick another spot.` });
 		}
 		if ((err as { status?: number })?.status === 404) {
-			return fail(409, { error: "This spot doesn't exist anymore. Reload the page." });
+			return fail(409, { error: "Something here doesn't exist anymore. Reload the page." });
 		}
 		console.error(`[Admin:Requests] ${what} failed:`, (err as Error)?.message);
 		return fail(500, { error: 'The server could not save this. Reload the page and try again.' });

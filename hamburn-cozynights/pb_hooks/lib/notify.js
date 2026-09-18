@@ -504,12 +504,14 @@ function currentSpot(app, orderId) {
 	return spot;
 }
 
-/** The ticket's special-needs request: { id, status } or null. */
+/** The ticket's special-needs request: { id, status, bed (the spot the crew booked) } or null. */
 function currentRequest(app, orderId) {
 	const rows = app.findRecordsByFilter('special_requests', 'order = {:order}', '', 1, 0, {
 		order: orderId
 	});
-	return rows.length > 0 ? { id: rows[0].id, status: rows[0].getString('status') } : null;
+	return rows.length > 0
+		? { id: rows[0].id, status: rows[0].getString('status'), bed: rows[0].getString('bed') }
+		: null;
 }
 
 /** What a channel remembers about the request: "<id>:<status>", or "" for none. */
@@ -599,22 +601,43 @@ function spotLines(spot) {
 
 /**
  * Subject, plain text and HTML of a guest e-mail. kind: booked | changed |
- * released, or '' when only a special-needs request changed. pass: { code,
+ * released, or '' when only the special-needs request changed. pass: { code,
  * url } of the ticket's booking pass, or null. request (optional): { kind:
- * received | approved | declined | '', fixed: the ticket has an approved
- * request, so the crew picks its spot and only the crew changes it }.
+ * received | approved | declined | '' (what to tell about the request),
+ * status: its current status, fixed: the ticket's spot is the one the crew
+ * booked for the request, so only the crew changes it }. Every combination
+ * tells both: a message is sent once per state, news left out is lost.
  */
 function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
-	const req = request || { kind: '', fixed: false };
+	const req = request || { kind: '', status: '', fixed: false };
 	const hello = name ? 'Hi ' + name + ',' : 'Hi,';
 	const mapUrl = cfg.appUrl + '/map';
 	const requestUrl = cfg.appUrl + '/special-needs';
 	const roomUrl = spot ? cfg.appUrl + '/room/' + spot.roomId : mapUrl;
-	const passUrl = pass && kind && kind !== 'released' ? pass.url : '';
+	const crewBooked = req.kind === 'approved' && req.fixed && !!spot;
+	// the spot's details: whenever it is booked or changed, or the crew just booked it
+	const showSpot = !!spot && ((!!kind && kind !== 'released') || crewBooked);
+	const passUrl = pass && showSpot ? pass.url : '';
+	const passLine = passUrl
+		? 'Your booking pass (code ' +
+			pass.code +
+			'): ' +
+			passUrl +
+			' — show it when you arrive, if the crew asks.'
+		: '';
+	const fixedLine =
+		'The crew picked this spot for you, so please contact the crew to change it. Your room: ' +
+		roomUrl;
 	let subject;
 	let intro;
 	let after = [];
-	if (!kind) {
+	if (crewBooked) {
+		subject = 'Your special-needs spot: ' + spot.label;
+		intro = 'the crew approved your special-needs request and booked this spot for you:';
+		if (kind === 'changed' && previousLabel) after.push('Before: ' + previousLabel);
+		if (passLine) after.push(passLine);
+		after.push(fixedLine);
+	} else if (!kind) {
 		if (req.kind === 'received') {
 			subject = 'We got your special-needs request';
 			intro = 'the crew got your request for a special-needs spot.';
@@ -628,77 +651,85 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
 			subject = 'Your special-needs request was approved';
 			intro = 'the crew approved your request for a special-needs spot.';
 			after = [
-				'They are picking a fitting spot for you. You get another e-mail as soon as it is booked.',
+				spot
+					? 'You keep your current spot, ' +
+						spot.label +
+						', until the crew books a more fitting one for you. Then you get another e-mail.'
+					: 'They are picking a fitting spot for you. You get another e-mail as soon as it is booked.',
 				'Your request: ' + requestUrl
 			];
 		} else {
 			subject = 'About your special-needs request';
 			intro = 'the crew could not offer you a special-needs spot.';
-			after = [
-				'You can book a spot like everyone else when booking opens: ' + mapUrl,
-				'If you have questions, please contact the crew.'
-			];
+			after = spot
+				? [
+						'You keep your current spot, ' + spot.label + '.',
+						'If you have questions, please contact the crew.'
+					]
+				: [
+						'You can book a spot like everyone else when booking opens: ' + mapUrl,
+						'If you have questions, please contact the crew.'
+					];
 		}
 	} else if (kind === 'released') {
 		subject = 'Your CozyNights spot was released';
 		intro =
 			'your ticket no longer holds a spot' +
 			(previousLabel ? ' — ' + previousLabel + ' is free again.' : '.');
-		after = req.fixed
-			? [
-					'Your special-needs request is still approved: the crew picks a new spot for you, and you get an e-mail when it is booked.'
-				]
-			: [
-					"If you didn't release it yourself, the crew had to change the camp layout.",
-					'While booking is open you can pick a new spot: ' + mapUrl
-				];
+		if (req.status === 'approved') {
+			after = [
+				(req.kind === 'approved'
+					? 'The crew approved your special-needs request'
+					: 'Your special-needs request is still approved') +
+					': the crew picks a new spot for you, and you get an e-mail when it is booked.'
+			];
+		} else {
+			after = [
+				"If you didn't release it yourself, the crew had to change the camp layout.",
+				'While booking is open you can pick a new spot: ' + mapUrl
+			];
+		}
 		if (req.kind === 'declined')
 			after.unshift('The crew could not offer you a special-needs spot.');
+		if (req.kind === 'received') {
+			after.unshift(
+				'The crew got your special-needs request; you get an e-mail when they have decided.'
+			);
+		}
 	} else {
 		subject =
-			(req.kind === 'approved'
-				? 'Your special-needs spot: '
-				: kind === 'changed'
-					? 'Your CozyNights spot changed: '
-					: 'Your CozyNights spot: ') + spot.label;
-		intro =
-			req.kind === 'approved'
-				? 'the crew approved your special-needs request and booked this spot for you:'
-				: kind === 'changed'
-					? 'your ticket now holds a different spot:'
-					: 'your spot is booked:';
+			(kind === 'changed' ? 'Your CozyNights spot changed: ' : 'Your CozyNights spot: ') +
+			spot.label;
+		intro = kind === 'changed' ? 'your ticket now holds a different spot:' : 'your spot is booked:';
 		if (req.kind === 'received') {
 			after.push(
 				'The crew also got your special-needs request; you get an e-mail when they have decided.'
 			);
+		} else if (req.kind === 'approved') {
+			after.push(
+				'The crew approved your special-needs request. You keep this spot until they book a more fitting one for you; then you get another e-mail.'
+			);
+		} else if (req.kind === 'declined') {
+			after.push('The crew could not offer you a special-needs spot; you keep this spot.');
 		}
 		if (kind === 'changed' && previousLabel) after.push('Before: ' + previousLabel);
-		if (kind === 'changed' && req.kind !== 'approved') {
+		if (kind === 'changed') {
 			after.push(
 				req.fixed
 					? 'The crew moved you to this spot.'
 					: "If you didn't change it yourself, the crew had to move you."
 			);
 		}
-		if (passUrl) {
-			after.push(
-				'Your booking pass (code ' +
-					pass.code +
-					'): ' +
-					passUrl +
-					' — show it when you arrive, if the crew asks.'
-			);
-		}
+		if (passLine) after.push(passLine);
 		after.push(
 			req.fixed
-				? 'The crew picked this spot for you, so please contact the crew to change it. Your room: ' +
-						roomUrl
+				? fixedLine
 				: 'To change or release it, open ' +
 						roomUrl +
 						', sign in with your ticket code and tap your spot — as long as booking is open.'
 		);
 	}
-	const rows = spot && kind && kind !== 'released' ? spotLines(spot) : [];
+	const rows = showSpot ? spotLines(spot) : [];
 	const footer = 'You get this e-mail because this address belongs to your Hamburn ticket.';
 
 	const text = [hello, '', intro]
@@ -765,17 +796,17 @@ const REQUEST_STATUS_TEXT = {
 };
 
 /**
- * kind: connected | booked | changed | released, or '' when only a
+ * kind: connected | booked | changed | released, or '' when only the
  * special-needs request changed; pass: { code, url } or null; request
- * (optional): { kind, fixed } like guestMail, plus `status` for "connected".
+ * (optional): { kind, status, fixed } like guestMail.
  */
 function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
-	const req = request || { kind: '', fixed: false, status: '' };
+	const req = request || { kind: '', status: '', fixed: false };
 	const mapUrl = cfg.appUrl + '/map';
 	const requestUrl = cfg.appUrl + '/special-needs';
 	const roomUrl = spot ? cfg.appUrl + '/room/' + spot.roomId : mapUrl;
 	const passLine = pass && spot ? '\n\n🎫 Booking pass ' + pass.code + ':\n' + pass.url : '';
-	const received = req.kind === 'received' ? '🧡 The crew got your special-needs request.\n\n' : '';
+	const crewBooked = req.kind === 'approved' && req.fixed && !!spot;
 	let text;
 	if (kind === 'connected') {
 		text =
@@ -787,57 +818,78 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 				? '\n\nYour special-needs request: ' + REQUEST_STATUS_TEXT[req.status]
 				: '') +
 			'\n\nSend /stop to disconnect.';
+	} else if (crewBooked) {
+		text =
+			'✅ Your special-needs request was approved. The crew booked this spot for you:\n' +
+			spot.label +
+			(kind === 'changed' && previousLabel ? '\nBefore: ' + previousLabel : '') +
+			'\n\n' +
+			roomUrl +
+			passLine +
+			'\n\nTo change it, please contact the crew.';
 	} else if (!kind) {
 		if (req.kind === 'received') {
 			text =
 				"🧡 The crew got your special-needs request. You'll get a message here when they have decided.\n\nSee, change or withdraw it: " +
 				requestUrl;
 		} else if (req.kind === 'approved') {
+			text = spot
+				? '✅ Your special-needs request was approved. You keep your current spot, ' +
+					spot.label +
+					", until the crew books a more fitting one for you; you'll get a message here when they do."
+				: "✅ Your special-needs request was approved. The crew is picking a fitting spot for you; you'll get a message here when it is booked.";
+		} else {
+			text = spot
+				? '✋ The crew could not offer you a special-needs spot. You keep your current spot, ' +
+					spot.label +
+					'.'
+				: '✋ The crew could not offer you a special-needs spot. You can book a spot like everyone else when booking opens: ' +
+					mapUrl;
+		}
+	} else {
+		const news =
+			req.kind === 'received'
+				? '🧡 The crew got your special-needs request.\n\n'
+				: req.kind === 'declined'
+					? '✋ The crew could not offer you a special-needs spot.\n\n'
+					: req.kind === 'approved' && kind !== 'released'
+						? "✅ Your special-needs request was approved. You keep this spot until the crew books a more fitting one; you'll get a message here when they do.\n\n"
+						: '';
+		if (kind === 'released') {
 			text =
-				"✅ Your special-needs request was approved. The crew is picking a fitting spot for you; you'll get a message here when it is booked.";
+				news +
+				'🫥 Your CozyNights spot was released' +
+				(previousLabel ? ': ' + previousLabel + ' is free again.' : '.') +
+				(req.status === 'approved'
+					? '\n\n' +
+						(req.kind === 'approved'
+							? 'Your special-needs request was approved'
+							: 'Your special-needs request is still approved') +
+						": the crew picks a new spot for you, and you'll get a message here when it is booked."
+					: "\n\nIf you didn't do this yourself, the crew had to change the camp layout. Pick a new spot while booking is open: " +
+						mapUrl);
+		} else if (kind === 'changed') {
+			text =
+				news +
+				'🔁 Your CozyNights spot changed\nNow: ' +
+				spot.label +
+				(previousLabel ? '\nBefore: ' + previousLabel : '') +
+				(req.fixed
+					? '\n\nThe crew moved you to this spot. To change it, please contact the crew.\n'
+					: "\n\nIf you didn't change it yourself, the crew had to move you.\n") +
+				roomUrl +
+				passLine;
 		} else {
 			text =
-				'✋ The crew could not offer you a special-needs spot. You can book a spot like everyone else when booking opens: ' +
-				mapUrl;
+				news +
+				'✨ Your CozyNights spot is booked\n' +
+				spot.label +
+				(req.fixed
+					? '\n\nThe crew picked it for you. To change it, please contact the crew.\n'
+					: '\n\nChange or release it: ') +
+				roomUrl +
+				passLine;
 		}
-	} else if (kind === 'released') {
-		text =
-			(req.kind === 'declined' ? '✋ The crew could not offer you a special-needs spot.\n\n' : '') +
-			'🫥 Your CozyNights spot was released' +
-			(previousLabel ? ': ' + previousLabel + ' is free again.' : '.') +
-			(req.fixed
-				? "\n\nYour special-needs request is still approved: the crew picks a new spot for you, and you'll get a message here when it is booked."
-				: "\n\nIf you didn't do this yourself, the crew had to change the camp layout. Pick a new spot while booking is open: " +
-					mapUrl);
-	} else if (kind === 'changed' && req.kind !== 'approved') {
-		text =
-			received +
-			'🔁 Your CozyNights spot changed\nNow: ' +
-			spot.label +
-			(previousLabel ? '\nBefore: ' + previousLabel : '') +
-			(req.fixed
-				? '\n\nThe crew moved you to this spot. To change it, please contact the crew.\n'
-				: "\n\nIf you didn't change it yourself, the crew had to move you.\n") +
-			roomUrl +
-			passLine;
-	} else if (req.kind === 'approved') {
-		text =
-			'✅ Your special-needs request was approved. The crew booked this spot for you:\n' +
-			spot.label +
-			'\n\n' +
-			roomUrl +
-			passLine +
-			'\n\nTo change it, please contact the crew.';
-	} else {
-		text =
-			received +
-			'✨ Your CozyNights spot is booked\n' +
-			spot.label +
-			(req.fixed
-				? '\n\nThe crew picked it for you. To change it, please contact the crew.\n'
-				: '\n\nChange or release it: ') +
-			roomUrl +
-			passLine;
 	}
 	return prefixed(cfg, text);
 }
@@ -928,7 +980,9 @@ function deliverOne(app, cfg, rec, force) {
 	// The special-needs request, remembered per channel as "<id>:<status>".
 	const request = currentRequest(app, order.id);
 	const reqKey = requestKey(request);
-	const fixed = !!request && request.status === 'approved';
+	const reqStatus = request ? request.status : '';
+	// only the spot the crew booked for the approved request is theirs to change
+	const fixed = !!request && request.status === 'approved' && !!request.bed && key === request.bed;
 	const problems = [];
 	const channels = [];
 	let deferred = false;
@@ -962,7 +1016,7 @@ function deliverOne(app, cfg, rec, force) {
 							known ? rec.getString('mail_label') : '',
 							greetingName(order),
 							pass,
-							{ kind: reqKind, fixed: fixed }
+							{ kind: reqKind, status: reqStatus, fixed: fixed }
 						)
 					);
 					mailDone = { to: email, key: key, label: label, req: reqKey, sent: pbDate(now) };
@@ -998,8 +1052,8 @@ function deliverOne(app, cfg, rec, force) {
 					chat_id: chat,
 					text: guestTelegram(cfg, kind, spot, rec.getString('tg_label'), pass, {
 						kind: reqKind,
-						fixed: fixed,
-						status: request ? request.status : ''
+						status: reqStatus,
+						fixed: fixed
 					}),
 					disable_web_page_preview: true
 				},

@@ -52,7 +52,7 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 		});
 
 		const spotFixed = userBed
-			? await isSpotFixed(locals.adminPb, order.id).catch((err) => {
+			? await isSpotFixed(locals.adminPb, order.id, userBed.id).catch((err) => {
 					console.error('[House] Special-needs request lookup failed:', (err as Error)?.message);
 					return false;
 				})

@@ -5,12 +5,13 @@
 // approve or decline the request and assign a spot.
 //
 // - special_requests: at most one per ticket (unique `order`). `needs` is what
-//   the guest ticked, `reason` their own words. The app ENCRYPTS `reason` and
-//   `burner_name` (AES-256-GCM with ENCRYPTION_KEY, like orders.burner_name):
-//   a reason is often health data (Art. 9 GDPR), so the dashboard and backups
-//   only hold ciphertext. `consent_at` is when the guest agreed to that.
-//   Withdrawing a request deletes it; so does deleting its ticket (cascade)
-//   and `cozy-admin tickets forget-contacts` after the event.
+//   the guest ticked, `reason` their own words. The app ENCRYPTS `needs`,
+//   `reason` and `burner_name` (AES-256-GCM with ENCRYPTION_KEY, like
+//   orders.burner_name): they are often health data (Art. 9 GDPR), so the
+//   dashboard and backups only hold ciphertext. `consent_at` is when the guest
+//   agreed to that. `bed` is the spot the crew booked for the request: only
+//   that spot is fixed for the guest. Withdrawing a request deletes it; so do
+//   deleting its ticket (cascade) and `cozy-admin tickets forget-contacts`.
 // - beds.is_special: a special-needs spot. Guests can't book it (like a locked
 //   spot, and they never see why); admins assign it to an approved request.
 // - app_settings.special_requests_open: whether guests can send requests,
@@ -69,13 +70,8 @@ migrate(
 							maxSelect: 1,
 							values: ['pending', 'approved', 'declined']
 						},
-						// Keep in sync with SPECIAL_NEEDS in src/lib/special-needs.ts.
-						{
-							name: 'needs',
-							type: 'select',
-							maxSelect: 6,
-							values: ['lower_bunk', 'step_free', 'near_toilet', 'quiet', 'power', 'other']
-						},
+						// ciphertext of the ticked needs (a JSON list, see src/lib/special-needs.ts)
+						{ name: 'needs', type: 'text', max: 1000 },
 						// ciphertext of at most 500 characters
 						{ name: 'reason', type: 'text', max: 5000 },
 						// ciphertext of the burner name for the spot, optional
@@ -84,6 +80,14 @@ migrate(
 						// the admin who approved or declined, and when
 						{ name: 'decided_by', type: 'text', max: 320 },
 						{ name: 'decided_at', type: 'date' },
+						// the spot the crew booked for this request (emptied when released)
+						{
+							name: 'bed',
+							type: 'relation',
+							collectionId: beds.id,
+							maxSelect: 1,
+							cascadeDelete: false
+						},
 						{ name: 'created', type: 'autodate', onCreate: true, onUpdate: false },
 						{ name: 'updated', type: 'autodate', onCreate: true, onUpdate: true }
 					],

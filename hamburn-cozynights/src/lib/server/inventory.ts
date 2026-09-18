@@ -31,8 +31,9 @@ export class InventoryService {
 			// Serialize everything to plain objects to ensure compatibility.
 			// This tree is the public guest map: deactivated beds are left out,
 			// locked and special-needs beds show as taken, and neither the booking's
-			// order id nor the special-needs flag is exposed (together with the
-			// burner names on the room pages it would tell who has special needs).
+			// order id nor why a bed is taken is exposed: together with the burner
+			// names on the room pages, a lock or special-needs flag would tell who
+			// has special needs.
 			const houses = housesRaw.map((h) => ({ ...h }));
 			const rooms = roomsRaw.map((r) => ({ ...r }));
 			const beds = bedsRaw
@@ -41,6 +42,7 @@ export class InventoryService {
 					...b,
 					occupied: !!b.occupied || !!b.is_locked || !!b.is_special,
 					order: '',
+					is_locked: false,
 					is_special: false
 				}));
 

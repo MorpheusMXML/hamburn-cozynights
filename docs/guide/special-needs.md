@@ -21,8 +21,8 @@ You get an e-mail that your request arrived, and another one when the crew has d
 | Status | What it means |
 | --- | --- |
 | **Waiting for the crew** | The crew hasn't decided yet. You can still change or withdraw your request. |
-| **Approved** | The crew picks a fitting spot and books it for you. You get a message with the spot and your [booking pass](./booking#your-booking-pass). |
-| **Declined** | The crew can't offer you a special-needs spot. Book a spot like everyone else when booking opens. |
+| **Approved** | The crew picks a fitting spot and books it for you. You get a message with the spot and your [booking pass](./booking#your-booking-pass). If you already booked a spot yourself, you keep it until the crew books a more fitting one. |
+| **Declined** | The crew can't offer you a special-needs spot. Keep the spot you booked, or book one like everyone else when booking opens. |
 
 A spot the crew booked for you is yours, also while booking is still closed. You can give it a new burner name, but **only the crew can move it or release it**: write to them if something doesn't fit.
 
@@ -32,7 +32,7 @@ On the same page, <kbd>Withdraw request</kbd> deletes your request and everythin
 
 ## Who sees what
 
-- **Only the crew's admins** can read what you wrote. It is stored encrypted and deleted after the event at the latest.
+- **Only the crew's admins** can read what you ticked and wrote. It is stored encrypted and deleted after the event at the latest.
 - **Messages never contain it:** e-mails and Telegram messages only say what the crew decided.
 - **Other guests can't tell** that your spot is a special-needs spot: they see your burner name, like on any other spot.
 

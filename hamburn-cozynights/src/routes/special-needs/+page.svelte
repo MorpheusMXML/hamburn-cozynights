@@ -5,6 +5,8 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 -->
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/stores';
 	import type { ActionData, PageData } from './$types';
 	import { confirmDialog, toast } from '$lib/dialogs';
 	import {
@@ -29,8 +31,9 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 	};
 
 	// Without JavaScript a failed send comes back as `form`; keep what was typed.
+	// "Change request" is a link to ?edit, so it works without JavaScript too.
 	const returned = formValues(form);
-	let editing = !data.request || !!returned;
+	let editing = !data.request || !!returned || $page.url.searchParams.has('edit');
 	let needs: string[] = returned?.needs ?? [...(data.request?.needs ?? [])];
 	let text = returned?.text ?? data.request?.text ?? '';
 	let burnerName = returned?.burnerName ?? data.request?.burnerName ?? '';
@@ -103,7 +106,14 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 					message when they have decided.
 				</p>
 			{:else if request.status === 'approved' && data.spot}
-				<p>The crew picked this spot for you:</p>
+				{#if data.spot.fixed}
+					<p>The crew picked this spot for you:</p>
+				{:else}
+					<p>
+						You keep your current spot until the crew books a more fitting one for you; you get a
+						message when they do. Your spot:
+					</p>
+				{/if}
 				<p class="spot"><strong>{data.spot.label}</strong></p>
 				<p class="actions-row">
 					<a class="btn-primary" href="/room/{data.spot.roomId}">Open my room</a>
@@ -111,11 +121,18 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 						<a class="btn-secondary" href="/pass/{data.passCode}">🎫 Booking pass</a>
 					{/if}
 				</p>
-				<p class="hint">To change the spot, please contact the crew.</p>
+				{#if data.spot.fixed}
+					<p class="hint">To change the spot, please contact the crew.</p>
+				{/if}
 			{:else if request.status === 'approved'}
 				<p>
 					The crew is picking a fitting spot for you. You get a message with the details as soon as
 					it is booked.
+				</p>
+			{:else if data.spot}
+				<p>
+					The crew could not offer you a special-needs spot. You keep your current spot,
+					<strong>{data.spot.label}</strong>. If you have questions, please contact the crew.
 				</p>
 			{:else}
 				<p>
@@ -142,8 +159,11 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 
 				<div class="actions-row">
 					{#if canEdit}
-						<button type="button" class="btn-secondary" on:click={startEditing}
-							>Change request</button
+						<a
+							class="btn-secondary"
+							href="?edit"
+							on:click|preventDefault={startEditing}
+							data-sveltekit-noscroll>Change request</a
 						>
 					{/if}
 					<form
@@ -216,6 +236,8 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 							formError =
 								failed.error ??
 								(failed.errors ? 'Please check the marked fields.' : 'Nothing was sent.');
+							// Refused because the crew decided meanwhile: show the decision.
+							if (result.status === 409) await invalidateAll();
 							return;
 						}
 						if (result.type === 'error') {
@@ -322,11 +344,11 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 						{isSaving ? 'Sending…' : request ? 'Save changes' : 'Send request'}
 					</button>
 					{#if request}
-						<button
-							type="button"
+						<a
 							class="btn-secondary"
-							on:click={() => (editing = false)}
-							disabled={isSaving}>Cancel</button
+							href="/special-needs"
+							on:click|preventDefault={() => (editing = false)}
+							data-sveltekit-noscroll>Cancel</a
 						>
 					{/if}
 				</div>

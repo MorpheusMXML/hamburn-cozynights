@@ -152,8 +152,8 @@ variables in the server's .env (`$lib/server/legal`).
 		tell us diagnoses. Booking the spot for you is part of allocating the beds (Art. 6(1)(b) GDPR).
 	</p>
 	<p>
-		Only crew members with access to the administration can read your request. What you write and
-		the burner name are stored encrypted. They are never part of an email{#if notify.telegram}
+		Only crew members with access to the administration can read your request. What you tick and
+		write and the burner name are stored encrypted. They are never part of an email{#if notify.telegram}
 			or Telegram message{/if}: those only say that your request arrived and what the crew decided.
 		The crew{#if notify.telegram}'s Telegram group{/if} only learns that a request arrived or was decided,
 		without your name or what you wrote.

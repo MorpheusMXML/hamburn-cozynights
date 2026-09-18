@@ -14,7 +14,7 @@ import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
 import { parseTemplate, TEMPLATE_LIMITS, type TemplateParseResult } from '$lib/template';
 import { getCampCounts, importTemplate, TemplateImportError } from '$lib/server/template';
 import { logAdminEvent } from '$lib/server/admin-events';
-import { approvedOrderIds } from '$lib/server/special-requests';
+import { crewBookedBeds } from '$lib/server/special-requests';
 
 /**
  * Shared first half of the template preview and import: both are superuser-only,
@@ -134,15 +134,20 @@ export const actions: Actions = {
 		try {
 			// 1. Release every occupied bed. The orders themselves are the ticket
 			//    roster (one order per ticket code) and must survive, otherwise every
-			//    guest's code would stop working. Spots the crew assigned for
+			//    guest's code would stop working. Spots the crew booked for
 			//    approved special-needs requests stay: they were handed out on
 			//    purpose, usually before booking opened.
-			const keep = await approvedOrderIds(locals.adminPb);
+			const crewBooked = await crewBookedBeds(locals.adminPb);
 			const booked = await locals.adminPb.collection('beds').getFullList({
 				filter: 'occupied = true || order != ""'
 			});
-			const occupiedBeds = booked.filter((bed) => !(bed.order && keep.has(bed.order)));
+			const occupiedBeds = booked.filter(
+				(bed) => !(bed.order && crewBooked.get(bed.id) === bed.order)
+			);
 			const kept = booked.length - occupiedBeds.length;
+			const keep = new Set(
+				booked.filter((bed) => !occupiedBeds.includes(bed)).map((bed) => bed.order)
+			);
 
 			console.log(
 				`[Action:clearAllBookings] Clearing ${occupiedBeds.length} spots, keeping ${kept} special-needs spots.`

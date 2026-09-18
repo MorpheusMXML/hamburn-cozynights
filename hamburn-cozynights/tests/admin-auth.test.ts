@@ -535,7 +535,7 @@ describe('superuser-only dashboard actions', () => {
 				opts?.filter?.includes('burner_name')
 					? [{ id: 'order1' }, { id: 'order2' }]
 					: opts?.filter?.includes('approved')
-						? [{ order: 'order2' }] // an approved special-needs request
+						? [{ order: 'order2', bed: 'bed2' }] // the crew booked bed2 for a special-needs request
 						: [{ id: 'bed1' }, { id: 'bed2', order: 'order2' }]
 			),
 			update: vi.fn(async () => ({})),

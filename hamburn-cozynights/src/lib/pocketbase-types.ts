@@ -238,22 +238,15 @@ export enum SpecialRequestsStatusOptions {
 	approved = 'approved',
 	declined = 'declined'
 }
-export enum SpecialRequestsNeedsOptions {
-	lower_bunk = 'lower_bunk',
-	step_free = 'step_free',
-	near_toilet = 'near_toilet',
-	quiet = 'quiet',
-	power = 'power',
-	other = 'other'
-}
 export type SpecialRequestsRecord = {
+	bed?: RecordIdString;
 	burner_name?: string;
 	consent_at: IsoDateString;
 	created: IsoAutoDateString;
 	decided_at?: IsoDateString;
 	decided_by?: string;
 	id: string;
-	needs?: SpecialRequestsNeedsOptions[];
+	needs?: string;
 	order: RecordIdString;
 	reason?: string;
 	status: SpecialRequestsStatusOptions;

@@ -30,6 +30,7 @@ import {
 	decideRequest,
 	getGuestRequest,
 	isSpotFixed,
+	releaseSpot,
 	listAssignableSpots,
 	listRequests,
 	RequestError,
@@ -149,10 +150,9 @@ describe('request form', () => {
 		expect(cleanRequestText(raw)).toBe('Lower bunk\n\nplease ok too');
 	});
 
-	it('keeps the list of needs in line with the database', async () => {
-		const fs = await import('fs');
-		const migration = fs.readFileSync('pb_migrations/1759200000_special_requests.js', 'utf8');
-		for (const need of SPECIAL_NEEDS) expect(migration).toContain(`'${need.value}'`);
+	it('offers each need once', () => {
+		const values = SPECIAL_NEEDS.map((need) => need.value);
+		expect(new Set(values).size).toBe(values.length);
 	});
 });
 
@@ -243,7 +243,10 @@ describe('special-needs requests', () => {
 		expect(await saveRequest(c.pb as any, c.order as any, parsed.value)).toBe('created');
 
 		const [stored] = c.pb.rows('special_requests');
-		expect(stored).toMatchObject({ order: c.order.id, status: 'pending', needs: GOOD.needs });
+		expect(stored).toMatchObject({ order: c.order.id, status: 'pending' });
+		// what was ticked is health data too: stored encrypted like the text
+		expect(stored.needs).not.toContain('lower_bunk');
+		expect(JSON.parse(decrypt(stored.needs))).toEqual(GOOD.needs);
 		expect(stored.reason).not.toContain('lower bunk');
 		expect(decrypt(stored.reason)).toBe(GOOD.text);
 		expect(decrypt(stored.burner_name)).toBe('Sparkle Pony');
@@ -300,7 +303,8 @@ describe('special-needs requests', () => {
 		expect(bed).toMatchObject({ occupied: true, order: c.order.id });
 		expect(c.pb.rows('special_requests')[0]).toMatchObject({
 			status: 'approved',
-			decided_by: admin.email
+			decided_by: admin.email,
+			bed: c.special.id
 		});
 		// no burner name anywhere: a random one, like a guest booking without one
 		expect(decrypt(c.pb.rows('orders')[0].burner_name)).toMatch(/ #\d{3}$/);
@@ -309,6 +313,48 @@ describe('special-needs requests', () => {
 			'special_spot_assigned'
 		]);
 		expect(await isSpotFixed(c.pb as any, c.order.id)).toBe(true);
+	});
+
+	it('changes nothing when the spot is taken meanwhile', async () => {
+		const request = c.pb.seed('special_requests', { order: c.order.id, status: 'pending' });
+		await c.pb.collection('beds').update(c.special.id, { occupied: true, order: 'someone-else' });
+		await expect(assignSpot(c.pb as any, admin, request.id, c.special.id)).rejects.toThrow(
+			/already claimed/
+		);
+		expect(c.pb.rows('special_requests')[0].status).toBe('pending');
+		expect(c.pb.rows('admin_events')).toHaveLength(0);
+	});
+
+	it('only fixes the spot the crew booked, not one the guest booked themselves', async () => {
+		const request = c.pb.seed('special_requests', { order: c.order.id, status: 'pending' });
+		await c.pb.collection('beds').update(c.normal.id, { occupied: true, order: c.order.id });
+		await decideRequest(c.pb as any, admin, request.id, 'approved');
+		expect(await isSpotFixed(c.pb as any, c.order.id)).toBe(false);
+
+		// declining is fine: the guest keeps their own spot
+		await decideRequest(c.pb as any, admin, request.id, 'declined');
+		expect(c.pb.rows('beds').find((b) => b.id === c.normal.id)!.order).toBe(c.order.id);
+	});
+
+	it('forgets the booked spot when the crew releases it', async () => {
+		const request = c.pb.seed('special_requests', { order: c.order.id, status: 'approved' });
+		await assignSpot(c.pb as any, admin, request.id, c.special.id);
+		await releaseSpot(c.pb as any, admin, request.id);
+		expect(c.pb.rows('special_requests')[0]).toMatchObject({ status: 'approved', bed: '' });
+		expect(c.pb.rows('beds').find((b) => b.id === c.special.id)!.order).toBeNull();
+		expect(await isSpotFixed(c.pb as any, c.order.id)).toBe(false);
+	});
+
+	it('keeps the burner name the guest uses when the crew moves them', async () => {
+		const { encrypt } = await import('../src/lib/server/crypto');
+		const request = c.pb.seed('special_requests', {
+			order: c.order.id,
+			status: 'approved',
+			burner_name: encrypt('Old Wish')
+		});
+		await c.pb.collection('orders').update(c.order.id, { burner_name: encrypt('Renamed Later') });
+		await assignSpot(c.pb as any, admin, request.id, c.normal.id);
+		expect(decrypt(c.pb.rows('orders')[0].burner_name)).toBe('Renamed Later');
 	});
 
 	it('uses the burner name from the request', async () => {
@@ -409,6 +455,46 @@ describe('guest page actions', () => {
 		} as any);
 		expect(renamed).toEqual({ success: true });
 		expect(c.pb.rows('beds').find((b) => b.id === c.special.id)!.order).toBe(c.order.id);
+	});
+});
+
+describe('what guests can learn about spots', () => {
+	it('taken spots look the same, whether special-needs, locked or normal', async () => {
+		const c = camp({ is_booking_active: true });
+		const other = c.pb.seed('orders', { order_number: 'HB-3003', customer_name: 'Other' });
+		await c.pb.collection('beds').update(c.special.id, { occupied: true, order: other.id });
+		await c.pb.collection('beds').update(c.normal.id, { occupied: true, order: 'third' });
+		const { load } = await import('../src/routes/room/[id]/+page.server');
+		const data: any = await load({
+			params: { id: c.room.id },
+			locals: { pb: c.pb, adminPb: c.pb, orderNumber: c.code, admin: null },
+			cookies: { delete: () => {} }
+		} as any);
+		expect(data.beds.map((b: any) => [b.label, b.occupied, b.bookable])).toEqual([
+			['B1', true, false],
+			['B2', true, false]
+		]);
+		expect(JSON.stringify(data)).not.toMatch(/is_special|is_locked/);
+	});
+
+	it('a guest can still rename a spot they hold after the crew locked it', async () => {
+		const c = camp({ is_booking_active: true });
+		await c.pb
+			.collection('beds')
+			.update(c.normal.id, { occupied: true, order: c.order.id, is_locked: true });
+		const locals = { pb: c.pb, adminPb: c.pb, orderNumber: c.code, admin: null };
+		const renamed: any = await roomActions.bookBed({
+			request: { formData: async () => form({ bedId: c.normal.id, guestName: 'New Name' }) },
+			locals
+		} as any);
+		expect(renamed).toEqual({ success: true });
+
+		// ...but a locked or special-needs spot they don't hold stays closed
+		const claimed: any = await roomActions.bookBed({
+			request: { formData: async () => form({ bedId: c.special.id, guestName: 'X' }) },
+			locals
+		} as any);
+		expect(claimed.status).toBe(409);
 	});
 });
 

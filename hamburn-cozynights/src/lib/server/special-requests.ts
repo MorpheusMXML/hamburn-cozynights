@@ -31,6 +31,7 @@ import {
 	type GuestRequestView,
 	type RequestInput,
 	type RequestStatus,
+	type SpecialNeed,
 	type SpotInfo
 } from '$lib/special-needs';
 
@@ -100,10 +101,24 @@ export function toSpot(bed: BedWithRoom): SpotInfo {
 	};
 }
 
+/** The ticked needs, stored encrypted as a JSON list. Anything unreadable counts as none. */
+function readNeeds(value: string | undefined): SpecialNeed[] {
+	const text = readSecret(value);
+	if (!text) return [];
+	try {
+		const list: unknown = JSON.parse(text);
+		return Array.isArray(list) ? list.filter(isSpecialNeed) : [];
+	} catch {
+		return [];
+	}
+}
+
+const toMs = (value: string | undefined) => Date.parse(String(value || '').replace(' ', 'T'));
+
 function toGuestView(record: SpecialRequestsResponse): GuestRequestView {
 	return {
 		status: record.status as RequestStatus,
-		needs: (record.needs ?? []).filter(isSpecialNeed),
+		needs: readNeeds(record.needs),
 		text: readSecret(record.reason),
 		burnerName: readSecret(record.burner_name),
 		sentAt: record.created,
@@ -188,7 +203,7 @@ export async function saveRequest(
 	input: RequestInput
 ): Promise<'created' | 'updated'> {
 	const data = {
-		needs: input.needs,
+		needs: encrypt(JSON.stringify(input.needs)),
 		reason: encrypt(input.text),
 		burner_name: input.burnerName ? encrypt(input.burnerName) : '',
 		// The form asks for consent every time it is sent.
@@ -233,17 +248,32 @@ export async function withdrawRequest(adminPb: TypedPocketBase, orderId: string)
 	return true;
 }
 
-/** An approved request pins the ticket's spot: only the crew moves or releases it. */
-export async function isSpotFixed(adminPb: TypedPocketBase, orderId: string): Promise<boolean> {
-	return (await findRequest(adminPb, orderId))?.status === 'approved';
+/**
+ * Whether the ticket's spot is the one the crew booked for its approved
+ * request: only the crew moves or releases that one. A spot the guest booked
+ * themselves stays theirs to change.
+ * @param currentBedId the ticket's spot, when the caller has looked it up already
+ */
+export async function isSpotFixed(
+	adminPb: TypedPocketBase,
+	orderId: string,
+	currentBedId?: string | null
+): Promise<boolean> {
+	const request = await findRequest(adminPb, orderId);
+	if (request?.status !== 'approved' || !request.bed) return false;
+	const bedId =
+		currentBedId !== undefined
+			? currentBedId
+			: ((await new BookingService(adminPb).getBedForOrder(orderId))?.id ?? null);
+	return !!bedId && bedId === request.bed;
 }
 
-/** Tickets whose spot the crew assigned for a special-needs request. */
-export async function approvedOrderIds(adminPb: TypedPocketBase): Promise<Set<string>> {
+/** Spots the crew booked for approved requests: bed id → ticket. */
+export async function crewBookedBeds(adminPb: TypedPocketBase): Promise<Map<string, string>> {
 	const approved = await adminPb
 		.collection('special_requests')
-		.getFullList({ filter: "status = 'approved'", fields: 'order' });
-	return new Set(approved.map((request) => request.order));
+		.getFullList({ filter: "status = 'approved' && bed != ''", fields: 'order,bed' });
+	return new Map(approved.map((request) => [request.bed, request.order]));
 }
 
 /** All requests for the admin area, oldest first, with ticket and current spot. */
@@ -260,14 +290,19 @@ export async function listRequests(adminPb: TypedPocketBase): Promise<AdminReque
 
 	return records.map((record) => {
 		const order = record.expand?.order;
+		const spot = spotByOrder.get(record.order);
 		return {
 			...toGuestView(record),
 			id: record.id,
 			consentAt: record.consent_at,
 			decidedBy: record.decided_by,
 			decidedAt: record.decided_at,
+			changedAfterDecision:
+				!!record.decided_at && toMs(record.consent_at) > toMs(record.decided_at) + 1000,
 			ticket: { name: order ? ticketName(order) : '', email: order?.email ?? '' },
-			spot: spotByOrder.get(record.order) ?? null
+			spot: spot
+				? { ...spot, assigned: record.status === 'approved' && record.bed === spot.bedId }
+				: null
 		};
 	});
 }
@@ -298,17 +333,16 @@ export async function decideRequest(
 ): Promise<void> {
 	const request = await getRequest(adminPb, requestId);
 	if (request.status === decision) return;
-	if (decision === 'declined' && request.status === 'approved') {
-		if (await new BookingService(adminPb).getBedForOrder(request.order)) {
-			throw new RequestError(
-				'This ticket holds a spot. Release the spot first, then decline the request.'
-			);
-		}
+	if (decision === 'declined' && (await isSpotFixed(adminPb, request.order))) {
+		throw new RequestError(
+			'The crew booked a spot for this request. Release the spot first, then decline the request.'
+		);
 	}
 	await adminPb.collection('special_requests').update(request.id, {
 		status: decision,
 		decided_by: admin.email,
-		decided_at: new Date().toISOString()
+		decided_at: new Date().toISOString(),
+		...(decision === 'declined' ? { bed: '' } : {})
 	});
 	await logAdminEvent(
 		adminPb,
@@ -321,8 +355,9 @@ export async function decideRequest(
 
 /**
  * Books a spot for the request's ticket, whatever the booking phase: locked and
- * special-needs spots included. A waiting request is approved on the way.
- * @throws {RequestError} for a declined request
+ * special-needs spots included. Books first, so a taken spot changes nothing;
+ * then remembers the spot on the request and approves a waiting request.
+ * @throws {RequestError} for a declined request, or a spot that is gone
  * @throws {BedUnavailableError} when the spot is taken or deactivated
  */
 export async function assignSpot(
@@ -337,18 +372,36 @@ export async function assignSpot(
 	}
 	const order = await adminPb.collection('orders').getOne<OrdersResponse>(request.order);
 
-	if (request.status === 'pending') {
-		await adminPb.collection('special_requests').update(request.id, {
-			status: 'approved',
-			decided_by: admin.email,
-			decided_at: new Date().toISOString()
-		});
-		await logAdminEvent(adminPb, admin, 'special_request_approved', request.id, {});
+	// The name the guest uses now wins; the one from the request is for a first spot.
+	const name =
+		readSecret(order.burner_name) || readSecret(request.burner_name) || randomBurnerName();
+	try {
+		await new BookingService(adminPb).bookBed(order, bedId, name, { allowLocked: true });
+	} catch (err) {
+		if (isNotFound(err)) {
+			throw new RequestError("This spot doesn't exist anymore. Reload the page.", 409);
+		}
+		throw err;
 	}
 
-	const name =
-		readSecret(request.burner_name) || readSecret(order.burner_name) || randomBurnerName();
-	await new BookingService(adminPb).bookBed(order, bedId, name, { allowLocked: true });
+	const approving = request.status === 'pending';
+	try {
+		await adminPb.collection('special_requests').update(request.id, {
+			bed: bedId,
+			...(approving
+				? { status: 'approved', decided_by: admin.email, decided_at: new Date().toISOString() }
+				: {})
+		});
+	} catch (err) {
+		if (isNotFound(err)) {
+			throw new RequestError(
+				'The guest withdrew the request meanwhile. The spot is booked for the ticket anyway; release it on the room page if it should be free.',
+				409
+			);
+		}
+		throw err;
+	}
+	if (approving) await logAdminEvent(adminPb, admin, 'special_request_approved', request.id, {});
 	await logAdminEvent(adminPb, admin, 'special_spot_assigned', request.id, {});
 }
 
@@ -360,6 +413,14 @@ export async function releaseSpot(
 ): Promise<void> {
 	const request = await getRequest(adminPb, requestId);
 	await new BookingService(adminPb).unbookOrder(request.order);
+	if (request.bed) {
+		await adminPb
+			.collection('special_requests')
+			.update(request.id, { bed: '' })
+			.catch((err) => {
+				if (!isNotFound(err)) throw err; // withdrawn meanwhile: nothing to remember
+			});
+	}
 	await logAdminEvent(adminPb, admin, 'special_spot_released', request.id, {});
 }
 

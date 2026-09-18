@@ -63,6 +63,8 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 
 		// Only these fields reach the browser. The expanded orders carry other
 		// guests' ticket codes and customer names and must never be serialized.
+		// `bookable` only matters for free spots: for a taken one it would tell
+		// whether it is locked or a special-needs spot, next to the burner name.
 		const safeBeds = beds.map((bed) => {
 			let burnerName = '';
 			if (bed.occupied && bed.expand?.order?.burner_name) {
@@ -76,7 +78,7 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				id: bed.id,
 				label: bed.label,
 				occupied: !!bed.occupied,
-				bookable: isBedBookable(bed, { allowLocked: !!locals.admin }),
+				bookable: !bed.occupied && isBedBookable(bed, { allowLocked: !!locals.admin }),
 				burnerName
 			};
 		});
@@ -98,7 +100,7 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 						console.error('[Room] Booking pass failed:', (err as Error)?.message);
 						return null;
 					}),
-				isSpotFixed(locals.adminPb, order.id).catch((err) => {
+				isSpotFixed(locals.adminPb, order.id, userBed.id).catch((err) => {
 					console.error('[Room] Special-needs request lookup failed:', (err as Error)?.message);
 					return false;
 				})
@@ -163,7 +165,11 @@ export const actions: Actions = {
 			// A spot the crew picked for a special-needs request stays where it is;
 			// giving it a new burner name is fine.
 			const currentBed = await bookingService.getBedForOrder(order.id);
-			if (currentBed && currentBed.id !== bedId && (await isSpotFixed(locals.adminPb, order.id))) {
+			if (
+				currentBed &&
+				currentBed.id !== bedId &&
+				(await isSpotFixed(locals.adminPb, order.id, currentBed.id))
+			) {
 				return fail(409, { error: SPOT_FIXED_MESSAGE });
 			}
 

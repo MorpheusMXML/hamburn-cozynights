@@ -177,6 +177,7 @@ describe('special-needs requests in the database', () => {
 		expect(stored?.status).toBe('pending');
 		expect(JSON.stringify(stored)).not.toContain('Wheelchair');
 		expect(JSON.stringify(stored)).not.toContain('Rolling Thunder');
+		expect(JSON.stringify(stored)).not.toContain('step_free');
 		expect(stored?.consent_at).toBeTruthy();
 	});
 
@@ -193,6 +194,20 @@ describe('special-needs requests in the database', () => {
 
 		await su.collection('orders').delete(guest.order.id);
 		expect(await requestOf(guest.order.id)).toBeNull();
+	});
+
+	it('let a booked bed be deleted (room removed, template import): the request forgets it', async () => {
+		const guest = await seedTicket(su);
+		const { room, bed } = await specialBed();
+		await saveRequest(su as any, guest.order as any, INPUT);
+		const request = await requestOf(guest.order.id);
+		await assignSpot(su as any, ADMIN, request!.id, bed.id);
+		expect((await requestOf(guest.order.id))?.bed).toBe(bed.id);
+
+		await su.collection('rooms').delete(room.id); // its beds go with it
+		const after = await requestOf(guest.order.id);
+		expect(after?.status).toBe('approved');
+		expect(after?.bed).toBe('');
 	});
 
 	it('mark beds as special-needs spots, normal by default', async () => {

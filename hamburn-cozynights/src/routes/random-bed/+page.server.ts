@@ -66,7 +66,7 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 				}));
 
 		const spotFixed = userBed
-			? await isSpotFixed(locals.adminPb, order.id).catch((err) => {
+			? await isSpotFixed(locals.adminPb, order.id, userBed.id).catch((err) => {
 					console.error(
 						'[RandomBed] Special-needs request lookup failed:',
 						(err as Error)?.message

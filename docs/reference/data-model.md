@@ -16,7 +16,7 @@ data lives and how it is backed up: [Backups and where data lives](../develop/de
 | `app_settings` | `is_booking_active`, `booking_unlock_at`, `notify_mail`, `telegram_bot`, `special_requests_open` (single record `appsettings0123`) | no | admins; PocketBase keeps the two notification flags current | public read, admin write |
 | `admins`       | `email`, `name`, `role` (`pending`, `admin`, `superuser`), `last_sign_in`                | yes (email)   | Google sign-in, `scripts/cozy-admin.sh`              | none (sign-in creates `pending` only) |
 | `guest_notify` | per ticket: what was last confirmed by mail / Telegram (spot and special-needs request), when the next message is due, retries, the linked Telegram chat and a one-time link token (hashed) | yes (chat id) | PocketBase hooks; the app's service account (Telegram link) | none (superusers only) |
-| `special_requests` | per ticket at most one: `order`, `status` (`pending`, `approved`, `declined`), `needs`, `reason` and `burner_name` (both encrypted), `consent_at`, `decided_by`, `decided_at` | yes (often health data) | the app's service account | none (superusers only) |
+| `special_requests` | per ticket at most one: `order`, `status` (`pending`, `approved`, `declined`), `needs`, `reason` and `burner_name` (all three encrypted), `consent_at`, `decided_by`, `decided_at`, `bed` (the spot the crew booked for it) | yes (often health data) | the app's service account | none (superusers only) |
 | `admin_events` | audit log: `action`, `actor`, `subject`, `details`, crew alert state                      | yes (admin emails) | PocketBase hooks; the app's service account      | none (superusers only)                |
 
 Deleting a house in the dashboard also deletes its rooms and beds. "Admin

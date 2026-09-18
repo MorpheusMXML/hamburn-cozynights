@@ -15,6 +15,7 @@ import { FailureRateLimiter } from '$lib/server/rate-limit';
 import {
 	getGuestRequest,
 	getSpotForOrder,
+	isSpotFixed,
 	RequestError,
 	saveRequest,
 	withdrawRequest
@@ -46,8 +47,10 @@ async function sessionOrder(
 	}
 }
 
-export const load: PageServerLoad = async ({ locals, cookies }) => {
+export const load: PageServerLoad = async ({ locals, cookies, setHeaders }) => {
 	if (!locals.orderNumber) throw redirect(303, '/?login=required');
+	// The page shows what the guest wrote about their needs: never keep it in a cache.
+	setHeaders({ 'cache-control': 'no-store' });
 
 	let order;
 	try {
@@ -69,8 +72,9 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 			getSpotForOrder(locals.adminPb, order.id)
 		]);
 
-		// Where messages go, and the pass of a spot. Optional: the page works without them.
-		const [notify, passCode] = await Promise.all([
+		// Where messages go, the pass of a spot, and whether the crew booked that
+		// spot for the request. Optional: the page works without them.
+		const [notify, passCode, fixed] = await Promise.all([
 			getGuestNotifyStatus(locals.adminPb, order, settings).catch((err): null => {
 				console.error('[SpecialNeeds] Notification status failed:', (err as Error)?.message);
 				return null;
@@ -82,14 +86,20 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 							console.error('[SpecialNeeds] Booking pass failed:', (err as Error)?.message);
 							return null;
 						})
-				: Promise.resolve(null)
+				: Promise.resolve(null),
+			spot
+				? isSpotFixed(locals.adminPb, order.id, spot.bedId).catch((err): boolean => {
+						console.error('[SpecialNeeds] Fixed-spot check failed:', (err as Error)?.message);
+						return false;
+					})
+				: Promise.resolve(false)
 		]);
 
 		return {
 			request,
 			requestsOpen: settings.requestsOpen,
 			isBookingActive: settings.isBookingActive,
-			spot: spot ? { label: spot.label, roomId: spot.roomId } : null,
+			spot: spot ? { label: spot.label, roomId: spot.roomId, fixed } : null,
 			passCode,
 			notify
 		};

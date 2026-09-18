@@ -324,7 +324,11 @@
 						<span class="status-text">Your Spot</span>
 						<span class="guest-name">{bed.burnerName}</span>
 						<small class="edit-hint"
-							>{isLocked ? 'Booking closed' : 'Tap to change or release'}</small
+							>{isLocked
+								? 'Booking closed'
+								: data.spotFixed
+									? 'Tap to change your burner name'
+									: 'Tap to change or release'}</small
 						>
 					</div>
 				</button>

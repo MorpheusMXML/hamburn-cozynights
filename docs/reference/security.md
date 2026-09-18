@@ -43,9 +43,9 @@ What a guest writes about their needs is often health data (Art. 9 GDPR), so it 
 
 - **Explicit consent** with an unticked checkbox, stored with the time; withdrawing deletes the request right away.
 - **The form asks what is needed, not why**, and says so.
-- **Encrypted at rest** (AES-256-GCM, like burner names); the collection has no API rules, only the app's service account reads it.
+- **Encrypted at rest** (AES-256-GCM, like burner names): what was ticked and written, and the burner name. The collection has no API rules, only the app's service account reads it; the pages are sent with `Cache-Control: no-store`.
 - **Admins only.** Never part of e-mails, Telegram messages, the crew group, logs or the audit log. The crew group hears *that* a request arrived or was decided, without names.
-- **No hint for other guests.** Guest pages never say which spots are special-needs spots; a booked one shows the burner name like any other.
+- **No hint for other guests.** Guest pages and their data never say why a spot is taken or reserved (special-needs, locked or booked all look alike); a booked special-needs spot shows the burner name like any other.
 - **Deleted after the event** with `tickets forget-contacts`.
 
 ### Booking passes

@@ -6,11 +6,13 @@ What guests wrote may be health data; it is shown here and nowhere else.
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
-	import type { PageData } from './$types';
+	import type { ActionData, PageData } from './$types';
 	import { confirmDialog, toast } from '$lib/dialogs';
 	import { STATUS_LABELS, needLabel, type AdminRequestView } from '$lib/special-needs';
 
 	export let data: PageData;
+	// Without JavaScript a refused step comes back here (with it: a toast).
+	export let form: ActionData;
 
 	let busy = '';
 	// The spot picked in each request's list, by request id.
@@ -111,19 +113,28 @@ What guests wrote may be health data; it is shown here and nowhere else.
 	function releaseConfirmation(id: string): Confirmation {
 		const spot = current(id)?.spot;
 		const stays = spot?.special ? ' (it stays a special-needs spot)' : '';
+		const whose = spot?.assigned
+			? ''
+			: ' The guest booked this spot themselves: releasing it takes it away from them.';
 		return {
 			title: 'Release this spot?',
-			message: `${spot?.label ?? 'The spot'} becomes free again${stays}, and the guest gets a message. The request stays approved.`,
+			message: `${spot?.label ?? 'The spot'} becomes free again${stays}, and the guest gets a message.${whose} The request stays approved.`,
 			label: 'Release spot'
 		};
 	}
 
-	const declineConfirmation = (): Confirmation => ({
-		title: 'Decline this request?',
-		message:
-			'The guest gets a message that the crew cannot offer a special-needs spot. They can book like everyone else when booking opens.',
-		label: 'Decline'
-	});
+	function declineConfirmation(id: string): Confirmation {
+		const spot = current(id)?.spot;
+		return {
+			title: 'Decline this request?',
+			message: `The guest gets a message that the crew cannot offer a special-needs spot. ${
+				spot
+					? `They keep the spot they booked, ${spot.label}.`
+					: 'They can book like everyone else when booking opens.'
+			}`,
+			label: 'Decline'
+		};
+	}
 </script>
 
 <svelte:head>
@@ -168,6 +179,10 @@ What guests wrote may be health data; it is shown here and nowhere else.
 		chats or e-mails; talk about it in person. Everything is deleted after the event.
 	</p>
 
+	{#if form && 'error' in form && form.error}
+		<p class="form-error" role="alert">⚠️ {form.error}</p>
+	{/if}
+
 	{#if data.requests.length === 0}
 		<p class="empty">No requests yet.</p>
 	{/if}
@@ -195,7 +210,13 @@ What guests wrote may be health data; it is shown here and nowhere else.
 							{/each}
 						</ul>
 
-						<details open={request.status === 'pending'}>
+						{#if request.changedAfterDecision}
+							<p class="warn">
+								⚠️ The guest sent the form again right when the crew decided. Read it again.
+							</p>
+						{/if}
+
+						<details open={request.status === 'pending' || request.changedAfterDecision}>
 							<summary>What the guest wrote</summary>
 							<p class="text">{request.text || '(nothing readable)'}</p>
 						</details>
@@ -220,6 +241,9 @@ What guests wrote may be health data; it is shown here and nowhere else.
 								{#if request.spot}
 									<a href="/admin/room/{request.spot.roomId}">{request.spot.label}</a>
 									{#if request.spot.special}♿{/if}{#if request.spot.locked}🔒{/if}
+									<span class="dim"
+										>· {request.spot.assigned ? 'booked by the crew' : 'booked by the guest'}</span
+									>
 								{:else}
 									No spot yet
 								{/if}
@@ -233,11 +257,11 @@ What guests wrote may be health data; it is shown here and nowhere else.
 									<button class="btn primary" disabled={!!busy}>Approve</button>
 								</form>
 							{/if}
-							{#if request.status === 'pending' || (request.status === 'approved' && !request.spot)}
+							{#if request.status === 'pending' || (request.status === 'approved' && !request.spot?.assigned)}
 								<form
 									method="POST"
 									action="?/decline"
-									use:enhance={act(request.id, 'Declined.', declineConfirmation)}
+									use:enhance={act(request.id, 'Declined.', () => declineConfirmation(request.id))}
 								>
 									<input type="hidden" name="id" value={request.id} />
 									<button class="btn" disabled={!!busy}>Decline</button>
@@ -286,7 +310,7 @@ What guests wrote may be health data; it is shown here and nowhere else.
 											</optgroup>
 										{/if}
 									</select>
-									<button class="btn primary" disabled={!!busy || !picked[request.id]}>
+									<button class="btn primary" disabled={!!busy}>
 										{request.status === 'pending'
 											? 'Approve & book'
 											: request.spot
@@ -530,5 +554,18 @@ What guests wrote may be health data; it is shown here and nowhere else.
 		margin: 0;
 		color: #a3a3a3;
 		font-size: 0.85rem;
+	}
+	.dim {
+		color: #a3a3a3;
+	}
+	.warn,
+	.form-error {
+		margin: 0;
+		padding: 0.6rem 0.9rem;
+		border-radius: 10px;
+		background: rgba(251, 146, 60, 0.1);
+		border: 1px solid rgba(251, 146, 60, 0.4);
+		color: #fed7aa;
+		font-weight: 700;
 	}
 </style>
