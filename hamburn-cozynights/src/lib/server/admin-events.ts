@@ -49,7 +49,9 @@ export async function logGuestEvent(
 	details: Record<string, unknown>
 ): Promise<void> {
 	try {
-		await adminPb.collection('admin_events').create({ action, actor: 'guest', subject, details });
+		await adminPb
+			.collection('admin_events')
+			.create({ action, actor: 'guest', subject: subject.slice(0, 320), details });
 	} catch (err) {
 		console.error(`[AdminEvents] Could not record ${action}:`, (err as Error)?.message);
 	}
