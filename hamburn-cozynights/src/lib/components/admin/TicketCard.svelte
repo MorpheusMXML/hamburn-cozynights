@@ -60,6 +60,7 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 		ticket.telegram ? 'Telegram updates to the old holder stop.' : '',
 		ticket.pass ? 'The booking pass gets a new code: the old pass link stops working.' : '',
 		ticket.burnerName ? `The burner name "${ticket.burnerName}" is forgotten.` : '',
+		'A special-needs request of the old holder is deleted (a spot the crew booked stays with the ticket).',
 		!emailChanged && cleanEmail
 			? "The address is still the old one: no e-mail goes out, and later updates would reach the old holder. Enter the new holder's address."
 			: '',
@@ -75,7 +76,8 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 		if (outcome.newHolder) {
 			return (
 				'🔁 Ticket handed over' +
-				(outcome.confirmation ? `: ${outcome.ticket.email} gets a confirmation shortly.` : '.')
+				(outcome.confirmation ? `: ${outcome.ticket.email} gets a confirmation shortly.` : '.') +
+				(outcome.requestRemoved ? ' Their special-needs request was deleted.' : '')
 			);
 		}
 		if (outcome.emailChanged && !outcome.ticket.email) {

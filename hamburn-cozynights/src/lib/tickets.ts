@@ -558,6 +558,8 @@ export interface TicketChangeOutcome {
 	emailChanged: boolean;
 	nameChanged: boolean;
 	newHolder: boolean;
+	/** The old holder's special-needs request was deleted with the hand-over. */
+	requestRemoved: boolean;
 	/** The new address will get a confirmation of the ticket's spot. */
 	confirmation: boolean;
 }
@@ -573,6 +575,8 @@ export interface RosterImportOutcome {
 	updated: number;
 	/** Updated tickets that were handed over to a new holder. */
 	newHolders: number;
+	/** Handed-over tickets whose old holder's special-needs request was deleted. */
+	requestsRemoved: number;
 	/** New addresses of tickets that hold a spot: they get a confirmation. */
 	confirmations: number;
 	/** Selected, but nothing (or no longer anything) to change. */

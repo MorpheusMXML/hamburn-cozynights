@@ -89,6 +89,7 @@
 						occupied: false,
 						is_locked: false,
 						is_special: false,
+						booked_at: '',
 						room: 'temp-room',
 						bookedBy: '',
 						order: ''

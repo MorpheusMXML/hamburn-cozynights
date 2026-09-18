@@ -305,7 +305,7 @@
 			notes.push(
 				to === 'closed'
 					? 'Guests can no longer book, change or release a spot. The layout stays locked.'
-					: 'Guests can no longer book, change or release a spot; the layout can be edited again. Existing bookings stay.'
+					: `Guests can no longer book, change or release a spot; the layout can be edited again. Every guest booking is released${occupiedBeds > 0 ? ` (${occupiedBeds} right now)` : ''}: those guests book again once booking opens, their ticket codes stay valid. Spots the crew booked for special-needs requests stay. This cannot be undone.`
 			);
 			if (to === 'closed' && bookingWindow.closesAt && !after.closesAt) {
 				notes.push('The planned closing time is dropped.');
@@ -324,49 +324,62 @@
 		});
 		if (!ok) return;
 
-		let clearBookings = false;
-		if (to === 'staging' && occupiedBeds > 0) {
-			clearBookings = await confirmDialog(
-				`There are ${occupiedBeds} booked spots right now. Do you also want to clear ALL bookings? Every guest loses their spot and has to book again. Ticket codes stay valid. This cannot be undone.`,
-				{
-					title: 'Also clear all bookings?',
-					tone: 'danger',
-					confirmLabel: 'Clear all bookings',
-					cancelLabel: 'Keep bookings'
-				}
-			);
-		}
-
 		const form = new FormData();
 		form.set('phase', to);
 		busy = true;
 		const result = await submitAction('?/setPhase', form);
 		busy = false;
 		if (result.type === 'success') {
-			const data = result.data as { phaseBefore?: BookingPhase } | undefined;
+			const data = result.data as
+				| { phaseBefore?: BookingPhase; released?: number; kept?: number }
+				| undefined;
+			const releasedNote =
+				to === 'staging'
+					? ` ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}.`
+					: '';
 			if (data?.phaseBefore && data.phaseBefore !== current) {
 				await alertDialog(
-					`The phase had already changed to ${PHASE_LABELS[data.phaseBefore]} before your click (the timer, or another superuser). It is ${PHASE_LABELS[to]} now.`,
+					`The phase had already changed to ${PHASE_LABELS[data.phaseBefore]} before your click (the timer, or another superuser). It is ${PHASE_LABELS[to]} now.${releasedNote}`,
 					{ title: 'Check the booking phase', tone: 'warning' }
 				);
 			} else {
-				toast(`${PHASE_ICONS[to]} ${PHASE_LABELS[to]} is on. ${PHASE_EFFECTS[to]}`, 'success');
-			}
-			if (clearBookings) {
-				const purge = await submitAction('?/clearAllBookings', new FormData());
-				if (purge.type === 'success') {
-					toast('✨ All bookings were cleared. Every spot is free again.', 'success');
-				} else {
-					await alertDialog(
-						`${actionErrorMessage(purge) || 'The server could not be reached.'} No bookings were changed by this step; the app is in Staging Mode. Check the spots before you try again.`,
-						{ title: 'Bookings were not cleared', tone: 'danger' }
-					);
-				}
+				toast(`${PHASE_ICONS[to]} ${PHASE_LABELS[to]} is on. ${PHASE_EFFECTS[to]}${releasedNote}`, 'success');
 			}
 		} else {
 			await alertDialog(
-				`${actionErrorMessage(result) || 'The server could not be reached.'} Reload the page and try again.`,
-				{ title: 'Phase not changed', tone: 'danger' }
+				`${actionErrorMessage(result) || 'The server could not be reached.'} Reload the page and check the phase and the bookings.`,
+				{ title: 'Check the booking phase', tone: 'danger' }
+			);
+		}
+		await invalidateAll();
+	}
+
+	/** Superusers, Staging Mode only: releases what going back to Staging left (crew-booked spots stay). */
+	async function clearAllBookings() {
+		if (busy || !isSuperuser || current !== 'staging') return;
+		const ok = await confirmDialog(
+			`Every one of the ${occupiedBeds} booked spot${occupiedBeds === 1 ? '' : 's'} becomes free and its burner name is forgotten. Spots the crew booked for special-needs requests stay as long as their requests exist. Ticket codes keep working. This cannot be undone.`,
+			{
+				title: '🧨 Clear all bookings?',
+				tone: 'danger',
+				confirmLabel: 'Clear all bookings',
+				cancelLabel: 'Cancel'
+			}
+		);
+		if (!ok) return;
+		busy = true;
+		const result = await submitAction('?/clearAllBookings', new FormData());
+		busy = false;
+		if (result.type === 'success') {
+			const data = result.data as { released?: number; kept?: number } | undefined;
+			toast(
+				`✨ ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}.`,
+				'success'
+			);
+		} else {
+			await alertDialog(
+				`${actionErrorMessage(result) || 'The server could not be reached.'} Check the spots before you try again.`,
+				{ title: 'Bookings were not cleared', tone: 'danger' }
 			);
 		}
 		await invalidateAll();
@@ -654,6 +667,23 @@
 									</button>
 								{/each}
 							</div>
+							{#if current === 'staging'}
+								<div class="purge">
+									<span class="purge-text">
+										{occupiedBeds > 0
+											? `${occupiedBeds} spot${occupiedBeds === 1 ? ' is' : 's are'} still booked (crew-booked special-needs spots, or bookings made in Staging).`
+											: 'No spot is booked. Staging Mode starts without guest bookings.'}
+									</span>
+									<button
+										type="button"
+										class="btn-purge"
+										disabled={busy || occupiedBeds === 0}
+										on:click={clearAllBookings}
+									>
+										🧨 Clear all bookings
+									</button>
+								</div>
+							{/if}
 						</div>
 					{/if}
 				</div>
@@ -1339,6 +1369,41 @@
 	}
 	.segment-option.active.closed {
 		color: #f5f5f5;
+	}
+	.purge {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 0.6rem 1rem;
+		margin-top: 0.9rem;
+		padding-top: 0.9rem;
+		border-top: 1px dashed rgba(255, 255, 255, 0.12);
+		font-size: 0.78rem;
+		color: #9a9a9a;
+	}
+	.purge-text {
+		flex: 1 1 14rem;
+		min-width: 0;
+	}
+	.btn-purge {
+		min-height: 44px;
+		padding: 0.5rem 1rem;
+		border-radius: 8px;
+		border: 1px solid #ef4444;
+		background: transparent;
+		color: #f87171;
+		font-weight: 900;
+		font-size: 0.75rem;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.btn-purge:hover:not(:disabled) {
+		background: rgba(239, 68, 68, 0.12);
+	}
+	.btn-purge:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
 	}
 	.override-locked {
 		margin: 0;

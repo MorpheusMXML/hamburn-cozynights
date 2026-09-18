@@ -184,6 +184,28 @@ describe('changing a ticket', () => {
 		expect(outcome.confirmation).toBe(true);
 	});
 
+	it("deletes the old holder's special-needs request when a ticket is passed on", async () => {
+		db.data.special_requests = [
+			{ id: 'sr1', order: 'o1', status: 'approved', needs: 'x', reason: 'y', consent_at: '2026-09-01' },
+			{ id: 'sr3', order: 'o3', status: 'pending', needs: 'x', reason: 'y', consent_at: '2026-09-01' }
+		];
+		const outcome = await changeTicket(db.pb, 'o1', {
+			email: 'new@example.org',
+			name: 'New Holder',
+			newHolder: true
+		});
+		expect(outcome.requestRemoved).toBe(true);
+		expect(db.data.special_requests.map((r) => r.id)).toEqual(['sr3']);
+		expect(db.log).toContain('delete special_requests/sr1');
+		// the spot stays with the ticket, as an ordinary booking
+		expect(db.data.beds.find((b) => b.id === 'b1')).toMatchObject({ occupied: true, order: 'o1' });
+
+		// an address change alone keeps the request
+		const kept = await changeTicket(db.pb, 'o3', { email: 'g@example.org', name: '', newHolder: false });
+		expect(kept.requestRemoved).toBe(false);
+		expect(db.data.special_requests).toHaveLength(1);
+	});
+
 	it('removes an address, and changes nothing when nothing changed', async () => {
 		await changeTicket(db.pb, 'o3', { email: '', name: 'Grace', newHolder: false });
 		expect(db.log).toEqual([]);

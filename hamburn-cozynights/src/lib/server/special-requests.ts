@@ -249,6 +249,19 @@ export async function withdrawRequest(adminPb: TypedPocketBase, orderId: string)
 }
 
 /**
+ * Deletes the ticket's request without a guest event: the ticket was passed on
+ * to a new holder (Tickets page, ticket list import), so the old holder's
+ * health data goes with them. A spot the crew booked stays with the ticket as
+ * an ordinary booking. Returns whether there was a request.
+ */
+export async function forgetRequest(adminPb: TypedPocketBase, orderId: string): Promise<boolean> {
+	const existing = await findRequest(adminPb, orderId);
+	if (!existing) return false;
+	await adminPb.collection('special_requests').delete(existing.id);
+	return true;
+}
+
+/**
  * Whether the ticket's spot is the one the crew booked for its approved
  * request: only the crew moves or releases that one. A spot the guest booked
  * themselves stays theirs to change.

@@ -373,7 +373,9 @@
 					<strong>✨ Imported</strong>
 					<span>
 						{plural(imported.created, 'new ticket')}, {plural(imported.updated, 'ticket')} updated{imported.newHolders
-							? ` (${imported.newHolders} handed over)`
+							? ` (${imported.newHolders} handed over${imported.requestsRemoved
+									? `, ${plural(imported.requestsRemoved, 'special-needs request')} deleted`
+									: ''})`
 							: ''}.
 						{#if imported.confirmations}
 							{plural(imported.confirmations, 'new address', 'new addresses')} get a confirmation of their

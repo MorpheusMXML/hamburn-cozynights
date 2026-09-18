@@ -6,6 +6,7 @@ import { decrypt } from '$lib/server/crypto';
 import {
 	BookingService,
 	BedUnavailableError,
+	ReleaseFailedError,
 	isBedBookable,
 	randomBurnerName
 } from '$lib/server/booking';
@@ -160,15 +161,19 @@ export const actions: Actions = {
 				return fail(404, { error: CODE_UNKNOWN });
 			}
 
-			// A spot the crew picked for a special-needs request stays where it is;
-			// giving it a new burner name is fine.
 			const currentBed = await bookingService.getBedForOrder(order.id);
-			if (
-				currentBed &&
-				currentBed.id !== bedId &&
-				(await isSpotFixed(locals.adminPb, order.id, currentBed.id))
-			) {
-				return fail(409, { error: SPOT_FIXED_MESSAGE });
+			if (currentBed && currentBed.id !== bedId) {
+				// A spot the crew picked for a special-needs request stays where it
+				// is; giving it a new burner name is fine.
+				if (await isSpotFixed(locals.adminPb, order.id, currentBed.id)) {
+					return fail(409, { error: SPOT_FIXED_MESSAGE });
+				}
+				// One ticket, one spot: the page asks to release first, and so does
+				// the server — a stale tab or a hand-made request must not move a
+				// booking on the quiet.
+				return fail(409, {
+					error: `Your ticket already holds ${currentBed.label ? `spot ${currentBed.label}` : 'a spot'}. Release it first, then pick this one.`
+				});
 			}
 
 			// Availability (free, enabled, not locked unless admin) is checked
@@ -181,6 +186,7 @@ export const actions: Actions = {
 			if (err instanceof BedUnavailableError) {
 				return fail(409, { error: `${err.message} Please pick another spot.`, bedTaken: true });
 			}
+			if (err instanceof ReleaseFailedError) return fail(409, { error: err.message });
 			if (err?.status === 404) {
 				return fail(404, {
 					error: "This spot doesn't exist anymore. Please pick another one.",

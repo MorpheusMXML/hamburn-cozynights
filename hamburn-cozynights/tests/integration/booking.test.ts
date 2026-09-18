@@ -55,6 +55,20 @@ describe('one ticket = one bed', () => {
 		expect(decrypt(stored)).toBe('Dusty Nomad');
 	});
 
+	it('stamps booked_at when a spot gets a ticket and clears it on release', async () => {
+		const { beds } = await seedHouse(su, 1);
+		const { order } = await seedTicket(su);
+		const before = Date.now();
+
+		await booking.bookBed(order as any, beds[0].id, 'Stamp');
+		const booked = await su.collection('beds').getOne(beds[0].id);
+		expect(booked.booked_at).toBeTruthy();
+		expect(Math.abs(new Date(booked.booked_at).getTime() - before)).toBeLessThan(60_000);
+
+		await booking.unbookOrder(order.id);
+		expect((await su.collection('beds').getOne(beds[0].id)).booked_at).toBe('');
+	});
+
 	it('moves the booking when the same ticket picks another bed', async () => {
 		const { beds } = await seedHouse(su, 2);
 		const { order } = await seedTicket(su);

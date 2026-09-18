@@ -8,6 +8,8 @@ import { createLookupHash, encrypt } from '$lib/server/crypto';
  * from real infrastructure/DB errors so callers can show the right message.
  */
 export class BedUnavailableError extends Error {}
+/** The new spot was claimed, but the previous one could not be released: the claim was undone. */
+export class ReleaseFailedError extends Error {}
 
 // In-process async locks: chain concurrent operations on the same key so a
 // "read, check, write" sequence is atomic with respect to other requests of
@@ -185,17 +187,38 @@ export class BookingService {
 					burner_name: encrypt(guestName)
 				});
 
-				// Release any other bed of this order.
+				// Release any other bed of this order. If that fails, the ticket
+				// would hold two beds: undo the new claim instead, so the guest
+				// keeps the old spot and nothing has changed.
 				const previousBeds = await this.adminPb.collection('beds').getFullList({
 					filter: this.adminPb.filter('order = {:orderId} && id != {:bedId}', {
 						orderId: order.id,
 						bedId
 					})
 				});
-				for (const prevBed of previousBeds) {
+				try {
+					for (const prevBed of previousBeds) {
+						await this.adminPb
+							.collection('beds')
+							.update(prevBed.id, { occupied: false, order: null });
+					}
+				} catch (err) {
+					console.error(
+						`[Booking] Could not release the previous spot of order ${order.id}, undoing the new claim:`,
+						(err as Error)?.message
+					);
 					await this.adminPb
 						.collection('beds')
-						.update(prevBed.id, { occupied: false, order: null });
+						.update(bedId, { occupied: false, order: null })
+						.catch((undoErr) =>
+							console.error(
+								`[Booking] Undo failed too — order ${order.id} may hold two spots (${bedId} and ${previousBeds.map((b) => b.id).join(', ')}):`,
+								(undoErr as Error)?.message
+							)
+						);
+					throw new ReleaseFailedError(
+						'Your previous spot could not be released, so nothing was changed. Try again in a moment.'
+					);
 				}
 			})
 		);

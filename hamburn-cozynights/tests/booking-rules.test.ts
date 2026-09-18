@@ -1,6 +1,6 @@
 // tests/booking-rules.test.ts — one ticket = one booking, event-time helpers, rate limiting
 import { describe, it, expect, vi } from 'vitest';
-import { BookingService, BedUnavailableError } from '../src/lib/server/booking';
+import { BookingService, BedUnavailableError, ReleaseFailedError } from '../src/lib/server/booking';
 import { FailureRateLimiter } from '../src/lib/server/rate-limit';
 import { berlinLocalToIso, isoToBerlinLocal } from '../src/lib/time';
 
@@ -69,6 +69,36 @@ describe('BookingService: one ticket code = one booking', () => {
 		const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
 		expect(rejected.reason).toBeInstanceOf(BedUnavailableError);
 		expect(['a', 'b']).toContain(byId.get('bed1')!.order);
+	});
+
+	it('undoes the new claim when the previous spot cannot be released (never two beds)', async () => {
+		const { pb, byId } = makeFakePb([
+			{ id: 'bed1', occupied: true, order: 'order1', enabled: true },
+			{ id: 'bed2', occupied: false, order: '', enabled: true }
+		]);
+		const original = pb.collection.bind(pb);
+		let failOnce = true;
+		pb.collection = (name: string) => {
+			const service = original(name);
+			if (name !== 'beds') return service;
+			return {
+				...service,
+				update: async (id: string, data: Record<string, any>) => {
+					if (id === 'bed1' && failOnce) {
+						failOnce = false;
+						throw new Error('database gone away');
+					}
+					return service.update(id, data);
+				}
+			};
+		};
+		const service = new BookingService(pb);
+
+		await expect(service.bookBed({ id: 'order1' } as any, 'bed2', 'Alice')).rejects.toBeInstanceOf(
+			ReleaseFailedError
+		);
+		expect(byId.get('bed1')).toMatchObject({ occupied: true, order: 'order1' });
+		expect(byId.get('bed2')).toMatchObject({ occupied: false, order: null });
 	});
 
 	it('treats infrastructure errors as errors, not as "code not found"', async () => {

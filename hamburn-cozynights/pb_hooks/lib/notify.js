@@ -401,7 +401,9 @@ function eventText(ev, cfg) {
 				': ' +
 				(d.released || 0) +
 				' spot(s) released, tickets kept' +
-				(d.kept ? '; ' + d.kept + ' special-needs spot(s) kept' : '')
+				(d.kept ? '; ' + d.kept + ' special-needs spot(s) kept' : '') +
+				(d.reason === 'staging' ? ' (back to Staging Mode)' : '') +
+				(d.stopped ? ' — STOPPED, ' + (d.stopped - (d.released || 0)) + ' still booked' : '')
 			);
 		// Special-needs requests: never the guest's name or what they wrote.
 		case 'special_request_new':
@@ -484,7 +486,12 @@ function eventText(ev, cfg) {
 				parts.push('e-mail ' + (d.emailFrom || '(none)') + ' → ' + (d.emailTo || '(none)'));
 			}
 			if (d.nameChanged) parts.push('name');
-			if (d.newHolder) parts.push('passed on: Telegram disconnected, new booking pass');
+			if (d.newHolder) {
+				parts.push(
+					'passed on: Telegram disconnected, new booking pass' +
+						(d.requestRemoved ? ', special-needs request removed' : '')
+				);
+			}
 			return (
 				'🎟️ Ticket ' + (d.ticket || subject) + ' changed' + by + ': ' + (parts.join('; ') || '-')
 			);
@@ -499,6 +506,7 @@ function eventText(ev, cfg) {
 				(d.updated || 0) +
 				' updated' +
 				(d.newHolders ? ' (' + d.newHolders + ' passed on)' : '') +
+				(d.requestsRemoved ? ', ' + d.requestsRemoved + ' special-needs request(s) removed' : '') +
 				(d.failed ? ', ' + d.failed + ' failed' : '')
 			);
 		case 'house_deleted':
@@ -812,7 +820,8 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
 		);
 	}
 	const rows = showSpot ? spotLines(spot) : [];
-	const footer = 'You get this e-mail because this address belongs to your Hamburn ticket.';
+	const footer =
+		'You get this e-mail because this address belongs to your Hamburn ticket. CozyNights never asks you for your ticket code by e-mail.';
 
 	const text = [hello, '', intro]
 		.concat(rows.length ? [''].concat(rows.map((r) => '  ' + (r[0] + ':').padEnd(7) + r[1])) : [])

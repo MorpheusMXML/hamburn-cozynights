@@ -20,6 +20,7 @@ import type {
 } from '$lib/pocketbase-types';
 import { createLookupHash, decrypt } from '$lib/server/crypto';
 import { disconnectTelegram } from '$lib/server/notifications';
+import { forgetRequest } from '$lib/server/special-requests';
 import {
 	TICKET_CODE_PATTERN,
 	TICKET_LIMITS,
@@ -254,10 +255,14 @@ export async function changeTicket(
 	if (nameChanged) data.customer_name = name;
 	if (input.newHolder) Object.assign(data, NEW_HOLDER_FIELDS);
 
+	let requestRemoved = false;
 	if (Object.keys(data).length > 0) {
 		// Telegram first: no update about the new holder may reach the old chat.
 		if (input.newHolder) await disconnectTelegram(adminPb, order.id);
 		order = await adminPb.collection('orders').update<OrdersResponse>(order.id, data);
+		// The old holder's special-needs request is their health data: it goes
+		// with them. A spot the crew booked stays, as an ordinary booking.
+		if (input.newHolder) requestRemoved = await forgetRequest(adminPb, order.id);
 	}
 
 	// Masked like a search by address: the answer to a change must not hand out
@@ -271,6 +276,7 @@ export async function changeTicket(
 		emailChanged,
 		nameChanged,
 		newHolder: input.newHolder,
+		requestRemoved,
 		confirmation: emailChanged && !!email && !!ticket.spot
 	};
 }
@@ -413,6 +419,7 @@ export async function importRoster(
 			created: 0,
 			updated: 0,
 			newHolders: 0,
+			requestsRemoved: 0,
 			confirmations: 0,
 			skipped: wanted.size - todo.length,
 			failed: []
@@ -440,7 +447,11 @@ export async function importRoster(
 				}
 				await adminPb.collection('orders').update(id, data);
 				outcome.updated++;
-				if (newHolder) outcome.newHolders++;
+				if (newHolder) {
+					outcome.newHolders++;
+					// the old holder's health data goes with them (see changeTicket)
+					if (await forgetRequest(adminPb, id)) outcome.requestsRemoved++;
+				}
 				if (change.emailChanged && change.email && change.hasSpot) outcome.confirmations++;
 			} catch (err) {
 				console.error(`[Tickets] Import of ${maskTicketCode(change.code)} failed:`, err);

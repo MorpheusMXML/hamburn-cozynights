@@ -79,6 +79,7 @@ export const actions: Actions = {
 					emailTo: maskEmail(outcome.ticket.email),
 					nameChanged: outcome.nameChanged,
 					newHolder: outcome.newHolder,
+					requestRemoved: outcome.requestRemoved,
 					hasSpot: !!outcome.ticket.spot
 				});
 			}
@@ -126,6 +127,7 @@ export const actions: Actions = {
 					created: outcome.created,
 					updated: outcome.updated,
 					newHolders: outcome.newHolders,
+					requestsRemoved: outcome.requestsRemoved,
 					confirmations: outcome.confirmations,
 					failed: outcome.failed.length
 				});

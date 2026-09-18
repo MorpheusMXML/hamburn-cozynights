@@ -136,6 +136,50 @@ function readSelection(form: FormData): string[] | null {
 	}
 }
 
+/** Releasing bookings stopped halfway: how far it got. */
+class ReleaseStoppedError extends Error {
+	constructor(
+		public released: number,
+		public total: number,
+		public reason: unknown
+	) {
+		super(`Releasing bookings stopped after ${released} of ${total} spots`);
+		this.name = 'ReleaseStoppedError';
+	}
+}
+
+/**
+ * Releases every guest booking ("clear all bookings", and what going back to
+ * Staging Mode does). The orders themselves are the ticket roster and survive,
+ * otherwise every guest's code would stop working; the burner names of the
+ * released bookings are forgotten. Spots the crew booked for approved
+ * special-needs requests stay: they were handed out on purpose, usually
+ * before booking opened.
+ * @throws {ReleaseStoppedError} when the database refuses halfway
+ */
+async function releaseGuestBookings(
+	adminPb: TypedPocketBase
+): Promise<{ released: number; kept: number }> {
+	const crewBooked = await crewBookedBeds(adminPb);
+	const booked = await adminPb.collection('beds').getFullList({
+		filter: 'occupied = true || order != ""'
+	});
+	const occupiedBeds = booked.filter((bed) => !(bed.order && crewBooked.get(bed.id) === bed.order));
+	const kept = booked.length - occupiedBeds.length;
+	const keep = new Set(booked.filter((bed) => !occupiedBeds.includes(bed)).map((bed) => bed.order));
+	let released = 0;
+	try {
+		for (const bed of occupiedBeds) {
+			await adminPb.collection('beds').update(bed.id, { occupied: false, order: null });
+			released++;
+		}
+		await clearBurnerNames(adminPb, keep);
+	} catch (err) {
+		throw new ReleaseStoppedError(released, occupiedBeds.length, err);
+	}
+	return { released, kept };
+}
+
 /** Clears the burner names of all orders (they only describe bookings), except `keep`. */
 async function clearBurnerNames(pb: TypedPocketBase, keep: Set<string> = new Set()) {
 	const named = await pb.collection('orders').getFullList({
@@ -178,11 +222,43 @@ export const actions: Actions = {
 			const next = switchPhase(window, to, now);
 			await writeWindow(locals.pb, exists, next);
 			console.log(`[Action:setPhase] SUCCESS: ${phaseBefore} → ${to}`);
+
+			// Staging Mode never starts with guest bookings: the layout is about to
+			// be edited. Spots the crew booked for special-needs requests stay.
+			let cleared: { released: number; kept: number } | null = null;
+			if (to === 'staging') {
+				try {
+					cleared = await releaseGuestBookings(locals.adminPb);
+					await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
+						...cleared,
+						reason: 'staging'
+					});
+					console.log(
+						`[Action:setPhase] ${cleared.released} bookings released, ${cleared.kept} special-needs spots kept.`
+					);
+				} catch (err) {
+					console.error('[Action:setPhase] Staging is on, but releasing the bookings failed:', err);
+					const released = err instanceof ReleaseStoppedError ? err.released : 0;
+					if (released > 0) {
+						await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
+							released,
+							kept: 0,
+							reason: 'staging',
+							stopped: err instanceof ReleaseStoppedError ? err.total : undefined
+						});
+					}
+					return fail(500, {
+						error: `Staging Mode is on, but the bookings could not all be released (${released} done). Use "Clear all bookings" for the rest.`
+					});
+				}
+			}
 			return {
 				success: true,
 				phase: to,
 				phaseBefore,
-				pausedTimer: next.paused && !window.paused
+				pausedTimer: next.paused && !window.paused,
+				released: cleared?.released,
+				kept: cleared?.kept
 			};
 		} catch (err) {
 			return phaseFailure('setPhase', err, 'The booking phase was not changed.');
@@ -229,50 +305,41 @@ export const actions: Actions = {
 		if (!locals.admin?.isSuperuser) {
 			return fail(403, { error: 'Only superusers can clear all bookings.' });
 		}
+		// Only in Staging Mode: switching back to Staging releases the bookings
+		// itself, and a stale tab must never clear a live camp.
+		const { phase } = await getBookingSettings(locals.pb);
+		if (phase !== 'staging') {
+			return fail(403, {
+				error: `Bookings can only be cleared in Staging Mode, not ${lockedDuring(phase)}. Switching back to Staging releases them.`
+			});
+		}
 
 		console.log(`[Action:clearAllBookings] INITIATED by ${locals.admin.email}`);
-
 		try {
-			// 1. Release every occupied bed. The orders themselves are the ticket
-			//    roster (one order per ticket code) and must survive, otherwise every
-			//    guest's code would stop working. Spots the crew booked for
-			//    approved special-needs requests stay: they were handed out on
-			//    purpose, usually before booking opened.
-			const crewBooked = await crewBookedBeds(locals.adminPb);
-			const booked = await locals.adminPb.collection('beds').getFullList({
-				filter: 'occupied = true || order != ""'
-			});
-			const occupiedBeds = booked.filter(
-				(bed) => !(bed.order && crewBooked.get(bed.id) === bed.order)
-			);
-			const kept = booked.length - occupiedBeds.length;
-			const keep = new Set(
-				booked.filter((bed) => !occupiedBeds.includes(bed)).map((bed) => bed.order)
-			);
-
+			const { released, kept } = await releaseGuestBookings(locals.adminPb);
 			console.log(
-				`[Action:clearAllBookings] Clearing ${occupiedBeds.length} spots, keeping ${kept} special-needs spots.`
+				`[Action:clearAllBookings] SUCCESS. ${released} spots released, ${kept} special-needs spots kept, ticket codes kept.`
 			);
-
-			for (const bed of occupiedBeds) {
-				await locals.adminPb.collection('beds').update(bed.id, {
-					occupied: false,
-					order: null
-				});
-			}
-
-			// 2. Forget the burner names chosen for those bookings.
-			await clearBurnerNames(locals.adminPb, keep);
-
-			console.log('[Action:clearAllBookings] SUCCESS. All spots released, ticket codes kept.');
 			await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
-				released: occupiedBeds.length,
+				released,
 				kept
 			});
-			return { success: true, kept };
+			return { success: true, released, kept };
 		} catch (err) {
 			console.error('[Action:clearAllBookings] FAILED:', err);
-			return fail(500, { error: 'Purge failed' });
+			if (err instanceof ReleaseStoppedError && err.released > 0) {
+				await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
+					released: err.released,
+					kept: 0,
+					stopped: err.total
+				});
+				return fail(500, {
+					error: `Clearing stopped after ${err.released} of ${err.total} spots: the rest are still booked. Reload the page and try again.`
+				});
+			}
+			return fail(500, {
+				error: 'No booking was released: the server could not write to the database. Try again.'
+			});
 		}
 	},
 	updateHouseCoords: async ({ locals, request }) => {
@@ -315,6 +382,7 @@ export const actions: Actions = {
 
 		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
 
+		let progress: { released: number; rooms: number; total: number } | null = null;
 		try {
 			const { isLayoutLocked, phase } = await getBookingSettings(locals.pb);
 			if (isLayoutLocked) {
@@ -328,16 +396,20 @@ export const actions: Actions = {
 				filter: locals.pb.filter('room.house = {:id} && occupied = true', { id }),
 				expand: 'room'
 			});
-			// For the audit log / crew chat when bookings go with the house.
+			// For the audit log / crew chat: every deleted house is recorded.
 			const houseName =
-				occupiedBeds.length > 0
-					? ((
-							await locals.pb
-								.collection('houses')
-								.getOne(id)
-								.catch(() => null)
-						)?.name ?? id)
-					: '';
+				(
+					await locals.pb
+						.collection('houses')
+						.getOne(id)
+						.catch(() => null)
+				)?.name ?? id;
+
+			const rooms = await locals.pb.collection('rooms').getFullList({
+				filter: locals.pb.filter('house = {:id}', { id })
+			});
+			// What already happened when a step fails halfway (the message says so).
+			progress = { released: 0, rooms: 0, total: rooms.length };
 
 			if (occupiedBeds.length > 0) {
 				console.log(
@@ -345,12 +417,9 @@ export const actions: Actions = {
 				);
 				for (const bed of occupiedBeds) {
 					await locals.pb.collection('beds').update(bed.id, { occupied: false, order: null });
+					progress.released++;
 				}
 			}
-
-			const rooms = await locals.pb.collection('rooms').getFullList({
-				filter: locals.pb.filter('house = {:id}', { id })
-			});
 
 			console.log(`[Action:deleteHouse] Vanishing ${rooms.length} modules...`);
 			for (const room of rooms) {
@@ -361,19 +430,24 @@ export const actions: Actions = {
 					await locals.pb.collection('beds').delete(bed.id);
 				}
 				await locals.pb.collection('rooms').delete(room.id);
+				progress.rooms++;
 			}
 
 			await locals.pb.collection('houses').delete(id);
 			console.log(`[Action:deleteHouse] SUCCESS. House ${id} evaporated.`);
-			if (occupiedBeds.length > 0) {
-				await logAdminEvent(locals.adminPb, locals.admin, 'house_deleted', houseName, {
-					released: occupiedBeds.length
-				});
-			}
+			await logAdminEvent(locals.adminPb, locals.admin, 'house_deleted', houseName, {
+				released: occupiedBeds.length,
+				rooms: rooms.length
+			});
 			return { success: true };
 		} catch (err) {
 			console.error(`[Action:deleteHouse] FAILED for ${id}:`, err);
-			return fail(500, { error: 'Vanish failed.' });
+			if (progress && (progress.released > 0 || progress.rooms > 0)) {
+				return fail(500, {
+					error: `Vanish stopped halfway: ${progress.rooms} of ${progress.total} rooms are gone and ${progress.released} bookings were released, the house is still there. Reload the page and try again.`
+				});
+			}
+			return fail(500, { error: 'Vanish failed. Nothing was deleted.' });
 		}
 	},
 	renameHouse: async ({ locals, request }) => {
@@ -505,14 +579,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// Runs in parallel with the layout load, so it guards itself too.
 	if (!locals.admin) throw redirect(303, '/admin/login');
 
-	const [houses, allRooms, allBeds, settings, orders] = await Promise.all([
+	const [houses, allRooms, allBeds, settings] = await Promise.all([
 		locals.pb.collection('houses').getFullList<HousesResponse>({ sort: 'name' }),
 		locals.pb.collection('rooms').getFullList<RoomsResponse>(),
 		locals.pb
 			.collection('beds')
 			.getFullList<BedsResponse<{ room: RoomsResponse }>>({ expand: 'room' }),
-		getBookingSettings(locals.pb),
-		locals.adminPb.collection('orders').getFullList({ fields: 'created' })
+		getBookingSettings(locals.pb)
 	]);
 
 	// Sanity Checks logic 🛠️
@@ -560,7 +633,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		};
 	});
 
-	// Real orders created per day, last 7 days (including today).
+	// Spots booked per day, last 7 days (including today): PocketBase stamps
+	// beds.booked_at whenever a spot gets a ticket (pb_hooks/cozy_booked.pb.js),
+	// so a ticket import is not a booking wave. A released spot drops out, a
+	// moved booking counts on the day of the move.
 	// Bucket by Berlin calendar day (the event's timezone), not UTC — a raw
 	// UTC slice would misfile any booking made in the CET/CEST evening into
 	// "tomorrow".
@@ -580,9 +656,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		days.push({ key: berlinDay.format(d), label: berlinWeekday.format(d) });
 	}
 	const countsByDay = new Map(days.map((d) => [d.key, 0]));
-	for (const order of orders) {
-		if (!order.created) continue;
-		const key = berlinDay.format(new Date(order.created));
+	for (const bed of allBeds) {
+		if (!bed.order || !bed.booked_at) continue;
+		const key = berlinDay.format(new Date(bed.booked_at));
 		if (countsByDay.has(key)) {
 			countsByDay.set(key, (countsByDay.get(key) || 0) + 1);
 		}

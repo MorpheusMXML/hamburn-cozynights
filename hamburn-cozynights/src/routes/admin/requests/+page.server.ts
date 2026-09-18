@@ -1,7 +1,7 @@
 // src/routes/admin/requests/+page.server.ts
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { BedUnavailableError } from '$lib/server/booking';
+import { BedUnavailableError, ReleaseFailedError } from '$lib/server/booking';
 import { getBookingSettings } from '$lib/server/settings';
 import {
 	assignSpot,
@@ -54,6 +54,7 @@ async function step(what: string, fn: () => Promise<void>) {
 		if (err instanceof BedUnavailableError) {
 			return fail(409, { error: `${err.message} Pick another spot.` });
 		}
+		if (err instanceof ReleaseFailedError) return fail(409, { error: err.message });
 		if ((err as { status?: number })?.status === 404) {
 			return fail(409, { error: "Something here doesn't exist anymore. Reload the page." });
 		}

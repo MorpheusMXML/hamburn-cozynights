@@ -131,6 +131,8 @@ export type BedsRecord = {
 	updated: IsoAutoDateString;
 	is_locked?: boolean;
 	is_special?: boolean;
+	/** When the spot got its ticket; set and cleared by PocketBase (pb_hooks/cozy_booked.pb.js). */
+	booked_at?: IsoDateString;
 };
 
 export type HousesRecord = {

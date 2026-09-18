@@ -70,14 +70,14 @@
 			}
 		});
 
-		// 2. New bookings per day, last 7 days (real order counts)
+		// 2. Spots booked per day, last 7 days (beds.booked_at, stamped by PocketBase)
 		trend = new Chart(trendChart, {
 			type: 'bar',
 			data: {
 				labels: history.labels,
 				datasets: [
 					{
-						label: 'New Bookings',
+						label: 'Booked spots',
 						data: history.bookingTrend,
 						backgroundColor: '#2dd4bf',
 						borderRadius: 4,

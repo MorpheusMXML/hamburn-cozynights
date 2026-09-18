@@ -529,8 +529,17 @@ describe('Google sign-in flow', () => {
 });
 
 describe('superuser-only dashboard actions', () => {
-	function makeAdminPb() {
+	function makeAdminPb(phase: 'staging' | 'live' = 'staging') {
 		const service = {
+			// app_settings for getBookingSettings: the phase set by hand
+			getOne: vi.fn(async () => ({
+				id: 'appsettings0123',
+				is_booking_active: phase === 'live',
+				booking_closed: false,
+				booking_unlock_at: '',
+				booking_close_at: '',
+				booking_timer_paused: false
+			})),
 			getFullList: vi.fn(async (opts?: any) =>
 				opts?.filter?.includes('burner_name')
 					? [{ id: 'order1' }, { id: 'order2' }]
@@ -576,12 +585,23 @@ describe('superuser-only dashboard actions', () => {
 			locals: { pb, adminPb: pb, admin: boss }
 		} as any);
 
-		expect(result).toEqual({ success: true, kept: 1 });
+		expect(result).toEqual({ success: true, released: 1, kept: 1 });
 		expect(service.update).toHaveBeenCalledWith('bed1', { occupied: false, order: null });
 		expect(service.update).toHaveBeenCalledWith('order1', { burner_name: '' });
 		expect(service.delete).not.toHaveBeenCalled();
 		// The spot the crew assigned for a special-needs request stays, with its name.
 		expect(service.update).not.toHaveBeenCalledWith('bed2', expect.anything());
 		expect(service.update).not.toHaveBeenCalledWith('order2', expect.anything());
+	});
+
+	it('clears bookings only in Staging Mode (going back to Staging releases them itself)', async () => {
+		const { pb, service } = makeAdminPb('live');
+		const result: any = await dashboardActions.clearAllBookings({
+			locals: { pb, adminPb: pb, admin: boss }
+		} as any);
+
+		expect(result.status).toBe(403);
+		expect(result.data.error).toContain('Staging Mode');
+		expect(service.update).not.toHaveBeenCalled();
 	});
 });

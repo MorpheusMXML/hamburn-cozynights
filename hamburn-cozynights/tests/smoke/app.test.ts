@@ -441,6 +441,55 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		expect(house).toMatchObject({ x: 900, y: 650 });
 	});
 
+	it('refuses a second spot for a ticket that already holds one (release first)', async () => {
+		const { room, beds } = await seedHouse(su, 2);
+		const ticket = await seedTicket(su);
+		const cookie = await guestLogin(ticket.code);
+		await setBookingOpen(true);
+
+		expect((await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id }, cookie)).status).toBe(200);
+		const second = await post(`/room/${room.id}?/bookBed`, { bedId: beds[1].id }, cookie);
+		expect(second.status).toBe(409);
+		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
+		expect((await su.collection('beds').getOne(beds[1].id)).order).toBe('');
+		// renaming the spot it holds is fine
+		const renamed = await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[0].id, guestName: 'Dusty' },
+			cookie
+		);
+		expect(renamed.status).toBe(200);
+	});
+
+	it('releases every guest booking when a superuser switches back to Staging Mode', async () => {
+		const { room, beds } = await seedHouse(su, 1);
+		const ticket = await seedTicket(su);
+		const cookie = await guestLogin(ticket.code);
+		await setBookingOpen(true);
+		expect((await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id }, cookie)).status).toBe(200);
+		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
+
+		// admins can't switch right now (PocketBase refuses the phase change too)
+		const admin = await createAdmin(su, 'admin');
+		expect(
+			(await post('/admin?/setPhase', { phase: 'staging' }, adminCookie(admin.client))).status
+		).toBe(403);
+		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
+
+		const boss = await createAdmin(su, 'superuser');
+		const switched = await post('/admin?/setPhase', { phase: 'staging' }, adminCookie(boss.client));
+		expect(switched.status).toBe(200);
+		const bed = await su.collection('beds').getOne(beds[0].id);
+		expect(bed.occupied).toBe(false);
+		expect(bed.order).toBe('');
+		expect(bed.booked_at).toBe('');
+		expect((await su.collection('app_settings').getOne(APP_SETTINGS_ID)).is_booking_active).toBe(
+			false
+		);
+		// the ticket roster survives
+		await guestLogin(ticket.code);
+	});
+
 	it('reserves "clear all bookings" for superusers and keeps the tickets', async () => {
 		const { room, beds } = await seedHouse(su, 1);
 		const ticket = await seedTicket(su);
@@ -455,6 +504,12 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(true);
 
 		const boss = await createAdmin(su, 'superuser');
+		// only in Staging Mode: a stale tab must never clear a live camp
+		const live = await post('/admin?/clearAllBookings', {}, adminCookie(boss.client));
+		expect(live.status).toBe(403);
+		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(true);
+
+		await setBookingOpen(false);
 		const cleared = await post('/admin?/clearAllBookings', {}, adminCookie(boss.client));
 		expect(cleared.status).toBe(200);
 		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(false);
