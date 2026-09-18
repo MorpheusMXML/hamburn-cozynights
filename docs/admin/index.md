@@ -8,12 +8,13 @@ After signing in you land in the **Control Center** at `/admin`: one page to bui
 
 | Control | What it does |
 | --- | --- |
+| <kbd>ADMIN GUIDE 📖</kbd> | Opens this documentation in a new tab, admin pages included. |
 | <kbd>TEMPLATES 💾</kbd> | Opens the **Burn Template Manager** to export or import the camp layout. See [Layout templates](./templates). |
 | <kbd>SHOW INTEL 📊</kbd> | Shows or hides the statistics panel. |
 | <kbd>🛠 STAGING MODE</kbd> / <kbd>🎪 LIVE BOOKING ACTIVE</kbd> | Shows the current phase. Click to switch. See [Staging & Live Booking](../guide/phases). |
 | <kbd>🛰️ LIST VIEW</kbd> / <kbd>🗺️ MAP VIEW</kbd> | Switches between the map editor and house cards. |
 
-The top bar shows the account you're signed in with, a **SUPERUSER ⚡️** badge if you are one, and <kbd>Eject 🚀</kbd> to sign out.
+The top bar on every admin page shows <kbd>🎫 Check passes</kbd> (see [Booking passes](./passes)), the account you're signed in with, a **SUPERUSER ⚡️** badge if you are one, and <kbd>Eject 🚀</kbd> to sign out.
 
 ## Go-live timer
 
@@ -81,4 +82,7 @@ The Control Center stays fully usable for watching: statistics, occupancy, templ
 
 - [Houses, rooms & spots](./camp-layout): building the camp in detail
 - [Layout templates](./templates): export and import
+- [Notifications](./notifications): booking e-mails, Telegram for guests and the crew group
+- [Booking passes](./passes): checking guests in with the QR code
 - [Event checklist](./event-checklist): from the first layout to after the burn
+- [Legal pages](./legal): legal notice, privacy policy and booking rules

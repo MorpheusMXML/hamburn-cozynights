@@ -36,6 +36,8 @@ Ticket holders pick their own bed on the Hamburn camp map. The crew builds the c
 | 🛡️  | **Privacy first**            | Server-side rendering only, encrypted burner names, hashed ticket lookups, strict database rules.      |
 | 🔥  | **Burning effigy title**     | Magic balls build rainbow timber letters, then fire eats them letter by letter. Light them yourself.   |
 | ⚖️  | **Legal pages**              | Legal notice, privacy policy and booking rules on every page; the operator's details stay out of git.  |
+| 📬  | **Booking confirmations**    | E-mail to the ticket holder, Telegram if they like, and a crew group that hears about admin changes.   |
+| 🎟️  | **Booking pass**             | A QR code and a short code per booking; the crew checks it with a phone camera, a PC or a USB scanner. |
 
 ## 🧭 How it works
 
@@ -74,6 +76,8 @@ The documentation lives in [`docs/`](docs/) and is published at **[morpheusmxml.
 | [FAQ](https://morpheusmxml.github.io/hamburn-cozynights/guide/faq)                       | [Layout templates](https://morpheusmxml.github.io/hamburn-cozynights/admin/templates)        |                                                                                            | [Landing page title](https://morpheusmxml.github.io/hamburn-cozynights/develop/effigy-title)      |
 |                                                                                          | [Event checklist](https://morpheusmxml.github.io/hamburn-cozynights/admin/event-checklist)   |                                                                                            |                                                                                                   |
 |                                                                                          | [Legal pages](https://morpheusmxml.github.io/hamburn-cozynights/admin/legal)                 |                                                                                            |                                                                                                   |
+|                                                                                          | [Notifications](https://morpheusmxml.github.io/hamburn-cozynights/admin/notifications)       |                                                                                            |                                                                                                   |
+|                                                                                          | [Booking passes](https://morpheusmxml.github.io/hamburn-cozynights/admin/passes)             |                                                                                            |                                                                                                   |
 
 ## 🗂️ Repository
 

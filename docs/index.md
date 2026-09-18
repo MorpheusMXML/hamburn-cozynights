@@ -37,6 +37,16 @@ features:
     details: Can't decide? Roll for a random free bed and a burner name to go with it.
     link: /guide/booking#destiny-roulette
     linkText: Feeling lucky
+  - icon: 📬
+    title: Booking confirmations
+    details: Guests hear about every change of their spot by e-mail, and on Telegram if they like. No address to type in.
+    link: /guide/booking#confirmations
+    linkText: Confirmations
+  - icon: 🎟️
+    title: Booking pass
+    details: Every booking comes with a QR code and a short code. The crew checks it at arrival with a phone camera.
+    link: /guide/booking#your-booking-pass
+    linkText: The pass
   - icon: 🛠️
     title: Staging, then Live
     details: The crew builds the layout in staging. Going live freezes the structure and opens booking, by switch or on a timer.

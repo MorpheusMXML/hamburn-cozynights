@@ -9,6 +9,8 @@ flowchart TB
   guest["📱 Guest browser"]
   admin["💻 Admin browser"]
   google["🔑 Google<br/>Workspace sign-in"]
+  mail["📧 Mail service<br/>SMTP"]
+  telegram["✈️ Telegram<br/>Bot API"]
 
   subgraph server["🖥️ Server"]
     nginx["nginx<br/>HTTPS · reverse proxy"]
@@ -24,11 +26,14 @@ flowchart TB
   app -- "internal network only" --> pb
   admin -. "sign-in redirect" .-> google
   pb -. "verifies the sign-in" .-> google
+  pb -. "booking e-mails" .-> mail
+  pb -. "messages, polls for replies" .-> telegram
 ```
 
 - **Browsers only ever talk to the app.** Pages are rendered on the server, and every button submits a form to a server action. There is no public database API.
 - **PocketBase is internal.** It is reachable from the app over the Docker network, and its dashboard only from the server itself.
 - **nginx** terminates TLS and forwards the site's domain to the app, which listens on the server's loopback interface only.
+- **PocketBase sends every message.** Booking e-mails go out through an SMTP service, Telegram messages through the Bot API. The bot fetches its incoming messages itself (long polling), so nothing on the server waits for calls from Telegram. See [Notifications](../admin/notifications).
 
 ## Tech stack
 
@@ -62,6 +67,7 @@ erDiagram
   HOUSES ||--o{ ROOMS : contains
   ROOMS ||--o{ BEDS : contains
   ORDERS |o--o| BEDS : "books at most one"
+  ORDERS ||--o| GUEST_NOTIFY : "messages about"
   HOUSES {
     text name
     number x "map position"
@@ -85,15 +91,30 @@ erDiagram
     text customer_name
     text burner_name "encrypted"
     date booking_date
+    email email "from the ticket import"
+    text pass_code "booking pass"
+  }
+  GUEST_NOTIFY {
+    date due "next message"
+    text mail_to
+    text tg_chat "linked Telegram chat"
+  }
+  ADMIN_EVENTS {
+    text action
+    text actor
+    select alert_status "crew group"
   }
   APP_SETTINGS {
     bool is_booking_active
     date booking_unlock_at "go-live timer"
+    bool notify_mail "e-mail is set up"
+    text telegram_bot "bot for guest updates"
   }
   ADMINS {
     email email
     text name
     select role "pending, admin, superuser"
+    date last_sign_in "weekly re-sign-in"
   }
 ```
 
@@ -101,6 +122,8 @@ erDiagram
 - **Spots are called `beds`** in the database. A booking is simply a bed with `occupied` set and a link to its order.
 - **`app_settings`** is a single record holding the phase switch and the go-live timer.
 - **`admins`** is its own auth collection for Google sign-in. PocketBase's default `users` collection is unused and closed for sign-up.
+- **`guest_notify`** holds what each ticket was last told and where (e-mail, linked Telegram chat); **`admin_events`** is the audit log that feeds the crew group. Neither has API rules: only PocketBase itself and the app server use them.
+- **`pass_code`** is created by PocketBase when a ticket gets a spot. It is not the ticket code: the pass shows the booking, never lets anyone book.
 - Schema and API rules live in `hamburn-cozynights/pb_migrations/`. The migrations are idempotent, so a database restored from a backup is brought to the current rules too.
 
 ## Routes
@@ -115,11 +138,15 @@ erDiagram
 | `/legal-notice` | everyone | Legal notice (Impressum), details from the server's `.env`; `/impressum` redirects here |
 | `/privacy` | everyone | Privacy policy; `/datenschutz` redirects here |
 | `/booking-rules` | everyone | Booking rules, linked from every booking dialog |
+| `/pass/:code` | whoever has the link | Booking pass with QR code (`/pass/:code/qr.gif` as an image); signed-in admins also see whether it is valid |
+| `/docs/*` | everyone | The guest guide and FAQ |
 | `/admin/login` | everyone | Google sign-in and the *access requested* page |
 | `/auth/callback/google` | – | Where Google sends admins back to |
 | `/admin` | admins | Control Center |
 | `/admin/house/:id` | admins | Rooms of a house |
 | `/admin/room/:id` | admins | Spots of a room |
+| `/admin/check` | admins | Check booking passes: typed code, USB scanner or camera |
+| `/admin/docs/*` | admins | The full documentation, admin pages included |
 | `/admin/api/export-template` | admins | Layout template download |
 
 A single server hook (`src/hooks.server.ts`) runs before every request. It restores the guest's ticket session and the admin session, re-checks the admin's role, and refuses admin form actions and API calls without an approved session, so no single action can forget the check.
@@ -167,7 +194,8 @@ hamburn-cozynights/                 repository root
     │       ├── fx/                 cursor trail, burning effigy title (canvas)
     │       └── server/             booking, inventory, settings, admin auth, crypto
     ├── pb_migrations/              database schema and API rules
-    ├── pb_hooks/                   PocketBase hooks: admin sign-in guard, admin tool
+    ├── pb_hooks/                   PocketBase hooks: admin sign-in guard, admin tool,
+    │                               notifications, booking passes, backups
     ├── scripts/                    admin tool, health check, test setup, backups
     ├── deploy/                     deploy script, nginx vhost, server runbook
     ├── tests/                      Vitest and Playwright tests

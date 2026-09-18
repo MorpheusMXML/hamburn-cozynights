@@ -93,6 +93,19 @@ Operators put the settings into the server's `.env` (the template `deploy/stagin
 - **One Telegram bot per environment.** The server reads the bot's messages itself (no public webhook), and two servers can't read the same bot. Add the bot to a **private** crew group, and turn off "Allow groups" for it in @BotFather afterwards, so nobody can add it elsewhere.
 - **E-mail through a sending service, from a crew address.** Recommended: a Google group of the Workspace (for example `cozynights@mauersegler.art`, anyone on the web may post, members are the crew) as the sender, so guests' replies reach the crew; sending through a transactional mail service such as SMTP2GO with its **own SMTP user per environment** (send-only, revocable without touching other apps), the sender domain verified there (DKIM), open and click tracking off. Avoid a personal mailbox with an app password: that password would open the whole mailbox.
 
+Step by step:
+
+<div class="steps">
+
+1. **Create the bot** with @BotFather in Telegram, one per environment (for example *CozyNights Staging*).
+2. **Create the crew group** as a private group, add the crew and the bot. The bot needs no admin rights.
+3. **Find the group's id.** Send `/start@<your bot>` in the group, then read the chat id from the Bot API's `getUpdates`. Group ids are negative; bigger groups start with `-100`. Do it before the server uses the bot: from then on the server fetches the updates itself. If the group later becomes a supergroup (for example when you turn on topics), its id changes; for a topic, also set `TELEGRAM_THREAD_ID`.
+4. **Close the bot for other groups:** @BotFather → *Bot Settings* → *Allow Groups?* → *Turn groups off*.
+5. **Fill in `.env`:** bot token and group id, the mail settings, and `LEGAL_MAIL_PROVIDER` so the privacy policy names the mail service (see [Legal pages](./legal)). Then deploy.
+6. **Check** it on the server, as below.
+
+</div>
+
 Then check on the server:
 
 ```bash

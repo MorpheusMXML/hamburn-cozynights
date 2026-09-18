@@ -20,6 +20,7 @@ It needs Node and a running Docker (Docker Desktop on a Mac). Nothing else — n
 | Smoke | `npm run test:smoke` | Docker | The **whole app**: the same Docker image staging builds, driven over HTTP — guest login, booking, admin area protection, superuser-only actions. |
 | Post-deploy | `npm run smoke:remote` | a URL | A **deployment**: the read-only part of the smoke tests against a real site. Runs automatically after every staging deploy. |
 | Browser E2E | `npm run test:e2e` | dev setup | Optional, local: Playwright clicks through the UI against your dev server and dev database. Not part of the automatic checks. |
+| Title & legal E2E | `npx playwright test tests/e2e/landing.test.ts tests/e2e/legal.test.ts` | `npx vite dev` | Optional, local: the start page title and the legal pages in Chromium and on an emulated iPhone (WebKit). Needs no PocketBase. |
 
 ### What the integration tests cover
 
