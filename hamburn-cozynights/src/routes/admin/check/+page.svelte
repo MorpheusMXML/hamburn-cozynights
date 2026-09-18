@@ -73,6 +73,7 @@
 		action="?/check"
 		bind:this={formEl}
 		class="check-form"
+		novalidate
 		use:enhance={() => {
 			checking = true;
 			error = '';
@@ -102,7 +103,6 @@
 				autocapitalize="characters"
 				spellcheck="false"
 				placeholder="7F3K-9QXM-2CWD"
-				required
 			/>
 			<button type="submit" disabled={checking}>{checking ? 'Checking…' : 'Check'}</button>
 		</div>
