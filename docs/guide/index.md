@@ -47,7 +47,10 @@ flowchart TB
 
 <div class="steps">
 
-1. **Build the camp.** In staging, admins place houses on the map and add rooms and spots, or import last year's layout template. See [Houses, rooms & spots](../admin/camp-layout).
+1. **Build the camp.** In staging, admins place houses on the map and add rooms and spots, or import last year's layout template.
+   <!-- audience:admin -->
+   See [Houses, rooms & spots](../admin/camp-layout).
+   <!-- /audience -->
 2. **Load the tickets.** The ticket list goes into the database, so every ticket code can sign in.
 3. **Announce the opening.** An admin schedules the go-live time. Guests who look at the map see a countdown.
 4. **Booking opens.** Guests pick their beds; the layout is now frozen. See [Staging & Live Booking](./phases).
@@ -56,8 +59,13 @@ flowchart TB
 
 </div>
 
+<!-- audience:admin -->
 The [event checklist](../admin/event-checklist) walks through all of this in detail.
+<!-- /audience -->
 
 ## What's under the hood?
 
-A SvelteKit web app backed by a PocketBase database, running in Docker behind nginx. Guests never talk to the database directly, ticket codes are looked up by keyed hashes and never logged, and burner names are encrypted. Curious? Read [Architecture](../reference/architecture) and [Security & privacy](../reference/security).
+A SvelteKit web app backed by a PocketBase database, running in Docker behind nginx. Guests never talk to the database directly, ticket codes are looked up by keyed hashes and never logged, and burner names are encrypted.
+<!-- audience:admin -->
+Curious? Read [Architecture](../reference/architecture) and [Security & privacy](../reference/security).
+<!-- /audience -->

@@ -42,6 +42,8 @@ Only with their ticket code. On a shared device, entering another code switches 
 The crew has locked or deactivated it, for example because the bed is broken, kept free on purpose or not in use. Pick another spot.
 :::
 
+<!-- audience:admin -->
+
 ## For admins
 
 ::: details I'm stuck on "ACCESS REQUESTED"
@@ -67,3 +69,5 @@ Either Live Booking is active (dragging is switched off while the layout is lock
 ::: details I can't find "Clear all bookings" or the template import
 Both are superuser-only. Regular admins see the import card with a lock 🔒 and aren't offered to clear bookings.
 :::
+
+<!-- /audience -->

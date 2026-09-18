@@ -107,4 +107,7 @@ CozyNights works in any mobile browser, no app needed. If you booked on your lap
 - Other guests never see your ticket code or the name on your ticket.
 - Your burner name is stored encrypted, and your ticket code is never written to logs.
 
-More details in [Security & privacy](../reference/security). Something not working? See [FAQ & troubleshooting](./faq).
+<!-- audience:admin -->
+More details in [Security & privacy](../reference/security).
+<!-- /audience -->
+Something not working? See [FAQ & troubleshooting](./faq).

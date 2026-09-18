@@ -27,12 +27,15 @@ npm run dev            # http://localhost:5173
 
 ## Where to read on
 
-| Topic                                  | Page                                                                                              |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Setup, tests, schema changes           | [Local development](https://morpheusmxml.github.io/hamburn-cozynights/develop/)                   |
-| Staging, production, deploy pipeline   | [Environments & deployment](https://morpheusmxml.github.io/hamburn-cozynights/develop/deployment) |
-| Request flow, data model, routes       | [Architecture](https://morpheusmxml.github.io/hamburn-cozynights/reference/architecture)          |
-| Collections, integrity rules, templates | [Data model & templates](https://morpheusmxml.github.io/hamburn-cozynights/reference/data-model) |
-| Protections for guests and admins      | [Security & privacy](https://morpheusmxml.github.io/hamburn-cozynights/reference/security)        |
-| Google sign-in, access requests, roles | [Admin access & roles](https://morpheusmxml.github.io/hamburn-cozynights/admin/access)            |
-| Server setup and rollback (German)     | [`deploy/README.md`](deploy/README.md)                                                            |
+The published site only carries the guest guide. Developer and admin pages are read here in the repository, or in a running app at `/admin/docs/` after the admin sign-in.
+
+| Topic                                   | Page                                                       |
+| --------------------------------------- | ---------------------------------------------------------- |
+| Setup, tests, schema changes            | [Local development](../docs/develop/index.md)              |
+| Staging, production, deploy pipeline    | [Environments & deployment](../docs/develop/deployment.md) |
+| Request flow, data model, routes        | [Architecture](../docs/reference/architecture.md)          |
+| Collections, integrity rules, templates | [Data model & templates](../docs/reference/data-model.md)  |
+| Protections for guests and admins       | [Security & privacy](../docs/reference/security.md)        |
+| Google sign-in, access requests, roles  | [Admin access & roles](../docs/admin/access.md)            |
+| Writing docs, the two audiences         | [Working on these docs](../docs/develop/docs.md)           |
+| Server setup and rollback (German)      | [`deploy/README.md`](deploy/README.md)                     |

@@ -42,8 +42,10 @@ services:
 
   app:
     build:
-      context: .
-      dockerfile: Dockerfile
+      # The repository root, not this folder: the image also contains the
+      # documentation site from ../docs (served at /docs and /admin/docs).
+      context: ..
+      dockerfile: hamburn-cozynights/Dockerfile
     container_name: cozynights-staging-app
     restart: unless-stopped
     depends_on:

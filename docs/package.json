@@ -5,8 +5,14 @@
 	"description": "Documentation site for Hamburn CozyNights (VitePress, published to GitHub Pages)",
 	"scripts": {
 		"dev": "vitepress dev",
+		"dev:public": "DOCS_AUDIENCE=public vitepress dev",
 		"build": "vitepress build",
-		"preview": "vitepress preview"
+		"build:public": "DOCS_AUDIENCE=public vitepress build",
+		"build:app": "npm run build:app:public && npm run build:app:admin",
+		"build:app:public": "DOCS_AUDIENCE=public DOCS_BASE=/docs/ vitepress build --outDir .vitepress/dist/app/public",
+		"build:app:admin": "DOCS_AUDIENCE=admin DOCS_BASE=/admin/docs/ vitepress build --outDir .vitepress/dist/app/admin",
+		"preview": "vitepress preview",
+		"preview:public": "DOCS_AUDIENCE=public vitepress preview"
 	},
 	"devDependencies": {
 		"medium-zoom": "^1.1.0",

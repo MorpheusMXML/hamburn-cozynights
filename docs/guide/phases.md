@@ -37,6 +37,10 @@ During Live Booking, houses without any active spot don't appear on the guest ma
 
 ![Staging map with the countdown](../assets/screenshots/guest-map-staging.webp)
 
+<!-- audience:public -->
+The crew opens booking either by hand or on a timer. With a timer, guests see the moment as a countdown: **IGNITION IN** on the map, and a small timer on house and room pages.
+<!-- /audience -->
+<!-- audience:admin -->
 There are two ways to open booking, both in the [Control Center](../admin/):
 
 ### Flip the switch
@@ -50,6 +54,8 @@ Under the header, next to **Schedule automatic go-live**, pick a date and time a
 - Guests see the same moment as a countdown: **IGNITION IN** on the map, and a small timer on house and room pages.
 - When the time has come, booking is open. No background job needs to run for that: every request compares the clock with the timer.
 
+<!-- /audience -->
+
 > [!IMPORTANT] Event time
 > The go-live time is always **Europe/Berlin** time (CET/CEST), no matter which timezone your laptop or the server is in.
 
@@ -59,6 +65,10 @@ Almost everything structural is locked. The one exception is **locking and unloc
 
 ## Switching back to staging
 
+<!-- audience:public -->
+The crew can switch back to staging at any time. Guests can then no longer book, rename or release a spot. **Existing bookings stay.**
+<!-- /audience -->
+<!-- audience:admin -->
 Press <kbd>🎪 LIVE BOOKING ACTIVE</kbd>. After a confirmation, guests can no longer book, rename or release. **Existing bookings stay.**
 
 - If you are a **superuser** and there are bookings, a second dialog offers to **clear all bookings**. Every spot becomes free again and all burner names are forgotten. Ticket codes keep working. This can't be undone.
@@ -66,3 +76,5 @@ Press <kbd>🎪 LIVE BOOKING ACTIVE</kbd>. After a confirmation, guests can no l
 
 > [!CAUTION] Mind the timer
 > Switched back to staging but a future go-live timer is still set? Booking will open again at that time. Cancel the timer if that's not what you want.
+
+<!-- /audience -->

@@ -28,8 +28,9 @@ jobs:
           cache-dependency-path: hamburn-cozynights/package-lock.json
       - run: npm ci
       - run: npm test
-      # Same Dockerfile the server builds — fail here, not on the server.
-      - run: docker build -t cozynights-ci .
+      # Same Dockerfile and context (the repository root, for the docs) the
+      # server builds — fail here, not on the server.
+      - run: docker build -t cozynights-ci -f Dockerfile ..
 
   deploy:
     name: Deploy ${{ github.ref_name }}@${{ github.sha }}

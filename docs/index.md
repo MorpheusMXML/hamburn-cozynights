@@ -73,15 +73,28 @@ flowchart LR
 
 <p class="shot-caption">🎫 Guests pick a house on the live camp map</p>
 </div>
+<!-- audience:admin -->
 <div>
 
 ![Admins run everything from the Control Center](./assets/screenshots/admin-control-center.webp)
 
 <p class="shot-caption">🛠️ The crew runs the camp from the Control Center</p>
 </div>
+<!-- /audience -->
 </div>
 
 ## Find your way
+
+<!-- audience:public -->
+
+| I am… | Start here |
+| --- | --- |
+| 🎫 **A guest** with a ticket | [Booking a bed](./guide/booking): ticket code, map, spot, done. |
+| 🤔 **Stuck** somewhere | [FAQ & troubleshooting](./guide/faq), or ask the Hamburn crew. |
+| 🛠️ **On the crew** | The admin guide is part of the app and opens for signed-in admins only: `/admin/docs/` on the CozyNights site. |
+
+<!-- /audience -->
+<!-- audience:admin -->
 
 | I am… | Start here |
 | --- | --- |
@@ -89,3 +102,5 @@ flowchart LR
 | 🛠️ **On the crew** and need admin access | [Admin access & roles](./admin/access), then [the Control Center](./admin/). |
 | 📋 **Organizing** the next burn | [Event checklist](./admin/event-checklist) from first layout to after the event. |
 | 💻 **A developer** | [Local development](./develop/) and [Architecture](./reference/architecture). |
+
+<!-- /audience -->

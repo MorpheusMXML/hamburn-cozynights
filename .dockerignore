@@ -1,0 +1,26 @@
+# Build context of hamburn-cozynights/Dockerfile is the repository root.
+.git
+.github
+.claude
+**/node_modules
+**/.DS_Store
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example
+
+# App: build outputs, local data, test results
+hamburn-cozynights/.svelte-kit
+hamburn-cozynights/build
+hamburn-cozynights/pb_data
+hamburn-cozynights/*.gpg
+hamburn-cozynights/playwright-report
+hamburn-cozynights/test-results
+hamburn-cozynights/html
+hamburn-cozynights/.ssh-keys
+
+# Docs: build outputs and old planning notes
+docs/.vitepress/dist
+docs/.vitepress/cache
+docs/.vitepress/.temp
+docs/superpowers
