@@ -166,6 +166,8 @@ describe('changing a ticket', () => {
 		// the spot stays with the ticket
 		expect(db.data.beds.find((b) => b.id === 'b1')?.order).toBe('o1');
 		expect(outcome.ticket).toMatchObject({
+			code: 'HB-•••01', // never the full code in an answer
+			codeMasked: true,
 			name: '',
 			burnerName: '',
 			pass: false,
@@ -406,6 +408,13 @@ describe('who may do what', () => {
 			request: post({ rows })
 		} as any);
 		expect(preview.roster.diff.changes.map((c: any) => c.code)).toEqual(['HB-3000']);
+		// the stored tickets that are not in the file: shortened codes only
+		expect(preview.roster.diff.notInFile.map((t: any) => t.code)).toEqual([
+			'HB-•••01',
+			'HB-•••02',
+			'HB-•••03'
+		]);
+		expect(JSON.stringify(preview)).not.toContain('HB-1001');
 		const done: any = await ticketActions.importRoster({
 			locals: locals(boss),
 			request: post({ rows, selected: '["hb-3000"]', newHolders: '[]' })

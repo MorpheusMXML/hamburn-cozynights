@@ -15,7 +15,7 @@ Type a ticket code or a complete e-mail address and press <kbd>Enter</kbd>.
 | A ticket code, in any upper and lower case | That ticket |
 | A complete e-mail address | Every ticket with that address. Their codes are shown hidden (`HB-•••01`): an address must not reveal somebody's sign-in. |
 
-Each ticket shows whether its code was used to sign in, its spot (a link to the room page), the burner name, and whether Telegram updates are on. Codes and addresses are sent in the request body, never in the page address, so they don't end up in logs or the browser history.
+Each ticket shows whether its code was used to sign in, its spot (a link to the room page), the burner name, and whether Telegram updates are on. Codes and addresses are sent in the request body, never in the page address, so they don't end up in logs or the browser history. The server only ever answers with shortened codes; the full code is shown only where you typed it.
 
 ## Change the e-mail address <Badge type="tip" text="all admins" />
 
@@ -60,7 +60,7 @@ flowchart LR
 - **The review** lists new tickets, changed tickets (old → new address or name), problem rows, addresses shared by several tickets, tickets that are not in the file, and unchanged ones. Everything new and changed starts ticked; <kbd>All</kbd> ticks or clears a whole group.
 - **Changed address = new holder?** Each changed ticket that holds a spot or a Telegram link has a <kbd>🔁 New holder</kbd> / <kbd>Same holder</kbd> switch: a new holder gets the [hand-over](#a-ticket-passed-on-to-someone-else). It starts on *New holder* when both the address and the name changed, the way a ticket transfer in the shop looks.
 - **Problem rows are left out,** the rest can be imported: codes with other characters than letters, digits, `-` and `_`, broken addresses, a code that is twice in the file, or a code that differs from a stored one only in upper and lower case (the sign-in could mix them up).
-- **Nothing is deleted.** Tickets that aren't in the file stay as they are. Cancelled tickets are removed on the server (`cozy-admin.sh tickets remove`), and only if they hold no spot.
+- **Nothing is deleted.** Tickets that aren't in the file stay as they are; the review lists them with shortened codes. Cancelled tickets are removed on the server (`cozy-admin.sh tickets remove`), and only if they hold no spot.
 - **Empty cells keep what is stored,** so a list without names never wipes the names.
 - **Load the same list again any time,** for example after late ticket sales: the review only shows what changed.
 

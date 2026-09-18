@@ -261,7 +261,10 @@ export async function changeTicket(
 		order = await adminPb.collection('orders').update<OrdersResponse>(order.id, data);
 	}
 
-	const ticket = await describeTicket(adminPb, order, false);
+	// Masked like a search by address: the answer to a change must not hand out
+	// the code of a ticket the admin only found by its address. The page keeps
+	// showing the code the admin typed.
+	const ticket = await describeTicket(adminPb, order, true);
 	return {
 		ticket,
 		maskedCode: maskTicketCode(code),
@@ -349,7 +352,13 @@ export async function previewRoster(
 ): Promise<RosterPreview> {
 	const { entries, problems } = checkRosterRows(rows);
 	const stored = await loadStoredTickets(adminPb);
-	return { diff: diffRoster(entries, stored, problems), stored: stored.length };
+	const diff = diffRoster(entries, stored, problems);
+	// The file doesn't have these codes: only show enough to recognise them.
+	diff.notInFile = diff.notInFile.map((ticket) => ({
+		...ticket,
+		code: maskTicketCode(ticket.code)
+	}));
+	return { diff, stored: stored.length };
 }
 
 function describeError(err: unknown): string {

@@ -91,11 +91,9 @@
 
 	function ticketSaved(index: number, fresh: TicketView) {
 		if (!search) return;
-		// A ticket found by its address keeps the hidden code.
+		// The server answers with the code hidden; keep showing what was shown.
 		const shown = search.tickets[index];
-		search.tickets[index] = shown.codeMasked
-			? { ...fresh, code: shown.code, codeMasked: true }
-			: fresh;
+		search.tickets[index] = { ...fresh, code: shown.code, codeMasked: shown.codeMasked };
 		search = search;
 	}
 
@@ -624,9 +622,8 @@
 							open={false}
 						>
 							<p class="hint">
-								The import never deletes tickets. Cancelled tickets are removed on the server (<code
-									>cozy-admin.sh tickets remove</code
-								>).
+								The import never deletes tickets. Their codes are shown shortened. Cancelled tickets
+								are removed on the server (<code>cozy-admin.sh tickets remove</code>).
 							</p>
 							<ul class="code-list">
 								{#each diff.notInFile as ticket}
