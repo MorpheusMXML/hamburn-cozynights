@@ -34,7 +34,9 @@ write" means an approved `admins` record (see [Security & privacy](./security)).
 - **Contact data is temporary.** `orders.email` and the Telegram links are deleted after the event with `scripts/cozy-admin.sh tickets forget-contacts --yes`.
 - **Orders are the ticket roster.** No admin action deletes them: "clear all
   bookings" and the template import only release beds and clear burner names,
-  so every guest's code keeps working.
+  so every guest's code keeps working. A ticket handed over to a new holder
+  (Tickets page) keeps its bed and code; its `pass_code` and `burner_name`
+  are cleared and its Telegram link is removed.
 - **While booking is live**, the structure is locked on the server: houses
   and rooms can't be added, moved, renamed or deleted, beds can't be added or
   deleted, and templates can't be imported (see [Staging & Live Booking](../guide/phases)).
@@ -43,52 +45,31 @@ write" means an approved `admins` record (see [Security & privacy](./security)).
 
 A template is the camp's structure as JSON: houses with their map positions,
 rooms and beds. It contains no personal data, so layouts can be kept in Git.
-
-```json
-{
-	"name": "Burn Location Template",
-	"exported_at": "2026-09-17T12:00:00.000Z",
-	"version": "1.0",
-	"houses": [
-		{
-			"name": "Haus 1",
-			"x": 100,
-			"y": 200,
-			"rooms": [
-				{
-					"name": "Main Module",
-					"room_number": 1,
-					"amount_beds": 2,
-					"beds": [
-						{ "label": "B1", "enabled": true, "is_locked": false },
-						{ "label": "B2", "enabled": true, "is_locked": false }
-					]
-				}
-			]
-		}
-	]
-}
-```
+The format is described in [Layout templates](../admin/templates#file-format)
+(`format` `cozynights-layout`, version `2.0`; version `1.0` files are still read).
 
 - **Export:** admin dashboard → TEMPLATES → download (any approved admin).
-- **Import:** superusers only, and only in Staging Mode. It replaces all houses,
-  rooms and beds. Bookings on the replaced beds are released, orders stay.
+- **Compare & import:** any admin can compare a file with the camp; superusers
+  apply the chosen differences, only in Staging Mode. Houses are matched by
+  name, rooms by `room_number` within the house, beds by `label` within the
+  room (case-insensitive). The logic is pure code in `src/lib/template-diff.ts`;
+  `src/lib/server/template.ts` applies it.
+- **Order of the writes:** a PocketBase backup, then new records top down (on
+  a failure everything created is deleted again and nothing else happens),
+  then updates, then removals bottom up (beds, rooms, houses). Beds that are
+  not removed keep their bookings; removed booked beds release their
+  booking and the order's burner name is cleared.
 - **Coordinates:** `x`/`y` are positions in the map's 1000 × 700 coordinate
   space, drawn over the built-in map image `static/lageplan-brahmsee.jpg`.
-
-Current limits of the import (format version `1.0`):
-
-- It is not atomic: it deletes the old structure first, then creates records
-  one by one. If it fails halfway, the structure is incomplete. Create a
-  backup in the PocketBase dashboard (Settings → Backups) before importing.
-- The `version` field is not checked, and malformed entries only fail during
-  the import.
-- The map image is not part of the template, so a layout only fits the
+  The map image is not part of the template, so a layout only fits the
   built-in map.
 
 ## Known gaps
 
-- There is no import for the ticket roster (`orders`) in the app yet.
+- The ticket roster (`orders`) is loaded on the admin Tickets page (superusers)
+  or with `cozy-admin tickets import`; there is no unique index on
+  `order_number`, so the app refuses codes that exist twice or differ only in
+  upper and lower case instead.
 - `order_number` is still stored in plain text next to `order_hash`, for
   legacy imports (see [Security & privacy](./security)).
 - PocketBase stores its own settings, including the Google OAuth client

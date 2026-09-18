@@ -51,6 +51,7 @@ const sections: Section[] = [
 				items: [
 					{ text: 'The Control Center', link: '/admin/' },
 					{ text: 'Admin access & roles', link: '/admin/access' },
+					{ text: 'Tickets & e-mail addresses', link: '/admin/tickets' },
 					{ text: 'Notifications', link: '/admin/notifications' },
 					{ text: 'Booking passes', link: '/admin/passes' },
 					{ text: 'Houses, rooms & spots', link: '/admin/camp-layout' },

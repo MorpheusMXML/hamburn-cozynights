@@ -37,7 +37,12 @@
 	let searchError = '';
 	let search: TicketSearch | null = null;
 
-	onMount(() => searchInput?.focus());
+	// Ready to type a code, unless the admin is already typing somewhere else
+	// (the page can take a moment to start on a slow phone).
+	onMount(() => {
+		const active = document.activeElement;
+		if (!active || active === document.body) searchInput?.focus();
+	});
 
 	// Enter submits explicitly: some setups (scanners, automation) don't trigger
 	// the browser's implicit submission.

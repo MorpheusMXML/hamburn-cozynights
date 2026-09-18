@@ -118,7 +118,7 @@ erDiagram
   }
 ```
 
-- **`orders`** is the ticket list: one record per ticket. CozyNights only reads it and writes the burner name. No admin action deletes orders.
+- **`orders`** is the ticket list: one record per ticket. Guests' actions only write the burner name. Admins change e-mail addresses and names on the Tickets page, superusers add tickets from the ticket shop's list there. No admin action deletes orders.
 - **Spots are called `beds`** in the database. A booking is simply a bed with `occupied` set and a link to its order.
 - **`app_settings`** is a single record holding the phase switch and the go-live timer.
 - **`admins`** is its own auth collection for Google sign-in. PocketBase's default `users` collection is unused and closed for sign-up.
@@ -146,6 +146,7 @@ erDiagram
 | `/admin/house/:id` | admins | Rooms of a house |
 | `/admin/room/:id` | admins | Spots of a room |
 | `/admin/check` | admins | Check booking passes: typed code, USB scanner or camera |
+| `/admin/tickets` | admins | Find tickets, change their e-mail address, hand them over; superusers load the ticket list |
 | `/admin/docs/*` | admins | The full documentation, admin pages included |
 | `/admin/api/export-template` | admins | Layout template download |
 

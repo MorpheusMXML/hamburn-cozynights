@@ -17,7 +17,7 @@ timeline
 ## Weeks before: build the camp
 
 - [ ] **Admin access sorted.** Everyone on the crew has signed in once and been approved. See [Admin access & roles](./access).
-- [ ] **Start from last year.** A superuser imports last year's template, or you build from scratch. See [Layout templates](./templates).
+- [ ] **Start from last year.** A superuser drops last year's template on *Compare & Import* and applies it, or you build from scratch. See [Layout templates](./templates).
 - [ ] **Houses on the map.** Every house is placed where it really is. See [Houses, rooms & spots](./camp-layout).
 - [ ] **Rooms and spots complete.** Room names and numbers match the signs on the doors.
 - [ ] **Spot states checked.** New spots are active right away. Deactivate ❄️ the ones that aren't in use; after a template import, look for ⚪️ INACTIVE spots that should be bookable.
@@ -27,7 +27,7 @@ timeline
 
 ## Days before: get ready to open
 
-- [ ] **Ticket codes created.** Test codes for a trial run with testers, the real roster for the event, **with the ticket holders' e-mail addresses** for the confirmations. An operator does this on the server, see [Ticket codes](#ticket-codes).
+- [ ] **Ticket codes created.** Test codes for a trial run with testers, the real roster for the event, **with the ticket holders' e-mail addresses** for the confirmations. A superuser loads the ticket shop's list on the [Tickets](./tickets) page; test codes come from the server, see [Ticket codes](#ticket-codes).
 - [ ] **Notifications checked.** `./scripts/cozy-admin.sh notify test --email you@mauersegler.art` reaches the crew group and your inbox; one booking with a test code brings a confirmation. See [Notifications](./notifications).
 - [ ] **Test run.** Sign in with a real test ticket code in a private browser window. The map shows the countdown, rooms show the right spots.
 - [ ] **Test bookings removed.** If you booked in staging, release those spots again.
@@ -62,7 +62,7 @@ timeline
 
 ## Ticket codes
 
-A ticket code is a guest's whole login, and the list of valid codes lives in the database. CozyNights has no screen for that list. An operator creates the codes **on the server**, with the admin tool that ships with the app, the same one that [manages admin access](./access#managing-admins).
+A ticket code is a guest's whole login, and the list of valid codes lives in the database. The real roster comes from the ticket shop: a superuser loads its CSV export on the [Tickets](./tickets) page, reviews it and picks what to take over. Everything else (test codes, single codes, removing codes) an operator does **on the server**, with the admin tool that ships with the app, the same one that [manages admin access](./access#managing-admins).
 
 ### Codes for a trial run
 
@@ -74,7 +74,7 @@ This creates ten tickets with random codes like `UT-7F3K9Q` and prints them one 
 
 ### The real roster
 
-The ticket shop's export, with e-mail addresses for the booking confirmations:
+The ticket shop's export, with e-mail addresses for the booking confirmations. In the app: 🎟️ **Tickets** → *Load the ticket list*, see [Tickets & e-mail addresses](./tickets#load-the-ticket-list). On the server:
 
 ```bash
 ./scripts/cozy-admin.sh tickets import roster.csv --dry-run   # check first, change nothing
