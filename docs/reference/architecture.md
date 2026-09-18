@@ -114,6 +114,7 @@ erDiagram
 | `/random-bed` | guests with a code | Destiny Roulette |
 | `/impressum` | everyone | Legal notice (German), details from the server's `.env` |
 | `/datenschutz` | everyone | Privacy policy (German) |
+| `/buchungsregeln` | everyone | Booking rules (German), linked from every booking dialog |
 | `/admin/login` | everyone | Google sign-in and the *access requested* page |
 | `/auth/callback/google` | – | Where Google sends admins back to |
 | `/admin` | admins | Control Center |

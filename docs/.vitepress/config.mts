@@ -20,7 +20,7 @@ if (!base.startsWith('/') || !base.endsWith('/')) {
 // Absolute URL of the published site, for the sitemap and link previews. Only
 // known for GitHub Pages; the app serves the docs under whatever domain it runs on.
 const siteUrl = process.env.DOCS_SITE_URL || (base === pagesBase ? pagesUrl : '');
-// The legal notice and privacy policy are pages of the app, not of the docs
+// The legal notice, privacy policy and booking rules are pages of the app, not of the docs
 // (the operator's details live in the app server's .env). Served by the app,
 // the docs link them on the same domain; on GitHub Pages they need the app's
 // address: DOCS_APP_URL, set as a repository variable for the Pages build.
@@ -30,12 +30,13 @@ const appUrl = (process.env.DOCS_APP_URL || (base === pagesBase ? stagingAppUrl 
 );
 const legal = {
 	impressum: `${appUrl}/impressum`,
-	privacy: `${appUrl}/datenschutz`
+	privacy: `${appUrl}/datenschutz`,
+	rules: `${appUrl}/buchungsregeln`
 };
 
 /** Theme settings of this site on top of VitePress' default theme (see theme/LegalLinks.vue). */
 export interface CozyThemeConfig extends DefaultTheme.Config {
-	legal: { impressum: string; privacy: string };
+	legal: { impressum: string; privacy: string; rules: string };
 }
 
 // "Last updated" comes from git, which the Docker build has neither as a
@@ -172,7 +173,7 @@ export default defineConfigWithTheme<CozyThemeConfig>({
 
 		footer: {
 			// Only shown on pages without a sidebar; doc pages get theme/LegalLinks.vue.
-			message: `Made with 🔥 for Hamburn by the Mauersegler* crew. · <a href="${legal.impressum}" target="_self" lang="de">Impressum</a> · <a href="${legal.privacy}" target="_self" lang="de">Datenschutz</a>`,
+			message: `Made with 🔥 for Hamburn by the Mauersegler* crew. · <a href="${legal.impressum}" target="_self" lang="de">Impressum</a> · <a href="${legal.privacy}" target="_self" lang="de">Datenschutz</a> · <a href="${legal.rules}" target="_self" lang="de">Buchungsregeln</a>`,
 			copyright: `<a href="${repo}">Source on GitHub</a>`
 		}
 	}

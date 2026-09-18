@@ -31,6 +31,15 @@ describe('legal page settings (LEGAL_* in .env)', () => {
 		).toBe('p@example.org');
 	});
 
+	it('only accepts web links for the participation terms', () => {
+		expect(parseLegalEnv({}).termsUrl).toBe('');
+		expect(parseLegalEnv({ LEGAL_TERMS_URL: 'https://example.org/tb' }).termsUrl).toBe(
+			'https://example.org/tb'
+		);
+		expect(parseLegalEnv({ LEGAL_TERMS_URL: 'javascript:alert(1)' }).termsUrl).toBe('');
+		expect(parseLegalEnv({ LEGAL_TERMS_URL: 'example.org/tb' }).termsUrl).toBe('');
+	});
+
 	it('falls back to 14 days for an invalid log retention', () => {
 		expect(parseLegalEnv({ LEGAL_LOG_RETENTION_DAYS: '7' }).logRetentionDays).toBe(7);
 		expect(parseLegalEnv({ LEGAL_LOG_RETENTION_DAYS: 'zwei' }).logRetentionDays).toBe(14);

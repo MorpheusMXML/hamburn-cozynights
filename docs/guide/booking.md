@@ -104,10 +104,12 @@ CozyNights works in any mobile browser, no app needed. If you booked on your lap
 ## Privacy: what others see
 
 - Other guests see **which spots are taken** and the **burner name** on them. Nothing else.
-- Other guests never see your ticket code or the name on your ticket.
+- Other guests never see your ticket code or the e-mail address from your ticket order. The crew only uses that address to reach you about your spot, for example if they have to move you.
 - Your burner name is stored encrypted, and your ticket code is never written to logs.
 
 <!-- audience:admin -->
 More details in [Security & privacy](../reference/security).
 <!-- /audience -->
+The **booking rules** (Buchungsregeln), the privacy policy (Datenschutzerklärung) and the legal notice (Impressum) are linked at the bottom of every CozyNights page.
+
 Something not working? See [FAQ & troubleshooting](./faq).

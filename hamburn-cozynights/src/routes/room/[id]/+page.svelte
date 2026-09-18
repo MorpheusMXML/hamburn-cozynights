@@ -1,4 +1,5 @@
 <script lang="ts">
+	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { onDestroy, tick } from 'svelte';
@@ -435,6 +436,7 @@
 						{/if}
 					</div>
 				{/if}
+				<BookingRulesNote />
 			</form>
 		</div>
 	</div>

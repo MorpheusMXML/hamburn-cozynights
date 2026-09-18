@@ -98,10 +98,12 @@ The operator details are LEGAL_* variables in the server's .env
 
 	<h3>Schlafplatzwahl</h3>
 	<p>
-		Mit deinem Ticketcode reservierst du einen Schlafplatz für dein Ticket. Einen Anspruch auf einen
-		bestimmten Platz begründet das nicht: Aus organisatorischen Gründen, etwa aus Sicherheitsgründen
-		oder bei Ausfällen, kann die Crew Plätze umverteilen. Im Übrigen gelten die Teilnahmebedingungen
-		der Veranstaltung.
+		Für die Wahl der Schlafplätze gelten die <a href="/buchungsregeln">Buchungsregeln</a>
+		{#if legal.termsUrl}
+			und die <a href={legal.termsUrl} rel="noopener">Teilnahmebedingungen von Hamburn</a>.
+		{:else}
+			und die Teilnahmebedingungen von Hamburn, die du beim Ticketkauf akzeptiert hast.
+		{/if}
 	</p>
 
 	<h3>Urheberrecht</h3>

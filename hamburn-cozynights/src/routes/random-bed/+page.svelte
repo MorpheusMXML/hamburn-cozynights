@@ -1,4 +1,5 @@
 <script lang="ts">
+	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import SlotMachine from '$lib/components/SlotMachine.svelte';
@@ -262,6 +263,7 @@
 							{isSpinning ? 'CALCULATING FATE...' : 'ROLL THE DICE 🎲'}
 						</button>
 					{/if}
+					<BookingRulesNote />
 				</form>
 			</div>
 		{/if}

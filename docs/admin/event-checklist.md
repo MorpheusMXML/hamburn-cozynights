@@ -75,6 +75,14 @@ This creates ten tickets with random codes like `UT-7F3K9Q` and prints them one 
 xargs ./scripts/cozy-admin.sh tickets add < codes.txt                     # a whole list, one code per line
 ```
 
+**With e-mail addresses.** To reach guests about their spot, for example when the crew has to move them, store each ticket's e-mail address as its label. From a file with one `code,email` pair per line and no header row (about a second per ticket):
+
+```bash
+tr -d '\r' < tickets.csv | while IFS=, read -r code email; do ./scripts/cozy-admin.sh tickets add "$code" --name "$email" < /dev/null; done
+```
+
+`< /dev/null` matters: the admin tool would otherwise read the rest of the file as its input. Delete `tickets.csv` from the server afterwards. `tickets list` then shows the address next to each code. Guests never see it; the privacy policy names it, and it goes with the ticket list after the event (see [After the burn](#after-the-burn)).
+
 Codes may contain letters, digits, `-` and `_`, up to 64 characters. Stick to capitals and digits, because the sign-in field shows every code in capitals. Two codes that differ only in upper and lower case are refused. Codes that already exist are left alone, so the same list can be loaded again after late ticket sales.
 
 ### Check and tidy up

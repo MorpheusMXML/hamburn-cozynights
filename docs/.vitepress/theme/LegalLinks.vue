@@ -1,5 +1,6 @@
 <!--
-Links to the app's legal notice and privacy policy under every doc page.
+Links to the app's legal notice, privacy policy and booking rules under every
+doc page.
 VitePress only shows its footer on pages without a sidebar, so doc pages get
 this instead (see index.ts). The addresses come from `themeConfig.legal` in
 config.mts. target="_self" keeps the VitePress router from treating them as
@@ -17,6 +18,8 @@ const { theme } = useData<CozyThemeConfig>();
 		<a :href="theme.legal.impressum" target="_self" lang="de">Impressum</a>
 		<span aria-hidden="true">·</span>
 		<a :href="theme.legal.privacy" target="_self" lang="de">Datenschutz</a>
+		<span aria-hidden="true">·</span>
+		<a :href="theme.legal.rules" target="_self" lang="de">Buchungsregeln</a>
 	</nav>
 </template>
 

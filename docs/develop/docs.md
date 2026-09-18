@@ -37,7 +37,7 @@ VitePress prints the local address, usually `http://localhost:5173/hamburn-cozyn
 
 Every build **fails on broken internal links**, and a link from a guide page into the admin guide is broken in the public build. `npm run preview` and `npm run preview:public` serve the finished builds.
 
-Three more variables exist for special cases: `DOCS_BASE` is the path the site is served under (default `/hamburn-cozynights/`), `DOCS_SITE_URL` its full public address for the sitemap and link previews (only known for GitHub Pages), and `DOCS_APP_URL` the address of the app, whose Impressum and privacy policy every page links (see [Legal links](#legal-links)).
+Three more variables exist for special cases: `DOCS_BASE` is the path the site is served under (default `/hamburn-cozynights/`), `DOCS_SITE_URL` its full public address for the sitemap and link previews (only known for GitHub Pages), and `DOCS_APP_URL` the address of the app, whose legal pages every page links (see [Legal links](#legal-links)).
 
 ## Pages for both audiences
 
@@ -112,7 +112,7 @@ The repository's Pages source has to be set to **GitHub Actions** (Settings → 
 
 ## Legal links
 
-Every page links the app's Impressum and privacy policy: the home page in its footer, doc pages under their content (`.vitepress/theme/LegalLinks.vue`, because VitePress shows its footer only on pages without a sidebar). The pages themselves belong to the app, see [Legal pages](../admin/legal).
+Every page links the app's Impressum, privacy policy and booking rules: the home page in its footer, doc pages under their content (`.vitepress/theme/LegalLinks.vue`, because VitePress shows its footer only on pages without a sidebar). The pages themselves belong to the app, see [Legal pages](../admin/legal).
 
 - **Served by the app** (`/docs/`, `/admin/docs/`), the links point to `/impressum` and `/datenschutz` on the same domain.
 - **On GitHub Pages** they need the app's address. The Pages build reads it from the repository variable `DOCS_APP_URL`; without it they point to staging. Once production has its domain:

@@ -96,9 +96,8 @@ Operator details are LEGAL_* variables in the server's .env
 	<p>Für die Schlafplatzwahl verarbeiten wir:</p>
 	<ul>
 		<li>
-			deinen <strong>Ticketcode</strong> und eine Bezeichnung zu deinem Ticket aus der Ticketliste (zum
-			Beispiel einen Namen, falls die Orga ihn hinterlegt hat). Beides erhalten wir aus der Ticketverwaltung
-			der Veranstaltung;
+			deinen <strong>Ticketcode</strong> und die <strong>E-Mail-Adresse</strong> aus deiner Ticketbestellung.
+			Beides übernehmen wir aus unserem Ticketverkauf für Hamburn;
 		</li>
 		<li>den <strong>Schlafplatz</strong>, den du wählst, und den Zeitpunkt der Buchung;</li>
 		<li>
@@ -109,10 +108,11 @@ Operator details are LEGAL_* variables in the server's .env
 	</ul>
 	<p>
 		Wir nutzen diese Daten, um die Schlafplätze im Rahmen deiner Teilnahme an der Veranstaltung zu
-		verteilen (Art. 6 Abs. 1 lit. b DSGVO). Den Burner-Namen verarbeiten wir, weil du ihn freiwillig
-		angibst (Einwilligung, Art. 6 Abs. 1 lit. a DSGVO). Solange die Buchung offen ist, kannst du ihn
-		ändern oder deinen Platz freigeben; danach hilft dir die Crew. Burner-Namen speichern wir
-		verschlüsselt.
+		verteilen und dich dazu zu erreichen, etwa wenn die Crew umverteilen muss (Art. 6 Abs. 1 lit. b
+		DSGVO). Deine E-Mail-Adresse sehen andere Gäste nicht, und wir schicken dir darüber keine
+		Werbung. Den Burner-Namen verarbeiten wir, weil du ihn freiwillig angibst (Einwilligung, Art. 6
+		Abs. 1 lit. a DSGVO). Solange die Buchung offen ist, kannst du ihn ändern oder deinen Platz
+		freigeben; danach hilft dir die Crew. Burner-Namen speichern wir verschlüsselt.
 	</p>
 	<p>
 		Nach deiner Anmeldung speichert dein Browser den Ticketcode 30 Tage lang in einem Cookie (<code

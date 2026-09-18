@@ -29,11 +29,26 @@ test.describe('Legal pages', () => {
 		await expect(page.getByText('bookingCode')).toBeVisible();
 	});
 
+	test('the booking rules cover booking, reassignment, names and the houses', async ({ page }) => {
+		await page.goto('/buchungsregeln');
+		await expect(page.getByRole('heading', { level: 1, name: 'Buchungsregeln' })).toBeVisible();
+		for (const section of [
+			'Wer buchen kann',
+			'Kein Anspruch auf einen bestimmten Platz',
+			'Burner-Name',
+			'In den Unterkünften'
+		]) {
+			await expect(page.getByRole('heading', { name: section })).toBeVisible();
+		}
+		await expect(page.locator('main')).toHaveAttribute('lang', 'de');
+	});
+
 	for (const path of ['/', '/map', '/impressum', '/no-such-page']) {
 		test(`one click from ${path} to both pages`, async ({ page }) => {
 			await page.goto(path);
 			const legal = page.getByRole('navigation', { name: 'Legal' });
 			await expect(legal.getByRole('link', { name: 'Impressum' })).toBeVisible();
+			await expect(legal.getByRole('link', { name: 'Buchungsregeln' })).toBeVisible();
 			await legal.getByRole('link', { name: 'Datenschutz' }).click();
 			await expect(page).toHaveURL(/\/datenschutz$/);
 		});

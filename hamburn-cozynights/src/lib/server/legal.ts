@@ -1,5 +1,5 @@
 /**
- * Operator details for the legal pages (/impressum, /datenschutz).
+ * Operator details for the legal pages (/impressum, /datenschutz, /buchungsregeln).
  *
  * They come from LEGAL_* variables in the server's .env, not from the
  * repository: the repository is public, and a postal address doesn't belong
@@ -30,6 +30,8 @@ export interface LegalInfo {
 	logRetentionDays: number;
 	/** When bookings, burner names and the ticket list are deleted. */
 	deletionPeriod: string;
+	/** The event's participation terms (published with the ticket shop), if any. */
+	termsUrl: string;
 	/** Required variables that are not set yet. */
 	missing: string[];
 }
@@ -38,6 +40,11 @@ export const REQUIRED_LEGAL_VARS = ['LEGAL_NAME', 'LEGAL_ADDRESS', 'LEGAL_EMAIL'
 
 const DEFAULT_LOG_RETENTION_DAYS = 14;
 const DEFAULT_DELETION_PERIOD = 'spätestens vier Wochen nach dem Ende der Veranstaltung';
+
+/** Only plain web links; anything else (e.g. `javascript:`) is dropped. */
+function webUrl(value: string): string {
+	return /^https?:\/\/\S+$/i.test(value) ? value : '';
+}
 
 function lines(value: string): string[] {
 	return value
@@ -63,6 +70,7 @@ export function parseLegalEnv(source: Record<string, string | undefined>): Legal
 		supervisoryAuthority: get('LEGAL_SUPERVISORY_AUTHORITY'),
 		logRetentionDays: days > 0 ? days : DEFAULT_LOG_RETENTION_DAYS,
 		deletionPeriod: get('LEGAL_DELETION_PERIOD') || DEFAULT_DELETION_PERIOD,
+		termsUrl: webUrl(get('LEGAL_TERMS_URL')),
 		missing: REQUIRED_LEGAL_VARS.filter((key) => !get(key))
 	};
 }
