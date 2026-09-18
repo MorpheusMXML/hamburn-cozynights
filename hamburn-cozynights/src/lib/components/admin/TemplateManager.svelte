@@ -10,7 +10,7 @@ Staging Mode. Unchanged spots keep their bookings.
 	import { applyAction, deserialize } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { fade, fly } from 'svelte/transition';
-	import { createEventDispatcher } from 'svelte';
+	import { createEventDispatcher, tick } from 'svelte';
 	import { alertDialog, confirmDialog, dialogQueue } from '$lib/dialogs';
 	import { parseTemplate, TEMPLATE_LIMITS, type TemplateSummary } from '$lib/template';
 	import {
@@ -57,6 +57,7 @@ Staging Mode. Unchanged spots keep their bookings.
 	let backupFailed = false;
 	let skipBackup = false;
 	let applied: ApplyOutcome | null = null;
+	let reviewSection: HTMLElement;
 
 	const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 	const layoutLine = (counts: { houses: number; rooms: number; beds: number }) =>
@@ -189,6 +190,9 @@ Staging Mode. Unchanged spots keep their bookings.
 		if (result.type === 'success') {
 			review = result.data?.review as Review;
 			selection = new Set(review.selection);
+			// The review is below both cards: bring it into view.
+			await tick();
+			reviewSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 		} else if (result.type === 'failure') {
 			const data = result.data as { error?: string; errors?: string[] } | undefined;
 			const problems = data?.errors ?? [
@@ -328,15 +332,18 @@ Staging Mode. Unchanged spots keep their bookings.
 					</div>
 				{/if}
 
-				<div class="howto">
-					<h4>How to build a starting layout</h4>
+				<details class="howto">
+					<summary>How to build a starting layout</summary>
 					<ol>
 						<li>In Staging Mode, place your houses on the map and add their rooms and spots.</li>
 						<li>Download the layout and keep the file somewhere safe, e.g. the team drive.</li>
-						<li>On a fresh or reset database, a superuser imports that file here.</li>
+						<li>
+							Next time (or on a fresh database) drop that file on Compare &amp; Import and apply
+							what you need.
+						</li>
 					</ol>
 					<a href={EXAMPLE_URL} download="brahmsee-starter.json">Download example template</a>
-				</div>
+				</details>
 
 				{#if isExporting}
 					<div class="card-loading-overlay" in:fade>
@@ -419,7 +426,12 @@ Staging Mode. Unchanged spots keep their bookings.
 		</div>
 
 		{#if review}
-			<section class="review-section" in:fade={{ duration: 150 }} aria-labelledby="review-title">
+			<section
+				class="review-section"
+				bind:this={reviewSection}
+				in:fade={{ duration: 150 }}
+				aria-labelledby="review-title"
+			>
 				<div class="review-head">
 					<h3 id="review-title">Review: “{review.name}”</h3>
 					<span class="dim">
@@ -706,13 +718,39 @@ Staging Mode. Unchanged spots keep their bookings.
 		line-height: 1.5;
 		color: #999;
 	}
-	.howto h4 {
-		margin: 0 0 0.6rem;
+	.howto summary {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		min-height: 36px;
+		cursor: pointer;
+		list-style: none;
 		font-size: 0.7rem;
 		font-weight: 900;
 		letter-spacing: 1px;
 		text-transform: uppercase;
 		color: #ccc;
+	}
+	.howto summary::-webkit-details-marker {
+		display: none;
+	}
+	.howto summary::before {
+		content: '+';
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 26px;
+		height: 26px;
+		border-radius: 50%;
+		border: 1px solid #333;
+		color: #2dd4bf;
+		font-size: 0.95rem;
+	}
+	.howto[open] summary::before {
+		content: '−';
+	}
+	.howto[open] summary {
+		margin-bottom: 0.6rem;
 	}
 	.howto ol {
 		margin: 0 0 0.9rem;

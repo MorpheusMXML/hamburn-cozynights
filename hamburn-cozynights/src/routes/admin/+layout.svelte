@@ -46,7 +46,7 @@
 				</div>
 
 				<form action="/admin/logout" method="POST" class="logout-form">
-					<button type="submit" class="logout-btn" title="Sign out">
+					<button type="submit" class="logout-btn" title="Sign out {data.admin.email}">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							width="18"
@@ -264,18 +264,26 @@
 		.logo-text {
 			font-size: 1.2rem;
 		}
+		/* One compact row under the logo: pages on the left, sign-out on the right. */
 		.user-area {
-			gap: 0.75rem;
+			width: 100%;
+			justify-content: space-between;
+			gap: 0.5rem;
 		}
-		.user-label {
+		.user-info {
 			display: none;
 		}
-		.user-email {
-			font-size: 0.75rem;
+		.admin-nav {
+			flex-wrap: nowrap;
+			gap: 0.4rem;
+		}
+		.nav-link {
+			padding: 0 0.6rem;
+			font-size: 0.8rem;
 		}
 		.logout-btn {
-			min-height: 44px;
-			padding: 0.5rem 0.9rem;
+			min-height: 40px;
+			padding: 0.4rem 0.7rem;
 		}
 		.admin-content {
 			padding: 1rem;

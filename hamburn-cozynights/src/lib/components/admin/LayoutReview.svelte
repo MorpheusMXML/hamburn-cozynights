@@ -17,7 +17,8 @@ takes its rooms and spots along).
 		type FieldChange,
 		type FieldValue,
 		type HouseDiff,
-		type LayoutDiff
+		type LayoutDiff,
+		type RoomDiff
 	} from '$lib/template-diff';
 
 	export let diff: LayoutDiff;
@@ -100,19 +101,31 @@ takes its rooms and spots along).
 	const describe = (change: FieldChange) =>
 		`${FIELD_LABEL[change.field] ?? change.field}: ${show(change.from)} → ${show(change.to)}`;
 
+	const count = (list: { own: ChangeKind | null }[], kind: ChangeKind) =>
+		list.filter((item) => item.own === kind).length;
+
+	/** "1 new spot · 2 spots not in file (1 booked)" for the spots of a list of rooms. */
+	function spotSummary(rooms: RoomDiff[]): string[] {
+		const spots = rooms.flatMap((room) => room.spots).filter((spot) => spot.own);
+		const missing = spots.filter((spot) => spot.own === 'removed');
+		const booked = missing.filter((spot) => spot.booked > 0).length;
+		return [
+			count(spots, 'new') ? plural(count(spots, 'new'), 'new spot') : '',
+			count(spots, 'changed') ? `${plural(count(spots, 'changed'), 'spot')} changed` : '',
+			missing.length
+				? `${plural(missing.length, 'spot')} not in file${booked ? ` (${booked} booked)` : ''}`
+				: ''
+		];
+	}
+
 	/** "2 new rooms · 5 spots changed" for a folded house. */
 	function inside(house: HouseDiff): string {
 		const rooms = house.rooms.filter((room) => room.own);
-		const spots = house.rooms.flatMap((room) => room.spots).filter((spot) => spot.own);
-		const count = (list: { own: ChangeKind | null }[], kind: ChangeKind) =>
-			list.filter((item) => item.own === kind).length;
 		const bits = [
 			count(rooms, 'new') ? `${plural(count(rooms, 'new'), 'new room')}` : '',
 			count(rooms, 'changed') ? `${plural(count(rooms, 'changed'), 'room')} renamed` : '',
 			count(rooms, 'removed') ? `${plural(count(rooms, 'removed'), 'room')} not in file` : '',
-			count(spots, 'new') ? `${plural(count(spots, 'new'), 'new spot')}` : '',
-			count(spots, 'changed') ? `${plural(count(spots, 'changed'), 'spot')} changed` : '',
-			count(spots, 'removed') ? `${plural(count(spots, 'removed'), 'spot')} not in file` : ''
+			...spotSummary(house.rooms.filter((room) => room.own !== 'new' && room.own !== 'removed'))
 		];
 		return bits.filter(Boolean).join(' · ');
 	}
@@ -237,10 +250,14 @@ takes its rooms and spots along).
 											<span class="badge warn">⚠️ {plural(room.booked, 'booking')}</span>
 										{/if}
 									</div>
-									{#if room.own === 'changed'}
-										<p class="detail">{room.changes.map(describe).join(' · ')}</p>
-									{:else if room.own === 'new'}
+									{#if room.own === 'new'}
 										<p class="detail">{plural(room.spots.length, 'spot')}</p>
+									{:else if room.own !== 'removed'}
+										<p class="detail">
+											{[...room.changes.map(describe), ...spotSummary([room])]
+												.filter(Boolean)
+												.join(' · ')}
+										</p>
 									{/if}
 
 									{#if open.has(room.key)}
@@ -424,7 +441,9 @@ takes its rooms and spots along).
 		width: 20px;
 		height: 20px;
 		flex-shrink: 0;
+		/* accent-color for plain browsers, color for the Tailwind forms plugin */
 		accent-color: #2dd4bf;
+		color: #14b8a6;
 	}
 	.pick input:disabled {
 		cursor: not-allowed;

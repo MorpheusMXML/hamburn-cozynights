@@ -350,6 +350,7 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 		margin-top: 0.1rem;
 		flex-shrink: 0;
 		accent-color: #fb923c;
+		color: #f97316;
 	}
 	.hand-over span {
 		display: flex;

@@ -10,6 +10,7 @@
 	import {
 		TICKET_LIMITS,
 		defaultRosterSelection,
+		defaultTicketName,
 		readRosterFile,
 		type ColumnMap,
 		type RosterChange,
@@ -37,6 +38,14 @@
 	let search: TicketSearch | null = null;
 
 	onMount(() => searchInput?.focus());
+
+	// Enter submits explicitly: some setups (scanners, automation) don't trigger
+	// the browser's implicit submission.
+	function submitOnEnter(event: KeyboardEvent) {
+		if (event.key !== 'Enter' || event.isComposing || searching) return;
+		event.preventDefault();
+		(event.currentTarget as HTMLInputElement).form?.requestSubmit();
+	}
 
 	// Without JavaScript the actions answer with this page: show their result.
 	$: if (form) showFormResult(form);
@@ -247,7 +256,8 @@
 		}
 	}
 
-	const columnLabel = (index: number) => (index >= 0 ? header[index] || `Column ${index + 1}` : '');
+	/** New tickets without a name get the label "Ticket <code>": show that as no name. */
+	const isDefaultName = (change: RosterChange) => change.name === defaultTicketName(change.code);
 </script>
 
 <svelte:head>
@@ -278,12 +288,13 @@
 				type="text"
 				bind:this={searchInput}
 				bind:value={query}
-				placeholder="Ticket code or e-mail address"
+				placeholder="Code or e-mail"
 				autocomplete="off"
 				autocapitalize="off"
 				spellcheck="false"
 				enterkeyhint="search"
 				on:input={() => (searchError = '')}
+				on:keydown={submitOnEnter}
 			/>
 			<button type="submit" class="btn-primary" disabled={searching}>
 				{searching ? 'Searching…' : 'Search'}
@@ -324,7 +335,7 @@
 		title="Load the ticket list"
 		icon="📥"
 		summary={isSuperuser ? 'CSV from the ticket shop' : 'superusers only'}
-		open={isSuperuser && !!preview}
+		open={isSuperuser}
 	>
 		{#if !isSuperuser}
 			<p class="locked">
@@ -423,8 +434,13 @@
 
 					{#if changes.length === 0}
 						<p class="all-set">
-							✅ Nothing to do: every ticket of the file is in the database, with the same address
-							and name.
+							{#if diff.problems.length > 0}
+								✅ Everything else of the file is in the database. The rows under Problems need
+								fixing first.
+							{:else}
+								✅ Nothing to do: every ticket of the file is in the database, with the same address
+								and name.
+							{/if}
 						</p>
 					{/if}
 
@@ -465,8 +481,12 @@
 												on:change={() => toggle(change.key)}
 											/>
 											<code class="row-code">{change.code}</code>
-											<span class="row-email">{change.email || 'no e-mail'}</span>
-											<span class="row-name">{change.name}</span>
+											<span class="row-email" class:muted={!change.email}
+												>{change.email || 'no e-mail'}</span
+											>
+											<span class="row-name" class:muted={isDefaultName(change)}
+												>{isDefaultName(change) ? 'no name' : change.name}</span
+											>
 										</label>
 									</li>
 								{/each}
@@ -508,7 +528,14 @@
 													>
 												{/if}
 												{#if change.nameChanged}
-													<span>👤 <s>{change.before?.name}</s> → <b>{change.name}</b></span>
+													<span
+														>👤 <s
+															>{change.before?.name === defaultTicketName(change.code)
+																? 'no name'
+																: change.before?.name}</s
+														>
+														→ <b>{change.name}</b></span
+													>
 												{/if}
 											</span>
 										</label>
@@ -557,7 +584,9 @@
 								{/each}
 							</ul>
 							<p class="hint">
-								Fix these rows in the file and load it again, or import the rest now.
+								Fix these rows in the file and load it again{changes.length > 0
+									? ', or import the rest now'
+									: ''}.
 							</p>
 						</FoldPanel>
 					{/if}
@@ -850,7 +879,9 @@
 	.row-main input {
 		width: 20px;
 		height: 20px;
+		/* accent-color for plain browsers, color for the Tailwind forms plugin */
 		accent-color: #2dd4bf;
+		color: #14b8a6;
 		flex-shrink: 0;
 	}
 
@@ -896,6 +927,10 @@
 		color: #999;
 		font-size: 0.8rem;
 		text-align: right;
+	}
+	.muted {
+		color: #666;
+		font-style: italic;
 	}
 	.row-diff {
 		grid-column: 3 / 5;
