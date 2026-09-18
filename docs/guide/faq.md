@@ -50,6 +50,10 @@ On your room page (<kbd>🎫 Show booking pass</kbd>) and behind the link in you
 Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page, or send `/stop` to the bot.
 :::
 
+::: details I need a special spot (lower bunk, step-free, quiet, a socket for a medical device)
+Ask the crew for a special-needs spot, even before booking opens: sign in with your ticket code and follow the link on the map while the crew accepts requests. See [Special-needs spot](./special-needs).
+:::
+
 ::: details A spot says "Not available · Reserved by the crew"
 The crew has locked or deactivated it, for example because the bed is broken, kept free on purpose or not in use. Pick another spot.
 :::

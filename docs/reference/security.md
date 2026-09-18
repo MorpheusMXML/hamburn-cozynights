@@ -25,7 +25,8 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 
 - **One ticket, one spot**, enforced on the server, including under parallel requests.
 - **No double bookings.** Simultaneous clicks on the same spot are serialized; exactly one guest gets it.
-- **Locked and inactive spots** are refused by the server, not just hidden in the interface.
+- **Locked, inactive and special-needs spots** are refused by the server, not just hidden in the interface.
+- **Booking while booking is closed** happens in exactly one place: an admin books a spot for an approved special-needs request. The ticket comes from the guest's signed-in session, never from a form field.
 
 ### Messages to guests
 
@@ -34,6 +35,17 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 - **Telegram is opt-in** through a one-time link that works for 30 minutes; only its hash is stored. `/stop` or <kbd>Turn off</kbd> removes the link, and a blocked bot is noticed and forgotten.
 - **No inbound endpoint.** The server fetches the bot's messages itself; there is no public webhook to attack. The bot token lives in the server configuration only and never appears in logs or stored errors.
 - **The mail password** is in the server configuration, and PocketBase keeps a copy in its settings, so it is part of the database and its backups. It belongs to a send-only SMTP user of a sending service (one per environment), never to a mailbox.
+- **Deleted after the event** with `tickets forget-contacts`.
+
+### Special-needs requests
+
+What a guest writes about their needs is often health data (Art. 9 GDPR), so it gets extra care. Details: [Special-needs requests](../admin/special-needs#privacy).
+
+- **Explicit consent** with an unticked checkbox, stored with the time; withdrawing deletes the request right away.
+- **The form asks what is needed, not why**, and says so.
+- **Encrypted at rest** (AES-256-GCM, like burner names); the collection has no API rules, only the app's service account reads it.
+- **Admins only.** Never part of e-mails, Telegram messages, the crew group, logs or the audit log. The crew group hears *that* a request arrived or was decided, without names.
+- **No hint for other guests.** Guest pages never say which spots are special-needs spots; a booked one shows the burner name like any other.
 - **Deleted after the event** with `tickets forget-contacts`.
 
 ### Booking passes

@@ -65,6 +65,7 @@ Open a room by clicking its card on the house page.
 | 🟢 **VACANT ✨** | *Available*: they can book it. |
 | 🔴 **CLAIMED 👥** | *Occupied* with the guest's burner name. |
 | **LOCKED 🔒** | *Not available · Reserved by the crew*. It still counts as a spot, but never as a free one. |
+| **SPECIAL NEEDS ♿** | Like a locked spot: *Not available · Reserved by the crew* while it's free, never counted as free. The crew books it for approved [special-needs requests](./special-needs). Once booked, guests see the burner name, not the mark. |
 | ⚪️ **INACTIVE 🧊** | *Not available · Reserved by the crew* in its room. It isn't counted in any occupancy numbers (map, Control Center, house pages), the roulette never picks it, and nobody can book it. |
 
 ### Spot actions
@@ -72,6 +73,7 @@ Open a room by clicking its card on the house page.
 | Button | Action | During Live Booking |
 | :---: | --- | :---: |
 | 🔒 / 🔓 | **Lock** (block guests) / unlock | <span class="yes">✓</span> allowed |
+| ♿ | **Special** / **normal**: keep the spot for [special-needs requests](./special-needs), or give it back to all guests | <span class="yes">✓</span> allowed |
 | ❄️ / ⚡️ | **Deactivate** / activate | <span class="no">✗</span> |
 | 🔄 | **Toggle occupancy**: mark as taken or free without a ticket | <span class="no">✗</span> |
 | 🗑 | **Delete** the spot | <span class="no">✗</span> |

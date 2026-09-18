@@ -21,10 +21,12 @@ stateDiagram-v2
 | --- | :---: | :---: |
 | Guests: sign in and see the map | <span class="yes">✓</span> blurred, with countdown | <span class="yes">✓</span> |
 | Guests: book, rename, release a spot | <span class="no">✗</span> | <span class="yes">✓</span> |
+| Guests: ask for a [special-needs spot](./special-needs) | <span class="yes">✓</span> while requests are open | <span class="yes">✓</span> while requests are open |
 | Admins: add, rename, move, delete houses | <span class="yes">✓</span> | <span class="no">✗</span> |
 | Admins: add or delete rooms and spots | <span class="yes">✓</span> | <span class="no">✗</span> |
 | Admins: activate / deactivate spots, mark as taken | <span class="yes">✓</span> | <span class="no">✗</span> |
 | Admins: **lock / unlock a spot** | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| Admins: mark special-needs spots ♿, book a spot for a request | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | Admins: export a layout template | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | Superusers: import a layout template | <span class="yes">✓</span> | <span class="no">✗</span> |
 

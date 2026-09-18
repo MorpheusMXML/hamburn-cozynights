@@ -64,7 +64,7 @@ Importing is refused during Live Booking and for regular admins; they see the im
 | `houses[]` | **Required.** Everything else is optional. |
 | `name`, `x`, `y` | House name and pin position. The map is 1000 × 700 units, `0/0` is the top-left corner. |
 | `rooms[]` | Rooms of the house: `name`, `room_number`, `amount_beds`. |
-| `beds[]` | Spots of the room: `label`, `enabled` (active), `is_locked`. |
+| `beds[]` | Spots of the room: `label`, `enabled` (active), `is_locked`, and `"is_special": true` for a [special-needs spot](./special-needs) (left out otherwise). |
 
 > [!NOTE]
 > Only spots listed in `beds` are created. `amount_beds` is stored as information but does not create spots on import. `name`, `exported_at` and `version` describe the file and are not imported.

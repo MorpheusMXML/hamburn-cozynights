@@ -8,8 +8,8 @@ One Telegram bot per environment, two kinds of chats:
 
 | Chat | Who is in it | What happens there |
 | --- | --- | --- |
-| **Crew group** (private) | the admins | The bot **reports**: access requests, approvals, sign-ins, phase switches, bulk actions, failed guest messages. It takes no commands. Nobody can approve or change anything from Telegram. |
-| **A guest's own chat** | one guest and the bot, nobody else | Only if the guest connects it on their room page: the booking confirmation and every change of their spot. Guests never join a group and see nothing about other guests. |
+| **Crew group** (private) | the admins | The bot **reports**: access requests, approvals, sign-ins, phase switches, bulk actions, special-needs requests (never who or what they wrote), failed guest messages. It takes no commands. Nobody can approve or change anything from Telegram. |
+| **A guest's own chat** | one guest and the bot, nobody else | Only if the guest connects it on their room page or their special-needs request: the booking confirmation, every change of their spot and the crew's decision on their request. Guests never join a group and see nothing about other guests. |
 
 ::: tip Why approvals stay on the server
 A Telegram account isn't your Google Workspace account: it has no enforced 2-Step Verification and could be lost or taken over. Approving admins therefore stays where the Google identity is checked: `./scripts/cozy-admin.sh approve <email>` on the server. The group message tells you who is waiting and shows the command.
@@ -36,6 +36,7 @@ A guest hears from CozyNights when their spot changes:
 | A spot is booked | **Your CozyNights spot:** house, room and spot, with links to the room and to the [booking pass](./passes) |
 | The spot changes (the guest moves, or the crew moves them) | **Your CozyNights spot changed**, with the old and the new spot and the pass link |
 | The spot is gone (released by the guest, freed by an admin, its room or house deleted, **Clear all bookings**, a template import) | **Your CozyNights spot was released**, with a link to the map |
+| A [special-needs request](./special-needs) arrives · is approved · is declined | **We got your special-needs request** · **…was approved** · **About your special-needs request**. Approved and booked at once: one message, **Your special-needs spot:** with the pass. What the guest wrote is never in a message. |
 
 - **One message per change.** A move is one "changed" message, never "released" plus "booked". Changes within about ten seconds are combined, and two messages about the same ticket are at least two minutes apart.
 - **E-mail goes to the address of the ticket.** Guests never type an address: it comes with the [ticket import](#ticket-codes-with-e-mail-addresses). On their room page they see where confirmations go, shortened to `m•••@example.com`.
@@ -55,9 +56,12 @@ Every message here is also kept in the audit log (collection `admin_events` in t
 | 🎪 LIVE BOOKING switched ON · 🛠 Booking closed | Somebody flips the phase switch, with their name |
 | ⏰ Go-live timer set · removed | With the opening time and who set it |
 | 🎪 Booking is LIVE now | The go-live timer fired |
-| 🧨 All bookings cleared | With the number of released spots |
+| 🧨 All bookings cleared | With the number of released spots, and of special-needs spots kept |
 | 🗺️ Layout template imported | With the template's size, released bookings and the backup |
 | 🏚️ House deleted | Only when bookings went with it |
+| 🧡 New special-needs request · A guest withdrew their request | With the number waiting and a link to ♿ **Special needs**; never the guest's name or text |
+| ✅ approved · ✋ declined · ♿ spot booked · ♿ spot released | An admin decided on a [special-needs request](./special-needs), with their name |
+| 🧡 Special-needs requests OPENED · closed | Somebody flips the requests switch, with their name |
 | 📭 Could not notify ticket | A guest message failed for good |
 
 If Telegram is down, the messages wait and go out later.
@@ -119,7 +123,7 @@ Then check on the server:
 ./scripts/cozy-admin.sh tickets forget-contacts --yes
 ```
 
-Deletes every guest address and Telegram link. The ticket codes stay, and so does the audit log.
+Deletes every guest address, every Telegram link and every [special-needs request](./special-needs). The ticket codes and bookings stay, and so does the audit log.
 
 ## When something doesn't arrive
 
