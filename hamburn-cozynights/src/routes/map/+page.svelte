@@ -2,6 +2,7 @@
 	import type { PageData } from './$types';
 	import Map from '$lib/components/Map.svelte';
 	import CountdownTimer from '$lib/components/CountdownTimer.svelte';
+	import LegalLinks from '$lib/components/LegalLinks.svelte';
 	import { onMount } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 
@@ -116,6 +117,7 @@
 			</div>
 		</div>
 	{/if}
+	<div class="map-legal"><LegalLinks /></div>
 </div>
 
 <style>
@@ -203,9 +205,23 @@
 		backdrop-filter: blur(10px);
 	}
 
+	.map-legal {
+		position: absolute;
+		left: 50%;
+		bottom: max(8px, env(safe-area-inset-bottom));
+		transform: translateX(-50%);
+		z-index: 100;
+		padding: 0 0.6rem;
+		border-radius: 999px;
+		background: rgba(5, 5, 5, 0.7);
+		backdrop-filter: blur(8px);
+		white-space: nowrap;
+	}
+
 	.floating-action-bar {
 		position: absolute;
-		bottom: max(24px, env(safe-area-inset-bottom));
+		/* Above the legal links row. */
+		bottom: calc(max(8px, env(safe-area-inset-bottom)) + 36px);
 		left: 50%;
 		transform: translateX(-50%);
 		z-index: 100;

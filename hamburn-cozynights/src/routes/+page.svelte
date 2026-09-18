@@ -4,6 +4,7 @@
 	import { onMount, tick } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
 	import EffigyTitle from '$lib/components/EffigyTitle.svelte';
+	import LegalLinks from '$lib/components/LegalLinks.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	export let data: PageData;
@@ -199,11 +200,17 @@
 					>Already signed in on this device? Continue to the map →</a
 				>
 			{/if}
+
+			<p class="privacy-note">
+				Signing in keeps your ticket code in a cookie on this device. No tracking.
+				<a href="/datenschutz" lang="de">Datenschutzerklärung</a>
+			</p>
 		</div>
 	</div>
 
 	<footer class="hero-footer">
 		<a class="footer-link" href="/docs/guide/" target="_blank" rel="noopener">Help &amp; FAQ</a>
+		<LegalLinks />
 		<a class="footer-link crew" href="/admin/login" aria-label="Crew login">
 			<span aria-hidden="true">🔒</span> Crew
 		</a>
@@ -438,6 +445,19 @@
 		padding: 0 20px max(16px, env(safe-area-inset-bottom));
 	}
 
+	/* Phones: help and crew on one row, the legal links centered below. */
+	@media (max-width: 520px) {
+		.hero-footer {
+			flex-wrap: wrap;
+			row-gap: 0.25rem;
+		}
+		.hero-footer :global(.legal-links) {
+			order: 3;
+			width: 100%;
+			justify-content: center;
+		}
+	}
+
 	.footer-link {
 		display: inline-flex;
 		align-items: center;
@@ -495,6 +515,24 @@
 	}
 
 	.continue-link:hover {
+		color: #fff;
+	}
+
+	.privacy-note {
+		margin: 0.9rem auto 0;
+		max-width: 30rem;
+		color: #8a8a8a;
+		font-size: 0.78rem;
+		line-height: 1.5;
+	}
+
+	.privacy-note a {
+		color: #b5b5b5;
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+
+	.privacy-note a:hover {
 		color: #fff;
 	}
 

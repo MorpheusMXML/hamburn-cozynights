@@ -394,7 +394,8 @@
 						aria-describedby="guestName-hint"
 					/>
 					<small id="guestName-hint" class="field-hint"
-						>Leave it empty and the slot machine rolls one for you 🎰</small
+						>Other ticket holders see this name next to your spot. Leave it empty and the slot
+						machine rolls one for you 🎰</small
 					>
 				</div>
 

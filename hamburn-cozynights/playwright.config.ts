@@ -22,7 +22,7 @@ export default defineConfig({
 		{
 			name: 'webkit-iphone',
 			use: { ...devices['iPhone 14'] },
-			testMatch: /map\.test\.ts/
+			testMatch: /(map|landing|legal)\.test\.ts/
 		}
 	],
 	webServer: {
