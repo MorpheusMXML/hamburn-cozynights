@@ -1,30 +1,31 @@
 // src/lib/server/template.ts
 /**
- * Layout templates against PocketBase: building the export, the numbers shown
- * in the import preview, the pre-import backup and the import itself.
+ * Layout templates against PocketBase: the export, the comparison of a
+ * template with the camp (the review in the Burn Template Manager), the
+ * safety backup, and applying the changes the admin chose
+ * (docs/admin/templates.md).
  */
 import type { TypedPocketBase } from '$lib/pocketbase-types';
 import { buildTemplate, type LayoutTemplate } from '$lib/template';
+import {
+	changeKeys,
+	diffLayout,
+	normalizeSelection,
+	planChanges,
+	planSize,
+	type ApplyOutcome,
+	type CampRecords,
+	type LayoutDiff,
+	type LayoutPlan
+} from '$lib/template-diff';
+
+export type { ApplyOutcome };
+
+type LevelCounts = ApplyOutcome['created'];
 
 const BACKUP_PREFIX = 'pre-import-';
 /** Older pre-import backups are removed, so repeated imports can't fill the disk. */
 const BACKUPS_KEPT = 10;
-
-export interface CampCounts {
-	houses: number;
-	rooms: number;
-	beds: number;
-	/** Spots that are currently booked or marked as taken. */
-	bookings: number;
-}
-
-export interface ImportOutcome {
-	/** File name of the backup made before the import, null when it was skipped. */
-	backup: string | null;
-	releasedBookings: number;
-	/** Old records that could not be deleted after the new layout was in place. */
-	leftovers: number;
-}
 
 /** An import that did not happen. `message` is written for the admin. */
 export class TemplateImportError extends Error {
@@ -48,22 +49,28 @@ export async function exportTemplate(pb: TypedPocketBase): Promise<LayoutTemplat
 	return buildTemplate({ houses, rooms, beds });
 }
 
-export async function getCampCounts(pb: TypedPocketBase): Promise<CampCounts> {
-	// requestKey null: two of these hit the same endpoint, and a per-request
-	// client would auto-cancel the first one.
-	const count = (collection: 'houses' | 'rooms' | 'beds', filter = '') =>
+/**
+ * The camp as the comparison needs it: record ids and bookings, and every field
+ * of the spots, because buildTemplate decides which of them a template holds.
+ */
+export async function loadCamp(pb: TypedPocketBase): Promise<CampRecords> {
+	// requestKey null: parallel requests of one client must not cancel each other.
+	const [houses, rooms, beds] = await Promise.all([
+		pb.collection('houses').getFullList({ fields: 'id,created,name,x,y', requestKey: null }),
 		pb
-			.collection(collection)
-			.getList(1, 1, { filter, fields: 'id', requestKey: null })
-			.then((page) => page.totalItems);
-
-	const [houses, rooms, beds, bookings] = await Promise.all([
-		count('houses'),
-		count('rooms'),
-		count('beds'),
-		count('beds', 'occupied = true || order != ""')
+			.collection('rooms')
+			.getFullList({ fields: 'id,created,house,name,room_number', requestKey: null }),
+		pb.collection('beds').getFullList({ requestKey: null })
 	]);
-	return { houses, rooms, beds, bookings };
+	return { houses, rooms, beds } as CampRecords;
+}
+
+/** What applying the template could change (the review). Changes nothing. */
+export async function compareTemplate(
+	pb: TypedPocketBase,
+	template: LayoutTemplate
+): Promise<LayoutDiff> {
+	return diffLayout(await loadCamp(pb), template);
 }
 
 function describeError(err: unknown): string {
@@ -120,96 +127,45 @@ async function deleteAll(
 	return failed;
 }
 
-let importRunning = false;
-
 /**
- * Replaces the camp's structure with `template` (already validated).
- *
- * PocketBase has no transaction over several requests, so the order makes it
- * safe: the new layout is created completely while the old one still exists.
- * If anything fails, the records created so far are removed again and the old
- * camp is untouched. Only a complete new layout replaces the old records.
- *
- * @throws {TemplateImportError} when nothing was imported
+ * Creates the new houses, rooms and spots, top down. PocketBase has no
+ * transaction over several requests: if one fails, what was created so far is
+ * removed again and nothing else of the import happens.
  */
-export async function importTemplate(
-	pb: TypedPocketBase,
-	template: LayoutTemplate,
-	options: { skipBackup?: boolean } = {}
-): Promise<ImportOutcome> {
-	if (importRunning) {
-		throw new TemplateImportError(
-			'Another import is running right now. Wait until it has finished, then check the layout before you import again.',
-			409
-		);
-	}
-	importRunning = true;
-	try {
-		let backup: string | null = null;
-		if (!options.skipBackup) {
-			try {
-				backup = await createBackup(pb);
-			} catch (err) {
-				console.error('[Template import] Backup failed:', err);
-				throw new TemplateImportError(
-					`The safety backup could not be created (${describeError(err)}), so nothing was imported and your layout is unchanged. Try again in a minute. If it keeps failing, you can import without a backup.`,
-					500,
-					true
-				);
-			}
-		}
-		return { backup, ...(await replaceLayout(pb, template)) };
-	} finally {
-		importRunning = false;
-	}
-}
-
-async function replaceLayout(pb: TypedPocketBase, template: LayoutTemplate) {
-	const [oldHouses, oldRooms, oldBeds] = await Promise.all([
-		pb.collection('houses').getFullList({ fields: 'id' }),
-		pb.collection('rooms').getFullList({ fields: 'id' }),
-		pb.collection('beds').getFullList({ fields: 'id,occupied,order' })
-	]).catch((err) => {
-		console.error('[Template import] Could not read the current layout:', err);
-		throw new TemplateImportError(
-			`The current layout could not be read (${describeError(err)}). Nothing was changed. Try again.`
-		);
-	});
-
+async function createAll(pb: TypedPocketBase, plan: LayoutPlan): Promise<LevelCounts> {
+	const houseIds = new Map<string, string>();
+	const roomIds = new Map<string, string>();
 	const created = { houses: [] as string[], rooms: [] as string[], beds: [] as string[] };
 	let where = '';
 	try {
-		for (const [houseIndex, house] of template.houses.entries()) {
-			where = `houses[${houseIndex}] "${house.name}"`;
-			const houseRecord = await pb
+		for (const house of plan.createHouses) {
+			where = `house "${house.name}"`;
+			const record = await pb
 				.collection('houses')
 				.create({ name: house.name, x: house.x, y: house.y });
-			created.houses.push(houseRecord.id);
-
-			for (const [roomIndex, room] of house.rooms.entries()) {
-				const roomWhere = `houses[${houseIndex}] "${house.name}" > rooms[${roomIndex}] "${room.name}"`;
-				where = roomWhere;
-				const roomRecord = await pb.collection('rooms').create({
-					name: room.name,
-					room_number: room.room_number,
-					amount_beds: room.beds.length,
-					house: houseRecord.id
-				});
-				created.rooms.push(roomRecord.id);
-
-				for (const [bedIndex, bed] of room.beds.entries()) {
-					where = `${roomWhere} > beds[${bedIndex}] "${bed.label}"`;
-					const bedRecord = await pb.collection('beds').create({
-						label: bed.label,
-						enabled: bed.enabled,
-						is_locked: bed.is_locked,
-						is_special: bed.is_special === true,
-						occupied: false,
-						room: roomRecord.id
-					});
-					created.beds.push(bedRecord.id);
-				}
-			}
+			houseIds.set(house.key, record.id);
+			created.houses.push(record.id);
+		}
+		for (const room of plan.createRooms) {
+			where = `room "${room.name}" of "${room.houseName}"`;
+			const house = room.houseId ?? houseIds.get(room.houseKey);
+			if (!house) throw new Error('its house is missing');
+			const record = await pb.collection('rooms').create({
+				name: room.name,
+				room_number: room.room_number,
+				amount_beds: room.spots,
+				house
+			});
+			roomIds.set(room.key, record.id);
+			created.rooms.push(record.id);
+		}
+		for (const spot of plan.createSpots) {
+			where = `spot "${spot.bed.label}" in "${spot.roomName}" of "${spot.houseName}"`;
+			const room = spot.roomId ?? roomIds.get(spot.roomKey);
+			if (!room) throw new Error('its room is missing');
+			// Every field the template knows about the spot, whatever they are.
+			const record = await pb.collection('beds').create({ ...spot.bed, occupied: false, room });
+			created.beds.push(record.id);
 		}
 	} catch (err) {
 		console.error(`[Template import] Creating ${where} failed, rolling back:`, err);
@@ -219,39 +175,152 @@ async function replaceLayout(pb: TypedPocketBase, template: LayoutTemplate) {
 			(await deleteAll(pb, 'houses', created.houses));
 		const aftermath =
 			stuck === 0
-				? 'Everything created so far was removed again. Your previous layout and all bookings are unchanged.'
-				: `Your previous layout and all bookings are unchanged, but ${stuck} half-imported records could not be removed. Delete them in the editor.`;
+				? 'Everything created so far was removed again. Your layout and all bookings are unchanged.'
+				: `Your layout and all bookings are unchanged, but ${stuck} half-imported records could not be removed. Delete them in the editor.`;
 		throw new TemplateImportError(
 			`The database refused ${where} (${describeError(err)}). ${aftermath}`
 		);
 	}
+	return { houses: created.houses.length, rooms: created.rooms.length, spots: created.beds.length };
+}
 
-	// The new layout is complete. From here on nothing is rolled back.
-	let leftovers = 0;
-	let releasedBookings = 0;
-	for (const bed of oldBeds.filter((bed) => bed.occupied || bed.order)) {
-		try {
-			await pb.collection('beds').update(bed.id, { occupied: false, order: null });
-			releasedBookings++;
-		} catch (err) {
-			if (!isNotFound(err)) console.error(`[Template import] Could not release ${bed.id}:`, err);
-		}
+let importRunning = false;
+
+/**
+ * Applies the chosen changes of `template` (already validated). The camp is
+ * read and compared again here: the review in the browser is only a courtesy.
+ * A change that is no longer needed is skipped.
+ *
+ * Order: backup, new records (all or nothing), then changes, then removals
+ * (spots before rooms before houses). Changes and removals that fail are
+ * reported; the rest stays applied.
+ *
+ * @throws {TemplateImportError} when nothing was changed
+ */
+export async function applyTemplate(
+	pb: TypedPocketBase,
+	template: LayoutTemplate,
+	selected: string[],
+	options: { skipBackup?: boolean } = {}
+): Promise<ApplyOutcome> {
+	if (importRunning) {
+		throw new TemplateImportError(
+			'Another import is running right now. Wait until it has finished, then check the layout before you import again.',
+			409
+		);
 	}
-	leftovers += await deleteAll(
-		pb,
-		'beds',
-		oldBeds.map((bed) => bed.id)
-	);
-	leftovers += await deleteAll(
-		pb,
-		'rooms',
-		oldRooms.map((room) => room.id)
-	);
-	leftovers += await deleteAll(
-		pb,
-		'houses',
-		oldHouses.map((house) => house.id)
-	);
+	importRunning = true;
+	try {
+		let camp: CampRecords;
+		try {
+			camp = await loadCamp(pb);
+		} catch (err) {
+			console.error('[Template import] Could not read the current layout:', err);
+			throw new TemplateImportError(
+				`The current layout could not be read (${describeError(err)}). Nothing was changed. Try again.`
+			);
+		}
 
-	return { releasedBookings, leftovers };
+		const diff = diffLayout(camp, template);
+		const known = new Set(changeKeys(diff));
+		const wanted = [...new Set(selected)];
+		const plan = planChanges(diff, normalizeSelection(diff, wanted));
+		const outcome: ApplyOutcome = {
+			backup: null,
+			created: { houses: 0, rooms: 0, spots: 0 },
+			updated: { houses: 0, rooms: 0, spots: 0 },
+			removed: { houses: 0, rooms: 0, spots: 0 },
+			releasedBookings: 0,
+			skipped: wanted.filter((key) => !known.has(key)).length,
+			problems: [],
+			namesCleared: true
+		};
+		if (planSize(plan) === 0) return outcome;
+
+		if (!options.skipBackup) {
+			try {
+				outcome.backup = await createBackup(pb);
+			} catch (err) {
+				console.error('[Template import] Backup failed:', err);
+				throw new TemplateImportError(
+					`The safety backup could not be created (${describeError(err)}), so nothing was imported and your layout is unchanged. Try again in a minute. If it keeps failing, you can import without a backup.`,
+					500,
+					true
+				);
+			}
+		}
+
+		outcome.created = await createAll(pb, plan);
+
+		// From here on nothing is rolled back: each step stands on its own.
+		const attempt = async (what: string, step: () => Promise<unknown>) => {
+			try {
+				await step();
+				return true;
+			} catch (err) {
+				if (isNotFound(err)) return false;
+				console.error(`[Template import] ${what} failed:`, err);
+				outcome.problems.push(`${what}: ${describeError(err)}`);
+				return false;
+			}
+		};
+
+		for (const house of plan.updateHouses) {
+			const done = await attempt(`Updating house "${house.name}"`, () =>
+				pb.collection('houses').update(house.id, { name: house.name, x: house.x, y: house.y })
+			);
+			if (done) outcome.updated.houses++;
+		}
+		for (const room of plan.updateRooms) {
+			const done = await attempt(`Renaming room "${room.name}"`, () =>
+				pb.collection('rooms').update(room.id, { name: room.name })
+			);
+			if (done) outcome.updated.rooms++;
+		}
+		for (const spot of plan.updateSpots) {
+			const done = await attempt(`Changing spot ${spot.label}`, () =>
+				pb.collection('beds').update(spot.id, spot.fields)
+			);
+			if (done) outcome.updated.spots++;
+		}
+
+		const bookedBy = new Map(camp.beds.map((bed) => [bed.id, bed.order ?? '']));
+		const released = new Set<string>();
+		for (const spot of plan.removeSpots) {
+			const done = await attempt(`Removing spot ${spot.label}`, () =>
+				pb.collection('beds').delete(spot.id)
+			);
+			if (!done) continue;
+			outcome.removed.spots++;
+			if (spot.booked) outcome.releasedBookings++;
+			const order = bookedBy.get(spot.id);
+			if (order) released.add(order);
+		}
+		for (const room of plan.removeRooms) {
+			const done = await attempt(`Removing room "${room.name}"`, () =>
+				pb.collection('rooms').delete(room.id)
+			);
+			if (done) outcome.removed.rooms++;
+		}
+		for (const house of plan.removeHouses) {
+			const done = await attempt(`Removing house "${house.name}"`, () =>
+				pb.collection('houses').delete(house.id)
+			);
+			if (done) outcome.removed.houses++;
+		}
+
+		// The names chosen for released bookings go with them; the tickets stay.
+		for (const order of released) {
+			try {
+				await pb.collection('orders').update(order, { burner_name: '' });
+			} catch (err) {
+				if (isNotFound(err)) continue;
+				outcome.namesCleared = false;
+				console.error(`[Template import] Could not clear the burner name of ${order}:`, err);
+			}
+		}
+		return outcome;
+	} finally {
+		importRunning = false;
+	}
 }

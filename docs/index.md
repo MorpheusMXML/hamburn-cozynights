@@ -64,7 +64,7 @@ features:
     linkText: Admin access
   - icon: 💾
     title: Layout templates
-    details: Export the whole camp as JSON and rebuild it for the next burn in one step.
+    details: Export the whole camp as JSON. A file is compared with the camp first, and only the changes you pick are applied.
     link: /admin/templates
     linkText: Templates
 ---

@@ -57,7 +57,9 @@ Every message here is also kept in the audit log (collection `admin_events` in t
 | ⏰ Go-live timer set · removed | With the opening time and who set it |
 | 🎪 Booking is LIVE now | The go-live timer fired |
 | 🧨 All bookings cleared | With the number of released spots, and of special-needs spots kept |
-| 🗺️ Layout template imported | With the template's size, released bookings and the backup |
+| 🗺️ Layout template applied | What was created, changed and removed, released bookings and the backup |
+| 🎟️ Ticket changed | A new address, a new name or a hand-over on the Tickets page, with the code and addresses shortened (`H•••`, `a•••@example.org`) |
+| 📥 Ticket list imported | How many tickets were created, updated and handed over |
 | 🏚️ House deleted | Only when bookings went with it |
 | 🧡 New special-needs request · A guest withdrew their request | With the number waiting and a link to ♿ **Special needs**; never the guest's name or text |
 | ✅ approved · ✋ declined · ♿ spot booked · ♿ spot released | An admin decided on a [special-needs request](./special-needs), with their name |
@@ -68,7 +70,9 @@ If Telegram is down, the messages wait and go out later.
 
 ## Ticket codes with e-mail addresses
 
-Confirmations need the ticket holders' addresses, and they come with the ticket list. Export the list from the ticket shop as a CSV file and load it on the server:
+Confirmations need the ticket holders' addresses, and they come with the ticket list. Export the list from the ticket shop as a CSV file. A superuser loads it on the **Tickets** page, sees what is new or changed and picks what to take over; single addresses are fixed there as well, also when a ticket was passed on. See [Tickets & e-mail addresses](./tickets).
+
+Operators can load the same file on the server:
 
 ```bash
 ./scripts/cozy-admin.sh tickets import roster.csv --dry-run   # check the file, change nothing
@@ -88,7 +92,7 @@ HB-1002;grace@example.org;Grace Hopper
 - **Nothing is deleted.** Tickets that aren't in the file stay; the tool says how many.
 - **Several tickets may share one address,** for example when one person bought for friends. Each ticket gets its own messages.
 
-A single ticket: `./scripts/cozy-admin.sh tickets add HB-1003 --email linus@example.com --name "Linus"`. `tickets list` shows the address and a Telegram link per ticket. More on codes: [Ticket codes](./event-checklist#ticket-codes).
+A single ticket: `./scripts/cozy-admin.sh tickets add HB-1003 --email linus@example.com --name "Linus"`. `tickets list` shows the address and a Telegram link per ticket. More on codes: [Ticket codes](./event-checklist#ticket-codes). To change one address, search the ticket on the Tickets page instead.
 
 ## Setting it up
 

@@ -9,12 +9,12 @@ After signing in you land in the **Control Center** at `/admin`: one page to bui
 | Control | What it does |
 | --- | --- |
 | <kbd>ADMIN GUIDE 📖</kbd> | Opens this documentation in a new tab, admin pages included. |
-| <kbd>TEMPLATES 💾</kbd> | Opens the **Burn Template Manager** to export or import the camp layout. See [Layout templates](./templates). |
+| <kbd>TEMPLATES 💾</kbd> | Opens the **Burn Template Manager** to export the camp layout, or compare a layout file with the camp and take over what you pick. See [Layout templates](./templates). |
 | <kbd>SHOW INTEL 📊</kbd> | Shows or hides the statistics panel. |
 | <kbd>🛠 STAGING MODE</kbd> / <kbd>🎪 LIVE BOOKING ACTIVE</kbd> | Shows the current phase. Click to switch. See [Staging & Live Booking](../guide/phases). |
 | <kbd>🛰️ LIST VIEW</kbd> / <kbd>🗺️ MAP VIEW</kbd> | Switches between the map editor and house cards. |
 
-The top bar on every admin page shows <kbd>♿ Special needs</kbd> with the number of requests waiting for a decision (see [Special-needs requests](./special-needs)), <kbd>🎫 Check passes</kbd> (see [Booking passes](./passes)), the account you're signed in with, a **SUPERUSER ⚡️** badge if you are one, and <kbd>Eject 🚀</kbd> to sign out.
+The top bar on every admin page shows <kbd>🎟️ Tickets</kbd> (find a ticket, change its e-mail address, load the ticket list; see [Tickets & e-mail addresses](./tickets)), <kbd>♿ Special needs</kbd> with the number of requests waiting for a decision (see [Special-needs requests](./special-needs)), <kbd>🎫 Check passes</kbd> (see [Booking passes](./passes)), the account you're signed in with (not on phones), a **SUPERUSER ⚡️** badge if you are one, and <kbd>Eject 🚀</kbd> to sign out.
 
 ## Go-live timer
 
@@ -83,7 +83,8 @@ The Control Center stays fully usable for watching: statistics, occupancy, templ
 ## Next
 
 - [Houses, rooms & spots](./camp-layout): building the camp in detail
-- [Layout templates](./templates): export and import
+- [Tickets & e-mail addresses](./tickets): find a ticket, fix its address, hand it over, load the ticket list
+- [Layout templates](./templates): export, compare and import
 - [Notifications](./notifications): booking e-mails, Telegram for guests and the crew group
 - [Booking passes](./passes): checking guests in with the QR code
 - [Event checklist](./event-checklist): from the first layout to after the burn

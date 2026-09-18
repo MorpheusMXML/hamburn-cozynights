@@ -503,25 +503,44 @@ cozyTickets.addCommand(cozyTicketsAdd);
 
 // --- tickets import: the roster with e-mail addresses -------------------------
 
-/** A CSV file as rows of fields; the delimiter (, ; or tab) is taken from the header. */
+/**
+ * A CSV file as rows of fields. The delimiter (, ; or tab) is taken from the
+ * first line that isn't blank, or from Excel's "sep=;" line in front. A quote
+ * only opens a quoted field at the start of a field, so a stray quote in a
+ * name can't swallow the following rows. Same rules as src/lib/tickets.ts.
+ */
 function cozyParseCsv(text) {
-	const src = String(text).replace(/^﻿/, '');
-	const header = src.split(/\r?\n/, 1)[0] || '';
-	const counts = { ',': 0, ';': 0, '\t': 0 };
-	let quoted = false;
-	for (let i = 0; i < header.length; i++) {
-		const c = header.charAt(i);
-		if (c === '"') quoted = !quoted;
-		else if (!quoted && counts[c] !== undefined) counts[c]++;
+	const lines = String(text).replace(/^\uFEFF/, '').split(/\r?\n/);
+	let first = -1;
+	for (let i = 0; i < lines.length; i++) {
+		if (lines[i].trim() !== '') {
+			first = i;
+			break;
+		}
 	}
 	let delimiter = ',';
-	if (counts[';'] > counts[delimiter]) delimiter = ';';
-	if (counts['\t'] > counts[delimiter]) delimiter = '\t';
+	const directive = first >= 0 ? /^\s*"?sep=([^"\r\n])"?\s*$/i.exec(lines[first]) : null;
+	if (directive) {
+		delimiter = directive[1];
+		lines[first] = '';
+	} else if (first >= 0) {
+		const counts = { ',': 0, ';': 0, '\t': 0 };
+		let inQuotes = false;
+		const header = lines[first];
+		for (let i = 0; i < header.length; i++) {
+			const c = header.charAt(i);
+			if (c === '"') inQuotes = !inQuotes;
+			else if (!inQuotes && counts[c] !== undefined) counts[c]++;
+		}
+		if (counts[';'] > counts[delimiter]) delimiter = ';';
+		if (counts['\t'] > counts[delimiter]) delimiter = '\t';
+	}
+	const src = lines.join('\n');
 
 	const rows = [];
 	let row = [];
 	let field = '';
-	quoted = false;
+	let quoted = false;
 	for (let i = 0; i < src.length; i++) {
 		const c = src.charAt(i);
 		if (quoted) {
@@ -533,7 +552,7 @@ function cozyParseCsv(text) {
 			} else {
 				field += c;
 			}
-		} else if (c === '"') {
+		} else if (c === '"' && field === '') {
 			quoted = true;
 		} else if (c === delimiter) {
 			row.push(field);
@@ -616,10 +635,14 @@ const cozyTicketsImport = new Command({
 		for (let r = 1; r < rows.length; r++) {
 			const line = r + 1;
 			const cell = (idx) => (idx >= 0 && idx < rows[r].length ? String(rows[r][idx]).trim() : '');
-			const code = cell(cols.code).replace(/[​-‍﻿]/g, '');
+			const code = cell(cols.code).replace(/[\u200B-\u200D\uFEFF]/g, '');
 			const email = cell(cols.email).toLowerCase();
 			const name = cell(cols.name);
-			if (!TICKET_CODE_PATTERN.test(code)) {
+			if (/[\r\n]/.test(rows[r].join(''))) {
+				problems.push(
+					'line ' + line + ': a cell spans several lines (a quote that is never closed?)'
+				);
+			} else if (!TICKET_CODE_PATTERN.test(code)) {
 				problems.push('line ' + line + ': invalid ticket code "' + code + '"');
 			} else if (email && !cozyValidGuestEmail(email)) {
 				problems.push('line ' + line + ': invalid e-mail address "' + email + '"');

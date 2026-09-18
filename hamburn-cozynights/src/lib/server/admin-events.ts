@@ -6,6 +6,8 @@ export type AdminEventAction =
 	| 'bookings_cleared'
 	| 'template_imported'
 	| 'house_deleted'
+	| 'ticket_updated'
+	| 'tickets_imported'
 	| 'special_request_approved'
 	| 'special_request_declined'
 	| 'special_spot_assigned'
@@ -13,6 +15,9 @@ export type AdminEventAction =
 
 /** What guests do that the crew hears about. Never with names or what they wrote. */
 export type GuestEventAction = 'special_request_new' | 'special_request_withdrawn';
+
+/** admin_events.actor and .subject (pb_migrations/1759000000_notifications.js). */
+const MAX_TEXT = 320;
 
 /**
  * Adds an entry to the audit log (collection admin_events); PocketBase posts
@@ -32,8 +37,10 @@ export async function logAdminEvent(
 	try {
 		await adminPb.collection('admin_events').create({
 			action,
-			actor: admin?.email ?? '',
-			subject,
+			// The fields hold at most 320 characters: a longer template name must
+			// not cost the whole entry.
+			actor: (admin?.email ?? '').slice(0, MAX_TEXT),
+			subject: subject.slice(0, MAX_TEXT),
 			details
 		});
 	} catch (err) {
@@ -51,7 +58,7 @@ export async function logGuestEvent(
 	try {
 		await adminPb
 			.collection('admin_events')
-			.create({ action, actor: 'guest', subject: subject.slice(0, 320), details });
+			.create({ action, actor: 'guest', subject: subject.slice(0, MAX_TEXT), details });
 	} catch (err) {
 		console.error(`[AdminEvents] Could not record ${action}:`, (err as Error)?.message);
 	}

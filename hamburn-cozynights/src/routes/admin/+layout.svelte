@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { fly } from 'svelte/transition';
+	import { page } from '$app/state';
 
 	// Get data from server (admin session; null on the login page)
 	export let data;
@@ -25,24 +26,38 @@
 			</div>
 
 			<div class="user-area">
-				<a
-					href="/admin/requests"
-					class="check-link requests-link"
-					title="Special-needs requests{data.openRequests
-						? `: ${data.openRequests} waiting for a decision`
-						: ''}"
-				>
-					♿ Special needs
-					{#if data.openRequests}<span class="request-count">{data.openRequests}</span>{/if}
-				</a>
-				<a href="/admin/check" class="check-link" title="Check booking passes">🎫 Check passes</a>
+				<nav class="admin-nav" aria-label="Admin pages">
+					<a
+						href="/admin/tickets"
+						class="nav-link"
+						class:active={page.url.pathname === '/admin/tickets'}
+						title="Find tickets, change e-mail addresses, load the ticket list">🎟️ Tickets</a
+					>
+					<a
+						href="/admin/requests"
+						class="nav-link requests-link"
+						class:active={page.url.pathname === '/admin/requests'}
+						title="Special-needs requests{data.openRequests
+							? `: ${data.openRequests} waiting for a decision`
+							: ''}"
+					>
+						♿ Special needs
+						{#if data.openRequests}<span class="request-count">{data.openRequests}</span>{/if}
+					</a>
+					<a
+						href="/admin/check"
+						class="nav-link"
+						class:active={page.url.pathname === '/admin/check'}
+						title="Check booking passes">🎫 Check passes</a
+					>
+				</nav>
 				<div class="user-info">
 					<span class="user-label">Burner:</span>
 					<span class="user-email" title={data.admin.email}>{data.admin.email}</span>
 				</div>
 
 				<form action="/admin/logout" method="POST" class="logout-form">
-					<button type="submit" class="logout-btn" title="Sign out">
+					<button type="submit" class="logout-btn" title="Sign out {data.admin.email}">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							width="18"
@@ -103,7 +118,12 @@
 		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 	}
 
-	.check-link {
+	.admin-nav {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+	.nav-link {
 		display: inline-flex;
 		align-items: center;
 		min-height: 40px;
@@ -115,8 +135,12 @@
 		text-decoration: none;
 		white-space: nowrap;
 	}
-	.check-link:hover {
+	.nav-link:hover {
 		background: rgba(45, 212, 191, 0.1);
+	}
+	.nav-link.active {
+		background: #2dd4bf;
+		color: #000;
 	}
 	.requests-link {
 		gap: 0.4rem;
@@ -268,18 +292,25 @@
 		.logo-text {
 			font-size: 1.2rem;
 		}
+		/* One compact row under the logo: pages on the left, sign-out on the right. */
 		.user-area {
-			gap: 0.75rem;
+			width: 100%;
+			justify-content: space-between;
+			gap: 0.5rem;
 		}
-		.user-label {
+		.user-info {
 			display: none;
 		}
-		.user-email {
-			font-size: 0.75rem;
+		.admin-nav {
+			gap: 0.4rem;
+		}
+		.nav-link {
+			padding: 0 0.6rem;
+			font-size: 0.8rem;
 		}
 		.logout-btn {
-			min-height: 44px;
-			padding: 0.5rem 0.9rem;
+			min-height: 40px;
+			padding: 0.4rem 0.7rem;
 		}
 		.admin-content {
 			padding: 1rem;

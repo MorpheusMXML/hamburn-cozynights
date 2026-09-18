@@ -67,6 +67,10 @@ The admin area needs Google sign-in, also locally:
 
 Without a Google client the login page says *Google sign-in is not configured on this server yet*. Everything guest-facing still works.
 
+::: tip Several instances on one machine
+Cookies belong to a host name, not to a port. Two CozyNights instances on `localhost:5173` and `localhost:5174` in the same browser share the admin cookie, and the one that doesn't know the session deletes it for both: you get signed out at random. Give each instance its own name under `.localhost`, which browsers send to your machine anyway, for example `http://tickets.localhost:5173` and `http://staging-copy.localhost:5174`.
+:::
+
 ## Everyday commands
 
 | Command | What it does |

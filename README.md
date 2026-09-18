@@ -32,7 +32,8 @@ Ticket holders pick their own bed on the Hamburn camp map. The crew builds the c
 | 🎰  | **Destiny Roulette**         | A random free bed plus a random burner name, for the undecided.                                        |
 | 🛠️  | **Staging, then Live**       | The crew builds the layout in staging; going live freezes it and opens booking, by switch or by timer. |
 | 🔐  | **Google Workspace sign-in** | Admins use their `@mauersegler.art` account. Newcomers request access, a superuser approves.           |
-| 💾  | **Layout templates**         | Export the whole camp as JSON and rebuild it for the next burn in one step.                            |
+| 💾  | **Layout templates**         | Export the camp as JSON; a file is compared with the camp and only the changes you pick are applied.   |
+| 📥  | **Ticket list with review**  | Load the ticket shop's list after a review; fix an address or hand a ticket over in a few clicks.      |
 | 🛡️  | **Privacy first**            | Server-side rendering only, encrypted burner names, hashed ticket lookups, strict database rules.      |
 | 🔥  | **Burning effigy title**     | Magic balls build rainbow timber letters, then fire eats them letter by letter. Light them yourself.   |
 | ⚖️  | **Legal pages**              | Legal notice, privacy policy and booking rules on every page; the operator's details stay out of git.  |

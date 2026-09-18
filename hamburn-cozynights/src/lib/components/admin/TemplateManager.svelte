@@ -1,37 +1,42 @@
 <!--
 @component
-The admin's template tools: export the camp layout as JSON; superusers can check
-a template file and then replace the layout with it.
+The admin's template tools: export the camp layout as JSON, and compare a
+template file with the camp. The review shows every difference as a tree of
+houses ▸ rooms ▸ spots; superusers pick what to take over and apply it in
+Staging Mode. Unchanged spots keep their bookings.
 -->
 <script lang="ts">
-	import type { SubmitFunction } from '@sveltejs/kit';
-	import { enhance } from '$app/forms';
+	import type { ActionResult } from '@sveltejs/kit';
+	import { applyAction, deserialize } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { fade, fly } from 'svelte/transition';
-	import { createEventDispatcher } from 'svelte';
+	import { createEventDispatcher, tick } from 'svelte';
 	import { alertDialog, confirmDialog, dialogQueue } from '$lib/dialogs';
 	import { parseTemplate, TEMPLATE_LIMITS, type TemplateSummary } from '$lib/template';
+	import {
+		changeKeys,
+		describePlan,
+		planChanges,
+		planSize,
+		type ApplyOutcome,
+		type LayoutDiff,
+		type LayoutPlan
+	} from '$lib/template-diff';
+	import DropZone from './DropZone.svelte';
+	import LayoutReview from './LayoutReview.svelte';
 
 	export let isSuperuser = false;
 
 	const EXAMPLE_URL = '/templates/brahmsee-starter.json';
 
-	interface LayoutCounts {
-		houses: number;
-		rooms: number;
-		beds: number;
-	}
-	interface Preview {
+	interface Review {
+		name: string;
 		summary: TemplateSummary;
 		warnings: string[];
-		current: LayoutCounts & { bookings: number };
-	}
-	interface ImportResult {
-		summary: TemplateSummary;
-		backup: string | null;
-		releasedBookings: number;
-		leftovers: number;
-		namesCleared: boolean;
+		diff: LayoutDiff;
+		selection: string[];
+		/** Why this admin can only look (regular admin, Live Booking); '' = may apply. */
+		lockedReason: string;
 	}
 
 	const dispatch = createEventDispatcher<{ close: void }>();
@@ -40,22 +45,30 @@ a template file and then replace the layout with it.
 	let isExporting = false;
 	let exportNote: { fileName: string; line: string; problems: string[] } | null = null;
 
-	let fileInput: HTMLInputElement;
 	let selectedFile: File | null = null;
 	// Exactly the text that was checked is imported, even if the file changes on disk.
 	let checkedText: string | null = null;
-	let preview: Preview | null = null;
+	let review: Review | null = null;
+	let selection = new Set<string>();
 	let errors: string[] = [];
 	let errorTitle = '';
 	// Only promised when the server said so: after a broken connection nobody knows.
 	let campUnchangedHint = false;
 	let backupFailed = false;
 	let skipBackup = false;
-	let importResult: ImportResult | null = null;
+	let applied: ApplyOutcome | null = null;
+	let reviewSection: HTMLElement;
 
 	const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
-	const layoutLine = (counts: LayoutCounts) =>
+	const layoutLine = (counts: { houses: number; rooms: number; beds: number }) =>
 		`${plural(counts.houses, 'house')} · ${plural(counts.rooms, 'room')} · ${plural(counts.beds, 'spot')}`;
+
+	$: applicable = review ? changeKeys(review.diff).length : 0;
+	$: plan = review ? planChanges(review.diff, selection) : null;
+	$: steps = plan ? planSize(plan) : 0;
+	$: planLines = plan ? describePlan(plan) : [];
+	$: releases = plan ? plan.removeSpots.filter((spot) => spot.booked).length : 0;
+	$: canApply = !!review && !review.lockedReason && steps > 0 && busy === null;
 
 	function close() {
 		if (busy !== 'importing') dispatch('close');
@@ -67,8 +80,8 @@ a template file and then replace the layout with it.
 	}
 
 	function resetCheck() {
-		checkedText = null;
-		preview = null;
+		review = null;
+		selection = new Set();
 		errors = [];
 		campUnchangedHint = false;
 		backupFailed = false;
@@ -82,25 +95,30 @@ a template file and then replace the layout with it.
 	}
 
 	const fileProblems = (problems: string[]) =>
-		showErrors(
-			`This file can't be imported (${plural(problems.length, 'problem')})`,
-			problems,
-			true
-		);
+		showErrors(`This file can't be used (${plural(problems.length, 'problem')})`, problems, true);
 
-	// Browsers fire no change event when the same file is chosen again, so a
-	// file that was fixed in an editor could never be re-checked. Every pick
-	// therefore starts from an empty input.
-	function handleFilePick() {
-		fileInput.value = '';
-		selectedFile = null;
-		resetCheck();
+	async function post(action: string, form: FormData): Promise<ActionResult> {
+		try {
+			const response = await fetch(`/admin?/${action}`, {
+				method: 'POST',
+				body: form,
+				headers: { 'x-sveltekit-action': 'true', accept: 'application/json' }
+			});
+			// The `data` of an action response is devalue-encoded.
+			return deserialize(await response.text());
+		} catch (err) {
+			return { type: 'error', error: err };
+		}
 	}
 
-	function handleFileChange() {
-		selectedFile = fileInput.files?.[0] ?? null;
-		importResult = null;
-		resetCheck();
+	function templateForm(): FormData {
+		const form = new FormData();
+		form.set(
+			'template',
+			new Blob([checkedText ?? ''], { type: 'application/json' }),
+			selectedFile?.name ?? 'template.json'
+		);
+		return form;
 	}
 
 	async function handleExportTemplate() {
@@ -143,105 +161,123 @@ a template file and then replace the layout with it.
 		}
 	}
 
-	const handleSubmit: SubmitFunction = async ({ action, formData, cancel }) => {
-		const importing = action.search.includes('importTemplate');
-
-		if (!selectedFile) {
-			cancel();
-			showErrors('No file chosen', ['Choose a template file first.']);
+	/** A file was picked or dropped: compare it with the camp right away. */
+	async function handleFile(event: CustomEvent<File>) {
+		selectedFile = event.detail;
+		applied = null;
+		resetCheck();
+		if (selectedFile.size > TEMPLATE_LIMITS.fileBytes) {
+			fileProblems([
+				`The file is ${Math.ceil(selectedFile.size / 1024)} KB, templates are limited to ${TEMPLATE_LIMITS.fileBytes / 1024} KB. A layout file is usually far smaller, so this is probably the wrong file.`
+			]);
 			return;
 		}
+		try {
+			checkedText = await selectedFile.text();
+		} catch {
+			showErrors('File not readable', [
+				'The file could not be read. If you changed or moved it after choosing it, choose it again.'
+			]);
+			return;
+		}
+		await compare();
+	}
 
-		if (!importing) {
-			resetCheck();
-			importResult = null;
-			if (selectedFile.size > TEMPLATE_LIMITS.fileBytes) {
-				cancel();
-				fileProblems([
-					`The file is ${Math.ceil(selectedFile.size / 1024)} KB, templates are limited to ${TEMPLATE_LIMITS.fileBytes / 1024} KB. A layout file is usually far smaller, so this is probably the wrong file.`
-				]);
-				return;
-			}
-			try {
-				checkedText = await selectedFile.text();
-			} catch {
-				cancel();
-				showErrors('File not readable', [
-					'The file could not be read. If you changed or moved it after choosing it, choose it again.'
-				]);
-				return;
-			}
+	async function compare() {
+		busy = 'checking';
+		const result = await post('previewTemplate', templateForm());
+		busy = null;
+		if (result.type === 'success') {
+			review = result.data?.review as Review;
+			selection = new Set(review.selection);
+			// The review is below both cards: bring it into view.
+			await tick();
+			reviewSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		} else if (result.type === 'failure') {
+			const data = result.data as { error?: string; errors?: string[] } | undefined;
+			const problems = data?.errors ?? [
+				data?.error ?? `The server refused the file (${result.status}).`
+			];
+			if (result.status === 400) fileProblems(problems);
+			else showErrors('Check not possible', problems);
+		} else if (result.type === 'error') {
+			showErrors('Connection problem', [
+				`The file could not be sent to the server (${(result.error as Error)?.message ?? 'no connection'}). Check your connection and try again.`
+			]);
 		} else {
-			if (checkedText === null || !preview) {
-				cancel();
-				return;
-			}
-			const { current, summary } = preview;
-			const bookings =
-				current.bookings > 0
-					? `${plural(current.bookings, 'booking')} will be released, those guests have to book again.`
-					: 'There are no bookings right now.';
-			const confirmed = await confirmDialog(
-				`Your camp's ${layoutLine(current)} will be deleted and replaced by the ${layoutLine(summary)} from "${selectedFile.name}".\n\n` +
-					`${bookings} All ticket codes stay valid.\n\n` +
-					(skipBackup
-						? 'No backup will be made, so this cannot be undone.'
-						: 'A backup of the database is made first, so a superuser can undo this.'),
-				{
-					title: 'Replace the whole layout?',
-					tone: 'danger',
-					confirmLabel: 'Replace layout',
-					cancelLabel: 'Keep current layout'
-				}
-			);
-			if (!confirmed) {
-				cancel();
-				return;
-			}
+			await applyAction(result);
+		}
+	}
+
+	function confirmText(current: LayoutPlan): string {
+		const lines = describePlan(current);
+		const bookings =
+			releases > 0
+				? `${plural(releases, 'booking')} will be released: those guests are told by e-mail and have to book again.`
+				: 'No booking is affected.';
+		return (
+			`From "${selectedFile?.name ?? 'the file'}":\n${lines.map((line) => `• ${line}`).join('\n')}\n\n` +
+			`${bookings} Ticket codes stay valid.\n\n` +
+			(skipBackup
+				? 'No backup will be made, so this cannot be undone.'
+				: 'A backup of the database is made first, so a superuser can undo this.')
+		);
+	}
+
+	async function apply() {
+		if (!review || !plan || !canApply) return;
+		const removes =
+			plan.removeHouses.length + plan.removeRooms.length + plan.removeSpots.length > 0;
+		if (removes || skipBackup) {
+			const confirmed = await confirmDialog(confirmText(plan), {
+				title: removes ? 'Remove parts of the camp?' : 'Apply without a backup?',
+				tone: 'danger',
+				confirmLabel: `Apply ${plural(steps, 'change')}`,
+				cancelLabel: 'Back to the review'
+			});
+			if (!confirmed) return;
 		}
 
-		formData.set(
-			'template',
-			new Blob([checkedText ?? ''], { type: 'application/json' }),
-			selectedFile.name
-		);
-		busy = importing ? 'importing' : 'checking';
+		const form = templateForm();
+		form.set('selection', JSON.stringify([...selection]));
+		if (skipBackup) form.set('skipBackup', '1');
+		busy = 'importing';
+		const result = await post('importTemplate', form);
+		busy = null;
 
-		return async ({ result, update }) => {
-			busy = null;
+		if (result.type === 'success') {
+			applied = result.data?.applied as ApplyOutcome;
+			backupFailed = false;
+			skipBackup = false;
+			// Reloads the map behind this window, then shows what is left to do.
+			await invalidateAll();
+			await compare();
+		} else if (result.type === 'failure') {
+			const data = result.data as
+				{ error?: string; errors?: string[]; backupFailed?: boolean } | undefined;
+			backupFailed = data?.backupFailed === true;
+			showErrors(
+				'Nothing was imported',
+				data?.errors ?? [data?.error ?? `The server refused (${result.status}).`]
+			);
+			await invalidateAll();
+		} else if (result.type === 'error') {
+			showErrors('Connection problem', [
+				'The connection broke while the import was running, so its result is unknown. Close this window and check the map before you try again.'
+			]);
+			await invalidateAll();
+		} else {
+			await applyAction(result);
+		}
+	}
 
-			if (result.type === 'success' && !importing) {
-				preview = result.data?.preview as Preview;
-			} else if (result.type === 'success') {
-				importResult = result.data as unknown as ImportResult;
-				selectedFile = null;
-				resetCheck();
-				// Resets the form and reloads the map behind this window.
-				await update();
-			} else if (result.type === 'failure') {
-				const data = result.data as { error?: string; errors?: string[]; backupFailed?: boolean };
-				const problems = data?.errors ?? [
-					data?.error ?? `The server refused the request (${result.status}).`
-				];
-				backupFailed = data?.backupFailed === true;
-				if (!backupFailed) preview = null;
-				if (result.status === 400) fileProblems(problems);
-				else showErrors(importing ? 'Nothing was imported' : 'Check not possible', problems);
-				if (importing) await invalidateAll();
-			} else if (result.type === 'error') {
-				preview = null;
-				showErrors('Connection problem', [
-					importing
-						? 'The connection broke while the import was running, so its result is unknown. Close this window and check the map before you try again.'
-						: `The file could not be sent to the server (${result.error?.message ?? 'no connection'}). Check your connection and try again.`
-				]);
-				if (importing) await invalidateAll();
-			} else {
-				// Redirect, e.g. to the login page after the session expired.
-				await update();
+	$: totals = applied
+		? {
+				created: applied.created.houses + applied.created.rooms + applied.created.spots,
+				updated: applied.updated.houses + applied.updated.rooms + applied.updated.spots,
+				removed: applied.removed.houses + applied.removed.rooms + applied.removed.spots
 			}
-		};
-	};
+		: null;
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
@@ -296,15 +332,18 @@ a template file and then replace the layout with it.
 					</div>
 				{/if}
 
-				<div class="howto">
-					<h4>How to build a starting layout</h4>
+				<details class="howto">
+					<summary>How to build a starting layout</summary>
 					<ol>
 						<li>In Staging Mode, place your houses on the map and add their rooms and spots.</li>
 						<li>Download the layout and keep the file somewhere safe, e.g. the team drive.</li>
-						<li>On a fresh or reset database, a superuser imports that file here.</li>
+						<li>
+							Next time (or on a fresh database) drop that file on Compare &amp; Import and apply
+							what you need.
+						</li>
 					</ol>
 					<a href={EXAMPLE_URL} download="brahmsee-starter.json">Download example template</a>
-				</div>
+				</details>
 
 				{#if isExporting}
 					<div class="card-loading-overlay" in:fade>
@@ -320,147 +359,139 @@ a template file and then replace the layout with it.
 				{/if}
 			</div>
 
-			{#if isSuperuser}
-				<div class="tool-card import-card">
-					<div class="icon">🌀</div>
-					<h3>Import New Layout</h3>
-					<p>
-						Replaces <strong>all</strong> houses, rooms and spots with the ones from a template file.
-						Bookings are released, ticket codes stay valid. Works in Staging Mode only.
-					</p>
+			<div class="tool-card import-card">
+				<div class="icon">🌀</div>
+				<h3>Compare &amp; Import</h3>
+				<p>
+					Drop a layout file: you see what differs from your camp and pick what to take over.
+					Nothing changes before you apply, and unchanged spots keep their bookings.
+					{#if !isSuperuser}<strong>Applying is for superusers.</strong>{/if}
+				</p>
 
-					<form
-						method="POST"
-						action="?/previewTemplate"
-						enctype="multipart/form-data"
-						novalidate
-						use:enhance={handleSubmit}
-					>
-						<div class="file-input-wrapper">
-							<input
-								type="file"
-								name="template"
-								accept=".json,application/json"
-								id="template-upload"
-								bind:this={fileInput}
-								on:click={handleFilePick}
-								on:change={handleFileChange}
-							/>
-							<label for="template-upload" class:selected={selectedFile}>
-								<span class="file-icon">{selectedFile ? '📄' : '📁'}</span>
-								{selectedFile?.name ?? 'CHOOSE TEMPLATE FILE'}
-							</label>
-						</div>
+				<DropZone
+					accept=".json,application/json"
+					label="Drop a layout file here"
+					hint="or tap to choose one · it is compared right away"
+					fileName={selectedFile?.name ?? ''}
+					busy={busy === 'checking'}
+					disabled={busy === 'importing'}
+					on:file={handleFile}
+				/>
 
-						{#if errors.length > 0}
-							<div class="note bad" role="alert">
-								<strong>{errorTitle}</strong>
-								<ul>
-									{#each errors as problem}
-										<li>{problem}</li>
-									{/each}
-								</ul>
-								{#if campUnchangedHint}
-									<span>Fix the file, then choose it again. Your camp was not changed.</span>
-								{/if}
-							</div>
+				{#if errors.length > 0}
+					<div class="note bad" role="alert">
+						<strong>{errorTitle}</strong>
+						<ul>
+							{#each errors as problem}
+								<li>{problem}</li>
+							{/each}
+						</ul>
+						{#if campUnchangedHint}
+							<span>Fix the file, then choose it again. Your camp was not changed.</span>
 						{/if}
+					</div>
+				{/if}
 
-						{#if preview}
-							<div class="note" role="status" in:fade>
-								<strong>This file</strong>
-								<span>{layoutLine(preview.summary)}</span>
-								<span class="dim">
-									{preview.summary.activeBeds} active · {preview.summary.lockedBeds} locked ·
-									{#if preview.summary.specialBeds}{preview.summary.specialBeds} special-needs ·
-									{/if}{preview.summary.deactivatedBeds} deactivated
-								</span>
-								<strong>Your camp now</strong>
-								<span>{layoutLine(preview.current)}</span>
-								<span class="dim">
-									{preview.current.bookings > 0
-										? `${plural(preview.current.bookings, 'booking')} will be released.`
-										: 'No bookings to release.'}
-									Ticket codes stay valid.
-								</span>
-							</div>
-
-							{#if preview.warnings.length > 0}
-								<div class="note warn">
-									<strong>Good to know ({preview.warnings.length})</strong>
-									<ul>
-										{#each preview.warnings as warning}
-											<li>{warning}</li>
-										{/each}
-									</ul>
-								</div>
+				{#if applied && totals}
+					<div class="note good" role="status" in:fade>
+						<strong>✨ Applied</strong>
+						<span>
+							{totals.created} created · {totals.updated} changed · {totals.removed} removed{applied.skipped
+								? ` · ${applied.skipped} no longer needed`
+								: ''}.
+						</span>
+						<span class="dim">
+							{applied.releasedBookings > 0
+								? `${plural(applied.releasedBookings, 'booking')} released; those guests are told. `
+								: ''}All ticket codes still work.
+						</span>
+						<span class="dim">
+							{#if applied.backup}
+								Backup made first: <code>{applied.backup}</code>. A superuser can restore it in the
+								PocketBase dashboard under Settings → Backups.
+							{:else}
+								No backup was made.
 							{/if}
-
-							{#if backupFailed}
-								<label class="skip-backup">
-									<input type="checkbox" name="skipBackup" value="1" bind:checked={skipBackup} />
-									Import without a backup. It can't be undone then.
-								</label>
-							{/if}
-
-							<button
-								type="submit"
-								formaction="?/importTemplate"
-								class="btn-action danger"
-								disabled={busy !== null}
-							>
-								REPLACE LAYOUT 🔥
-							</button>
-						{:else}
-							<button type="submit" class="btn-action" disabled={busy !== null || !selectedFile}>
-								{busy === 'checking' ? 'CHECKING...' : 'CHECK TEMPLATE 🔍'}
-							</button>
-							<small class="dim"
-								>Checking changes nothing. You confirm before anything is replaced.</small
-							>
+						</span>
+						{#each applied.problems as problem}<span class="alarm">{problem}</span>{/each}
+						{#if !applied.namesCleared}
+							<span class="alarm">
+								Some burner names of the released bookings could not be deleted. They are not shown
+								anywhere, but should go: apply the file again, or ask an operator (server log:
+								"[Template import]").
+							</span>
 						{/if}
-					</form>
-
-					{#if importResult}
-						<div class="note good" role="status" in:fade>
-							<strong>✨ Layout replaced</strong>
-							<span>Your camp now has {layoutLine(importResult.summary)}.</span>
-							<span class="dim">
-								{plural(importResult.releasedBookings, 'booking')} released. All ticket codes still work.
-							</span>
-							<span class="dim">
-								{#if importResult.backup}
-									Backup made before the import: <code>{importResult.backup}</code>. A superuser can
-									restore it in the PocketBase dashboard under Settings → Backups.
-								{:else}
-									No backup was made.
-								{/if}
-							</span>
-							{#if importResult.leftovers > 0}
-								<span class="alarm">
-									{plural(importResult.leftovers, 'old record')} could not be deleted. Look for duplicate
-									houses on the map and delete them in the editor.
-								</span>
-							{/if}
-							{#if !importResult.namesCleared}
-								<span class="alarm">
-									The burner names of the released bookings could not be cleared. Use "Clear all
-									bookings" on the dashboard to finish that.
-								</span>
-							{/if}
-						</div>
-					{/if}
-				</div>
-			{:else}
-				<div class="tool-card import-card">
-					<div class="icon">🔒</div>
-					<h3>Import New Layout</h3>
-					<p>
-						Importing a template replaces all houses, rooms and spots. Only superusers can do this.
-					</p>
-				</div>
-			{/if}
+					</div>
+				{/if}
+			</div>
 		</div>
+
+		{#if review}
+			<section
+				class="review-section"
+				bind:this={reviewSection}
+				in:fade={{ duration: 150 }}
+				aria-labelledby="review-title"
+			>
+				<div class="review-head">
+					<h3 id="review-title">Review: “{review.name}”</h3>
+					<span class="dim">
+						The file has {layoutLine(review.summary)}{review.summary.specialBeds
+							? ` · ${review.summary.specialBeds} special-needs`
+							: ''}
+					</span>
+				</div>
+
+				{#if review.lockedReason}
+					<p class="locked">🔒 {review.lockedReason}</p>
+				{/if}
+
+				{#if review.warnings.length > 0}
+					<details class="note warn">
+						<summary><strong>Good to know ({review.warnings.length})</strong></summary>
+						<ul>
+							{#each review.warnings as warning}
+								<li>{warning}</li>
+							{/each}
+						</ul>
+					</details>
+				{/if}
+
+				<LayoutReview diff={review.diff} bind:selection readOnly={!!review.lockedReason} />
+
+				{#if !review.lockedReason && applicable > 0}
+					<div class="apply-bar">
+						<div class="apply-text">
+							{#if steps === 0}
+								<span>Nothing chosen.</span>
+							{:else}
+								{#each planLines as line}<span>{line}</span>{/each}
+								{#if releases > 0}
+									<span class="alarm">⚠️ {plural(releases, 'booking')} will be released</span>
+								{/if}
+							{/if}
+						</div>
+						{#if backupFailed}
+							<label class="skip-backup">
+								<input type="checkbox" bind:checked={skipBackup} />
+								Apply without a backup. It can't be undone then.
+							</label>
+						{/if}
+						<button
+							type="button"
+							class="btn-action"
+							class:danger={releases > 0 || (plan?.removeHouses.length ?? 0) > 0}
+							disabled={!canApply}
+							on:click={apply}
+						>
+							{busy === 'importing'
+								? 'APPLYING…'
+								: `APPLY ${steps} CHANGE${steps === 1 ? '' : 'S'} 🔥`}
+						</button>
+					</div>
+				{/if}
+			</section>
+		{/if}
 	</div>
 
 	{#if busy === 'importing'}
@@ -571,13 +602,6 @@ a template file and then replace the layout with it.
 		color: #ddd;
 	}
 
-	form {
-		width: 100%;
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
 	.btn-action {
 		display: inline-block;
 		width: 100%;
@@ -610,53 +634,6 @@ a template file and then replace the layout with it.
 	.btn-action.danger:hover:not(:disabled) {
 		background: #ef4444;
 		color: #000;
-	}
-
-	/* Hidden from view, but still focusable and tappable through its label. */
-	.file-input-wrapper {
-		position: relative;
-		width: 100%;
-	}
-	.file-input-wrapper input {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		opacity: 0;
-		pointer-events: none;
-	}
-	.file-input-wrapper label {
-		display: block;
-		padding: 1.2rem;
-		background: #050505;
-		border: 1px dashed #444;
-		border-radius: 12px;
-		color: #999;
-		font-weight: 900;
-		cursor: pointer;
-		transition: all 0.3s;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		font-size: 0.8rem;
-		letter-spacing: 1px;
-	}
-	.file-input-wrapper label:hover {
-		border-color: #666;
-		color: #ccc;
-	}
-	.file-input-wrapper input:focus-visible + label {
-		outline: 2px solid #2dd4bf;
-		outline-offset: 2px;
-	}
-	.file-input-wrapper label.selected {
-		border: 2px solid #2dd4bf;
-		background: rgba(45, 212, 191, 0.05);
-		color: #fff;
-		box-shadow: 0 0 20px rgba(45, 212, 191, 0.1);
-	}
-	.file-icon {
-		margin-right: 0.5rem;
-		font-size: 1.1rem;
 	}
 
 	/* Summaries, warnings and errors */
@@ -719,10 +696,6 @@ a template file and then replace the layout with it.
 	.dim {
 		color: #999;
 	}
-	small.dim {
-		font-size: 0.75rem;
-		line-height: 1.5;
-	}
 
 	.skip-backup {
 		display: flex;
@@ -748,13 +721,39 @@ a template file and then replace the layout with it.
 		line-height: 1.5;
 		color: #999;
 	}
-	.howto h4 {
-		margin: 0 0 0.6rem;
+	.howto summary {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		min-height: 36px;
+		cursor: pointer;
+		list-style: none;
 		font-size: 0.7rem;
 		font-weight: 900;
 		letter-spacing: 1px;
 		text-transform: uppercase;
 		color: #ccc;
+	}
+	.howto summary::-webkit-details-marker {
+		display: none;
+	}
+	.howto summary::before {
+		content: '+';
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 26px;
+		height: 26px;
+		border-radius: 50%;
+		border: 1px solid #333;
+		color: #2dd4bf;
+		font-size: 0.95rem;
+	}
+	.howto[open] summary::before {
+		content: '−';
+	}
+	.howto[open] summary {
+		margin-bottom: 0.6rem;
 	}
 	.howto ol {
 		margin: 0 0 0.9rem;
@@ -769,6 +768,86 @@ a template file and then replace the layout with it.
 		font-weight: 700;
 		text-decoration: underline;
 		text-underline-offset: 3px;
+	}
+
+	/* The review below both cards */
+	.review-section {
+		margin-top: 2rem;
+		padding-top: 1.5rem;
+		border-top: 1px solid #222;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+	.review-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.3rem 1rem;
+	}
+	.review-head h3 {
+		margin: 0;
+		font-weight: 900;
+		font-size: 1.2rem;
+		letter-spacing: -0.3px;
+		overflow-wrap: anywhere;
+	}
+	.locked {
+		margin: 0;
+		padding: 0.8rem 1rem;
+		border: 1px solid #3a2a12;
+		border-radius: 12px;
+		background: rgba(251, 146, 60, 0.07);
+		color: #fdba74;
+		font-size: 0.85rem;
+		line-height: 1.5;
+	}
+	details.note summary {
+		cursor: pointer;
+		list-style: none;
+	}
+	details.note summary::-webkit-details-marker {
+		display: none;
+	}
+	details.note summary::before {
+		content: '+ ';
+		color: #fb923c;
+		font-weight: 900;
+	}
+	details.note[open] summary::before {
+		content: '− ';
+	}
+	.apply-bar {
+		position: sticky;
+		bottom: -3rem;
+		z-index: 3;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.8rem 1.2rem;
+		padding: 1rem 1.1rem;
+		background: rgba(10, 10, 10, 0.96);
+		backdrop-filter: blur(8px);
+		border: 1px solid #2dd4bf;
+		border-radius: 16px;
+		box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.6);
+	}
+	.apply-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		font-size: 0.85rem;
+		color: #ccc;
+		text-align: left;
+	}
+	.apply-text .alarm {
+		color: #f87171;
+		font-weight: 700;
+	}
+	.apply-bar .btn-action {
+		width: auto;
+		padding: 1rem 1.6rem;
 	}
 
 	/* Whole-screen overlay while the import runs */
@@ -898,6 +977,12 @@ a template file and then replace the layout with it.
 		}
 		.tool-card .icon {
 			font-size: 2.2rem;
+		}
+		.apply-bar {
+			bottom: -2rem;
+		}
+		.apply-bar .btn-action {
+			width: 100%;
 		}
 	}
 

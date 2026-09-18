@@ -69,8 +69,10 @@ A request can also be approved straight to superuser.
 | Build the camp: houses, rooms, spots | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | Switch phases, schedule the go-live timer | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | Lock and unlock spots | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
-| Export a layout template | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
-| **Import a layout template** | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
+| Export a layout template, compare a file with the camp | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| **Apply a layout template** | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
+| Find tickets, change their e-mail address, hand them over | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| **Load the ticket list** | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
 | **Clear all bookings** | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
 | Approve, invite and remove admins | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> on the server |
 
@@ -89,7 +91,7 @@ Approving, inviting and removing admins deliberately happens **outside the web a
 
 Changes apply on the **next click**: CozyNights re-checks the role on every request, so an approved admin gets in with a reload, and a removed admin is out immediately.
 
-The same tool creates the guests' ticket codes (`tickets generate`, `add`, `list`, `remove`), see [Ticket codes](./event-checklist#ticket-codes).
+The same tool creates the guests' ticket codes (`tickets generate`, `add`, `import`, `list`, `remove`), see [Ticket codes](./event-checklist#ticket-codes). The ticket list with e-mail addresses can also be loaded in the app, see [Tickets & e-mail addresses](./tickets).
 
 ::: info Crew group
 Access requests, approvals, role changes, removals and every admin sign-in show up in the crew's Telegram group, so nothing goes unnoticed. See [Notifications](./notifications#crew-group).

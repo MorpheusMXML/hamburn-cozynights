@@ -350,6 +350,97 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		}
 	});
 
+	it('lets admins find a ticket and change its address; the ticket list is for superusers', async () => {
+		const ticket = await seedTicket(su);
+		const admin = await createAdmin(su, 'admin');
+		const cookie = adminCookie(admin.client);
+
+		const page = await get('/admin/tickets', cookie);
+		expect(page.status).toBe(200);
+		expect(await page.text()).toContain('Find a ticket');
+
+		// without JavaScript, the action answers with the page and the result
+		const found = await post('/admin/tickets?/search', { q: ticket.code.toLowerCase() }, cookie);
+		expect(found.status).toBe(200);
+		expect(await found.text()).toContain(ticket.code);
+
+		const email = `smoke-${Date.now()}@example.com`;
+		const saved = await post(
+			'/admin/tickets?/update',
+			{ id: ticket.order.id, email, name: 'Smoke Holder' },
+			cookie
+		);
+		expect(saved.status).toBe(200);
+		expect(await su.collection('orders').getOne(ticket.order.id)).toMatchObject({
+			email,
+			customer_name: 'Smoke Holder'
+		});
+
+		const rows = JSON.stringify([{ line: 2, code: `SMOKE-${Date.now()}`, email: '', name: '' }]);
+		expect((await post('/admin/tickets?/previewRoster', { rows }, cookie)).status).toBe(403);
+		expect((await post('/admin/tickets?/importRoster', { rows }, cookie)).status).toBe(403);
+		const boss = await createAdmin(su, 'superuser');
+		const preview = await post('/admin/tickets?/previewRoster', { rows }, adminCookie(boss.client));
+		expect(preview.status).toBe(200);
+	});
+
+	it('lets admins compare a layout file, and only superusers apply it in Staging Mode', async () => {
+		const name = `Smoke Tent ${Date.now()}`;
+		const layout = {
+			format: 'cozynights-layout',
+			version: '2.0',
+			name: 'Smoke layout',
+			houses: [
+				{
+					name,
+					x: 900,
+					y: 650,
+					rooms: [{ name: 'Canvas', room_number: 1, beds: [{ label: 'T1' }] }]
+				}
+			]
+		};
+		const upload = (action: string, cookie: string, selection?: string[]) => {
+			const form = new FormData();
+			form.set(
+				'template',
+				new Blob([JSON.stringify(layout)], { type: 'application/json' }),
+				'l.json'
+			);
+			if (selection) form.set('selection', JSON.stringify(selection));
+			return fetch(`${BASE}/admin?/${action}`, {
+				method: 'POST',
+				redirect: 'manual',
+				headers: { accept: 'text/html', origin: BASE, cookie },
+				body: form
+			});
+		};
+		const key = `h:${encodeURIComponent(name.toLowerCase())}`;
+		const chosen = [key, `${key}/r:1`, `${key}/r:1/s:t1`];
+		await setBookingOpen(false);
+
+		const crew = adminCookie((await createAdmin(su, 'admin')).client);
+		expect((await upload('previewTemplate', crew)).status).toBe(200);
+		// Templates may be up to 1 MB: more than adapter-node's default body limit.
+		const big = new FormData();
+		const padded = { ...layout, name: 'x'.repeat(700 * 1024) };
+		big.set('template', new Blob([JSON.stringify(padded)], { type: 'application/json' }), 'b.json');
+		const bigPreview = await fetch(`${BASE}/admin?/previewTemplate`, {
+			method: 'POST',
+			redirect: 'manual',
+			headers: { accept: 'text/html', origin: BASE, cookie: crew },
+			body: big
+		});
+		expect(bigPreview.status).toBe(200);
+		expect((await upload('importTemplate', crew, chosen)).status).toBe(403);
+
+		const boss = adminCookie((await createAdmin(su, 'superuser')).client);
+		expect((await upload('importTemplate', boss, chosen)).status).toBe(200);
+		const house = await su
+			.collection('houses')
+			.getFirstListItem(su.filter('name = {:name}', { name }));
+		expect(house).toMatchObject({ x: 900, y: 650 });
+	});
+
 	it('reserves "clear all bookings" for superusers and keeps the tickets', async () => {
 		const { room, beds } = await seedHouse(su, 1);
 		const ticket = await seedTicket(su);
