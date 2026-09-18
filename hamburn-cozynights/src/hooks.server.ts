@@ -10,6 +10,7 @@ import {
 	isAdminPath,
 	isAdminAccount,
 	isPublicAdminPath,
+	isSignInFresh,
 	toAdminSession,
 	toPendingAdmin
 } from '$lib/server/admin-auth';
@@ -29,8 +30,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	//    changing or revoking an account (scripts/cozy-admin.sh, PocketBase
 	//    dashboard) takes effect on the next request. A pending access request
 	//    keeps its session (to show "waiting for approval") but has no rights.
+	//    Once a week the session ends anyway and Google is asked again
+	//    (ADMIN_SIGN_IN_MAX_AGE_DAYS): that's when Workspace suspensions and
+	//    2-Step Verification apply.
 	event.locals.admin = null;
 	event.locals.pendingAdmin = null;
+	event.locals.adminSignInExpired = false;
 	const hadAuthCookie = event.cookies.get(AUTH_COOKIE) !== undefined;
 
 	if (hadAuthCookie) {
@@ -42,8 +47,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 		if (event.locals.pb.authStore.isValid && isAdminAccount(event.locals.pb.authStore.record)) {
 			try {
 				await event.locals.pb.collection(ADMIN_COLLECTION).authRefresh();
-				event.locals.admin = toAdminSession(event.locals.pb.authStore.record);
-				event.locals.pendingAdmin = toPendingAdmin(event.locals.pb.authStore.record);
+				const record = event.locals.pb.authStore.record;
+				if (isSignInFresh(record)) {
+					event.locals.admin = toAdminSession(record);
+					event.locals.pendingAdmin = toPendingAdmin(record);
+				} else {
+					event.locals.adminSignInExpired = true;
+				}
 			} catch {
 				// revoked, expired or PocketBase unreachable
 			}

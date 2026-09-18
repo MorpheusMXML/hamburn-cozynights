@@ -50,7 +50,7 @@ export type Role = 'pending' | 'admin' | 'superuser';
 /**
  * Creates an `admins` record the way the server does (always born `pending`,
  * approved by a later update) and returns it with a signed-in client — the
- * stand-in for "this person signed in with Google".
+ * stand-in for "this person signed in with Google" (incl. `last_sign_in`).
  */
 export async function createAdmin(su: PocketBase, role: Role) {
 	const password = crypto.randomBytes(24).toString('hex'); // never used: password login is off
@@ -60,7 +60,12 @@ export async function createAdmin(su: PocketBase, role: Role) {
 		passwordConfirm: password,
 		role: 'pending'
 	});
-	if (role !== 'pending') await su.collection('admins').update(record.id, { role });
+	// A real Google sign-in records last_sign_in (pb_hooks/cozy_notify.pb.js);
+	// without it the app asks for a fresh sign-in (weekly check).
+	await su.collection('admins').update(record.id, {
+		...(role !== 'pending' ? { role } : {}),
+		last_sign_in: new Date().toISOString()
+	});
 
 	const client = await su.collection('admins').impersonate(record.id, 3600);
 	client.autoCancellation(false);

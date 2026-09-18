@@ -17,12 +17,21 @@ vi.mock('$lib/server/pocketbase', () => ({
 	getAdminPb: vi.fn(async () => ({ authStore: { isValid: true } }))
 }));
 
-import { checkGoogleIdentity, toAdminSession, toPendingAdmin } from '../src/lib/server/admin-auth';
+import {
+	checkGoogleIdentity,
+	isSignInFresh,
+	toAdminSession,
+	toPendingAdmin
+} from '../src/lib/server/admin-auth';
 import { handle } from '../src/hooks.server';
 import { actions as loginActions } from '../src/routes/admin/login/+page.server';
 import { GET as oauthCallback } from '../src/routes/auth/callback/[provider]/+server';
 import { actions as dashboardActions } from '../src/routes/admin/+page.server';
 import { load as adminLayoutLoad } from '../src/routes/admin/+layout.server';
+
+const HOUR = 60 * 60 * 1000;
+/** PocketBase's date format, like pb_hooks/cozy_notify.pb.js stores it. */
+const pbDate = (ms: number) => new Date(ms).toISOString().replace('T', ' ');
 
 const ADMIN_RECORD = {
 	id: 'admin1',
@@ -31,7 +40,8 @@ const ADMIN_RECORD = {
 	email: 'max@mauersegler.art',
 	name: 'Max',
 	role: 'superuser',
-	verified: true
+	verified: true,
+	last_sign_in: pbDate(Date.now() - HOUR)
 };
 
 function fakeToken(expiresInSeconds = 3600): string {
@@ -93,6 +103,23 @@ describe('access requests (role pending)', () => {
 		expect(toPendingAdmin(ADMIN_RECORD)).toBeNull();
 		expect(toPendingAdmin({ ...pending, collectionName: 'users' })).toBeNull();
 		expect(toPendingAdmin({ ...pending, email: 'x@gmail.com' })).toBeNull();
+	});
+});
+
+describe('isSignInFresh (weekly Google sign-in)', () => {
+	const now = Date.parse('2026-09-18T12:00:00Z');
+
+	it('accepts a Google sign-in of the last 7 days, in PocketBase and ISO format', () => {
+		expect(isSignInFresh({ last_sign_in: '2026-09-18 11:00:00.000Z' }, now)).toBe(true);
+		expect(isSignInFresh({ last_sign_in: '2026-09-11T12:30:00.000Z' }, now)).toBe(true);
+	});
+
+	it('asks again after 7 days, and when there is no sign-in on record', () => {
+		expect(isSignInFresh({ last_sign_in: '2026-09-11 11:59:00.000Z' }, now)).toBe(false);
+		expect(isSignInFresh({ last_sign_in: '' }, now)).toBe(false);
+		expect(isSignInFresh({}, now)).toBe(false);
+		expect(isSignInFresh(null, now)).toBe(false);
+		expect(isSignInFresh({ last_sign_in: 'not a date' }, now)).toBe(false);
 	});
 });
 
@@ -243,6 +270,29 @@ describe('hooks.server handle', () => {
 		expect(resolve).toHaveBeenCalled();
 	});
 
+	it('ends the session a week after the last Google sign-in, even while it is in use', async () => {
+		const stale = { ...ADMIN_RECORD, last_sign_in: pbDate(Date.now() - 8 * 24 * HOUR) };
+		refreshSpy.mockImplementation(async function (this: any) {
+			this.client.authStore.save(fakeToken(), stale);
+			return { token: '', record: stale } as any;
+		});
+		const resolve = vi.fn(async () => new Response('ok'));
+
+		const post = makeEvent('/admin', { method: 'POST', cookie: authCookie(stale) });
+		expect((await handle({ event: post, resolve })).status).toBe(403);
+		expect(post.locals.admin).toBeNull();
+		expect(post.locals.adminSignInExpired).toBe(true);
+		expect(post.locals.pb.authStore.isValid).toBe(false);
+
+		// the cookie's own (client-side) record doesn't count, only the refreshed one
+		const forged = makeEvent('/admin', {
+			method: 'POST',
+			cookie: authCookie({ ...stale, last_sign_in: pbDate(Date.now()) })
+		});
+		expect((await handle({ event: forged, resolve })).status).toBe(403);
+		expect(resolve).not.toHaveBeenCalled();
+	});
+
 	it('drops the session when PocketBase rejects the token (e.g. admin removed)', async () => {
 		refreshSpy.mockRejectedValue(new ClientResponseError({ status: 401 }));
 		const event = makeEvent('/admin', { method: 'POST', cookie: authCookie(ADMIN_RECORD) });
@@ -261,6 +311,16 @@ describe('admin layout', () => {
 			adminLayoutLoad({ locals: { admin: null }, url: new URL('http://x/admin') } as any) as any
 		);
 		expect(redirect).toEqual({ status: 303, location: '/admin/login' });
+	});
+
+	it('tells admins why they have to sign in again after a week', async () => {
+		const redirect = await isRedirect(
+			adminLayoutLoad({
+				locals: { admin: null, adminSignInExpired: true },
+				url: new URL('http://x/admin')
+			} as any) as any
+		);
+		expect(redirect).toEqual({ status: 303, location: '/admin/login?error=reauth' });
 	});
 
 	it('exposes only email, name and role', async () => {

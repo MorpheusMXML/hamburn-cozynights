@@ -17,7 +17,9 @@ export enum Collections {
 	Orders = 'orders',
 	Rooms = 'rooms',
 	Users = 'users',
-	AppSettings = 'app_settings'
+	AppSettings = 'app_settings',
+	GuestNotify = 'guest_notify',
+	AdminEvents = 'admin_events'
 }
 
 // Alias types for improved usability
@@ -107,6 +109,7 @@ export type AdminsRecord = {
 	email: string;
 	emailVisibility?: boolean;
 	id: string;
+	last_sign_in?: IsoDateString;
 	name?: string;
 	password: string;
 	role: AdminsRoleOptions;
@@ -143,6 +146,7 @@ export type OrdersRecord = {
 	created: IsoAutoDateString;
 	customer_name: string;
 	burner_name?: string;
+	email?: string;
 	id: string;
 	order_number: string;
 	order_hash?: string;
@@ -178,6 +182,48 @@ export type AppSettingsRecord = {
 	id: string;
 	is_booking_active?: boolean;
 	booking_unlock_at?: IsoDateString;
+	notify_mail?: boolean;
+	telegram_bot?: string;
+	updated: IsoAutoDateString;
+};
+
+export type GuestNotifyRecord = {
+	attempts?: number;
+	created: IsoAutoDateString;
+	due?: IsoDateString;
+	id: string;
+	last_error?: string;
+	mail_label?: string;
+	mail_sent?: IsoDateString;
+	mail_spot?: string;
+	mail_to?: string;
+	order: RecordIdString;
+	tg_chat?: string;
+	tg_label?: string;
+	tg_new?: boolean;
+	tg_sent?: IsoDateString;
+	tg_spot?: string;
+	tg_token_exp?: IsoDateString;
+	tg_token_hash?: string;
+	updated: IsoAutoDateString;
+};
+
+export enum AdminEventsAlertStatusOptions {
+	pending = 'pending',
+	sent = 'sent',
+	failed = 'failed',
+	off = 'off'
+}
+export type AdminEventsRecord<Tdetails = unknown> = {
+	action: string;
+	actor?: string;
+	alert_attempts?: number;
+	alert_error?: string;
+	alert_status?: AdminEventsAlertStatusOptions;
+	created: IsoAutoDateString;
+	details?: null | Tdetails;
+	id: string;
+	subject?: string;
 	updated: IsoAutoDateString;
 };
 
@@ -198,6 +244,12 @@ export type RoomsResponse<Texpand = unknown> = Required<RoomsRecord> & BaseSyste
 export type UsersResponse<Texpand = unknown> = Required<UsersRecord> & AuthSystemFields<Texpand>;
 export type AppSettingsResponse<Texpand = unknown> = Required<AppSettingsRecord> &
 	BaseSystemFields<Texpand>;
+export type GuestNotifyResponse<Texpand = unknown> = Required<GuestNotifyRecord> &
+	BaseSystemFields<Texpand>;
+export type AdminEventsResponse<Tdetails = unknown, Texpand = unknown> = Required<
+	AdminEventsRecord<Tdetails>
+> &
+	BaseSystemFields<Texpand>;
 
 // Types containing all Records and Responses, useful for creating typing helper functions
 
@@ -214,6 +266,8 @@ export type CollectionRecords = {
 	rooms: RoomsRecord;
 	users: UsersRecord;
 	app_settings: AppSettingsRecord;
+	guest_notify: GuestNotifyRecord;
+	admin_events: AdminEventsRecord;
 };
 
 export type CollectionResponses = {
@@ -229,6 +283,8 @@ export type CollectionResponses = {
 	rooms: RoomsResponse;
 	users: UsersResponse;
 	app_settings: AppSettingsResponse;
+	guest_notify: GuestNotifyResponse;
+	admin_events: AdminEventsResponse;
 };
 
 // Utility types for create/update operations

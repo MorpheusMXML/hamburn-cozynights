@@ -20,6 +20,8 @@ declare global {
 			admin: AdminSession | null;
 			// Signed in with Google, access request not approved yet (no rights) ⏳
 			pendingAdmin: PendingAdmin | null;
+			// The session was valid, but the last Google sign-in is older than a week 📅
+			adminSignInExpired?: boolean;
 		}
 
 		// interface PageData {}

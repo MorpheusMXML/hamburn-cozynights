@@ -14,7 +14,7 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
 	// hooks.server.ts only lets page/data requests through without a session,
 	// so they can be redirected here.
 	if (!locals.admin) {
-		throw redirect(303, '/admin/login');
+		throw redirect(303, locals.adminSignInExpired ? '/admin/login?error=reauth' : '/admin/login');
 	}
 
 	const { email, name, role, isSuperuser } = locals.admin;

@@ -13,6 +13,7 @@ import { countSpots } from '$lib/occupancy';
 import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
 import { parseTemplate, TEMPLATE_LIMITS, type TemplateParseResult } from '$lib/template';
 import { getCampCounts, importTemplate, TemplateImportError } from '$lib/server/template';
+import { logAdminEvent } from '$lib/server/admin-events';
 
 /**
  * Shared first half of the template preview and import: both are superuser-only,
@@ -149,6 +150,9 @@ export const actions: Actions = {
 			await clearBurnerNames(locals.adminPb);
 
 			console.log('[Action:clearAllBookings] SUCCESS. All spots released, ticket codes kept.');
+			await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
+				released: occupiedBeds.length
+			});
 			return { success: true };
 		} catch (err) {
 			console.error('[Action:clearAllBookings] FAILED:', err);
@@ -242,6 +246,16 @@ export const actions: Actions = {
 				filter: locals.pb.filter('room.house = {:id} && occupied = true', { id }),
 				expand: 'room'
 			});
+			// For the audit log / crew chat when bookings go with the house.
+			const houseName =
+				occupiedBeds.length > 0
+					? ((
+							await locals.pb
+								.collection('houses')
+								.getOne(id)
+								.catch(() => null)
+						)?.name ?? id)
+					: '';
 
 			if (occupiedBeds.length > 0) {
 				console.log(
@@ -269,6 +283,11 @@ export const actions: Actions = {
 
 			await locals.pb.collection('houses').delete(id);
 			console.log(`[Action:deleteHouse] SUCCESS. House ${id} evaporated.`);
+			if (occupiedBeds.length > 0) {
+				await logAdminEvent(locals.adminPb, locals.admin, 'house_deleted', houseName, {
+					released: occupiedBeds.length
+				});
+			}
 			return { success: true };
 		} catch (err) {
 			console.error(`[Action:deleteHouse] FAILED for ${id}:`, err);
@@ -344,6 +363,13 @@ export const actions: Actions = {
 			console.log(
 				`[Import Template] SUCCESS. Backup: ${outcome.backup ?? 'skipped'}, released bookings: ${outcome.releasedBookings}, leftovers: ${outcome.leftovers}.`
 			);
+			await logAdminEvent(pb, locals.admin, 'template_imported', template.name, {
+				houses: summary.houses,
+				rooms: summary.rooms,
+				beds: summary.beds,
+				releasedBookings: outcome.releasedBookings,
+				backup: outcome.backup ?? 'skipped'
+			});
 			return { success: true, summary, ...outcome, namesCleared };
 		} catch (err) {
 			if (err instanceof TemplateImportError) {

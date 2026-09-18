@@ -25,8 +25,13 @@
 onBootstrap((e) => {
 	e.next();
 	try {
-		const applied = require(`${__hooks}/lib/notify.js`).applyMailSettings(e.app);
+		const notify = require(`${__hooks}/lib/notify.js`);
+		const applied = notify.applyMailSettings(e.app);
 		if (applied) console.log('[cozy-notify] SMTP settings applied: ' + applied);
+		// Tell the guest pages right away whether e-mail is on (no network here;
+		// the bot's name follows with the first delivery run, and on a fresh
+		// database the migrations only run after this).
+		notify.refreshCapabilities(e.app, notify.config(e.app), true);
 	} catch (err) {
 		// A bad value must never keep PocketBase from starting.
 		console.error('[cozy-notify] SMTP settings not applied: ' + err);

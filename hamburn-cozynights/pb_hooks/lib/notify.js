@@ -920,7 +920,12 @@ function pollTelegram(app, cfg, timeoutSeconds) {
 
 // --- app_settings flags for the guest pages ---------------------------------
 
-function refreshCapabilities(app, cfg) {
+/**
+ * Publishes what the server can send (app_settings.notify_mail / telegram_bot).
+ * offline: don't ask Telegram for the bot's name, keep the stored one (used
+ * while the server starts, where a slow Telegram must not delay anything).
+ */
+function refreshCapabilities(app, cfg, offline) {
 	let settings;
 	try {
 		settings = app.findRecordById('app_settings', APP_SETTINGS_ID);
@@ -930,7 +935,7 @@ function refreshCapabilities(app, cfg) {
 	if (!settings.collection().fields.getByName('notify_mail')) return;
 	let bot = '';
 	if (cfg.telegram.guests) {
-		const name = botUsername(app, cfg);
+		const name = offline ? null : botUsername(app, cfg);
 		bot = name === null ? settings.getString('telegram_bot') : name;
 	}
 	if (

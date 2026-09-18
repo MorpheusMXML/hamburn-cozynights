@@ -30,6 +30,10 @@
 			title: 'BACKEND UNREACHABLE 📡',
 			text: 'The control center backend could not be reached. Try again shortly.'
 		},
+		reauth: {
+			title: 'WEEKLY CHECK 🔐',
+			text: 'For security, admins sign in with Google again every 7 days. One click and you are back.'
+		},
 		failed: {
 			title: 'SIGN-IN FAILED',
 			text: 'Google sign-in did not complete. Please try again.'

@@ -211,6 +211,63 @@
 						Spot <strong>{myBed.label}</strong> in this room is yours.
 						{#if data.isBookingActive}Tap it to change your burner name or to release it.{/if}
 					</p>
+					{#if data.notify && (data.notify.email || data.notify.telegram)}
+						<div class="notify-box">
+							{#if data.notify.email}
+								<p class="notify-line">
+									<span class="notify-icon" aria-hidden="true">📧</span> Confirmations and changes
+									go to
+									<strong>{data.notify.email}</strong>, the address of your ticket.
+								</p>
+							{/if}
+							{#if data.notify.telegram?.connected}
+								<form
+									method="POST"
+									action="?/disconnectTelegram"
+									class="notify-line"
+									use:enhance={() => {
+										isSaving = true;
+										return async ({ result, update }) => {
+											isSaving = false;
+											if (result.type === 'failure') {
+												toast(
+													failureMessage(result, 'Telegram updates could not be turned off.'),
+													'danger'
+												);
+												return;
+											}
+											if (result.type === 'error') {
+												toast(NO_CONNECTION, 'danger');
+												return;
+											}
+											toast('Telegram updates are off.', 'success');
+											await update();
+										};
+									}}
+								>
+									<span class="notify-icon" aria-hidden="true">✈️</span> Updates on Telegram are on.
+									<button type="submit" class="btn-link" disabled={isSaving}>Turn off</button>
+								</form>
+							{:else if data.notify.telegram}
+								<!-- A plain post into a new tab: the answer is a redirect to t.me. -->
+								<form
+									method="POST"
+									action="?/connectTelegram"
+									target="_blank"
+									rel="noopener"
+									class="notify-telegram"
+								>
+									<button type="submit" class="btn-telegram">
+										<span class="notify-icon" aria-hidden="true">✈️</span> Get updates on Telegram
+									</button>
+									<small class="field-hint">
+										Optional. Opens Telegram — tap <strong>START</strong> there and the bot confirms your
+										spot. Reload this page afterwards.
+									</small>
+								</form>
+							{/if}
+						</div>
+					{/if}
 				</div>
 			</div>
 		{/if}
@@ -587,6 +644,59 @@
 		margin-top: 1.25rem;
 	}
 	.btn-unbook-banner:disabled {
+		opacity: 0.6;
+		cursor: progress;
+	}
+
+	.notify-box {
+		margin-top: 1rem;
+		padding-top: 1rem;
+		border-top: 1px solid #222;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+	.success-content .notify-line {
+		margin: 0;
+		color: #b5b5b5;
+		font-size: 0.9rem;
+		line-height: 1.45;
+		overflow-wrap: anywhere;
+	}
+	.notify-icon {
+		margin-right: 0.35em;
+	}
+	.notify-telegram {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.5rem;
+	}
+	.btn-telegram {
+		background: #229ed9;
+		border: none;
+		color: #fff;
+		min-height: 44px;
+		padding: 0.7rem 1.25rem;
+		border-radius: 10px;
+		font-weight: 800;
+		cursor: pointer;
+	}
+	.btn-telegram:hover {
+		background: #1d8cc2;
+	}
+	.btn-link {
+		background: none;
+		border: none;
+		padding: 0.5rem 0.25rem;
+		min-height: 44px;
+		color: #2dd4bf;
+		font: inherit;
+		font-weight: 700;
+		text-decoration: underline;
+		cursor: pointer;
+	}
+	.btn-link:disabled {
 		opacity: 0.6;
 		cursor: progress;
 	}

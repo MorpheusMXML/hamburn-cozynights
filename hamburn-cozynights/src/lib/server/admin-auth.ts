@@ -16,6 +16,14 @@ export const ADMIN_COLLECTION = 'admins';
 export const ADMIN_EMAIL_DOMAIN = 'mauersegler.art';
 export const ADMIN_OAUTH_PROVIDER = 'google';
 
+/**
+ * Admins sign in with Google again after this many days. The session itself
+ * slides with every request, so without this an admin who keeps using the app
+ * would never meet Google again — a suspended Workspace account or a newly
+ * enforced 2-Step Verification would not reach them.
+ */
+export const ADMIN_SIGN_IN_MAX_AGE_DAYS = 7;
+
 /** PocketBase auth cookie (SDK default name). */
 export const AUTH_COOKIE = 'pb_auth';
 /** Short-lived cookie carrying the OAuth2 state + PKCE verifier between login and callback. */
@@ -46,6 +54,7 @@ export type AdminLoginError =
 	| 'cancelled'
 	| 'expired'
 	| 'unavailable'
+	| 'reauth'
 	| 'failed';
 
 const APPROVED_ROLES: readonly string[] = ['superuser', 'admin'];
@@ -82,6 +91,17 @@ export function toAdminSession(record: AuthRecord): AdminSession | null {
 		role,
 		isSuperuser: role === 'superuser'
 	};
+}
+
+/**
+ * Whether the account's last Google sign-in is recent enough. PocketBase
+ * records it on every OAuth2 sign-in (`last_sign_in`, pb_hooks/cozy_notify.pb.js);
+ * read it from the refreshed record, never from the cookie.
+ */
+export function isSignInFresh(record: AuthRecord, now = Date.now()): boolean {
+	const signedInAt = Date.parse(String(record?.last_sign_in || '').replace(' ', 'T'));
+	if (Number.isNaN(signedInAt)) return false;
+	return now - signedInAt < ADMIN_SIGN_IN_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
 }
 
 /** The access request behind a signed-in, not yet approved admin account. */

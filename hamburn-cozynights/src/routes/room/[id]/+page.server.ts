@@ -5,6 +5,12 @@ import type { RoomsResponse, BedsResponse, OrdersResponse } from '$lib/pocketbas
 import { decrypt } from '$lib/server/crypto';
 import { BookingService, BedUnavailableError, isBedBookable } from '$lib/server/booking';
 import { getBookingSettings } from '$lib/server/settings';
+import {
+	disconnectTelegram,
+	getGuestNotifyStatus,
+	startTelegramLink,
+	type GuestNotifyStatus
+} from '$lib/server/notifications';
 
 const burnerNames = [
 	'Dusty Nomad',
@@ -91,7 +97,17 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			};
 		});
 
+		// Where confirmations go. Optional: the page works without it.
+		let notify: GuestNotifyStatus | null = null;
+		if (userBed) {
+			notify = await getGuestNotifyStatus(locals.adminPb, order, settings).catch((err) => {
+				console.error('[Room] Notification status failed:', (err as Error)?.message);
+				return null;
+			});
+		}
+
 		return {
+			notify,
 			room: { id: room.id, name: room.name, room_number: room.room_number, house: room.house },
 			beds: safeBeds,
 			userBedId: userBed?.id || null,
@@ -164,6 +180,43 @@ export const actions: Actions = {
 				error:
 					'Something went wrong while booking. Check whether the spot shows as yours. If not, please try again.'
 			});
+		}
+	},
+
+	/**
+	 * Opens Telegram with a one-time link; tapping START there links the chat
+	 * to this ticket (pb_hooks/lib/notify.js). A plain form post answered with a
+	 * redirect to t.me, so it works without JavaScript and in a new tab.
+	 */
+	connectTelegram: async ({ locals }) => {
+		if (!locals.orderNumber) return fail(401, { error: SIGNED_OUT });
+		const { telegramBot } = await getBookingSettings(locals.pb);
+		if (!telegramBot) {
+			return fail(400, { error: 'Telegram updates are not available right now.' });
+		}
+
+		let link: string;
+		try {
+			const order = await new BookingService(locals.adminPb).getOrderByNumber(locals.orderNumber);
+			if (!order) return fail(404, { error: CODE_UNKNOWN });
+			link = await startTelegramLink(locals.adminPb, order.id, telegramBot);
+		} catch (err) {
+			console.error('[Room] Telegram link failed:', (err as Error)?.message);
+			return fail(500, { error: 'Telegram could not be connected right now. Please try again.' });
+		}
+		throw redirect(303, link);
+	},
+
+	disconnectTelegram: async ({ locals }) => {
+		if (!locals.orderNumber) return fail(401, { error: SIGNED_OUT });
+		try {
+			const order = await new BookingService(locals.adminPb).getOrderByNumber(locals.orderNumber);
+			if (!order) return fail(404, { error: CODE_UNKNOWN });
+			await disconnectTelegram(locals.adminPb, order.id);
+			return { success: true, telegramDisconnected: true };
+		} catch (err) {
+			console.error('[Room] Telegram disconnect failed:', (err as Error)?.message);
+			return fail(500, { error: 'Telegram updates could not be turned off. Please try again.' });
 		}
 	},
 
