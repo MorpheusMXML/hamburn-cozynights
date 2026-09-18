@@ -37,6 +37,9 @@ services:
       # one short pass per minute (the tests trigger runs themselves);
       # TEST_NOTIFY_LOOP_SECONDS=50 runs it like a server does
       COZY_NOTIFY_LOOP_SECONDS: ${TEST_NOTIFY_LOOP_SECONDS:-0}
+      # The whole suite sends far more guest e-mails per minute than the
+      # production cap (20); over the cap, mails wait and the tests miss them.
+      COZY_MAILS_PER_MINUTE: '1000'
     ports:
       - '127.0.0.1:${TEST_PB_PORT:-8290}:8090'
     volumes:
