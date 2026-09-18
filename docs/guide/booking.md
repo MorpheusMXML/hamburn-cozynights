@@ -64,7 +64,7 @@ That's it: the spot now shows **Your Spot** with your burner name. 🎉
 | **Available** · *Grab it now!* | Free. Click it to book. |
 | **Your Spot** · *your burner name* | That's you. Click it to rename or release it. |
 | **Occupied** · *a burner name* | Taken by another guest (*Mystery Burner* if they didn't pick a name). |
-| **Not available** · *Reserved by the crew* | Held back by the crew, for example a broken bed or a spot that isn't in use. |
+| **Not available** · *Reserved by the crew* | Held back by the crew, for example a broken bed, a spot that isn't in use or one kept for [guests with special needs](./special-needs). |
 | **Locked** · *Release other spot first* | You already have a spot somewhere else. |
 | **Locked** · *Phase: Staging Mode* | Booking hasn't opened yet. |
 

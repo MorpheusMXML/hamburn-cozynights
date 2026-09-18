@@ -47,6 +47,11 @@ features:
     details: Every booking comes with a QR code and a short code. The crew checks it at arrival with a phone camera.
     link: /guide/booking#your-booking-pass
     linkText: The pass
+  - icon: ♿
+    title: Special-needs spots
+    details: Need a lower bunk, step-free access or a quiet room? Ask the crew with your ticket code, even before booking opens.
+    link: /guide/special-needs
+    linkText: Ask for a spot
   - icon: 🛠️
     title: Staging, then Live
     details: The crew builds the layout in staging. Going live freezes the structure and opens booking, by switch or on a timer.

@@ -124,6 +124,7 @@ describe('parseTemplate: accepted files', () => {
 			beds: 3,
 			activeBeds: 1,
 			lockedBeds: 1,
+			specialBeds: 0,
 			deactivatedBeds: 1
 		});
 	});
@@ -523,6 +524,7 @@ describe('summarizeTemplate', () => {
 			beds: 5,
 			activeBeds: 2,
 			lockedBeds: 1,
+			specialBeds: 0,
 			deactivatedBeds: 2
 		});
 		expect(summary.activeBeds + summary.lockedBeds + summary.deactivatedBeds).toBe(summary.beds);

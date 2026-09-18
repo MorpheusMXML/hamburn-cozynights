@@ -10,9 +10,11 @@
 //    Google client: config as code, applied on every start.
 // 2. Guests: every change of a bed's ticket (booking, move, release, admin
 //    changes, deleted rooms/houses, template import) marks the ticket as due.
-//    So does a new e-mail address on a ticket.
-// 3. Crew: admin access changes, admin sign-ins and booking phase changes
-//    become admin_events; their Telegram alerts go out with the next run.
+//    So does a new e-mail address on a ticket, and a special-needs request
+//    that is sent, decided or withdrawn.
+// 3. Crew: admin access changes, admin sign-ins, booking phase changes and
+//    opening/closing special-needs requests become admin_events; their
+//    Telegram alerts go out with the next run.
 //    (last_sign_in for the weekly re-sign-in: pb_hooks/admins_oauth_guard.pb.js)
 // 4. A cron job delivers: e-mail, Telegram messages, crew alerts, and reads
 //    the bot's incoming messages (guests linking their chat).
@@ -100,6 +102,47 @@ onRecordUpdate((e) => {
 		console.error('[cozy-notify] ticket ' + e.record.id + ': ' + err);
 	}
 }, 'orders');
+
+// Special-needs requests (docs/admin/special-needs.md): the guest hears about
+// a new request and about the crew's decision. Changes of what the guest
+// wrote are not news; neither this file nor notify.js ever reads it.
+
+onRecordCreate((e) => {
+	e.next();
+	try {
+		require(`${__hooks}/lib/notify.js`).markDue(e.app, e.record.getString('order'));
+	} catch (err) {
+		console.error('[cozy-notify] new special-needs request ' + e.record.id + ': ' + err);
+	}
+}, 'special_requests');
+
+onRecordUpdate((e) => {
+	let before = null;
+	try {
+		before = require(`${__hooks}/lib/notify.js`).storedValue(e.app, e.record, 'status');
+	} catch (err) {
+		console.error('[cozy-notify] special-needs request ' + e.record.id + ': ' + err);
+	}
+	e.next();
+	if (before === null || before === e.record.getString('status')) return;
+	try {
+		require(`${__hooks}/lib/notify.js`).markDue(e.app, e.record.getString('order'));
+	} catch (err) {
+		console.error('[cozy-notify] special-needs request ' + e.record.id + ': ' + err);
+	}
+}, 'special_requests');
+
+// Withdrawn (or gone with its ticket): nothing to send, but the channels
+// forget it, so a new request later is news again.
+onRecordDelete((e) => {
+	const order = e.record.getString('order');
+	e.next();
+	try {
+		require(`${__hooks}/lib/notify.js`).markDue(e.app, order);
+	} catch (err) {
+		console.error('[cozy-notify] withdrawn special-needs request ' + e.record.id + ': ' + err);
+	}
+}, 'special_requests');
 
 // --- 3. crew: admin accounts -----------------------------------------------------
 //
@@ -194,7 +237,8 @@ onRecordUpdateRequest((e) => {
 	const old = e.record.original();
 	const before = {
 		active: old.getBool('is_booking_active'),
-		timer: old.getString('booking_unlock_at')
+		timer: old.getString('booking_unlock_at'),
+		requests: old.getBool('special_requests_open')
 	};
 	e.next();
 	try {
@@ -203,7 +247,8 @@ onRecordUpdateRequest((e) => {
 		const live = (active, timer) => active || (!!timer && notify.toMs(timer) <= now);
 		const after = {
 			active: e.record.getBool('is_booking_active'),
-			timer: e.record.getString('booking_unlock_at')
+			timer: e.record.getString('booking_unlock_at'),
+			requests: e.record.getBool('special_requests_open')
 		};
 		const actor = e.auth ? e.auth.email() : 'unknown';
 		const wasLive = live(before.active, before.timer);
@@ -217,6 +262,11 @@ onRecordUpdateRequest((e) => {
 			} else if (!after.timer && before.timer && notify.toMs(before.timer) > now) {
 				notify.logEvent(e.app, 'timer_removed', { actor: actor, subject: before.timer });
 			}
+		}
+		if (before.requests !== after.requests) {
+			notify.logEvent(e.app, after.requests ? 'requests_opened' : 'requests_closed', {
+				actor: actor
+			});
 		}
 	} catch (err) {
 		console.error('[cozy-notify] booking phase alert: ' + err);

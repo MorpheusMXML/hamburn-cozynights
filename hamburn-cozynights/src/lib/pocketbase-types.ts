@@ -19,7 +19,8 @@ export enum Collections {
 	Users = 'users',
 	AppSettings = 'app_settings',
 	GuestNotify = 'guest_notify',
-	AdminEvents = 'admin_events'
+	AdminEvents = 'admin_events',
+	SpecialRequests = 'special_requests'
 }
 
 // Alias types for improved usability
@@ -129,6 +130,7 @@ export type BedsRecord = {
 	room: RecordIdString;
 	updated: IsoAutoDateString;
 	is_locked?: boolean;
+	is_special?: boolean;
 };
 
 export type HousesRecord = {
@@ -185,6 +187,7 @@ export type AppSettingsRecord = {
 	booking_unlock_at?: IsoDateString;
 	notify_mail?: boolean;
 	telegram_bot?: string;
+	special_requests_open?: boolean;
 	updated: IsoAutoDateString;
 };
 
@@ -195,6 +198,7 @@ export type GuestNotifyRecord = {
 	id: string;
 	last_error?: string;
 	mail_label?: string;
+	mail_req?: string;
 	mail_sent?: IsoDateString;
 	mail_spot?: string;
 	mail_to?: string;
@@ -202,6 +206,7 @@ export type GuestNotifyRecord = {
 	tg_chat?: string;
 	tg_label?: string;
 	tg_new?: boolean;
+	tg_req?: string;
 	tg_sent?: IsoDateString;
 	tg_spot?: string;
 	tg_token_exp?: IsoDateString;
@@ -228,6 +233,26 @@ export type AdminEventsRecord<Tdetails = unknown> = {
 	updated: IsoAutoDateString;
 };
 
+export enum SpecialRequestsStatusOptions {
+	pending = 'pending',
+	approved = 'approved',
+	declined = 'declined'
+}
+export type SpecialRequestsRecord = {
+	bed?: RecordIdString;
+	burner_name?: string;
+	consent_at: IsoDateString;
+	created: IsoAutoDateString;
+	decided_at?: IsoDateString;
+	decided_by?: string;
+	id: string;
+	needs?: string;
+	order: RecordIdString;
+	reason?: string;
+	status: SpecialRequestsStatusOptions;
+	updated: IsoAutoDateString;
+};
+
 // Response types include system fields and match responses from the PocketBase API
 export type AuthoriginsResponse<Texpand = unknown> = Required<AuthoriginsRecord> &
 	BaseSystemFields<Texpand>;
@@ -251,6 +276,8 @@ export type AdminEventsResponse<Tdetails = unknown, Texpand = unknown> = Require
 	AdminEventsRecord<Tdetails>
 > &
 	BaseSystemFields<Texpand>;
+export type SpecialRequestsResponse<Texpand = unknown> = Required<SpecialRequestsRecord> &
+	BaseSystemFields<Texpand>;
 
 // Types containing all Records and Responses, useful for creating typing helper functions
 
@@ -269,6 +296,7 @@ export type CollectionRecords = {
 	app_settings: AppSettingsRecord;
 	guest_notify: GuestNotifyRecord;
 	admin_events: AdminEventsRecord;
+	special_requests: SpecialRequestsRecord;
 };
 
 export type CollectionResponses = {
@@ -286,6 +314,7 @@ export type CollectionResponses = {
 	app_settings: AppSettingsResponse;
 	guest_notify: GuestNotifyResponse;
 	admin_events: AdminEventsResponse;
+	special_requests: SpecialRequestsResponse;
 };
 
 // Utility types for create/update operations

@@ -27,6 +27,11 @@ export interface TemplateBed {
 	label: string;
 	enabled: boolean;
 	is_locked: boolean;
+	/**
+	 * A special-needs spot: only the crew assigns it. Only present when true, so
+	 * layouts without special-needs spots look exactly like before.
+	 */
+	is_special?: true;
 }
 
 export interface TemplateRoom {
@@ -55,10 +60,12 @@ export interface TemplateSummary {
 	houses: number;
 	rooms: number;
 	beds: number;
-	/** Bookable: active and not locked. */
+	/** Bookable: active, not locked, no special-needs spot. */
 	activeBeds: number;
 	/** Active but reserved by the crew. */
 	lockedBeds: number;
+	/** Active special-needs spots (not locked): the crew assigns them. */
+	specialBeds: number;
 	deactivatedBeds: number;
 }
 
@@ -76,12 +83,14 @@ export function summarizeTemplate(houses: TemplateHouse[]): TemplateSummary {
 	const beds = rooms.flatMap((room) => room.beds);
 	const deactivatedBeds = beds.filter((bed) => !bed.enabled).length;
 	const lockedBeds = beds.filter((bed) => bed.enabled && bed.is_locked).length;
+	const specialBeds = beds.filter((bed) => bed.enabled && !bed.is_locked && bed.is_special).length;
 	return {
 		houses: houses.length,
 		rooms: rooms.length,
 		beds: beds.length,
-		activeBeds: beds.length - deactivatedBeds - lockedBeds,
+		activeBeds: beds.length - deactivatedBeds - lockedBeds - specialBeds,
 		lockedBeds,
+		specialBeds,
 		deactivatedBeds
 	};
 }
@@ -90,7 +99,13 @@ export function summarizeTemplate(houses: TemplateHouse[]): TemplateSummary {
 export interface LayoutRecords {
 	houses: { id: string; name: string; x?: number; y?: number }[];
 	rooms: { id: string; house: string; name: string; room_number?: number }[];
-	beds: { room: string; label?: string; enabled?: boolean; is_locked?: boolean }[];
+	beds: {
+		room: string;
+		label?: string;
+		enabled?: boolean;
+		is_locked?: boolean;
+		is_special?: boolean;
+	}[];
 }
 
 /** Builds a version 2.0 template from flat record lists, in a stable order. */
@@ -112,10 +127,11 @@ export function buildTemplate(records: LayoutRecords, exportedAt = new Date()): 
 					name: room.name,
 					room_number: room.room_number ?? 0,
 					beds: (bedsByRoom.get(room.id) ?? [])
-						.map((bed) => ({
+						.map((bed): TemplateBed => ({
 							label: bed.label ?? '',
 							enabled: bed.enabled !== false,
-							is_locked: bed.is_locked === true
+							is_locked: bed.is_locked === true,
+							...(bed.is_special === true ? { is_special: true } : {})
 						}))
 						.sort((a, b) => compareNatural(a.label, b.label))
 				}))
@@ -141,7 +157,7 @@ export function stringifyTemplate(template: LayoutTemplate): string {
 			key === 'beds' && Array.isArray(value)
 				? (value as TemplateBed[]).map((bed) => {
 						spotLines.push(
-							`{ "label": ${JSON.stringify(bed.label)}, "enabled": ${bed.enabled}, "is_locked": ${bed.is_locked} }`
+							`{ "label": ${JSON.stringify(bed.label)}, "enabled": ${bed.enabled}, "is_locked": ${bed.is_locked}${bed.is_special ? ', "is_special": true' : ''} }`
 						);
 						return `${mark}${spotLines.length - 1}`;
 					})
@@ -524,6 +540,7 @@ function readBeds(room: Json, where: string, errors: string[], warnings: string[
 			enabled: readFlag(entry.enabled, bedWhere, 'enabled', true, errors),
 			is_locked: readFlag(entry.is_locked, bedWhere, 'is_locked', false, errors)
 		};
+		if (readFlag(entry.is_special, bedWhere, 'is_special', false, errors)) bed.is_special = true;
 		const key = bed.label.toLowerCase();
 		if (key && firstUse.has(key)) {
 			errors.push(

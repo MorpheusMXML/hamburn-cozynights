@@ -4,6 +4,7 @@ import type { PageServerLoad, Actions } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
 import { BookingService, isBedBookable } from '$lib/server/booking';
 import { getBookingSettings } from '$lib/server/settings';
+import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 
@@ -50,10 +51,18 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			return { ...room, freeCount, totalCount: roomBeds.length };
 		});
 
+		const spotFixed = userBed
+			? await isSpotFixed(locals.adminPb, order.id, userBed.id).catch((err) => {
+					console.error('[House] Special-needs request lookup failed:', (err as Error)?.message);
+					return false;
+				})
+			: false;
+
 		return {
 			house,
 			rooms: roomsWithStats,
 			userBedId: userBed?.id || null,
+			spotFixed,
 			isBookingActive: settings.isBookingActive,
 			bookingUnlockAt: settings.bookingUnlockAt
 		};
@@ -99,6 +108,9 @@ export const actions: Actions = {
 				return fail(404, {
 					error: 'Your ticket code was not found. Go to the start page and enter it again.'
 				});
+			}
+			if (await isSpotFixed(locals.adminPb, order.id)) {
+				return fail(409, { error: SPOT_FIXED_MESSAGE });
 			}
 
 			await bookingService.unbookOrder(order.id);

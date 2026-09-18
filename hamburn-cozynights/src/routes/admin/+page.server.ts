@@ -14,6 +14,7 @@ import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
 import { parseTemplate, TEMPLATE_LIMITS, type TemplateParseResult } from '$lib/template';
 import { getCampCounts, importTemplate, TemplateImportError } from '$lib/server/template';
 import { logAdminEvent } from '$lib/server/admin-events';
+import { crewBookedBeds } from '$lib/server/special-requests';
 
 /**
  * Shared first half of the template preview and import: both are superuser-only,
@@ -61,13 +62,14 @@ async function readTemplateUpload(
 	return { parsed, form };
 }
 
-/** Clears the burner names of all orders (they only describe bookings). */
-async function clearBurnerNames(pb: TypedPocketBase) {
+/** Clears the burner names of all orders (they only describe bookings), except `keep`. */
+async function clearBurnerNames(pb: TypedPocketBase, keep: Set<string> = new Set()) {
 	const named = await pb.collection('orders').getFullList({
 		filter: 'burner_name != ""',
 		fields: 'id'
 	});
 	for (const order of named) {
+		if (keep.has(order.id)) continue;
 		await pb.collection('orders').update(order.id, { burner_name: '' });
 	}
 }
@@ -132,12 +134,24 @@ export const actions: Actions = {
 		try {
 			// 1. Release every occupied bed. The orders themselves are the ticket
 			//    roster (one order per ticket code) and must survive, otherwise every
-			//    guest's code would stop working.
-			const occupiedBeds = await locals.adminPb.collection('beds').getFullList({
+			//    guest's code would stop working. Spots the crew booked for
+			//    approved special-needs requests stay: they were handed out on
+			//    purpose, usually before booking opened.
+			const crewBooked = await crewBookedBeds(locals.adminPb);
+			const booked = await locals.adminPb.collection('beds').getFullList({
 				filter: 'occupied = true || order != ""'
 			});
+			const occupiedBeds = booked.filter(
+				(bed) => !(bed.order && crewBooked.get(bed.id) === bed.order)
+			);
+			const kept = booked.length - occupiedBeds.length;
+			const keep = new Set(
+				booked.filter((bed) => !occupiedBeds.includes(bed)).map((bed) => bed.order)
+			);
 
-			console.log(`[Action:clearAllBookings] Clearing ${occupiedBeds.length} spots.`);
+			console.log(
+				`[Action:clearAllBookings] Clearing ${occupiedBeds.length} spots, keeping ${kept} special-needs spots.`
+			);
 
 			for (const bed of occupiedBeds) {
 				await locals.adminPb.collection('beds').update(bed.id, {
@@ -147,13 +161,14 @@ export const actions: Actions = {
 			}
 
 			// 2. Forget the burner names chosen for those bookings.
-			await clearBurnerNames(locals.adminPb);
+			await clearBurnerNames(locals.adminPb, keep);
 
 			console.log('[Action:clearAllBookings] SUCCESS. All spots released, ticket codes kept.');
 			await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
-				released: occupiedBeds.length
+				released: occupiedBeds.length,
+				kept
 			});
-			return { success: true };
+			return { success: true, kept };
 		} catch (err) {
 			console.error('[Action:clearAllBookings] FAILED:', err);
 			return fail(500, { error: 'Purge failed' });
@@ -483,6 +498,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		sanityWarnings,
 		history,
 		isBookingActive: settings.isBookingActive,
-		bookingUnlockAt: settings.bookingUnlockAt
+		bookingUnlockAt: settings.bookingUnlockAt,
+		requestsOpen: settings.requestsOpen
 	};
 };

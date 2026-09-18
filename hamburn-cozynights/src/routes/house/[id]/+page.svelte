@@ -48,7 +48,12 @@
 			<div class="banner-icon" aria-hidden="true">⚠️</div>
 			<div class="banner-content">
 				<h3>You already have a spot</h3>
-				{#if data.isBookingActive}
+				{#if data.spotFixed}
+					<p>
+						The crew picked your spot for you because of your special-needs request, so only the
+						crew can change it.
+					</p>
+				{:else if data.isBookingActive}
 					<p>
 						One ticket code is one spot. To pick a different one, release your current spot first.
 					</p>

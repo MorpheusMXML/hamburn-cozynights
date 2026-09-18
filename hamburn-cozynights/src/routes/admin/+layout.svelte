@@ -25,6 +25,16 @@
 			</div>
 
 			<div class="user-area">
+				<a
+					href="/admin/requests"
+					class="check-link requests-link"
+					title="Special-needs requests{data.openRequests
+						? `: ${data.openRequests} waiting for a decision`
+						: ''}"
+				>
+					♿ Special needs
+					{#if data.openRequests}<span class="request-count">{data.openRequests}</span>{/if}
+				</a>
 				<a href="/admin/check" class="check-link" title="Check booking passes">🎫 Check passes</a>
 				<div class="user-info">
 					<span class="user-label">Burner:</span>
@@ -107,6 +117,23 @@
 	}
 	.check-link:hover {
 		background: rgba(45, 212, 191, 0.1);
+	}
+	.requests-link {
+		gap: 0.4rem;
+		border-color: #f472b6;
+		color: #f9a8d4;
+	}
+	.requests-link:hover {
+		background: rgba(244, 114, 182, 0.1);
+	}
+	.request-count {
+		min-width: 1.4rem;
+		padding: 0 0.35rem;
+		border-radius: 999px;
+		background: #f472b6;
+		color: #111;
+		font-size: 0.8rem;
+		text-align: center;
 	}
 
 	/* Logo Area */

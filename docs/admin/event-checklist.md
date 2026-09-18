@@ -5,8 +5,8 @@ From an empty map to the morning after: everything the crew does in CozyNights f
 ```mermaid
 timeline
   section 🛠 Staging
-    Weeks before : Build or import the layout : Check spot states, clear the red alert
-    Days before : Load tickets, test with a code : Schedule the go-live
+    Weeks before : Build or import the layout : Check spot states, clear the red alert : Mark special-needs spots, open requests
+    Days before : Load tickets, test with a code : Book special-needs spots : Schedule the go-live
   section 🎪 Live Booking
     Opening day : Guests book their beds
     During the event : Watch occupancy : Lock broken beds
@@ -23,6 +23,8 @@ timeline
 - [ ] **Spot states checked.** New spots are active right away. Deactivate ❄️ the ones that aren't in use; after a template import, look for ⚪️ INACTIVE spots that should be bookable.
 - [ ] **Red alert gone.** No _NO ROOMS DETECTED_ or _EMPTY MODULE_ warnings in the Control Center.
 - [ ] **Crew beds locked.** Beds that guests shouldn't book are locked 🔒.
+- [ ] **Special-needs spots marked.** Spots that suit guests with special needs (lower bunks, step-free, quiet, near a toilet, with a socket) are marked ♿ on their room pages. See [Special-needs requests](./special-needs).
+- [ ] **Special-needs requests opened** in the Control Center, once the tickets are loaded, and announced to guests together with the booking date.
 - [ ] **Backup.** Export a template of the finished layout.
 
 ## Days before: get ready to open
@@ -32,6 +34,7 @@ timeline
 - [ ] **Test run.** Sign in with a real test ticket code in a private browser window. The map shows the countdown, rooms show the right spots.
 - [ ] **Test bookings removed.** If you booked in staging, release those spots again.
 - [ ] **Legal pages complete.** The legal notice, the privacy policy and the booking rules show no red note. See [Legal pages](./legal).
+- [ ] **Special-needs requests decided.** Every request at ♿ **Special needs** is approved with a spot or declined before booking opens. Close requests when you want no more, and switch unneeded ♿ spots back to normal.
 - [ ] **Go-live scheduled.** Set the timer in the Control Center (Europe/Berlin time) and announce the same time to guests.
 
 > [!TIP] Announce the ticket code, not a password
@@ -54,11 +57,11 @@ timeline
 
 - [ ] **Export the final layout** as a template for next year.
 - [ ] **Switch back to staging.** Confirm the dialog.
-- [ ] **Clear all bookings** (superuser). Offered right after switching back. Spots become free, burner names are forgotten, ticket codes stay.
+- [ ] **Clear all bookings** (superuser). Offered right after switching back. Spots become free, burner names are forgotten, ticket codes stay. Spots the crew booked for special-needs requests stay as long as their requests exist: clear once more after **Forget the guests' contacts** below.
 - [ ] **Delete the ticket list** within the period the [privacy policy](./legal) promises (default: four weeks after the event). An operator removes the codes on the server, see [Check and tidy up](#check-and-tidy-up).
 - [ ] **Cancel leftover timers**, so booking doesn't open again by accident.
 - [ ] **Tidy up admin access.** Remove accounts of people who have left the crew.
-- [ ] **Forget the guests' contacts.** `./scripts/cozy-admin.sh tickets forget-contacts --yes` deletes every guest e-mail address and Telegram link; the ticket codes stay.
+- [ ] **Forget the guests' contacts.** `./scripts/cozy-admin.sh tickets forget-contacts --yes` deletes every guest e-mail address, Telegram link and special-needs request; the ticket codes stay.
 
 ## Ticket codes
 

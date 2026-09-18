@@ -15,8 +15,8 @@ The texts are a careful starting point that matches what CozyNights really does.
 | Page             | Content                                                                                                                                                                                                                                              |
 | :--------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/legal-notice`  | Provider details under § 5 DDG, contact, register entry, VAT ID if set, a disclaimer (content, links, availability, booking a bed, copyright)                                                                                                        |
-| `/privacy`       | Controller, hosting, server logs, the brake on guessing ticket codes, ticket codes, e-mail addresses, bookings and booking passes, crew sign-in with Google, browser storage, the docs on GitHub Pages, e-mail contact, recipients, rights incl. the right to object. Once they are set up, also the booking e-mails, the Telegram option for guests and the crew group ([Notifications](./notifications)) |
-| `/booking-rules` | Only Indoor memberships include a bed, when and how to book, no claim to a particular bed (the crew may move people and writes to them), burner names, fair play, consent and Leave No Trace in the houses                                           |
+| `/privacy`       | Controller, hosting, server logs, the brake on guessing ticket codes, ticket codes, e-mail addresses, bookings and booking passes, crew sign-in with Google, browser storage, the docs on GitHub Pages, e-mail contact, recipients, rights incl. the right to object. Once they are set up, also the booking e-mails, the Telegram option for guests and the crew group ([Notifications](./notifications)). Special-needs requests: explicit consent under Art. 9 GDPR, encryption, who reads them, deletion ([Special-needs requests](./special-needs)) |
+| `/booking-rules` | Only Indoor memberships include a bed, when and how to book, special-needs spots (ask the crew, the crew decides and changes a spot it booked), no claim to a particular bed (the crew may move people and writes to them), burner names, fair play, consent and Leave No Trace in the houses |
 
 Left out on purpose:
 
@@ -75,6 +75,7 @@ The ticket list holds the ticket codes and the buyers' e-mail addresses, so the 
 - [ ] **Data processing agreement with the hoster.** The privacy policy says one exists. Hetzner offers it in the account settings of its console.
 - [ ] **Data processing agreement with the mail service**, which is named in `LEGAL_MAIL_PROVIDER`.
 - [ ] **Telegram sections checked**: consent for guests, and the crew group, which gets admins' e-mail addresses on sign-ins and access changes.
+- [ ] **Special-needs section checked**: the consent text on `/special-needs` and the privacy section. What guests write there is often health data (Art. 9 GDPR); only admins read it, and it is deleted with `forget-contacts` after the event.
 - [ ] **Server location.** The privacy policy says the server is in the EU.
 - [ ] **Log retention matches.** nginx rotates its logs after as many days as `LEGAL_LOG_RETENTION_DAYS` says (Debian default: 14 days, `/etc/logrotate.d/nginx`).
 - [ ] **Deletion after the event is planned** within the period the privacy policy names. See [After the burn](./event-checklist#after-the-burn).

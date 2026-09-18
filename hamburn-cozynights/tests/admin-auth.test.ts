@@ -328,9 +328,12 @@ describe('admin layout', () => {
 			locals: { admin: toAdminSession(ADMIN_RECORD) },
 			url: new URL('http://x/admin')
 		} as any);
+		// openRequests: special-needs requests waiting for a decision (no
+		// database here, so 0)
 		expect(data).toEqual({
 			admin: { email: 'max@mauersegler.art', name: 'Max', role: 'superuser' },
-			isSuperuser: true
+			isSuperuser: true,
+			openRequests: 0
 		});
 	});
 });
@@ -529,7 +532,11 @@ describe('superuser-only dashboard actions', () => {
 	function makeAdminPb() {
 		const service = {
 			getFullList: vi.fn(async (opts?: any) =>
-				opts?.filter?.includes('burner_name') ? [{ id: 'order1' }] : [{ id: 'bed1' }]
+				opts?.filter?.includes('burner_name')
+					? [{ id: 'order1' }, { id: 'order2' }]
+					: opts?.filter?.includes('approved')
+						? [{ order: 'order2', bed: 'bed2' }] // the crew booked bed2 for a special-needs request
+						: [{ id: 'bed1' }, { id: 'bed2', order: 'order2' }]
 			),
 			update: vi.fn(async () => ({})),
 			delete: vi.fn(async () => ({})),
@@ -569,9 +576,12 @@ describe('superuser-only dashboard actions', () => {
 			locals: { pb, adminPb: pb, admin: boss }
 		} as any);
 
-		expect(result).toEqual({ success: true });
+		expect(result).toEqual({ success: true, kept: 1 });
 		expect(service.update).toHaveBeenCalledWith('bed1', { occupied: false, order: null });
 		expect(service.update).toHaveBeenCalledWith('order1', { burner_name: '' });
 		expect(service.delete).not.toHaveBeenCalled();
+		// The spot the crew assigned for a special-needs request stays, with its name.
+		expect(service.update).not.toHaveBeenCalledWith('bed2', expect.anything());
+		expect(service.update).not.toHaveBeenCalledWith('order2', expect.anything());
 	});
 });

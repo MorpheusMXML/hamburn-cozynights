@@ -162,6 +162,27 @@ export const actions: Actions = {
 		}
 	},
 
+	/**
+	 * Special-needs spot (♿): guests can't book it, admins assign it to approved
+	 * requests (/admin/requests). Allowed during Live Booking too, like locking.
+	 */
+	toggleSpecial: async ({ request, locals }) => {
+		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
+
+		const data = await request.formData();
+		const id = data.get('id') as string;
+		const isSpecial = data.get('is_special') === 'true';
+		if (!id) return fail(400, { message: 'No spot was selected. Reload the page and try again.' });
+
+		try {
+			await locals.pb.collection('beds').update(id, { is_special: !isSpecial });
+			return { success: true };
+		} catch (err) {
+			console.error('[Action:toggleSpecial] FAILED:', err);
+			return fail(500, { message: SERVER_ERROR });
+		}
+	},
+
 	toggleLocked: async ({ request, locals }) => {
 		const data = await request.formData();
 		const id = data.get('id') as string;

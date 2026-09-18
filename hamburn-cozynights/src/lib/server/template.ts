@@ -43,7 +43,7 @@ export async function exportTemplate(pb: TypedPocketBase): Promise<LayoutTemplat
 	const [houses, rooms, beds] = await Promise.all([
 		pb.collection('houses').getFullList({ fields: 'id,name,x,y' }),
 		pb.collection('rooms').getFullList({ fields: 'id,house,name,room_number' }),
-		pb.collection('beds').getFullList({ fields: 'room,label,enabled,is_locked' })
+		pb.collection('beds').getFullList({ fields: 'room,label,enabled,is_locked,is_special' })
 	]);
 	return buildTemplate({ houses, rooms, beds });
 }
@@ -203,6 +203,7 @@ async function replaceLayout(pb: TypedPocketBase, template: LayoutTemplate) {
 						label: bed.label,
 						enabled: bed.enabled,
 						is_locked: bed.is_locked,
+						is_special: bed.is_special === true,
 						occupied: false,
 						room: roomRecord.id
 					});

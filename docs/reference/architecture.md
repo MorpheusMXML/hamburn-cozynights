@@ -68,6 +68,8 @@ erDiagram
   ROOMS ||--o{ BEDS : contains
   ORDERS |o--o| BEDS : "books at most one"
   ORDERS ||--o| GUEST_NOTIFY : "messages about"
+  ORDERS ||--o| SPECIAL_REQUESTS : "asks with"
+  SPECIAL_REQUESTS |o--o| BEDS : "spot the crew booked"
   HOUSES {
     text name
     number x "map position"
@@ -82,6 +84,7 @@ erDiagram
     text label
     bool enabled "inactive when false"
     bool is_locked "blocked for guests"
+    bool is_special "special-needs spot"
     bool occupied
     relation order "the booking ticket"
   }
@@ -99,6 +102,13 @@ erDiagram
     text mail_to
     text tg_chat "linked Telegram chat"
   }
+  SPECIAL_REQUESTS {
+    select status "pending, approved, declined"
+    text needs "encrypted"
+    text reason "encrypted"
+    date consent_at
+    relation bed "spot the crew booked"
+  }
   ADMIN_EVENTS {
     text action
     text actor
@@ -109,6 +119,7 @@ erDiagram
     date booking_unlock_at "go-live timer"
     bool notify_mail "e-mail is set up"
     text telegram_bot "bot for guest updates"
+    bool special_requests_open "requests switch"
   }
   ADMINS {
     email email
@@ -123,6 +134,7 @@ erDiagram
 - **`app_settings`** is a single record holding the phase switch and the go-live timer.
 - **`admins`** is its own auth collection for Google sign-in. PocketBase's default `users` collection is unused and closed for sign-up.
 - **`guest_notify`** holds what each ticket was last told and where (e-mail, linked Telegram chat); **`admin_events`** is the audit log that feeds the crew group. Neither has API rules: only PocketBase itself and the app server use them.
+- **`special_requests`** holds at most one special-needs request per ticket. What the guest ticked and wrote is encrypted by the app; the collection has no API rules. `bed` is the spot the crew booked for it, the only spot the guest can't change themselves. See [Special-needs requests](../admin/special-needs).
 - **`pass_code`** is created by PocketBase when a ticket gets a spot. It is not the ticket code: the pass shows the booking, never lets anyone book.
 - Schema and API rules live in `hamburn-cozynights/pb_migrations/`. The migrations are idempotent, so a database restored from a backup is brought to the current rules too.
 
@@ -135,6 +147,7 @@ erDiagram
 | `/house/:id` | guests with a code | Rooms of a house with free spots |
 | `/room/:id` | guests with a code | Spots of a room, booking dialog |
 | `/random-bed` | guests with a code | Destiny Roulette |
+| `/special-needs` | guests with a code | Ask for a special-needs spot, see the crew's answer, withdraw |
 | `/legal-notice` | everyone | Legal notice (Impressum), details from the server's `.env`; `/impressum` redirects here |
 | `/privacy` | everyone | Privacy policy; `/datenschutz` redirects here |
 | `/booking-rules` | everyone | Booking rules, linked from every booking dialog |
@@ -146,6 +159,7 @@ erDiagram
 | `/admin/house/:id` | admins | Rooms of a house |
 | `/admin/room/:id` | admins | Spots of a room |
 | `/admin/check` | admins | Check booking passes: typed code, USB scanner or camera |
+| `/admin/requests` | admins | Special-needs requests: read, approve or decline, book a spot (also while booking is closed), open or close requests |
 | `/admin/docs/*` | admins | The full documentation, admin pages included |
 | `/admin/api/export-template` | admins | Layout template download |
 

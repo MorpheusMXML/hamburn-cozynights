@@ -30,12 +30,21 @@ export class InventoryService {
 
 			// Serialize everything to plain objects to ensure compatibility.
 			// This tree is the public guest map: deactivated beds are left out,
-			// locked beds show as taken, and the booking's order id is not exposed.
+			// locked and special-needs beds show as taken, and neither the booking's
+			// order id nor why a bed is taken is exposed: together with the burner
+			// names on the room pages, a lock or special-needs flag would tell who
+			// has special needs.
 			const houses = housesRaw.map((h) => ({ ...h }));
 			const rooms = roomsRaw.map((r) => ({ ...r }));
 			const beds = bedsRaw
 				.filter((b) => b.enabled !== false)
-				.map((b) => ({ ...b, occupied: !!b.occupied || !!b.is_locked, order: '' }));
+				.map((b) => ({
+					...b,
+					occupied: !!b.occupied || !!b.is_locked || !!b.is_special,
+					order: '',
+					is_locked: false,
+					is_special: false
+				}));
 
 			// Build the hierarchy
 			const tree = houses.map((house) => {
@@ -49,7 +58,7 @@ export class InventoryService {
 						};
 					});
 
-				// Calculate stats for the house (locked beds already count as taken here)
+				// Calculate stats for the house (locked and special beds already count as taken here)
 				const allBedsInHouse = houseRooms.flatMap((r) => r.beds);
 				const totalBeds = allBedsInHouse.length;
 				const occupiedBeds = allBedsInHouse.filter((b) => b.occupied).length;

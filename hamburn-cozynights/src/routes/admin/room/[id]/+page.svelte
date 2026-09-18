@@ -196,6 +196,9 @@
 									{bed.occupied ? 'CLAIMED 👥' : 'VACANT ✨'}
 								{/if}
 							</span>
+							{#if bed.is_special}
+								<span class="bed-status special">SPECIAL NEEDS ♿</span>
+							{/if}
 						</div>
 
 						<div class="bed-actions">
@@ -215,6 +218,25 @@
 								>
 									<span class="btn-emoji">{bed.is_locked ? '🔓' : '🔒'}</span>
 									<span class="btn-text">{bed.is_locked ? 'UNLOCK' : 'LOCK'}</span>
+								</button>
+							</form>
+
+							<form
+								action="?/toggleSpecial"
+								method="POST"
+								use:enhance={toggleSpot('Special-needs mark not changed')}
+							>
+								<input type="hidden" name="id" value={bed.id} />
+								<input type="hidden" name="is_special" value={String(!!bed.is_special)} />
+								<button
+									class="btn-icon pink"
+									class:active={bed.is_special}
+									title={bed.is_special
+										? 'Special-needs spot: only the crew assigns it. Click to make it a normal spot again.'
+										: 'Special-needs spot: guests cannot book it, the crew assigns it to approved special-needs requests'}
+								>
+									<span class="btn-emoji">♿</span>
+									<span class="btn-text">{bed.is_special ? 'NORMAL' : 'SPECIAL'}</span>
 								</button>
 							</form>
 
@@ -583,11 +605,12 @@
 		color: #777;
 	}
 
-	/* Own row below the label: the four buttons don't fit next to it in a card of
-	   the grid's minimum width, and the card would clip them. */
+	/* Own row below the label: the five buttons don't fit next to it in a card of
+	   the grid's minimum width, and the card would clip them. In a narrow card
+	   they wrap onto a second row instead of cutting their words. */
 	.bed-actions {
 		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(3.75rem, 1fr));
 		gap: 0.5rem;
 		flex-basis: 100%;
 		padding-top: 1rem;
@@ -645,6 +668,16 @@
 		border-color: #fb923c;
 		color: #fb923c;
 		box-shadow: 0 0 10px rgba(251, 146, 60, 0.2);
+	}
+	.btn-icon.pink:hover:not(.disabled),
+	.btn-icon.pink.active {
+		border-color: #f472b6;
+		color: #f472b6;
+		box-shadow: 0 0 10px rgba(244, 114, 182, 0.2);
+	}
+	.bed-status.special {
+		display: block;
+		color: #f472b6;
 	}
 	.btn-icon.vanish:hover:not(.disabled) {
 		border-color: #f87171;

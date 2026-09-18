@@ -155,7 +155,12 @@
 				<div class="warning-icon" aria-hidden="true">⚠️</div>
 				<div class="warning-content">
 					<h3>You already have a spot</h3>
-					{#if data.isBookingActive}
+					{#if data.spotFixed}
+						<p>
+							Your spot is in another room. The crew picked it for you because of your special-needs
+							request, so only the crew can change it.
+						</p>
+					{:else if data.isBookingActive}
 						<p>
 							Your spot is in another room. One ticket code is one spot: to pick one here, release
 							your current spot first.
@@ -210,7 +215,11 @@
 					<h3>Welcome Home!</h3>
 					<p>
 						Spot <strong>{myBed.label}</strong> in this room is yours.
-						{#if data.isBookingActive}Tap it to change your burner name or to release it.{/if}
+						{#if data.spotFixed}
+							The crew picked it for you because of your special-needs request. To change it, please
+							contact the crew.
+							{#if data.isBookingActive}Tap it to change your burner name.{/if}
+						{:else if data.isBookingActive}Tap it to change your burner name or to release it.{/if}
 					</p>
 					{#if data.passCode}
 						<p class="pass-line">
@@ -315,7 +324,11 @@
 						<span class="status-text">Your Spot</span>
 						<span class="guest-name">{bed.burnerName}</span>
 						<small class="edit-hint"
-							>{isLocked ? 'Booking closed' : 'Tap to change or release'}</small
+							>{isLocked
+								? 'Booking closed'
+								: data.spotFixed
+									? 'Tap to change your burner name'
+									: 'Tap to change or release'}</small
 						>
 					</div>
 				</button>
@@ -493,7 +506,7 @@
 							{isSaving ? 'Saving…' : 'Save Spot'}
 						</button>
 						<button type="button" class="btn-cancel" on:click={closeModal}>Cancel</button>
-						{#if selectedBedId === data.userBedId}
+						{#if selectedBedId === data.userBedId && !data.spotFixed}
 							<button type="submit" formaction="?/unbookBed" class="btn-unbook" disabled={isSaving}
 								>Release</button
 							>

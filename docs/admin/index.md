@@ -14,7 +14,7 @@ After signing in you land in the **Control Center** at `/admin`: one page to bui
 | <kbd>🛠 STAGING MODE</kbd> / <kbd>🎪 LIVE BOOKING ACTIVE</kbd> | Shows the current phase. Click to switch. See [Staging & Live Booking](../guide/phases). |
 | <kbd>🛰️ LIST VIEW</kbd> / <kbd>🗺️ MAP VIEW</kbd> | Switches between the map editor and house cards. |
 
-The top bar on every admin page shows <kbd>🎫 Check passes</kbd> (see [Booking passes](./passes)), the account you're signed in with, a **SUPERUSER ⚡️** badge if you are one, and <kbd>Eject 🚀</kbd> to sign out.
+The top bar on every admin page shows <kbd>♿ Special needs</kbd> with the number of requests waiting for a decision (see [Special-needs requests](./special-needs)), <kbd>🎫 Check passes</kbd> (see [Booking passes](./passes)), the account you're signed in with, a **SUPERUSER ⚡️** badge if you are one, and <kbd>Eject 🚀</kbd> to sign out.
 
 ## Go-live timer
 
@@ -24,6 +24,8 @@ Right under the header:
 - **Timer set:** *Auto-opens live booking on …* with <kbd>Cancel Timer ✕</kbd>.
 
 Times are Europe/Berlin (CET/CEST). How the timer interacts with the phase switch is explained in [Going live](../guide/phases#going-live).
+
+Below it, **♿ Special-needs requests: OPEN / CLOSED** opens or closes requests for guests, independent of the phase, with <kbd>Review requests →</kbd> next to it. See [Special-needs requests](./special-needs#_2-open-requests).
 
 ## Intel panel
 

@@ -154,11 +154,13 @@ describe('Room Load & Booking Logic', () => {
 		expect(result.room.id).toBe('room1');
 		expect(result.beds.length).toBe(2);
 		expect(mockAdminPb.update).toHaveBeenCalled(); // Migration was called
+		// A taken spot is never "bookable": the flag would tell locked or
+		// special-needs spots apart from others, next to the burner name.
 		expect(result.beds[1]).toEqual({
 			id: 'bed2',
 			label: 'A2',
 			occupied: true,
-			bookable: true,
+			bookable: false,
 			burnerName: 'Dusty Nomad #123'
 		});
 	});
