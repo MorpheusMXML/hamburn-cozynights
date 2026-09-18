@@ -39,7 +39,7 @@ Only with their ticket code. On a shared device, entering another code switches 
 :::
 
 ::: details A spot says "Not available · Reserved by the crew"
-The crew has locked it, for example because the bed is broken or kept free on purpose. Pick another spot.
+The crew has locked or deactivated it, for example because the bed is broken, kept free on purpose or not in use. Pick another spot.
 :::
 
 ## For admins
@@ -56,8 +56,8 @@ You picked a Google account outside the `@mauersegler.art` Workspace (for exampl
 Structural changes only work in Staging Mode. Switch back to staging first, or, if you only want to take a spot out of service, lock it: that works during Live Booking too. See [Staging & Live Booking](./phases).
 :::
 
-::: details Guests can't book the spots of a room I just created
-Spots created together with a new room, and spots added one by one, start **inactive**. Activate them with ⚡️ on the room page. See [Houses, rooms & spots](../admin/camp-layout#spots).
+::: details Guests can't book a spot
+Check the spot on its room page. Guests can't book **LOCKED 🔒** or ⚪️ **INACTIVE 🧊** spots: unlock it, or activate it with ⚡️ in Staging Mode. New spots are active from the start, but a template import keeps the states stored in the file. See [Houses, rooms & spots](../admin/camp-layout#spots).
 :::
 
 ::: details A house won't move when I drag it

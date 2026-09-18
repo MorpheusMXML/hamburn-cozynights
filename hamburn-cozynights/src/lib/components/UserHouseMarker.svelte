@@ -7,6 +7,8 @@
 	let markerEl: HTMLElement;
 
 	$: isOccupied = status === 'full' || status === 'besetzt';
+	// A house without active spots: nothing to book, but not booked out either.
+	$: isEmpty = status === 'empty';
 </script>
 
 <div
@@ -17,7 +19,7 @@
 >
 	<div class="hit-area"></div>
 
-	<div class="pin" class:occupied={isOccupied} class:hovered>
+	<div class="pin" class:occupied={isOccupied} class:empty={isEmpty} class:hovered>
 		<div class="pulse-ring"></div>
 		<div class="laser-shine"></div>
 	</div>
@@ -121,6 +123,14 @@
 	}
 	.pin.occupied.hovered {
 		border-color: #f87171;
+	}
+
+	.pin.empty {
+		background-color: #666;
+		box-shadow: 0 0 15px rgba(102, 102, 102, 0.6);
+	}
+	.pin.empty.hovered {
+		border-color: #666;
 	}
 
 	.laser-shine {

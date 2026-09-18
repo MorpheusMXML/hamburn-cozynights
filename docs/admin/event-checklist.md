@@ -5,7 +5,7 @@ From an empty map to the morning after: everything the crew does in CozyNights f
 ```mermaid
 timeline
   section 🛠 Staging
-    Weeks before : Build or import the layout : Activate spots, clear the red alert
+    Weeks before : Build or import the layout : Check spot states, clear the red alert
     Days before : Load tickets, test with a code : Schedule the go-live
   section 🎪 Live Booking
     Opening day : Guests book their beds
@@ -20,7 +20,7 @@ timeline
 - [ ] **Start from last year.** A superuser imports last year's template, or you build from scratch. See [Layout templates](./templates).
 - [ ] **Houses on the map.** Every house is placed where it really is. See [Houses, rooms & spots](./camp-layout).
 - [ ] **Rooms and spots complete.** Room names and numbers match the signs on the doors.
-- [ ] **Spots activated.** New rooms' spots start inactive. Check each room page for ⚪️ INACTIVE spots.
+- [ ] **Spot states checked.** New spots are active right away. Deactivate ❄️ the ones that aren't in use; after a template import, look for ⚪️ INACTIVE spots that should be bookable.
 - [ ] **Red alert gone.** No *NO ROOMS DETECTED* or *EMPTY MODULE* warnings in the Control Center.
 - [ ] **Crew beds locked.** Beds that guests shouldn't book are locked 🔒.
 - [ ] **Backup.** Export a template of the finished layout.

@@ -8,6 +8,7 @@
 	import { enhance } from '$app/forms';
 	import { fade, fly, slide } from 'svelte/transition';
 	import { isoToBerlinLocal } from '$lib/time';
+	import { tick } from 'svelte';
 
 	export let data: PageData;
 
@@ -21,10 +22,11 @@
 	$: freeBeds = totalBeds - occupiedBeds;
 	$: occupancyRate = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
 
+	// "Full" means nothing left to book, like the cards' "Fully booked" badge.
 	$: houseStats = {
-		empty: houses.filter((h) => h.occupiedBeds === 0 && h.totalBeds > 0).length,
-		partial: houses.filter((h) => h.occupiedBeds > 0 && h.occupiedBeds < h.totalBeds).length,
-		full: houses.filter((h) => h.occupiedBeds >= h.totalBeds && h.totalBeds > 0).length,
+		empty: houses.filter((h) => h.occupiedBeds === 0 && h.freeBeds > 0).length,
+		partial: houses.filter((h) => h.occupiedBeds > 0 && h.freeBeds > 0).length,
+		full: houses.filter((h) => h.totalBeds > 0 && h.freeBeds === 0).length,
 		unconfigured: houses.filter((h) => h.totalBeds === 0).length
 	};
 
@@ -151,6 +153,17 @@
 		console.log(`[Dashboard] House selected: ${house.name}`);
 	}
 
+	// The editor sidebar belongs to the map view. List-view actions that open it
+	// switch to the map first, otherwise nothing visible would happen.
+	async function showEditorOnMap() {
+		if (showMap) return;
+		showMap = true;
+		await tick();
+		document
+			.querySelector('.details-sidebar')
+			?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+	}
+
 	function handleRenameHouse(house: any) {
 		if (isBookingActive) {
 			alert(
@@ -161,6 +174,16 @@
 		selectedHouseId = house.id;
 		editingHouse = { id: house.id, x: house.x, y: house.y, name: house.name };
 		console.log(`[Dashboard] House selected for rename: ${house.name}`);
+		showEditorOnMap();
+	}
+
+	function handleIgniteFromList() {
+		if (isBookingActive) {
+			alert('🔒 LOCKDOWN ACTIVE: Switch to 🛠 STAGING to ignite new sanctuaries.');
+			return;
+		}
+		handleLocationSelected({ x: 500, y: 350 });
+		showEditorOnMap();
 	}
 
 	async function handleDeleteHouse(house: any) {
@@ -308,7 +331,7 @@
 	const handleImportTemplate: SubmitFunction = ({ cancel }) => {
 		if (
 			!confirm(
-				'☢️ NUCLEAR WARNING ☢️\n\nImporting a template will PERMANENTLY ERASE:\n- All current Houses\n- All current Rooms\n- All current Beds\n- ALL ACTIVE BOOKINGS AND ORDERS\n\nThis cannot be undone. Are you absolutely sure the playa is ready for a reset?'
+				'☢️ NUCLEAR WARNING ☢️\n\nImporting a template will PERMANENTLY ERASE:\n- All current Houses\n- All current Rooms\n- All current Beds and the bookings on them\n\nTicket codes are kept, so guests can book again afterwards.\n\nThis cannot be undone. Are you absolutely sure the playa is ready for a reset?'
 			)
 		) {
 			cancel();
@@ -669,10 +692,7 @@
 
 				<button
 					class="add-house-card"
-					on:click={() =>
-						isBookingActive
-							? alert('🔒 LOCKDOWN ACTIVE: Switch to 🛠 STAGING to ignite new sanctuaries.')
-							: handleLocationSelected({ x: 500, y: 350 })}
+					on:click={handleIgniteFromList}
 					class:disabled={isBookingActive}
 				>
 					<span class="plus">+</span>

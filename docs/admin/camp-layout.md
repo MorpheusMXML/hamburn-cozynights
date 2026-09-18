@@ -10,16 +10,16 @@ The camp is a simple tree: **houses** on the map contain **rooms**, and rooms co
 ### Create a house
 
 - **Map view:** click an empty place on the map. In the *GENERATE SANCTUARY* sidebar enter a name (**UNIT DESIGNATION**) and the **INITIAL CAPACITY (BEDS)**, then press <kbd>IGNITE HOUSE ✨</kbd>.
-- **List view:** click **Ignite New House**, then switch to <kbd>🗺️ MAP VIEW</kbd> where the same sidebar is waiting. The house starts in the middle of the map; drag it into place afterwards.
+- **List view:** click **Ignite New House**. CozyNights switches to the map view and opens the same sidebar. The house starts in the middle of the map; drag it into place afterwards.
 
-CozyNights creates the house, a first room called **Main Module** (#1), and spots **B1 … Bn** for the capacity you entered. These first spots are **active right away**.
+CozyNights creates the house, a first room called **Main Module** (#1), and spots **B1 … Bn** for the capacity you entered. Like every new spot, they are **active right away**.
 
 ### Move, rename, delete
 
 | Task | How |
 | --- | --- |
 | Move | Drag the pin in map view. Saved when you let go. Houses keep a small distance from each other. |
-| Rename | Click the house in map view → change the name → <kbd>SYNC MODULE ✨</kbd>. |
+| Rename | Click the house in map view, or <kbd>RENAME ✏️</kbd> on its card in list view → change the name → <kbd>SYNC MODULE ✨</kbd>. |
 | Delete | <kbd>VANISH FROM PLAYA 🌪️</kbd> in the sidebar or <kbd>VANISH 🌪️</kbd> on the card, then confirm. |
 
 > [!CAUTION] Deleting is final
@@ -43,8 +43,8 @@ Fill in **ADD ROOM ➕**:
 
 Press <kbd>IGNITE ROOM ✨</kbd>.
 
-> [!WARNING] New spots start inactive
-> Spots created together with a room, and spots you add one by one, are **inactive** until you activate them, so nobody can book a half-finished room. Activate each spot with ⚡️ on the room page. Only the spots that come with a brand-new house are active from the start.
+> [!NOTE] New spots are active
+> Every new spot, whether it comes with a house, with a room or on its own, is **active**: guests can book it as soon as booking opens. Lock 🔒 or deactivate ❄️ the spots that shouldn't be booked, see [Spot actions](#spot-actions).
 
 ### Room cards
 
@@ -64,8 +64,8 @@ Open a room by clicking its card on the house page.
 | --- | --- |
 | 🟢 **VACANT ✨** | *Available*: they can book it. |
 | 🔴 **CLAIMED 👥** | *Occupied* with the guest's burner name. |
-| **LOCKED 🔒** | *Not available · Reserved by the crew*. |
-| ⚪️ **INACTIVE 🧊** | *Not available · Reserved by the crew* in its room. It isn't counted as a spot on the map or the house page, the roulette never picks it, and nobody can book it. |
+| **LOCKED 🔒** | *Not available · Reserved by the crew*. It still counts as a spot, but never as a free one. |
+| ⚪️ **INACTIVE 🧊** | *Not available · Reserved by the crew* in its room. It isn't counted in any occupancy numbers (map, Control Center, house pages), the roulette never picks it, and nobody can book it. |
 
 ### Spot actions
 

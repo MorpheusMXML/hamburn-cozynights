@@ -32,7 +32,7 @@ Times are Europe/Berlin (CET/CEST). How the timer interacts with the phase switc
 | --- | --- |
 | **LOAD** | Doughnut chart: share of all spots that are taken. |
 | **New Bookings · Last 7 Days** | New ticket orders per day over the last week, counted in event time. |
-| **EMPTY HOUSES · FILLING · FULL** | How many houses have no, some or no more free spots. |
+| **EMPTY HOUSES · FILLING · FULL** | How many houses have no bookings yet, some bookings, or no free spot left. |
 | **PLAYA PROTOCOLS** | Quick reminders of the editor gestures below. |
 
 ## Red alert: sanity checks
@@ -45,11 +45,13 @@ When the layout has gaps, a red **RED ALERT: ARCHITECTURAL DEVIATIONS** panel li
 | 🚪 **EMPTY MODULE (NO BEDS)** | <kbd>ADD SPOTS 🛌</kbd> | The room page, to add spots |
 
 > [!TIP]
-> During Live Booking, houses without any active spot don't appear on the guest map. Clear the red alert, and activate new spots, before you go live.
+> During Live Booking, houses without any active spot don't appear on the guest map. Clear the red alert before you go live.
 
 ## Map view: the editor
 
 In Staging Mode the map is a live editor. A status bar reads *🛠 EDITOR ACTIVE*; during Live Booking it switches to *🔒 LOCKDOWN* and the map becomes read-only.
+
+Pins are teal while a house has free spots, red when none is left, and grey while it has no active spots at all.
 
 | Gesture | Result |
 | --- | --- |
@@ -63,11 +65,11 @@ In Staging Mode the map is a live editor. A status bar reads *🛠 EDITOR ACTIVE
 
 ![House cards in list view](../assets/screenshots/admin-list-view.webp)
 
-Every house as a card with its occupancy badge (*n spots free*, *Fully booked* or *Not setup*), **Spots Claimed** with a progress bar, and its map coordinates.
+Every house as a card with its occupancy badge (*n spots free*, *Fully booked* or *Not setup*), **Spots Claimed** with a progress bar, and its map coordinates. Locked spots never count as free, and deactivated spots don't count at all.
 
 - Click a card to manage its rooms.
 - <kbd>VANISH 🌪️</kbd> deletes the house after a confirmation.
-- <kbd>RENAME ✏️</kbd> and the **Ignite New House** card prepare the editor sidebar, which appears once you switch to <kbd>🗺️ MAP VIEW</kbd>. A new house starts in the middle of the map (500/350), ready to be dragged into place.
+- <kbd>RENAME ✏️</kbd> and the **Ignite New House** card switch to the map view and open the editor sidebar there. A new house starts in the middle of the map (500/350), ready to be dragged into place.
 
 ## During Live Booking
 

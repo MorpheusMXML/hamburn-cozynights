@@ -1,5 +1,6 @@
 <script lang="ts">
 	import UserHouseMarker from './UserHouseMarker.svelte';
+	import { houseMarkerStatus } from '$lib/occupancy';
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
 
@@ -219,7 +220,7 @@
 						>
 							<UserHouseMarker
 								name={house.name}
-								status={house.occupiedBeds >= house.totalBeds ? 'full' : 'available'}
+								status={houseMarkerStatus(house)}
 								labelPosition={labelPositions[house.id]}
 								hovered={hoveredHouseId === house.id}
 							/>
