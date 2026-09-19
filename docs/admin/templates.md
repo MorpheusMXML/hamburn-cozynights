@@ -13,6 +13,7 @@ Press <kbd>DOWNLOAD JSON 💾</kbd>. Your browser saves `cozynights-layout-YYYY-
 - Works in every phase: Staging, Live Booking and after booking closed (see [Staging, Live & Closed](../guide/phases#who-can-do-what)).
 - Contains **structure only**: no bookings, no ticket codes, no burner names.
 - If the camp has something an import would refuse (two houses with the same name, for example), the manager says so right after the download.
+- **How to build a starting layout** (unfold it under the button) explains the routine: build the camp in Staging Mode, download it, keep the file safe, and next time drop it on *Compare & Import*. <kbd>Download example template</kbd> there gives you `brahmsee-starter.json`, a small worked example for the Brahmsee site.
 
 ## Compare & import
 
@@ -29,18 +30,18 @@ Drop a layout file on <kbd>Compare & Import</kbd>, or tap the field to choose on
 | --- | --- |
 | House | the **name** is the same (upper and lower case don't matter) |
 | Room | it has the same **room number** in that house |
-| Spot | it has the same **label** in that room |
+| Spot | it has the same **label** in that room (upper and lower case don't matter) |
 
-So a house that was renamed shows up twice: as a new house and as a house that is not in the file. Positions, room names and the spot switches (active, locked) are compared.
+So a house that was renamed shows up twice: as a new house and as a house that is not in the file. Positions, room names and the spot switches (active, locked, special needs ♿) are compared.
 
 ### The review
 
-The differences are listed as a tree of houses ▸ rooms ▸ spots. Unfold a house or room with <kbd>+</kbd>, fold it with <kbd>−</kbd>, or use <kbd>+ Expand all</kbd>. Unchanged houses are only named at the end.
+The review names the file and counts what is in it (houses, rooms, spots and special-needs spots); chips below sum up what is new, changed and not in the file. The differences are listed as a tree of houses ▸ rooms ▸ spots. Unfold a house or room with <kbd>+</kbd>, fold it with <kbd>−</kbd>, or use <kbd>+ Expand all</kbd>. Unchanged houses are only named at the end.
 
 | Badge | Meaning | Ticked at the start |
 | --- | --- | --- |
 | **NEW** | In the file, not in the camp | ✓ |
-| **CHANGED** | Moved, renamed, or a spot switch differs (the line says what: `position: 425 / 150 → 455 / 150`) | ✓ |
+| **CHANGED** | Moved, renamed, or a spot switch differs (the line says what: `position: 425 / 150 → 455 / 150`, `special needs: off → on`) | ✓ |
 | **NOT IN FILE** | In the camp, not in the file. ⚠️ marks spots that are booked. | ✗ |
 
 Tick or untick anything. A house's checkbox covers everything inside it; a half-filled box means only part of it is chosen. Two rules keep the choice consistent:
@@ -63,7 +64,8 @@ flowchart LR
 
 - **Bookings stay** on every spot that is not removed, also on moved houses and renamed rooms.
 - **Removing booked spots** releases those bookings. The guests get a *spot was released* e-mail, their burner names are forgotten, and their ticket codes stay valid. You confirm this in a dialog first; without removals, applying needs no extra click.
-- **A backup comes first.** Its name is shown afterwards (`pre-import-….zip`); a superuser can restore it in the PocketBase dashboard under Settings → Backups. If the backup fails, nothing happens and you may choose to apply without one.
+- **A backup comes first.** Its name is shown afterwards (`pre-import-….zip`); a superuser can restore it in the PocketBase dashboard under Settings → Backups. The ten newest of these backups are kept, older ones are removed. If the backup fails, nothing happens and you may choose to apply without one.
+- **One import at a time.** While another import runs, applying is refused with *Another import is running right now. Wait until it has finished, then check the layout before you import again.*
 - **New parts are created all or nothing:** if the database refuses one, everything created so far is removed again and the camp is unchanged. Changes and removals that fail afterwards are listed; the rest stays applied.
 - **Afterwards the file is compared again,** so you see what is left, for example the houses you chose to keep.
 

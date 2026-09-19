@@ -109,7 +109,9 @@ export async function findPass(adminPb: TypedPocketBase, code: string): Promise<
 					spot: bed.label,
 					enabled: bed.enabled !== false,
 					locked: !!bed.is_locked,
-					since: bed.updated
+					// when the spot got this ticket (pb_hooks/lib/booked.js); `updated`
+					// also moves on a rename, a lock or a ♿ toggle
+					since: bed.booked_at || bed.updated
 				}
 			: null
 	};

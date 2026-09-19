@@ -46,10 +46,10 @@ The details are `LEGAL_*` variables in the environment's `.env`, next to the oth
 | `LEGAL_SUPERVISORY_AUTHORITY` | optional        | The data protection authority of the provider's state                                                          |
 | `LEGAL_LOG_RETENTION_DAYS`    | optional        | How long nginx keeps access logs; default `14`                                                                 |
 | `LEGAL_DELETION_PERIOD`       | optional        | When bookings and the ticket list are deleted; default _at the latest four weeks after the end of the event_   |
-| `LEGAL_TERMS_URL`             | once published  | Link to the membership terms at the ticket shop; `https://` only                                               |
-| `LEGAL_CODE_OF_CONDUCT_URL`   | recommended     | Link to the event's code of conduct (Hamburn: `https://hamburn.de/code-of-conduct`); the booking rules link it |
+| `LEGAL_TERMS_URL`             | once published  | Link to the membership terms at the ticket shop, a full `https://` address                                     |
+| `LEGAL_CODE_OF_CONDUCT_URL`   | recommended     | Link to the event's code of conduct (Hamburn: `https://hamburn.de/code-of-conduct`); the booking rules link it. A full `https://` address |
 
-While a required value is missing, the pages show a red note for the operators and the app log names the missing variables on the first visit. `LEGAL_MAIL_PROVIDER` counts as required as soon as the server sends e-mail.
+While one of the four required values is missing, the pages show a red note for the operators (*Note for the operators: details are missing on this server (…)*) and the app log names the missing variables on the first visit. `LEGAL_MAIL_PROVIDER` isn't part of that note: while the server sends e-mail and the value is missing, the privacy policy shows *Mail service missing (LEGAL_MAIL_PROVIDER)* in its section on booking e-mails instead, so read that page once mail is set up.
 
 The privacy policy asks PocketBase which messages this server sends: the sections on booking e-mails, on Telegram for guests and on the crew group only appear once e-mail or the Telegram bot is set up. Telegram runs outside the EU, so guests only get messages there after their own consent (they press START in the bot's chat).
 
@@ -75,7 +75,7 @@ The ticket list holds the ticket codes and the buyers' e-mail addresses, so the 
 - [ ] **Data processing agreement with the hoster.** The privacy policy says one exists. Hetzner offers it in the account settings of its console.
 - [ ] **Data processing agreement with the mail service**, which is named in `LEGAL_MAIL_PROVIDER`.
 - [ ] **Telegram sections checked**: consent for guests, and the crew group, which gets admins' e-mail addresses on sign-ins and access changes.
-- [ ] **Special-needs section checked**: the consent text on `/special-needs` and the privacy section. What guests write there is often health data (Art. 9 GDPR); only admins read it, and it is deleted with `forget-contacts` after the event.
+- [ ] **Special-needs section checked**: the consent text on `/special-needs` (quoted in [Special-needs requests](./special-needs#privacy)) and the privacy section. What guests write there is often health data (Art. 9 GDPR); only admins read it, and it is deleted with `forget-contacts` after the event.
 - [ ] **Server location.** The privacy policy says the server is in the EU.
 - [ ] **Log retention matches.** nginx rotates its logs after as many days as `LEGAL_LOG_RETENTION_DAYS` says (Debian default: 14 days, `/etc/logrotate.d/nginx`).
 - [ ] **Deletion after the event is planned** within the period the privacy policy names. See [After the burn](./event-checklist#after-the-burn).

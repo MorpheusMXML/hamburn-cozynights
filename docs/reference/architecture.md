@@ -167,6 +167,7 @@ erDiagram
 | `/admin/tickets` | admins | Find tickets, change their e-mail address, hand them over; superusers load the ticket list |
 | `/admin/docs/*` | admins | The full documentation, admin pages included |
 | `/admin/api/export-template` | admins | Layout template download |
+| `/api/health` | everyone | Readiness check for the deploy script and the smoke tests: 200 only while the app's service account is signed in to the database |
 
 A single server hook (`src/hooks.server.ts`) runs before every request. It restores the guest's ticket session and the admin session, re-checks the admin's role, and refuses admin form actions and API calls without an approved session, so no single action can forget the check.
 

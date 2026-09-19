@@ -13,7 +13,7 @@ timeline
     Closing time : Spots are final
     During the event : Watch occupancy : Lock broken beds
   section 🌅 After the burn
-    Morning after : Export the layout : Back to staging, clear bookings
+    Morning after : Export the layout : Forget contacts, back to staging
 ```
 
 ## Weeks before: build the camp
@@ -34,8 +34,8 @@ timeline
 
 - [ ] **Ticket codes created.** Test codes for a trial run with testers, the real roster for the event, **with the ticket holders' e-mail addresses** for the confirmations. A superuser loads the ticket shop's list on the [Tickets](./tickets) page; test codes come from the server, see [Ticket codes](#ticket-codes).
 - [ ] **Notifications checked.** `./scripts/cozy-admin.sh notify test --email you@mauersegler.art` reaches the crew group and your inbox; one booking with a test code brings a confirmation. See [Notifications](./notifications).
-- [ ] **Test run.** Sign in with a real test ticket code in a private browser window. The map shows the countdown, rooms show the right spots.
-- [ ] **Test bookings removed.** If you booked in staging, release those spots again.
+- [ ] **Test run.** Sign in with a real test ticket code in a private browser window. The map shows the countdown (once the timer is armed), rooms show the right spots.
+- [ ] **Test bookings removed.** Bookings from a trial round go when a superuser switches back to Staging (see [Reset between rounds](#reset-between-rounds)); spots marked 🔄 TAKEN in Staging afterwards are freed with 🔄 FREE on their room page or with <kbd>🧨 Clear all bookings</kbd>.
 - [ ] **Legal pages complete.** The legal notice, the privacy policy and the booking rules show no red note. See [Legal pages](./legal).
 - [ ] **Special-needs requests decided.** Every request at ♿ **Special needs** is approved with a spot or declined before booking opens. Close requests when you want no more, and switch unneeded ♿ spots back to normal.
 - [ ] **Booking window planned.** In the Control Center's 🎟 BOOKING WINDOW panel, set when booking opens and when it closes (Europe/Berlin time), save, and arm the timer. Admins need at least one day ahead and one day open. Announce the same times to guests. See [The booking window](../guide/phases#the-booking-window).
@@ -59,13 +59,14 @@ timeline
 
 ## After the burn
 
+In this order: forget the contacts before any booking is released, because every released booking sends its guest a *your spot was released* message, which nobody needs the day after the burn.
+
 - [ ] **Export the final layout** as a template for next year.
-- [ ] **Switch back to staging** (superuser: ⚡ Switch right now → 🛠 Staging). Confirm the dialog; the timer is paused and **every guest booking is released** (spots free, burner names forgotten, ticket codes stay). Spots the crew booked for special-needs requests stay as long as their requests exist.
-- [ ] **Clear all bookings** (superuser, in Staging Mode: 🎟 BOOKING WINDOW → ⚡ Switch right now → <kbd>🧨 Clear all bookings</kbd>) once more after **Forget the guests' contacts** below, so the special-needs spots are free too.
+- [ ] **Forget the guests' contacts.** `./scripts/cozy-admin.sh tickets forget-contacts --yes` deletes every guest e-mail address, Telegram link and special-needs request; the ticket codes, the names from the ticket list and the bookings stay.
+- [ ] **Switch back to staging** (superuser: ⚡ Switch right now → 🛠 Staging). Confirm the dialog; the timer is paused and **every booking is released**, spots marked 🔄 TAKEN included (spots free, burner names forgotten, ticket codes stay). With the requests gone, the spots the crew booked for special-needs requests are ordinary bookings now and go too, so <kbd>🧨 Clear all bookings</kbd> next to the switch stays greyed out: nothing is left to clear.
 - [ ] **Delete the ticket list** within the period the [privacy policy](./legal) promises (default: four weeks after the event). An operator removes the codes on the server, see [Check and tidy up](#check-and-tidy-up).
 - [ ] **No timer left armed**, so booking doesn't open again by accident: the panel's summary shows NO TIMER or NOT ARMED.
 - [ ] **Tidy up admin access.** Remove accounts of people who have left the crew.
-- [ ] **Forget the guests' contacts.** `./scripts/cozy-admin.sh tickets forget-contacts --yes` deletes every guest e-mail address, Telegram link and special-needs request; the ticket codes stay.
 
 ## Ticket codes
 
@@ -77,7 +78,7 @@ A ticket code is a guest's whole login, and the list of valid codes lives in the
 ./scripts/cozy-admin.sh tickets generate 10 --prefix UT --name "Trial run"
 ```
 
-This creates ten tickets with random codes like `UT-7F3K9Q` and prints them one per line, ready to paste into a spreadsheet or a message. The codes leave out look-alike characters (no `0` or `O`, no `1`, `I` or `L`). `--name` is a label that tells batches apart later.
+This creates ten tickets with random codes like `UT-7F3K9Q` and prints them one per line, ready to paste into a spreadsheet or a message. The codes leave out look-alike characters (no `0` or `O`, no `1`, `I` or `L`). Without `--prefix` they start with `TEST-`; a prefix has 1 to 20 capital letters, digits, `-` or `_` and starts with a letter or digit. `--name` is stored as the name of every generated ticket: the Tickets page shows it, and e-mails greet with it (*Hi Trial run,*). Without it, e-mails just say *Hi,*.
 
 ### The real roster
 
@@ -88,22 +89,24 @@ The ticket shop's export, with e-mail addresses for the booking confirmations. I
 ./scripts/cozy-admin.sh tickets import roster.csv
 ```
 
-The file format and what an import changes: [Notifications](./notifications#ticket-codes-with-e-mail-addresses). Codes without addresses work as well:
-
-```bash
-./scripts/cozy-admin.sh tickets add HB-1001 HB-1002 --name "Early bird"  # a few known codes
-xargs ./scripts/cozy-admin.sh tickets add < codes.txt                     # a whole list, one code per line
-```
+The file format and what an import changes: [Notifications](./notifications#ticket-codes-with-e-mail-addresses). The server import never hands a ticket over to a new holder; for tickets that changed hands, use the [Tickets](./tickets) page. Delete the CSV from the server afterwards.
 
 **Only Indoor memberships.** Load the codes of Indoor memberships only: they include a bed, Camper memberships don't.
 
-**With e-mail addresses.** To reach guests about their spot, for example when the crew has to move them, store each ticket's e-mail address as its label. From a file with one `code,email` pair per line and no header row (about a second per ticket):
+**With e-mail addresses.** Confirmations, and messages when the crew has to move somebody, go to the address stored with each ticket. The ticket shop's export brings it along; for a single ticket, add it with `--email`:
 
 ```bash
-tr -d '\r' < tickets.csv | while IFS=, read -r code email; do ./scripts/cozy-admin.sh tickets add "$code" --name "$email" < /dev/null; done
+./scripts/cozy-admin.sh tickets add HB-1003 --email linus@example.com --name "Linus"  # one code with its address
 ```
 
-`< /dev/null` matters: the admin tool would otherwise read the rest of the file as its input. Delete `tickets.csv` from the server afterwards. `tickets list` then shows the address next to each code. Guests never see it; the privacy policy names it, and it goes with the ticket list after the event (see [After the burn](#after-the-burn)).
+Codes without addresses work as well, they just get no e-mails:
+
+```bash
+./scripts/cozy-admin.sh tickets add HB-1001 HB-1002          # a few known codes
+xargs ./scripts/cozy-admin.sh tickets add < codes.txt        # a whole list, one code per line
+```
+
+`tickets list` shows the address next to each code. Guests never see it; the privacy policy names it, and it goes after the event (see [After the burn](#after-the-burn)).
 
 Codes may contain letters, digits, `-` and `_`, up to 64 characters. Stick to capitals and digits, because the sign-in field shows every code in capitals. Two codes that differ only in upper and lower case are refused. Codes that already exist are left alone, so the same list can be loaded again after late ticket sales.
 
@@ -114,7 +117,7 @@ Codes may contain letters, digits, `-` and `_`, up to 64 characters. Stick to ca
 ./scripts/cozy-admin.sh tickets remove UT-7F3K9Q UT-X2M8PD  # delete codes again
 ```
 
-`remove` refuses a ticket that holds a bed and names the bed. Free that spot first: in staging with 🔄 on its room page, or with **Clear all bookings**.
+`remove` refuses a ticket that holds a bed and names the bed. Free that spot first: a superuser's switch back to Staging releases every guest booking, and 🔄 FREE on a room page frees a single spot.
 
 ### Handing codes to testers
 
@@ -125,4 +128,4 @@ Codes may contain letters, digits, `-` and `_`, up to 64 characters. Stick to ca
 
 ### Reset between rounds
 
-Switch **back to staging** in the Control Center, then let a superuser **clear all bookings**. All spots are free again, burner names are forgotten, and **the codes stay valid**, so the same testers can go again with the same codes. When the trials are over, `remove` the test codes before the real roster goes in.
+A superuser switches **back to staging** in the Control Center: every booking of the round is released, spots marked 🔄 TAKEN included (only spots the crew booked for special-needs requests stay), burner names are forgotten, and **the codes stay valid**, so the same testers can go again with the same codes. The testers get a *spot released* message. When the trials are over, `remove` the test codes before the real roster goes in.

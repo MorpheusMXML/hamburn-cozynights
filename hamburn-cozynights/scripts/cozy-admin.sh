@@ -19,7 +19,8 @@
 #                                                       recreate the app container
 #
 # Ticket codes (the guests' logins, collection `orders`) and the ticket holders'
-# e-mail addresses for booking confirmations; the app has no import for them:
+# e-mail addresses for booking confirmations (superusers can also load the list
+# in the app, /admin/tickets, which can also hand a ticket over to a new holder):
 #   scripts/cozy-admin.sh tickets import <roster.csv> [--dry-run]
 #                                                       create/update tickets from a CSV file with
 #                                                       the columns code, email (and name); checks
@@ -33,7 +34,8 @@
 #   scripts/cozy-admin.sh tickets list                  codes with sign-in, booking and contact state
 #   scripts/cozy-admin.sh tickets remove <code> [<code> ...]  delete tickets that hold no bed
 #   scripts/cozy-admin.sh tickets forget-contacts --yes after the event: delete all guest e-mail
-#                                                       addresses and Telegram links
+#                                                       addresses, Telegram links and
+#                                                       special-needs requests
 #
 # Notifications (guest e-mail and Telegram, crew chat; settings in .env):
 #   scripts/cozy-admin.sh notify status                 what is configured, queued, the last events
