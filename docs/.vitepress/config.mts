@@ -97,6 +97,9 @@ export default defineConfigWithTheme<CozyThemeConfig>({
 
 	markdown: {
 		image: { lazyLoading: true },
+		// GitHub-style task lists ("- [ ] item") are built in since VitePress 2, but rendered
+		// disabled by default. Enabled, the checkboxes are clickable; theme/index.ts remembers them.
+		tasklist: { disabled: false },
 		config(md) {
 			audienceBlocksPlugin(md, audience);
 
@@ -110,33 +113,6 @@ export default defineConfigWithTheme<CozyThemeConfig>({
 				}
 				return fence(tokens, idx, options, env, self);
 			};
-
-			// GitHub-style task lists ("- [ ] item"), as GitHub renders them too.
-			// The checkboxes are clickable; theme/index.ts remembers their state.
-			md.core.ruler.push('task-lists', (state) => {
-				const tokens = state.tokens;
-				for (let i = 2; i < tokens.length; i++) {
-					const inline = tokens[i];
-					if (
-						inline.type !== 'inline' ||
-						tokens[i - 1].type !== 'paragraph_open' ||
-						tokens[i - 2].type !== 'list_item_open'
-					) {
-						continue;
-					}
-					const first = inline.children?.[0];
-					const match = first?.type === 'text' ? /^\[([ xX])\]\s+/.exec(first.content) : null;
-					if (!first || !match) continue;
-
-					first.content = first.content.slice(match[0].length);
-					const checkbox = new state.Token('html_inline', '', 0);
-					checkbox.content = `<input type="checkbox" class="task-list-item-checkbox"${
-						match[1] === ' ' ? '' : ' checked'
-					} aria-label="Done"> `;
-					inline.children!.unshift(checkbox);
-					tokens[i - 2].attrJoin('class', 'task-list-item');
-				}
-			});
 		}
 	},
 
