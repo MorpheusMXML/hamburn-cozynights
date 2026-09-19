@@ -40,7 +40,7 @@ flowchart TB
 | Layer | Technology |
 | --- | --- |
 | Web app | [SvelteKit 2](https://svelte.dev/docs/kit) with Svelte 5, TypeScript, Vite; [`adapter-node`](https://svelte.dev/docs/kit/adapter-node) |
-| Styling | Tailwind CSS 4 plus component styles (the "laser" look), WebGL cursor trail |
+| Styling | Tailwind CSS 4 plus component styles (the "laser" look), WebGL cursor trail and booking fireworks |
 | Charts | Chart.js |
 | Database & auth | [PocketBase](https://pocketbase.io) 0.40 (SQLite); schema and API rules as migrations, server hooks in JavaScript |
 | Admin sign-in | Google OAuth 2.0 through PocketBase, limited to a Google Workspace domain |
@@ -211,7 +211,7 @@ hamburn-cozynights/                 repository root
     │   ├── routes/                 guest pages, /admin, OAuth callback
     │   └── lib/
     │       ├── components/         map, markers, slot machine, effigy title, admin widgets
-    │       ├── fx/                 cursor trail, burning effigy title (canvas)
+    │       ├── fx/                 cursor trail, booking fireworks, burning effigy title (canvas)
     │       └── server/             booking, inventory, settings, admin auth, crypto
     ├── pb_migrations/              database schema and API rules
     ├── pb_hooks/                   PocketBase hooks: admin sign-in guard, admin tool,
