@@ -103,6 +103,8 @@ Almost everything structural is locked. The exceptions: **locking and unlocking 
 Your spot stays yours, and your booking pass keeps working. Nothing can be booked, changed or released any more. If something has to change, ask the crew.
 
 The map greets you with a panel over the blurred camp, like before booking opened: **BOOKING CLOSED**, your spot as a small ticket (tap it for your [booking pass](./booking#your-booking-pass)) and, if you sent one, your special-needs request. <kbd>🗺️ LOOK AROUND</kbd> clears the view; houses and rooms still open, read-only.
+
+![The map after booking closed: the panel with your spot as a small ticket and LOOK AROUND](../assets/screenshots/guest-map-closed.webp)
 <!-- /audience -->
 <!-- audience:admin -->
 The layout stays locked; locking and unlocking single spots, ♿ marks and booking spots for special-needs requests still work. For another booking round, plan a new window: the camp stays closed until its opening time. Only a superuser can switch back to Staging, for example to rebuild the layout.
