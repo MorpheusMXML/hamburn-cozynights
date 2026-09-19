@@ -4,7 +4,9 @@
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import SlotMachine from '$lib/components/SlotMachine.svelte';
+	import SuccessFireworks from '$lib/components/SuccessFireworks.svelte';
 	import type { PageData } from './$types';
+	import { onDestroy } from 'svelte';
 	import { fade, scale } from 'svelte/transition';
 	import { confirmDialog, toast } from '$lib/dialogs';
 
@@ -23,6 +25,19 @@
 	let finalName = '';
 	let showBookingSuccess = false;
 	let slotMachineRef: SlotMachine;
+
+	// Fireworks over the success card; their finale lights the card up for a moment.
+	let showFireworks = false;
+	let cardIgnite = false;
+	let cardTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function igniteCard() {
+		cardIgnite = true;
+		clearTimeout(cardTimer);
+		cardTimer = setTimeout(() => (cardIgnite = false), 1400);
+	}
+
+	onDestroy(() => clearTimeout(cardTimer));
 
 	let bedIterations = 0;
 	const maxBedIterations = 20; // Halved for snappier reveal
@@ -229,6 +244,7 @@
 							isBooking = false;
 							if (result.type === 'success') {
 								showBookingSuccess = true;
+								showFireworks = true;
 								await invalidateAll();
 							} else if (result.type === 'failure') {
 								bookingError =
@@ -280,6 +296,7 @@
 		<div class="success-overlay" in:fade>
 			<div
 				class="success-card"
+				class:ignite={cardIgnite}
 				in:scale
 				role="dialog"
 				aria-modal="true"
@@ -299,6 +316,13 @@
 				</div>
 			</div>
 		</div>
+		{#if showFireworks}
+			<SuccessFireworks
+				zIndex={1001}
+				on:finale={igniteCard}
+				on:done={() => (showFireworks = false)}
+			/>
+		{/if}
 	{/if}
 </div>
 
@@ -571,6 +595,37 @@
 		font-size: clamp(2rem, 9vw, 3rem);
 		margin-bottom: 1rem;
 	}
+	/* The finale of the fireworks lights the card up for a moment. */
+	.success-card.ignite {
+		animation: card-ignite 1.4s ease-out;
+	}
+
+	@keyframes card-ignite {
+		0% {
+			border-color: #2dd4bf;
+			box-shadow: 0 0 100px rgba(45, 212, 191, 0.3);
+			transform: scale(1);
+		}
+		18% {
+			border-color: #ffd27a;
+			box-shadow:
+				0 0 80px rgba(251, 146, 60, 0.6),
+				0 0 160px rgba(255, 210, 122, 0.35);
+			transform: scale(1.012);
+		}
+		100% {
+			border-color: #2dd4bf;
+			box-shadow: 0 0 100px rgba(45, 212, 191, 0.3);
+			transform: scale(1);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.success-card.ignite {
+			animation: none;
+		}
+	}
+
 	.success-card h2 {
 		font-size: clamp(1.6rem, 8vw, 2.5rem);
 		line-height: 1.15;
