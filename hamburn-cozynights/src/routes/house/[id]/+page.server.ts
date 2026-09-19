@@ -2,7 +2,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
-import { BookingService, isBedBookable } from '$lib/server/booking';
+import { BookingService, CheckedInError, isBedBookable } from '$lib/server/booking';
 import { getBookingSettings } from '$lib/server/settings';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
 import { passSummary } from '$lib/server/pass';
@@ -75,6 +75,8 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			rooms: roomsWithStats,
 			userBedId: userBed?.id || null,
 			spotFixed,
+			// The crew checked the guest in at arrival: only the crew changes the spot now.
+			checkedIn: !!userBed?.checked_in_at,
 			pass,
 			isBookingActive: settings.isBookingActive,
 			phase: settings.phase,
@@ -130,6 +132,7 @@ export const actions: Actions = {
 			await bookingService.unbookOrder(order.id);
 			return { success: true };
 		} catch (err: any) {
+			if (err instanceof CheckedInError) return fail(409, { error: err.message });
 			console.error('[Security] House unbookBed failed:', err?.message);
 			return fail(500, {
 				error: 'Your spot could not be released. It is still reserved for you. Please try again.'

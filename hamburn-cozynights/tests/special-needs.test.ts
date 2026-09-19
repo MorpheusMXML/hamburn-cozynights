@@ -170,7 +170,7 @@ describe('special-needs beds in booking and counts', () => {
 				{ enabled: true, occupied: false, is_locked: false, is_special: true },
 				{ enabled: true, occupied: false, is_locked: false, is_special: false }
 			])
-		).toEqual({ total: 2, occupied: 0, free: 1 });
+		).toEqual({ total: 2, occupied: 0, free: 1, checkedIn: 0 });
 	});
 
 	it('look taken on the public map, which never learns which beds are special', async () => {

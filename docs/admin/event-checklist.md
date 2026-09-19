@@ -52,10 +52,10 @@ timeline
 
 ## During the event
 
-- [ ] **Check booking passes at arrival** where needed: phone camera on the guest's QR code, or 🎫 **Check passes** in the admin header (type the code or use a USB scanner). See [Booking passes](./passes).
+- [ ] **Check guests in at arrival** with their booking pass: 🎫 **Check-in** in the admin header (type the code, scan with the camera or a USB scanner: a known pass is checked in right away), or the phone camera on the guest's QR code and <kbd>✅ Check in</kbd>. A checked-in guest can't release their spot anymore; a mistake is undone with <kbd>↩️ Undo check-in</kbd>. *Show Intel* counts the spots checked in. See [Booking passes & check-in](./passes).
 
 - [ ] **Broken bed?** Lock it 🔒 on its room page. That works in every phase.
-- [ ] **Resist restructuring.** Houses, rooms and spots only change in 🛠 Staging, and a superuser's switch back to Staging **releases every guest booking** (only spots the crew booked for special-needs requests stay; burner names are forgotten; it can't be undone, and guests book again once booking is Live). During the event only lock 🔒 spots, mark ♿ spots or book a spot for a special-needs request: those work in every phase. If restructuring is unavoidable, export a template first and expect to re-seat every guest by hand; they get a *spot released* e-mail. See [After the burn](#after-the-burn).
+- [ ] **Resist restructuring.** Houses, rooms and spots only change in 🛠 Staging, and a superuser's switch back to Staging **offers to release every guest booking** (the dialog says how many there are and how many guests are checked in; released spots lose their burner names and check-ins, it can't be undone, and those guests book again once booking is Live). Keeping them is the other button — then clear them later with 🧨 *Clear all bookings*. During the event only lock 🔒 spots, mark ♿ spots or book a spot for a special-needs request: those work in every phase. If restructuring is unavoidable, export a template first and expect to re-seat every guest by hand; they get a *spot released* e-mail. See [After the burn](#after-the-burn).
 
 ## After the burn
 

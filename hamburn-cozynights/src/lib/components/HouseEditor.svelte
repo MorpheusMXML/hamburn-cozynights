@@ -90,6 +90,8 @@
 						is_locked: false,
 						is_special: false,
 						booked_at: '',
+						checked_in_at: '',
+						checked_in_by: '',
 						room: 'temp-room',
 						order: ''
 					}))

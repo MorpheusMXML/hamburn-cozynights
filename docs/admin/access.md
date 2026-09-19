@@ -71,7 +71,7 @@ A request can also be approved straight to superuser.
 | **Switch the phase right now** (Staging, Live Booking, Closed) | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
 | Lock and unlock spots, mark spots ♿ special or normal | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | Decide [special-needs requests](./special-needs), book spots for them, open and close requests | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
-| [Check booking passes](./passes) | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| [Check guests in](./passes) with their booking pass, undo a check-in | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | Change the [message texts](./notifications#message-texts) guests get | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | Export a layout template, compare a file with the camp | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | **Apply a layout template** | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |

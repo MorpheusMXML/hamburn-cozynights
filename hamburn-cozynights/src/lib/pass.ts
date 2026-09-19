@@ -9,15 +9,29 @@ export const PASS_CODE_LENGTH = 12;
 
 const PASS_CODE = new RegExp(`^[${PASS_ALPHABET}]{${PASS_CODE_LENGTH}}$`);
 
-/** What the admin check page shows for one scanned or typed pass. */
+/**
+ * What the admin check page shows for one scanned or typed pass. Checking a
+ * pass there checks the guest in (docs/admin/passes.md):
+ * - checkedin: checked in just now
+ * - already: checked in before (`checkIn` says when and by whom); nothing changed
+ * - undone: the check-in was taken back, the spot stays booked
+ * - booked: holds a spot, not checked in (an undo found nothing to undo)
+ * - nospot: the ticket exists but holds no spot, so there is nothing to check in
+ * - unknown: no ticket has this pass
+ */
+export type PassCheckStatus = 'checkedin' | 'already' | 'undone' | 'booked' | 'nospot' | 'unknown';
+
 export interface PassCheckResult {
-	status: 'valid' | 'nospot' | 'unknown';
+	status: PassCheckStatus;
 	code: string;
+	/** When this check ran. */
 	checkedAt: string;
 	ticketName?: string;
 	email?: string;
 	spot?: { house: string; room: string; spot: string; roomId: string } | null;
 	burnerName?: string;
+	/** The check-in at arrival: when and by which admin. */
+	checkIn?: { at: string; by: string } | null;
 	warning?: string;
 }
 

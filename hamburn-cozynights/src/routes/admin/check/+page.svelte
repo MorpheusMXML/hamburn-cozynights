@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { onMount, tick } from 'svelte';
+	import type { SubmitFunction } from '@sveltejs/kit';
 	import type { ActionData } from './$types';
 	import type { PassCheckResult } from '$lib/pass';
+	import { formatBerlin } from '$lib/booking-phase';
+	import { confirmDialog } from '$lib/dialogs';
 	import PassScanner from '$lib/components/admin/PassScanner.svelte';
 
 	export let form: ActionData;
@@ -49,28 +52,68 @@
 	onMount(() => inputEl?.focus());
 
 	const VERDICT: Record<PassCheckResult['status'], string> = {
-		valid: '✅ VALID — holds a spot',
-		nospot: '⚠️ NO SPOT — ticket exists, no spot booked',
+		checkedin: '✅ CHECKED IN — welcome!',
+		already: '☑️ ALREADY CHECKED IN',
+		undone: '↩️ CHECK-IN UNDONE — the spot stays booked',
+		booked: '🛏️ BOOKED — not checked in',
+		nospot: '⚠️ NO SPOT — nothing to check in',
 		unknown: '❌ UNKNOWN — no ticket has this pass'
 	};
+
+	/** The buttons on the newest result: undo a check-in, or check in again. */
+	function followUp(result: PassCheckResult, kind: 'undo' | 'checkin'): SubmitFunction {
+		return async ({ cancel }) => {
+			if (kind === 'undo') {
+				const spot = result.spot?.spot ? ` at spot ${result.spot.spot}` : '';
+				const ok = await confirmDialog(
+					`The guest${spot} shows as booked again, not as arrived. Their booking stays. Use this for a mistake at the desk.`,
+					{
+						title: 'Undo this check-in?',
+						tone: 'warning',
+						confirmLabel: 'Undo check-in',
+						cancelLabel: 'Keep it'
+					}
+				);
+				if (!ok) {
+					cancel();
+					return;
+				}
+			}
+			checking = true;
+			error = '';
+			return async ({ result: outcome, update }) => {
+				checking = false;
+				if (outcome.type === 'failure') {
+					error =
+						typeof outcome.data?.error === 'string' ? outcome.data.error : 'That did not work.';
+				} else if (outcome.type === 'error') {
+					error = 'We could not reach the server. Check the connection and try again.';
+				} else {
+					await update({ reset: false });
+				}
+				inputEl?.focus();
+			};
+		};
+	}
 </script>
 
 <svelte:head>
-	<title>Check passes · CozyNights Admin</title>
+	<title>Check-in · CozyNights Admin</title>
 </svelte:head>
 
 <div class="check-page">
 	<a href="/admin" class="back">← Control Center</a>
-	<h1>Check booking passes 🎫</h1>
+	<h1>Check guests in 🎫</h1>
 	<p class="intro">
-		Scan the guest's QR code or type the code under it. With a phone you can also use the phone's
-		camera app: the pass opens with the result on top, as long as you are signed in here in the same
-		browser.
+		Scan the guest's QR code or type the code under it: a pass whose ticket holds a spot is checked
+		in right away. Scanning it again shows when and by whom. With a phone you can also use the
+		phone's camera app: the pass opens with the booking on top and a <strong>Check in</strong> button,
+		as long as you are signed in here in the same browser.
 	</p>
 
 	<form
 		method="POST"
-		action="?/check"
+		action="?/checkin"
 		bind:this={formEl}
 		class="check-form"
 		novalidate
@@ -104,7 +147,7 @@
 				spellcheck="false"
 				placeholder="7F3K-9QXM-2CWD"
 			/>
-			<button type="submit" disabled={checking}>{checking ? 'Checking…' : 'Check'}</button>
+			<button type="submit" disabled={checking}>{checking ? 'Checking…' : 'Check in'}</button>
 		</div>
 		<small>A USB barcode scanner works too: it types the code and presses Enter.</small>
 		{#if error}<p class="error" role="alert">{error}</p>{/if}
@@ -122,6 +165,12 @@
 			<p class="meta">
 				<span class="code">{result.code}</span> · checked {time(result.checkedAt)}
 			</p>
+			{#if result.status === 'already'}
+				<p class="warn">
+					Checked in earlier. If this isn't the same person, the pass may have been passed on:
+					compare the name on the ticket.
+				</p>
+			{/if}
 			{#if result.status !== 'unknown'}
 				<dl>
 					<dt>Ticket</dt>
@@ -141,8 +190,29 @@
 							<dd>{result.burnerName}</dd>
 						{/if}
 					{/if}
+					{#if result.checkIn}
+						<dt>Checked in</dt>
+						<dd>
+							{formatBerlin(result.checkIn.at, { year: false })}{result.checkIn.by
+								? ` · ${result.checkIn.by}`
+								: ''}
+						</dd>
+					{/if}
 				</dl>
 				{#if result.warning}<p class="warn">{result.warning}</p>{/if}
+				{#if i === 0 && (result.status === 'checkedin' || result.status === 'already')}
+					<form method="POST" action="?/undo" use:enhance={followUp(result, 'undo')}>
+						<input type="hidden" name="code" value={result.code} />
+						<button type="submit" class="btn-secondary" disabled={checking}>
+							↩️ Undo check-in
+						</button>
+					</form>
+				{:else if i === 0 && (result.status === 'undone' || result.status === 'booked')}
+					<form method="POST" action="?/checkin" use:enhance={followUp(result, 'checkin')}>
+						<input type="hidden" name="code" value={result.code} />
+						<button type="submit" class="btn-secondary" disabled={checking}>✅ Check in</button>
+					</form>
+				{/if}
 			{/if}
 		</section>
 	{/each}
@@ -243,8 +313,15 @@
 		opacity: 1;
 		border-width: 2px;
 	}
-	.result.valid.latest {
+	.result.checkedin.latest {
 		border-color: #2dd4bf;
+	}
+	.result.already.latest {
+		border-color: #facc15;
+	}
+	.result.undone.latest,
+	.result.booked.latest {
+		border-color: #a3a3a3;
 	}
 	.result.nospot.latest {
 		border-color: #fb923c;
@@ -257,14 +334,41 @@
 		font-weight: 900;
 		font-size: 1.1rem;
 	}
-	.result.valid .verdict {
+	.result.checkedin .verdict {
 		color: #2dd4bf;
+	}
+	.result.already .verdict {
+		color: #facc15;
+	}
+	.result.undone .verdict,
+	.result.booked .verdict {
+		color: #e5e5e5;
 	}
 	.result.nospot .verdict {
 		color: #fb923c;
 	}
 	.result.unknown .verdict {
 		color: #f43f5e;
+	}
+	.result form {
+		margin-top: 0.9rem;
+	}
+	.btn-secondary {
+		min-height: 44px;
+		padding: 0 1.1rem;
+		border-radius: 10px;
+		border: 1px solid #525252;
+		background: transparent;
+		color: #e5e5e5;
+		font-weight: 800;
+		cursor: pointer;
+	}
+	.btn-secondary:hover {
+		border-color: #a3a3a3;
+	}
+	.btn-secondary:disabled {
+		opacity: 0.6;
+		cursor: progress;
 	}
 	.meta {
 		margin: 0.25rem 0 0.75rem;
@@ -296,5 +400,8 @@
 		color: #fecaca;
 		font-weight: 700;
 		margin: 0.75rem 0 0;
+	}
+	.meta + .warn {
+		margin: 0 0 0.75rem;
 	}
 </style>

@@ -103,7 +103,7 @@ describe('finding tickets', () => {
 			name: 'Ada Lovelace',
 			email: 'ada@example.org',
 			signedIn: true,
-			spot: { house: 'Neon Cave', room: 'Bunks #1', spot: 'B1', roomId: 'r1' },
+			spot: { house: 'Neon Cave', room: 'Bunks #1', spot: 'B1', roomId: 'r1', checkIn: null },
 			burnerName: 'Sparkle',
 			telegram: true,
 			pass: true
@@ -184,6 +184,36 @@ describe('changing a ticket', () => {
 		expect(outcome.confirmation).toBe(true);
 	});
 
+	it("resets the old holder's check-in: the new holder checks in with the new pass", async () => {
+		const bed = db.data.beds.find((b) => b.id === 'b1')!;
+		Object.assign(bed, { checked_in_at: '2026-09-19 12:00:00.000Z', checked_in_by: crew.email });
+		const outcome = await changeTicket(db.pb, 'o1', {
+			email: 'bob@example.org',
+			name: '',
+			newHolder: true
+		});
+		expect(outcome.checkInReset).toBe(true);
+		// before the ticket itself changes, like the Telegram link
+		expect(db.log).toEqual(['update guest_notify/n1', 'update beds/b1', 'update orders/o1']);
+		expect(bed).toMatchObject({
+			order: 'o1',
+			occupied: true,
+			checked_in_at: '',
+			checked_in_by: ''
+		});
+		expect(outcome.ticket.spot?.checkIn).toBeNull();
+
+		// an address change alone keeps it
+		Object.assign(bed, { checked_in_at: '2026-09-19 12:00:00.000Z', checked_in_by: crew.email });
+		const same = await changeTicket(db.pb, 'o1', {
+			email: 'b@example.org',
+			name: '',
+			newHolder: false
+		});
+		expect(same.checkInReset).toBe(false);
+		expect(same.ticket.spot?.checkIn).toEqual({ at: '2026-09-19 12:00:00.000Z', by: crew.email });
+	});
+
 	it("deletes the old holder's special-needs request when a ticket is passed on", async () => {
 		db.data.special_requests = [
 			{ id: 'sr1', order: 'o1', status: 'approved', needs: 'x', reason: 'y', consent_at: '2026-09-01' },
@@ -238,6 +268,8 @@ describe('importing the ticket list', () => {
 	];
 
 	it('imports only the chosen tickets, and hands over only where it applies', async () => {
+		const bed = db.data.beds.find((b) => b.id === 'b1')!;
+		Object.assign(bed, { checked_in_at: '2026-09-19 12:00:00.000Z', checked_in_by: crew.email });
 		const outcome = await importRoster(db.pb, rows, {
 			selected: ['hb-1001', 'hb-1003', 'hb-2000', 'hb-9999', 'bad code'],
 			newHolders: ['hb-1001', 'hb-1003']
@@ -256,6 +288,8 @@ describe('importing the ticket list', () => {
 			pass_code: ''
 		});
 		expect(db.data.guest_notify[0].tg_chat).toBe('');
+		// the new holder checks in with the new pass; the spot stays booked
+		expect(bed).toMatchObject({ order: 'o1', checked_in_at: '', checked_in_by: '' });
 		// HB-1003 had no address and no spot: nothing to hand over
 		expect(order('o3')).toMatchObject({ email: 'grace@example.org', customer_name: 'Grace' });
 		expect(db.data.orders.map((o) => o.order_number)).toEqual([

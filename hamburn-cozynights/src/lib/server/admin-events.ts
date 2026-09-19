@@ -13,7 +13,8 @@ export type AdminEventAction =
 	| 'special_spot_assigned'
 	| 'special_spot_released'
 	| 'message_text_changed'
-	| 'message_text_reset';
+	| 'message_text_reset'
+	| 'check_in_undone';
 
 /** What guests do that the crew hears about. Never with names or what they wrote. */
 export type GuestEventAction = 'special_request_new' | 'special_request_withdrawn';

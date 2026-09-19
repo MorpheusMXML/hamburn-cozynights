@@ -10,11 +10,16 @@ import { writable } from 'svelte/store';
 
 export type DialogTone = 'info' | 'success' | 'warning' | 'danger';
 
+/** What the person picked. `alt` is the second yes, e.g. "keep the bookings". */
+export type DialogChoice = 'confirm' | 'alt' | 'cancel';
+
 export interface DialogOptions {
 	title?: string;
 	tone?: DialogTone;
 	confirmLabel?: string;
 	cancelLabel?: string;
+	/** Shown as a third button: another way to go on, with other consequences. */
+	altLabel?: string;
 }
 
 export interface DialogRequest extends Required<Omit<DialogOptions, 'title'>> {
@@ -22,7 +27,7 @@ export interface DialogRequest extends Required<Omit<DialogOptions, 'title'>> {
 	kind: 'alert' | 'confirm';
 	title: string;
 	message: string;
-	resolve: (confirmed: boolean) => void;
+	resolve: (choice: DialogChoice) => void;
 }
 
 export interface Toast {
@@ -38,7 +43,7 @@ export const toasts = writable<Toast[]>([]);
 let nextId = 1;
 
 function open(kind: DialogRequest['kind'], message: string, options: DialogOptions) {
-	return new Promise<boolean>((resolve) => {
+	return new Promise<DialogChoice>((resolve) => {
 		const request: DialogRequest = {
 			id: nextId++,
 			kind,
@@ -47,6 +52,7 @@ function open(kind: DialogRequest['kind'], message: string, options: DialogOptio
 			tone: options.tone ?? (kind === 'confirm' ? 'warning' : 'info'),
 			confirmLabel: options.confirmLabel ?? (kind === 'confirm' ? 'Confirm' : 'OK'),
 			cancelLabel: options.cancelLabel ?? 'Cancel',
+			altLabel: options.altLabel ?? '',
 			resolve
 		};
 		dialogQueue.update((queue) => [...queue, request]);
@@ -54,15 +60,29 @@ function open(kind: DialogRequest['kind'], message: string, options: DialogOptio
 }
 
 /** Closes a dialog and settles its promise. Called by DialogHost. */
-export function settleDialog(id: number, confirmed: boolean) {
+export function settleDialog(id: number, choice: DialogChoice) {
 	dialogQueue.update((queue) => {
-		queue.find((request) => request.id === id)?.resolve(confirmed);
+		queue.find((request) => request.id === id)?.resolve(choice);
 		return queue.filter((request) => request.id !== id);
 	});
 }
 
 /** English replacement for window.confirm. Resolves true when confirmed. */
-export function confirmDialog(message: string, options: DialogOptions = {}): Promise<boolean> {
+export async function confirmDialog(
+	message: string,
+	options: DialogOptions = {}
+): Promise<boolean> {
+	return (await open('confirm', message, { ...options, altLabel: '' })) === 'confirm';
+}
+
+/**
+ * A confirm with two ways to go on ("release the bookings" / "keep them") and
+ * Cancel. Escape and the backdrop mean cancel, like everywhere else.
+ */
+export function chooseDialog(
+	message: string,
+	options: DialogOptions & { altLabel: string }
+): Promise<DialogChoice> {
 	return open('confirm', message, options);
 }
 

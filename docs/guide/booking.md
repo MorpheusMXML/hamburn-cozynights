@@ -114,11 +114,11 @@ When your spot is booked, changes or is released, CozyNights sends an e-mail to 
 
 ### Your booking pass
 
-Once you hold a spot, your room page shows <kbd>🎫 Show booking pass</kbd>, every other house and room shows your spot as a small ticket that opens it (so does the map once booking has closed), and every confirmation links to it: a page with your spot, a QR code and a short code like `7F3K-9QXM-2CWD`. If the crew asks at arrival, show it — or a screenshot of it. <kbd>Save QR code</kbd> stores the QR code as a picture (on a phone it goes to your photos), <kbd>Camp map</kbd> takes you back to the map.
+Once you hold a spot, your room page shows <kbd>🎫 Show booking pass</kbd>, every other house and room shows your spot as a small ticket that opens it (so does the map once booking has closed), and every confirmation links to it: a page with your spot, a QR code and a short code like `7F3K-9QXM-2CWD`. Show it when you arrive — or a screenshot of it: the crew scans it and checks you in. From then on your spot is final: you can still change your burner name while booking is open, but only the crew can release or move the spot.
 
 <p align="center"><img src="../assets/screenshots/guest-pass.webp" alt="A booking pass on a phone: house, room, spot, burner name, QR code and pass code" width="300" /></p>
 
-The pass stays valid when you move to another spot; the crew always sees the spot your ticket holds right now. Release your spot, and the same link says that your ticket holds no spot at the moment. The pass code is not your ticket code: it can only show your booking, never change it.
+<kbd>Save QR code</kbd> stores the QR code as a picture (on a phone it goes to your photos), <kbd>Camp map</kbd> takes you back to the map. Before the check-in the pass stays valid when you move to another spot; the crew always sees the spot your ticket holds right now. Release your spot, and the same link says that your ticket holds no spot at the moment. The pass code is not your ticket code: it can only show your booking, never change it.
 
 ::: tip Updates on Telegram
 Prefer Telegram? On your room page press <kbd>Get updates on Telegram</kbd>, then <kbd>START</kbd> in Telegram. The CozyNights bot confirms your spot right away and tells you about every change. The button's link works once and for 30 minutes; reload the room page afterwards, and it says *Updates on Telegram are on.* <kbd>Turn off</kbd> on the room page, or `/stop` in the chat, ends it.

@@ -5,12 +5,15 @@
 	import { fade, fly } from 'svelte/transition';
 	import { enhance } from '$app/forms';
 	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
+	import { formatBerlin } from '$lib/booking-phase';
 
 	export let data: PageData;
 	export let form: { message?: string } | null = null;
 	// Only admins reach this page (hooks + layout)
 	$: ({ room, beds, isLayoutLocked, phase } = data);
 	$: house = room.expand?.house;
+	// Guests the crew checked in at arrival (the booking pass check).
+	$: checkedIn = beds.filter((b) => !!b.order && !!b.checked_in_at).length;
 	$: roomTitle = room.name || `Room ${room.room_number}`;
 
 	type Bed = PageData['beds'][number];
@@ -46,7 +49,9 @@
 			// A spot with a ticket attached is a guest's booking, not a test flag.
 			if (bed.occupied && bed.order) {
 				const confirmed = await confirmDialog(
-					`Spot ${spotName(bed)} was booked by a guest. Freeing it cancels that booking: the guest loses the spot and has to book again. Their ticket code stays valid.`,
+					`Spot ${spotName(bed)} was booked by a guest.` +
+						(bed.checked_in_at ? ' The guest is checked in, so they are on site.' : '') +
+						' Freeing it cancels that booking: the guest loses the spot and has to book again. Their ticket code stays valid.',
 					{
 						title: "Cancel this guest's booking?",
 						tone: 'danger',
@@ -142,6 +147,9 @@
 					{beds.filter((b) => b.enabled !== false).length}
 				</div>
 				<p class="label">CLAIMED SPOTS</p>
+				{#if checkedIn > 0}
+					<p class="checked-in-count">✅ {checkedIn} checked in</p>
+				{/if}
 				<div class="capacity-info">
 					Total Capacity: {beds.length} ({(
 						(beds.filter((b) => b.enabled !== false).length / (beds.length || 1)) *
@@ -199,6 +207,13 @@
 							</span>
 							{#if bed.is_special}
 								<span class="bed-status special">SPECIAL NEEDS ♿</span>
+							{/if}
+							{#if bed.order && bed.checked_in_at}
+								<span
+									class="bed-status checked-in"
+									title={bed.checked_in_by ? `Checked in by ${bed.checked_in_by}` : 'Checked in'}
+									>CHECKED IN ✅ {formatBerlin(bed.checked_in_at, { year: false })}</span
+								>
 							{/if}
 						</div>
 
@@ -434,6 +449,13 @@
 		margin: 0.5rem 0 0 0;
 		color: #2dd4bf;
 		font-size: 0.7rem;
+		font-weight: 900;
+		letter-spacing: 1px;
+	}
+	.checked-in-count {
+		margin: 0.35rem 0 0 0;
+		color: #2dd4bf;
+		font-size: 0.75rem;
 		font-weight: 900;
 		letter-spacing: 1px;
 	}
@@ -679,6 +701,10 @@
 	.bed-status.special {
 		display: block;
 		color: #f472b6;
+	}
+	.bed-status.checked-in {
+		display: block;
+		color: #2dd4bf;
 	}
 	.btn-icon.vanish:hover:not(.disabled) {
 		border-color: #f87171;

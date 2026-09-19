@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ownSpotNote } from '$lib/booking-phase';
+	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
@@ -11,7 +12,7 @@
 	import { confirmDialog, toast } from '$lib/dialogs';
 
 	export let data: PageData;
-	$: ({ freeBeds, isBookingActive, userBed, spotFixed, phase } = data);
+	$: ({ freeBeds, isBookingActive, userBed, spotFixed, checkedIn, phase } = data);
 
 	let isReleasing = false;
 	let releaseError = '';
@@ -127,7 +128,9 @@
 					<strong>{userBed.label}</strong>
 					<span>{userBed.roomName} • {userBed.houseName}</span>
 				</div>
-				{#if spotFixed}
+				{#if checkedIn}
+					<p class="hint">{CHECKED_IN_NOTE}</p>
+				{:else if spotFixed}
 					<p class="hint">
 						The crew picked this spot for you because of your special-needs request, so only the
 						crew can change it.
@@ -142,7 +145,7 @@
 				{/if}
 				<div class="already-booked-actions">
 					<a href="/room/{userBed.roomId}" class="btn-goto">Visit My Room</a>
-					{#if isBookingActive && !spotFixed}
+					{#if isBookingActive && !spotFixed && !checkedIn}
 						<form
 							method="POST"
 							action="?/releaseBed"

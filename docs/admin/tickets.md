@@ -36,6 +36,7 @@ When a ticket was swapped or sold on, tick <kbd>🔁 Ticket passed on to someone
 | Booking pass | Gets a new code. The old pass link stops working; checking it shows ❌ UNKNOWN. |
 | Burner name | Is forgotten. The spot shows as taken without a name. |
 | Special-needs request | Is deleted: it holds the old holder's health data. A spot the crew booked for it stays with the ticket as an ordinary booking. |
+| Check-in | Is reset: the spot shows as booked again, and the new holder checks in with the new pass when they arrive. See [Booking passes & check-in](./passes#a-spot-s-states). |
 | E-mail | If the ticket holds a spot, the new address gets a confirmation with the spot and the new pass. |
 
 > [!WARNING] The ticket code stays the same

@@ -133,6 +133,10 @@ export type BedsRecord = {
 	is_special?: boolean;
 	/** When the spot got its ticket; set and cleared by PocketBase (pb_hooks/cozy_booked.pb.js). */
 	booked_at?: IsoDateString;
+	/** When the crew checked the guest in at arrival; gone with the booking (pb_hooks/cozy_booked.pb.js). */
+	checked_in_at?: IsoDateString;
+	/** The admin who checked the guest in (e-mail). */
+	checked_in_by?: string;
 };
 
 export type HousesRecord = {

@@ -6,6 +6,7 @@ import { decrypt } from '$lib/server/crypto';
 import {
 	BookingService,
 	BedUnavailableError,
+	CheckedInError,
 	ReleaseFailedError,
 	isBedBookable,
 	randomBurnerName
@@ -111,6 +112,8 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			notify,
 			pass,
 			spotFixed,
+			// The crew checked the guest in at arrival: only the crew changes the spot now.
+			checkedIn: !!userBed?.checked_in_at,
 			room: { id: room.id, name: room.name, room_number: room.room_number, house: room.house },
 			beds: safeBeds,
 			userBedId: userBed?.id || null,
@@ -184,7 +187,9 @@ export const actions: Actions = {
 			if (err instanceof BedUnavailableError) {
 				return fail(409, { error: `${err.message} Please pick another spot.`, bedTaken: true });
 			}
-			if (err instanceof ReleaseFailedError) return fail(409, { error: err.message });
+			if (err instanceof ReleaseFailedError || err instanceof CheckedInError) {
+				return fail(409, { error: err.message });
+			}
 			if (err?.status === 404) {
 				return fail(404, {
 					error: "This spot doesn't exist anymore. Please pick another one.",
@@ -267,6 +272,7 @@ export const actions: Actions = {
 			await bookingService.unbookOrder(order.id);
 			return { success: true, released: true };
 		} catch (err: any) {
+			if (err instanceof CheckedInError) return fail(409, { error: err.message });
 			console.error('[Security] unbookBed failed:', err?.message);
 			return fail(500, {
 				error: 'Your spot could not be released. It is still reserved for you. Please try again.'

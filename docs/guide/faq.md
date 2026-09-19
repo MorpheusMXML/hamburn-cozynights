@@ -86,6 +86,10 @@ On your room page (<kbd>🎫 Show booking pass</kbd>), as the small ticket on ev
 *Unknown* means no ticket has this pass code any more: an old link after your ticket was passed on, or a typo in the link. Open your room page and press <kbd>🎫 Show booking pass</kbd> for the current one. *Too many unknown passes* means many wrong codes came from your network (a shared Wi-Fi, for example) within a few minutes: wait a little and open the link again.
 :::
 
+::: details I can't release my spot: "The crew has checked you in, so your spot is final"
+The crew checked your booking pass when you arrived, so the spot is yours for the event. If it has to change, ask the crew: they can move you or free the spot.
+:::
+
 ::: details How do I stop the Telegram messages?
 Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page, or send `/stop` to the bot.
 :::
@@ -142,11 +146,11 @@ Either the layout is locked (Live Booking, or booking closed: dragging is switch
 <kbd>🧨 Clear all bookings</kbd> is for superusers in Staging Mode: 🎟 BOOKING WINDOW → ⚡ Switch right now. It is greyed out while no guest booking is left, and the switch back to Staging already releases every guest booking. Applying a layout template is superuser-only too: admins can compare a file with the camp, and the manager says *Applying is for superusers.*
 :::
 
-::: details The camera on "Check passes" won't open
-The browser needs permission for the camera on this site, and the page must come over HTTPS. Allow it in the site settings, or just use the phone's own camera app: it opens the pass link, and signed in, you see the check result on top. The camera closes after each code it recognised: press <kbd>📷 Scan with camera</kbd> again for the next guest. Details in [Booking passes](../admin/passes#when-something-doesn-t-work).
+::: details The camera on "Check-in" won't open
+The browser needs permission for the camera on this site, and the page must come over HTTPS. Allow it in the site settings, or just use the phone's own camera app: it opens the pass link, and signed in, you see the booking on top with a <kbd>✅ Check in</kbd> button. The camera closes after each code it recognised: press <kbd>📷 Scan with camera</kbd> again for the next guest. Details in [Booking passes & check-in](../admin/passes#when-something-doesn-t-work).
 :::
 
-::: details "Check passes" says "We could not reach the server", but the connection is fine
+::: details "Check-in" says "We could not reach the server", but the connection is fine
 Your admin session has probably ended, for example because the weekly Google sign-in is due. Reload the page and sign in again.
 :::
 

@@ -6,7 +6,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import CountdownDigits from '$lib/components/CountdownDigits.svelte';
 	import { actionErrorMessage, submitAction } from '$lib/admin-actions';
-	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
+	import { alertDialog, chooseDialog, confirmDialog, toast } from '$lib/dialogs';
 	import { berlinLocalToIso, isoToBerlinLocal } from '$lib/time';
 	import {
 		PHASE_ICONS,
@@ -36,7 +36,13 @@
 	export let occupiedBeds = 0;
 	/** Of those, spots the crew booked for special-needs requests: they stay. */
 	export let crewBookedSpots = 0;
+	/** Booked spots whose guest the crew checked in at arrival: the guests are on site. */
+	export let checkedInBeds = 0;
 	$: guestBooked = Math.max(0, occupiedBeds - crewBookedSpots);
+	$: arrivedNote =
+		checkedInBeds > 0
+			? ` Careful: ${checkedInBeds} spot${checkedInBeds === 1 ? ' is' : 's are'} checked in, those guests are on site. A released booking loses its check-in.`
+			: '';
 
 	let now = Date.now();
 	let ticker: ReturnType<typeof setInterval> | undefined;
@@ -308,7 +314,7 @@
 			notes.push(
 				to === 'closed'
 					? 'Guests can no longer book, change or release a spot. The layout stays locked.'
-					: `Guests can no longer book, change or release a spot; the layout can be edited again. Every guest booking is released${guestBooked > 0 ? ` (${guestBooked} right now)` : ''}: those guests book again once booking opens, their ticket codes stay valid.${crewBookedSpots > 0 ? ` The ${crewBookedSpots} spot${crewBookedSpots === 1 ? '' : 's'} the crew booked for special-needs requests stay.` : ' Spots the crew booked for special-needs requests stay.'} This cannot be undone.`
+					: `Guests can no longer book, change or release a spot; the layout can be edited again.${guestBooked > 0 ? ` ${guestBooked} guest booking${guestBooked === 1 ? ' is' : 's are'} in the camp right now.` : ''}${arrivedNote} Choose below whether they are released (they book again once booking opens, ticket codes stay valid — this cannot be undone) or stay as they are.${crewBookedSpots > 0 ? ` The ${crewBookedSpots} spot${crewBookedSpots === 1 ? '' : 's'} the crew booked for special-needs requests stay either way.` : ' Spots the crew booked for special-needs requests stay either way.'}`
 			);
 			if (to === 'closed' && bookingWindow.closesAt && !after.closesAt) {
 				notes.push('The planned closing time is dropped.');
@@ -319,16 +325,34 @@
 				notes.push(`Careful: the armed timer still opens booking ${formatBerlin(after.opensAt)}.`);
 			}
 		}
-		const ok = await confirmDialog(notes.join(' '), {
-			title: `${PHASE_ICONS[to]} Switch to ${PHASE_LABELS[to]} right now?`,
-			tone: to === 'live' ? 'warning' : 'danger',
-			confirmLabel: `Switch to ${PHASE_LABELS[to]}`,
-			cancelLabel: 'Cancel'
-		});
-		if (!ok) return;
+		// Going back to Staging asks what happens to the bookings; releasing them
+		// (and with them every check-in) is a superuser's call, so the server
+		// only does it when this dialog says so.
+		const asksAboutBookings = to === 'staging' && guestBooked > 0;
+		let clearBookings = false;
+		if (asksAboutBookings) {
+			const choice = await chooseDialog(notes.join(' '), {
+				title: `${PHASE_ICONS[to]} Switch to ${PHASE_LABELS[to]} right now?`,
+				tone: 'danger',
+				confirmLabel: `Switch & release ${guestBooked} booking${guestBooked === 1 ? '' : 's'}`,
+				altLabel: 'Switch & keep the bookings',
+				cancelLabel: 'Cancel'
+			});
+			if (choice === 'cancel') return;
+			clearBookings = choice === 'confirm';
+		} else {
+			const ok = await confirmDialog(notes.join(' '), {
+				title: `${PHASE_ICONS[to]} Switch to ${PHASE_LABELS[to]} right now?`,
+				tone: to === 'live' ? 'warning' : 'danger',
+				confirmLabel: `Switch to ${PHASE_LABELS[to]}`,
+				cancelLabel: 'Cancel'
+			});
+			if (!ok) return;
+		}
 
 		const form = new FormData();
 		form.set('phase', to);
+		if (clearBookings) form.set('clearBookings', '1');
 		busy = true;
 		const result = await submitAction('?/setPhase', form);
 		busy = false;
@@ -336,9 +360,13 @@
 			const data = result.data as
 				{ phaseBefore?: BookingPhase; released?: number; kept?: number } | undefined;
 			const releasedNote =
-				to === 'staging'
-					? ` ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}.`
-					: '';
+				to !== 'staging'
+					? ''
+					: clearBookings
+						? ` ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}.`
+						: guestBooked > 0
+							? ` The ${guestBooked} guest booking${guestBooked === 1 ? '' : 's'} stay${guestBooked === 1 ? 's' : ''}: clear them with 🧨 Clear all bookings when the camp should be empty.`
+							: '';
 			if (data?.phaseBefore && data.phaseBefore !== current) {
 				await alertDialog(
 					`The phase had already changed to ${PHASE_LABELS[data.phaseBefore]} before your click (the timer, or another superuser). It is ${PHASE_LABELS[to]} now.${releasedNote}`,
@@ -363,7 +391,7 @@
 	async function clearAllBookings() {
 		if (busy || !isSuperuser || current !== 'staging') return;
 		const ok = await confirmDialog(
-			`${guestBooked} booked spot${guestBooked === 1 ? '' : 's'} become${guestBooked === 1 ? 's' : ''} free and lose${guestBooked === 1 ? 's' : ''} the burner name.${crewBookedSpots > 0 ? ` The ${crewBookedSpots} spot${crewBookedSpots === 1 ? '' : 's'} the crew booked for special-needs requests stay as long as those requests exist.` : ''} Ticket codes keep working. This cannot be undone.`,
+			`${guestBooked} booked spot${guestBooked === 1 ? '' : 's'} become${guestBooked === 1 ? 's' : ''} free and lose${guestBooked === 1 ? 's' : ''} the burner name.${arrivedNote}${crewBookedSpots > 0 ? ` The ${crewBookedSpots} spot${crewBookedSpots === 1 ? '' : 's'} the crew booked for special-needs requests stay as long as those requests exist.` : ''} Ticket codes keep working. This cannot be undone.`,
 			{
 				title: '🧨 Clear all bookings?',
 				tone: 'danger',

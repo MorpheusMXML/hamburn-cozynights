@@ -118,7 +118,7 @@ flowchart LR
 | 🛠️ **On the crew** and need admin access | [Admin access & roles](./admin/access), then [the Control Center](./admin/). |
 | 📋 **Organizing** the next burn | [Event checklist](./admin/event-checklist) from first layout to after the event. |
 | ♿ **Deciding special-needs requests** | [Special-needs requests](./admin/special-needs): mark spots, decide, book. |
-| 🎟️ **At the entrance**, checking guests in | [Booking passes](./admin/passes): phone camera, check page or USB scanner. |
+| 🎟️ **At the entrance**, checking guests in | [Booking passes & check-in](./admin/passes): phone camera, check-in page or USB scanner. |
 | 💻 **A developer** | [Local development](./develop/) and [Architecture](./reference/architecture). |
 
 <!-- /audience -->

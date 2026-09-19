@@ -131,6 +131,12 @@
 								<span class="label">SPOTS CLAIMED 📊</span>
 								<span class="value">{room.stats.occupied} / {room.stats.total}</span>
 							</div>
+							{#if room.stats.checkedIn > 0}
+								<div class="stat-info">
+									<span class="label">CHECKED IN ✅</span>
+									<span class="value">{room.stats.checkedIn} / {room.stats.occupied}</span>
+								</div>
+							{/if}
 						</div>
 					</div>
 				</a>

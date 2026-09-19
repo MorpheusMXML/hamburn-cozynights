@@ -10,6 +10,7 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 	import { slide } from 'svelte/transition';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { toast } from '$lib/dialogs';
+	import { formatBerlin } from '$lib/booking-phase';
 	import {
 		TICKET_LIMITS,
 		isValidGuestEmail,
@@ -60,6 +61,9 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 		ticket.telegram ? 'Telegram updates to the old holder stop.' : '',
 		ticket.pass ? 'The booking pass gets a new code: the old pass link stops working.' : '',
 		ticket.burnerName ? `The burner name "${ticket.burnerName}" is forgotten.` : '',
+		ticket.spot?.checkIn
+			? 'The check-in is reset: the new holder checks in with the new pass when they arrive.'
+			: '',
 		'A special-needs request of the old holder is deleted (a spot the crew booked stays with the ticket).',
 		!emailChanged && cleanEmail
 			? "The address is still the old one: no e-mail goes out, and later updates would reach the old holder. Enter the new holder's address."
@@ -77,7 +81,8 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 			return (
 				'🔁 Ticket handed over' +
 				(outcome.confirmation ? `: ${outcome.ticket.email} gets a confirmation shortly.` : '.') +
-				(outcome.requestRemoved ? ' Their special-needs request was deleted.' : '')
+				(outcome.requestRemoved ? ' Their special-needs request was deleted.' : '') +
+				(outcome.checkInReset ? ' The check-in was reset.' : '')
 			);
 		}
 		if (outcome.emailChanged && !outcome.ticket.email) {
@@ -139,6 +144,11 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 				</li>
 			{:else}
 				<li>No spot</li>
+			{/if}
+			{#if ticket.spot?.checkIn}
+				<li class="good" title={ticket.spot.checkIn.by ? `by ${ticket.spot.checkIn.by}` : ''}>
+					✅ Checked in {formatBerlin(ticket.spot.checkIn.at, { year: false })}
+				</li>
 			{/if}
 			{#if ticket.burnerName}<li>🔥 {ticket.burnerName}</li>{/if}
 			{#if ticket.telegram}<li>💬 Telegram</li>{/if}

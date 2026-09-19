@@ -48,7 +48,7 @@
 						href="/admin/check"
 						class="nav-link"
 						class:active={page.url.pathname === '/admin/check'}
-						title="Check booking passes">🎫 Check passes</a
+						title="Check guests in with their booking pass">🎫 Check-in</a
 					>
 					<a
 						href="/admin/messages"

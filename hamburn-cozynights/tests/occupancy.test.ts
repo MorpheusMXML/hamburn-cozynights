@@ -32,11 +32,24 @@ function makePb(records: Records) {
 
 describe('countSpots', () => {
 	it('ignores deactivated spots and does not count locked ones as free', () => {
-		expect(countSpots(beds)).toEqual({ total: 3, occupied: 1, free: 1 });
+		expect(countSpots(beds)).toEqual({ total: 3, occupied: 1, free: 1, checkedIn: 0 });
 	});
 
 	it('is empty for no spots', () => {
-		expect(countSpots([])).toEqual({ total: 0, occupied: 0, free: 0 });
+		expect(countSpots([])).toEqual({ total: 0, occupied: 0, free: 0, checkedIn: 0 });
+	});
+
+	it('counts checked-in guests among the booked spots', () => {
+		const booked = { enabled: true, occupied: true, is_locked: false, order: 'o1' };
+		expect(
+			countSpots([
+				{ ...booked, checked_in_at: '2026-09-19 12:00:00.000Z' },
+				{ ...booked, order: 'o2', checked_in_at: '' },
+				// a check-in without a booking doesn't exist (PocketBase drops it)
+				{ ...booked, order: '', checked_in_at: '2026-09-19 12:00:00.000Z' },
+				{ ...booked, order: 'o3', enabled: false, checked_in_at: '2026-09-19 12:00:00.000Z' }
+			])
+		).toEqual({ total: 3, occupied: 3, free: 0, checkedIn: 1 });
 	});
 });
 
@@ -88,6 +101,6 @@ describe('admin occupancy numbers', () => {
 			occupancyRate: 33
 		});
 		expect(dashboard.houses[1]).toMatchObject({ totalBeds: 0, occupiedBeds: 0, freeBeds: 0 });
-		expect(housePage.rooms[0].stats).toEqual({ total: 3, occupied: 1, free: 1 });
+		expect(housePage.rooms[0].stats).toEqual({ total: 3, occupied: 1, free: 1, checkedIn: 0 });
 	});
 });

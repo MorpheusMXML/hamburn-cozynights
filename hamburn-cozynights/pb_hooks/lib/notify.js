@@ -494,7 +494,8 @@ function eventText(ev, cfg) {
 			if (d.newHolder) {
 				parts.push(
 					'passed on: Telegram disconnected, new booking pass' +
-						(d.requestRemoved ? ', special-needs request removed' : '')
+						(d.requestRemoved ? ', special-needs request removed' : '') +
+						(d.checkInReset ? ', check-in reset' : '')
 				);
 			}
 			return (
@@ -539,6 +540,8 @@ function eventText(ev, cfg) {
 			return '✏️ Message text changed' + by + ': ' + subject;
 		case 'message_text_reset':
 			return '↩️ Message text reset to its default' + by + ': ' + subject;
+		case 'check_in_undone':
+			return '↩️ Check-in undone' + by + (subject ? ': spot ' + subject : '');
 		case 'test':
 			return '🧪 Test message from cozy-admin notify test' + by;
 		default:

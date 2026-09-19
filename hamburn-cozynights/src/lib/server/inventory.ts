@@ -34,7 +34,8 @@ export class InventoryService {
 			// names on the room pages, a lock or special-needs flag would tell who
 			// has special needs.
 			// Timestamps go too: `booked_at` (and `updated`) of a crew-booked spot
-			// would date the special-needs assignment.
+			// would date the special-needs assignment, and the check-in (when a
+			// guest arrived, which admin checked them in) is for the crew only.
 			const blank = '' as HouseData['created'];
 			const houses = housesRaw.map((h) => ({ ...h, created: blank, updated: blank }));
 			const rooms = roomsRaw.map((r) => ({ ...r, created: blank, updated: blank }));
@@ -47,6 +48,8 @@ export class InventoryService {
 					is_locked: false,
 					is_special: false,
 					booked_at: '',
+					checked_in_at: '',
+					checked_in_by: '',
 					created: blank,
 					updated: blank
 				}));

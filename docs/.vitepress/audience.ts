@@ -54,7 +54,7 @@ const sections: Section[] = [
 					{ text: 'Admin access & roles', link: '/admin/access' },
 					{ text: 'Tickets & e-mail addresses', link: '/admin/tickets' },
 					{ text: 'Notifications', link: '/admin/notifications' },
-					{ text: 'Booking passes', link: '/admin/passes' },
+					{ text: 'Booking passes & check-in', link: '/admin/passes' },
 					{ text: 'Special-needs requests', link: '/admin/special-needs' },
 					{ text: 'Houses, rooms & spots', link: '/admin/camp-layout' },
 					{ text: 'Layout templates', link: '/admin/templates' },

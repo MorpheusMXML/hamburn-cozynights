@@ -389,7 +389,11 @@ export async function assignSpot(
 	const name =
 		readSecret(order.burner_name) || readSecret(request.burner_name) || randomBurnerName();
 	try {
-		await new BookingService(adminPb).bookBed(order, bedId, name, { allowLocked: true });
+		// The crew may move a guest who has already arrived: the check-in moves along.
+		await new BookingService(adminPb).bookBed(order, bedId, name, {
+			allowLocked: true,
+			allowCheckedIn: true
+		});
 	} catch (err) {
 		if (isNotFound(err)) {
 			throw new RequestError("This spot doesn't exist anymore. Reload the page.", 409);
@@ -425,7 +429,7 @@ export async function releaseSpot(
 	requestId: string
 ): Promise<void> {
 	const request = await getRequest(adminPb, requestId);
-	await new BookingService(adminPb).unbookOrder(request.order);
+	await new BookingService(adminPb).unbookOrder(request.order, { allowCheckedIn: true });
 	if (request.bed) {
 		await adminPb
 			.collection('special_requests')

@@ -60,6 +60,7 @@
 	// Management Summary Calculations
 	$: totalBeds = houses.reduce((sum, h) => sum + (h.totalBeds || 0), 0);
 	$: occupiedBeds = houses.reduce((sum, h) => sum + (h.occupiedBeds || 0), 0);
+	$: checkedInBeds = houses.reduce((sum, h) => sum + (h.checkedInBeds || 0), 0);
 
 	// "Full" means nothing left to book, like the cards' "Fully booked" badge.
 	$: houseStats = {
@@ -383,7 +384,14 @@
 		</div>
 	</header>
 
-	<BookingWindowPanel {phase} {bookingWindow} {isSuperuser} {occupiedBeds} {crewBookedSpots} />
+	<BookingWindowPanel
+		{phase}
+		{bookingWindow}
+		{isSuperuser}
+		{occupiedBeds}
+		{crewBookedSpots}
+		{checkedInBeds}
+	/>
 
 	<section class="requests-panel" class:open={requestsOpen}>
 		<span class="requests-icon" aria-hidden="true">♿</span>
@@ -431,6 +439,11 @@
 								<span class="dot full"></span>
 								<span class="count">{houseStats.full}</span>
 								<span class="text">FULL</span>
+							</div>
+							<div class="legend-item">
+								<span class="dot checked-in"></span>
+								<span class="count">{checkedInBeds}</span>
+								<span class="text">SPOTS CHECKED IN</span>
 							</div>
 						</div>
 					</div>
@@ -563,6 +576,12 @@
 									<span class="stat-label">Spots Claimed 👥</span>
 									<span class="stat-value">{house.occupiedBeds} / {house.totalBeds}</span>
 								</div>
+								{#if house.checkedInBeds > 0}
+									<div class="stat-group">
+										<span class="stat-label">Checked In ✅</span>
+										<span class="stat-value">{house.checkedInBeds} / {house.occupiedBeds}</span>
+									</div>
+								{/if}
 
 								<div class="progress-bar">
 									<div
@@ -821,6 +840,10 @@
 	.legend-item .dot.full {
 		background: #f87171;
 		box-shadow: 0 0 10px #f87171;
+	}
+	.legend-item .dot.checked-in {
+		background: #2dd4bf;
+		box-shadow: 0 0 10px #2dd4bf;
 	}
 	.legend-item .count {
 		font-weight: 900;
