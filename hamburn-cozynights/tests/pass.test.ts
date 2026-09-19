@@ -152,6 +152,15 @@ describe('findPass', () => {
 		expect((await findPass(fakeAdminPb({ bed: null }), CODE))?.spot).toBeNull();
 		expect(await findPass(fakeAdminPb({ order: null }), CODE)).toBeNull();
 	});
+
+	it('dates the booking by booked_at, not by the last change of the spot', async () => {
+		const booked = { ...BED, booked_at: '2026-09-15 07:32:00.000Z' };
+		expect((await findPass(fakeAdminPb({ bed: booked }), CODE))?.spot?.since).toBe(
+			'2026-09-15 07:32:00.000Z'
+		);
+		// spots booked before booked_at existed
+		expect((await findPass(fakeAdminPb(), CODE))?.spot?.since).toBe(BED.updated);
+	});
 });
 
 describe('ensurePassCode', () => {
