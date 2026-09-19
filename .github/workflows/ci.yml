@@ -22,7 +22,7 @@ jobs:
   verify:
     name: Verify
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: hamburn-cozynights
@@ -46,10 +46,15 @@ jobs:
       - name: Integration tests (real PocketBase)
         run: npm run test:integration
 
-      # Builds the same Dockerfile the server builds and drives the running
-      # app over HTTP: guest login, booking, admin protection.
-      - name: Smoke tests (app image + PocketBase)
-        run: npm run test:smoke
+      - name: Browsers for the layout test
+        run: npx playwright install --with-deps chromium webkit
+
+      # One app image, built from the same Dockerfile the server builds, for
+      # both suites: the smoke tests drive it over HTTP (guest login, booking,
+      # admin protection), the layout test opens every page with awkward names
+      # at every width from 320 to 1440 px (docs/develop/layout.md).
+      - name: Smoke and layout tests (app image + PocketBase)
+        run: bash scripts/test-stack.sh smoke layout
 
   # The repository is public: a committed secret is published. gitleaks scans
   # the whole history with the rules in .gitleaks.toml; the same rules run

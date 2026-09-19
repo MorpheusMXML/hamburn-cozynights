@@ -25,65 +25,63 @@
 				{/if}
 			</div>
 
-			<div class="user-area">
-				<nav class="admin-nav" aria-label="Admin pages">
-					<a
-						href="/admin/tickets"
-						class="nav-link"
-						class:active={page.url.pathname === '/admin/tickets'}
-						title="Find tickets, change e-mail addresses, load the ticket list">🎟️ Tickets</a
-					>
-					<a
-						href="/admin/requests"
-						class="nav-link requests-link"
-						class:active={page.url.pathname === '/admin/requests'}
-						title="Special-needs requests{data.openRequests
-							? `: ${data.openRequests} waiting for a decision`
-							: ''}"
-					>
-						♿ Special needs
-						{#if data.openRequests}<span class="request-count">{data.openRequests}</span>{/if}
-					</a>
-					<a
-						href="/admin/check"
-						class="nav-link"
-						class:active={page.url.pathname === '/admin/check'}
-						title="Check guests in with their booking pass">🎫 Check-in</a
-					>
-					<a
-						href="/admin/messages"
-						class="nav-link"
-						class:active={page.url.pathname === '/admin/messages'}
-						title="Message texts: what guests get by e-mail, on Telegram and from the bot"
-						>✉️ Messages</a
-					>
-				</nav>
-				<div class="user-info">
-					<span class="user-label">Burner:</span>
-					<span class="user-email" title={data.admin.email}>{data.admin.email}</span>
-				</div>
-
-				<form action="/admin/logout" method="POST" class="logout-form">
-					<button type="submit" class="logout-btn" title="Sign out {data.admin.email}">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="18"
-							height="18"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-							<polyline points="16 17 21 12 16 7"></polyline>
-							<line x1="21" y1="12" x2="9" y2="12"></line>
-						</svg>
-						<span>Eject 🚀</span>
-					</button>
-				</form>
+			<nav class="admin-nav" aria-label="Admin pages">
+				<a
+					href="/admin/tickets"
+					class="nav-link"
+					class:active={page.url.pathname === '/admin/tickets'}
+					title="Find tickets, change e-mail addresses, load the ticket list">🎟️ Tickets</a
+				>
+				<a
+					href="/admin/requests"
+					class="nav-link requests-link"
+					class:active={page.url.pathname === '/admin/requests'}
+					title="Special-needs requests{data.openRequests
+						? `: ${data.openRequests} waiting for a decision`
+						: ''}"
+				>
+					♿ Special needs
+					{#if data.openRequests}<span class="request-count">{data.openRequests}</span>{/if}
+				</a>
+				<a
+					href="/admin/check"
+					class="nav-link"
+					class:active={page.url.pathname === '/admin/check'}
+					title="Check guests in with their booking pass">🎫 Check-in</a
+				>
+				<a
+					href="/admin/messages"
+					class="nav-link"
+					class:active={page.url.pathname === '/admin/messages'}
+					title="Message texts: what guests get by e-mail, on Telegram and from the bot"
+					>✉️ Messages</a
+				>
+			</nav>
+			<div class="user-info">
+				<span class="user-label">Burner:</span>
+				<span class="user-email" title={data.admin.email}>{data.admin.email}</span>
 			</div>
+
+			<form action="/admin/logout" method="POST" class="logout-form">
+				<button type="submit" class="logout-btn" title="Sign out {data.admin.email}">
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="18"
+						height="18"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+						<polyline points="16 17 21 12 16 7"></polyline>
+						<line x1="21" y1="12" x2="9" y2="12"></line>
+					</svg>
+					<span>Eject 🚀</span>
+				</button>
+			</form>
 		</header>
 	{/if}
 
@@ -126,10 +124,15 @@
 		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 	}
 
+	/* One row on wide screens: logo, pages, account, sign-out. The pages never
+	   shrink; the account (a long e-mail address) gives way and is cut with "…".
+	   Squeezed next to the account, the pages once stacked up in a column
+	   (tests/layout checks every width). */
 	.admin-nav {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.5rem;
+		flex-shrink: 0;
 	}
 	.nav-link {
 		display: inline-flex;
@@ -210,16 +213,10 @@
 		font-weight: bold;
 	}
 
-	/* User Area */
-	.user-area {
-		display: flex;
-		align-items: center;
-		gap: 2rem;
-		min-width: 0;
-		margin-left: auto;
-	}
-
+	/* Account and sign-out */
 	.user-info {
+		flex: 1 1 6rem;
+		margin-left: auto;
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
@@ -293,6 +290,20 @@
 		box-sizing: border-box;
 	}
 
+	/* Narrower: logo, account and sign-out on top, the pages in a row of their own. */
+	@media (max-width: 1400px) {
+		.user-info {
+			order: 1;
+		}
+		.logout-form {
+			order: 2;
+		}
+		.admin-nav {
+			order: 3;
+			flex-basis: 100%;
+		}
+	}
+
 	@media (max-width: 640px) {
 		.admin-header {
 			padding: 0.6rem 1rem;
@@ -300,11 +311,9 @@
 		.logo-text {
 			font-size: 1.2rem;
 		}
-		/* One compact row under the logo: pages on the left, sign-out on the right. */
-		.user-area {
-			width: 100%;
-			justify-content: space-between;
-			gap: 0.5rem;
+		/* Phones: logo and sign-out on top, no account line. */
+		.logo-area {
+			flex: 1 1 8rem;
 		}
 		.user-info {
 			display: none;

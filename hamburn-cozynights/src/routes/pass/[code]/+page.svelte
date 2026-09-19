@@ -271,7 +271,7 @@
 
 	dl {
 		display: grid;
-		grid-template-columns: max-content 1fr;
+		grid-template-columns: max-content minmax(0, 1fr);
 		gap: 0.35rem 1rem;
 		margin: 0;
 	}
@@ -281,6 +281,16 @@
 	dd {
 		margin: 0;
 		overflow-wrap: anywhere;
+	}
+	/* Small phones: label above value, next to it a long name got a word per line. */
+	@media (max-width: 25rem) {
+		dl {
+			grid-template-columns: minmax(0, 1fr);
+			row-gap: 0;
+		}
+		dd + dt {
+			margin-top: 0.5rem;
+		}
 	}
 
 	.pass {

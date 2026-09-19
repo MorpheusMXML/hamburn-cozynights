@@ -31,8 +31,10 @@ Used on the ticket page and in the template review.
 		>
 			<span class="sign" aria-hidden="true">{open ? '−' : '+'}</span>
 			{#if icon}<span class="icon" aria-hidden="true">{icon}</span>{/if}
-			<span class="title">{title}</span>
-			{#if summary}<span class="summary">{summary}</span>{/if}
+			<span class="text">
+				<span class="title">{title}</span>
+				{#if summary}<span class="summary">{summary}</span>{/if}
+			</span>
 		</button>
 		{#if $$slots.actions}
 			<div class="actions"><slot name="actions" /></div>
@@ -82,8 +84,7 @@ Used on the ticket page and in the template review.
 		min-height: 52px;
 		display: flex;
 		align-items: center;
-		flex-wrap: wrap;
-		gap: 0.25rem 0.7rem;
+		gap: 0.7rem;
 		padding: 0.75rem 1rem;
 		background: transparent;
 		border: none;
@@ -125,6 +126,16 @@ Used on the ticket page and in the template review.
 	}
 	.icon {
 		font-size: 1.15rem;
+	}
+	/* Title and summary wrap together; the sign stays in front of them (on a
+	   phone, next to "select all", it once got a line of its own). */
+	.text {
+		flex: 1 1 auto;
+		min-width: 0;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.25rem 0.7rem;
 	}
 	.title {
 		font-weight: 900;
