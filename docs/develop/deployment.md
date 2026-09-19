@@ -71,6 +71,10 @@ The old containers keep serving while the new image builds.
 - The **PocketBase version** comes from the compose file of the deployed commit. It is pinned and never updated implicitly.
 - The one-time server setup, restoring a data backup, and maintenance are in the operator runbook [`hamburn-cozynights/deploy/README.md`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md) (German).
 
+### nginx in front of the app
+
+The vhost in [`deploy/nginx/test-cozynights.hamburn.de.conf`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/nginx/test-cozynights.hamburn.de.conf) is applied by hand on the server; the deploy never touches it. Two things in it are load-bearing: the header block (`server_tokens off`, HSTS, `X-Robots-Tag`; the post-deploy smoke test expects HSTS on every HTTPS page) and `proxy_buffer_size 16k` in `location /`, because a signed-in browser's response headers (session cookie, SvelteKit's `Link` preload header, the CSP headers) exceed nginx's default 4 KB buffer, which shows up as a `502 Bad Gateway` for admins only ("upstream sent too big header" in the error log). After editing: `nginx -t && systemctl reload nginx`.
+
 ### After a deploy
 
 Check that all migrations went through:
