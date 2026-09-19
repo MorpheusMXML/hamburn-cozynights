@@ -17,14 +17,14 @@ stateDiagram-v2
 ```
 
 - **🛠 Staging** is for building. Admins shape the camp; guests can sign in and look at the (blurred) map, but can't book.
-- **🎪 Live Booking** is for booking. Guests claim spots; the camp's structure is frozen so nothing moves under their feet. A slim countdown at the top of every page shows when booking closes.
+- **🎪 Live Booking** is for booking. Guests claim spots; the camp's structure is frozen so nothing moves under their feet. A countdown shows when booking closes: a big box on the start page, a slim bar at the top of every other page.
 - **🔒 Closed** follows the booking window. Spots are final: guests still see their spot and their booking pass, but can't book, change or release anything. The layout stays frozen, because it holds the bookings.
 
 ## Who can do what
 
 | | 🛠 Staging | 🎪 Live | 🔒 Closed |
 | --- | :---: | :---: | :---: |
-| Guests: sign in and see the map | <span class="yes">✓</span> blurred, with countdown | <span class="yes">✓</span> | <span class="yes">✓</span> blurred at first, with your booking pass |
+| Guests: sign in and see the map | <span class="yes">✓</span> blurred, with a countdown once the timer is armed | <span class="yes">✓</span> | <span class="yes">✓</span> blurred at first, with your booking pass |
 | Guests: book, rename, release a spot | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="no">✗</span> |
 | Guests: ask for a [special-needs spot](./special-needs) | <span class="yes">✓</span> while requests are open | <span class="yes">✓</span> while requests are open | <span class="yes">✓</span> while requests are open |
 | Admins: add, rename, move, delete houses | <span class="yes">✓</span> | <span class="no">✗</span> | <span class="no">✗</span> |
@@ -38,14 +38,14 @@ stateDiagram-v2
 > [!IMPORTANT] Enforced by the server
 > The lockdown is not just hidden buttons. Every structural change is checked on the server against the *current* phase, so an old browser tab can't sneak a change in after going live.
 
-During Live Booking and after booking closed, houses without any active spot don't appear on the guest map.
+During Live Booking and after booking closed, houses without any active spot don't appear on the guest map; in Staging they show as grey pins.
 
 ## The booking window
 
 ![Staging map with the countdown](../assets/screenshots/guest-map-staging.webp)
 
 <!-- audience:public -->
-The crew plans when booking opens and when it closes. Guests see both moments as countdowns: **IGNITION IN** on the start page (right above the ticket-code field) and on the map before booking opens, and a slim bar at the top of every other page. Tap the bar for the exact time. While booking is live, the countdown runs to the closing time (big on the start page, slim on every other page), and it turns red in the last hour. When a countdown ends, the page opens or locks by itself; there's no need to reload.
+The crew plans when booking opens and when it closes. Guests see both moments as countdowns: **IGNITION IN** on the start page (right above the ticket-code field) and on the map before booking opens, and a slim bar at the top of every other page. Tap the bar for the exact time. While booking is live, the countdown runs to the closing time (big on the start page, slim on every other page), and it turns red in the last hour. When a countdown ends, the page opens or locks by itself; there's no need to reload. Until the crew has armed the timer there is no countdown: the map then says *Booking is not open yet. The crew is still setting up the houses. Check back soon.*
 <!-- /audience -->
 <!-- audience:admin -->
 Everything about the phase sits in one panel of the [Control Center](../admin/), right under the header: **🎟 BOOKING WINDOW**. Its summary line shows the phase, the next switch with a countdown, and whether the timer is armed. Click it to unfold:
@@ -56,7 +56,9 @@ Everything about the phase sits in one panel of the [Control Center](../admin/),
 
 ### Plan the window
 
-<kbd>＋ Plan window</kbd> unfolds two fields, **Booking opens** and **Booking closes**. Under each field you see how far ahead it is and how long booking stays open; problems show up right there, before you save. <kbd>Save window ✨</kbd> stores the times. A new window starts **not armed**: saving and arming are two steps. <kbd>Clear times</kbd> empties both fields, and saving that removes the window.
+<kbd>＋ Plan window</kbd> unfolds two fields, **Booking opens** and **Booking closes**. Under each field you see how far ahead it is and how long booking stays open; problems show up right there, before you save. <kbd>Save window ✨</kbd> stores the times. A new window starts **not armed**: saving and arming are two steps. <kbd>Clear times</kbd> empties both fields, and saving that removes the window. During Live Booking the opening time is fixed for admins (*Booking is already open.*); the closing time can still move.
+
+A superuser may save times that switch the phase at once (an armed window whose opening time is already over, for example). The panel asks first: *Switch to … now?* with <kbd>Save and switch</kbd> or <kbd>Back to editing</kbd>.
 
 ### Arm or pause the timer
 
@@ -80,7 +82,7 @@ Times the armed timer already has don't have to be a day ahead again, so you can
 
 - **Live Booking:** a planned opening time is dropped (booking opened now). A future closing time stays and closes booking as planned.
 - **Closed:** the closing time of the current window is dropped (booking closed now). If the timer had already opened booking, it is paused as well (armed, it would reopen booking at once) and the elapsed opening time stays visible in the panel. For another round, edit the window with new times before arming again.
-- **Staging:** the timer is paused, so nothing switches by itself. **Every guest booking is released:** those spots become free again and their burner names are forgotten; ticket codes keep working, so the guests book again once booking opens. Spots the crew booked for [special-needs requests](./special-needs) stay. The dialog says how many bookings go. This can't be undone — Staging Mode never starts with guest bookings, because the layout is about to be edited.
+- **Staging:** the timer is paused, so nothing switches by itself. **Every guest booking is released:** those spots become free again and their burner names are forgotten, and every guest with an e-mail address or a Telegram link gets a *spot was released* message. Ticket codes keep working, so the guests book again once booking opens. Spots the crew booked for [special-needs requests](./special-needs) stay. The dialog says how many bookings go. This can't be undone — Staging Mode never starts with guest bookings, because the layout is about to be edited.
 
 A window planned for later (its opening time still ahead) stays armed when a superuser closes booking or goes back to Staging. The confirmation warns about it.
 
@@ -93,15 +95,15 @@ A window planned for later (its opening time still ahead) stays armed when a sup
 
 ## During Live Booking
 
-Almost everything structural is locked. The one exception is **locking and unlocking single spots**, so the crew can take a broken bed out of service mid-event. Guests then see it as *Not available · Reserved by the crew*.
+Almost everything structural is locked. The exceptions: **locking and unlocking single spots**, so the crew can take a broken bed out of service mid-event (guests then see it as *Not available · Reserved by the crew*), and everything around [special-needs spots](./special-needs): marking spots ♿ and booking a spot for a request.
 
 ## After booking closed
 
 <!-- audience:public -->
 Your spot stays yours, and your booking pass keeps working. Nothing can be booked, changed or released any more. If something has to change, ask the crew.
 
-The map greets you with a panel over the blurred camp, like before booking opened: your spot as a small ticket (tap it for your [booking pass](./booking#your-booking-pass)). <kbd>🗺️ LOOK AROUND</kbd> clears the view; houses and rooms still open, read-only.
+The map greets you with a panel over the blurred camp, like before booking opened: **BOOKING CLOSED**, your spot as a small ticket (tap it for your [booking pass](./booking#your-booking-pass)) and, if you sent one, your special-needs request. <kbd>🗺️ LOOK AROUND</kbd> clears the view; houses and rooms still open, read-only.
 <!-- /audience -->
 <!-- audience:admin -->
-The layout stays locked; locking and unlocking single spots still works. For another booking round, plan a new window: the camp stays closed until its opening time. Only a superuser can switch back to Staging, for example to rebuild the layout.
+The layout stays locked; locking and unlocking single spots, ♿ marks and booking spots for special-needs requests still work. For another booking round, plan a new window: the camp stays closed until its opening time. Only a superuser can switch back to Staging, for example to rebuild the layout.
 <!-- /audience -->

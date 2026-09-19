@@ -1,6 +1,6 @@
 # Admin access & roles
 
-The admin area lives at **`/admin`**. From the start page you can also get there with the small 🔒 button in the corner.
+The admin area lives at **`/admin`**. From the start page you can also get there with the **🔒 Crew** link at the bottom.
 
 ## Who can get in
 
@@ -69,12 +69,15 @@ A request can also be approved straight to superuser.
 | Build the camp: houses, rooms, spots | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | Plan the booking window, arm and pause the timer (at least a day ahead) | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | **Switch the phase right now** (Staging, Live Booking, Closed) | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
-| Lock and unlock spots | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| Lock and unlock spots, mark spots ♿ special or normal | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| Decide [special-needs requests](./special-needs), book spots for them, open and close requests | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| [Check booking passes](./passes) | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| Change the [message texts](./notifications#message-texts) guests get | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | Export a layout template, compare a file with the camp | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | **Apply a layout template** | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
 | Find tickets, change their e-mail address, hand them over | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | **Load the ticket list** | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
-| **Clear all bookings** | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
+| **Clear all bookings** (Staging Mode only) | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
 | Approve, invite and remove admins | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> on the server |
 
 Superusers carry a **SUPERUSER ⚡️** badge in the admin header.
@@ -89,10 +92,9 @@ Approving, inviting and removing admins deliberately happens **outside the web a
 ./scripts/cozy-admin.sh approve someone@mauersegler.art superuser  # … or straight as superuser
 ./scripts/cozy-admin.sh add someone@mauersegler.art          # invite before the first sign-in
 ./scripts/cozy-admin.sh remove someone@mauersegler.art       # reject a request or revoke access
-./scripts/cozy-admin.sh superuser someone@mauersegler.art    # superuser in the app AND the PocketBase dashboard
 ```
 
-`superuser` asks for a password (at least 12 characters, typed twice) and creates a PocketBase dashboard account for that address on top of the app role, for the few people who need the dashboard on the server; `remove` takes both away. `service-account` is for operators only: it creates or repairs the app's own service superuser from `PB_ADMIN_EMAIL` / `PB_ADMIN_PASSWORD` in `.env`, generates a password when the stored one is shorter than 24 characters (the old file is kept as `.env.before-service-account`) and recreates the app container so it picks the value up.
+The few superusers who also need the PocketBase dashboard on the server get that from an operator; `./scripts/cozy-admin.sh --help` lists every command of the tool.
 
 Changes apply on the **next click**: CozyNights re-checks the role on every request, so an approved admin gets in with a reload, and a removed admin is out immediately.
 

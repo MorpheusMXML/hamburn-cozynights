@@ -46,8 +46,8 @@ The details are `LEGAL_*` variables in the environment's `.env`, next to the oth
 | `LEGAL_SUPERVISORY_AUTHORITY` | optional        | The data protection authority of the provider's state                                                          |
 | `LEGAL_LOG_RETENTION_DAYS`    | optional        | How long nginx keeps access logs; default `14`                                                                 |
 | `LEGAL_DELETION_PERIOD`       | optional        | When bookings and the ticket list are deleted; default _at the latest four weeks after the end of the event_   |
-| `LEGAL_TERMS_URL`             | once published  | Link to the membership terms at the ticket shop; `https://` only                                               |
-| `LEGAL_CODE_OF_CONDUCT_URL`   | recommended     | Link to the event's code of conduct (Hamburn: `https://hamburn.de/code-of-conduct`); the booking rules link it. `https://` only |
+| `LEGAL_TERMS_URL`             | once published  | Link to the membership terms at the ticket shop, a full `https://` address                                     |
+| `LEGAL_CODE_OF_CONDUCT_URL`   | recommended     | Link to the event's code of conduct (Hamburn: `https://hamburn.de/code-of-conduct`); the booking rules link it. A full `https://` address |
 
 While one of the four required values is missing, the pages show a red note for the operators (*Note for the operators: details are missing on this server (…)*) and the app log names the missing variables on the first visit. `LEGAL_MAIL_PROVIDER` isn't part of that note: while the server sends e-mail and the value is missing, the privacy policy shows *Mail service missing (LEGAL_MAIL_PROVIDER)* in its section on booking e-mails instead, so read that page once mail is set up.
 

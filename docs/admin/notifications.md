@@ -44,6 +44,7 @@ A guest hears from CozyNights when their spot changes:
 - **The bot talks to guests, nobody else.** Any other message to it (a question, a sticker) gets a short help text: how to connect on the room page or the special-needs page. `/start` with a used or expired link answers *⌛ This link has expired or was already used. Open your room on the booking page and tap "Get updates on Telegram" again.*; `/stop` answers *🔕 Disconnected. You won't get updates here anymore.*, or *This chat is not connected to a ticket.*
 - **No secrets in messages.** They show the spot and a link, never the ticket code. Messages are in English. On staging every subject and message starts with `[STAGING]`.
 - **The wording is yours.** Every sentence of these messages can be changed on <kbd>✉️ Messages</kbd>, see [Message texts](#message-texts).
+- **At most 20 e-mails a minute** (the server setting `COZY_MAILS_PER_MINUTE`). On opening day, when many guests book at once, the rest wait their turn, so confirmations can lag a few minutes.
 - **Delivery problems are retried** for about two days (after 1, 5 and 15 minutes, then after 1, 4, 12 and 24 hours), so a daily sending limit on opening day only delays messages. After that the crew group gets 📭 *Could not notify ticket …* with the reason.
 
 ## Crew group
@@ -55,30 +56,32 @@ Every message here is also kept in the audit log (collection `admin_events` in t
 | 🛎️ Admin access request | Someone signs in to `/admin` for the first time, with the command to approve them |
 | ✉️ Admin invited · ✅ approved · 🔁 role changed · 🚫 removed | Access changes, with `cozy-admin` or in the PocketBase dashboard |
 | 🔐 Admin sign-in | An approved admin signs in with Google (at least once a week, see [Sessions](./access#sessions)) |
-| 🎪 LIVE BOOKING switched ON · 🔒 Booking CLOSED · 🛠 Back to STAGING MODE | The phase changed right now (a superuser's switch), with their name |
+| 🎪 LIVE BOOKING switched ON · 🔒 Booking CLOSED · 🛠 Back to STAGING MODE | The phase changed right now (a superuser's switch), with their e-mail address |
 | ⏰ Booking timer armed · window changed · ⏸️ paused · removed | With the opening and closing time and who did it |
 | 🎪 Booking is LIVE now · 🔒 Booking is CLOSED now | The armed timer reached the opening or the closing time |
 | 🧨 All bookings cleared | With the number of released spots, and of special-needs spots kept |
 | 🗺️ Layout template applied | What was created, changed and removed, released bookings and the backup |
 | 🎟️ Ticket changed | A new address, a new name or a hand-over on the Tickets page, with the code and addresses shortened (`H•••`, `a•••@example.org`) |
-| 📥 Ticket list imported | How many tickets were created, updated and handed over |
+| 📥 Ticket list imported | A superuser loaded the list on the Tickets page: how many tickets were created, updated and handed over |
 | 🏚️ House deleted | Every deletion, with the number of bookings released |
 | 🧡 New special-needs request | With the number waiting for a decision and a link to ♿ **Special needs**; never the guest's name or text |
-| 🧡 A guest withdrew their request | With the status it had (waiting, approved, declined); never the guest's name or text |
-| ✅ approved · ✋ declined · ♿ spot booked · ♿ spot released | An admin decided on a [special-needs request](./special-needs), with their name |
-| 🧡 Special-needs requests OPENED · closed | Somebody flips the requests switch, with their name |
-| ✏️ Message text changed · ↩️ reset to its default | An admin changed a [message text](#message-texts) or took it back, with their name and the text's key |
+| 🧡 A guest withdrew their special-needs request | With the status it had (*was pending*, *approved* or *declined*); never the guest's name or text |
+| ✅ approved · ✋ declined · ♿ spot booked · ♿ spot released | An admin decided on a [special-needs request](./special-needs), with their e-mail address |
+| 🧡 Special-needs requests OPENED · closed | Somebody flips the requests switch, with their e-mail address |
+| ✏️ Message text changed · ↩️ reset to its default | An admin changed a [message text](#message-texts) or took it back, with their e-mail address and the text's key |
 | 📭 Could not notify ticket | A guest message failed for good |
 
 If Telegram is down, a crew message is tried again after 1, 5, 15 and 60 minutes; after the fifth failed attempt it is marked *failed* in the audit log (`notify status` shows it). Guest messages keep being retried for about two days, see above.
 
 ## Message texts
 
-Every sentence guests get — by e-mail, on Telegram and from the bot — can be changed on <kbd>✉️ Messages</kbd> in the admin header. Each text has a box with the default; change it, <kbd>Save</kbd>, and every message from then on uses it. <kbd>Reset to default</kbd> takes it back. The preview next to the boxes shows whole messages for a sample guest, rendered by the same code that sends them, with unsaved texts included: pick e-mail, Telegram or the bot's replies, and the situation.
+Every sentence guests get — by e-mail, on Telegram and from the bot — can be changed on <kbd>✉️ Messages</kbd> in the admin header. Each text has a box with the text in use; change it, and <kbd>Save</kbd> and <kbd>Undo</kbd> appear. After saving, every message from then on uses it, and the box notes *Changed by … · Default: …*. <kbd>Reset to default</kbd> takes it back; saving the default text counts as a reset too. The preview next to the boxes shows whole messages for a sample guest, rendered by the same code that sends them, with unsaved texts included: pick e-mail, Telegram or the bot's replies, and the situation; *Show as the e-mail looks* switches to the formatted e-mail. **Find a text** filters the boxes (e.g. *released*, *pass*), next to a counter of all texts and the changed ones.
+
+![Message texts: the boxes grouped by message, and the preview of a whole e-mail](../assets/screenshots/admin-messages.webp)
 
 - **Placeholders** in curly braces are filled in when the message is sent: `{name}`, `{spot}`, `{before}`, `{roomUrl}`, `{mapUrl}`, `{requestUrl}`, `{passCode}`, `{passUrl}`, `{appUrl}`, `{status}`. Each box lists the ones its text may use; a text with any other placeholder can't be saved. Anything else in curly braces is sent as written.
 - **The shape of a message stays.** Which lines a message has in which case (a spot booked by the crew, a request declined while the guest keeps their spot, …) is decided by the app; the texts are the sentences it puts together. That's why some sentences exist twice, for example *The crew could not offer you a special-needs spot* with and without *you keep this spot*.
-- **Line breaks stay**, in e-mails and Telegram messages alike. Texts are plain: no HTML, no Markdown, no links other than the placeholders.
+- **Line breaks stay**, in e-mails and Telegram messages alike. Texts are plain: no HTML, no Markdown, no links other than the placeholders. A text has at most 2,000 characters and can't be empty.
 - **English only, `[STAGING]` stays.** The label in front of subjects and messages is a server setting (`COZY_ENV_LABEL`), not a text.
 - **The crew group hears about every change** (✏️ *Message text changed*, ↩️ *reset*), with the admin's name and the text's key; the audit log keeps it. Changed texts live in the collection `message_texts`, so they are in every backup; *Reset* deletes the record.
 - **Not here:** the crew group's own alerts. They are log lines with names and counts, fixed in the code.
@@ -104,10 +107,11 @@ HB-1002;grace@example.org;Grace Hopper
 
 - **The whole file is checked first.** One broken line, and nothing is imported; the tool lists what's wrong.
 - **Existing codes are updated.** A new address replaces the old one; an empty cell keeps the stored value. If the ticket already holds a spot, the new address gets a confirmation right away.
+- **No hand-overs.** The tool only changes addresses and names. A ticket that changed hands keeps the old holder's Telegram link, booking pass and special-needs request, and the new address hears about all of them. Load such lists on the [Tickets](./tickets) page, where 🔁 *New holder* hands the ticket over. The server import also sends no 📥 message to the crew group.
 - **Nothing is deleted.** Tickets that aren't in the file stay; the tool says how many.
 - **Several tickets may share one address,** for example when one person bought for friends. Each ticket gets its own messages.
 
-A single ticket: `./scripts/cozy-admin.sh tickets add HB-1003 --email linus@example.com --name "Linus"`. `tickets list` shows the address and a Telegram link per ticket. More on codes: [Ticket codes](./event-checklist#ticket-codes). To change one address, search the ticket on the Tickets page instead.
+A single ticket: `./scripts/cozy-admin.sh tickets add HB-1003 --email linus@example.com --name "Linus"` (`--name` is the name e-mails greet with). `tickets list` shows the address per ticket and whether a Telegram chat is linked (`tg=yes` / `tg=no`). More on codes: [Ticket codes](./event-checklist#ticket-codes). To change one address, search the ticket on the Tickets page instead.
 
 ## Setting it up
 
@@ -151,8 +155,8 @@ Deletes every guest address, every Telegram link and every [special-needs reques
 | `notify test`: *crew chat: FAILED — 401* | The bot token is wrong. | Check the token in `.env`. |
 | `notify test`: *403* or *chat not found* | The bot isn't in the group, or the group id is wrong. | Add the bot to the group; group ids are negative numbers. |
 | `notify status`: *WARNING: this bot has a webhook* | Something else registered a webhook for the bot, so the server can't read its messages. | Remove the webhook, or give this environment its own bot. |
-| Guests see no <kbd>Get updates on Telegram</kbd> | No bot is set up, or `TELEGRAM_GUEST_UPDATES=off`. | `notify status`. |
+| Guests see no <kbd>Get updates on Telegram</kbd> | No bot is set up, or `TELEGRAM_GUEST_UPDATES=off`. The button also only shows once the guest holds a spot (room page) or has sent a special-needs request. | `notify status`. |
 | A guest sees *⌛ This link has expired or was already used* in Telegram | The link works once and for 30 minutes. | Press <kbd>Get updates on Telegram</kbd> on the room page again. |
 | The room page shows no address | E-mail isn't set up, or the ticket has no address. | `notify status`, `tickets list`. |
-| 📭 *Could not notify ticket* in the group | The address bounced or the mail server refused. | Fix the address in the ticket list and import it again. |
+| 📭 *Could not notify ticket* in the group | The mail server refused the address on every attempt for about two days. A bounce that only comes back later by e-mail never reaches CozyNights. | Fix the address on the [Tickets](./tickets) page. |
 | Nothing at all | Look at the queue, then at the server log. | `notify status` (queued / retrying), PocketBase log lines with `[cozy-notify]`. |

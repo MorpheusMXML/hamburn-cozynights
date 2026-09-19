@@ -25,11 +25,11 @@ Right under the header, the **🎟 BOOKING WINDOW** panel holds everything about
 | Let it run by itself | Flip the switch to **Timer armed** | admins |
 | Hold it | Flip the switch back (paused, the times stay) | admins |
 | Open, close or go back to Staging now | <kbd>⚡ Switch right now</kbd> | superusers only |
-| Release every guest booking | Happens by itself when switching back to Staging; <kbd>🧨 Clear all bookings</kbd> (same place, Staging only) for what is left | superusers only |
+| Release every guest booking | Happens by itself when switching back to Staging (every guest with an address or Telegram gets a *spot was released* message); <kbd>🧨 Clear all bookings</kbd> (same place, Staging only, greyed out while no guest booking is left) for what is left | superusers only |
 
 Times are Europe/Berlin (CET/CEST). The rules and what each switch does to the timer are in [The booking window](../guide/phases#the-booking-window).
 
-Below it, **♿ Special-needs requests: OPEN / CLOSED** opens or closes requests for guests, independent of the phase, with <kbd>Review requests →</kbd> next to it. See [Special-needs requests](./special-needs#_2-open-requests).
+Below it, the row **♿ Special-needs requests: OPEN** (or **CLOSED**, with *· n waiting for a decision* while requests wait) opens or closes requests for guests with <kbd>Open requests</kbd> / <kbd>Close requests</kbd>, independent of the phase. <kbd>Review requests →</kbd> leads to the requests. See [Special-needs requests](./special-needs#_2-open-requests).
 
 ## Intel panel
 
@@ -64,7 +64,8 @@ Pins are teal while a house has free spots, red when none is left, and grey whil
 | --- | --- |
 | **Click an empty place** | Sidebar *GENERATE SANCTUARY*: name the new house and set its initial number of beds, then <kbd>IGNITE HOUSE ✨</kbd>. |
 | **Drag a house** | Moves it. The new position is saved when you let go. |
-| **Click a house** | Sidebar *HOUSE INTEL*: rename it (<kbd>SYNC MODULE ✨</kbd>), <kbd>MANAGE ROOMS ⚙️</kbd>, or <kbd>VANISH FROM PLAYA 🌪️</kbd> to delete it. |
+| **Arrow keys** on a selected pin | Move it one unit per press (with <kbd>Shift</kbd>: ten), saved when you let go of the key. |
+| **Click a house** | Sidebar *HOUSE INTEL*: rename it (<kbd>SYNC MODULE ✨</kbd>), type an exact **MAP POSITION 📍** (X 0–1000, Y 0–700) and press <kbd>MOVE PIN</kbd>, <kbd>MANAGE ROOMS ⚙️</kbd>, or <kbd>VANISH FROM PLAYA 🌪️</kbd> to delete it. Moves are saved right away. |
 
 ![A selected house with the House Intel sidebar](../assets/screenshots/admin-house-selected.webp)
 
@@ -72,24 +73,25 @@ Pins are teal while a house has free spots, red when none is left, and grey whil
 
 ![House cards in list view](../assets/screenshots/admin-list-view.webp)
 
-Every house as a card with its occupancy badge (*n spots free*, *Fully booked* or *Not setup*), **Spots Claimed** with a progress bar, and its map coordinates. Locked spots never count as free, and deactivated spots don't count at all.
+Every house as a card with its occupancy badge (*n spots free*, *Fully booked* or *Not setup*), **Spots Claimed** with a progress bar, and its map coordinates. Locked 🔒 and special-needs ♿ spots never count as free, and deactivated spots don't count at all.
 
 - Click a card to manage its rooms.
 - <kbd>VANISH 🌪️</kbd> deletes the house after a confirmation.
-- <kbd>RENAME ✏️</kbd> and the **Ignite New House** card switch to the map view and open the editor sidebar there. A new house starts in the middle of the map (500/350), ready to be dragged into place.
+- <kbd>RENAME ✏️</kbd> and the **Ignite New House** card switch to the map view and open the editor sidebar there. A new house starts in the middle of the map (or at the nearest free place, if a pin is already there), ready to be dragged into place.
 
 ## During Live Booking and after it closed
 
 ![Control Center during Live Booking](../assets/screenshots/admin-live.webp)
 
-The Control Center stays fully usable for watching: statistics, occupancy, template export. Structural buttons are greyed out and refused by the server. What you can still change, on the [room page](./camp-layout#spots): lock or unlock single spots, and mark spots ♿ special or normal.
+The Control Center stays fully usable for watching: statistics, occupancy, template export. Structural buttons are greyed out and refused by the server. What you can still change: on the [room page](./camp-layout#spots), lock or unlock single spots and mark spots ♿ special or normal; on ♿ **Special needs**, decide requests and book spots for them.
 
 ## Next
 
 - [Houses, rooms & spots](./camp-layout): building the camp in detail
 - [Tickets & e-mail addresses](./tickets): find a ticket, fix its address, hand it over, load the ticket list
+- [Special-needs requests](./special-needs): mark ♿ spots, decide requests, book spots for guests
 - [Layout templates](./templates): export, compare and import
-- [Notifications](./notifications): booking e-mails, Telegram for guests and the crew group
+- [Notifications](./notifications): booking e-mails, Telegram for guests and the crew group, [message texts](./notifications#message-texts)
 - [Booking passes](./passes): checking guests in with the QR code
 - [Event checklist](./event-checklist): from the first layout to after the burn
 - [Legal pages](./legal): legal notice, privacy policy and booking rules
