@@ -24,7 +24,7 @@ stateDiagram-v2
 
 | | 🛠 Staging | 🎪 Live | 🔒 Closed |
 | --- | :---: | :---: | :---: |
-| Guests: sign in and see the map | <span class="yes">✓</span> blurred, with countdown | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| Guests: sign in and see the map | <span class="yes">✓</span> blurred, with countdown | <span class="yes">✓</span> | <span class="yes">✓</span> blurred at first, with your booking pass |
 | Guests: book, rename, release a spot | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="no">✗</span> |
 | Guests: ask for a [special-needs spot](./special-needs) | <span class="yes">✓</span> while requests are open | <span class="yes">✓</span> while requests are open | <span class="yes">✓</span> while requests are open |
 | Admins: add, rename, move, delete houses | <span class="yes">✓</span> | <span class="no">✗</span> | <span class="no">✗</span> |
@@ -99,6 +99,8 @@ Almost everything structural is locked. The one exception is **locking and unloc
 
 <!-- audience:public -->
 Your spot stays yours, and your booking pass keeps working. Nothing can be booked, changed or released any more. If something has to change, ask the crew.
+
+The map greets you with a panel over the blurred camp, like before booking opened: your spot as a small ticket (tap it for your [booking pass](./booking#your-booking-pass)). <kbd>🗺️ LOOK AROUND</kbd> clears the view; houses and rooms still open, read-only.
 <!-- /audience -->
 <!-- audience:admin -->
 The layout stays locked; locking and unlocking single spots still works. For another booking round, plan a new window: the camp stays closed until its opening time. Only a superuser can switch back to Staging, for example to rebuild the layout.

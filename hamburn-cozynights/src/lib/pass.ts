@@ -21,6 +21,16 @@ export interface PassCheckResult {
 	warning?: string;
 }
 
+/** A guest's own pass as the small ticket on house, room and map pages shows it (PassTicket.svelte). */
+export interface PassSummary {
+	/** XXXX-XXXX-XXXX */
+	code: string;
+	house: string;
+	room: string;
+	spot: string;
+	burnerName: string;
+}
+
 export function isPassCode(value: string): boolean {
 	return PASS_CODE.test(value);
 }

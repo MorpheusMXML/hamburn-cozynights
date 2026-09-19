@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ownSpotNote } from '$lib/booking-phase';
+	import PassTicket from '$lib/components/PassTicket.svelte';
 	import type { PageData, ActionData } from './$types';
 	import { enhance } from '$app/forms';
 	import { confirmDialog, toast } from '$lib/dialogs';
@@ -57,6 +58,13 @@
 					<p>
 						One ticket code is one spot. To pick a different one, release your current spot first.
 					</p>
+				{:else}
+					<p>{ownSpotNote(data.phase)}</p>
+				{/if}
+				{#if data.pass}
+					<PassTicket pass={data.pass} />
+				{/if}
+				{#if data.isBookingActive && !data.spotFixed}
 					{#if releaseError}
 						<p class="error-msg" role="alert">{releaseError}</p>
 					{/if}
@@ -101,8 +109,6 @@
 							{isReleasing ? 'Releasing…' : 'Release Current Spot'}
 						</button>
 					</form>
-				{:else}
-					<p>{ownSpotNote(data.phase)}</p>
 				{/if}
 			</div>
 		</div>
