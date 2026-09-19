@@ -20,7 +20,7 @@
 	// to a QR code) for a while: no WebGL context and no 19 endless animations.
 	const PLAIN_PAGES = /^\/(legal-notice|privacy|booking-rules|pass|admin\/check)(\/|$)/;
 	let ambient = $derived(!PLAIN_PAGES.test(page.url.pathname));
-	// The map shows the big "IGNITION IN" countdown itself while it is Staging.
+	// The start page always shows the big countdown itself, the map while it is Staging.
 	let bar = $derived(
 		showCountdownBar(data.booking?.phase ?? 'staging', data.booking?.next, page.url.pathname)
 	);

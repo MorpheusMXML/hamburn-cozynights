@@ -43,6 +43,7 @@ A guest hears from CozyNights when their spot changes:
 - **Telegram is the guest's choice.** On their room page, <kbd>Get updates on Telegram</kbd> opens a chat with the CozyNights bot. After <kbd>START</kbd> the bot confirms the current spot and sends every change from then on. <kbd>Turn off</kbd> on the room page or `/stop` in the chat ends it. The link works once and for 30 minutes.
 - **The bot talks to guests, nobody else.** Any other message to it (a question, a sticker) gets a short help text: how to connect on the room page or the special-needs page. `/start` with a used or expired link answers *⌛ This link has expired or was already used. Open your room on the booking page and tap "Get updates on Telegram" again.*; `/stop` answers *🔕 Disconnected. You won't get updates here anymore.*, or *This chat is not connected to a ticket.*
 - **No secrets in messages.** They show the spot and a link, never the ticket code. Messages are in English. On staging every subject and message starts with `[STAGING]`.
+- **The wording is yours.** Every sentence of these messages can be changed on <kbd>✉️ Messages</kbd>, see [Message texts](#message-texts).
 - **Delivery problems are retried** for about two days (after 1, 5 and 15 minutes, then after 1, 4, 12 and 24 hours), so a daily sending limit on opening day only delays messages. After that the crew group gets 📭 *Could not notify ticket …* with the reason.
 
 ## Crew group
@@ -66,9 +67,21 @@ Every message here is also kept in the audit log (collection `admin_events` in t
 | 🧡 A guest withdrew their request | With the status it had (waiting, approved, declined); never the guest's name or text |
 | ✅ approved · ✋ declined · ♿ spot booked · ♿ spot released | An admin decided on a [special-needs request](./special-needs), with their name |
 | 🧡 Special-needs requests OPENED · closed | Somebody flips the requests switch, with their name |
+| ✏️ Message text changed · ↩️ reset to its default | An admin changed a [message text](#message-texts) or took it back, with their name and the text's key |
 | 📭 Could not notify ticket | A guest message failed for good |
 
 If Telegram is down, a crew message is tried again after 1, 5, 15 and 60 minutes; after the fifth failed attempt it is marked *failed* in the audit log (`notify status` shows it). Guest messages keep being retried for about two days, see above.
+
+## Message texts
+
+Every sentence guests get — by e-mail, on Telegram and from the bot — can be changed on <kbd>✉️ Messages</kbd> in the admin header. Each text has a box with the default; change it, <kbd>Save</kbd>, and every message from then on uses it. <kbd>Reset to default</kbd> takes it back. The preview next to the boxes shows whole messages for a sample guest, rendered by the same code that sends them, with unsaved texts included: pick e-mail, Telegram or the bot's replies, and the situation.
+
+- **Placeholders** in curly braces are filled in when the message is sent: `{name}`, `{spot}`, `{before}`, `{roomUrl}`, `{mapUrl}`, `{requestUrl}`, `{passCode}`, `{passUrl}`, `{appUrl}`, `{status}`. Each box lists the ones its text may use; a text with any other placeholder can't be saved. Anything else in curly braces is sent as written.
+- **The shape of a message stays.** Which lines a message has in which case (a spot booked by the crew, a request declined while the guest keeps their spot, …) is decided by the app; the texts are the sentences it puts together. That's why some sentences exist twice, for example *The crew could not offer you a special-needs spot* with and without *you keep this spot*.
+- **Line breaks stay**, in e-mails and Telegram messages alike. Texts are plain: no HTML, no Markdown, no links other than the placeholders.
+- **English only, `[STAGING]` stays.** The label in front of subjects and messages is a server setting (`COZY_ENV_LABEL`), not a text.
+- **The crew group hears about every change** (✏️ *Message text changed*, ↩️ *reset*), with the admin's name and the text's key; the audit log keeps it. Changed texts live in the collection `message_texts`, so they are in every backup; *Reset* deletes the record.
+- **Not here:** the crew group's own alerts. They are log lines with names and counts, fixed in the code.
 
 ## Ticket codes with e-mail addresses
 

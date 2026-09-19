@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { onMount, tick } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
+	import { countdownKind } from '$lib/booking-phase';
+	import CountdownTimer from '$lib/components/CountdownTimer.svelte';
 	import EffigyTitle from '$lib/components/EffigyTitle.svelte';
 	import LegalLinks from '$lib/components/LegalLinks.svelte';
 	import MadeInHamburg from '$lib/components/MadeInHamburg.svelte';
@@ -49,6 +52,12 @@
 	let isSubmitting = false;
 
 	$: errorMessage = clientError || (isSubmitting ? '' : (form?.error ?? ''));
+
+	// The big countdown between the title and the ticket-code field: until
+	// booking opens, and while it is live until it closes. It replaces the slim
+	// bar on this page (showCountdownBar). When it ends, the page data is
+	// reloaded and the server says which phase it is now.
+	$: countdown = countdownKind(data.booking.phase, data.booking.next);
 
 	// Guest pages send visitors here when the ticket-code cookie is missing or stale.
 	$: loginHint =
@@ -108,6 +117,19 @@
 		<div class="title-container">
 			<EffigyTitle bind:paused={motionPaused} />
 		</div>
+
+		{#if countdown && data.booking.next}
+			<div class="booking-countdown" in:fly={{ y: 20, delay: 750, duration: 600 }}>
+				<h2 class="countdown-heading">
+					{countdown === 'closes' ? 'BOOKING CLOSES IN' : 'IGNITION IN'}
+				</h2>
+				<CountdownTimer
+					targetDate={data.booking.next.at}
+					kind={countdown}
+					on:elapsed={() => invalidateAll()}
+				/>
+			</div>
+		{/if}
 
 		<div class="login-module" in:fly={{ y: 30, delay: 900, duration: 600 }}>
 			{#if loginHint && !errorMessage}
@@ -236,9 +258,8 @@
 <style>
 	.hero {
 		position: relative;
-		/* minus the booking countdown bar on top, if shown (+layout.svelte) */
-		min-height: calc(100vh - var(--booking-bar-height, 0px));
-		min-height: calc(100dvh - var(--booking-bar-height, 0px));
+		min-height: 100vh;
+		min-height: 100dvh;
 		width: 100%;
 		display: flex;
 		flex-direction: column;
@@ -304,6 +325,28 @@
 		position: relative;
 		width: 100%;
 		margin: clamp(0.5rem, 4vw, 2.5rem) 0 clamp(3.75rem, 9vh, 5.5rem);
+	}
+
+	/* The big booking countdown: between the title and the ticket-code field,
+	   as wide as the field. It replaces the slim bar on this page. */
+	.booking-countdown {
+		--countdown-digits: clamp(1.75rem, 8vw, 2.75rem);
+		width: 100%;
+		max-width: 600px;
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		margin-bottom: clamp(1.25rem, 3vh, 2rem);
+	}
+
+	/* Same laser look as the heading over the map's countdown. */
+	.countdown-heading {
+		margin: 0;
+		font-size: 1rem;
+		font-weight: 900;
+		letter-spacing: 4px;
+		color: #f472b6;
+		text-shadow: 0 0 10px currentColor;
 	}
 
 	.login-module {

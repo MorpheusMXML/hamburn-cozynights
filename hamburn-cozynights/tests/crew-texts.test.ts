@@ -1,13 +1,9 @@
 // tests/crew-texts.test.ts — what the crew chat says about the ticket and
 // template imports (pb_hooks/lib/notify.js eventText, run outside PocketBase).
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
+import { loadHookModule } from './hook-module';
 
-const source = readFileSync(new URL('../pb_hooks/lib/notify.js', import.meta.url), 'utf8');
-const sandbox = { module: { exports: {} as Record<string, any> }, require: () => ({}) };
-vm.runInNewContext(source, sandbox);
-const { eventText } = sandbox.module.exports;
+const { eventText } = loadHookModule('lib/notify.js');
 
 const event = (action: string, actor: string, subject: string, details: object) => ({
 	getString: (field: string) =>
@@ -84,6 +80,17 @@ describe('crew chat texts', () => {
 			)
 		).toBe(
 			'🗺️ Layout template "Camp" imported by max@mauersegler.art: 3 houses, 4 rooms, 9 spots; 2 booking(s) released; backup b.zip'
+		);
+	});
+});
+
+describe('crew chat texts about message texts', () => {
+	it('say who changed or reset which text', () => {
+		expect(
+			eventText(event('message_text_changed', 'crew@mauersegler.art', 'mail.signature', {}))
+		).toBe('✏️ Message text changed by crew@mauersegler.art: mail.signature');
+		expect(eventText(event('message_text_reset', 'crew@mauersegler.art', 'bot.help', {}))).toBe(
+			'↩️ Message text reset to its default by crew@mauersegler.art: bot.help'
 		);
 	});
 });

@@ -6,7 +6,12 @@
  */
 export const MAP_WIDTH = 1000;
 export const MAP_HEIGHT = 700;
-export const MAP_IMAGE = '/lageplan-brahmsee.jpg';
+/**
+ * The map picture, drawn over the whole coordinate space. A new year's map
+ * gets a new file name, since browsers may keep the old picture under the old
+ * one: see docs/develop/index.md, "The map image".
+ */
+export const MAP_IMAGE = '/lageplan-brahmsee-2026.jpg';
 
 /** Two pins closer than this (in map units) can't be told apart or tapped. */
 export const MIN_HOUSE_DISTANCE = 25;

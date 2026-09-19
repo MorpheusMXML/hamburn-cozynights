@@ -43,7 +43,7 @@ Every switch goes to the crew group with the name of the admin.
 - what the guest **ticked** (a lower bunk or a bed without a ladder · step-free access or the ground floor · close to a toilet · a quiet room · a power socket for a medical device · something else) and **wrote** (5 to 500 characters), and a burner name if they chose one;
 - who **decided** and when, and the **spot** the ticket holds right now: *booked by the crew* (through this page) or *booked by the guest*.
 
-If a guest sends the form again right when you decide, the card says so: read it once more.
+If a guest sends the form again right when you decide, the card says so: read it once more. Cards are colour-coded: **waiting** orange, **approved** green, **declined** grey and dimmed.
 
 | Button | What happens |
 | --- | --- |
@@ -52,6 +52,7 @@ If a guest sends the form again right when you decide, the card says so: read it
 | <kbd>Move</kbd> | Books another spot for the guest; the old one becomes free. |
 | <kbd>Release spot</kbd> | The spot becomes free again (a special-needs spot stays one); the request stays approved, so book another one. The guest gets a message. |
 | <kbd>Decline</kbd> | The guest gets a message that the crew can't offer a special-needs spot: they keep a spot they booked themselves, or book like everyone else once booking opens. To decline a request whose spot you booked, release the spot first. |
+| <kbd>⋯</kbd> → <kbd>Approve after all</kbd> | On a declined card only, deliberately out of the way: the request is approved after all (the guest gets the *approved* message), and the spot list comes back so you can book one. |
 
 Every decision and booking is in the audit log and goes to the crew group — **without the guest's name or what they wrote**.
 
@@ -64,7 +65,7 @@ Every decision and booking is in the audit log and goes to the crew group — **
 | Approved and booked | **Your special-needs spot:** house, room, spot and the [booking pass](./passes) |
 | Declined | **About your special-needs request** — book like everyone else when booking opens |
 
-Messages say what the crew decided, never what the guest wrote. On `/special-needs` the guest sees the status, what they sent, the spot and the pass, and can connect Telegram.
+Messages say what the crew decided, never what the guest wrote. On `/special-needs` the guest sees the status, what they sent, the spot and the pass, and can connect Telegram. The wording of every message can be changed on <kbd>✉️ Messages</kbd> (see [Message texts](./notifications#message-texts)).
 
 ## Rules the app keeps
 

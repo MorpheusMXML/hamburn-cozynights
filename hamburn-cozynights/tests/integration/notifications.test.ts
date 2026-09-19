@@ -16,6 +16,7 @@ import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
 import {
 	anonymous,
 	createAdmin,
+	expectRefused,
 	seedHouse,
 	seedTicket,
 	serviceAccount,
@@ -587,5 +588,73 @@ describe('cozy-admin tickets import and notify', () => {
 		const to = `crew-${uid()}@example.com`;
 		expect(cozyAdmin(['notify', 'test', '--email', to])).toContain(`e-mail: sent to ${to}`);
 		expect((await mailsTo(to))[0].Subject).toBe('[TEST] CozyNights test e-mail');
+	});
+});
+
+// --- message texts (docs/admin/notifications.md, "Message texts") -------------------
+
+describe('message texts', () => {
+	it('serve the catalogue with the defaults and preview whole messages with changed texts', async () => {
+		const catalogue = await su.send('/api/cozy/texts', { method: 'GET' });
+		expect(catalogue.groups.length).toBeGreaterThan(5);
+		const signature = catalogue.items.find(
+			(item: { key: string }) => item.key === 'mail.signature'
+		);
+		expect(signature.text).toBe('— The CozyNights crew');
+
+		const preview = await su.send('/api/cozy/texts/preview', {
+			method: 'POST',
+			body: { texts: { 'mail.signature': '— Your Cozy crew 🌙', 'tg.connected.stop': '' } }
+		});
+		expect(preview.mail[0].subject).toContain('[TEST] Your CozyNights spot: ');
+		expect(preview.mail[0].text).toContain('— Your Cozy crew 🌙');
+		expect(preview.mail[0].html).toContain('— Your Cozy crew 🌙');
+		expect(preview.telegram[0].text).toContain('Send /stop to disconnect.'); // '' = the default
+		expect(preview.bot[0].text).toContain(APP_URL);
+
+		// the crew hears about a change (the app records the event)
+		await su.collection('admin_events').create({
+			action: 'message_text_changed',
+			actor: 'crew@mauersegler.art',
+			subject: 'mail.signature',
+			details: {}
+		});
+		await flush();
+		const crew = (await telegramTo(CREW_CHAT)).map((m) => m.text);
+		expect(crew).toContain(
+			'[TEST] ✏️ Message text changed by crew@mauersegler.art: mail.signature'
+		);
+
+		// not for guests
+		await expectRefused(anonymous().send('/api/cozy/texts', { method: 'GET' }));
+		await expectRefused(anonymous().send('/api/cozy/texts/preview', { method: 'POST', body: {} }));
+	});
+
+	it('send a stored text instead of the default, and the default again once it is gone', async () => {
+		const stored = await su
+			.collection('message_texts')
+			.create({ key: 'mail.signature', text: '— Your Cozy crew 🌙', updated_by: 'test' });
+		try {
+			const { beds } = await seedHouse(su, 1);
+			const guest = await ticketWithEmail();
+			await booking.bookBed(guest.order as any, beds[0].id, 'Text Tester');
+			await flush();
+
+			const mails = await mailsTo(guest.email);
+			expect(mails).toHaveLength(1);
+			const body = await mailBody(mails[0].ID);
+			expect(body.Text).toContain('— Your Cozy crew 🌙');
+			expect(body.Text).not.toContain('— The CozyNights crew');
+			expect(body.HTML).toContain('— Your Cozy crew 🌙');
+		} finally {
+			await su.collection('message_texts').delete(stored.id);
+		}
+
+		const { beds } = await seedHouse(su, 1);
+		const guest = await ticketWithEmail();
+		await booking.bookBed(guest.order as any, beds[0].id, 'Text Tester');
+		await flush();
+		const body = await mailBody((await mailsTo(guest.email))[0].ID);
+		expect(body.Text).toContain('— The CozyNights crew');
 	});
 });
