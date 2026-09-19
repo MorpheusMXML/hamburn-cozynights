@@ -18,6 +18,7 @@ data lives and how it is backed up: [Backups and where data lives](../develop/de
 | `guest_notify` | per ticket: what was last confirmed by mail / Telegram (spot and special-needs request), when the next message is due, retries, the linked Telegram chat and a one-time link token (hashed) | yes (chat id) | PocketBase hooks; the app's service account (Telegram link) | none (superusers only) |
 | `special_requests` | per ticket at most one: `order`, `status` (`pending`, `approved`, `declined`), `needs`, `reason` and `burner_name` (all three encrypted), `consent_at`, `decided_by`, `decided_at`, `bed` (the spot the crew booked for it) | yes (often health data) | the app's service account | none (superusers only) |
 | `admin_events` | audit log: `action`, `actor`, `subject`, `details`, crew alert state                      | yes (admin emails) | PocketBase hooks; the app's service account      | none (superusers only)                |
+| `message_texts` | the message texts admins changed: `key` (as in `pb_hooks/lib/texts.js`, unique), `text`, `updated_by`; a text without a record uses the default | yes (admin email) | the app's service account                        | none (superusers only)                |
 
 Deleting a house in the dashboard also deletes its rooms and beds. "Admin
 write" means an approved `admins` record (see [Security & privacy](./security)).

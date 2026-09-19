@@ -20,6 +20,9 @@
 //    the bot's incoming messages (guests linking their chat).
 // 5. POST /api/cozy/notify/flush (superusers only): one run right now, for
 //    the tests.
+// 6. The message texts for /admin/messages (superusers only, the app's service
+//    account): GET /api/cozy/texts lists the catalogue with the defaults,
+//    POST /api/cozy/texts/preview renders sample messages with changed texts.
 
 // --- 1. SMTP ------------------------------------------------------------------
 
@@ -326,6 +329,44 @@ routerAdd(
 		// force=1: ignore the settle time and the per-ticket cooldown (tests)
 		const force = e.request.url.query().get('force') === '1';
 		return e.json(200, notify.flush(e.app, force));
+	},
+	$apis.requireSuperuserAuth()
+);
+
+// --- 6. message texts ------------------------------------------------------------
+//
+// The sentences themselves: pb_hooks/lib/texts.js; what admins changed:
+// collection message_texts (read by notify.js when it sends). The admin page
+// reads the catalogue here and renders its preview here, so the preview is
+// what the guest will get.
+
+routerAdd(
+	'GET',
+	'/api/cozy/texts',
+	(e) => {
+		const notify = require(`${__hooks}/lib/notify.js`);
+		return e.json(200, notify.textCatalogue());
+	},
+	$apis.requireSuperuserAuth()
+);
+
+// Body: { texts: { <key>: <text> } } — the texts to try on top of the stored
+// ones; an empty text means the default.
+routerAdd(
+	'POST',
+	'/api/cozy/texts/preview',
+	(e) => {
+		const notify = require(`${__hooks}/lib/notify.js`);
+		const cfg = notify.config(e.app);
+		const body = e.requestInfo().body || {};
+		// A plain object, whatever the request parser hands over.
+		const given = body.texts ? JSON.parse(JSON.stringify(body.texts)) : {};
+		if (given && typeof given === 'object') {
+			for (const key of Object.keys(given)) {
+				if (typeof given[key] === 'string') cfg.texts[key] = given[key];
+			}
+		}
+		return e.json(200, notify.previewMessages(cfg));
 	},
 	$apis.requireSuperuserAuth()
 );

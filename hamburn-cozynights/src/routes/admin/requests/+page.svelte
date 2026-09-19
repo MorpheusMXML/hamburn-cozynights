@@ -1,7 +1,9 @@
 <!--
 Special-needs requests (docs/admin/special-needs.md): read, approve or
 decline, assign a spot. Assigning books even while booking is closed.
-What guests wrote may be health data; it is shown here and nowhere else.
+A declined request can still be approved, from the ⋯ menu on its card:
+deliberately out of the way. What guests wrote may be health data; it is
+shown here and nowhere else.
 -->
 <script lang="ts">
 	import { enhance } from '$app/forms';
@@ -123,6 +125,24 @@ What guests wrote may be health data; it is shown here and nowhere else.
 		};
 	}
 
+	function approveAfterAllConfirmation(id: string): Confirmation {
+		const spot = current(id)?.spot;
+		return {
+			title: 'Approve this request after all?',
+			message: `The guest gets a message that the crew approved their special-needs request${
+				spot ? ` and keeps ${spot.label} until you book a more fitting spot` : ''
+			}. Then assign a spot.`,
+			label: 'Approve'
+		};
+	}
+
+	/** The ⋯ menus are plain <details>: a click elsewhere closes them. */
+	function closeMenus(event: MouseEvent) {
+		for (const menu of document.querySelectorAll('details.more[open]')) {
+			if (!menu.contains(event.target as Node)) menu.removeAttribute('open');
+		}
+	}
+
 	function declineConfirmation(id: string): Confirmation {
 		const spot = current(id)?.spot;
 		return {
@@ -140,6 +160,8 @@ What guests wrote may be health data; it is shown here and nowhere else.
 <svelte:head>
 	<title>Special needs · CozyNights Admin</title>
 </svelte:head>
+
+<svelte:window on:click={closeMenus} />
 
 <div class="requests-page">
 	<a href="/admin" class="back">← Control Center</a>
@@ -201,7 +223,26 @@ What guests wrote may be health data; it is shown here and nowhere else.
 									<a class="mail" href="mailto:{request.ticket.email}">{request.ticket.email}</a>
 								{/if}
 							</div>
-							<span class="badge">{STATUS_LABELS[request.status]}</span>
+							<div class="head-right">
+								<span class="badge">{STATUS_LABELS[request.status]}</span>
+								{#if request.status === 'declined'}
+									<details class="more">
+										<summary aria-label="More actions" title="More actions">⋯</summary>
+										<div class="menu">
+											<form
+												method="POST"
+												action="?/approve"
+												use:enhance={act(request.id, 'Approved after all.', () =>
+													approveAfterAllConfirmation(request.id)
+												)}
+											>
+												<input type="hidden" name="id" value={request.id} />
+												<button class="menu-item" disabled={!!busy}>Approve after all</button>
+											</form>
+										</div>
+									</details>
+								{/if}
+							</div>
 						</header>
 
 						<ul class="needs">
@@ -250,8 +291,8 @@ What guests wrote may be health data; it is shown here and nowhere else.
 							</dd>
 						</dl>
 
-						<div class="actions">
-							{#if request.status === 'pending' || request.status === 'declined'}
+						<div class="actions" class:hidden={request.status === 'declined'}>
+							{#if request.status === 'pending'}
 								<form method="POST" action="?/approve" use:enhance={act(request.id, 'Approved.')}>
 									<input type="hidden" name="id" value={request.id} />
 									<button class="btn primary" disabled={!!busy}>Approve</button>
@@ -423,10 +464,18 @@ What guests wrote may be health data; it is shown here and nowhere else.
 		gap: 0.75rem;
 	}
 	.request.status-approved {
-		border-left-color: #2dd4bf;
+		border-left-color: #22c55e;
 	}
 	.request.status-declined {
 		border-left-color: #525252;
+		border-color: #1f1f1f;
+	}
+	/* a declined request steps back; its header (with the ⋯ menu) stays readable */
+	.request.status-declined > :not(header) {
+		opacity: 0.55;
+	}
+	.request.status-declined h3 {
+		color: #a3a3a3;
 	}
 	.request header {
 		display: flex;
@@ -443,14 +492,91 @@ What guests wrote may be health data; it is shown here and nowhere else.
 		font-size: 0.9rem;
 		overflow-wrap: anywhere;
 	}
+	.head-right {
+		flex: none;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
 	.badge {
 		flex: none;
 		font-size: 0.75rem;
 		font-weight: 800;
 		padding: 0.25rem 0.6rem;
 		border-radius: 999px;
+		background: rgba(251, 146, 60, 0.15);
+		color: #fdba74;
+		border: 1px solid rgba(251, 146, 60, 0.4);
+	}
+	.status-approved .badge {
+		background: rgba(34, 197, 94, 0.15);
+		color: #86efac;
+		border-color: rgba(34, 197, 94, 0.5);
+	}
+	.status-declined .badge {
+		background: #1f1f1f;
+		color: #a3a3a3;
+		border-color: #3f3f46;
+	}
+
+	/* the ⋯ menu: a native <details>, so it works without JavaScript too */
+	details.more {
+		position: relative;
+	}
+	details.more summary {
+		list-style: none;
+		cursor: pointer;
+		width: 36px;
+		height: 36px;
+		border-radius: 10px;
+		border: 1px solid #3f3f46;
+		display: grid;
+		place-items: center;
+		font-weight: 900;
+		color: #d4d4d4;
+		line-height: 1;
+	}
+	details.more summary::-webkit-details-marker {
+		display: none;
+	}
+	details.more[open] summary,
+	details.more summary:hover {
 		background: #27272a;
+	}
+	.menu {
+		position: absolute;
+		right: 0;
+		top: calc(100% + 6px);
+		min-width: 12rem;
+		padding: 0.35rem;
+		background: #18181b;
+		border: 1px solid #3f3f46;
+		border-radius: 12px;
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+		z-index: 5;
+	}
+	.menu-item {
+		width: 100%;
+		min-height: 44px;
+		padding: 0.5rem 0.75rem;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
 		color: #e5e5e5;
+		font: inherit;
+		font-weight: 700;
+		text-align: left;
+		cursor: pointer;
+	}
+	.menu-item:hover {
+		background: #27272a;
+	}
+	.menu-item:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.actions.hidden {
+		display: none;
 	}
 	.needs {
 		display: flex;

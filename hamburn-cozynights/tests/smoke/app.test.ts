@@ -93,6 +93,15 @@ describe('any deployment (read-only)', () => {
 		expect(requests.status).toBe(303);
 		expect(requests.headers.get('location')).toBe('/admin/login');
 		expect((await post('/admin/requests?/approve', { id: 'doesnotexist000' })).status).toBe(403);
+
+		// message texts: the editor and its preview are for admins only
+		const messages = await get('/admin/messages');
+		expect(messages.status).toBe(303);
+		expect(messages.headers.get('location')).toBe('/admin/login');
+		expect((await post('/admin/messages?/save', { key: 'mail.signature', text: 'x' })).status).toBe(
+			403
+		);
+		expect((await post('/admin/messages/preview')).status).toBe(403);
 	});
 
 	it('ignores a forged admin cookie', async () => {
@@ -447,7 +456,9 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		const cookie = await guestLogin(ticket.code);
 		await setBookingOpen(true);
 
-		expect((await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id }, cookie)).status).toBe(200);
+		expect((await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id }, cookie)).status).toBe(
+			200
+		);
 		const second = await post(`/room/${room.id}?/bookBed`, { bedId: beds[1].id }, cookie);
 		expect(second.status).toBe(409);
 		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
@@ -466,7 +477,9 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		const ticket = await seedTicket(su);
 		const cookie = await guestLogin(ticket.code);
 		await setBookingOpen(true);
-		expect((await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id }, cookie)).status).toBe(200);
+		expect((await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id }, cookie)).status).toBe(
+			200
+		);
 		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
 
 		// admins can't switch right now (PocketBase refuses the phase change too)

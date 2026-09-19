@@ -50,6 +50,13 @@
 						class:active={page.url.pathname === '/admin/check'}
 						title="Check booking passes">🎫 Check passes</a
 					>
+					<a
+						href="/admin/messages"
+						class="nav-link"
+						class:active={page.url.pathname === '/admin/messages'}
+						title="Message texts: what guests get by e-mail, on Telegram and from the bot"
+						>✉️ Messages</a
+					>
 				</nav>
 				<div class="user-info">
 					<span class="user-label">Burner:</span>
