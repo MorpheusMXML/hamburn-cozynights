@@ -140,6 +140,15 @@ Schema and API rules are code: `pb_migrations/*.js`, applied by PocketBase on st
 - After changing the schema, run `npm run typegen` so the TypeScript types match.
 - Hooks in `pb_hooks/` and the migrations use the JavaScript API of the pinned PocketBase version (see `docker-compose.yml`). Read the PocketBase changelog and back up the data before bumping it.
 
+## The map image
+
+Guests and admins see one picture of the camp, `static/lageplan-brahmsee-<year>.jpg`, drawn over the 1000 × 700 coordinate space in which house pins and [layout templates](../admin/templates) live (`src/lib/map-geometry.ts`). When the next burn gets a new map:
+
+1. **Export it as a JPEG** in A4 landscape proportions, 1754 to 2000 px wide (the 2026 map is 1754 × 1241 px, 0.4 MB). Keep the framing of the previous year, so the houses stay under their pins.
+2. **Save it under a new name,** `static/lageplan-brahmsee-<year>.jpg`, delete the previous year's file and point `MAP_IMAGE` in `src/lib/map-geometry.ts` to the new one. The new name matters: browsers may keep the old picture under the old address.
+3. **Put the same name into `map.image`** of `static/templates/brahmsee-starter.json` and of the example in [Layout templates](../admin/templates#file-format); `npm test` checks the starter template.
+4. **Check the pins** on staging in the Control Center's map view and drag any that no longer sit on their house. Templates exported before the swap carry the old name in `map.image`; importing them shows a warning to check the pins, nothing else changes.
+
 ## Conventions
 
 - **One feature per branch, merged into `integration/staging` with a signed merge commit**, released to `main` by pull request. See [Branches, integration & releases](./integration).

@@ -77,7 +77,7 @@ The crew group gets a *🗺️ Layout template applied* message with what change
 	"version": "2.0",
 	"name": "CozyNights camp layout",
 	"exported_at": "2026-09-17T15:04:05.000Z",
-	"map": { "image": "/lageplan-brahmsee.jpg", "width": 1000, "height": 700 },
+	"map": { "image": "/lageplan-brahmsee-2026.jpg", "width": 1000, "height": 700 },
 	"houses": [
 		{
 			"name": "Neon Cave",
@@ -106,7 +106,7 @@ The crew group gets a *🗺️ Layout template applied* message with what change
 | `rooms[]` | `name` and `room_number` (unique in the house; missing numbers are filled in). |
 | `beds[]` | Spots: `label` (unique in the room), `enabled` (active, default `true`), `is_locked` (default `false`), and `"is_special": true` for a [special-needs spot](./special-needs) (left out otherwise). |
 
-Files of version `1.0` (older exports, spots only as `amount_beds`) are still read. `name`, `exported_at` and `map` describe the file.
+Files of version `1.0` (older exports, spots only as `amount_beds`) are still read. `name`, `exported_at` and `map` describe the file: `map.image` is the map picture the layout was made for, and a file made for another year's picture imports with a warning to check the pins.
 
 ::: tip Hand-editing templates
 Templates are plain JSON, so a layout can be prepared in a text editor: copy a house block, change name and coordinates, drop the file on Compare & Import. The whole file is checked first. If anything is wrong, the manager lists every problem with its place in the file (`houses[2] "Neon Cave" > rooms[0]: room_number …`) and nothing changes.
