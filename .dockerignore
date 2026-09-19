@@ -19,8 +19,7 @@ hamburn-cozynights/test-results
 hamburn-cozynights/html
 hamburn-cozynights/.ssh-keys
 
-# Docs: build outputs and old planning notes
+# Docs: build outputs
 docs/.vitepress/dist
 docs/.vitepress/cache
 docs/.vitepress/.temp
-docs/superpowers

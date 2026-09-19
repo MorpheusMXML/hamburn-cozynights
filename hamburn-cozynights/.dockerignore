@@ -6,7 +6,6 @@ build
 .env.*
 !.env.example
 pb_data
-pb_data.tar.gz.gpg
 playwright-report
 test-results
 .ssh-keys
