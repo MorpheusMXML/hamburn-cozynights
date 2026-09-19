@@ -1,6 +1,6 @@
 # Special-needs requests
 
-Some guests need a particular kind of spot: a lower bunk, step-free access, a quiet room, a socket for a medical device. They can **ask the crew for one with their ticket code, even before booking opens**. Admins read the request, approve or decline it, and **book a spot for the guest** — the only way a spot gets booked while booking is closed.
+Some guests need a particular kind of spot: a lower bunk, step-free access, a place close to a toilet, a quiet room, a socket for a medical device, or something else. They can **ask the crew for one with their ticket code, even before booking opens**. Admins read the request, approve or decline it, and **book a spot for the guest** — the only way a spot gets booked while booking is closed.
 
 ## At a glance
 
@@ -40,7 +40,7 @@ Every switch goes to the crew group with the name of the admin.
 <kbd>♿ Special needs</kbd> in the admin header, with the number of requests waiting for a decision. Each request shows:
 
 - the **ticket holder** from the ticket list (name and e-mail address), when it was sent and changed;
-- what the guest **ticked** and **wrote**, and a burner name if they chose one;
+- what the guest **ticked** (a lower bunk or a bed without a ladder · step-free access or the ground floor · close to a toilet · a quiet room · a power socket for a medical device · something else) and **wrote** (5 to 500 characters), and a burner name if they chose one;
 - who **decided** and when, and the **spot** the ticket holds right now: *booked by the crew* (through this page) or *booked by the guest*.
 
 If a guest sends the form again right when you decide, the card says so: read it once more.
@@ -69,7 +69,9 @@ Messages say what the crew decided, never what the guest wrote. On `/special-nee
 ## Rules the app keeps
 
 - **One request per ticket**, taken from the guest's signed-in ticket code, never from the form. The database refuses a second one.
-- **A guest can change a request while it waits**, and **withdraw it at any time**. Withdrawing deletes it; a spot the crew already booked stays booked, but from then on it is an ordinary booking (the guest can change it, and clear all bookings frees it). The crew group hears about every withdrawal.
+- **A guest can change a request while it waits**, and **withdraw it at any time**. Once you decided, the request is fixed: a guest who sends the form again reads *The crew has already decided on your request, so it can't be changed anymore. If something changed, please contact the crew.* and sees your decision. Withdrawing deletes it; a spot the crew already booked stays booked, but from then on it is an ordinary booking (the guest can change it, and clear all bookings frees it). The crew group hears about every withdrawal.
+- **Ten sends per hour.** A ticket can send or change its request at most ten times within an hour; after that the form says *You sent your request 10 times within an hour. Please wait a while, then try again.*
+- **Consent is given with every send.** The checkbox is unticked each time the form opens, and the stored consent time is the time of the last send.
 - **A spot the crew booked is fixed.** The guest can rename it, but can't move or release it themselves: they ask the crew. You move or release it here. A spot the guest booked themselves stays theirs to change, also when the request is approved.
 - **Going back to Staging Mode (and Clear all bookings) keeps the spots the crew booked**, with their burner names; every other booking is released. The dialog says how many.
 - **A template import keeps the spots the crew booked**, like every other booking, as long as the spot stays in the layout (also when its house moves or its room is renamed). Only spots you choose to remove release their booking, crew-booked ones too: the guest gets a *spot was released* e-mail and the burner name is forgotten. Those requests stay approved and show *No spot yet*: book a spot again for them after the import. The confirmation dialog says how many bookings go before anything happens (see [Layout templates](./templates#applying)).
@@ -81,7 +83,7 @@ What guests write is often **health data**. The app treats it that way; please d
 - **Only admins can read it**, here and nowhere else. What guests tick and write is stored encrypted, so the PocketBase dashboard and backups only hold unreadable text. The pages are sent with `Cache-Control: no-store`.
 - **It never leaves the admin area:** not in e-mails, Telegram messages, the crew group, logs or the audit log.
 - **Don't copy it** into chats, e-mails or spreadsheets. Talk about a request in person, and decide based on what the guest needs, not why.
-- **Guests give explicit consent** with a checkbox when they send a request (Art. 9(2)(a) GDPR); the time is stored. The privacy policy (`/privacy`, section *Special-needs requests*) explains it; see [Legal pages](./legal).
+- **Guests give explicit consent** with a checkbox when they send a request (Art. 9(2)(a) GDPR); the time is stored. The privacy policy (`/privacy`, section *Special-needs requests*) explains it; see [Legal pages](./legal). The checkbox reads: *I agree that the CozyNights crew uses what I write here to find a fitting spot for me. It may include information about my health. Only the crew's admins can read it; it is stored encrypted and deleted after the event at the latest. I can withdraw my request on this page at any time. Details: privacy policy.* (the link opens the policy's section). Keep the text, the policy and this page in step.
 - **A ticket passed on** to a new holder (Tickets page, ticket list import) loses its request the same way; a spot the crew booked stays with the ticket as an ordinary booking.
 - **It is deleted after the event** together with the contact data: `./scripts/cozy-admin.sh tickets forget-contacts --yes` also deletes every request. See [After the event](./notifications#after-the-event).
 
@@ -93,5 +95,8 @@ What guests write is often **health data**. The app treats it that way; please d
 | *Requests are closed right now* for a guest | The switch is off. | Open requests, or book a spot for them another way. |
 | *This spot is already claimed. Pick another spot.* | Someone was faster, or the list was old. | Reload the page and pick another spot. |
 | *This request does not exist anymore* | The guest withdrew it meanwhile. | Reload the page. |
+| *The guest withdrew the request meanwhile. The spot is booked for the ticket anyway; release it on the room page if it should be free.* | The guest withdrew while you were booking. | The ticket keeps the spot as an ordinary booking. Release it on the room page if it should be free. |
+| *This request is declined. Approve it first, then assign a spot.* | You pressed Book on a declined request. | <kbd>Approve</kbd>, then <kbd>Book</kbd>. |
+| A guest reports *You sent your request 10 times within an hour…* | The form's limit. | Nothing to do: it works again within the hour. |
 | *(nothing readable)* instead of the text | The server's encryption key changed since the request was sent. | Ask the guest to send the request again. |
 | The guest got no message | No e-mail address on the ticket, and no Telegram connected. | Check the ticket with `tickets list`; see [Notifications](./notifications#when-something-doesn-t-arrive). |

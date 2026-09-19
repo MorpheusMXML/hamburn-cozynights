@@ -8,11 +8,13 @@ Some spots are kept for guests who need something special: a lower bunk or a bed
 
 1. **Sign in** on the start page with your ticket code.
 2. On the map, tap **♿ Need a special-needs spot? Ask the crew now**. The link is there while the crew accepts requests.
-3. **Tick what you need**, and tell the crew in a few words what they should know. Describe *what* you need, not *why*: no diagnoses or medical details, the crew doesn't need them.
-4. Optionally enter the **burner name** for your spot. Leave it empty and you get a random one.
+3. **Tick what you need**: a lower bunk or a bed without a ladder, step-free access or the ground floor, close to a toilet, a quiet room, a power socket for a medical device, or *something else*. Then tell the crew in a few words what they should know (5 to 500 characters; the form counts for you). Describe *what* you need, not *why*: no diagnoses or medical details, the crew doesn't need them.
+4. Optionally enter the **burner name** for your spot (up to 80 characters). Leave it empty and you get a random one.
 5. Tick the **consent** box and press <kbd>Send request</kbd>.
 
 </div>
+
+If something is missing, the form says so: tick at least one thing (or *Something else*), write at least a few words, and tick the consent box, because without it the crew may not use what you wrote. Sending the form more than ten times within an hour is refused for a while.
 
 You get an e-mail that your request arrived, and another one when the crew has decided. You can also get the messages on Telegram: <kbd>Get updates on Telegram</kbd> on the same page.
 
@@ -20,15 +22,21 @@ You get an e-mail that your request arrived, and another one when the crew has d
 
 | Status | What it means |
 | --- | --- |
-| **Waiting for the crew** | The crew hasn't decided yet. You can still change or withdraw your request. |
+| **Waiting for the crew** | The crew hasn't decided yet (before booking opens, they look at it before the opening). You can still change or withdraw your request. |
 | **Approved** | The crew picks a fitting spot and books it for you. You get a message with the spot and your [booking pass](./booking#your-booking-pass). If you already booked a spot yourself, you keep it until the crew books a more fitting one. |
-| **Declined** | The crew can't offer you a special-needs spot. Keep the spot you booked, or book one like everyone else when booking opens. |
+| **Declined** | The crew can't offer you a special-needs spot. Keep the spot you booked, or book one like everyone else when booking opens. Once booking has closed, no spot can be booked anymore: contact the crew. |
+
+Once the crew has decided, the request can't be changed anymore: the page says so and shows the decision. If something changed, contact the crew; withdrawing still works.
 
 A spot the crew booked for you is yours, also while booking is still closed. You can give it a new burner name, but **only the crew can move it or release it**: write to them if something doesn't fit.
 
 ## Withdrawing
 
-On the same page, <kbd>Withdraw request</kbd> deletes your request and everything you wrote, right away. A spot the crew already booked for you stays yours.
+On the same page, <kbd>Withdraw request</kbd> deletes your request and everything you wrote, right away. A spot the crew already booked for you stays yours; the confirmation says so (*Your spot stays yours, but the crew no longer knows why you have it*). Without such a spot, you can send a new request while requests are open.
+
+## Requests are closed?
+
+Then the page says *Requests are closed right now*: the crew isn't taking special-needs requests at the moment. If you need a special spot, contact the crew. A request you already sent stays, and you can still see and withdraw it.
 
 ## Who sees what
 

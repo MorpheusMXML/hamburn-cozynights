@@ -76,7 +76,7 @@ A ticket code is a guest's whole login, and the list of valid codes lives in the
 ./scripts/cozy-admin.sh tickets generate 10 --prefix UT --name "Trial run"
 ```
 
-This creates ten tickets with random codes like `UT-7F3K9Q` and prints them one per line, ready to paste into a spreadsheet or a message. The codes leave out look-alike characters (no `0` or `O`, no `1`, `I` or `L`). `--name` is a label that tells batches apart later.
+This creates ten tickets with random codes like `UT-7F3K9Q` and prints them one per line, ready to paste into a spreadsheet or a message. The codes leave out look-alike characters (no `0` or `O`, no `1`, `I` or `L`). Without `--prefix` they start with `TEST-`; a prefix has 1 to 20 capital letters, digits, `-` or `_` and starts with a letter or digit. `--name` is a label that tells batches apart later.
 
 ### The real roster
 

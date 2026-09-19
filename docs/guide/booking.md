@@ -104,7 +104,7 @@ When your spot is booked, changes or is released, CozyNights sends an e-mail to 
 
 ### Your booking pass
 
-Once you hold a spot, your room page shows <kbd>🎫 Show booking pass</kbd>, and every confirmation links to it: a page with your spot, a QR code and a short code like `7F3K-9QXM-2CWD`. If the crew asks at arrival, show it — or a screenshot of it. It stays valid when you move to another spot; the crew always sees the spot your ticket holds right now. The pass code is not your ticket code: it can only show your booking, never change it.
+Once you hold a spot, your room page shows <kbd>🎫 Show booking pass</kbd>, and every confirmation links to it: a page with your spot, a QR code and a short code like `7F3K-9QXM-2CWD`. If the crew asks at arrival, show it — or a screenshot of it. It stays valid when you move to another spot; the crew always sees the spot your ticket holds right now. Release your spot, and the same link says that your ticket holds no spot at the moment. The pass code is not your ticket code: it can only show your booking, never change it.
 
 ::: tip Updates on Telegram
 Prefer Telegram? On your room page press <kbd>Get updates on Telegram</kbd>, then <kbd>START</kbd> in Telegram. The CozyNights bot confirms your spot right away and tells you about every change. <kbd>Turn off</kbd> on the room page, or `/stop` in the chat, ends it.

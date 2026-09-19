@@ -84,11 +84,15 @@ Superusers carry a **SUPERUSER ⚡️** badge in the admin header.
 Approving, inviting and removing admins deliberately happens **outside the web app**, on the server that runs CozyNights. Even a hijacked browser session can't hand out access. Superusers use the PocketBase dashboard (collection `admins`, field `role`), which is only reachable from the server itself, or the admin tool that ships with the app:
 
 ```bash
-./scripts/cozy-admin.sh list                             # open requests, admins, superusers
-./scripts/cozy-admin.sh approve someone@mauersegler.art  # approve an access request
-./scripts/cozy-admin.sh add someone@mauersegler.art      # invite before the first sign-in
-./scripts/cozy-admin.sh remove someone@mauersegler.art   # reject a request or revoke access
+./scripts/cozy-admin.sh list                                 # open requests, admins, superusers
+./scripts/cozy-admin.sh approve someone@mauersegler.art      # approve an access request as admin
+./scripts/cozy-admin.sh approve someone@mauersegler.art superuser  # … or straight as superuser
+./scripts/cozy-admin.sh add someone@mauersegler.art          # invite before the first sign-in
+./scripts/cozy-admin.sh remove someone@mauersegler.art       # reject a request or revoke access
+./scripts/cozy-admin.sh superuser someone@mauersegler.art    # superuser in the app AND the PocketBase dashboard
 ```
+
+`superuser` asks for a password (at least 12 characters, typed twice) and creates a PocketBase dashboard account for that address on top of the app role, for the few people who need the dashboard on the server; `remove` takes both away. `service-account` is for operators only: it creates or repairs the app's own service superuser from `PB_ADMIN_EMAIL` / `PB_ADMIN_PASSWORD` in `.env`, generates a password when the stored one is shorter than 24 characters (the old file is kept as `.env.before-service-account`) and recreates the app container so it picks the value up.
 
 Changes apply on the **next click**: CozyNights re-checks the role on every request, so an approved admin gets in with a reload, and a removed admin is out immediately.
 

@@ -97,7 +97,7 @@ The live database stays on the server's local disk. SQLite must not run on a net
 
 Backups come in layers. The first two need no setup:
 
-- **Hourly ZIPs:** PocketBase writes ZIP backups into its volume (`pb_hooks/cozy_backups.pb.js`, `PB_BACKUP_CRON` / `PB_BACKUP_KEEP`; default: hourly, keep 72). A quick undo from the dashboard.
+- **Hourly ZIPs:** PocketBase writes ZIP backups into its volume (`pb_hooks/cozy_backups.pb.js`, `PB_BACKUP_CRON` / `PB_BACKUP_KEEP`; default: hourly, keep 72; `PB_BACKUP_CRON=off` switches them off). A quick undo from the dashboard.
 - **Before every deploy:** the deploy script archives the volume.
 - **Versioned server backup, hourly:** `deploy/backup/server-backup.sh` copies all live databases of the server consistently and stores them, together with configuration and certificates, in an encrypted [restic](https://restic.net) repository (24 hourly, 14 daily, 8 weekly and 12 monthly snapshots). It alerts on failure and on a disk running full, and test-restores the databases weekly.
 
@@ -134,6 +134,7 @@ Booking confirmations and crew alerts are sent by PocketBase (`pb_hooks/cozy_not
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (`TELEGRAM_THREAD_ID`) | The crew group, and guests' Telegram updates (off: `TELEGRAM_GUEST_UPDATES=off`). |
 | `COZY_ADMIN_WEBHOOK_URL` | Older crew webhook (Slack, Google Chat, Discord, Telegram URL), used when `TELEGRAM_*` are empty. |
 | `COZY_APP_URL`, `COZY_ENV_LABEL` | Links in messages and the `[STAGING]` marker. Set in the compose file, not in `.env`. |
+| `PB_HIDE_CONTROLS`, `PB_LOGS_DAYS` | PocketBase settings applied on every start (`pb_hooks/cozy_settings.pb.js`): the dashboard's schema editors hidden (`on`, the default on servers), and the request log kept for that many days (default 2, never with IPs). |
 
 - **One Telegram bot per environment.** The server reads the bot's messages by polling; two environments with the same bot would steal each other's messages.
 - **The mail password is stored twice.** PocketBase keeps its own copy of the SMTP settings in its database, so it is also in every database backup. Use credentials that can only send mail — an SMTP user of a sending service, one per environment — never the password of a mailbox.
@@ -149,7 +150,7 @@ Production, for example:
 2. **Configuration.** Create the environment's `.env` on the server, following `deploy/staging.env.template`. Never commit it. It also holds the operator details for the Impressum and the privacy policy (`LEGAL_*`, see [Legal pages](../admin/legal)).
 3. **Domain.** Add an nginx vhost for the domain (see `deploy/nginx/`), issue a certificate, and add the redirect URI to the Google OAuth client.
 4. **Pipeline.** Add a workflow mirroring `deploy-staging.yml`, with its own GitHub environment and required approval, and a deploy user scoped to that environment only.
-5. **First admins.** Invite the crew with the admin tool, pointed at the new stack: `COZY_COMPOSE_FILE=docker-compose.<env>.yml COMPOSE_PROJECT_NAME=<project of that stack>` (or `COZY_DEPLOY_CONF=/etc/cozynights/<env>.conf`). The tool refuses to guess the project name, because a guess would silently target the staging containers. See [Admin access & roles](../admin/access#managing-admins).
+5. **First admins.** Invite the crew with the admin tool, pointed at the new stack: `COZY_COMPOSE_FILE=docker-compose.<env>.yml COMPOSE_PROJECT_NAME=<project of that stack>` (or `COZY_DEPLOY_CONF=/etc/cozynights/<env>.conf`), plus `COZY_ENV_FILE` if that stack's `.env` isn't next to the compose file. The tool refuses to guess the project name (*COZY_COMPOSE_FILE is set but COMPOSE_PROJECT_NAME is not*), because a guess would silently target the staging containers. See [Admin access & roles](../admin/access#managing-admins).
 6. **Keep the stacks apart.** Give the new compose file a fixed volume name and its own `container_name`s and ports; the deploy script gets its own config in `/etc/cozynights/` and its own backup folder; the forced-command deploy key is a second key. Both stacks share one Docker daemon, so never prune images while the other stack builds.
 
 </div>

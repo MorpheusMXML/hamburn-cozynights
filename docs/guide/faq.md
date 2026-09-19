@@ -23,7 +23,23 @@ Booking hasn't opened yet. The countdown shows when it starts; the map unlocks b
 :::
 
 ::: details I can't book or change my spot any more ("Booking has closed")
-The booking window is over, so spots are final. Your spot stays yours and your booking pass keeps working. If something has to change, ask the crew.
+The booking window is over, so spots are final. Your spot stays yours and your booking pass keeps working. If something has to change, ask the crew. Releasing is closed too: *Booking is closed right now, so your spot cannot be released. It stays reserved for you.*
+:::
+
+::: details "You are not signed in anymore. Go to the start page and enter your ticket code again."
+Your browser has forgotten your ticket code: it remembers it for 30 days, unless you signed out or somebody entered another code on this device. Enter your code on the start page again; your booking is still there. *Your ticket code was not found* instead means the ticket is no longer in the ticket list: ask the crew.
+:::
+
+::: details "Something went wrong while booking…", "The booking system has a technical problem…", "This spot doesn't exist anymore…"
+First look at the room page: if the spot shows as **Your Spot**, all is fine. *Something went wrong* means the booking may or may not have gone through, so check before booking again. *Technical problem. Nothing was booked* is one for the crew. *This spot doesn't exist anymore* means the crew changed the layout meanwhile: pick another spot.
+:::
+
+::: details Destiny Roulette says "Someone was faster", "The roll was incomplete" or "You already have a spot"
+Roll again: another guest took that spot in the meantime, or the roll didn't finish. *You already have a spot* means the roulette only hands out spots to tickets without one; release yours first if you want to roll.
+:::
+
+::: details "This house doesn't exist (anymore)", "This room doesn't exist (anymore)", "The map could not be loaded right now"
+The crew changed the camp layout while you had the page open, or the map data didn't arrive. Go back to the map and pick again; if the map itself won't load, try again in a minute.
 :::
 
 ::: details I can't click a free spot, it says "Release your other spot first"
@@ -47,7 +63,11 @@ It goes to the address that belongs to your ticket, usually within a minute. Che
 :::
 
 ::: details Where is my booking pass?
-On your room page (<kbd>🎫 Show booking pass</kbd>) and behind the link in your confirmation e-mail or Telegram message. It only exists while your ticket holds a spot. A screenshot of it is fine.
+On your room page (<kbd>🎫 Show booking pass</kbd>) and behind the link in your confirmation e-mail or Telegram message. The link keeps working after you release your spot, but then it says that your ticket holds no spot right now. A screenshot of it is fine.
+:::
+
+::: details My pass link says "This booking pass is unknown" or "Too many unknown passes from your connection"
+*Unknown* means no ticket has this pass code any more: an old link after your ticket was passed on, or a typo in the link. Open your room page and press <kbd>🎫 Show booking pass</kbd> for the current one. *Too many unknown passes* means many wrong codes came from your network (a shared Wi-Fi, for example) within a few minutes: wait a little and open the link again.
 :::
 
 ::: details How do I stop the Telegram messages?
@@ -56,6 +76,10 @@ Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page
 
 ::: details I need a special spot (lower bunk, step-free, quiet, a socket for a medical device)
 Ask the crew for a special-needs spot, even before booking opens: sign in with your ticket code and follow the link on the map while the crew accepts requests. See [Special-needs spot](./special-needs).
+:::
+
+::: details My special-needs request won't send, or says the crew has already decided
+The form needs at least one ticked need (or *Something else*), a few words of text (5 to 500 characters) and the ticked consent box. *You sent your request 10 times within an hour* is a limit: it works again within the hour. *The crew has already decided on your request* means it can't be changed anymore; the page shows the decision. If something changed, contact the crew. You can still withdraw the request.
 :::
 
 ::: details A spot says "Not available · Reserved by the crew"
@@ -100,6 +124,10 @@ Either the layout is locked (Live Booking, or booking closed: dragging is switch
 
 ::: details I can't find "Clear all bookings" or the template import
 Both are superuser-only. Regular admins see the import card with a lock 🔒 and aren't offered to clear bookings.
+:::
+
+::: details The camera on "Check passes" won't open
+The browser needs permission for the camera on this site, and the page must come over HTTPS. Allow it in the site settings, or just use the phone's own camera app: it opens the pass link, and signed in, you see the check result on top. Details in [Booking passes](../admin/passes#when-something-doesn-t-work).
 :::
 
 <!-- /audience -->

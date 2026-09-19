@@ -41,6 +41,7 @@ A guest hears from CozyNights when their spot changes:
 - **One message per change.** A move is one "changed" message, never "released" plus "booked". Changes within about ten seconds are combined, and two messages about the same ticket are at least two minutes apart.
 - **E-mail goes to the address of the ticket.** Guests never type an address: it comes with the [ticket import](#ticket-codes-with-e-mail-addresses). On their room page they see where confirmations go, shortened to `m•••@example.com`.
 - **Telegram is the guest's choice.** On their room page, <kbd>Get updates on Telegram</kbd> opens a chat with the CozyNights bot. After <kbd>START</kbd> the bot confirms the current spot and sends every change from then on. <kbd>Turn off</kbd> on the room page or `/stop` in the chat ends it. The link works once and for 30 minutes.
+- **The bot talks to guests, nobody else.** Any other message to it (a question, a sticker) gets a short help text: how to connect on the room page or the special-needs page. `/start` with a used or expired link answers *⌛ This link has expired or was already used. Open your room on the booking page and tap "Get updates on Telegram" again.*; `/stop` answers *🔕 Disconnected. You won't get updates here anymore.*, or *This chat is not connected to a ticket.*
 - **No secrets in messages.** They show the spot and a link, never the ticket code. Messages are in English. On staging every subject and message starts with `[STAGING]`.
 - **Delivery problems are retried** for about two days (after 1, 5 and 15 minutes, then after 1, 4, 12 and 24 hours), so a daily sending limit on opening day only delays messages. After that the crew group gets 📭 *Could not notify ticket …* with the reason.
 
@@ -67,7 +68,7 @@ Every message here is also kept in the audit log (collection `admin_events` in t
 | 🧡 Special-needs requests OPENED · closed | Somebody flips the requests switch, with their name |
 | 📭 Could not notify ticket | A guest message failed for good |
 
-If Telegram is down, the messages wait and go out later.
+If Telegram is down, a crew message is tried again after 1, 5, 15 and 60 minutes; after the fifth failed attempt it is marked *failed* in the audit log (`notify status` shows it). Guest messages keep being retried for about two days, see above.
 
 ## Ticket codes with e-mail addresses
 
@@ -138,6 +139,7 @@ Deletes every guest address, every Telegram link and every [special-needs reques
 | `notify test`: *403* or *chat not found* | The bot isn't in the group, or the group id is wrong. | Add the bot to the group; group ids are negative numbers. |
 | `notify status`: *WARNING: this bot has a webhook* | Something else registered a webhook for the bot, so the server can't read its messages. | Remove the webhook, or give this environment its own bot. |
 | Guests see no <kbd>Get updates on Telegram</kbd> | No bot is set up, or `TELEGRAM_GUEST_UPDATES=off`. | `notify status`. |
+| A guest sees *⌛ This link has expired or was already used* in Telegram | The link works once and for 30 minutes. | Press <kbd>Get updates on Telegram</kbd> on the room page again. |
 | The room page shows no address | E-mail isn't set up, or the ticket has no address. | `notify status`, `tickets list`. |
 | 📭 *Could not notify ticket* in the group | The address bounced or the mail server refused. | Fix the address in the ticket list and import it again. |
 | Nothing at all | Look at the queue, then at the server log. | `notify status` (queued / retrying), PocketBase log lines with `[cozy-notify]`. |

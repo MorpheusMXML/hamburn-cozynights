@@ -45,7 +45,7 @@ During Live Booking and after booking closed, houses without any active spot don
 ![Staging map with the countdown](../assets/screenshots/guest-map-staging.webp)
 
 <!-- audience:public -->
-The crew plans when booking opens and when it closes. Guests see both moments as countdowns: **IGNITION IN** on the map before booking opens, and a slim bar at the top of every page. Tap the bar for the exact time. While booking is live, the bar counts down to the closing time, and it turns red in the last hour. When a countdown ends, the page opens or locks by itself; there's no need to reload.
+The crew plans when booking opens and when it closes. Guests see both moments as countdowns: **IGNITION IN** on the map before booking opens, and a slim bar at the top of every page. Tap the bar for the exact time. On the map itself the bar stays away before booking opens, because the map already shows the big countdown. While booking is live, the bar counts down to the closing time, and it turns red in the last hour. When a countdown ends, the page opens or locks by itself; there's no need to reload.
 <!-- /audience -->
 <!-- audience:admin -->
 Everything about the phase sits in one panel of the [Control Center](../admin/), right under the header: **🎟 BOOKING WINDOW**. Its summary line shows the phase, the next switch with a countdown, and whether the timer is armed. Click it to unfold:
