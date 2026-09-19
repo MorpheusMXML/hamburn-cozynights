@@ -20,6 +20,7 @@ export enum Collections {
 	AppSettings = 'app_settings',
 	GuestNotify = 'guest_notify',
 	AdminEvents = 'admin_events',
+	MessageTexts = 'message_texts',
 	SpecialRequests = 'special_requests'
 }
 
@@ -257,6 +258,15 @@ export type SpecialRequestsRecord = {
 	updated: IsoAutoDateString;
 };
 
+export type MessageTextsRecord = {
+	created: IsoAutoDateString;
+	id: string;
+	key: string;
+	text: string;
+	updated: IsoAutoDateString;
+	updated_by?: string;
+};
+
 // Response types include system fields and match responses from the PocketBase API
 export type AuthoriginsResponse<Texpand = unknown> = Required<AuthoriginsRecord> &
 	BaseSystemFields<Texpand>;
@@ -282,6 +292,8 @@ export type AdminEventsResponse<Tdetails = unknown, Texpand = unknown> = Require
 	BaseSystemFields<Texpand>;
 export type SpecialRequestsResponse<Texpand = unknown> = Required<SpecialRequestsRecord> &
 	BaseSystemFields<Texpand>;
+export type MessageTextsResponse<Texpand = unknown> = Required<MessageTextsRecord> &
+	BaseSystemFields<Texpand>;
 
 // Types containing all Records and Responses, useful for creating typing helper functions
 
@@ -301,6 +313,7 @@ export type CollectionRecords = {
 	guest_notify: GuestNotifyRecord;
 	admin_events: AdminEventsRecord;
 	special_requests: SpecialRequestsRecord;
+	message_texts: MessageTextsRecord;
 };
 
 export type CollectionResponses = {
@@ -319,6 +332,7 @@ export type CollectionResponses = {
 	guest_notify: GuestNotifyResponse;
 	admin_events: AdminEventsResponse;
 	special_requests: SpecialRequestsResponse;
+	message_texts: MessageTextsResponse;
 };
 
 // Utility types for create/update operations

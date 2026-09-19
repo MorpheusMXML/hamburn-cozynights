@@ -5,20 +5,10 @@
 // tests/integration/notifications.test.ts and special-needs.test.ts.
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
-import vm from 'vm';
+import { loadHookModule, HOOKS_DIR } from './hook-module';
 
-/** notify.js is a CommonJS module for PocketBase's JSVM; load it the same way here. */
-function loadNotify() {
-	const source = fs.readFileSync(new URL('../pb_hooks/lib/notify.js', import.meta.url), 'utf8');
-	const module = { exports: {} as Record<string, any> };
-	vm.runInNewContext(
-		source,
-		{ module, exports: module.exports, console },
-		{ filename: 'notify.js' }
-	);
-	return module.exports;
-}
-const notify = loadNotify();
+// notify.js is a CommonJS module for PocketBase's JSVM; loaded the same way here.
+const notify = loadHookModule('lib/notify.js');
 
 const cfg = { appUrl: 'https://cozy.test', label: '' };
 const spot = {
@@ -167,5 +157,132 @@ describe('what a channel remembers about a request', () => {
 		expect(telegram('connected', false, { kind: '', status: 'pending', fixed: false })).toContain(
 			'Your special-needs request: waiting for the crew'
 		);
+	});
+});
+
+describe('message texts from the catalogue (pb_hooks/lib/texts.js)', () => {
+	const texts = loadHookModule('lib/texts.js');
+	const source = fs.readFileSync(`${HOOKS_DIR}/lib/notify.js`, 'utf8');
+	const entries: {
+		key: string;
+		group: string;
+		label: string;
+		placeholders: string[];
+		text: string;
+	}[] = texts.TEXTS;
+
+	it('has unique keys with a label, a known group and only declared placeholders', () => {
+		const keys = entries.map((entry) => entry.key);
+		expect(new Set(keys).size).toBe(keys.length);
+		const groups = new Set(texts.GROUPS.map((group: { id: string }) => group.id));
+		const known = new Set(texts.PLACEHOLDERS.map((p: { name: string }) => p.name));
+		for (const entry of entries) {
+			expect(entry.key).toMatch(/^[a-z0-9_.]{1,80}$/);
+			expect(entry.label).not.toBe('');
+			expect(groups.has(entry.group), entry.key).toBe(true);
+			const used = [...entry.text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]);
+			expect(
+				used.filter((name) => !entry.placeholders.includes(name)),
+				entry.key
+			).toEqual([]);
+			expect(
+				entry.placeholders.filter((name) => !used.includes(name)),
+				entry.key
+			).toEqual([]);
+			expect(
+				entry.placeholders.filter((name) => !known.has(name)),
+				entry.key
+			).toEqual([]);
+		}
+	});
+
+	it('is what notify.js uses: every key once at least, and no key that is not in it', () => {
+		const keys = new Set(entries.map((entry) => entry.key));
+		for (const key of keys) expect(source, key).toContain(`'${key}'`);
+		const referenced = [
+			...source.matchAll(/\bT\('([a-z0-9_.]+)'\)|\bt\(cfg, '([a-z0-9_.]+)'/g)
+		].map((match) => match[1] || match[2]);
+		expect(referenced.length).toBeGreaterThan(50);
+		for (const key of referenced) expect(keys.has(key), key).toBe(true);
+	});
+
+	it('sends a stored text instead of the default, with the placeholders filled in', () => {
+		const custom = {
+			...cfg,
+			texts: {
+				'mail.booked.subject': 'Dein Platz: {spot}',
+				'mail.signature': '— Deine Crew',
+				'tg.booked.intro': '✨ Gebucht: {spot}'
+			}
+		};
+		const m = notify.guestMail(custom, 'booked', spot, '', 'Ada', pass, none);
+		expect(m.subject).toBe('Dein Platz: B1 · Dorm #1 · Villa');
+		expect(m.text).toContain('— Deine Crew');
+		expect(m.text).not.toContain('The CozyNights crew');
+		expect(m.html).toContain('— Deine Crew');
+		expect(notify.guestTelegram(custom, 'booked', spot, '', pass, none)).toContain(
+			'✨ Gebucht: B1 · Dorm #1 · Villa'
+		);
+	});
+
+	it('keeps the default for an empty stored text, and an unknown placeholder as written', () => {
+		const custom = {
+			...cfg,
+			texts: { 'mail.booked.subject': '', 'mail.booked.intro': 'your spot {nope} is booked:' }
+		};
+		const m = notify.guestMail(custom, 'booked', spot, '', 'Ada', pass, none);
+		expect(m.subject).toBe('Your CozyNights spot: B1 · Dorm #1 · Villa');
+		expect(m.text).toContain('your spot {nope} is booked:');
+	});
+
+	it('keeps the line breaks of a stored text in the HTML e-mail, escaped', () => {
+		const custom = { ...cfg, texts: { 'mail.booked.change': 'Line one <b>\nLine two' } };
+		const m = notify.guestMail(custom, 'booked', spot, '', 'Ada', pass, none);
+		expect(m.text).toContain('Line one <b>\nLine two');
+		expect(m.html).toContain('Line one &lt;b&gt;<br>Line two');
+	});
+
+	it('looks a text up with t(): stored or default, unknown keys refused', () => {
+		const custom = { ...cfg, texts: { 'bot.help': 'Hallo! {appUrl}' } };
+		expect(notify.t(custom, 'bot.help', { appUrl: 'https://x' })).toBe('Hallo! https://x');
+		expect(notify.t(cfg, 'bot.stopped')).toBe(
+			"🔕 Disconnected. You won't get updates here anymore. You can connect again on the booking page."
+		);
+		expect(() => notify.t(cfg, 'nope.nope')).toThrow(/unknown message text/);
+	});
+
+	it('shows every text in at least one preview message', () => {
+		// Every text becomes a marker; it keeps its placeholders, because some
+		// texts only appear through one (the request status words via {status}).
+		const marker = (key: string) => `«${key}»`;
+		const all = Object.fromEntries(
+			entries.map((entry) => [
+				entry.key,
+				marker(entry.key) + entry.placeholders.map((name) => ` {${name}}`).join('')
+			])
+		);
+		const preview = notify.previewMessages({ ...cfg, texts: all });
+		const rendered = [
+			...preview.mail.map((m: { subject: string; text: string }) => `${m.subject}\n${m.text}`),
+			...preview.telegram.map((m: { text: string }) => m.text),
+			...preview.bot.map((m: { text: string }) => m.text)
+		].join('\n');
+		for (const entry of entries) expect(rendered, entry.key).toContain(marker(entry.key));
+		expect(preview.mail[0]).toMatchObject({ id: 'booked', title: 'Spot booked' });
+		expect(preview.mail[0].html).toContain('<!doctype html>');
+		expect(preview.telegram[0].id).toBe('connected');
+		expect(preview.bot.map((m: { id: string }) => m.id)).toEqual([
+			'help',
+			'link_expired',
+			'stopped',
+			'not_connected'
+		]);
+	});
+
+	it('hands the catalogue to the admin page', () => {
+		const catalogue = notify.textCatalogue();
+		expect(catalogue.groups).toEqual(texts.GROUPS);
+		expect(catalogue.placeholders).toEqual(texts.PLACEHOLDERS);
+		expect(catalogue.items).toEqual(texts.TEXTS);
 	});
 });

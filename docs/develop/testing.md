@@ -15,7 +15,7 @@ It needs Node and a running Docker (Docker Desktop on a Mac). Nothing else — n
 | Layer | Command | Needs | What it proves |
 | --- | --- | --- | --- |
 | Type check | `npm run check` | – | The code compiles; Svelte components and server code agree on their types. |
-| Unit | `npm test` | – | The logic in isolation, PocketBase mocked: admin sign-in flow and session handling, role checks, booking rules, encryption, rate limit, special-needs requests (with the in-memory stand-in `tests/fake-pb.ts`), and every guest message text for each mix of spot change and request news (`tests/notify-messages.test.ts`). Fast (< 1 s) — run it all the time. |
+| Unit | `npm test` | – | The logic in isolation, PocketBase mocked: admin sign-in flow and session handling, role checks, booking rules, encryption, rate limit, special-needs requests (with the in-memory stand-in `tests/fake-pb.ts`), and every guest message text for each mix of spot change and request news (`tests/notify-messages.test.ts`), including the message texts admins change (`tests/message-texts.test.ts`). Fast (< 1 s) — run it all the time. |
 | Integration | `npm run test:integration` | Docker | The **database**: a real, empty PocketBase applies `pb_migrations/` and loads `pb_hooks/`; then availability, schema, read/write, API rules, admin roles, booking service. |
 | Smoke | `npm run test:smoke` | Docker | The **whole app**: the same Docker image staging builds, driven over HTTP — guest login, booking, admin area protection, superuser-only actions. |
 | Post-deploy | `npm run smoke:remote` | a URL | A **deployment**: the read-only part of the smoke tests against a real site. Runs automatically after every staging deploy. |

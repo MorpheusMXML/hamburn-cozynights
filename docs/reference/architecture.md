@@ -137,6 +137,7 @@ erDiagram
 - **`admins`** is its own auth collection for Google sign-in. PocketBase's default `users` collection is unused and closed for sign-up.
 - **`guest_notify`** holds what each ticket was last told and where (e-mail, linked Telegram chat); **`admin_events`** is the audit log that feeds the crew group. Neither has API rules: only PocketBase itself and the app server use them.
 - **`special_requests`** holds at most one special-needs request per ticket. What the guest ticked and wrote is encrypted by the app; the collection has no API rules. `bed` is the spot the crew booked for it, the only spot the guest can't change themselves. See [Special-needs requests](../admin/special-needs).
+- **`message_texts`** holds the sentences admins changed on ✉️ Messages, one record per text (`key`, `text`, `updated_by`); the defaults are in `pb_hooks/lib/texts.js`, and PocketBase reads the records when it sends. No API rules. See [Message texts](../admin/notifications#message-texts).
 - **`pass_code`** is created by PocketBase when a ticket gets a spot. It is not the ticket code: the pass shows the booking, never lets anyone book.
 - Schema and API rules live in `hamburn-cozynights/pb_migrations/`. The migrations are idempotent, so a database restored from a backup is brought to the current rules too.
 
@@ -162,6 +163,7 @@ erDiagram
 | `/admin/room/:id` | admins | Spots of a room |
 | `/admin/check` | admins | Check booking passes: typed code, USB scanner or camera |
 | `/admin/requests` | admins | Special-needs requests: read, approve or decline, book a spot (also while booking is closed), open or close requests |
+| `/admin/messages` | admins | Message texts: every sentence guests get by e-mail, on Telegram and from the bot, with a preview of whole messages |
 | `/admin/tickets` | admins | Find tickets, change their e-mail address, hand them over; superusers load the ticket list |
 | `/admin/docs/*` | admins | The full documentation, admin pages included |
 | `/admin/api/export-template` | admins | Layout template download |

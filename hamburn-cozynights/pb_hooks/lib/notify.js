@@ -21,6 +21,9 @@
 // alert. What a guest wrote in a request is encrypted by the app and never
 // read here: messages only say what the crew decided.
 //
+// Every sentence guests get comes from pb_hooks/lib/texts.js; admins change
+// them on /admin/messages (collection message_texts). See "message texts".
+//
 // Secrets: the bot token is part of every Telegram API URL, and Go's HTTP
 // errors quote the URL. Every error that could contain a URL goes through
 // safeError() before it is logged or stored.
@@ -77,7 +80,9 @@ function config(app) {
 		},
 		legacyWebhook: env('COZY_ADMIN_WEBHOOK_URL'),
 		loopSeconds: loop >= 0 && loop <= 50 ? loop : 50,
-		mailsPerMinute: perMinute > 0 ? perMinute : 20
+		mailsPerMinute: perMinute > 0 ? perMinute : 20,
+		// the texts admins changed (key → text); the defaults are in texts.js
+		texts: loadTexts(app)
 	};
 }
 
@@ -530,6 +535,10 @@ function eventText(ev, cfg) {
 				' attempts: ' +
 				d.error
 			);
+		case 'message_text_changed':
+			return '✏️ Message text changed' + by + ': ' + subject;
+		case 'message_text_reset':
+			return '↩️ Message text reset to its default' + by + ': ' + subject;
 		case 'test':
 			return '🧪 Test message from cozy-admin notify test' + by;
 		default:
@@ -674,6 +683,65 @@ function markDue(app, orderId, options) {
 	});
 }
 
+// --- message texts -----------------------------------------------------------
+//
+// Every sentence guests get is in pb_hooks/lib/texts.js (docs/admin/
+// notifications.md, "Message texts"). Admins change them on /admin/messages;
+// a changed text is a record in message_texts and wins over the default. The
+// stored texts are read once per run (config) and looked up with t(). Which
+// lines a message has in which case is decided below, never by a text.
+
+const CATALOGUE = require(__hooks + '/lib/texts.js');
+
+const DEFAULT_TEXTS = {};
+for (const entry of CATALOGUE.TEXTS) DEFAULT_TEXTS[entry.key] = entry.text;
+
+const isKnownText = (key) => Object.prototype.hasOwnProperty.call(DEFAULT_TEXTS, key);
+
+/**
+ * The changed texts (key → text) from message_texts. {} when there are none
+ * or the collection is missing (a database from before the migration): the
+ * defaults are used then.
+ */
+function loadTexts(app) {
+	const texts = {};
+	try {
+		const rows = app.findAllRecords('message_texts');
+		for (const row of rows) {
+			const key = row.getString('key');
+			const text = row.getString('text');
+			if (key && text && isKnownText(key)) texts[key] = text;
+		}
+	} catch (err) {
+		warnOnce(
+			app,
+			'message_texts',
+			'stored message texts not read, using the defaults: ' + safeError(err)
+		);
+	}
+	return texts;
+}
+
+/**
+ * The text for `key`: the stored one, else the default, with its
+ * {placeholders} filled from vars. A placeholder the text may not use stays as
+ * written, so a typo shows in the preview instead of vanishing.
+ */
+function t(cfg, key, vars) {
+	if (!isKnownText(key)) throw new Error('unknown message text: ' + key);
+	const stored = cfg && cfg.texts ? cfg.texts[key] : '';
+	const text = stored || DEFAULT_TEXTS[key];
+	if (!vars) return text;
+	return text.replace(/\{([A-Za-z]+)\}/g, (match, name) =>
+		Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : match
+	);
+}
+
+/** The catalogue for the admin page: groups, placeholders and every text with its default. */
+function textCatalogue() {
+	return { groups: CATALOGUE.GROUPS, placeholders: CATALOGUE.PLACEHOLDERS, items: CATALOGUE.TEXTS };
+}
+
 function greetingName(order) {
 	const name = order.getString('customer_name').trim();
 	// the CLI's default label for tickets without a name
@@ -700,134 +768,96 @@ function spotLines(spot) {
  */
 function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
 	const req = request || { kind: '', status: '', fixed: false };
-	const hello = name ? 'Hi ' + name + ',' : 'Hi,';
 	const mapUrl = cfg.appUrl + '/map';
 	const requestUrl = cfg.appUrl + '/special-needs';
 	const roomUrl = spot ? cfg.appUrl + '/room/' + spot.roomId : mapUrl;
+	const vars = {
+		name: name || '',
+		spot: spot ? spot.label : '',
+		before: previousLabel || '',
+		roomUrl: roomUrl,
+		mapUrl: mapUrl,
+		requestUrl: requestUrl,
+		passCode: pass ? pass.code : '',
+		passUrl: pass ? pass.url : ''
+	};
+	const T = (key) => t(cfg, key, vars);
+	const hello = name ? T('mail.greeting') : T('mail.greeting_anonymous');
 	const crewBooked = req.kind === 'approved' && req.fixed && !!spot;
 	// the spot's details: whenever it is booked or changed, or the crew just booked it
 	const showSpot = !!spot && ((!!kind && kind !== 'released') || crewBooked);
 	const passUrl = pass && showSpot ? pass.url : '';
-	const passLine = passUrl
-		? 'Your booking pass (code ' +
-			pass.code +
-			'): ' +
-			passUrl +
-			' — show it when you arrive, if the crew asks.'
-		: '';
-	const fixedLine =
-		'The crew picked this spot for you, so please contact the crew to change it. Your room: ' +
-		roomUrl;
+	const passLine = passUrl ? T('mail.pass') : '';
+	const fixedLine = T('mail.fixed');
 	let subject;
 	let intro;
 	let after = [];
 	if (crewBooked) {
-		subject = 'Your special-needs spot: ' + spot.label;
-		intro = 'the crew approved your special-needs request and booked this spot for you:';
-		if (kind === 'changed' && previousLabel) after.push('Before: ' + previousLabel);
+		subject = T('mail.crew_booked.subject');
+		intro = T('mail.crew_booked.intro');
+		if (kind === 'changed' && previousLabel) after.push(T('mail.changed.before'));
 		if (passLine) after.push(passLine);
 		after.push(fixedLine);
 	} else if (!kind) {
 		if (req.kind === 'received') {
-			subject = 'We got your special-needs request';
-			intro = 'the crew got your request for a special-needs spot.';
-			after = [
-				'They look at it and you get an e-mail when they have decided.',
-				'To see, change or withdraw your request, open ' +
-					requestUrl +
-					' and sign in with your ticket code.'
-			];
+			subject = T('mail.request_received.subject');
+			intro = T('mail.request_received.intro');
+			after = [T('mail.request_received.next'), T('mail.request_received.manage')];
 		} else if (req.kind === 'approved') {
-			subject = 'Your special-needs request was approved';
-			intro = 'the crew approved your request for a special-needs spot.';
+			subject = T('mail.request_approved.subject');
+			intro = T('mail.request_approved.intro');
 			after = [
-				spot
-					? 'You keep your current spot, ' +
-						spot.label +
-						', until the crew books a more fitting one for you. Then you get another e-mail.'
-					: 'They are picking a fitting spot for you. You get another e-mail as soon as it is booked.',
-				'Your request: ' + requestUrl
+				spot ? T('mail.request_approved.keep') : T('mail.request_approved.picking'),
+				T('mail.request_approved.link')
 			];
 		} else {
-			subject = 'About your special-needs request';
-			intro = 'the crew could not offer you a special-needs spot.';
-			after = spot
-				? [
-						'You keep your current spot, ' + spot.label + '.',
-						'If you have questions, please contact the crew.'
-					]
-				: [
-						'You can book a spot like everyone else when booking opens: ' + mapUrl,
-						'If you have questions, please contact the crew.'
-					];
+			subject = T('mail.request_declined.subject');
+			intro = T('mail.request_declined.intro');
+			after = [
+				spot ? T('mail.request_declined.keep') : T('mail.request_declined.book'),
+				T('mail.request_declined.questions')
+			];
 		}
 	} else if (kind === 'released') {
-		subject = 'Your CozyNights spot was released';
-		intro =
-			'your ticket no longer holds a spot' +
-			(previousLabel ? ' — ' + previousLabel + ' is free again.' : '.');
+		subject = T('mail.released.subject');
+		intro = previousLabel ? T('mail.released.intro') : T('mail.released.intro_unknown');
 		if (req.status === 'approved') {
 			after = [
-				(req.kind === 'approved'
-					? 'The crew approved your special-needs request'
-					: 'Your special-needs request is still approved') +
-					': the crew picks a new spot for you, and you get an e-mail when it is booked.'
+				req.kind === 'approved'
+					? T('mail.released.approved_now')
+					: T('mail.released.still_approved')
 			];
 		} else {
-			after = [
-				"If you didn't release it yourself, the crew had to change the camp layout.",
-				'While booking is open you can pick a new spot: ' + mapUrl
-			];
+			after = [T('mail.released.layout'), T('mail.released.rebook')];
 		}
-		if (req.kind === 'declined')
-			after.unshift('The crew could not offer you a special-needs spot.');
-		if (req.kind === 'received') {
-			after.unshift(
-				'The crew got your special-needs request; you get an e-mail when they have decided.'
-			);
-		}
+		if (req.kind === 'declined') after.unshift(T('mail.released.also_declined'));
+		if (req.kind === 'received') after.unshift(T('mail.released.also_received'));
 	} else {
-		subject =
-			(kind === 'changed' ? 'Your CozyNights spot changed: ' : 'Your CozyNights spot: ') +
-			spot.label;
-		intro = kind === 'changed' ? 'your ticket now holds a different spot:' : 'your spot is booked:';
+		subject = kind === 'changed' ? T('mail.changed.subject') : T('mail.booked.subject');
+		intro = kind === 'changed' ? T('mail.changed.intro') : T('mail.booked.intro');
 		if (req.kind === 'received') {
-			after.push(
-				'The crew also got your special-needs request; you get an e-mail when they have decided.'
-			);
+			after.push(T('mail.also.received'));
 		} else if (req.kind === 'approved') {
-			after.push(
-				'The crew approved your special-needs request. You keep this spot until they book a more fitting one for you; then you get another e-mail.'
-			);
+			after.push(T('mail.also.approved'));
 		} else if (req.kind === 'declined') {
-			after.push('The crew could not offer you a special-needs spot; you keep this spot.');
+			after.push(T('mail.also.declined'));
 		}
-		if (kind === 'changed' && previousLabel) after.push('Before: ' + previousLabel);
+		if (kind === 'changed' && previousLabel) after.push(T('mail.changed.before'));
 		if (kind === 'changed') {
-			after.push(
-				req.fixed
-					? 'The crew moved you to this spot.'
-					: "If you didn't change it yourself, the crew had to move you."
-			);
+			after.push(req.fixed ? T('mail.changed.by_crew') : T('mail.changed.maybe_crew'));
 		}
 		if (passLine) after.push(passLine);
-		after.push(
-			req.fixed
-				? fixedLine
-				: 'To change or release it, open ' +
-						roomUrl +
-						', sign in with your ticket code and tap your spot — as long as booking is open.'
-		);
+		after.push(req.fixed ? fixedLine : T('mail.booked.change'));
 	}
 	const rows = showSpot ? spotLines(spot) : [];
-	const footer =
-		'You get this e-mail because this address belongs to your Hamburn ticket. CozyNights never asks you for your ticket code by e-mail.';
+	const signature = T('mail.signature');
+	const footer = T('mail.footer');
 
 	const text = [hello, '', intro]
 		.concat(rows.length ? [''].concat(rows.map((r) => '  ' + (r[0] + ':').padEnd(7) + r[1])) : [])
 		.concat([''])
 		.concat(after)
-		.concat(['', '— The CozyNights crew', '', footer])
+		.concat(['', signature, '', footer])
 		.join('\n');
 
 	const link = (url) => '<a href="' + esc(url) + '" style="color:#7a3cff">' + esc(url) + '</a>';
@@ -846,6 +876,8 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
 		if (!url) return esc(line);
 		return esc(line.slice(0, at)) + link(url) + esc(line.slice(at + url.length));
 	};
+	// A changed text may have line breaks; they stay in the HTML as well.
+	const para = (line) => line.split('\n').map(linkify).join('<br>');
 	const html =
 		'<!doctype html><html><body style="margin:0;padding:24px;background:#f6f3ee;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1d1a24">' +
 		'<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;padding:24px">' +
@@ -853,9 +885,9 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
 			? '<p style="margin:0 0 12px;color:#b00020;font-weight:bold">' + esc(cfg.label) + '</p>'
 			: '') +
 		'<p style="margin:0 0 12px">' +
-		esc(hello) +
+		para(hello) +
 		'</p><p style="margin:0 0 12px">' +
-		esc(intro) +
+		para(intro) +
 		'</p>' +
 		(rows.length
 			? '<table style="border-collapse:collapse;margin:0 0 16px">' +
@@ -871,19 +903,21 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
 					.join('') +
 				'</table>'
 			: '') +
-		after.map((line) => '<p style="margin:0 0 12px">' + linkify(line) + '</p>').join('') +
-		'<p style="margin:16px 0 0">— The CozyNights crew</p>' +
+		after.map((line) => '<p style="margin:0 0 12px">' + para(line) + '</p>').join('') +
+		'<p style="margin:16px 0 0">' +
+		para(signature) +
+		'</p>' +
 		'<p style="margin:16px 0 0;font-size:12px;color:#6b6478">' +
-		esc(footer) +
+		para(footer) +
 		'</p></div></body></html>';
 
 	return { subject: prefixed(cfg, subject), text: text, html: html };
 }
 
-const REQUEST_STATUS_TEXT = {
-	pending: 'waiting for the crew',
-	approved: 'approved',
-	declined: 'declined'
+const REQUEST_STATUS_KEY = {
+	pending: 'tg.status.pending',
+	approved: 'tg.status.approved',
+	declined: 'tg.status.declined'
 };
 
 /**
@@ -896,93 +930,277 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 	const mapUrl = cfg.appUrl + '/map';
 	const requestUrl = cfg.appUrl + '/special-needs';
 	const roomUrl = spot ? cfg.appUrl + '/room/' + spot.roomId : mapUrl;
-	const passLine = pass && spot ? '\n\n🎫 Booking pass ' + pass.code + ':\n' + pass.url : '';
+	const vars = {
+		spot: spot ? spot.label : '',
+		before: previousLabel || '',
+		roomUrl: roomUrl,
+		mapUrl: mapUrl,
+		requestUrl: requestUrl,
+		passCode: pass ? pass.code : '',
+		passUrl: pass ? pass.url : '',
+		status: ''
+	};
+	const T = (key) => t(cfg, key, vars);
+	const passLine = pass && spot ? '\n\n' + T('tg.pass') : '';
 	const crewBooked = req.kind === 'approved' && req.fixed && !!spot;
 	let text;
 	if (kind === 'connected') {
+		const statusKey = REQUEST_STATUS_KEY[req.status];
+		vars.status = statusKey ? T(statusKey) : '';
 		text =
-			"✅ Connected! You'll get news about your CozyNights spot here.\n\n" +
-			(spot
-				? 'Your spot: ' + spot.label + '\n' + roomUrl + passLine
-				: "You don't have a spot yet — you'll get a message here when you book one.") +
-			(REQUEST_STATUS_TEXT[req.status]
-				? '\n\nYour special-needs request: ' + REQUEST_STATUS_TEXT[req.status]
-				: '') +
-			'\n\nSend /stop to disconnect.';
+			T('tg.connected.intro') +
+			'\n\n' +
+			(spot ? T('tg.connected.spot') + passLine : T('tg.connected.no_spot')) +
+			(vars.status ? '\n\n' + T('tg.connected.request') : '') +
+			'\n\n' +
+			T('tg.connected.stop');
 	} else if (crewBooked) {
 		text =
-			'✅ Your special-needs request was approved. The crew booked this spot for you:\n' +
-			spot.label +
-			(kind === 'changed' && previousLabel ? '\nBefore: ' + previousLabel : '') +
+			T('tg.crew_booked.intro') +
+			(kind === 'changed' && previousLabel ? '\n' + T('tg.before') : '') +
 			'\n\n' +
 			roomUrl +
 			passLine +
-			'\n\nTo change it, please contact the crew.';
+			'\n\n' +
+			T('tg.contact_crew');
 	} else if (!kind) {
 		if (req.kind === 'received') {
-			text =
-				"🧡 The crew got your special-needs request. You'll get a message here when they have decided.\n\nSee, change or withdraw it: " +
-				requestUrl;
+			text = T('tg.request_received');
 		} else if (req.kind === 'approved') {
-			text = spot
-				? '✅ Your special-needs request was approved. You keep your current spot, ' +
-					spot.label +
-					", until the crew books a more fitting one for you; you'll get a message here when they do."
-				: "✅ Your special-needs request was approved. The crew is picking a fitting spot for you; you'll get a message here when it is booked.";
+			text = spot ? T('tg.request_approved.keep') : T('tg.request_approved.picking');
 		} else {
-			text = spot
-				? '✋ The crew could not offer you a special-needs spot. You keep your current spot, ' +
-					spot.label +
-					'.'
-				: '✋ The crew could not offer you a special-needs spot. You can book a spot like everyone else when booking opens: ' +
-					mapUrl;
+			text = spot ? T('tg.request_declined.keep') : T('tg.request_declined.book');
 		}
 	} else {
 		const news =
 			req.kind === 'received'
-				? '🧡 The crew got your special-needs request.\n\n'
+				? T('tg.news.received') + '\n\n'
 				: req.kind === 'declined'
-					? '✋ The crew could not offer you a special-needs spot.\n\n'
+					? T('tg.news.declined') + '\n\n'
 					: req.kind === 'approved' && kind !== 'released'
-						? "✅ Your special-needs request was approved. You keep this spot until the crew books a more fitting one; you'll get a message here when they do.\n\n"
+						? T('tg.news.approved') + '\n\n'
 						: '';
 		if (kind === 'released') {
 			text =
 				news +
-				'🫥 Your CozyNights spot was released' +
-				(previousLabel ? ': ' + previousLabel + ' is free again.' : '.') +
+				(previousLabel ? T('tg.released.intro') : T('tg.released.intro_unknown')) +
+				'\n\n' +
 				(req.status === 'approved'
-					? '\n\n' +
-						(req.kind === 'approved'
-							? 'Your special-needs request was approved'
-							: 'Your special-needs request is still approved') +
-						": the crew picks a new spot for you, and you'll get a message here when it is booked."
-					: "\n\nIf you didn't do this yourself, the crew had to change the camp layout. Pick a new spot while booking is open: " +
-						mapUrl);
+					? req.kind === 'approved'
+						? T('tg.released.approved_now')
+						: T('tg.released.still_approved')
+					: T('tg.released.rebook'));
 		} else if (kind === 'changed') {
 			text =
 				news +
-				'🔁 Your CozyNights spot changed\nNow: ' +
-				spot.label +
-				(previousLabel ? '\nBefore: ' + previousLabel : '') +
-				(req.fixed
-					? '\n\nThe crew moved you to this spot. To change it, please contact the crew.\n'
-					: "\n\nIf you didn't change it yourself, the crew had to move you.\n") +
-				roomUrl +
+				T('tg.changed.intro') +
+				(previousLabel ? '\n' + T('tg.before') : '') +
+				'\n\n' +
+				(req.fixed ? T('tg.changed.by_crew') : T('tg.changed.maybe_crew')) +
 				passLine;
 		} else {
 			text =
 				news +
-				'✨ Your CozyNights spot is booked\n' +
-				spot.label +
-				(req.fixed
-					? '\n\nThe crew picked it for you. To change it, please contact the crew.\n'
-					: '\n\nChange or release it: ') +
-				roomUrl +
+				T('tg.booked.intro') +
+				'\n\n' +
+				(req.fixed ? T('tg.booked.by_crew') : T('tg.booked.change')) +
 				passLine;
 		}
 	}
 	return prefixed(cfg, text);
+}
+
+/**
+ * Sample messages for the admin page (/admin/messages), rendered with cfg.texts
+ * like the real ones: every text is in at least one of them (tests/notify-
+ * messages.test.ts checks). The sample guest is Ada with a booking pass.
+ */
+function previewMessages(cfg) {
+	const spot = {
+		bedId: 'sample',
+		roomId: 'sample',
+		spot: 'B1',
+		room: 'Dorm #2',
+		house: 'Villa',
+		label: 'B1 · Dorm #2 · Villa'
+	};
+	const before = 'B7 · Loft #1 · Hut';
+	const pass = { code: 'AAAA-BBBB-CCCC', url: cfg.appUrl + '/pass/AAAA-BBBB-CCCC' };
+	const none = { kind: '', status: '', fixed: false };
+	const req = (kind, status, fixed) => ({ kind: kind, status: status, fixed: !!fixed });
+	// name: '' = a ticket without a name; before: '' = the old spot is unknown
+	const cases = [
+		{ id: 'booked', title: 'Spot booked', kind: 'booked', spot: true, req: none },
+		{
+			id: 'changed',
+			title: 'Spot changed',
+			kind: 'changed',
+			spot: true,
+			before: before,
+			req: none
+		},
+		{ id: 'released', title: 'Spot released', kind: 'released', before: before, req: none },
+		{
+			id: 'released_unknown',
+			title: 'Spot released, old spot unknown, ticket without a name',
+			kind: 'released',
+			name: '',
+			req: none
+		},
+		{
+			id: 'request_received',
+			title: 'Special-needs request received',
+			req: req('received', 'pending')
+		},
+		{
+			id: 'request_approved',
+			title: 'Request approved, no spot yet',
+			req: req('approved', 'approved')
+		},
+		{
+			id: 'request_approved_keep',
+			title: 'Request approved, the guest keeps their spot',
+			spot: true,
+			req: req('approved', 'approved')
+		},
+		{
+			id: 'request_declined',
+			title: 'Request declined, no spot',
+			req: req('declined', 'declined')
+		},
+		{
+			id: 'request_declined_keep',
+			title: 'Request declined, the guest keeps their spot',
+			spot: true,
+			req: req('declined', 'declined')
+		},
+		{
+			id: 'crew_booked',
+			title: 'Request approved and the spot booked by the crew',
+			kind: 'booked',
+			spot: true,
+			req: req('approved', 'approved', true)
+		},
+		{
+			id: 'crew_moved',
+			title: 'Moved by the crew to another special-needs spot',
+			kind: 'changed',
+			spot: true,
+			before: before,
+			req: req('', 'approved', true)
+		},
+		{
+			id: 'crew_booked_again',
+			title: 'Spot booked by the crew, the approval was told before',
+			kind: 'booked',
+			spot: true,
+			req: req('', 'approved', true)
+		},
+		{
+			id: 'booked_request_received',
+			title: 'Spot booked while a request waits',
+			kind: 'booked',
+			spot: true,
+			req: req('received', 'pending')
+		},
+		{
+			id: 'booked_request_approved',
+			title: 'Spot booked while the request is approved',
+			kind: 'booked',
+			spot: true,
+			req: req('approved', 'approved')
+		},
+		{
+			id: 'booked_request_declined',
+			title: 'Spot booked while the request is declined',
+			kind: 'booked',
+			spot: true,
+			req: req('declined', 'declined')
+		},
+		{
+			id: 'released_request_received',
+			title: 'Spot released while a request arrives',
+			kind: 'released',
+			before: before,
+			req: req('received', 'pending')
+		},
+		{
+			id: 'released_request_declined',
+			title: 'Spot released while the request is declined',
+			kind: 'released',
+			before: before,
+			req: req('declined', 'declined')
+		},
+		{
+			id: 'released_approved_now',
+			title: 'Spot released while the request is approved right now',
+			kind: 'released',
+			before: before,
+			req: req('approved', 'approved')
+		},
+		{
+			id: 'released_still_approved',
+			title: 'Spot released, the request stays approved',
+			kind: 'released',
+			before: before,
+			req: req('', 'approved')
+		}
+	];
+	const name = (c) => (c.name === undefined ? 'Ada' : c.name);
+	const mail = cases.map((c) => {
+		const m = guestMail(
+			cfg,
+			c.kind || '',
+			c.spot ? spot : null,
+			c.before || '',
+			name(c),
+			pass,
+			c.req
+		);
+		return { id: c.id, title: c.title, subject: m.subject, text: m.text, html: m.html };
+	});
+	const connected = [
+		{
+			id: 'connected',
+			title: 'Chat connected, request waiting',
+			kind: 'connected',
+			spot: true,
+			req: req('', 'pending')
+		},
+		{
+			id: 'connected_approved',
+			title: 'Chat connected, request approved',
+			kind: 'connected',
+			spot: true,
+			req: req('', 'approved')
+		},
+		{
+			id: 'connected_declined',
+			title: 'Chat connected, request declined, no spot',
+			kind: 'connected',
+			req: req('', 'declined')
+		}
+	];
+	const telegram = connected.concat(cases).map((c) => ({
+		id: c.id,
+		title: c.title,
+		text: guestTelegram(cfg, c.kind || '', c.spot ? spot : null, c.before || '', pass, c.req)
+	}));
+	const bot = [
+		{ id: 'help', title: 'Any other message to the bot', text: helpText(cfg) },
+		{
+			id: 'link_expired',
+			title: 'The connect link has expired',
+			text: prefixed(cfg, t(cfg, 'bot.link_expired'))
+		},
+		{ id: 'stopped', title: '/stop', text: prefixed(cfg, t(cfg, 'bot.stopped')) },
+		{
+			id: 'not_connected',
+			title: '/stop in a chat that is not connected',
+			text: prefixed(cfg, t(cfg, 'bot.not_connected'))
+		}
+	];
+	return { mail: mail, telegram: telegram, bot: bot };
 }
 
 function sendMail(app, cfg, to, msg) {
@@ -1256,12 +1474,7 @@ function deliverDue(app, cfg, force, deadline, keepAlive) {
 // --- Telegram: guests link their chat --------------------------------------
 
 function helpText(cfg) {
-	return prefixed(
-		cfg,
-		'👋 This bot sends updates about your CozyNights spot.\n\nTo connect: open ' +
-			(cfg.appUrl || 'the booking page') +
-			', sign in with your ticket code, open your room or your special-needs request and tap “Get updates on Telegram”.'
-	);
+	return prefixed(cfg, t(cfg, 'bot.help', { appUrl: cfg.appUrl || 'the booking page' }));
 }
 
 function reply(cfg, chatId, text) {
@@ -1300,14 +1513,7 @@ function handleUpdate(app, cfg, update) {
 				fresh.set('due', pbDate(Date.now()));
 			});
 		if (!linked) {
-			reply(
-				cfg,
-				chatId,
-				prefixed(
-					cfg,
-					'⌛ This link has expired or was already used. Open your room on the booking page and tap “Get updates on Telegram” again.'
-				)
-			);
+			reply(cfg, chatId, prefixed(cfg, t(cfg, 'bot.link_expired')));
 			return;
 		}
 		return; // the delivery run right after this sends "connected" with the spot
@@ -1330,12 +1536,7 @@ function handleUpdate(app, cfg, update) {
 		reply(
 			cfg,
 			chatId,
-			prefixed(
-				cfg,
-				linked.length > 0
-					? "🔕 Disconnected. You won't get updates here anymore. You can connect again on the booking page."
-					: 'This chat is not connected to a ticket.'
-			)
+			prefixed(cfg, t(cfg, linked.length > 0 ? 'bot.stopped' : 'bot.not_connected'))
 		);
 		return;
 	}
@@ -1641,6 +1842,10 @@ module.exports = {
 	markDue: markDue,
 	guestMail: guestMail,
 	guestTelegram: guestTelegram,
+	loadTexts: loadTexts,
+	t: t,
+	textCatalogue: textCatalogue,
+	previewMessages: previewMessages,
 	sendMail: sendMail,
 	refreshCapabilities: refreshCapabilities,
 	applyMailSettings: applyMailSettings,

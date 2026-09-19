@@ -46,6 +46,8 @@ The first state that carries every feature built for the key-user test, merged i
 | 3 | `feature/import-review` | `/admin/tickets`, ticket list review, template compare & apply | — |
 | 4 | `feature/booking-window` | Booking window with opening and closing time, phase Closed, countdown bar, superuser-only instant switch | `1759300000_booking_window` |
 | 5 | fixes on the integrated state | Hand-over deletes the special-needs request (i79); anti-phishing line in guest mails (i12); `beds.booked_at` and a truthful "New Bookings" chart (Q2); one ticket = one spot also on the server (i61, i62); clear-all only in Staging, partial failures reported, every house deletion logged (i63); **going back to Staging releases every guest booking** | `1759400000_booked_at` |
+| 6 | `claude/annual-map-update-458d54` | The Hamburn 2026 site map | — |
+| 7 | `claude/special-needs-decline-ux-9daa4e` | Declined special-needs requests keep *Approve after all* behind a ⋯ menu, cards coloured by status; **message texts**: every sentence guests get is editable on `/admin/messages` (✉️ Messages), with a preview rendered by PocketBase; changes go to the audit log and the crew group | `1759600000_message_texts` |
 
 Conflicts worth knowing about (all resolved in the merge commits):
 
