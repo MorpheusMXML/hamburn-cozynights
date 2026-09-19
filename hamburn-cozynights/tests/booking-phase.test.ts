@@ -298,7 +298,7 @@ describe('what guests see of the window', () => {
 		);
 	});
 
-	it('shows the slim bar everywhere but on the staging map, which counts down itself', () => {
+	it('shows the slim bar everywhere but where the page counts down itself', () => {
 		const opens = nextTransition(armed, NOW);
 		expect(showCountdownBar('staging', opens, '/map')).toBe(false);
 		expect(showCountdownBar('staging', opens, '/house/x')).toBe(true);
@@ -307,6 +307,10 @@ describe('what guests see of the window', () => {
 		const closes = nextTransition({ ...armed, basePhase: 'live', opensAt: at(-DAY) }, NOW);
 		expect(showCountdownBar('live', closes, '/map')).toBe(true);
 		expect(showCountdownBar('staging', null, '/house/x')).toBe(false);
+		// the start page shows the big countdown above the ticket-code field, both kinds
+		expect(showCountdownBar('staging', opens, '/')).toBe(false);
+		expect(showCountdownBar('closed', opens, '/')).toBe(false);
+		expect(showCountdownBar('live', closes, '/')).toBe(false);
 	});
 
 	it('words the own-spot note by phase', () => {
