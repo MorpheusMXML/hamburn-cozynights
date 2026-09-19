@@ -150,10 +150,11 @@ describe('crew alerts', () => {
 	});
 
 	it('announce an opening and a closing reached by the timer, once each', async () => {
-		await reset({
-			booking_unlock_at: new Date(Date.now() + 1500).toISOString(),
-			booking_close_at: new Date(Date.now() + 3000).toISOString()
-		});
+		// The closing time is armed only after the opening has been announced:
+		// with both times set up front, a slow machine reaches the first run
+		// when BOTH moments have passed, and the opening is never announced on
+		// its own.
+		await reset({ booking_unlock_at: new Date(Date.now() + 1500).toISOString() });
 		const stored = await su.collection('app_settings').getOne(APP_SETTINGS_ID);
 		const announced = async (action: string, at: string) =>
 			(
@@ -177,11 +178,16 @@ describe('crew alerts', () => {
 		await crewTexts(); // the run that sees the opening
 		expect(await announced('booking_opened_by_timer', stored.booking_unlock_at)).toBe(1);
 
-		await waitPast(stored.booking_close_at);
+		await su.collection('app_settings').update(APP_SETTINGS_ID, {
+			booking_close_at: new Date(Date.now() + 1500).toISOString()
+		});
+		const closing = (await su.collection('app_settings').getOne(APP_SETTINGS_ID))
+			.booking_close_at as string;
+		await waitPast(closing);
 		const texts = await crewTexts(); // … and the closing
 		await crewTexts(); // a later run repeats nothing
 		expect(await announced('booking_opened_by_timer', stored.booking_unlock_at)).toBe(1);
-		expect(await announced('booking_closed_by_timer', stored.booking_close_at)).toBe(1);
+		expect(await announced('booking_closed_by_timer', closing)).toBe(1);
 		expect(texts.some((t) => t.startsWith('[TEST] 🎪 Booking is LIVE now — go-live timer'))).toBe(
 			true
 		);
