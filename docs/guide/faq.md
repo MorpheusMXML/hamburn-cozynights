@@ -103,7 +103,7 @@ The crew holds it back: the bed is broken, kept free on purpose, not in use, or 
 :::
 
 ::: details The burning title is too much for me
-Press the pause button ⏸ next to the title; your browser remembers it. If your device is set to reduce motion (for example on iPhone: Settings → Accessibility → Motion → Reduce Motion), the title doesn't move at all. And if you like it: move the cursor over the standing letters or tap them to set them on fire yourself.
+Press the pause button ⏸ next to the title; your browser remembers it. If your device is set to reduce motion (for example on iPhone: Settings → Accessibility → Motion → Reduce Motion), the title doesn't move at all, and there are no fireworks after booking either. And if you like it: move the cursor over the standing letters or tap them to set them on fire yourself.
 :::
 
 ::: details Who runs CozyNights, and what happens with my data?

@@ -57,7 +57,7 @@ flowchart LR
 
 </div>
 
-That's it: the spot now shows **Your Spot** with your burner name. 🎉 Above the spots, a **Welcome Home!** box holds your [booking pass](#your-booking-pass), the address your [confirmations](#confirmations) go to and the Telegram option.
+That's it: fireworks go up from your new spot 🎆, and the spot now shows **Your Spot** with your burner name. Above the spots, a **Welcome Home!** box holds your [booking pass](#your-booking-pass), the address your [confirmations](#confirmations) go to and the Telegram option.
 
 ## What the spots mean
 
@@ -79,7 +79,7 @@ Can't decide? On the map press <kbd>🎰 DESTINY ROULETTE</kbd>, then <kbd>ROLL 
 
 - <kbd>New Name 🎲</kbd> keeps the spot and rolls a new name.
 - <kbd>Full Respin 🔥</kbd> rolls spot and name again.
-- <kbd>Accept Fate & Book 🌵</kbd> books it: *Destiny Fulfilled!*
+- <kbd>Accept Fate & Book 🌵</kbd> books it: *Destiny Fulfilled!*, with fireworks.
 
 ![Destiny Roulette before the first roll](../assets/screenshots/guest-roulette.webp)
 
