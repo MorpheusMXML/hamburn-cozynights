@@ -7,6 +7,8 @@
 	import { fade } from 'svelte/transition';
 	import type { PageData, ActionData } from './$types';
 	import SlotMachine from '$lib/components/SlotMachine.svelte';
+	import SuccessFireworks from '$lib/components/SuccessFireworks.svelte';
+	import type { Point } from '$lib/fx/fireworks';
 	import { confirmDialog, dialogQueue, toast } from '$lib/dialogs';
 
 	export let data: PageData;
@@ -21,7 +23,30 @@
 	let isAutoSpinning = false;
 	let showSlotManually = false;
 	let nameGenerated = false;
+
+	// Fireworks for a fresh booking: they rise from the booked card, and their
+	// finale lights the "Welcome Home" banner up for a moment.
 	let triggerFireworks = false;
+	let fireworksOrigin: Point | null = null;
+	let bannerIgnite = false;
+	let bannerTimer: ReturnType<typeof setTimeout> | undefined;
+
+	/** Centre of a spot's card in viewport pixels, or null when it isn't rendered. */
+	function cardCenter(bedId: string | null): Point | null {
+		if (!bedId) return null;
+		const card = document.querySelector<HTMLElement>(`[data-bed-id="${CSS.escape(bedId)}"]`);
+		if (!card) return null;
+		const rect = card.getBoundingClientRect();
+		return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+	}
+
+	function igniteBanner() {
+		bannerIgnite = true;
+		clearTimeout(bannerTimer);
+		bannerTimer = setTimeout(() => (bannerIgnite = false), 1400);
+	}
+
+	onDestroy(() => clearTimeout(bannerTimer));
 
 	// `form` only matters without JavaScript; with it, the enhance callbacks
 	// below report errors where the guest is looking (modal or banner).
@@ -210,7 +235,7 @@
 				</div>
 			</div>
 		{:else}
-			<div class="booking-success-banner">
+			<div class="booking-success-banner" class:ignite={bannerIgnite}>
 				<div class="success-icon" aria-hidden="true">✨</div>
 				<div class="success-content">
 					<h3>Welcome Home!</h3>
@@ -303,7 +328,7 @@
 			{@const isLocked = !data.isBookingActive}
 
 			{#if someoneElseBooked}
-				<div class="bed-card occupied">
+				<div class="bed-card occupied" data-bed-id={bed.id}>
 					<div class="icon" aria-hidden="true">🛏️</div>
 					<span class="label">{bed.label}</span>
 					<div class="status-box occupied">
@@ -316,6 +341,7 @@
 			{:else if isMyBed}
 				<button
 					class="bed-card mine {isLocked ? 'locked' : ''}"
+					data-bed-id={bed.id}
 					on:click={() => !isLocked && openBookingModal(bed.id, bed.burnerName)}
 					disabled={isLocked}
 				>
@@ -336,7 +362,7 @@
 					</div>
 				</button>
 			{:else if !bed.bookable}
-				<div class="bed-card occupied">
+				<div class="bed-card occupied" data-bed-id={bed.id}>
 					<div class="icon" aria-hidden="true">🔒</div>
 					<span class="label">{bed.label}</span>
 					<div class="status-box occupied">
@@ -347,6 +373,7 @@
 			{:else}
 				<button
 					class="bed-card free {iHaveAnotherBooking || isLocked ? 'disabled' : ''}"
+					data-bed-id={bed.id}
 					on:click={() => !iHaveAnotherBooking && !isLocked && openBookingModal(bed.id)}
 					disabled={iHaveAnotherBooking || isLocked}
 				>
@@ -455,10 +482,8 @@
 							if (releasing) {
 								toast('Your spot is released.', 'success');
 							} else {
+								fireworksOrigin = cardCenter(selectedBedId);
 								triggerFireworks = true;
-								setTimeout(() => {
-									triggerFireworks = false;
-								}, 5000);
 							}
 							closeModal();
 						}
@@ -531,22 +556,11 @@
 {/if}
 
 {#if triggerFireworks}
-	<div class="fireworks-overlay" in:fade={{ duration: 1000 }} out:fade={{ duration: 1000 }}>
-		<div class="pixel-fireworks">
-			{#each Array(12) as _, i}
-				<div
-					class="firework"
-					style="--left: {Math.random() * 100}%; --top: {Math.random() *
-						80}%; --delay: {Math.random() * 2}s; --color: {[
-						'#f472b6',
-						'#2dd4bf',
-						'#fb923c',
-						'#a855f7'
-					][Math.floor(Math.random() * 4)]}"
-				></div>
-			{/each}
-		</div>
-	</div>
+	<SuccessFireworks
+		origin={fireworksOrigin}
+		on:finale={igniteBanner}
+		on:done={() => (triggerFireworks = false)}
+	/>
 {/if}
 
 <style>
@@ -1106,66 +1120,34 @@
 		}
 	}
 
-	/* Fireworks Art */
-	.fireworks-overlay {
-		position: fixed;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		pointer-events: none;
-		z-index: 200;
-		overflow: hidden;
-		background: rgba(0, 0, 0, 0.2);
-	}
-	.pixel-fireworks {
-		position: relative;
-		width: 100%;
-		height: 100%;
+	/* The finale of the fireworks lights the banner up for a moment. */
+	.booking-success-banner.ignite {
+		animation: banner-ignite 1.4s ease-out;
 	}
 
-	.firework {
-		position: absolute;
-		left: var(--left);
-		top: var(--top);
-		width: 4px;
-		height: 4px;
-		background: transparent;
-		box-shadow: 0 0 0 0 var(--color);
-		animation: pixel-explode 1.5s ease-out forwards;
-		animation-delay: var(--delay);
-	}
-
-	@keyframes pixel-explode {
+	@keyframes banner-ignite {
 		0% {
+			border-left-color: #2dd4bf;
+			box-shadow: 0 0 0 rgba(255, 210, 122, 0);
 			transform: scale(1);
-			box-shadow: 0 0 0 0 var(--color);
-			opacity: 1;
 		}
-		50% {
+		18% {
+			border-left-color: #ffd27a;
 			box-shadow:
-				-20px -20px 0 2px var(--color),
-				20px -20px 0 2px var(--color),
-				-20px 20px 0 2px var(--color),
-				20px 20px 0 2px var(--color),
-				0 -30px 0 2px var(--color),
-				0 30px 0 2px var(--color),
-				-30px 0 0 2px var(--color),
-				30px 0 0 2px var(--color);
-			opacity: 1;
+				0 0 60px rgba(251, 146, 60, 0.55),
+				0 0 140px rgba(255, 210, 122, 0.3);
+			transform: scale(1.012);
 		}
 		100% {
-			box-shadow:
-				-40px -40px 0 0 var(--color),
-				40px -40px 0 0 var(--color),
-				-40px 40px 0 0 var(--color),
-				40px 40px 0 0 var(--color),
-				0 -60px 0 0 var(--color),
-				0 60px 0 0 var(--color),
-				-60px 0 0 0 var(--color),
-				60px 0 0 0 var(--color);
-			opacity: 0;
-			transform: scale(1.5);
+			border-left-color: #2dd4bf;
+			box-shadow: 0 0 0 rgba(255, 210, 122, 0);
+			transform: scale(1);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.booking-success-banner.ignite {
+			animation: none;
 		}
 	}
 
