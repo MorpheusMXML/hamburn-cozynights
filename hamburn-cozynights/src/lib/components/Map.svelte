@@ -21,6 +21,8 @@
 	export let phase: BookingPhase | null = null;
 	/** Editor: the layout is locked (live or closed). Defaults to isBookingActive. */
 	export let layoutLocked: boolean | null = null;
+	/** Guests: blurs the map like in Staging while a panel covers it (Closed). */
+	export let dimmed = false;
 
 	$: browsable = phase ? phase !== 'staging' : isBookingActive;
 
@@ -335,7 +337,7 @@
 			width={MAP_WIDTH}
 			height={MAP_HEIGHT}
 			class="map-image"
-			class:blurred={!browsable && !isEditorMode}
+			class:blurred={(!browsable || dimmed) && !isEditorMode}
 		/>
 
 		<!-- Dynamic Mouse Glow -->

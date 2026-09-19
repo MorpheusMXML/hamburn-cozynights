@@ -1,20 +1,33 @@
 import { error } from '@sveltejs/kit';
 import { InventoryService } from '$lib/server/inventory';
 import type { PageServerLoad } from './$types';
+import type { OrdersResponse } from '$lib/pocketbase-types';
 import { BookingService } from '$lib/server/booking';
 import { getBookingSettings } from '$lib/server/settings';
 import { findRequest } from '$lib/server/special-requests';
+import { passSummary } from '$lib/server/pass';
 import { openingCountdownAt } from '$lib/booking-phase';
 
-/** Whether the signed-in ticket has a special-needs request. Optional for the map. */
-async function hasRequest(locals: App.Locals): Promise<boolean> {
-	if (!locals.orderNumber) return false;
+/** The signed-in ticket and whether it has a special-needs request. Optional for the map. */
+async function signedInTicket(locals: App.Locals) {
+	if (!locals.orderNumber) return null;
 	try {
 		const order = await new BookingService(locals.adminPb).getOrderByNumber(locals.orderNumber);
-		return !!order && !!(await findRequest(locals.adminPb, order.id));
+		return order ? { order, requestSent: !!(await findRequest(locals.adminPb, order.id)) } : null;
 	} catch (err) {
 		console.error('[Map] Special-needs request lookup failed:', (err as Error)?.message);
-		return false;
+		return null;
+	}
+}
+
+/** Closed: the ticket's spot as a small booking pass, or that it holds none. Optional too. */
+async function closedPanelPass(locals: App.Locals, order: OrdersResponse) {
+	try {
+		const bed = await new BookingService(locals.adminPb).getBedForOrder(order.id);
+		return { pass: bed ? await passSummary(locals.adminPb, order, bed) : null, noSpot: !bed };
+	} catch (err) {
+		console.error('[Map] Booking pass failed:', (err as Error)?.message);
+		return { pass: null, noSpot: false };
 	}
 }
 
@@ -24,15 +37,21 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// beds carry is_special, order and booked_at); getFullTree strips all of it.
 		const inventory = new InventoryService(locals.adminPb);
 		let houses = await inventory.getFullTree();
-		const [{ isBookingActive, phase, next, requestsOpen }, requestSent] = await Promise.all([
+		const [{ isBookingActive, phase, next, requestsOpen }, ticket] = await Promise.all([
 			getBookingSettings(locals.pb),
-			hasRequest(locals)
+			signedInTicket(locals)
 		]);
 
 		if (phase !== 'staging') {
 			// The layout is final: leave out unconfigured houses (live and closed).
 			houses = houses.filter((h) => h.isBookable);
 		}
+
+		// Closed: the panel over the map shows the guest's spot as a small booking pass.
+		const { pass, noSpot } =
+			phase === 'closed' && ticket
+				? await closedPanelPass(locals, ticket.order)
+				: { pass: null, noSpot: false };
 
 		return {
 			houses,
@@ -41,7 +60,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 			// only an armed opening still ahead: a paused or elapsed time shows no countdown
 			bookingUnlockAt: openingCountdownAt(phase, next),
 			// the "special-needs spot" link: while requests are open, or to see one's own
-			specialNeeds: { open: requestsOpen, requestSent }
+			specialNeeds: { open: requestsOpen, requestSent: !!ticket?.requestSent },
+			pass,
+			noSpot
 		};
 	} catch (err) {
 		console.error('[Map] Load failed:', (err as Error)?.message);

@@ -5,6 +5,8 @@ import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbas
 import { BookingService, isBedBookable } from '$lib/server/booking';
 import { getBookingSettings } from '$lib/server/settings';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
+import { passSummary } from '$lib/server/pass';
+import type { PassSummary } from '$lib/pass';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 
@@ -53,18 +55,27 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			return { ...room, freeCount, totalCount: roomBeds.length };
 		});
 
-		const spotFixed = userBed
-			? await isSpotFixed(locals.adminPb, order.id, userBed.id).catch((err) => {
-					console.error('[House] Special-needs request lookup failed:', (err as Error)?.message);
-					return false;
-				})
-			: false;
+		// Whether the crew picked the guest's spot, and their booking pass.
+		// Optional: the page works without them.
+		const [spotFixed, pass]: [boolean, PassSummary | null] = userBed
+			? await Promise.all([
+					isSpotFixed(locals.adminPb, order.id, userBed.id).catch((err) => {
+						console.error('[House] Special-needs request lookup failed:', (err as Error)?.message);
+						return false;
+					}),
+					passSummary(locals.adminPb, order, userBed).catch((err) => {
+						console.error('[House] Booking pass failed:', (err as Error)?.message);
+						return null;
+					})
+				])
+			: [false, null];
 
 		return {
 			house,
 			rooms: roomsWithStats,
 			userBedId: userBed?.id || null,
 			spotFixed,
+			pass,
 			isBookingActive: settings.isBookingActive,
 			phase: settings.phase,
 			bookingUnlockAt: settings.bookingUnlockAt

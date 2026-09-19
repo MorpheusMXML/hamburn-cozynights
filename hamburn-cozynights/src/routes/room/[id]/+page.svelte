@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { ownSpotNote } from '$lib/booking-phase';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
+	import PassTicket from '$lib/components/PassTicket.svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { onDestroy, tick } from 'svelte';
@@ -166,6 +167,13 @@
 							Your spot is in another room. One ticket code is one spot: to pick one here, release
 							your current spot first.
 						</p>
+					{:else}
+						<p>{ownSpotNote(data.phase)}</p>
+					{/if}
+					{#if data.pass}
+						<PassTicket pass={data.pass} />
+					{/if}
+					{#if data.isBookingActive && !data.spotFixed}
 						{#if bannerError}
 							<p class="error-msg" role="alert">{bannerError}</p>
 						{/if}
@@ -204,8 +212,6 @@
 								{isSaving ? 'Releasing…' : 'Release Current Spot'}
 							</button>
 						</form>
-					{:else}
-						<p>{ownSpotNote(data.phase)}</p>
 					{/if}
 				</div>
 			</div>
@@ -222,9 +228,9 @@
 							{#if data.isBookingActive}Tap it to change your burner name.{/if}
 						{:else if data.isBookingActive}Tap it to change your burner name or to release it.{/if}
 					</p>
-					{#if data.passCode}
+					{#if data.pass}
 						<p class="pass-line">
-							<a class="btn-pass" href="/pass/{data.passCode}">
+							<a class="btn-pass" href="/pass/{data.pass.code}">
 								<span class="notify-icon" aria-hidden="true">🎫</span> Show booking pass
 							</a>
 						</p>
