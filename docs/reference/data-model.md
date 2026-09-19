@@ -78,9 +78,11 @@ The format is described in [Layout templates](../admin/templates#file-format)
   not removed keep their bookings; removed booked beds release their
   booking and the order's burner name is cleared.
 - **Coordinates:** `x`/`y` are positions in the map's 1000 × 700 coordinate
-  space, drawn over the built-in map image `static/lageplan-brahmsee.jpg`.
-  The map image is not part of the template, so a layout only fits the
-  built-in map.
+  space, drawn over the built-in map image (`static/lageplan-brahmsee-2026.jpg`,
+  swapped once a year: see [The map image](../develop/#the-map-image)). The
+  image is not part of the template; `map.image` only records which one a
+  layout was made for, and importing a layout made for another one shows a
+  warning to check the pins.
 
 ## Known gaps
 
