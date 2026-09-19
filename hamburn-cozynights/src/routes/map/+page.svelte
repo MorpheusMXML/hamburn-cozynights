@@ -66,12 +66,13 @@
 			<span class="tagline">Interactive Map</span>
 		</div>
 
+		<!-- The words in .long go on the smallest phones: the header must stay one row. -->
 		{#if phase === 'live'}
-			<div class="phase-badge live">🎪 LIVE BOOKING</div>
+			<div class="phase-badge live">🎪 LIVE <span class="long">BOOKING</span></div>
 		{:else if phase === 'closed'}
-			<div class="phase-badge closed">🔒 BOOKING CLOSED</div>
+			<div class="phase-badge closed">🔒 <span class="long">BOOKING</span> CLOSED</div>
 		{:else}
-			<div class="phase-badge staging">🛠 STAGING MODE</div>
+			<div class="phase-badge staging">🛠 STAGING <span class="long">MODE</span></div>
 		{/if}
 
 		<div class="header-right">
@@ -616,8 +617,27 @@
 		}
 	}
 
-	/* Phones: the three header boxes don't fit next to each other. The logo
-	   shrinks, the house counter (a gimmick) goes, help becomes a round "?". */
+	/* The header boxes never wrap; below these widths they don't fit next to
+	   each other any more (checked by tests/layout at every width). First the
+	   house counter (a gimmick) goes, then the links lose their text. */
+	@media (max-width: 1200px) {
+		.debug-counter {
+			display: none;
+		}
+	}
+	@media (max-width: 920px) {
+		.help-text {
+			display: none;
+		}
+		.help-link {
+			width: 44px;
+			padding: 0;
+			justify-content: center;
+			border-radius: 50%;
+		}
+	}
+
+	/* Phones: the logo shrinks, the phase badge gets shorter. */
 	@media (max-width: 640px) {
 		.header-overlay {
 			top: 12px;
@@ -640,22 +660,20 @@
 			padding: 0.5rem 0.6rem;
 			font-size: 0.65rem;
 		}
-		.debug-counter,
-		.help-text {
-			display: none;
-		}
-		.help-link {
-			width: 44px;
-			padding: 0;
-			justify-content: center;
-			border-radius: 50%;
-		}
 		.random-btn {
 			font-size: 0.8rem;
 			letter-spacing: 1.5px;
 		}
 		.panel-button {
 			padding: 1rem 1.25rem;
+		}
+	}
+	@media (max-width: 420px) {
+		.phase-badge .long {
+			display: none;
+		}
+		.header-right {
+			gap: 0.5rem;
 		}
 	}
 

@@ -477,11 +477,18 @@ shown here and nowhere else.
 	.request.status-declined h3 {
 		color: #a3a3a3;
 	}
+	/* Name and status side by side while the name has room; otherwise the
+	   status goes underneath (it squeezed a long name to a word per line). */
 	.request header {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: flex-start;
-		gap: 1rem;
+		gap: 0.5rem 1rem;
+	}
+	.request header > :first-child {
+		flex: 1 1 14rem;
+		min-width: 0;
 	}
 	.request h3 {
 		margin: 0;

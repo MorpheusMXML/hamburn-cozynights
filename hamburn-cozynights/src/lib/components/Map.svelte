@@ -5,6 +5,8 @@
 		MAP_WIDTH,
 		MAP_HEIGHT,
 		MAP_IMAGE,
+		MARKER_LABEL_GAP,
+		MARKER_LABEL_HEIGHT,
 		clampToMap,
 		isTooCloseToOtherHouse,
 		screenToMap
@@ -26,7 +28,9 @@
 
 	$: browsable = phase ? phase !== 'staging' : isBookingActive;
 
-	// Calculate label positions to avoid overlaps
+	// Labels go below the pin unless another house sits right below it. At the
+	// top or bottom edge of the map the edge decides: a label cut off by the edge
+	// is worse than one overlapping a neighbour's.
 	$: labelPositions = (houses || []).reduce(
 		(acc, house) => {
 			const isSomeoneBelow = houses.some(
@@ -36,7 +40,10 @@
 					other.y > house.y &&
 					other.y - house.y < 60
 			);
-			acc[house.id] = isSomeoneBelow ? 'top' : 'bottom';
+			const labelReach = (MARKER_LABEL_GAP + MARKER_LABEL_HEIGHT) * markerScale;
+			if (house.y + labelReach > MAP_HEIGHT) acc[house.id] = 'top';
+			else if (house.y - labelReach < 0) acc[house.id] = 'bottom';
+			else acc[house.id] = isSomeoneBelow ? 'top' : 'bottom';
 			return acc;
 		},
 		{} as Record<string, 'top' | 'bottom'>
@@ -382,6 +389,8 @@
 								selected={selectedHouseId === house.id}
 								dragging={draggingHouseId === house.id}
 								{hitRadius}
+								x={house.x}
+								scale={markerScale}
 							/>
 						</g>
 					</g>
