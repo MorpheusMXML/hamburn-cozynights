@@ -35,7 +35,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 };
 
 const LOCKED_MESSAGE =
-	"Spots are locked while booking is live or closed: the layout holds the guests' bookings. Only locking 🔒 still works. A superuser can switch back to Staging Mode in the Control Center.";
+	"Spots are locked while booking is live or closed: the layout holds the guests' bookings. Only locking 🔒 and the ♿ special-needs mark still work. A superuser can switch back to Staging Mode in the Control Center.";
 const SERVER_ERROR = 'The server could not save the change. Reload the page and try again.';
 
 export const actions: Actions = {

@@ -33,8 +33,10 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				filter: locals.pb.filter('house = {:id}', { id: params.id }),
 				sort: 'room_number'
 			}),
-			locals.pb.collection('beds').getFullList<BedsResponse>({
-				filter: locals.pb.filter('room.house = {:id}', { id: params.id })
+			// beds are admin-only in PocketBase (order, is_special, booked_at):
+			// the service account reads them, the page keeps only what it shows
+			locals.adminPb.collection('beds').getFullList<BedsResponse>({
+				filter: locals.adminPb.filter('room.house = {:id}', { id: params.id })
 			}),
 			getBookingSettings(locals.pb),
 			bookingService.getBedForOrder(order.id)

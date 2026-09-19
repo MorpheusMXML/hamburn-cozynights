@@ -23,7 +23,7 @@ timeline
 - [ ] **Houses on the map.** Every house is placed where it really is. See [Houses, rooms & spots](./camp-layout).
 - [ ] **Rooms and spots complete.** Room names and numbers match the signs on the doors.
 - [ ] **Spot states checked.** New spots are active right away. Deactivate ❄️ the ones that aren't in use; after a template import, look for ⚪️ INACTIVE spots that should be bookable.
-- [ ] **Red alert gone.** No _NO ROOMS DETECTED_ or _EMPTY MODULE_ warnings in the Control Center.
+- [ ] **Red alert gone.** The Control Center shows no **RED ALERT: THE CAMP LAYOUT IS INCOMPLETE** panel (no house without rooms, no room without spots). See [Red alert](./index#red-alert-sanity-checks).
 - [ ] **Crew beds locked.** Beds that guests shouldn't book are locked 🔒.
 - [ ] **Special-needs spots marked.** Spots that suit guests with special needs (lower bunks, step-free, quiet, near a toilet, with a socket) are marked ♿ on their room pages. See [Special-needs requests](./special-needs).
 - [ ] **Special-needs requests opened** in the Control Center, once the tickets are loaded, and announced to guests together with the booking date.
@@ -54,7 +54,7 @@ timeline
 - [ ] **Check booking passes at arrival** where needed: phone camera on the guest's QR code, or 🎫 **Check passes** in the admin header (type the code or use a USB scanner). See [Booking passes](./passes).
 
 - [ ] **Broken bed?** Lock it 🔒 on its room page. That works in every phase.
-- [ ] **Resist restructuring.** Adding rooms or moving houses means a superuser switches back to staging, which freezes all guests' bookings meanwhile. Do it only when really needed, and switch back quickly.
+- [ ] **Resist restructuring.** Houses, rooms and spots only change in 🛠 Staging, and a superuser's switch back to Staging **releases every guest booking** (only spots the crew booked for special-needs requests stay; burner names are forgotten; it can't be undone, and guests book again once booking is Live). During the event only lock 🔒 spots, mark ♿ spots or book a spot for a special-needs request: those work in every phase. If restructuring is unavoidable, export a template first and expect to re-seat every guest by hand; they get a *spot released* e-mail. See [After the burn](#after-the-burn).
 
 ## After the burn
 

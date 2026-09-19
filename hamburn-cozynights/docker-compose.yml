@@ -11,6 +11,9 @@ services:
       # Ohne Werte startet PocketBase normal, nur der Google-Login ist dann aus.
       PB_GOOGLE_CLIENT_ID: ${PB_GOOGLE_CLIENT_ID:-}
       PB_GOOGLE_CLIENT_SECRET: ${PB_GOOGLE_CLIENT_SECRET:-}
+      # Lokal darf das Dashboard Collections bearbeiten (Migrationen entwerfen);
+      # auf Servern sind die Schema-Editoren versteckt (pb_hooks/cozy_settings.pb.js).
+      PB_HIDE_CONTROLS: 'off'
       # Notifications (pb_hooks/cozy_notify.pb.js, docs/admin/notifications.md):
       # booking confirmations by e-mail, Telegram for guests and the crew.
       # All optional; without SMTP_HOST / TELEGRAM_BOT_TOKEN nothing is sent.

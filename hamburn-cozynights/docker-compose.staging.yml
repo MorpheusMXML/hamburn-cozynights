@@ -8,7 +8,10 @@ services:
     restart: unless-stopped
     # --automigrate=false: schema changes only ever come from committed
     # migrations, never from dashboard edits writing files into the checkout.
-    command: ['--http=0.0.0.0:8090', '--automigrate=false']
+    # --hooksWatch=false: the deploy script stops and starts PocketBase itself;
+    # a git checkout of the bind-mounted tree must never restart the live
+    # instance (that would apply new migrations before the deploy's snapshot).
+    command: ['--http=0.0.0.0:8090', '--automigrate=false', '--hooksWatch=false']
     environment:
       # Google OAuth client for the admin login (auth collection `admins`),
       # interpolated from .env — see .env.example and docs/develop/deployment.md.

@@ -81,6 +81,15 @@ if ! compose build app; then
 	exit 6
 fi
 
+# The snapshot helper image, pulled BEFORE PocketBase is stopped: a failed pull
+# must not leave the database down. Pinned, like everything else.
+HELPER_IMAGE="${HELPER_IMAGE:-alpine:3.21}"
+if ! docker pull -q "$HELPER_IMAGE" >/dev/null 2>&1; then
+	git checkout --quiet --detach "$prev"
+	log "cannot pull $HELPER_IMAGE for the snapshot — nothing changed, still serving $prev"
+	exit 8
+fi
+
 # Consistent PocketBase snapshot: stop it briefly, archive the volume.
 volume="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/pb_data"}}{{.Name}}{{end}}{{end}}' "$PB_CONTAINER" 2>/dev/null || true)"
 if [[ -n "$volume" ]]; then
@@ -89,8 +98,17 @@ if [[ -n "$volume" ]]; then
 	compose stop pocketbase
 	# backups/ holds PocketBase's own hourly ZIPs (pb_hooks/cozy_backups.pb.js):
 	# not needed to roll back a deploy, and they would bloat every archive.
-	docker run --rm -v "$volume":/pb_data:ro -v "$BACKUP_DIR":/backup alpine \
-		tar czf "/backup/$backup" --exclude=./backups -C /pb_data .
+	if ! docker run --rm -v "$volume":/pb_data:ro -v "$BACKUP_DIR":/backup "$HELPER_IMAGE" \
+		tar czf "/backup/$backup" --exclude=./backups -C /pb_data .; then
+		rm -f "$BACKUP_DIR/$backup"
+		# Back to the old checkout BEFORE PocketBase starts again: pb_hooks and
+		# pb_migrations are bind-mounted from it, and $sha's migrations must not
+		# touch a volume that has no snapshot.
+		git checkout --quiet --detach "$prev"
+		compose start pocketbase
+		log "snapshot failed — PocketBase restarted, nothing changed, still serving $prev"
+		exit 9
+	fi
 	ls -1t "$BACKUP_DIR"/pb_data-*.tar.gz | tail -n +"$((BACKUP_KEEP + 1))" | xargs -r rm --
 elif [[ "${ALLOW_NO_BACKUP:-0}" == 1 ]]; then
 	log "WARNING: $PB_CONTAINER not found, skipping backup (ALLOW_NO_BACKUP=1)"

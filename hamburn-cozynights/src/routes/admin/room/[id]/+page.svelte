@@ -126,8 +126,9 @@
 	{#if isLayoutLocked}
 		<div class="lockdown-notice" role="status">
 			🔒 {phase === 'closed' ? 'Booking is closed' : 'Live Booking is active'}. You can still lock
-			🔒 and unlock 🔓 spots. To add, delete, deactivate or free spots, a superuser has to switch
-			back to Staging Mode in the <a href="/admin">Control Center</a>.
+			🔒 and unlock 🔓 spots and mark them ♿ special or normal. To add, delete, deactivate or free
+			spots, a superuser has to switch back to Staging Mode in the
+			<a href="/admin">Control Center</a>.
 		</div>
 	{/if}
 

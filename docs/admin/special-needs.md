@@ -17,7 +17,7 @@ flowchart LR
 
 ## 1. Mark special-needs spots
 
-On a room page, <kbd>♿ SPECIAL</kbd> marks a spot as a special-needs spot; <kbd>♿ NORMAL</kbd> turns it back into a normal one. Works in Staging Mode and during Live Booking.
+On a room page, <kbd>♿ SPECIAL</kbd> marks a spot as a special-needs spot; <kbd>♿ NORMAL</kbd> turns it back into a normal one. Works in Staging Mode, during Live Booking and after booking closed.
 
 - **Guests can't book it.** They see it like a locked spot, as *Not available · Reserved by the crew*, and never learn why. Once a guest has it, it shows as an ordinary occupied spot with their burner name: nobody can tell who has special needs.
 - **It never counts as free**, like a locked spot.
@@ -28,7 +28,7 @@ Mark the spots before booking opens. Special-needs spots that nobody needs at th
 
 ## 2. Open requests
 
-Requests have their **own switch**, independent of Staging Mode and Live Booking: the row *♿ Special-needs requests: OPEN / CLOSED* under the go-live timer in the [Control Center](./), or the same switch on the requests page.
+Requests have their **own switch**, independent of Staging Mode and Live Booking: the row *♿ Special-needs requests: OPEN / CLOSED* right under the [🎟 BOOKING WINDOW](./#booking-window) panel in the Control Center, or the same switch on the requests page.
 
 - **Open:** guests see a link on the map (*Need a special-needs spot? Ask the crew now*) and can send or change a request.
 - **Closed:** no new requests. Waiting requests stay, guests still see theirs and can withdraw it.
@@ -72,7 +72,7 @@ Messages say what the crew decided, never what the guest wrote. On `/special-nee
 - **A guest can change a request while it waits**, and **withdraw it at any time**. Withdrawing deletes it; a spot the crew already booked stays booked, but from then on it is an ordinary booking (the guest can change it, and clear all bookings frees it). The crew group hears about every withdrawal.
 - **A spot the crew booked is fixed.** The guest can rename it, but can't move or release it themselves: they ask the crew. You move or release it here. A spot the guest booked themselves stays theirs to change, also when the request is approved.
 - **Going back to Staging Mode (and Clear all bookings) keeps the spots the crew booked**, with their burner names; every other booking is released. The dialog says how many.
-- **A template import releases every booking**, these too. The requests stay approved and show *No spot yet*: book the spots again after the import.
+- **A template import keeps the spots the crew booked**, like every other booking, as long as the spot stays in the layout (also when its house moves or its room is renamed). Only spots you choose to remove release their booking, crew-booked ones too: the guest gets a *spot was released* e-mail and the burner name is forgotten. Those requests stay approved and show *No spot yet*: book a spot again for them after the import. The confirmation dialog says how many bookings go before anything happens (see [Layout templates](./templates#applying)).
 
 ## Privacy
 

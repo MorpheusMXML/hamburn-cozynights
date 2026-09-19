@@ -257,12 +257,15 @@ export async function changeTicket(
 
 	let requestRemoved = false;
 	if (Object.keys(data).length > 0) {
-		// Telegram first: no update about the new holder may reach the old chat.
-		if (input.newHolder) await disconnectTelegram(adminPb, order.id);
+		if (input.newHolder) {
+			// Telegram first: no update about the new holder may reach the old chat.
+			await disconnectTelegram(adminPb, order.id);
+			// Then the old holder's special-needs request (their health data):
+			// before the address changes, so the new holder is never told its
+			// status. A spot the crew booked stays, as an ordinary booking.
+			requestRemoved = await forgetRequest(adminPb, order.id);
+		}
 		order = await adminPb.collection('orders').update<OrdersResponse>(order.id, data);
-		// The old holder's special-needs request is their health data: it goes
-		// with them. A spot the crew booked stays, as an ordinary booking.
-		if (input.newHolder) requestRemoved = await forgetRequest(adminPb, order.id);
 	}
 
 	// Masked like a search by address: the answer to a change must not hand out
@@ -441,16 +444,19 @@ export async function importRoster(
 				const data: Record<string, string> = {};
 				if (change.emailChanged) data.email = change.email;
 				if (change.nameChanged) data.customer_name = change.name;
+				let requestRemoved = false;
 				if (newHolder) {
 					Object.assign(data, NEW_HOLDER_FIELDS);
 					await disconnectTelegram(adminPb, id);
+					// the old holder's health data goes with them, before the
+					// address changes (see changeTicket)
+					requestRemoved = await forgetRequest(adminPb, id);
 				}
 				await adminPb.collection('orders').update(id, data);
 				outcome.updated++;
 				if (newHolder) {
 					outcome.newHolders++;
-					// the old holder's health data goes with them (see changeTicket)
-					if (await forgetRequest(adminPb, id)) outcome.requestsRemoved++;
+					if (requestRemoved) outcome.requestsRemoved++;
 				}
 				if (change.emailChanged && change.email && change.hasSpot) outcome.confirmations++;
 			} catch (err) {

@@ -1,6 +1,5 @@
 import type { TypedPocketBase } from '$lib/pocketbase-types';
 import type { HouseData } from '$lib/types';
-import { countSpots } from '$lib/occupancy';
 
 export class InventoryService {
 	constructor(private pb: TypedPocketBase) {}
@@ -34,8 +33,11 @@ export class InventoryService {
 			// order id nor why a bed is taken is exposed: together with the burner
 			// names on the room pages, a lock or special-needs flag would tell who
 			// has special needs.
-			const houses = housesRaw.map((h) => ({ ...h }));
-			const rooms = roomsRaw.map((r) => ({ ...r }));
+			// Timestamps go too: `booked_at` (and `updated`) of a crew-booked spot
+			// would date the special-needs assignment.
+			const blank = '' as HouseData['created'];
+			const houses = housesRaw.map((h) => ({ ...h, created: blank, updated: blank }));
+			const rooms = roomsRaw.map((r) => ({ ...r, created: blank, updated: blank }));
 			const beds = bedsRaw
 				.filter((b) => b.enabled !== false)
 				.map((b) => ({
@@ -43,7 +45,10 @@ export class InventoryService {
 					occupied: !!b.occupied || !!b.is_locked || !!b.is_special,
 					order: '',
 					is_locked: false,
-					is_special: false
+					is_special: false,
+					booked_at: '',
+					created: blank,
+					updated: blank
 				}));
 
 			// Build the hierarchy
@@ -82,46 +87,6 @@ export class InventoryService {
 		} catch (err) {
 			console.error('[Inventory] getFullTree failed:', err);
 			return [];
-		}
-	}
-
-	/**
-	 * Fetches a single house with its rooms and beds. 🏠🚪🛌
-	 */
-	async getHouse(houseId: string): Promise<HouseData | null> {
-		try {
-			const [houseRaw, roomsRaw, bedsRaw] = await Promise.all([
-				this.pb.collection('houses').getOne(houseId),
-				this.pb.collection('rooms').getFullList({
-					filter: this.pb.filter('house = {:id}', { id: houseId }),
-					sort: 'room_number'
-				}),
-				this.pb.collection('beds').getFullList({
-					filter: this.pb.filter('room.house = {:id}', { id: houseId }),
-					sort: 'label'
-				})
-			]);
-
-			const houseRooms = roomsRaw.map((room) => {
-				const roomBeds = bedsRaw.filter((bed) => bed.room === room.id);
-				return {
-					...room,
-					beds: roomBeds.map((b) => ({ ...b }))
-				};
-			});
-
-			const spots = countSpots(bedsRaw);
-
-			return {
-				...houseRaw,
-				rooms: houseRooms,
-				totalBeds: spots.total,
-				occupiedBeds: spots.occupied,
-				freeBeds: spots.free
-			};
-		} catch (error) {
-			console.error(`Error fetching house ${houseId}:`, error);
-			return null;
 		}
 	}
 }

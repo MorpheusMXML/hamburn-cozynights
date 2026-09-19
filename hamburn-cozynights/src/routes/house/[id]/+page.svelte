@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ownSpotNote } from '$lib/booking-phase';
 	import type { PageData, ActionData } from './$types';
 	import { enhance } from '$app/forms';
 	import { confirmDialog, toast } from '$lib/dialogs';
@@ -101,7 +102,7 @@
 						</button>
 					</form>
 				{:else}
-					<p>It stays reserved for you. Changes are possible again once booking is open.</p>
+					<p>{ownSpotNote(data.phase)}</p>
 				{/if}
 			</div>
 		</div>

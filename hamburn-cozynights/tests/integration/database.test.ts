@@ -6,6 +6,7 @@ import type PocketBase from 'pocketbase';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
 import {
 	anonymous,
+	createAdmin,
 	expectRefused,
 	seedHouse,
 	seedTicket,
@@ -61,15 +62,26 @@ describe('schema from pb_migrations/', () => {
 });
 
 describe('reading and writing', () => {
-	it('stores a house → room → bed tree and serves it to guests', async () => {
+	it('stores a house → room → bed tree; houses and rooms are public, beds are for admins', async () => {
 		const { house, room, beds } = await seedHouse(su, 2);
 
 		expect((await guest.collection('houses').getOne(house.id)).name).toBe(house.name);
 		expect((await guest.collection('rooms').getOne(room.id)).house).toBe(house.id);
-		const listed = await guest
+		// beds carry the booking's ticket, the special-needs flag and the booking
+		// time: guests get spots only through the app's pages. A list rule that
+		// does not match filters everything out (empty list); a view rule refuses.
+		expect(
+			await guest
+				.collection('beds')
+				.getFullList({ filter: guest.filter('room = {:room}', { room: room.id }) })
+		).toEqual([]);
+		await expectRefused(guest.collection('beds').getOne(beds[0].id));
+		const admin = await createAdmin(su, 'admin');
+		const listed = await admin.client
 			.collection('beds')
-			.getFullList({ filter: guest.filter('room = {:room}', { room: room.id }) });
+			.getFullList({ filter: admin.client.filter('room = {:room}', { room: room.id }) });
 		expect(listed.map((b) => b.id).sort()).toEqual(beds.map((b) => b.id).sort());
+		expect(listed[0]).toHaveProperty('is_special');
 	});
 
 	it('updates and deletes records', async () => {
@@ -115,6 +127,17 @@ describe('what guests (no session) may do', () => {
 		const { order } = await seedTicket(su);
 		await expectRefused(guest.collection('orders').getFullList());
 		await expectRefused(guest.collection('orders').getOne(order.id));
+	});
+
+	it('never touch the internal collections (guest_notify, admin_events), nor do admins', async () => {
+		const { order } = await seedTicket(su);
+		const admin = await createAdmin(su, 'admin');
+		for (const pb of [guest, admin.client]) {
+			await expectRefused(pb.collection('guest_notify').getFullList());
+			await expectRefused(pb.collection('guest_notify').create({ order: order.id }));
+			await expectRefused(pb.collection('admin_events').getFullList());
+			await expectRefused(pb.collection('admin_events').create({ action: 'x', actor: 'y' }));
+		}
 	});
 
 	it('never write houses, rooms, beds, settings or tickets', async () => {

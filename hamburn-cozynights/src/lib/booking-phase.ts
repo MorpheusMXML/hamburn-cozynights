@@ -64,6 +64,13 @@ export function lockedDuring(phase: BookingPhase): string {
 	return phase === 'closed' ? 'while booking is closed' : 'during Live Booking';
 }
 
+/** What a guest reads under their own spot when they can't change it right now. */
+export function ownSpotNote(phase: BookingPhase): string {
+	return phase === 'closed'
+		? 'Spots are final now; this one stays yours.'
+		: 'It stays reserved for you. Changes are possible again once Live Booking starts.';
+}
+
 /**
  * ms since the epoch, or null for '' and anything unparsable. PocketBase
  * writes "2026-09-21 16:00:00.000Z"; older Safari only parses it with a "T".
@@ -121,6 +128,33 @@ export function countdownKind(
 	if (next.to === 'closed' && phase === 'live') return 'closes';
 	if (next.to === 'live' && phase !== 'live') return 'opens';
 	return null;
+}
+
+/**
+ * The opening time the guest map counts down to: only an ARMED window whose
+ * opening is still ahead. A planned-but-paused window, or an elapsed opening
+ * kept for the Control Center, shows no countdown (nothing would happen).
+ */
+export function openingCountdownAt(
+	phase: BookingPhase,
+	next: PhaseTransition | null | undefined
+): string {
+	return countdownKind(phase, next) === 'opens' && next ? next.at : '';
+}
+
+/**
+ * Whether the slim countdown bar shows on a page. The map draws its own big
+ * "IGNITION IN" countdown, but only in Staging: in Closed with a later window
+ * armed, the bar is the only countdown it has.
+ */
+export function showCountdownBar(
+	phase: BookingPhase,
+	next: PhaseTransition | null | undefined,
+	pathname: string
+): boolean {
+	const kind = countdownKind(phase, next);
+	if (kind === 'closes') return true;
+	return kind === 'opens' && !(phase === 'staging' && pathname === '/map');
 }
 
 /**

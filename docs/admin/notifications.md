@@ -60,8 +60,9 @@ Every message here is also kept in the audit log (collection `admin_events` in t
 | 🗺️ Layout template applied | What was created, changed and removed, released bookings and the backup |
 | 🎟️ Ticket changed | A new address, a new name or a hand-over on the Tickets page, with the code and addresses shortened (`H•••`, `a•••@example.org`) |
 | 📥 Ticket list imported | How many tickets were created, updated and handed over |
-| 🏚️ House deleted | Only when bookings went with it |
-| 🧡 New special-needs request · A guest withdrew their request | With the number waiting and a link to ♿ **Special needs**; never the guest's name or text |
+| 🏚️ House deleted | Every deletion, with the number of bookings released |
+| 🧡 New special-needs request | With the number waiting for a decision and a link to ♿ **Special needs**; never the guest's name or text |
+| 🧡 A guest withdrew their request | With the status it had (waiting, approved, declined); never the guest's name or text |
 | ✅ approved · ✋ declined · ♿ spot booked · ♿ spot released | An admin decided on a [special-needs request](./special-needs), with their name |
 | 🧡 Special-needs requests OPENED · closed | Somebody flips the requests switch, with their name |
 | 📭 Could not notify ticket | A guest message failed for good |

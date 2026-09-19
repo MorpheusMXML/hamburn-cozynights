@@ -91,7 +91,6 @@
 						is_special: false,
 						booked_at: '',
 						room: 'temp-room',
-						bookedBy: '',
 						order: ''
 					}))
 				}

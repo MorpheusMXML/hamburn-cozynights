@@ -10,7 +10,7 @@ Open the **Burn Template Manager** with <kbd>TEMPLATES 💾</kbd> in the Control
 
 Press <kbd>DOWNLOAD JSON 💾</kbd>. Your browser saves `cozynights-layout-YYYY-MM-DD.json`.
 
-- Works in both phases, also during Live Booking.
+- Works in every phase: Staging, Live Booking and after booking closed (see [Staging, Live & Closed](../guide/phases#who-can-do-what)).
 - Contains **structure only**: no bookings, no ticket codes, no burner names.
 - If the camp has something an import would refuse (two houses with the same name, for example), the manager says so right after the download.
 
@@ -20,8 +20,8 @@ Drop a layout file on <kbd>Compare & Import</kbd>, or tap the field to choose on
 
 | Who | Compare | Apply |
 | --- | --- | --- |
-| Admins | ✓ in both phases | ✗ |
-| Superusers | ✓ in both phases | ✓ in Staging Mode |
+| Admins | ✓ in every phase | ✗ |
+| Superusers | ✓ in every phase | ✓ in Staging Mode only (the layout is locked during Live Booking and after booking closed) |
 
 ### How the file is matched
 

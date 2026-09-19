@@ -78,7 +78,7 @@ erDiagram
   ROOMS {
     text name
     number room_number
-    number amount_beds
+    number amount_beds "initial spot count, not maintained"
   }
   BEDS {
     text label
@@ -93,7 +93,6 @@ erDiagram
     text order_hash "keyed hash for lookups"
     text customer_name
     text burner_name "encrypted"
-    date booking_date
     email email "from the ticket import"
     text pass_code "booking pass"
   }

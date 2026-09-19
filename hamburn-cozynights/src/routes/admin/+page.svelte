@@ -21,8 +21,16 @@
 
 	// Only admins reach this page (hooks + layout); superusers additionally get
 	// the destructive tools (clear all bookings, template import).
-	$: ({ houses, sanityWarnings, history, isSuperuser, phase, isLayoutLocked, bookingWindow } =
-		data);
+	$: ({
+		houses,
+		crewBookedSpots,
+		sanityWarnings,
+		history,
+		isSuperuser,
+		phase,
+		isLayoutLocked,
+		bookingWindow
+	} = data);
 	// Special-needs requests (/admin/requests): own switch, independent of the phase.
 	$: ({ requestsOpen, openRequests } = data);
 	let requestsSaving = false;
@@ -375,7 +383,7 @@
 		</div>
 	</header>
 
-	<BookingWindowPanel {phase} {bookingWindow} {isSuperuser} {occupiedBeds} />
+	<BookingWindowPanel {phase} {bookingWindow} {isSuperuser} {occupiedBeds} {crewBookedSpots} />
 
 	<section class="requests-panel" class:open={requestsOpen}>
 		<span class="requests-icon" aria-hidden="true">♿</span>

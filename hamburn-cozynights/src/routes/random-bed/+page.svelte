@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ownSpotNote } from '$lib/booking-phase';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
@@ -8,7 +9,7 @@
 	import { confirmDialog, toast } from '$lib/dialogs';
 
 	export let data: PageData;
-	$: ({ freeBeds, isBookingActive, userBed, spotFixed } = data);
+	$: ({ freeBeds, isBookingActive, userBed, spotFixed, phase } = data);
 
 	let isReleasing = false;
 	let releaseError = '';
@@ -119,10 +120,7 @@
 				{:else if isBookingActive}
 					<p class="hint">Release your spot first if you want to roll for a different one.</p>
 				{:else}
-					<p class="hint">
-						Booking is closed right now. Your spot stays reserved; changes are possible again once
-						booking is open.
-					</p>
+					<p class="hint">{ownSpotNote(phase)}</p>
 				{/if}
 				{#if releaseError}
 					<p class="error-msg" role="alert">{releaseError}</p>

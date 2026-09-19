@@ -22,6 +22,13 @@ function stamp(e) {
 		} else if (!order && e.record.getString('booked_at')) {
 			e.record.set('booked_at', '');
 		}
+		// A ticket that is deleted takes its `order` reference with it (PocketBase
+		// unsets it), but not `occupied`: the spot would stay "taken" forever.
+		// Only when the order goes in THIS write: the crew's "mark as taken" has
+		// no order at all and must stay.
+		if (before && !order && e.record.getBool('occupied')) {
+			e.record.set('occupied', false);
+		}
 	} catch (err) {
 		console.error('[cozy-booked] bed ' + (e.record ? e.record.id : '?') + ': ' + err);
 	}

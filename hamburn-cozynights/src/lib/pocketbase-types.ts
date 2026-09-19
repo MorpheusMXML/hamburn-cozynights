@@ -120,7 +120,6 @@ export type AdminsRecord = {
 };
 
 export type BedsRecord = {
-	bookedBy?: RecordIdString;
 	created: IsoAutoDateString;
 	enabled?: boolean;
 	id: string;

@@ -82,7 +82,7 @@ Every house as a card with its occupancy badge (*n spots free*, *Fully booked* o
 
 ![Control Center during Live Booking](../assets/screenshots/admin-live.webp)
 
-The Control Center stays fully usable for watching: statistics, occupancy, template export. Structural buttons are greyed out and refused by the server. The one thing you can still change is locking single spots, on the [room page](./camp-layout#spots).
+The Control Center stays fully usable for watching: statistics, occupancy, template export. Structural buttons are greyed out and refused by the server. What you can still change, on the [room page](./camp-layout#spots): lock or unlock single spots, and mark spots ♿ special or normal.
 
 ## Next
 

@@ -69,6 +69,19 @@ describe('one ticket = one bed', () => {
 		expect((await su.collection('beds').getOne(beds[0].id)).booked_at).toBe('');
 	});
 
+	it('frees the bed when its ticket is deleted (order unset, occupied cleared)', async () => {
+		const { beds } = await seedHouse(su, 1);
+		const { order } = await seedTicket(su);
+		await booking.bookBed(order as any, beds[0].id, 'Gone Soon');
+		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(true);
+
+		await su.collection('orders').delete(order.id);
+		const bed = await su.collection('beds').getOne(beds[0].id);
+		expect(bed.order).toBe('');
+		expect(bed.occupied).toBe(false);
+		expect(bed.booked_at).toBe('');
+	});
+
 	it('moves the booking when the same ticket picks another bed', async () => {
 		const { beds } = await seedHouse(su, 2);
 		const { order } = await seedTicket(su);

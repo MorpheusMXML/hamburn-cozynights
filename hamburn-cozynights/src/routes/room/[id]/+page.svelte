@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ownSpotNote } from '$lib/booking-phase';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
@@ -204,7 +205,7 @@
 							</button>
 						</form>
 					{:else}
-						<p>It stays reserved for you. Changes are possible again once booking is open.</p>
+						<p>{ownSpotNote(data.phase)}</p>
 					{/if}
 				</div>
 			</div>
@@ -325,7 +326,9 @@
 						<span class="guest-name">{bed.burnerName}</span>
 						<small class="edit-hint"
 							>{isLocked
-								? 'Booking closed'
+								? data.phase === 'closed'
+									? 'Spots are final now'
+									: 'Not open yet'
 								: data.spotFixed
 									? 'Tap to change your burner name'
 									: 'Tap to change or release'}</small

@@ -70,7 +70,7 @@ What a guest writes about their needs is often health data (Art. 9 GDPR), so it 
 ## Database
 
 - **Not on the internet.** nginx only forwards to the app. PocketBase is reachable from the app's internal network, and its dashboard only from the server itself.
-- **Strict API rules.** Only the camp layout and the phase settings are publicly readable. Layout changes require an approved admin, the ticket list is closed to the public API entirely, admin accounts can't be listed, and PocketBase's default user sign-up is closed.
+- **Strict API rules.** Only houses, rooms and the phase settings are publicly readable; beds are admin-only (they carry the booking's ticket, the special-needs flag and the booking time), so guests get spots only through the app's pages, which strip all of that. Layout changes require an approved admin, the ticket list is closed to the public API entirely, admin accounts can't be listed, and PocketBase's default user sign-up is closed. On a server the dashboard's schema editors are hidden (`PB_HIDE_CONTROLS`): the schema only ever comes from `pb_migrations/`.
 - **Rules as code.** Schema and rules are versioned migrations. They are re-applied to restored backups, so an old backup can't bring back old, looser rules.
 
 ## Operations

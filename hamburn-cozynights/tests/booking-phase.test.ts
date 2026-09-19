@@ -6,7 +6,10 @@ import {
 	formatDuration,
 	materialize,
 	nextTransition,
+	openingCountdownAt,
+	ownSpotNote,
 	saveTimesEdit,
+	showCountdownBar,
 	splitDuration,
 	switchPhase,
 	windowFromRecord,
@@ -271,5 +274,43 @@ describe('formatting', () => {
 		expect(formatDuration(DAY)).toBe('1 day');
 		expect(formatDuration(3 * HOUR + 20 * 60 * 1000)).toBe('3 hours 20 minutes');
 		expect(formatDuration(30 * 1000)).toBe('1 minute');
+	});
+});
+
+describe('what guests see of the window', () => {
+	const armed: BookingWindow = {
+		basePhase: 'staging',
+		opensAt: at(DAY),
+		closesAt: at(3 * DAY),
+		paused: false
+	};
+
+	it('counts down only to an armed opening that is still ahead', () => {
+		expect(openingCountdownAt('staging', nextTransition(armed, NOW))).toBe(at(DAY));
+		// planned but not armed: nothing will happen, so no countdown
+		expect(openingCountdownAt('staging', nextTransition({ ...armed, paused: true }, NOW))).toBe('');
+		// elapsed opening kept for the Control Center after a switch back to Staging
+		const elapsed = switchPhase({ ...armed, basePhase: 'live', opensAt: at(-DAY) }, 'staging', NOW);
+		expect(openingCountdownAt('staging', nextTransition(elapsed, NOW))).toBe('');
+		// live: the next switch is the closing, never an "opening" countdown
+		expect(openingCountdownAt('live', nextTransition({ ...armed, basePhase: 'live' }, NOW))).toBe(
+			''
+		);
+	});
+
+	it('shows the slim bar everywhere but on the staging map, which counts down itself', () => {
+		const opens = nextTransition(armed, NOW);
+		expect(showCountdownBar('staging', opens, '/map')).toBe(false);
+		expect(showCountdownBar('staging', opens, '/house/x')).toBe(true);
+		// closed with a later window armed: the map has no countdown of its own
+		expect(showCountdownBar('closed', opens, '/map')).toBe(true);
+		const closes = nextTransition({ ...armed, basePhase: 'live', opensAt: at(-DAY) }, NOW);
+		expect(showCountdownBar('live', closes, '/map')).toBe(true);
+		expect(showCountdownBar('staging', null, '/house/x')).toBe(false);
+	});
+
+	it('words the own-spot note by phase', () => {
+		expect(ownSpotNote('closed')).toMatch(/final/);
+		expect(ownSpotNote('staging')).toMatch(/Live Booking starts/);
 	});
 });

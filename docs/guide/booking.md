@@ -65,7 +65,7 @@ That's it: the spot now shows **Your Spot** with your burner name. 🎉
 | **Your Spot** · *your burner name* | That's you. Click it to rename or release it. |
 | **Occupied** · *a burner name* | Taken by another guest (*Mystery Burner* if they didn't pick a name). |
 | **Not available** · *Reserved by the crew* | Held back by the crew, for example a broken bed, a spot that isn't in use or one kept for [guests with special needs](./special-needs). |
-| **Locked** · *Release other spot first* | You already have a spot somewhere else. |
+| **Unavailable** · *Release your other spot first* | You already have a spot somewhere else. One ticket code = one spot. |
 | **Not open yet** · *Booking opens soon* | Booking hasn't opened yet. |
 | **Booking closed** · *Spots are final* | The booking window is over. |
 
@@ -96,7 +96,7 @@ One ticket holds one spot, so release your current spot first: <kbd>Release</kbd
 > [!WARNING] Released means free for everyone
 > The moment you release a spot, anyone can grab it. There is no undo.
 
-Bookings can only be changed while booking is open. If the crew switches back to staging, your booking stays but is frozen.
+Bookings can only be changed during Live Booking. After booking closes your spot is frozen: it stays yours and your booking pass keeps working (see [Closed](./phases#closed)). Should the crew ever go back to Staging Mode to rebuild the camp, every guest booking is released and you get a *spot was released* e-mail; your ticket code keeps working, so you simply book again once booking reopens. Only spots the crew booked for [special-needs requests](./special-needs) stay.
 
 ## Confirmations
 

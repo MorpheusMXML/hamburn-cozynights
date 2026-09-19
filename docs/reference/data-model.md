@@ -10,9 +10,9 @@ data lives and how it is backed up: [Backups and where data lives](../develop/de
 | Collection     | Holds                                                                                    | Personal data | Written by                                           | API rules                             |
 | :------------- | :--------------------------------------------------------------------------------------- | :------------ | :--------------------------------------------------- | :------------------------------------ |
 | `houses`       | `name`, `x`, `y` (map position)                                                          | no            | admins                                               | public read, admin write              |
-| `rooms`        | `name`, `room_number`, `house`, `amount_beds`                                            | no            | admins                                               | public read, admin write              |
-| `beds`         | `label`, `room`, `occupied`, `order`, `is_locked`, `enabled`, `is_special` (special-needs spot), `booked_at` (when the spot got its ticket, set by PocketBase) | no      | admins; guest bookings via the app's service account | public read, admin write              |
-| `orders`       | `order_number`, `order_hash`, `customer_name`, `burner_name` (encrypted), `email`, `pass_code` (booking pass, unique), `booking_date` | yes | the app's service account, `scripts/cozy-admin.sh tickets`; `pass_code` only by PocketBase | none (superusers only) |
+| `rooms`        | `name`, `room_number`, `house`, `amount_beds` (spots created with the room; an initial count only, not maintained: count the room's `beds`) | no            | admins                                               | public read, admin write              |
+| `beds`         | `label`, `room`, `occupied`, `order`, `is_locked`, `enabled`, `is_special` (special-needs spot), `booked_at` (when the spot got its ticket, set by PocketBase) | no      | admins; guest bookings via the app's service account | admin read, admin write (guests see spots only through the app) |
+| `orders`       | `order_number`, `order_hash`, `customer_name`, `burner_name` (encrypted), `email`, `pass_code` (booking pass, unique) | yes | the app's service account, `scripts/cozy-admin.sh tickets`; `pass_code` only by PocketBase | none (superusers only) |
 | `app_settings` | the phase set by hand: `is_booking_active` (live), `booking_closed` (closed); the booking window: `booking_unlock_at`, `booking_close_at`, `booking_timer_paused`; `notify_mail`, `telegram_bot`, `special_requests_open` (single record `appsettings0123`) | no | admins (a phase switch right now: superusers only); PocketBase keeps the two notification flags current | public read, admin write |
 | `admins`       | `email`, `name`, `role` (`pending`, `admin`, `superuser`), `last_sign_in`                | yes (email)   | Google sign-in, `scripts/cozy-admin.sh`              | none (sign-in creates `pending` only) |
 | `guest_notify` | per ticket: what was last confirmed by mail / Telegram (spot and special-needs request), when the next message is due, retries, the linked Telegram chat and a one-time link token (hashed) | yes (chat id) | PocketBase hooks; the app's service account (Telegram link) | none (superusers only) |
@@ -32,7 +32,8 @@ write" means an approved `admins` record (see [Security & privacy](./security)).
   Guest bookings and releases write both fields together. The admin toggle in
   the room view only flips `occupied`, so the two fields can drift apart.
   PocketBase stamps `booked_at` whenever `order` is set and clears it on
-  release (`pb_hooks/cozy_booked.pb.js`), whoever does the writing.
+  release (`pb_hooks/cozy_booked.pb.js`), whoever does the writing; when a
+  ticket is deleted, the bed it held becomes free in the same hook.
 - **One ticket, one spot, also on the server:** the room page refuses a second
   spot while the ticket holds one (release first). A move whose release of
   the old spot fails is undone, so a ticket never keeps two spots.

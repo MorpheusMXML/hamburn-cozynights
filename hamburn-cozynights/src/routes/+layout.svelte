@@ -6,7 +6,7 @@
 	import DialogHost from '$lib/components/DialogHost.svelte';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import BookingCountdownBar from '$lib/components/BookingCountdownBar.svelte';
-	import { countdownKind } from '$lib/booking-phase';
+	import { showCountdownBar } from '$lib/booking-phase';
 	import { page } from '$app/state';
 
 	let { children, data } = $props();
@@ -20,12 +20,9 @@
 	// to a QR code) for a while: no WebGL context and no 19 endless animations.
 	const PLAIN_PAGES = /^\/(legal-notice|privacy|booking-rules|pass|admin\/check)(\/|$)/;
 	let ambient = $derived(!PLAIN_PAGES.test(page.url.pathname));
-	// The map shows the big "IGNITION IN" countdown itself before booking opens.
-	const OWN_OPENING_COUNTDOWN = new Set(['/map']);
-	let countdown = $derived(countdownKind(data.booking?.phase ?? 'staging', data.booking?.next));
+	// The map shows the big "IGNITION IN" countdown itself while it is Staging.
 	let bar = $derived(
-		countdown === 'closes' ||
-			(countdown === 'opens' && !OWN_OPENING_COUNTDOWN.has(page.url.pathname))
+		showCountdownBar(data.booking?.phase ?? 'staging', data.booking?.next, page.url.pathname)
 	);
 </script>
 

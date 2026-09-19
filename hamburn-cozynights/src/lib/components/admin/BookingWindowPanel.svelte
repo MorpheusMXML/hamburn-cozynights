@@ -34,6 +34,9 @@
 	export let isSuperuser = false;
 	/** Booked spots right now: a superuser switching to Staging may clear them. */
 	export let occupiedBeds = 0;
+	/** Of those, spots the crew booked for special-needs requests: they stay. */
+	export let crewBookedSpots = 0;
+	$: guestBooked = Math.max(0, occupiedBeds - crewBookedSpots);
 
 	let now = Date.now();
 	let ticker: ReturnType<typeof setInterval> | undefined;
@@ -305,7 +308,7 @@
 			notes.push(
 				to === 'closed'
 					? 'Guests can no longer book, change or release a spot. The layout stays locked.'
-					: `Guests can no longer book, change or release a spot; the layout can be edited again. Every guest booking is released${occupiedBeds > 0 ? ` (${occupiedBeds} right now)` : ''}: those guests book again once booking opens, their ticket codes stay valid. Spots the crew booked for special-needs requests stay. This cannot be undone.`
+					: `Guests can no longer book, change or release a spot; the layout can be edited again. Every guest booking is released${guestBooked > 0 ? ` (${guestBooked} right now)` : ''}: those guests book again once booking opens, their ticket codes stay valid.${crewBookedSpots > 0 ? ` The ${crewBookedSpots} spot${crewBookedSpots === 1 ? '' : 's'} the crew booked for special-needs requests stay.` : ' Spots the crew booked for special-needs requests stay.'} This cannot be undone.`
 			);
 			if (to === 'closed' && bookingWindow.closesAt && !after.closesAt) {
 				notes.push('The planned closing time is dropped.');
@@ -331,8 +334,7 @@
 		busy = false;
 		if (result.type === 'success') {
 			const data = result.data as
-				| { phaseBefore?: BookingPhase; released?: number; kept?: number }
-				| undefined;
+				{ phaseBefore?: BookingPhase; released?: number; kept?: number } | undefined;
 			const releasedNote =
 				to === 'staging'
 					? ` ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}.`
@@ -343,7 +345,10 @@
 					{ title: 'Check the booking phase', tone: 'warning' }
 				);
 			} else {
-				toast(`${PHASE_ICONS[to]} ${PHASE_LABELS[to]} is on. ${PHASE_EFFECTS[to]}${releasedNote}`, 'success');
+				toast(
+					`${PHASE_ICONS[to]} ${PHASE_LABELS[to]} is on. ${PHASE_EFFECTS[to]}${releasedNote}`,
+					'success'
+				);
 			}
 		} else {
 			await alertDialog(
@@ -358,7 +363,7 @@
 	async function clearAllBookings() {
 		if (busy || !isSuperuser || current !== 'staging') return;
 		const ok = await confirmDialog(
-			`Every one of the ${occupiedBeds} booked spot${occupiedBeds === 1 ? '' : 's'} becomes free and its burner name is forgotten. Spots the crew booked for special-needs requests stay as long as their requests exist. Ticket codes keep working. This cannot be undone.`,
+			`${guestBooked} booked spot${guestBooked === 1 ? '' : 's'} become${guestBooked === 1 ? 's' : ''} free and lose${guestBooked === 1 ? 's' : ''} the burner name.${crewBookedSpots > 0 ? ` The ${crewBookedSpots} spot${crewBookedSpots === 1 ? '' : 's'} the crew booked for special-needs requests stay as long as those requests exist.` : ''} Ticket codes keep working. This cannot be undone.`,
 			{
 				title: '🧨 Clear all bookings?',
 				tone: 'danger',
@@ -671,13 +676,13 @@
 								<div class="purge">
 									<span class="purge-text">
 										{occupiedBeds > 0
-											? `${occupiedBeds} spot${occupiedBeds === 1 ? ' is' : 's are'} still booked (crew-booked special-needs spots, or bookings made in Staging).`
+											? `${occupiedBeds} spot${occupiedBeds === 1 ? ' is' : 's are'} still booked${crewBookedSpots > 0 ? `, ${crewBookedSpots} of them crew-booked for special-needs requests (those stay)` : ' (marked as taken, or booked in Staging)'}.`
 											: 'No spot is booked. Staging Mode starts without guest bookings.'}
 									</span>
 									<button
 										type="button"
 										class="btn-purge"
-										disabled={busy || occupiedBeds === 0}
+										disabled={busy || guestBooked === 0}
 										on:click={clearAllBookings}
 									>
 										🧨 Clear all bookings

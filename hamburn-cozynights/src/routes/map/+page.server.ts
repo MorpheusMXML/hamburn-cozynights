@@ -4,6 +4,7 @@ import type { PageServerLoad } from './$types';
 import { BookingService } from '$lib/server/booking';
 import { getBookingSettings } from '$lib/server/settings';
 import { findRequest } from '$lib/server/special-requests';
+import { openingCountdownAt } from '$lib/booking-phase';
 
 /** Whether the signed-in ticket has a special-needs request. Optional for the map. */
 async function hasRequest(locals: App.Locals): Promise<boolean> {
@@ -19,9 +20,11 @@ async function hasRequest(locals: App.Locals): Promise<boolean> {
 
 export const load: PageServerLoad = async ({ locals }) => {
 	try {
-		const inventory = new InventoryService(locals.pb);
+		// The service account reads the beds (their rules are admin-only since
+		// beds carry is_special, order and booked_at); getFullTree strips all of it.
+		const inventory = new InventoryService(locals.adminPb);
 		let houses = await inventory.getFullTree();
-		const [{ isBookingActive, phase, bookingUnlockAt, requestsOpen }, requestSent] = await Promise.all([
+		const [{ isBookingActive, phase, next, requestsOpen }, requestSent] = await Promise.all([
 			getBookingSettings(locals.pb),
 			hasRequest(locals)
 		]);
@@ -35,7 +38,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			houses,
 			isBookingActive,
 			phase,
-			bookingUnlockAt,
+			// only an armed opening still ahead: a paused or elapsed time shows no countdown
+			bookingUnlockAt: openingCountdownAt(phase, next),
 			// the "special-needs spot" link: while requests are open, or to see one's own
 			specialNeeds: { open: requestsOpen, requestSent }
 		};

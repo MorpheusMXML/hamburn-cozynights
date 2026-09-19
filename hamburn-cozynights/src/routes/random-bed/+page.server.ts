@@ -45,8 +45,9 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 		// Deactivated, locked and special-needs beds are never part of the roulette.
 		const freeBeds = userBed
 			? []
-			: (
-					await locals.pb
+			: // beds are admin-only in PocketBase: the service account reads them
+				(
+					await locals.adminPb
 						.collection('beds')
 						.getFullList<BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>>({
 							filter:

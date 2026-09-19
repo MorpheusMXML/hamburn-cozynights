@@ -63,7 +63,7 @@
 			<div class="debug-counter">
 				SENSORS: {houses?.length || 0}
 			</div>
-			{#if isBookingActive && (data.specialNeeds.open || data.specialNeeds.requestSent)}
+			{#if phase !== 'staging' && (data.specialNeeds.open || data.specialNeeds.requestSent)}
 				<a
 					class="help-link special-link"
 					href="/special-needs"

@@ -19,6 +19,12 @@ const KEY_ERROR = 'ENCRYPTION_KEY must be a 64-character hex string (32 bytes).'
 function requireKeyHex(): string {
 	const hex = env.ENCRYPTION_KEY || '';
 	if (!KEY_PATTERN.test(hex)) throw new Error(KEY_ERROR);
+	// 64 times the same character is a placeholder, never a generated key.
+	if (/^(.)\1{63}$/.test(hex)) {
+		throw new Error(
+			'ENCRYPTION_KEY is a placeholder (one repeated character): generate one with `openssl rand -hex 32`.'
+		);
+	}
 	return hex;
 }
 

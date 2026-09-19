@@ -102,8 +102,9 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 
 			{#if request.status === 'pending'}
 				<p>
-					The crew will look at it{data.isBookingActive ? '' : ' before booking opens'}. You get a
-					message when they have decided.
+					The crew will look at it{data.booking?.phase === 'staging'
+						? ' before booking opens'
+						: ''}. You get a message when they have decided.
 				</p>
 			{:else if request.status === 'approved' && data.spot}
 				{#if data.spot.fixed}
@@ -136,8 +137,10 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 				</p>
 			{:else}
 				<p>
-					The crew could not offer you a special-needs spot. You can book a spot like everyone else
-					when booking opens. If you have questions, please contact the crew.
+					The crew could not offer you a special-needs spot.
+					{data.booking?.phase === 'closed'
+						? 'Booking has closed, so no spot can be booked anymore. If you need one, please contact the crew.'
+						: 'You can book a spot like everyone else when booking opens. If you have questions, please contact the crew.'}
 				</p>
 			{/if}
 

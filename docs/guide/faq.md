@@ -18,7 +18,7 @@ After many wrong codes from the same network, CozyNights pauses sign-in attempts
 CozyNights couldn't reach its database for a moment. Your code is fine. Try again shortly.
 :::
 
-::: details The map is blurry and houses don't open ("PATIENCE, BURNER!")
+::: details The map is blurry and houses don't open ("Booking is not open yet…")
 Booking hasn't opened yet. The countdown shows when it starts; the map unlocks by itself when it ends. <kbd>📡 RELOAD SENSORS</kbd> refreshes the page state.
 :::
 
@@ -86,7 +86,7 @@ Admins sign in with Google again every 7 days, even when they use the admin area
 You picked a Google account outside the `@mauersegler.art` Workspace (for example a private Gmail address). Sign in again and choose your Workspace account, or use <kbd>USE ANOTHER ACCOUNT</kbd>.
 :::
 
-::: details "Management locked during live booking."
+::: details "… is locked during Live Booking" / "… while booking is closed" 🔒
 Structural changes only work in Staging Mode. During Live Booking and after booking closed, only a superuser can switch back to staging. If you only want to take a spot out of service, lock it: that works in every phase. See [Staging, Live Booking & Closed](./phases).
 :::
 

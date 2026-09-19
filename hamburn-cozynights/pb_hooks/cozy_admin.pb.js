@@ -510,7 +510,9 @@ cozyTickets.addCommand(cozyTicketsAdd);
  * name can't swallow the following rows. Same rules as src/lib/tickets.ts.
  */
 function cozyParseCsv(text) {
-	const lines = String(text).replace(/^\uFEFF/, '').split(/\r?\n/);
+	const lines = String(text)
+		.replace(/^\uFEFF/, '')
+		.split(/\r?\n/);
 	let first = -1;
 	for (let i = 0; i < lines.length; i++) {
 		if (lines[i].trim() !== '') {
@@ -1198,27 +1200,32 @@ onBootstrap((e) => {
 		return;
 	}
 
-	let current = null;
-	const providers = collection.oauth2.providers;
-	for (let i = 0; i < providers.length; i++) {
-		if (providers[i].name === 'google') current = providers[i];
-	}
-	if (
-		collection.oauth2.enabled &&
-		current &&
-		current.clientId === clientId &&
-		current.clientSecret === clientSecret
-	) {
-		return;
-	}
+	try {
+		let current = null;
+		const providers = collection.oauth2.providers;
+		for (let i = 0; i < providers.length; i++) {
+			if (providers[i].name === 'google') current = providers[i];
+		}
+		if (
+			collection.oauth2.enabled &&
+			current &&
+			current.clientId === clientId &&
+			current.clientSecret === clientSecret
+		) {
+			return;
+		}
 
-	// unmarshal merges providers by name, so other provider settings are kept.
-	unmarshal(
-		{ oauth2: { enabled: true, providers: [{ name: 'google', clientId, clientSecret }] } },
-		collection
-	);
-	e.app.save(collection);
-	console.log('[cozy-admin] Google OAuth client for admins updated from environment');
+		// unmarshal merges providers by name, so other provider settings are kept.
+		unmarshal(
+			{ oauth2: { enabled: true, providers: [{ name: 'google', clientId, clientSecret }] } },
+			collection
+		);
+		e.app.save(collection);
+		console.log('[cozy-admin] Google OAuth client for admins updated from environment');
+	} catch (err) {
+		// A refused save must never keep PocketBase from starting (crash loop).
+		console.error('[cozy-admin] Google client not applied: ' + err);
+	}
 });
 
 // Second barrier, independent of pb_hooks/admins_oauth_guard.pb.js: however a

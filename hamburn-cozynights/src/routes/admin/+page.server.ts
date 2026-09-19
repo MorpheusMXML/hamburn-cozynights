@@ -614,6 +614,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 		})
 		.filter((w) => w.noRooms || w.roomsWithNoBeds.length > 0);
 
+	// Spots the crew booked for approved special-needs requests: they survive a
+	// switch back to Staging and "clear all bookings", so the dialogs say so.
+	const crewBooked = await crewBookedBeds(locals.adminPb).catch((err) => {
+		console.error('[Admin] crew-booked spots could not be read:', (err as Error)?.message);
+		return new Map<string, string>();
+	});
+	const crewBookedSpots = allBeds.filter(
+		(bed) => !!bed.order && crewBooked.get(bed.id) === bed.order
+	).length;
+
 	const housesWithStats: HouseStats[] = houses.map((house: HousesResponse) => {
 		const bedsInHouse = allBeds.filter((b: BedsResponse<{ room: RoomsResponse }>) => {
 			return b.expand?.room?.house === house.id;
@@ -670,6 +680,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	return {
 		houses: housesWithStats,
+		crewBookedSpots,
 		sanityWarnings,
 		history,
 		phase: settings.phase,
