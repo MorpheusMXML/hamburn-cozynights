@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import type PocketBase from 'pocketbase';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
-import { anonymous, createAdmin, expectRefused, serviceAccount } from '../stack-helpers';
+import { anonymous, createAdmin, expectRefused, seedHouse, serviceAccount } from '../stack-helpers';
 
 const MOCK_URL = process.env.MOCK_URL || '';
 const CREW_CHAT = '-1001234567890'; // docker-compose.test.yml
@@ -162,11 +162,22 @@ describe('crew alerts', () => {
 				})
 			).length;
 
-		await new Promise((resolve) => setTimeout(resolve, 1800));
+		// Wait for the stored moments themselves, not for a fixed span: under
+		// load the setup above can take longer than the span and the test then
+		// polled before the timer was due.
+		const waitPast = async (iso: string) => {
+			for (;;) {
+				const left = new Date(iso).getTime() + 300 - Date.now();
+				if (left <= 0) return;
+				await new Promise((resolve) => setTimeout(resolve, Math.min(left, 100)));
+			}
+		};
+
+		await waitPast(stored.booking_unlock_at);
 		await crewTexts(); // the run that sees the opening
 		expect(await announced('booking_opened_by_timer', stored.booking_unlock_at)).toBe(1);
 
-		await new Promise((resolve) => setTimeout(resolve, 1500));
+		await waitPast(stored.booking_close_at);
 		const texts = await crewTexts(); // … and the closing
 		await crewTexts(); // a later run repeats nothing
 		expect(await announced('booking_opened_by_timer', stored.booking_unlock_at)).toBe(1);
@@ -178,4 +189,49 @@ describe('crew alerts', () => {
 			true
 		);
 	});
+});
+
+// pb_hooks/cozy_layout.pb.js: the camp layout may only change in phase staging,
+// checked for admin tokens on the records API (the app checks it as well).
+describe('layout guard', () => {
+	it('lets an admin build in Staging', async () => {
+		await reset();
+		const admin = await createAdmin(su, 'admin');
+		const house = await admin.client
+			.collection('houses')
+			.create({ name: `Guard House ${Date.now()}`, x: 10, y: 20 });
+		const room = await admin.client
+			.collection('rooms')
+			.create({ name: 'Guard Room', room_number: 1, house: house.id, amount_beds: 1 });
+		await admin.client.collection('rooms').delete(room.id);
+		await admin.client.collection('houses').delete(house.id);
+	});
+
+	for (const [label, fields] of [
+		['live', { is_booking_active: true }],
+		['closed', { booking_closed: true }]
+	] as const) {
+		it(`refuses an admin's create and delete while booking is ${label}`, async () => {
+			const admin = await createAdmin(su, 'admin');
+			const { house, room, beds } = await seedHouse(su, 1);
+			await reset(fields);
+
+			await expectRefused(
+				admin.client.collection('houses').create({ name: 'Guard House 2', x: 30, y: 40 })
+			);
+			await expectRefused(
+				admin.client
+					.collection('rooms')
+					.create({ name: 'Guard Room 2', room_number: 9, house: house.id, amount_beds: 1 })
+			);
+			await expectRefused(admin.client.collection('beds').delete(beds[0].id));
+			await expectRefused(admin.client.collection('rooms').delete(room.id));
+			await expectRefused(admin.client.collection('houses').delete(house.id));
+
+			// Marking a spot stays possible while booking runs, and the service
+			// account (the app itself, cozy-admin) is never blocked.
+			await admin.client.collection('beds').update(beds[0].id, { enabled: false });
+			await su.collection('houses').delete(house.id);
+		});
+	}
 });

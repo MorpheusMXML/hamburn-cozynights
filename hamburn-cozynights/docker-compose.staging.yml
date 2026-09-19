@@ -50,6 +50,8 @@ services:
       # NOTE: never pass PB_ADMIN_EMAIL/PB_ADMIN_PASSWORD to this container —
       # the image's entrypoint would re-upsert that superuser on every start,
       # which revokes the app's cached service-account token.
+    security_opt:
+      - no-new-privileges:true
     ports:
       # Only reachable from the host itself (SSH tunnel for the dashboard at /_/),
       # never from the internet.
@@ -77,8 +79,11 @@ services:
     depends_on:
       pocketbase:
         condition: service_healthy
-    env_file:
-      - .env
+    # No env_file here on purpose: .env also holds PocketBase's secrets (Google
+    # client secret, SMTP password, bot token). The app needs none of them, so
+    # every value it does need is listed explicitly — anything else stays out of
+    # this container's environment (and out of /proc/1/environ, crash dumps and
+    # `docker inspect`).
     environment:
       # Server-side PocketBase URL over the compose network. The browser never
       # talks to PocketBase directly, so there is no public PocketBase URL.
@@ -90,9 +95,50 @@ services:
       # adapter-node behind nginx: the real client IP (used by the ticket-code
       # login rate limit) comes from nginx's X-Real-IP header.
       ADDRESS_HEADER: x-real-ip
+      # Service account for PocketBase and the key for encrypted guest fields.
+      # `:-` and not `:?`: a missing value must not stop the deploy here — the
+      # app itself refuses to start with a blank or placeholder key and says so
+      # in its log (src/lib/server/crypto.ts), which the deploy's health check
+      # turns into a rollback.
+      PB_ADMIN_EMAIL: ${PB_ADMIN_EMAIL:-}
+      PB_ADMIN_PASSWORD: ${PB_ADMIN_PASSWORD:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      # Operator details for /legal-notice and /privacy (src/lib/server/legal.ts).
+      # Keep this list in step with deploy/staging.env.template: a key that is
+      # missing here is silently blank on those pages.
+      LEGAL_NAME: ${LEGAL_NAME:-}
+      LEGAL_ADDRESS: ${LEGAL_ADDRESS:-}
+      LEGAL_REPRESENTATIVE: ${LEGAL_REPRESENTATIVE:-}
+      LEGAL_EMAIL: ${LEGAL_EMAIL:-}
+      LEGAL_PHONE: ${LEGAL_PHONE:-}
+      LEGAL_REGISTER: ${LEGAL_REGISTER:-}
+      LEGAL_VAT_ID: ${LEGAL_VAT_ID:-}
+      LEGAL_CONTENT_RESPONSIBLE: ${LEGAL_CONTENT_RESPONSIBLE:-}
+      LEGAL_PRIVACY_EMAIL: ${LEGAL_PRIVACY_EMAIL:-}
+      LEGAL_HOSTER: ${LEGAL_HOSTER:-}
+      LEGAL_MAIL_PROVIDER: ${LEGAL_MAIL_PROVIDER:-}
+      LEGAL_SUPERVISORY_AUTHORITY: ${LEGAL_SUPERVISORY_AUTHORITY:-}
+      LEGAL_LOG_RETENTION_DAYS: ${LEGAL_LOG_RETENTION_DAYS:-}
+      LEGAL_DELETION_PERIOD: ${LEGAL_DELETION_PERIOD:-}
+      LEGAL_TERMS_URL: ${LEGAL_TERMS_URL:-}
+      LEGAL_CODE_OF_CONDUCT_URL: ${LEGAL_CODE_OF_CONDUCT_URL:-}
+    # The app never needs new privileges or any Linux capability: it listens on
+    # an unprivileged port and writes nothing outside /tmp.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     ports:
       # Only reachable from the host itself; nginx reverse-proxies to this.
       - '127.0.0.1:3001:3000'
+    healthcheck:
+      # Same endpoint the deploy script polls, so a wedged app shows up as
+      # unhealthy in `docker ps` even between deploys.
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:3000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     networks:
       - cozynights_staging_net
 
@@ -102,3 +148,10 @@ networks:
 
 volumes:
   pb_data_staging:
+    # Pinned on purpose. Without `name:` the real volume is called
+    # <COMPOSE_PROJECT_NAME>_pb_data_staging, so a deploy that runs with a
+    # different project name (or none) silently creates an EMPTY database and
+    # the site comes up without houses, tickets or bookings. This is the volume
+    # the staging server has used since the first deploy; production gets its
+    # own compose file with its own fixed name.
+    name: hamburn-cozynights_pb_data_staging

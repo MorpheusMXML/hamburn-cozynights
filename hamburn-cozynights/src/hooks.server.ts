@@ -116,6 +116,21 @@ export const handle: Handle = async ({ event, resolve }) => {
 			(event.request.method === 'GET' || event.request.method === 'HEAD') &&
 			!pathname.startsWith('/admin/api/');
 		if (!isPageRequest) {
+			// A form submitted with use:enhance cannot show a plain-text 403: the
+			// client deserialises every action response, so a bare body ends up as
+			// the page's generic "We could not reach the server" message, which
+			// hides the real reason (the admin session ran out, at the latest at
+			// the weekly re-sign-in). An action result of type "redirect" sends
+			// the browser to the login page instead, where the reason is visible.
+			if (event.request.headers.get('x-sveltekit-action') === 'true') {
+				const location = event.locals.adminSignInExpired
+					? '/admin/login?error=reauth'
+					: '/admin/login';
+				return new Response(JSON.stringify({ type: 'redirect', status: 303, location }), {
+					status: 403,
+					headers: { 'content-type': 'application/json' }
+				});
+			}
 			return new Response('Forbidden', { status: 403 });
 		}
 	}

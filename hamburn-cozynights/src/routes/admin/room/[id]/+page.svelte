@@ -164,7 +164,7 @@
 					<h3>ADD SPOT ➕</h3>
 				</header>
 				<p class="hint">Define spot label (e.g. "Upper Deck")</p>
-				<AddBedForm roomId={room.id} disabled={isLayoutLocked} />
+				<AddBedForm disabled={isLayoutLocked} />
 			</section>
 		</aside>
 

@@ -4,7 +4,6 @@
 	import { toast } from '$lib/dialogs';
 	import { TEMPLATE_LIMITS } from '$lib/template';
 
-	export let houseId: string;
 	export let disabled = false;
 
 	type FieldErrors = { name?: string; room_number?: string; amount_beds?: string };
@@ -84,8 +83,6 @@
 		novalidate
 		use:enhance={handleSubmit}
 	>
-		<input type="hidden" name="houseId" value={houseId} />
-
 		<div class="form-group">
 			<label for="room-name">ROOM DESIGNATION (NAME)</label>
 			<input

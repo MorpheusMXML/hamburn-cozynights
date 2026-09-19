@@ -4,7 +4,6 @@
 	import { toast } from '$lib/dialogs';
 	import { TEMPLATE_LIMITS } from '$lib/template';
 
-	export let roomId: string;
 	export let disabled = false;
 
 	let error = '';
@@ -47,8 +46,6 @@
 </script>
 
 <form method="POST" action="?/createBed" class="add-bed-form" novalidate use:enhance={handleSubmit}>
-	<input type="hidden" name="roomId" value={roomId} />
-
 	<div class="input-row">
 		<input
 			type="text"

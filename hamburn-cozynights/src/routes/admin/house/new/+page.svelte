@@ -34,7 +34,13 @@
 	const handleSubmit: SubmitFunction = ({ formElement, cancel }) => {
 		showFailure(null);
 		if (!name.trim()) nameError = 'Enter a name for the house.';
-		if (bedCount.trim() !== '' && !/^\d{1,2}$/.test(bedCount.trim())) {
+		// Same limit as the server (TEMPLATE_LIMITS.bedsPerRoom = 50); the old
+		// /^\d{1,2}$/ let 51–99 through and the save then failed on the server.
+		const beds = Number(bedCount.trim());
+		if (
+			bedCount.trim() !== '' &&
+			(!/^\d{1,2}$/.test(bedCount.trim()) || !Number.isInteger(beds) || beds > 50)
+		) {
 			bedCountError = 'Enter a whole number from 0 to 50, or leave it empty.';
 		}
 		if (nameError || bedCountError) {

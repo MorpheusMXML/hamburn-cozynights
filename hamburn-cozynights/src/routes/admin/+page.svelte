@@ -91,7 +91,7 @@
 	function getStatusText(free: number, total: number) {
 		if (total === 0) return 'Not setup';
 		if (free === 0) return 'Fully booked';
-		return `${free} spots free`;
+		return free === 1 ? '1 spot free' : `${free} spots free`;
 	}
 
 	let lastLockedToast = 0;

@@ -94,7 +94,7 @@
 			<h3>ADD ROOM ➕</h3>
 		</header>
 		<div class="form-wrapper">
-			<AddRoomForm houseId={house.id} disabled={isLayoutLocked} />
+			<AddRoomForm disabled={isLayoutLocked} />
 		</div>
 	</section>
 

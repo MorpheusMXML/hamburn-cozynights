@@ -150,8 +150,8 @@ Either the layout is locked (Live Booking, or booking closed: dragging is switch
 The browser needs permission for the camera on this site, and the page must come over HTTPS. Allow it in the site settings, or just use the phone's own camera app: it opens the pass link, and signed in, you see the booking on top with a <kbd>✅ Check in</kbd> button. The camera closes after each code it recognised: press <kbd>📷 Scan with camera</kbd> again for the next guest. Details in [Booking passes & check-in](../admin/passes#when-something-doesn-t-work).
 :::
 
-::: details "Check-in" says "We could not reach the server", but the connection is fine
-Your admin session has probably ended, for example because the weekly Google sign-in is due. Reload the page and sign in again.
+::: details "Check-in" suddenly jumps to the sign-in page
+Your admin session has ended, for example because the weekly Google sign-in is due. Sign in again and the page comes back; nothing you scanned is lost.
 :::
 
 <!-- /audience -->
