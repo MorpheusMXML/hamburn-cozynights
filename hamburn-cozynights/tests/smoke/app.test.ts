@@ -161,13 +161,15 @@ describe('any deployment (read-only)', () => {
 		}
 	});
 
-	it('answers unknown booking passes with 404 and keeps the pass check for admins', async () => {
+	it('answers unknown booking passes with 404 and keeps the check-in for admins', async () => {
 		const unknown = await get('/pass/AAAA-BBBB-CCCC');
 		expect(unknown.status).toBe(404);
 		expect(unknown.headers.get('referrer-policy')).toBe('no-referrer');
 		expect((await get('/pass/not-a-pass')).status).toBe(404);
 		expect((await get('/admin/check')).status).toBe(303);
-		expect((await post('/admin/check?/check', { code: 'AAAA-BBBB-CCCC' })).status).toBe(403);
+		// an unknown code: nothing would change even if the door were open
+		expect((await post('/admin/check?/checkin', { code: 'AAAA-BBBB-CCCC' })).status).toBe(403);
+		expect((await post('/admin/check?/undo', { code: 'AAAA-BBBB-CCCC' })).status).toBe(403);
 	});
 });
 
@@ -275,13 +277,59 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		const gif = await get(`/pass/${shown}/qr.gif`);
 		expect(gif.headers.get('content-type')).toBe('image/gif');
 
-		// the crew: the same link shows the check result, so does the check page
+		// the crew: the same link shows the booking and a Check in button
 		const admin = await createAdmin(su, 'admin');
 		const crewView = await (await get(`/pass/${shown}`, adminCookie(admin.client))).text();
-		expect(crewView).toContain('VALID');
+		expect(crewView).toContain('BOOKED');
 		expect(crewView).toContain('Test Guest');
-		const checked = await post('/admin/check?/check', { code: shown }, adminCookie(admin.client));
+		expect(crewView).toContain('action="/admin/check?/checkin"');
+		// opening the pass changes nothing
+		expect((await su.collection('beds').getOne(beds[0].id)).checked_in_at).toBe('');
+	});
+
+	it('lets only admins and superusers check guests in, never a ticket code', async () => {
+		const { room, beds } = await seedHouse(su, 1);
+		const ticket = await seedTicket(su);
+		const guest = await guestLogin(ticket.code);
+		await setBookingOpen(true);
+		await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id, guestName: 'Arriver' }, guest);
+		const code = (await su.collection('orders').getOne(ticket.order.id)).pass_code as string;
+		const shown = code.replace(/(.{4})(?=.)/g, '$1-');
+		const checkedIn = async () => (await su.collection('beds').getOne(beds[0].id)).checked_in_at;
+
+		// the ticket holder, a pending access request, nobody: refused before any action runs
+		const pending = await createAdmin(su, 'pending');
+		for (const cookie of [guest, adminCookie(pending.client), '']) {
+			expect((await post('/admin/check?/checkin', { code: shown }, cookie)).status).toBe(403);
+		}
+		expect(await checkedIn()).toBe('');
+
+		const admin = await createAdmin(su, 'admin');
+		const checked = await post('/admin/check?/checkin', { code: shown }, adminCookie(admin.client));
 		expect(checked.status).toBe(200);
+		expect(await checked.text()).toContain('CHECKED IN');
+		const stored = await su.collection('beds').getOne(beds[0].id);
+		expect(stored.checked_in_by).toBe(admin.email);
+
+		// the crew sees it, the guest's pass link doesn't
+		const crewView = await (await get(`/pass/${shown}`, adminCookie(admin.client))).text();
+		expect(crewView).toContain('CHECKED IN');
+		const guestView = await (await get(`/pass/${shown}`)).text();
+		expect(guestView).not.toContain('CHECKED IN');
+		expect(guestView).not.toContain(admin.email);
+
+		// the guest can't give the spot up anymore, and can't undo the check-in
+		expect((await post(`/room/${room.id}?/unbookBed`, {}, guest)).status).toBe(409);
+		expect((await post('/admin/check?/undo', { code: shown }, guest)).status).toBe(403);
+		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
+
+		// a superuser can undo it; then the guest may release again
+		const boss = await createAdmin(su, 'superuser');
+		expect(
+			(await post('/admin/check?/undo', { code: shown }, adminCookie(boss.client))).status
+		).toBe(200);
+		expect(await checkedIn()).toBe('');
+		expect((await post(`/room/${room.id}?/unbookBed`, {}, guest)).status).toBe(200);
 	});
 
 	it('opens the admin area for approved admins only', async () => {
@@ -472,7 +520,7 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		expect(renamed.status).toBe(200);
 	});
 
-	it('releases every guest booking when a superuser switches back to Staging Mode', async () => {
+	it('lets a superuser keep or release the guest bookings when switching back to Staging', async () => {
 		const { room, beds } = await seedHouse(su, 1);
 		const ticket = await seedTicket(su);
 		const cookie = await guestLogin(ticket.code);
@@ -489,8 +537,19 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		).toBe(403);
 		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
 
+		// without a word about the bookings they stay: the dialog asks, the server obeys
 		const boss = await createAdmin(su, 'superuser');
-		const switched = await post('/admin?/setPhase', { phase: 'staging' }, adminCookie(boss.client));
+		const kept = await post('/admin?/setPhase', { phase: 'staging' }, adminCookie(boss.client));
+		expect(kept.status).toBe(200);
+		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
+
+		// back to live, then switch again and release them this time
+		await setBookingOpen(true);
+		const switched = await post(
+			'/admin?/setPhase',
+			{ phase: 'staging', clearBookings: '1' },
+			adminCookie(boss.client)
+		);
 		expect(switched.status).toBe(200);
 		const bed = await su.collection('beds').getOne(beds[0].id);
 		expect(bed.occupied).toBe(false);

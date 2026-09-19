@@ -1,8 +1,10 @@
 // src/routes/pass/[code]/+page.server.ts — a booking pass (docs/admin/passes.md).
 // Anyone with the link sees the spot and the burner name (both are visible to
 // other guests anyway), never the ticket code, the ticket holder's name or
-// address. A signed-in admin sees the check result on top: that's what
-// happens when the crew scans the QR code with a phone camera.
+// address, or the check-in. A signed-in admin sees the booking on top, with a
+// Check in button: that's what happens when the crew scans the QR code with a
+// phone camera. Opening the page never changes anything; the button posts to
+// /admin/check, which only admins reach.
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { formatPassCode, normalizePassInput } from '$lib/pass';
@@ -66,7 +68,8 @@ export const load: PageServerLoad = async ({
 					roomId: pass.spot?.roomId ?? null,
 					enabled: pass.spot?.enabled ?? true,
 					locked: pass.spot?.locked ?? false,
-					since: pass.spot?.since ?? null
+					bookedAt: pass.spot?.bookedAt ?? null,
+					checkIn: pass.spot?.checkIn ?? null
 				}
 			: null
 	};

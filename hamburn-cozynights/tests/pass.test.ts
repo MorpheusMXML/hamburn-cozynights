@@ -329,8 +329,33 @@ describe('pass page', () => {
 			ticketName: 'Ada Lovelace',
 			email: 'a•••@example.com',
 			roomId: 'room1',
-			enabled: true
+			enabled: true,
+			bookedAt: BED.updated, // no booked_at stamp: the bed's last change
+			checkIn: null
 		});
+	});
+
+	it('shows admins the check-in, and guests nothing about it', async () => {
+		const bed = {
+			...BED,
+			booked_at: '2026-09-17 09:00:00.000Z',
+			checked_in_at: '2026-09-19 12:00:00.000Z',
+			checked_in_by: 'crew@mauersegler.art'
+		};
+		const admin = { email: 'other@mauersegler.art', role: 'admin' };
+		const crew: any = await passLoad(
+			passEvent('7F3K-9QXM-2CWD', { adminPb: fakeAdminPb({ bed }), admin }).event
+		);
+		expect(crew.check).toMatchObject({
+			bookedAt: '2026-09-17 09:00:00.000Z',
+			checkIn: { at: '2026-09-19 12:00:00.000Z', by: 'crew@mauersegler.art' }
+		});
+
+		const guest: any = await passLoad(
+			passEvent('7F3K-9QXM-2CWD', { adminPb: fakeAdminPb({ bed }), admin: null }).event
+		);
+		expect(guest.check).toBeNull();
+		expect(JSON.stringify(guest)).not.toMatch(/crew@|2026-09-19|checkIn|checked_in/);
 	});
 
 	it('redirects to the canonical code and refuses unknown or malformed ones', async () => {
@@ -363,37 +388,107 @@ describe('pass page', () => {
 
 describe('admin check page', () => {
 	const admin = { email: 'crew@mauersegler.art', role: 'admin' };
-	function check(code: string, locals: Record<string, unknown>) {
+
+	function act(kind: 'checkin' | 'undo', code: string, locals: Record<string, unknown>) {
 		const body = new FormData();
 		body.set('code', code);
-		return (checkActions.check as any)({ request: { formData: async () => body }, locals });
+		return (checkActions[kind] as any)({ request: { formData: async () => body }, locals });
 	}
 
-	it('answers valid, no spot or unknown', async () => {
-		const valid = await check('https://x/pass/7F3K-9QXM-2CWD', { admin, adminPb: fakeAdminPb() });
-		expect(valid.result).toMatchObject({
-			status: 'valid',
+	/** The admin's own connection writes; the service account only reads. */
+	function crewLocals(pb: FakePb, who: Record<string, unknown> | null = admin) {
+		const serviceAccount = {
+			filter: pb.filter.bind(pb),
+			collection: (name: string) => ({
+				...pb.collection(name),
+				update: vi.fn(async () => {
+					throw new Error('the service account must not write the check-in');
+				})
+			})
+		};
+		return { admin: who, pb, adminPb: serviceAccount };
+	}
+
+	it('checks the guest in, and a second check says when and by whom', async () => {
+		const c = campWithGuest();
+		const first = await act('checkin', 'https://x/pass/7F3K-9QXM-2CWD', crewLocals(c.pb));
+		expect(first.result).toMatchObject({
+			status: 'checkedin',
 			code: '7F3K-9QXM-2CWD',
 			ticketName: 'Ada Lovelace',
-			spot: { spot: 'B1', room: 'Blue Room #2', house: 'Brahmsee-Villa', roomId: 'room1' },
+			spot: { spot: 'B1', room: 'Blue Room #2', house: 'Brahmsee-Villa', roomId: c.bed.room },
 			burnerName: 'Disco Druid',
+			checkIn: { by: 'crew@mauersegler.art' },
 			warning: ''
 		});
-		expect((await check(CODE, { admin, adminPb: fakeAdminPb({ bed: null }) })).result.status).toBe(
-			'nospot'
+		const bed = c.pb.rows('beds').find((b) => b.id === c.bed.id)!;
+		expect(bed.checked_in_at).toBe(first.result.checkIn.at);
+		expect(bed).toMatchObject({ order: c.order.id, checked_in_by: 'crew@mauersegler.art' });
+
+		const other = { email: 'other@mauersegler.art', role: 'superuser' };
+		const again = await act('checkin', '7f3k9qxm2cwd', crewLocals(c.pb, other));
+		expect(again.result).toMatchObject({
+			status: 'already',
+			checkIn: { at: first.result.checkIn.at, by: 'crew@mauersegler.art' }
+		});
+		expect(c.pb.rows('beds').find((b) => b.id === c.bed.id)!.checked_in_by).toBe(
+			'crew@mauersegler.art'
 		);
-		expect(
-			(await check(CODE, { admin, adminPb: fakeAdminPb({ order: null }) })).result.status
-		).toBe('unknown');
 	});
 
-	it('says when the spot was deactivated or locked', async () => {
-		const pb = fakeAdminPb({ bed: { ...BED, enabled: false } });
-		expect((await check(CODE, { admin, adminPb: pb })).result.warning).toContain('deactivated');
+	it('undoes a check-in: the booking stays, the audit log knows', async () => {
+		const c = campWithGuest();
+		await act('checkin', CODE, crewLocals(c.pb));
+		const undone = await act('undo', CODE, crewLocals(c.pb));
+		expect(undone.result).toMatchObject({ status: 'undone', checkIn: null, spot: { spot: 'B1' } });
+		expect(c.pb.rows('beds').find((b) => b.id === c.bed.id)).toMatchObject({
+			order: c.order.id,
+			occupied: true,
+			checked_in_at: '',
+			checked_in_by: ''
+		});
+		expect(c.pb.rows('admin_events')).toEqual([
+			expect.objectContaining({
+				action: 'check_in_undone',
+				actor: 'crew@mauersegler.art',
+				subject: 'B1 · Blue Room #2 · Brahmsee-Villa'
+			})
+		]);
+		// nothing left to undo
+		expect((await act('undo', CODE, crewLocals(c.pb))).result.status).toBe('booked');
+		expect(c.pb.rows('admin_events')).toHaveLength(1);
 	});
 
-	it('refuses non-admins and input that is no pass code', async () => {
-		expect((await check(CODE, { admin: null, adminPb: fakeAdminPb() })).status).toBe(403);
-		expect((await check('HB-1001', { admin, adminPb: fakeAdminPb() })).status).toBe(400);
+	it('has nothing to check in without a spot, and knows unknown codes', async () => {
+		const c = campWithGuest();
+		c.pb.rows('orders')[1].pass_code = 'NSPTABCDEFGH';
+		const noSpot = await act('checkin', 'NSPT-ABCD-EFGH', crewLocals(c.pb));
+		expect(noSpot.result).toMatchObject({
+			status: 'nospot',
+			ticketName: 'Grace Hopper',
+			spot: null,
+			checkIn: null
+		});
+		expect((await act('checkin', 'AAAA-BBBB-CCCC', crewLocals(c.pb))).result.status).toBe(
+			'unknown'
+		);
+		expect(c.pb.rows('beds').some((b) => b.checked_in_at)).toBe(false);
+	});
+
+	it('says when the spot was deactivated or locked, and checks in anyway', async () => {
+		const c = campWithGuest();
+		c.bed.enabled = false;
+		const result = (await act('checkin', CODE, crewLocals(c.pb))).result;
+		expect(result.status).toBe('checkedin');
+		expect(result.warning).toContain('deactivated');
+	});
+
+	it('refuses non-admins and input that is no pass code, and stores nothing', async () => {
+		const c = campWithGuest();
+		for (const kind of ['checkin', 'undo'] as const) {
+			expect((await act(kind, CODE, crewLocals(c.pb, null))).status).toBe(403);
+		}
+		expect((await act('checkin', 'HB-1001', crewLocals(c.pb))).status).toBe(400);
+		expect(c.pb.rows('beds').some((b) => b.checked_in_at)).toBe(false);
 	});
 });

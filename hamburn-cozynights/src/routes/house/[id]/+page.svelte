@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ownSpotNote } from '$lib/booking-phase';
+	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import type { PageData, ActionData } from './$types';
 	import { enhance } from '$app/forms';
@@ -49,7 +50,9 @@
 			<div class="banner-icon" aria-hidden="true">⚠️</div>
 			<div class="banner-content">
 				<h3>You already have a spot</h3>
-				{#if data.spotFixed}
+				{#if data.checkedIn}
+					<p>{CHECKED_IN_NOTE}</p>
+				{:else if data.spotFixed}
 					<p>
 						The crew picked your spot for you because of your special-needs request, so only the
 						crew can change it.
@@ -64,7 +67,7 @@
 				{#if data.pass}
 					<PassTicket pass={data.pass} />
 				{/if}
-				{#if data.isBookingActive && !data.spotFixed}
+				{#if data.isBookingActive && !data.spotFixed && !data.checkedIn}
 					{#if releaseError}
 						<p class="error-msg" role="alert">{releaseError}</p>
 					{/if}

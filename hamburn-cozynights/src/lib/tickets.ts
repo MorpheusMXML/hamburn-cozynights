@@ -522,6 +522,8 @@ export interface TicketSpot {
 	room: string;
 	spot: string;
 	roomId: string;
+	/** The crew checked the holder in at arrival: when and by which admin. */
+	checkIn: { at: string; by: string } | null;
 }
 
 /** A ticket as the admin sees it. */
@@ -560,6 +562,8 @@ export interface TicketChangeOutcome {
 	newHolder: boolean;
 	/** The old holder's special-needs request was deleted with the hand-over. */
 	requestRemoved: boolean;
+	/** The old holder was checked in: the new holder checks in with the new pass. */
+	checkInReset: boolean;
 	/** The new address will get a confirmation of the ticket's spot. */
 	confirmation: boolean;
 }

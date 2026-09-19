@@ -80,6 +80,7 @@ export const actions: Actions = {
 					nameChanged: outcome.nameChanged,
 					newHolder: outcome.newHolder,
 					requestRemoved: outcome.requestRemoved,
+					checkInReset: outcome.checkInReset,
 					hasSpot: !!outcome.ticket.spot
 				});
 			}

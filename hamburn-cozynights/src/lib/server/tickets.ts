@@ -19,7 +19,9 @@ import type {
 	TypedPocketBase
 } from '$lib/pocketbase-types';
 import { createLookupHash, decrypt } from '$lib/server/crypto';
+import { BookingService } from '$lib/server/booking';
 import { disconnectTelegram } from '$lib/server/notifications';
+import { checkInOf } from '$lib/server/pass';
 import { forgetRequest } from '$lib/server/special-requests';
 import {
 	TICKET_CODE_PATTERN,
@@ -93,7 +95,8 @@ async function describeTicket(
 			house: room?.expand?.house?.name ?? '',
 			room: room ? `${room.name}${number}` : '',
 			spot: bed.label,
-			roomId: bed.room
+			roomId: bed.room,
+			checkIn: checkInOf(bed)
 		};
 	}
 
@@ -217,7 +220,9 @@ function readNameInput(raw: unknown): string {
 /**
  * The fields that hand a ticket over to a new holder: a new booking pass (the
  * old link stops working; PocketBase creates the next code on demand) and no
- * burner name. The Telegram link goes before them (disconnectTelegram).
+ * burner name. The Telegram link and the check-in go before them
+ * (disconnectTelegram, BookingService.resetCheckIn): the new holder checks in
+ * with the new pass.
  */
 const NEW_HOLDER_FIELDS = { pass_code: '', burner_name: '' } as const;
 
@@ -256,6 +261,7 @@ export async function changeTicket(
 	if (input.newHolder) Object.assign(data, NEW_HOLDER_FIELDS);
 
 	let requestRemoved = false;
+	let checkInReset = false;
 	if (Object.keys(data).length > 0) {
 		if (input.newHolder) {
 			// Telegram first: no update about the new holder may reach the old chat.
@@ -264,6 +270,8 @@ export async function changeTicket(
 			// before the address changes, so the new holder is never told its
 			// status. A spot the crew booked stays, as an ordinary booking.
 			requestRemoved = await forgetRequest(adminPb, order.id);
+			// The old holder's check-in: the new holder hasn't arrived yet.
+			checkInReset = await new BookingService(adminPb).resetCheckIn(order.id);
 		}
 		order = await adminPb.collection('orders').update<OrdersResponse>(order.id, data);
 	}
@@ -280,6 +288,7 @@ export async function changeTicket(
 		nameChanged,
 		newHolder: input.newHolder,
 		requestRemoved,
+		checkInReset,
 		confirmation: emailChanged && !!email && !!ticket.spot
 	};
 }
@@ -451,6 +460,7 @@ export async function importRoster(
 					// the old holder's health data goes with them, before the
 					// address changes (see changeTicket)
 					requestRemoved = await forgetRequest(adminPb, id);
+					await new BookingService(adminPb).resetCheckIn(id);
 				}
 				await adminPb.collection('orders').update(id, data);
 				outcome.updated++;

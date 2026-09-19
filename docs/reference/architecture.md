@@ -87,6 +87,9 @@ erDiagram
     bool is_special "special-needs spot"
     bool occupied
     relation order "the booking ticket"
+    date booked_at "set by PocketBase"
+    date checked_in_at "check-in at arrival"
+    text checked_in_by "admin who checked in"
   }
   ORDERS {
     text order_number "ticket number"
@@ -132,7 +135,7 @@ erDiagram
 ```
 
 - **`orders`** is the ticket list: one record per ticket. Guests' actions only write the burner name. Admins change e-mail addresses and names on the Tickets page, superusers add tickets from the ticket shop's list there. No admin action deletes orders.
-- **Spots are called `beds`** in the database. A booking is simply a bed with `occupied` set and a link to its order.
+- **Spots are called `beds`** in the database. A booking is simply a bed with `occupied` set and a link to its order; the crew's check-in at arrival adds `checked_in_at` and `checked_in_by`, which go with the booking.
 - **`app_settings`** is a single record holding the phase set by hand and the booking window (opening and closing time, armed or paused).
 - **`admins`** is its own auth collection for Google sign-in. PocketBase's default `users` collection is unused and closed for sign-up.
 - **`guest_notify`** holds what each ticket was last told and where (e-mail, linked Telegram chat); **`admin_events`** is the audit log that feeds the crew group. Neither has API rules: only PocketBase itself and the app server use them.
@@ -154,14 +157,14 @@ erDiagram
 | `/legal-notice` | everyone | Legal notice (Impressum), details from the server's `.env`; `/impressum` redirects here |
 | `/privacy` | everyone | Privacy policy; `/datenschutz` redirects here |
 | `/booking-rules` | everyone | Booking rules, linked from every booking dialog |
-| `/pass/:code` | whoever has the link | Booking pass with QR code (`/pass/:code/qr.gif` as an image); signed-in admins also see whether it is valid |
+| `/pass/:code` | whoever has the link | Booking pass with QR code (`/pass/:code/qr.gif` as an image); signed-in admins also see the booking, the check-in and a Check in button |
 | `/docs/*` | everyone | The guest guide and FAQ |
 | `/admin/login` | everyone | Google sign-in and the *access requested* page |
 | `/auth/callback/google` | – | Where Google sends admins back to |
 | `/admin` | admins | Control Center |
 | `/admin/house/:id` | admins | Rooms of a house |
 | `/admin/room/:id` | admins | Spots of a room |
-| `/admin/check` | admins | Check booking passes: typed code, USB scanner or camera |
+| `/admin/check` | admins | Check guests in with their booking pass (typed code, USB scanner or camera), undo a check-in |
 | `/admin/requests` | admins | Special-needs requests: read, approve or decline, book a spot (also while booking is closed), open or close requests |
 | `/admin/messages` | admins | Message texts: every sentence guests get by e-mail, on Telegram and from the bot, with a preview of whole messages |
 | `/admin/tickets` | admins | Find tickets, change their e-mail address, hand them over; superusers load the ticket list |

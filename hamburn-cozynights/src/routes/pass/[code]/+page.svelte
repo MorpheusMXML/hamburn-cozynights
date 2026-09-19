@@ -1,15 +1,67 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
+	import type { SubmitFunction } from '@sveltejs/kit';
 	import type { PageData } from './$types';
+	import type { PassCheckResult } from '$lib/pass';
+	import { formatBerlin } from '$lib/booking-phase';
+	import { confirmDialog, toast } from '$lib/dialogs';
 
 	export let data: PageData;
 
-	$: when = data.check?.since
-		? new Date(data.check.since.replace(' ', 'T')).toLocaleString('en-GB', {
-				timeZone: 'Europe/Berlin',
-				dateStyle: 'medium',
-				timeStyle: 'short'
-			})
-		: '';
+	let busy = false;
+	let checkError = '';
+
+	$: booked = formatBerlin(data.check?.bookedAt ?? '', { year: false });
+	$: checkIn = data.spot ? (data.check?.checkIn ?? null) : null;
+
+	const DONE: Partial<Record<PassCheckResult['status'], string>> = {
+		checkedin: '✅ Checked in. Welcome!',
+		already: 'This pass was checked in already.',
+		undone: '↩️ Check-in undone: the spot stays booked.',
+		nospot: 'The ticket holds no spot anymore: nothing to check in.'
+	};
+
+	/**
+	 * The crew's buttons post to the admin check page (only admins get there),
+	 * then this pass reloads with the new state.
+	 */
+	function crewStep(kind: 'checkin' | 'undo'): SubmitFunction {
+		return async ({ cancel }) => {
+			if (kind === 'undo') {
+				const ok = await confirmDialog(
+					'The guest shows as booked again, not as arrived. Their booking stays. Use this for a mistake at the desk.',
+					{
+						title: 'Undo this check-in?',
+						tone: 'warning',
+						confirmLabel: 'Undo check-in',
+						cancelLabel: 'Keep it'
+					}
+				);
+				if (!ok) {
+					cancel();
+					return;
+				}
+			}
+			busy = true;
+			checkError = '';
+			return async ({ result }) => {
+				busy = false;
+				if (result.type === 'success') {
+					const status = (result.data?.result as PassCheckResult | undefined)?.status;
+					const message = status ? DONE[status] : '';
+					if (message) toast(message, status === 'checkedin' ? 'success' : 'info');
+					await invalidateAll();
+				} else if (result.type === 'failure') {
+					checkError =
+						typeof result.data?.error === 'string' ? result.data.error : 'That did not work.';
+				} else {
+					checkError =
+						'That did not work: the server could not be reached, or your admin session has ended. Reload the page and try again.';
+				}
+			};
+		};
+	}
 </script>
 
 <svelte:head>
@@ -21,10 +73,14 @@
 <main class="pass-page">
 	{#if data.check}
 		<!-- The crew's view: what a scan with a signed-in phone shows. -->
-		<section class="check {data.spot ? 'valid' : 'nospot'}" aria-live="polite">
+		<section
+			class="check {!data.spot ? 'nospot' : checkIn ? 'checkedin' : 'booked'}"
+			aria-live="polite"
+		>
 			<p class="verdict">
-				{#if data.spot}✅ VALID — this ticket holds a spot{:else}⚠️ NO SPOT — the ticket exists, but
-					holds no spot right now{/if}
+				{#if !data.spot}⚠️ NO SPOT — the ticket exists, but holds no spot right now
+				{:else if checkIn}✅ CHECKED IN — this guest has arrived
+				{:else}🛏️ BOOKED — not checked in yet{/if}
 			</p>
 			<dl>
 				<dt>Ticket</dt>
@@ -40,9 +96,15 @@
 						<dt>Burner name</dt>
 						<dd>{data.burnerName}</dd>
 					{/if}
-					{#if when}
+					{#if booked}
 						<dt>Booked</dt>
-						<dd>{when}</dd>
+						<dd>{booked}</dd>
+					{/if}
+					{#if checkIn}
+						<dt>Checked in</dt>
+						<dd>
+							{formatBerlin(checkIn.at, { year: false })}{checkIn.by ? ` · ${checkIn.by}` : ''}
+						</dd>
 					{/if}
 				{/if}
 			</dl>
@@ -52,8 +114,24 @@
 					The booking still stands.
 				</p>
 			{/if}
+			{#if data.spot}
+				{#if checkIn}
+					<form method="POST" action="/admin/check?/undo" use:enhance={crewStep('undo')}>
+						<input type="hidden" name="code" value={data.code} />
+						<button type="submit" class="btn-undo" disabled={busy}>↩️ Undo check-in</button>
+					</form>
+				{:else}
+					<form method="POST" action="/admin/check?/checkin" use:enhance={crewStep('checkin')}>
+						<input type="hidden" name="code" value={data.code} />
+						<button type="submit" class="btn-checkin" disabled={busy}>
+							{busy ? 'Checking in…' : '✅ Check in'}
+						</button>
+					</form>
+				{/if}
+			{/if}
+			{#if checkError}<p class="warn" role="alert">{checkError}</p>{/if}
 			<p class="check-links">
-				<a href="/admin/check">Check another pass</a>
+				<a href="/admin/check">Check in another pass</a>
 				{#if data.check.roomId}<a href="/admin/room/{data.check.roomId}">Open the room</a>{/if}
 			</p>
 		</section>
@@ -128,8 +206,11 @@
 		background: #111;
 		border: 2px solid #333;
 	}
-	.check.valid {
+	.check.checkedin {
 		border-color: #2dd4bf;
+	}
+	.check.booked {
+		border-color: #a3a3a3;
 	}
 	.check.nospot {
 		border-color: #fb923c;
@@ -139,11 +220,39 @@
 		font-weight: 900;
 		font-size: 1.1rem;
 	}
-	.check.valid .verdict {
+	.check.checkedin .verdict {
 		color: #2dd4bf;
 	}
 	.check.nospot .verdict {
 		color: #fb923c;
+	}
+	.check form {
+		margin: 1rem 0 0;
+	}
+	.btn-checkin,
+	.btn-undo {
+		min-height: 48px;
+		padding: 0 1.25rem;
+		border-radius: 10px;
+		font-weight: 900;
+		cursor: pointer;
+	}
+	.btn-checkin {
+		width: 100%;
+		border: none;
+		background: #2dd4bf;
+		color: #000;
+		font-size: 1.05rem;
+	}
+	.btn-undo {
+		border: 1px solid #525252;
+		background: transparent;
+		color: #e5e5e5;
+	}
+	.btn-checkin:disabled,
+	.btn-undo:disabled {
+		opacity: 0.6;
+		cursor: progress;
 	}
 	.warn {
 		color: #fecaca;

@@ -50,6 +50,10 @@ It goes to the address that belongs to your ticket, usually within a minute. Che
 On your room page (<kbd>🎫 Show booking pass</kbd>), as the small ticket on every other house and room (and on the map once booking has closed), and behind the link in your confirmation e-mail or Telegram message. It only exists while your ticket holds a spot. A screenshot of it is fine.
 :::
 
+::: details I can't release my spot: "The crew has checked you in, so your spot is final"
+The crew checked your booking pass when you arrived, so the spot is yours for the event. If it has to change, ask the crew: they can move you or free the spot.
+:::
+
 ::: details How do I stop the Telegram messages?
 Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page, or send `/stop` to the bot.
 :::

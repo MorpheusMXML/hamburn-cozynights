@@ -13,7 +13,7 @@ After signing in you land in the **Control Center** at `/admin`: one page to bui
 | <kbd>SHOW INTEL 📊</kbd> | Shows or hides the statistics panel. |
 | <kbd>🛰️ LIST VIEW</kbd> / <kbd>🗺️ MAP VIEW</kbd> | Switches between the map editor and house cards. |
 
-The top bar on every admin page shows <kbd>🎟️ Tickets</kbd> (find a ticket, change its e-mail address, load the ticket list; see [Tickets & e-mail addresses](./tickets)), <kbd>♿ Special needs</kbd> with the number of requests waiting for a decision (see [Special-needs requests](./special-needs)), <kbd>🎫 Check passes</kbd> (see [Booking passes](./passes)), <kbd>✉️ Messages</kbd> (every text guests get, see [Message texts](./notifications#message-texts)), the account you're signed in with (not on phones), a **SUPERUSER ⚡️** badge if you are one, and <kbd>Eject 🚀</kbd> to sign out. While a countdown runs, a slim bar above it shows when booking opens or closes, the same one guests see.
+The top bar on every admin page shows <kbd>🎟️ Tickets</kbd> (find a ticket, change its e-mail address, load the ticket list; see [Tickets & e-mail addresses](./tickets)), <kbd>♿ Special needs</kbd> with the number of requests waiting for a decision (see [Special-needs requests](./special-needs)), <kbd>🎫 Check-in</kbd> (check guests in with their booking pass; see [Booking passes & check-in](./passes)), <kbd>✉️ Messages</kbd> (every text guests get, see [Message texts](./notifications#message-texts)), the account you're signed in with (not on phones), a **SUPERUSER ⚡️** badge if you are one, and <kbd>Eject 🚀</kbd> to sign out. While a countdown runs, a slim bar above it shows when booking opens or closes, the same one guests see.
 
 ## Booking window
 
@@ -25,7 +25,7 @@ Right under the header, the **🎟 BOOKING WINDOW** panel holds everything about
 | Let it run by itself | Flip the switch to **Timer armed** | admins |
 | Hold it | Flip the switch back (paused, the times stay) | admins |
 | Open, close or go back to Staging now | <kbd>⚡ Switch right now</kbd> | superusers only |
-| Release every guest booking | Happens by itself when switching back to Staging; <kbd>🧨 Clear all bookings</kbd> (same place, Staging only) for what is left | superusers only |
+| Release every guest booking | The switch back to Staging asks: <kbd>Switch & release …</kbd> or <kbd>Switch & keep the bookings</kbd>; <kbd>🧨 Clear all bookings</kbd> (same place, Staging only) does it later | superusers only |
 
 Times are Europe/Berlin (CET/CEST). The rules and what each switch does to the timer are in [The booking window](../guide/phases#the-booking-window).
 
@@ -90,6 +90,6 @@ The Control Center stays fully usable for watching: statistics, occupancy, templ
 - [Tickets & e-mail addresses](./tickets): find a ticket, fix its address, hand it over, load the ticket list
 - [Layout templates](./templates): export, compare and import
 - [Notifications](./notifications): booking e-mails, Telegram for guests and the crew group
-- [Booking passes](./passes): checking guests in with the QR code
+- [Booking passes & check-in](./passes): checking guests in with the QR code, the spot states, undoing a check-in
 - [Event checklist](./event-checklist): from the first layout to after the burn
 - [Legal pages](./legal): legal notice, privacy policy and booking rules

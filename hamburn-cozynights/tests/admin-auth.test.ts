@@ -594,7 +594,48 @@ describe('superuser-only dashboard actions', () => {
 		expect(service.update).not.toHaveBeenCalledWith('order2', expect.anything());
 	});
 
-	it('clears bookings only in Staging Mode (going back to Staging releases them itself)', async () => {
+	it('keeps the guest bookings when a superuser switches to Staging without saying otherwise', async () => {
+		const { pb, service } = makeAdminPb('live');
+		const form = new FormData();
+		form.set('phase', 'staging');
+		const result: any = await dashboardActions.setPhase({
+			locals: { pb, adminPb: pb, admin: boss },
+			request: { formData: async () => form }
+		} as any);
+
+		expect(result).toMatchObject({ success: true, phase: 'staging' });
+		expect(result.released).toBeUndefined();
+		expect(service.update).not.toHaveBeenCalledWith('bed1', expect.anything());
+	});
+
+	it('releases them when the dialog says so, and never for a regular admin', async () => {
+		const form = () => {
+			const data = new FormData();
+			data.set('phase', 'staging');
+			data.set('clearBookings', '1');
+			return data;
+		};
+		const refused = makeAdminPb('live');
+		const denied: any = await dashboardActions.setPhase({
+			locals: { pb: refused.pb, adminPb: refused.pb, admin: crew },
+			request: { formData: async () => form() }
+		} as any);
+		expect(denied.status).toBe(403);
+		expect(refused.service.update).not.toHaveBeenCalled();
+
+		const { pb, service } = makeAdminPb('live');
+		const result: any = await dashboardActions.setPhase({
+			locals: { pb, adminPb: pb, admin: boss },
+			request: { formData: async () => form() }
+		} as any);
+
+		expect(result).toMatchObject({ success: true, phase: 'staging', released: 1, kept: 1 });
+		expect(service.update).toHaveBeenCalledWith('bed1', { occupied: false, order: null });
+		// the spot the crew booked for a special-needs request stays
+		expect(service.update).not.toHaveBeenCalledWith('bed2', expect.anything());
+	});
+
+	it('clears bookings only in Staging Mode (the switch back asks about them itself)', async () => {
 		const { pb, service } = makeAdminPb('live');
 		const result: any = await dashboardActions.clearAllBookings({
 			locals: { pb, adminPb: pb, admin: boss }

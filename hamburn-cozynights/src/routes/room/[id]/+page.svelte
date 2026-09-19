@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ownSpotNote } from '$lib/booking-phase';
+	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import { enhance } from '$app/forms';
@@ -157,7 +158,9 @@
 				<div class="warning-icon" aria-hidden="true">⚠️</div>
 				<div class="warning-content">
 					<h3>You already have a spot</h3>
-					{#if data.spotFixed}
+					{#if data.checkedIn}
+						<p>Your spot is in another room. {CHECKED_IN_NOTE}</p>
+					{:else if data.spotFixed}
 						<p>
 							Your spot is in another room. The crew picked it for you because of your special-needs
 							request, so only the crew can change it.
@@ -173,7 +176,7 @@
 					{#if data.pass}
 						<PassTicket pass={data.pass} />
 					{/if}
-					{#if data.isBookingActive && !data.spotFixed}
+					{#if data.isBookingActive && !data.spotFixed && !data.checkedIn}
 						{#if bannerError}
 							<p class="error-msg" role="alert">{bannerError}</p>
 						{/if}
@@ -222,7 +225,10 @@
 					<h3>Welcome Home!</h3>
 					<p>
 						Spot <strong>{myBed.label}</strong> in this room is yours.
-						{#if data.spotFixed}
+						{#if data.checkedIn}
+							{CHECKED_IN_NOTE}
+							{#if data.isBookingActive}Tap it to change your burner name.{/if}
+						{:else if data.spotFixed}
 							The crew picked it for you because of your special-needs request. To change it, please
 							contact the crew.
 							{#if data.isBookingActive}Tap it to change your burner name.{/if}
@@ -335,7 +341,7 @@
 								? data.phase === 'closed'
 									? 'Spots are final now'
 									: 'Not open yet'
-								: data.spotFixed
+								: data.spotFixed || data.checkedIn
 									? 'Tap to change your burner name'
 									: 'Tap to change or release'}</small
 						>
@@ -523,7 +529,7 @@
 							{isSaving ? 'Saving…' : 'Save Spot'}
 						</button>
 						<button type="button" class="btn-cancel" on:click={closeModal}>Cancel</button>
-						{#if selectedBedId === data.userBedId && !data.spotFixed}
+						{#if selectedBedId === data.userBedId && !data.spotFixed && !data.checkedIn}
 							<button type="submit" formaction="?/unbookBed" class="btn-unbook" disabled={isSaving}
 								>Release</button
 							>

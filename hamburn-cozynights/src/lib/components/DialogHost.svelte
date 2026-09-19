@@ -11,6 +11,7 @@ Mounted once in the root layout.
 	$: current = $dialogQueue[0];
 
 	let primaryButton: HTMLButtonElement | undefined;
+	let altButton: HTMLButtonElement | undefined;
 	let cancelButton: HTMLButtonElement | undefined;
 	let previouslyFocused: HTMLElement | null = null;
 	let shownId: number | null = null;
@@ -37,10 +38,12 @@ Mounted once in the root layout.
 		if (!current) return;
 		if (event.key === 'Escape') {
 			event.preventDefault();
-			settleDialog(current.id, false);
+			settleDialog(current.id, 'cancel');
 		} else if (event.key === 'Tab') {
-			// Two buttons at most: keep the focus inside the dialog.
-			const buttons = [cancelButton, primaryButton].filter(Boolean) as HTMLButtonElement[];
+			// Three buttons at most: keep the focus inside the dialog.
+			const buttons = [cancelButton, altButton, primaryButton].filter(
+				Boolean
+			) as HTMLButtonElement[];
 			if (buttons.length === 0) return;
 			event.preventDefault();
 			const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
@@ -72,16 +75,26 @@ Mounted once in the root layout.
 						type="button"
 						class="dialog-btn ghost"
 						bind:this={cancelButton}
-						on:click={() => settleDialog(current.id, false)}
+						on:click={() => settleDialog(current.id, 'cancel')}
 					>
 						{current.cancelLabel}
+					</button>
+				{/if}
+				{#if current.altLabel}
+					<button
+						type="button"
+						class="dialog-btn alt"
+						bind:this={altButton}
+						on:click={() => settleDialog(current.id, 'alt')}
+					>
+						{current.altLabel}
 					</button>
 				{/if}
 				<button
 					type="button"
 					class="dialog-btn primary"
 					bind:this={primaryButton}
-					on:click={() => settleDialog(current.id, true)}
+					on:click={() => settleDialog(current.id, 'confirm')}
 				>
 					{current.confirmLabel}
 				</button>
@@ -174,6 +187,11 @@ Mounted once in the root layout.
 		background: transparent;
 		border: 1px solid #444;
 		color: #ccc;
+	}
+	.dialog-btn.alt {
+		background: transparent;
+		border: 1px solid var(--accent);
+		color: var(--accent);
 	}
 	.dialog-btn.primary {
 		background: var(--accent);

@@ -83,3 +83,87 @@ describe('beds.booked_at and occupied', () => {
 		expect(String(e.record.data.booked_at)).toMatch(/T/);
 	});
 });
+
+describe('the check-in follows the booking', () => {
+	const IN = '2026-09-19 12:00:00.000Z';
+	const BY = 'crew@mauersegler.art';
+
+	it('stays while the spot keeps its ticket (a check-in, a new burner name, a lock)', () => {
+		const checkIn = {
+			record: record(
+				{ order: 'o1', occupied: true, checked_in_at: IN, checked_in_by: BY },
+				{ order: 'o1', occupied: true, checked_in_at: '', checked_in_by: '' }
+			)
+		};
+		stamp(checkIn);
+		expect(checkIn.record.data).toMatchObject({ checked_in_at: IN, checked_in_by: BY });
+
+		const locked = {
+			record: record(
+				{ order: 'o1', is_locked: true, checked_in_at: IN, checked_in_by: BY },
+				{ order: 'o1', is_locked: false, checked_in_at: IN, checked_in_by: BY }
+			)
+		};
+		stamp(locked);
+		expect(locked.record.data).toMatchObject({ checked_in_at: IN, checked_in_by: BY });
+	});
+
+	it('goes when the spot is released (guest, crew, clear all, deleted ticket)', () => {
+		const e = {
+			record: record(
+				{ order: '', occupied: false, checked_in_at: IN, checked_in_by: BY },
+				{ order: 'o1', occupied: true, checked_in_at: IN, checked_in_by: BY }
+			)
+		};
+		stamp(e);
+		expect(e.record.data).toMatchObject({ checked_in_at: '', checked_in_by: '' });
+	});
+
+	it('goes when the spot gets another ticket', () => {
+		const e = {
+			record: record(
+				{ order: 'o2', checked_in_at: IN, checked_in_by: BY },
+				{ order: 'o1', checked_in_at: IN, checked_in_by: BY }
+			)
+		};
+		stamp(e);
+		expect(e.record.data).toMatchObject({ checked_in_at: '', checked_in_by: '' });
+	});
+
+	it('comes along when the crew moves a guest who arrived (same write)', () => {
+		const e = {
+			record: record(
+				{ order: 'o1', occupied: true, checked_in_at: IN, checked_in_by: BY },
+				{ order: '', occupied: false, checked_in_at: '', checked_in_by: '' }
+			)
+		};
+		stamp(e);
+		expect(e.record.data).toMatchObject({ checked_in_at: IN, checked_in_by: BY });
+	});
+
+	it('never exists without a booking, and has no author without a time', () => {
+		const free = {
+			record: record(
+				{ order: '', checked_in_at: IN, checked_in_by: BY },
+				{ order: '', checked_in_at: '', checked_in_by: '' }
+			)
+		};
+		stamp(free);
+		expect(free.record.data).toMatchObject({ checked_in_at: '', checked_in_by: '' });
+
+		const undone = {
+			record: record(
+				{ order: 'o1', checked_in_at: '', checked_in_by: BY },
+				{ order: 'o1', checked_in_at: IN, checked_in_by: BY }
+			)
+		};
+		stamp(undone);
+		expect(undone.record.data.checked_in_by).toBe('');
+	});
+
+	it('keeps a check-in when the original is unknown (a record made in this process)', () => {
+		const e = { record: record({ order: 'o1', checked_in_at: IN, checked_in_by: BY }) };
+		stamp(e);
+		expect(e.record.data).toMatchObject({ checked_in_at: IN, checked_in_by: BY });
+	});
+});

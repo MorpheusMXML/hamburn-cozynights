@@ -27,7 +27,10 @@ export interface PassSpot {
 	spot: string;
 	enabled: boolean;
 	locked: boolean;
-	since: string;
+	/** When the spot got this ticket. */
+	bookedAt: string;
+	/** The check-in at arrival: when and by which admin; null while only booked. */
+	checkIn: { at: string; by: string } | null;
 }
 
 export interface PassLookup {
@@ -109,10 +112,18 @@ export async function findPass(adminPb: TypedPocketBase, code: string): Promise<
 					spot: bed.label,
 					enabled: bed.enabled !== false,
 					locked: !!bed.is_locked,
-					since: bed.updated
+					bookedAt: bed.booked_at || bed.updated,
+					checkIn: checkInOf(bed)
 				}
 			: null
 	};
+}
+
+/** A spot's check-in, or null while it is only booked. */
+export function checkInOf(
+	bed: Pick<BedsResponse, 'checked_in_at' | 'checked_in_by'>
+): { at: string; by: string } | null {
+	return bed.checked_in_at ? { at: bed.checked_in_at, by: bed.checked_in_by ?? '' } : null;
 }
 
 /**

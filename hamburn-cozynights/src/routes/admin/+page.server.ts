@@ -149,10 +149,11 @@ class ReleaseStoppedError extends Error {
 }
 
 /**
- * Releases every guest booking ("clear all bookings", and what going back to
- * Staging Mode does). The orders themselves are the ticket roster and survive,
+ * Releases every guest booking ("clear all bookings", and what the switch back
+ * to Staging Mode offers). The orders themselves are the ticket roster and survive,
  * otherwise every guest's code would stop working; the burner names of the
- * released bookings are forgotten. Spots the crew booked for approved
+ * released bookings are forgotten, and so are their check-ins (PocketBase
+ * drops a check-in with its booking). Spots the crew booked for approved
  * special-needs requests stay: they were handed out on purpose, usually
  * before booking opened.
  * @throws {ReleaseStoppedError} when the database refuses halfway
@@ -196,6 +197,8 @@ type HouseStats = HousesResponse & {
 	totalBeds: number;
 	occupiedBeds: number;
 	freeBeds: number;
+	/** Booked spots whose guest the crew checked in at arrival. */
+	checkedInBeds: number;
 	occupancyRate: number;
 };
 
@@ -210,8 +213,13 @@ export const actions: Actions = {
 					'Only superusers can switch the booking phase right now. Plan it with the booking window and arm the timer instead.'
 			});
 		}
-		const to = String((await request.formData().catch(() => null))?.get('phase') ?? '');
+		const form = await request.formData().catch(() => null);
+		const to = String(form?.get('phase') ?? '');
 		if (!isBookingPhase(to)) return fail(400, { error: 'Unknown booking phase.' });
+		// Releasing the guest bookings (and with them their check-ins) is the
+		// superuser's explicit choice in the dialog, not a side effect: without
+		// it the bookings stay and "clear all bookings" can do it later.
+		const clearBookings = form?.get('clearBookings') === '1';
 
 		try {
 			const { exists, window } = await readWindow(locals.pb);
@@ -223,10 +231,11 @@ export const actions: Actions = {
 			await writeWindow(locals.pb, exists, next);
 			console.log(`[Action:setPhase] SUCCESS: ${phaseBefore} → ${to}`);
 
-			// Staging Mode never starts with guest bookings: the layout is about to
-			// be edited. Spots the crew booked for special-needs requests stay.
+			// Editing the layout with guest bookings in it is what the dialog
+			// warns about; only a "yes, release them" gets here. Spots the crew
+			// booked for special-needs requests stay.
 			let cleared: { released: number; kept: number } | null = null;
-			if (to === 'staging') {
+			if (to === 'staging' && clearBookings) {
 				try {
 					cleared = await releaseGuestBookings(locals.adminPb);
 					await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
@@ -305,12 +314,12 @@ export const actions: Actions = {
 		if (!locals.admin?.isSuperuser) {
 			return fail(403, { error: 'Only superusers can clear all bookings.' });
 		}
-		// Only in Staging Mode: switching back to Staging releases the bookings
-		// itself, and a stale tab must never clear a live camp.
+		// Only in Staging Mode: the switch back asks about the bookings itself,
+		// and a stale tab must never clear a live camp.
 		const { phase } = await getBookingSettings(locals.pb);
 		if (phase !== 'staging') {
 			return fail(403, {
-				error: `Bookings can only be cleared in Staging Mode, not ${lockedDuring(phase)}. Switching back to Staging releases them.`
+				error: `Bookings can only be cleared in Staging Mode, not ${lockedDuring(phase)}. Switch back to Staging first; that switch also offers to release them.`
 			});
 		}
 
@@ -639,6 +648,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			totalBeds: spots.total,
 			occupiedBeds: spots.occupied,
 			freeBeds: spots.free,
+			checkedInBeds: spots.checkedIn,
 			occupancyRate
 		};
 	});

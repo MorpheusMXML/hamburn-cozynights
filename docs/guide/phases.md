@@ -80,7 +80,7 @@ Times the armed timer already has don't have to be a day ahead again, so you can
 
 - **Live Booking:** a planned opening time is dropped (booking opened now). A future closing time stays and closes booking as planned.
 - **Closed:** the closing time of the current window is dropped (booking closed now). If the timer had already opened booking, it is paused as well (armed, it would reopen booking at once) and the elapsed opening time stays visible in the panel. For another round, edit the window with new times before arming again.
-- **Staging:** the timer is paused, so nothing switches by itself. **Every guest booking is released:** those spots become free again and their burner names are forgotten; ticket codes keep working, so the guests book again once booking opens. Spots the crew booked for [special-needs requests](./special-needs) stay. The dialog says how many bookings go. This can't be undone — Staging Mode never starts with guest bookings, because the layout is about to be edited.
+- **Staging:** the timer is paused, so nothing switches by itself. The dialog then asks what happens to the guest bookings, and says how many there are (and how many guests are already checked in): **release them** — those spots become free again and their burner names and check-ins are forgotten, ticket codes keep working, so the guests book again once booking opens; this can't be undone — or **keep them** while the layout is edited, and clear them later with 🧨 *Clear all bookings*. Spots the crew booked for [special-needs requests](./special-needs) stay either way. Only superusers can do either.
 
 A window planned for later (its opening time still ahead) stays armed when a superuser closes booking or goes back to Staging. The confirmation warns about it.
 

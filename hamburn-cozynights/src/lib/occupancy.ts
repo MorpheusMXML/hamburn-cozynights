@@ -7,17 +7,24 @@ export interface SpotCounts {
 	occupied: number;
 	/** Active spots guests can still book: neither taken, locked nor special-needs spots. */
 	free: number;
+	/** Active spots whose guest the crew checked in at arrival (part of `occupied`). */
+	checkedIn: number;
 }
 
 /** Occupancy of a set of spots, as the admin views count it. */
 export function countSpots(
-	beds: (Pick<BedsResponse, 'enabled' | 'occupied' | 'is_locked'> & { is_special?: boolean })[]
+	beds: (Pick<BedsResponse, 'enabled' | 'occupied' | 'is_locked'> & {
+		is_special?: boolean;
+		order?: string;
+		checked_in_at?: string;
+	})[]
 ): SpotCounts {
 	const active = beds.filter((bed) => bed.enabled !== false);
 	return {
 		total: active.length,
 		occupied: active.filter((bed) => bed.occupied).length,
-		free: active.filter((bed) => !bed.occupied && !bed.is_locked && !bed.is_special).length
+		free: active.filter((bed) => !bed.occupied && !bed.is_locked && !bed.is_special).length,
+		checkedIn: active.filter((bed) => !!bed.order && !!bed.checked_in_at).length
 	};
 }
 

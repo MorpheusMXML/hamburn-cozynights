@@ -11,7 +11,7 @@ data lives and how it is backed up: [Backups and where data lives](../develop/de
 | :------------- | :--------------------------------------------------------------------------------------- | :------------ | :--------------------------------------------------- | :------------------------------------ |
 | `houses`       | `name`, `x`, `y` (map position)                                                          | no            | admins                                               | public read, admin write              |
 | `rooms`        | `name`, `room_number`, `house`, `amount_beds` (spots created with the room; an initial count only, not maintained: count the room's `beds`) | no            | admins                                               | public read, admin write              |
-| `beds`         | `label`, `room`, `occupied`, `order`, `is_locked`, `enabled`, `is_special` (special-needs spot), `booked_at` (when the spot got its ticket, set by PocketBase) | no      | admins; guest bookings via the app's service account | admin read, admin write (guests see spots only through the app) |
+| `beds`         | `label`, `room`, `occupied`, `order`, `is_locked`, `enabled`, `is_special` (special-needs spot), `booked_at` (when the spot got its ticket, set by PocketBase), `checked_in_at` and `checked_in_by` (the check-in at arrival: when, which admin) | no      | admins; guest bookings via the app's service account; a check-in with the checking admin's own session (the service account only moves it along or clears it) | admin read, admin write (guests see spots only through the app) |
 | `orders`       | `order_number`, `order_hash`, `customer_name`, `burner_name` (encrypted), `email`, `pass_code` (booking pass, unique) | yes | the app's service account, `scripts/cozy-admin.sh tickets`; `pass_code` only by PocketBase | none (superusers only) |
 | `app_settings` | the phase set by hand: `is_booking_active` (live), `booking_closed` (closed); the booking window: `booking_unlock_at`, `booking_close_at`, `booking_timer_paused`; `notify_mail`, `telegram_bot`, `special_requests_open` (single record `appsettings0123`) | no | admins (a phase switch right now: superusers only); PocketBase keeps the two notification flags current | public read, admin write |
 | `admins`       | `email`, `name`, `role` (`pending`, `admin`, `superuser`), `last_sign_in`                | yes (email)   | Google sign-in, `scripts/cozy-admin.sh`              | none (sign-in creates `pending` only) |
@@ -35,12 +35,21 @@ write" means an approved `admins` record (see [Security & privacy](./security)).
   PocketBase stamps `booked_at` whenever `order` is set and clears it on
   release (`pb_hooks/cozy_booked.pb.js`), whoever does the writing; when a
   ticket is deleted, the bed it held becomes free in the same hook.
+- **A spot is free, booked or checked in.** Checked in means the crew checked
+  the guest's booking pass at arrival (`checked_in_at`, `checked_in_by`; only
+  admins and superusers, see [Booking passes & check-in](../admin/passes)).
+  A check-in only exists while the bed has its `order`: the same hook drops it
+  when the bed is released or gets another ticket, unless that write brings a
+  check-in along (the crew moving a guest who arrived). Guests can't release
+  a checked-in spot; a ticket handed over to a new holder loses its check-in.
 - **One ticket, one spot, also on the server:** the room page refuses a second
   spot while the ticket holds one (release first). A move whose release of
   the old spot fails is undone, so a ticket never keeps two spots.
-- **Staging Mode never starts with guest bookings:** a superuser's switch back
-  to Staging releases them (spots the crew booked for special-needs requests
-  stay); "clear all bookings" only works in Staging Mode.
+- **Only superusers release bookings:** the switch back to Staging Mode asks
+  whether the guest bookings (and with them their check-ins) are released or
+  stay while the layout is edited; spots the crew booked for special-needs
+  requests stay either way. "Clear all bookings" does the same later and only
+  works in Staging Mode. Both are superuser-only, in the app and in PocketBase.
 - **Guest messages follow the beds.** Every change of a bed's `order` (a booking, a move, a release, a deleted room) marks the ticket in `guest_notify` as due; PocketBase then sends one message per settled state. See [Notifications](../admin/notifications).
 - **Contact data is temporary.** `orders.email`, the Telegram links and all special-needs requests are deleted after the event with `scripts/cozy-admin.sh tickets forget-contacts --yes`.
 - **One special-needs request per ticket** (unique index on `special_requests.order`); it goes with its ticket (cascade). The app takes the ticket from the guest's session, encrypts what the guest wrote and never logs it. See [Special-needs requests](../admin/special-needs).

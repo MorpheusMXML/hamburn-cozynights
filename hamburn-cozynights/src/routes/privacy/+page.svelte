@@ -101,7 +101,8 @@ variables in the server's .env (`$lib/server/legal`).
 		<li>the <strong>bed</strong> you choose and when you booked it;</li>
 		<li>
 			the <strong>pass code</strong> of your booking pass. Anyone with your pass link or its QR code can
-			see your bed and burner name; the crew checks the pass when you arrive;
+			see your bed and burner name; the crew checks the pass when you arrive and notes that you checked
+			in (when, and which crew member did it);
 		</li>
 		<li>
 			your <strong>burner name</strong>, if you enter one. This is voluntary: leave the field empty
@@ -114,7 +115,8 @@ variables in the server's .env (`$lib/server/legal`).
 		you about your bed, for example if the crew has to move you (Art. 6(1)(b) GDPR). Other guests
 		never see your email address, and we don't use it for advertising. We process the burner name
 		because you give it voluntarily (consent, Art. 6(1)(a) GDPR). While booking is open you can
-		change it or release your bed; after that the crew helps you. Burner names are stored encrypted.
+		change it or release your bed (once the crew has checked you in, only the crew can release it);
+		after that the crew helps you. Burner names are stored encrypted.
 	</p>
 	<p>
 		After you sign in, your browser keeps the ticket code in a cookie (<code>bookingCode</code>) for
