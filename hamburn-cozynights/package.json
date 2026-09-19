@@ -59,5 +59,10 @@
 		"chart.js": "^4.5.1",
 		"pocketbase": "^0.28.1",
 		"qr": "^0.7.0"
+	},
+	"overrides": {
+		"@sveltejs/kit": {
+			"cookie": "^0.7.2"
+		}
 	}
 }
