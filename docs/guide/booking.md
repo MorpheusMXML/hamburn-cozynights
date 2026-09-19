@@ -5,7 +5,7 @@ All you need is the **ticket code** from your Hamburn ticket. There is no accoun
 Beds come with **Indoor memberships** only. Camper memberships (camper or tent) don't include a bed and don't need CozyNights.
 
 > [!NOTE] Booking opens and closes at set times
-> Before booking opens, the map stays blurred and a countdown shows when it starts. You can already sign in with your code. While booking is open, a slim countdown at the top of every page shows when it closes; after that, spots are final.
+> Before booking opens, the start page and the (still blurred) map count down to the start. You can already sign in with your code. While booking is open, a countdown on every page shows when it closes; after that, spots are final.
 
 ## At a glance
 

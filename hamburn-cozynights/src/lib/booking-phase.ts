@@ -143,9 +143,10 @@ export function openingCountdownAt(
 }
 
 /**
- * Whether the slim countdown bar shows on a page. The map draws its own big
- * "IGNITION IN" countdown, but only in Staging: in Closed with a later window
- * armed, the bar is the only countdown it has.
+ * Whether the slim countdown bar shows on a page. The start page always draws
+ * the big countdown itself (above the ticket-code field), the map only its
+ * "IGNITION IN" in Staging: in Closed with a later window armed, the bar is
+ * the only countdown the map has.
  */
 export function showCountdownBar(
 	phase: BookingPhase,
@@ -153,8 +154,8 @@ export function showCountdownBar(
 	pathname: string
 ): boolean {
 	const kind = countdownKind(phase, next);
-	if (kind === 'closes') return true;
-	return kind === 'opens' && !(phase === 'staging' && pathname === '/map');
+	if (!kind || pathname === '/') return false;
+	return kind === 'closes' || !(phase === 'staging' && pathname === '/map');
 }
 
 /**
