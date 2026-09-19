@@ -1,13 +1,28 @@
+<script lang="ts" module>
+	/** Closed: once a guest looked around, back from a house the panel stays away. */
+	let lookedAround = false;
+</script>
+
 <script lang="ts">
 	import type { PageData } from './$types';
 	import Map from '$lib/components/Map.svelte';
 	import CountdownTimer from '$lib/components/CountdownTimer.svelte';
+	import PassTicket from '$lib/components/PassTicket.svelte';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import { onMount } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 
 	export let data: PageData;
 	$: ({ houses, isBookingActive, phase, bookingUnlockAt } = data);
+
+	// Closed: a panel like the one in Staging covers the blurred map until
+	// the guest wants to look around (houses still open, read-only).
+	let lookingAround = lookedAround;
+	$: closedPanel = phase === 'closed' && !lookingAround;
+
+	function lookAround() {
+		lookingAround = lookedAround = true;
+	}
 
 	onMount(() => {
 		// Force a fresh fetch when entering the page
@@ -97,33 +112,16 @@
 				isEditorMode={false}
 				isBookingActive={data.isBookingActive}
 				phase={data.phase}
+				dimmed={closedPanel}
 			/>
 		</div>
-
-		{#if isBookingActive}
-			<div class="floating-action-bar">
-				<a href="/random-bed" class="random-btn pulsing-laser">
-					<span class="icon">🎰</span>
-					DESTINY ROULETTE
-				</a>
-			</div>
-		{/if}
 	{:else}
 		<div class="loading">Igniting Sensors...</div>
 	{/if}
 
-	{#if phase === 'closed'}
-		<div class="closed-note" role="status">
-			<span class="closed-icon" aria-hidden="true">🔒</span>
-			<span
-				><strong>Booking is closed.</strong> Spots are final now. Tap a house to look around.</span
-			>
-		</div>
-	{/if}
-
 	{#if phase === 'staging'}
-		<div class="staging-overlay">
-			<div class="staging-center-content">
+		<div class="phase-overlay">
+			<div class="phase-panel">
 				{#if bookingUnlockAt}
 					<div class="timer-wrapper">
 						<h2 class="laser-text pink">IGNITION IN</h2>
@@ -131,7 +129,7 @@
 					</div>
 				{/if}
 
-				<p class="staging-note">
+				<p class="phase-note">
 					Booking is not open yet. {bookingUnlockAt
 						? 'This page unlocks by itself when the countdown ends.'
 						: 'The crew is still setting up the houses. Check back soon.'}
@@ -147,7 +145,7 @@
 					</a>
 				{/if}
 
-				<button class="reload-button" class:smashed={isShaking} on:click={handleReloadSensors}>
+				<button class="panel-button" class:smashed={isShaking} on:click={handleReloadSensors}>
 					<span class="icon">📡</span>
 					RELOAD SENSORS
 					{#if clickCount > 5}
@@ -156,8 +154,45 @@
 				</button>
 			</div>
 		</div>
+	{:else if closedPanel}
+		<div class="phase-overlay">
+			<div class="phase-panel">
+				<h2 class="laser-text closed">BOOKING CLOSED</h2>
+
+				<p class="phase-note">
+					Spots are final now: nothing can be booked, changed or released anymore.
+					{#if data.noSpot}Your ticket holds no spot. If you need one, please contact the crew.{/if}
+				</p>
+
+				{#if data.pass}
+					<PassTicket pass={data.pass} />
+				{/if}
+
+				{#if data.specialNeeds.requestSent}
+					<a class="special-needs-cta" href="/special-needs">
+						<span aria-hidden="true">♿</span> See your special-needs request
+					</a>
+				{/if}
+
+				<button class="panel-button" on:click={lookAround}>
+					<span class="icon">🗺️</span>
+					LOOK AROUND
+				</button>
+			</div>
+		</div>
 	{/if}
-	<div class="map-legal"><SiteFooter compact /></div>
+
+	<!-- One column: the roulette button stacks on top of the legal links and
+	     the credit, so the two never cover each other. -->
+	<div class="bottom-dock">
+		{#if data.houses && isBookingActive}
+			<a href="/random-bed" class="random-btn pulsing-laser">
+				<span class="icon">🎰</span>
+				DESTINY ROULETTE
+			</a>
+		{/if}
+		<div class="map-legal"><SiteFooter compact /></div>
+	</div>
 </div>
 
 <style>
@@ -246,28 +281,29 @@
 		backdrop-filter: blur(10px);
 	}
 
-	.map-legal {
+	.bottom-dock {
 		position: absolute;
-		left: 50%;
+		left: 12px;
+		right: 12px;
 		bottom: max(8px, env(safe-area-inset-bottom));
-		transform: translateX(-50%);
 		z-index: 100;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 8px;
+		/* The map stays clickable beside the boxes. */
+		pointer-events: none;
+	}
+	.bottom-dock > * {
+		pointer-events: auto;
+	}
+
+	.map-legal {
 		padding: 0 0.6rem;
-		border-radius: 999px;
 		background: rgba(5, 5, 5, 0.7);
 		backdrop-filter: blur(8px);
 		white-space: nowrap;
 		border-radius: 14px;
-	}
-
-	.floating-action-bar {
-		position: absolute;
-		/* Above the legal links row. */
-		bottom: calc(max(8px, env(safe-area-inset-bottom)) + 36px);
-		left: 50%;
-		transform: translateX(-50%);
-		z-index: 100;
-		pointer-events: auto;
 	}
 
 	.random-btn {
@@ -407,44 +443,14 @@
 		box-shadow: 0 0 15px rgba(255, 255, 255, 0.08);
 	}
 
-	.closed-note {
-		position: absolute;
-		/* Where the roulette button sits during Live Booking. */
-		bottom: calc(max(8px, env(safe-area-inset-bottom)) + 36px);
-		left: 50%;
-		transform: translateX(-50%);
-		z-index: 100;
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		width: max-content;
-		max-width: calc(100% - 24px);
-		box-sizing: border-box;
-		padding: 0.75rem 1.1rem;
-		border-radius: 14px;
-		border: 1px solid #333;
-		background: rgba(10, 10, 10, 0.85);
-		backdrop-filter: blur(10px);
-		-webkit-backdrop-filter: blur(10px);
-		color: #b5b5b5;
-		font-size: 0.85rem;
-		line-height: 1.4;
-		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-	}
-	.closed-note strong {
-		color: #fff;
-	}
-	.closed-icon {
-		font-size: 1.1rem;
-	}
-
 	.map-container {
 		width: 100%;
 		height: 100%;
 		transition: filter 0.5s ease;
 	}
 
-	.staging-overlay {
+	/* Staging and Closed: a panel over the blurred map. */
+	.phase-overlay {
 		position: absolute;
 		top: 0;
 		left: 0;
@@ -452,13 +458,14 @@
 		height: 100%;
 		z-index: 50;
 		display: flex;
-		justify-content: center;
-		align-items: center;
-		padding: 0 1rem;
+		/* Centred between the header and the legal links; scrolls on very short screens. */
+		padding: 6rem 1rem 5rem;
+		overflow-y: auto;
 		pointer-events: none;
 	}
 
-	.staging-center-content {
+	.phase-panel {
+		margin: auto;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -471,7 +478,12 @@
 		max-width: 100%;
 	}
 
-	.staging-note {
+	/* The panel's gap spaces the ticket already. */
+	.phase-panel :global(.pass-ticket) {
+		margin-top: 0;
+	}
+
+	.phase-note {
 		margin: 0;
 		max-width: 22rem;
 		text-align: center;
@@ -525,7 +537,11 @@
 		color: #f472b6;
 	}
 
-	.reload-button {
+	.laser-text.closed {
+		color: #e5e5e5;
+	}
+
+	.panel-button {
 		background: #111;
 		border: 2px solid #2dd4bf;
 		color: #2dd4bf;
@@ -543,18 +559,18 @@
 		overflow: hidden;
 	}
 
-	.reload-button:hover {
+	.panel-button:hover {
 		background: #2dd4bf;
 		color: #111;
 		transform: scale(1.05);
 		box-shadow: 0 0 30px rgba(45, 212, 191, 0.6);
 	}
 
-	.reload-button:active {
+	.panel-button:active {
 		transform: scale(0.95);
 	}
 
-	.reload-button.smashed {
+	.panel-button.smashed {
 		animation: shake 0.1s infinite;
 		border-color: #f472b6;
 		color: #f472b6;
@@ -638,7 +654,7 @@
 			font-size: 0.8rem;
 			letter-spacing: 1.5px;
 		}
-		.reload-button {
+		.panel-button {
 			padding: 1rem 1.25rem;
 		}
 	}

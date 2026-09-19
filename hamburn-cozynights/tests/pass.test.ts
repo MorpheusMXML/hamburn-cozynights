@@ -11,12 +11,24 @@ vi.mock('$env/dynamic/private', () => ({
 	}
 }));
 
+import { FakePb } from './fake-pb';
 import { formatPassCode, isPassCode, normalizePassInput, PASS_ALPHABET } from '../src/lib/pass';
-import { ensurePassCode, findPass, passQrGif, passQrSvg, passUrl } from '../src/lib/server/pass';
-import { encrypt } from '../src/lib/server/crypto';
+import {
+	ensurePassCode,
+	findPass,
+	passQrGif,
+	passQrSvg,
+	passSummary,
+	passUrl
+} from '../src/lib/server/pass';
+import { createLookupHash, encrypt } from '../src/lib/server/crypto';
+import { APP_SETTINGS_ID } from '../src/lib/server/constants';
 import { load as passLoad } from '../src/routes/pass/[code]/+page.server';
 import { GET as passGif } from '../src/routes/pass/[code]/qr.gif/+server';
 import { actions as checkActions } from '../src/routes/admin/check/+page.server';
+import { load as houseLoad } from '../src/routes/house/[id]/+page.server';
+import { load as roomLoad } from '../src/routes/room/[id]/+page.server';
+import { load as mapLoad } from '../src/routes/map/+page.server';
 
 const CODE = '7F3K9QXM2CWD';
 const notFound = Object.assign(new Error('not found'), { status: 404 });
@@ -149,6 +161,140 @@ describe('ensurePassCode', () => {
 		expect(pb.send).not.toHaveBeenCalled();
 		expect(await ensurePassCode(pb, { id: 'order1', pass_code: '' })).toBe('NEWCODE23456');
 		expect(pb.send).toHaveBeenCalledWith('/api/cozy/pass/order1', { method: 'POST' });
+	});
+});
+
+/** Two houses; ticket HB-1001 sleeps in the first (B1), HB-2002 holds no spot. */
+function campWithGuest({ phase = 'closed', passCode = CODE } = {}) {
+	const pb = new FakePb();
+	pb.seed('app_settings', {
+		id: APP_SETTINGS_ID,
+		is_booking_active: phase === 'live',
+		booking_closed: phase === 'closed'
+	});
+	const villa = pb.seed('houses', { name: 'Brahmsee-Villa', x: 10, y: 20 });
+	const huts = pb.seed('houses', { name: 'Waldhütten', x: 30, y: 40 });
+	const blue = pb.seed('rooms', { name: 'Blue Room', room_number: 2, house: villa.id });
+	const hut = pb.seed('rooms', { name: 'Hut', room_number: 1, house: huts.id });
+	const order = pb.seed('orders', {
+		order_number: 'HB-1001',
+		order_hash: createLookupHash('HB-1001'),
+		customer_name: 'Ada Lovelace',
+		pass_code: passCode,
+		burner_name: encrypt('Disco Druid')
+	});
+	const bed = pb.seed('beds', {
+		label: 'B1',
+		room: blue.id,
+		enabled: true,
+		occupied: true,
+		order: order.id
+	});
+	pb.seed('beds', { label: 'H1', room: hut.id, enabled: true, occupied: false, order: '' });
+	pb.seed('orders', {
+		order_number: 'HB-2002',
+		order_hash: createLookupHash('HB-2002'),
+		customer_name: 'Grace Hopper'
+	});
+	return { pb, huts, hut, order, bed };
+}
+
+/** What the small ticket shows for HB-1001. */
+const TICKET = {
+	code: '7F3K-9QXM-2CWD',
+	house: 'Brahmsee-Villa',
+	room: 'Blue Room #2',
+	spot: 'B1',
+	burnerName: 'Disco Druid'
+};
+
+function guestLocals(pb: FakePb, orderNumber = 'HB-1001') {
+	return { pb, adminPb: pb, orderNumber, admin: null };
+}
+const cookies = { delete: () => {} };
+
+describe('passSummary', () => {
+	it('gives the small ticket the pass code and where the ticket sleeps', async () => {
+		const c = campWithGuest();
+		expect(await passSummary(c.pb as any, c.order as any, c.bed as any)).toEqual(TICKET);
+	});
+
+	it('makes the pass code on first use', async () => {
+		const c = campWithGuest({ passCode: '' });
+		const send = vi.fn(async () => ({ code: 'NEWCODE23456' }));
+		Object.assign(c.pb, { send });
+		expect((await passSummary(c.pb as any, c.order as any, c.bed as any)).code).toBe(
+			'NEWC-ODE2-3456'
+		);
+		expect(send).toHaveBeenCalledWith(`/api/cozy/pass/${c.order.id}`, { method: 'POST' });
+	});
+});
+
+describe("the guest's own pass on other pages", () => {
+	it('house and room pages give guests with a spot their ticket', async () => {
+		const c = campWithGuest();
+		const house: any = await houseLoad({
+			params: { id: c.huts.id },
+			locals: guestLocals(c.pb),
+			cookies
+		} as any);
+		expect(house.pass).toEqual(TICKET);
+		const room: any = await roomLoad({
+			params: { id: c.hut.id },
+			locals: guestLocals(c.pb),
+			cookies
+		} as any);
+		expect(room.pass).toEqual(TICKET);
+
+		const noSpot: any = await houseLoad({
+			params: { id: c.huts.id },
+			locals: guestLocals(c.pb, 'HB-2002'),
+			cookies
+		} as any);
+		expect(noSpot.pass).toBeNull();
+	});
+
+	it('a pass that cannot be made leaves the page working', async () => {
+		const c = campWithGuest({ passCode: '' });
+		Object.assign(c.pb, {
+			send: vi.fn(async () => {
+				throw new Error('PocketBase is down');
+			})
+		});
+		const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const house: any = await houseLoad({
+			params: { id: c.huts.id },
+			locals: guestLocals(c.pb),
+			cookies
+		} as any);
+		quiet.mockRestore();
+		expect(house.userBedId).toBe(c.bed.id);
+		expect(house.pass).toBeNull();
+	});
+
+	it('the map shows it on the Closed panel, and knows tickets without a spot', async () => {
+		const closed = campWithGuest();
+		expect(await mapLoad({ locals: guestLocals(closed.pb) } as any)).toMatchObject({
+			phase: 'closed',
+			pass: TICKET,
+			noSpot: false
+		});
+		expect(await mapLoad({ locals: guestLocals(closed.pb, 'HB-2002') } as any)).toMatchObject({
+			pass: null,
+			noSpot: true
+		});
+		// the map is public: nobody signed in, nothing to show
+		expect(await mapLoad({ locals: guestLocals(closed.pb, '') } as any)).toMatchObject({
+			pass: null,
+			noSpot: false
+		});
+
+		const live = campWithGuest({ phase: 'live' });
+		expect(await mapLoad({ locals: guestLocals(live.pb) } as any)).toMatchObject({
+			phase: 'live',
+			pass: null,
+			noSpot: false
+		});
 	});
 });
 

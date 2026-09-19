@@ -63,7 +63,7 @@ It goes to the address that belongs to your ticket, usually within a minute. Che
 :::
 
 ::: details Where is my booking pass?
-On your room page (<kbd>🎫 Show booking pass</kbd>) and behind the link in your confirmation e-mail or Telegram message. The link keeps working after you release your spot, but then it says that your ticket holds no spot right now. A screenshot of it is fine.
+On your room page (<kbd>🎫 Show booking pass</kbd>), as the small ticket on every other house and room (and on the map once booking has closed), and behind the link in your confirmation e-mail or Telegram message. The link keeps working after you release your spot, but then it says that your ticket holds no spot right now. A screenshot of it is fine.
 :::
 
 ::: details My pass link says "This booking pass is unknown" or "Too many unknown passes from your connection"

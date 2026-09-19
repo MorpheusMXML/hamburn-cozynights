@@ -8,7 +8,7 @@ import type {
 	RoomsResponse,
 	TypedPocketBase
 } from '$lib/pocketbase-types';
-import { formatPassCode } from '$lib/pass';
+import { formatPassCode, type PassSummary } from '$lib/pass';
 import { decrypt } from '$lib/server/crypto';
 
 /**
@@ -41,6 +41,21 @@ type BedWithRoom = BedsResponse<{ room?: RoomsResponse<{ house?: HousesResponse 
 
 function isNotFound(err: unknown): boolean {
 	return (err as ClientResponseError | undefined)?.status === 404;
+}
+
+/** "Blue Room #2" */
+function roomLabel(room: Pick<RoomsResponse, 'name' | 'room_number'>): string {
+	return `${room.name || 'Room'} #${room.room_number}`;
+}
+
+/** The ticket's burner name, or '' when it has none or it can't be read. */
+function burnerNameOf(order: Pick<OrdersResponse, 'burner_name'>): string {
+	if (!order.burner_name) return '';
+	try {
+		return decrypt(order.burner_name);
+	} catch {
+		return ''; // unreadable name: leave it out
+	}
 }
 
 /** The ticket's pass code; PocketBase creates one if the ticket has none yet. */
@@ -80,32 +95,47 @@ export async function findPass(adminPb: TypedPocketBase, code: string): Promise<
 		if (!isNotFound(err)) throw err;
 	}
 
-	let burnerName = '';
-	if (bed && order.burner_name) {
-		try {
-			burnerName = decrypt(order.burner_name);
-		} catch {
-			/* unreadable name: leave it out */
-		}
-	}
-
 	const room = bed?.expand?.room;
 	return {
 		code,
 		order,
-		burnerName,
+		burnerName: bed ? burnerNameOf(order) : '',
 		spot: bed
 			? {
 					bedId: bed.id,
 					roomId: bed.room,
 					house: room?.expand?.house?.name ?? '',
-					room: room ? `${room.name || 'Room'} #${room.room_number}` : '',
+					room: room ? roomLabel(room) : '',
 					spot: bed.label,
 					enabled: bed.enabled !== false,
 					locked: !!bed.is_locked,
 					since: bed.updated
 				}
 			: null
+	};
+}
+
+/**
+ * The small ticket on house, room and map pages: the guest's pass code (made
+ * on first use) and the spot `bed` they hold.
+ */
+export async function passSummary(
+	adminPb: TypedPocketBase,
+	order: Pick<OrdersResponse, 'id' | 'pass_code' | 'burner_name'>,
+	bed: Pick<BedsResponse, 'room' | 'label'>
+): Promise<PassSummary> {
+	const [code, room] = await Promise.all([
+		ensurePassCode(adminPb, order),
+		adminPb
+			.collection('rooms')
+			.getOne<RoomsResponse<{ house?: HousesResponse }>>(bed.room, { expand: 'house' })
+	]);
+	return {
+		code: formatPassCode(code),
+		house: room.expand?.house?.name ?? '',
+		room: roomLabel(room),
+		spot: bed.label,
+		burnerName: burnerNameOf(order)
 	};
 }
 

@@ -18,6 +18,7 @@ flowchart LR
 ## What the guest gets
 
 - **On their room page:** <kbd>🎫 Show booking pass</kbd>, as soon as they hold a spot.
+- **On every other house and room page:** a small ticket with their spot in the *You already have a spot* note; tapping it opens the pass. After booking closed, the map's panel shows the same ticket.
 - **In every confirmation:** the e-mail and the Telegram message link to the pass and show its code.
 - **The pass page** shows house, room, spot and burner name, the QR code and the code. <kbd>Save QR code</kbd> stores the QR code as an image named `cozynights-pass-<code>.gif` (on a phone it goes to the photos); a screenshot works just as well. A link typed without dashes or in lower case works too. If the ticket holds no spot right now, the page says so instead: *This ticket holds no spot right now. Pick one on the map while booking is open.*
 - **One pass per ticket.** It stays the same when the guest moves to another spot or releases theirs: the check always shows the spot the ticket holds *right now*.

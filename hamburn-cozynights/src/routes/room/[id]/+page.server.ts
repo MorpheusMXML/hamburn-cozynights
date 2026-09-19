@@ -18,9 +18,9 @@ import {
 	startTelegramLink,
 	type GuestNotifyStatus
 } from '$lib/server/notifications';
-import { ensurePassCode } from '$lib/server/pass';
+import { passSummary } from '$lib/server/pass';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
-import { formatPassCode } from '$lib/pass';
+import type { PassSummary } from '$lib/pass';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 const SIGNED_OUT =
@@ -88,20 +88,18 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 		// Where confirmations go, the booking pass, and whether the crew picked the
 		// spot (special-needs request). Optional: the page works without them.
 		let notify: GuestNotifyStatus | null = null;
-		let passCode: string | null = null;
+		let pass: PassSummary | null = null;
 		let spotFixed = false;
 		if (userBed) {
-			[notify, passCode, spotFixed] = await Promise.all([
+			[notify, pass, spotFixed] = await Promise.all([
 				getGuestNotifyStatus(locals.adminPb, order, settings).catch((err) => {
 					console.error('[Room] Notification status failed:', (err as Error)?.message);
 					return null;
 				}),
-				ensurePassCode(locals.adminPb, order)
-					.then(formatPassCode)
-					.catch((err) => {
-						console.error('[Room] Booking pass failed:', (err as Error)?.message);
-						return null;
-					}),
+				passSummary(locals.adminPb, order, userBed).catch((err) => {
+					console.error('[Room] Booking pass failed:', (err as Error)?.message);
+					return null;
+				}),
 				isSpotFixed(locals.adminPb, order.id, userBed.id).catch((err) => {
 					console.error('[Room] Special-needs request lookup failed:', (err as Error)?.message);
 					return false;
@@ -111,7 +109,7 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 
 		return {
 			notify,
-			passCode,
+			pass,
 			spotFixed,
 			room: { id: room.id, name: room.name, room_number: room.room_number, house: room.house },
 			beds: safeBeds,
