@@ -46,6 +46,15 @@ Get CozyNights running on your machine: a local PocketBase in Docker plus the Sv
 
    Open [http://localhost:5173](http://localhost:5173). Before the dev server starts, a health check verifies that PocketBase is reachable, the app can sign in to it and the schema is complete, and it tells you what to fix if not.
 
+5. **Turn on the secret check** (once per clone, from the repository root)
+
+   ```bash
+   brew install gitleaks
+   git config core.hooksPath .githooks
+   ```
+
+   From now on every commit is scanned with [gitleaks](https://github.com/gitleaks/gitleaks) before it is written, with the rules in `.gitleaks.toml`: passwords on command lines, values of `PB_ADMIN_PASSWORD`, `SMTP_PASSWORD`, `TELEGRAM_BOT_TOKEN`, `ENCRYPTION_KEY` and the like, plus gitleaks' own rules for tokens and private keys. A hit refuses the commit and names the line; the same scan runs over the whole history in CI (`Secrets` job). Without gitleaks installed the hook refuses every commit, on purpose.
+
 </div>
 
 > [!TIP] Test data
@@ -143,7 +152,7 @@ Schema and API rules are code: `pb_migrations/*.js`, applied by PocketBase on st
 ## Conventions
 
 - **One feature per branch, merged into `integration/staging` with a signed merge commit**, released to `main` by pull request. See [Branches, integration & releases](./integration).
-- **Never commit data.** The repository is public: `.env` files, `pb_data/` and database snapshots (encrypted or not) stay out of git. Share them through a private channel.
+- **Never commit data or secrets.** The repository is public: `.env` files, `pb_data/` and database snapshots (encrypted or not) stay out of git, and no password, token or key goes into a script, a compose file or `package.json`; scripts read them from the environment. The gitleaks hook (setup step 5) and the `Secrets` CI job refuse the obvious cases. Share data through a private channel.
 - Format with Prettier and satisfy ESLint: `npm run lint` must pass.
 - Server-only code goes to `src/lib/server/`; it must never be imported by client components.
 - Every read of ticket data happens on the server, and page data is trimmed to what the page shows. See [Security & privacy](../reference/security).

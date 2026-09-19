@@ -76,7 +76,7 @@ What a guest writes about their needs is often health data (Art. 9 GDPR), so it 
 
 ## Operations
 
-- **No secrets in git.** Each environment's configuration lives only on the machine that runs it and is kept in the team's password manager.
+- **No secrets in git.** Each environment's configuration lives only on the machine that runs it and is kept in the team's password manager. Two nets catch a slip: GitHub's push protection and secret scanning for provider tokens, and gitleaks with the project's own rules (`.gitleaks.toml`) as a pre-commit hook on every developer machine and as the `Secrets` job over the whole history in CI. A password that once sat in a script in this repository was treated as compromised and rotated; the history keeps it, so the rules also allowlist those old commits by id.
 - **Isolated environments.** Staging and production run as separate stacks: own containers, network, database and encryption key.
 - **Careful deploys.** Deploys are started by hand and need an approval. The deploy key can run exactly one command on the server. Every deploy backs up the database first and returns to the previous version automatically if the health check fails. See [Environments & deployment](../develop/deployment).
 - **Pinned database version.** The PocketBase image is pinned; upgrades are deliberate and come after a backup.
