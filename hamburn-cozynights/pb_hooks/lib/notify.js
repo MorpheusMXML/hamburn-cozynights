@@ -1432,7 +1432,10 @@ function deliverOne(app, cfg, rec, force, keepAlive) {
 		fresh.set('due', lease);
 	});
 	if (!leased) return 'skipped';
-	loadedDue = lease; // what the closing write checks against from here on
+	// What the closing write checks against from here on — and deliverDue's
+	// error path, which compares with the record it handed in.
+	loadedDue = lease;
+	rec.set('due', lease);
 
 	const spot = currentSpot(app, order.id);
 	const key = spot ? spot.bedId : '';
@@ -1625,9 +1628,7 @@ function deliverDue(app, cfg, force, deadline, keepAlive) {
 			console.error(
 				'[cozy-notify] delivery for ' + rec.getString('order') + ' failed: ' + safeError(err)
 			);
-			// Not again on the next pass: the same error would repeat every few
-			// seconds. A record that was already leased keeps the lease instead —
-			// same effect, and the lease is the newer value.
+			// Not again on the next pass: the same error would repeat every few seconds.
 			try {
 				updateNotify(app, rec.id, (fresh) => {
 					if (fresh.getString('due') !== rec.getString('due')) return false;

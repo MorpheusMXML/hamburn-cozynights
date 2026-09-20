@@ -487,3 +487,45 @@ describe('a release the crew keeps quiet (pb_hooks/lib/notify.js, setQuiet)', ()
 		expect(notify.setQuiet(app, 'nonsense')).toBe(0);
 	});
 });
+
+describe('a delivery that fails after its lease', () => {
+	const notify = loadHookModule('lib/notify.js', {
+		MailerMessage: class {
+			constructor(fields: Record<string, unknown>) {
+				Object.assign(this, fields);
+			}
+		}
+	});
+	const cfg = {
+		appUrl: 'https://cozy.test',
+		label: '',
+		mail: { enabled: true, replyTo: '' },
+		telegram: { token: '', chatId: '', threadId: '', apiBase: '', guests: false },
+		mailsPerMinute: 20,
+		texts: {}
+	};
+
+	it('still records the error and waits before the next try', () => {
+		const due = new Date(Date.now() - 1000).toISOString().replace('T', ' ');
+		const app = fakeHookApp({
+			orders: [{ id: 'order1', email: 'guest@example.com', pass_code: 'AAAABBBBCCCC' }],
+			beds: [{ id: 'bed1', order: 'order1', label: 'B1', room: 'room1' }],
+			guest_notify: [{ id: 'n1', order: 'order1', due, attempts: 0 }]
+		});
+		// The first save is the lease; the second, the closing write, fails the
+		// way a database hiccup would, after the mail went out.
+		const save = app.save;
+		let saves = 0;
+		app.save = (record: any) => {
+			if (++saves === 2) throw new Error('database hiccup');
+			return save(record);
+		};
+
+		notify.deliverDue(app, cfg, false, 0, () => true);
+
+		const stored = app.findRecordById('guest_notify', 'n1');
+		expect(stored.getString('last_error')).toContain('database hiccup');
+		const wait = Date.parse(stored.getString('due').replace(' ', 'T')) - Date.now();
+		expect(wait).toBeGreaterThan(60_000); // not again on the next pass
+	});
+});
