@@ -339,7 +339,6 @@ function windowText(d) {
 	return parts.length ? parts.join(' · ') : 'no times';
 }
 
-/** The crew chat text of an admin_events record. cfg (optional) adds links. */
 /**
  * What a special-needs request was when the guest withdrew it, in words. The
  * crew chat reads like a sentence; the stored word ('pending') is for code.
@@ -357,6 +356,7 @@ function requestStatusNote(status) {
 	}
 }
 
+/** The crew chat text of an admin_events record. cfg (optional) adds links. */
 function eventText(ev, cfg) {
 	const action = ev.getString('action');
 	const actor = ev.getString('actor');
@@ -797,7 +797,9 @@ function spotLines(spot) {
 
 /**
  * Subject, plain text and HTML of a guest e-mail. kind: booked | changed |
- * released, or '' when only the special-needs request changed. pass: { code,
+ * released | handed_over (the ticket was passed on, and this address hears
+ * about its spot for the first time), or '' when only the special-needs
+ * request changed. pass: { code,
  * url } of the ticket's booking pass, or null. request (optional): { kind:
  * received | approved | declined | '' (what to tell about the request),
  * status: its current status, fixed: the ticket's spot is the one the crew
