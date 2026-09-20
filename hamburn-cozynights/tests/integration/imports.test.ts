@@ -101,8 +101,13 @@ describe('a ticket passed on to someone else', () => {
 		expect(text).toContain(format(stored.pass_code));
 		expect(text).not.toContain(format(oldPass));
 		expect(text).not.toContain(ticket.code);
-		// the mark is used up: a spot they book later is an ordinary booking
-		expect(stored.handed_over_at).toBe('');
+		// the date stays on the ticket; the channel remembers what it was told,
+		// so a spot the new holder books later is an ordinary booking
+		expect(stored.handed_over_at).not.toBe('');
+		const told = await su
+			.collection('guest_notify')
+			.getFirstListItem(su.filter('order = {:o}', { o: ticket.order.id }));
+		expect(told.mail_handover).toBe(stored.handed_over_at);
 
 		// nothing more for the old holder: no mail about the hand-over, no chat
 		expect(await mailsTo(oldEmail)).toHaveLength(1);

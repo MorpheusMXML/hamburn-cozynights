@@ -71,8 +71,10 @@ const TEXTS = [
 	// --- e-mail: the ticket was passed on ---------------------------------------------
 	{ key: 'mail.handed_over.subject', group: 'mail.handed_over', label: 'Subject', hint: '', placeholders: ['spot'],
 		text: 'A CozyNights spot came with your ticket: {spot}' },
-	{ key: 'mail.handed_over.intro', group: 'mail.handed_over', label: 'First line', hint: 'After the greeting; house, room and spot follow. The lines about changing the spot and the booking pass are the ones of "spot booked".', placeholders: [],
+	{ key: 'mail.handed_over.intro', group: 'mail.handed_over', label: 'First line', hint: 'After the greeting; house, room and spot follow. The line about changing the spot is the one of "spot booked".', placeholders: [],
 		text: 'this ticket was passed on to you, and it holds this spot:' },
+	{ key: 'mail.handed_over.pass', group: 'mail.handed_over', label: 'Booking pass', hint: 'Instead of the usual pass line: the holder before may have passed their old pass link on with the ticket.', placeholders: ['passCode', 'passUrl'],
+		text: 'Your own booking pass (code {passCode}): {passUrl} — the pass of the holder before no longer works.' },
 
 	// --- e-mail: spot changed ---------------------------------------------------------
 	{ key: 'mail.changed.subject', group: 'mail.changed', label: 'Subject', hint: '', placeholders: ['spot'],

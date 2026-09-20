@@ -294,10 +294,23 @@ describe('a ticket that was passed on', () => {
 		expect(m.text).toContain('this ticket was passed on to you, and it holds this spot:');
 		expect(m.text).toContain('Spot:');
 		expect(m.text).toContain('Dorm #1');
-		// the new pass, and how to change the spot, as in every booked message
+		// its own pass line: the seller may have passed the old link on
 		expect(m.text).toContain(pass.url);
+		expect(m.text).toContain('the pass of the holder before no longer works');
 		expect(m.text).toContain('To change or release it');
 		expect(m.text).not.toContain('your spot is booked');
+	});
+
+	it('still carries news about a special-needs request', () => {
+		// One message per settled state: a request the new holder sent while
+		// this message was still waiting would be lost if the text left it out.
+		const received = mail('handed_over', true, {
+			kind: 'received',
+			status: 'pending',
+			fixed: false
+		});
+		expect(received.text).toContain('The crew also got your special-needs request');
+		expect(received.text).toContain('this ticket was passed on to you');
 	});
 
 	it('is in the preview for the crew, but not as a Telegram message', () => {
