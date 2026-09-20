@@ -1,122 +1,89 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
-	import {
-		ArcElement,
-		BarController,
-		BarElement,
-		CategoryScale,
-		Chart,
-		DoughnutController,
-		LinearScale
-	} from 'chart.js';
-	// Only the parts of chart.js the two charts use (a doughnut and bars,
-	// no legend, tooltip or line charts): the rest would be ~30 KB for nothing.
-	Chart.register(
-		ArcElement,
-		BarController,
-		BarElement,
-		CategoryScale,
-		DoughnutController,
-		LinearScale
-	);
-
+	/**
+	 * Two small charts for the Control Center, drawn as inline SVG: an
+	 * occupancy ring and the spots booked per day over the last 7 days.
+	 * (chart.js did the same and was ~50 KB of the /admin bundle.)
+	 */
 	export let totalBeds: number;
 	export let occupiedBeds: number;
 	export let history: { bookingTrend: number[]; labels: string[] };
 
-	let occupancyChart: HTMLCanvasElement;
-	let trendChart: HTMLCanvasElement;
-	let occupancy: Chart | undefined;
-	let trend: Chart | undefined;
+	// The ring: one circle whose dash pattern is [occupied share, rest] of the
+	// circumference, rotated a quarter back so it starts at 12 o'clock.
+	const RADIUS = 40;
+	const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+	$: share = totalBeds > 0 ? Math.min(1, Math.max(0, occupiedBeds / totalBeds)) : 0;
+	$: percent = Math.round(share * 100);
+	$: occupiedArc = CIRCUMFERENCE * share;
 
-	// Keep the charts in step with the numbers, e.g. after "clear all bookings".
-	$: if (occupancy) {
-		occupancy.data.datasets[0].data = [occupiedBeds, Math.max(0, totalBeds - occupiedBeds)];
-		occupancy.update();
-	}
-	$: if (trend) {
-		trend.data.labels = history.labels;
-		trend.data.datasets[0].data = history.bookingTrend;
-		trend.update();
-	}
-
-	onDestroy(() => {
-		occupancy?.destroy();
-		trend?.destroy();
+	// The bars: drawn in a 100-unit-high box that stretches to the card, one
+	// slot of 40 units per day (the labels are HTML below, so nothing stretches
+	// that shouldn't). The tallest day fills the height.
+	const BAR_HEIGHT = 100;
+	const SLOT = 40;
+	const BAR = 24;
+	$: counts = history.bookingTrend;
+	$: peak = Math.max(1, ...counts);
+	$: bars = counts.map((count, i) => {
+		const height = (count / peak) * BAR_HEIGHT;
+		return {
+			x: i * SLOT + (SLOT - BAR) / 2,
+			y: BAR_HEIGHT - height,
+			height,
+			count,
+			label: history.labels[i] ?? ''
+		};
 	});
-
-	onMount(() => {
-		// 1. Occupancy Pie Chart (Cookie Diagram)
-		occupancy = new Chart(occupancyChart, {
-			type: 'doughnut',
-			data: {
-				labels: ['Occupied', 'Free'],
-				datasets: [
-					{
-						data: [occupiedBeds, Math.max(0, totalBeds - occupiedBeds)],
-						backgroundColor: ['#f472b6', '#1a1a1a'],
-						borderColor: ['#f472b6', '#333'],
-						borderWidth: 2,
-						hoverOffset: 10
-					}
-				]
-			},
-			options: {
-				responsive: true,
-				plugins: {
-					legend: { display: false }
-				},
-				cutout: '70%'
-			}
-		});
-
-		// 2. Spots booked per day, last 7 days (beds.booked_at, stamped by PocketBase)
-		trend = new Chart(trendChart, {
-			type: 'bar',
-			data: {
-				labels: history.labels,
-				datasets: [
-					{
-						label: 'Booked spots',
-						data: history.bookingTrend,
-						backgroundColor: '#2dd4bf',
-						borderRadius: 4,
-						barPercentage: 0.6
-					}
-				]
-			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				scales: {
-					y: { display: false, beginAtZero: true },
-					x: {
-						grid: { display: false },
-						ticks: { color: '#444', font: { size: 10 } }
-					}
-				},
-				plugins: {
-					legend: { display: false }
-				}
-			}
-		});
-	});
+	$: trendSummary =
+		counts.length > 0
+			? counts.map((count, i) => `${history.labels[i] ?? ''}: ${count}`).join(', ')
+			: 'no data';
 </script>
 
 <div class="intel-dashboard">
 	<div class="chart-container pie-box">
-		<canvas bind:this={occupancyChart}></canvas>
-		<div class="pie-overlay">
-			<span class="percentage"
-				>{totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0}%</span
-			>
+		<svg
+			class="ring"
+			viewBox="0 0 100 100"
+			role="img"
+			aria-label="Occupancy: {occupiedBeds} of {totalBeds} spots booked ({percent} %)"
+		>
+			<circle class="ring-free" cx="50" cy="50" r={RADIUS} />
+			<circle
+				class="ring-occupied"
+				cx="50"
+				cy="50"
+				r={RADIUS}
+				stroke-dasharray="{occupiedArc} {CIRCUMFERENCE - occupiedArc}"
+				stroke-dashoffset={CIRCUMFERENCE / 4}
+			/>
+		</svg>
+		<div class="pie-overlay" aria-hidden="true">
+			<span class="percentage">{percent}%</span>
 			<span class="label">LOAD</span>
 		</div>
 	</div>
 	<div class="chart-container line-box">
 		<span class="chart-title">New Bookings · Last 7 Days</span>
 		<div class="canvas-wrap">
-			<canvas bind:this={trendChart}></canvas>
+			<svg
+				class="bars"
+				viewBox="0 0 {Math.max(1, counts.length) * SLOT} {BAR_HEIGHT}"
+				preserveAspectRatio="none"
+				role="img"
+				aria-label="New bookings in the last 7 days: {trendSummary}"
+			>
+				{#each bars as bar (bar.label + bar.x)}
+					<rect class="bar" x={bar.x} y={bar.y} width={BAR} height={bar.height}>
+						<title>{bar.label}: {bar.count} booked</title>
+					</rect>
+				{/each}
+			</svg>
+		</div>
+		<div class="bar-labels" aria-hidden="true">
+			{#each bars as bar (bar.label + bar.x)}
+				<span>{bar.label}</span>
+			{/each}
 		</div>
 	</div>
 </div>
@@ -142,6 +109,23 @@
 		height: 150px;
 		flex-shrink: 0;
 	}
+	.ring {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
+	.ring-free,
+	.ring-occupied {
+		fill: none;
+		stroke-width: 12;
+	}
+	.ring-free {
+		stroke: #1a1a1a;
+	}
+	.ring-occupied {
+		stroke: #f472b6;
+		transition: stroke-dasharray 0.6s ease;
+	}
 	.line-box {
 		flex: 1 1 220px;
 		min-width: 0;
@@ -149,12 +133,35 @@
 		display: flex;
 		flex-direction: column;
 	}
-	/* Chart.js sizes the canvas from this box; without it the bar chart grows
-	   past the card in a column flexbox. */
+	/* The bars stretch to whatever height the card leaves them. */
 	.line-box .canvas-wrap {
-		position: relative;
 		flex: 1;
 		min-height: 0;
+	}
+	.bars {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
+	.bar {
+		fill: #2dd4bf;
+		transition:
+			y 0.4s ease,
+			height 0.4s ease;
+	}
+	.bar-labels {
+		display: flex;
+		margin-top: 0.35rem;
+	}
+	.bar-labels span {
+		flex: 1 1 0;
+		min-width: 0;
+		text-align: center;
+		font-size: 10px;
+		color: #444;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	.chart-title {
 		font-size: 0.6rem;
