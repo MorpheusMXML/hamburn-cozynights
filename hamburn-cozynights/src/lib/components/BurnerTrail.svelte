@@ -2,6 +2,8 @@
 @component
 Full-viewport WebGL cursor FX: neon hue-cycling ribbon, ember sparks, click
 shockwaves and a soft spotlight. Disabled when the user prefers reduced motion.
+Fingers leave no trail on phones and tablets (the ribbon would chase every
+scroll of a spot list); a mouse on a touch-screen laptop still does.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
@@ -11,6 +13,8 @@ shockwaves and a soft spotlight. Disabled when the user prefers reduced motion.
 
 	onMount(() => {
 		const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+		// The primary pointer is a mouse or trackpad: only then follow touches too.
+		const finePointer = window.matchMedia('(pointer: fine)');
 		let destroy: (() => void) | null = null;
 
 		const sync = () => {
@@ -18,7 +22,7 @@ shockwaves and a soft spotlight. Disabled when the user prefers reduced motion.
 				destroy?.();
 				destroy = null;
 			} else if (!destroy) {
-				destroy = createBurnerTrail(canvas);
+				destroy = createBurnerTrail(canvas, { touch: finePointer.matches });
 			}
 		};
 

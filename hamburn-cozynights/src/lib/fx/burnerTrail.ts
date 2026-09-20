@@ -331,7 +331,7 @@ function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLSha
 }
 
 export interface BurnerTrailOptions {
-	/** Follow finger drags on touch devices. */
+	/** Follow finger drags on touch devices (off for phones: it would chase every scroll). */
 	touch?: boolean;
 	/** Shockwave + spark burst on click/tap. */
 	clickBurst?: boolean;
@@ -713,6 +713,21 @@ export function createBurnerTrail(
 
 	const onTouchEnd = () => endStroke();
 
+	// Hidden tab: browsers park requestAnimationFrame anyway, but the loop
+	// would resume mid-stroke with a stale pointer and a huge frame gap. Stop
+	// it cleanly and let the next input (or the return) wake it again.
+	const onVisibility = () => {
+		if (document.hidden) {
+			cancelAnimationFrame(raf);
+			raf = 0;
+			running = false;
+			endStroke();
+			lastMouseMove = -Infinity;
+		} else {
+			wake();
+		}
+	};
+
 	const onContextLost = (e: Event) => {
 		e.preventDefault();
 		contextLost = true;
@@ -738,12 +753,14 @@ export function createBurnerTrail(
 		window.addEventListener('touchend', onTouchEnd, passive);
 		window.addEventListener('touchcancel', onTouchEnd, passive);
 	}
+	document.addEventListener('visibilitychange', onVisibility);
 	canvas.addEventListener('webglcontextlost', onContextLost);
 	canvas.addEventListener('webglcontextrestored', onContextRestored);
 
 	return () => {
 		cancelAnimationFrame(raf);
 		running = false;
+		document.removeEventListener('visibilitychange', onVisibility);
 		window.removeEventListener('pointermove', onPointerMove);
 		window.removeEventListener('resize', resize);
 		document.removeEventListener('mouseout', onLeave);

@@ -72,21 +72,49 @@ summary,
 		0 0 20px rgba(45, 212, 191, 0.1) !important;
 }
 
-/* Button Pulse Animation */
+/* Button pulse: the glow sits on a pseudo-element whose opacity animates
+   (composited), not on the button's box-shadow (a repaint of the button
+   every frame while the page idles). The button keeps its own shadow. */
 @keyframes pulse-glow {
 	0%,
 	100% {
-		box-shadow: 0 0 15px rgba(45, 212, 191, 0.3);
+		opacity: 0;
 	}
 	50% {
-		box-shadow: 0 0 30px rgba(45, 212, 191, 0.6);
+		opacity: 1;
 	}
 }
 
 .btn-ignite,
-.btn-laser.live,
 .btn-confirm {
+	--pulse-glow: rgba(45, 212, 191, 0.6);
+	position: relative;
+	isolation: isolate;
+}
+.btn-confirm {
+	--pulse-glow: rgba(244, 114, 182, 0.55);
+}
+.btn-ignite::after,
+.btn-confirm::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	border-radius: inherit;
+	box-shadow: 0 0 30px var(--pulse-glow);
+	opacity: 0;
+	pointer-events: none;
 	animation: pulse-glow 3s infinite ease-in-out;
+}
+.btn-ignite:disabled::after,
+.btn-confirm:disabled::after {
+	display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.btn-ignite::after,
+	.btn-confirm::after {
+		animation: none;
+	}
 }
 
 /* Disintegrate effect for deletion */
