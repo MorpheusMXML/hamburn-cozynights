@@ -2,7 +2,12 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { getBookingSettings } from '$lib/server/settings';
 import { bookingRefusal } from '$lib/booking-phase';
-import { BookingService, BedUnavailableError, CheckedInError } from '$lib/server/booking';
+import {
+	BookingService,
+	BedUnavailableError,
+	CheckedInError,
+	SpotChangedError
+} from '$lib/server/booking';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
 import type { BedsResponse, RoomsResponse, HousesResponse } from '$lib/pocketbase-types';
 
@@ -41,7 +46,8 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 			.catch(() => null);
 
 		// Only fetch the (possibly large) free-bed list when the user doesn't
-		// already have a spot — they can't roll again without releasing first.
+		// already have a spot — they can't roll again without nuking it first,
+		// and the page reloads this list right after the nuke.
 		// Deactivated, locked and special-needs beds are never part of the roulette.
 		const freeBeds = userBed
 			? []
@@ -132,8 +138,9 @@ export const actions: Actions = {
 				return fail(404, { error: CODE_UNKNOWN });
 			}
 
-			// Roulette is only for claiming a first spot — once you have one, use
-			// "release spot" and re-roll deliberately rather than silently rebooking.
+			// Roulette is only for claiming a first spot — a guest who has one
+			// nukes it first (releaseBed, behind the hold-to-launch warning) and
+			// re-rolls deliberately, never by silently rebooking.
 			const existingBed = await bookingService.getBedForOrder(order.id);
 			if (existingBed) {
 				return fail(409, {
@@ -161,7 +168,12 @@ export const actions: Actions = {
 		}
 	},
 
-	releaseBed: async ({ locals }) => {
+	/**
+	 * The ☢ nuke before a respin: deletes the guest's booking right away, then
+	 * the page rolls a new spot. `bedId` is the spot the warning showed; if the
+	 * ticket holds another one by now, nothing is deleted.
+	 */
+	releaseBed: async ({ request, locals }) => {
 		if (!locals.adminPb.authStore.isValid) {
 			return fail(500, {
 				error:
@@ -179,6 +191,8 @@ export const actions: Actions = {
 
 		if (!locals.orderNumber) return fail(401, { error: SIGNED_OUT });
 
+		const formData = await request.formData();
+		const confirmedBedId = (formData.get('bedId') as string) || undefined;
 		const bookingService = new BookingService(locals.adminPb);
 
 		try {
@@ -188,10 +202,11 @@ export const actions: Actions = {
 				return fail(409, { error: SPOT_FIXED_MESSAGE });
 			}
 
-			await bookingService.unbookOrder(order.id);
-			return { success: true };
+			const released = await bookingService.unbookOrder(order.id, { onlyBed: confirmedBedId });
+			return { success: true, released: released > 0 };
 		} catch (err: any) {
 			if (err instanceof CheckedInError) return fail(409, { error: err.message });
+			if (err instanceof SpotChangedError) return fail(409, { error: err.message });
 			console.error('[RandomBed] releaseBed failed:', err?.message);
 			return fail(500, {
 				error: 'Your spot could not be released. It is still reserved for you. Please try again.'

@@ -152,7 +152,7 @@ erDiagram
 | `/map` | everyone | Camp map, blurred with countdown in staging; read-only after booking closed |
 | `/house/:id` | guests with a code | Rooms of a house with free spots |
 | `/room/:id` | guests with a code | Spots of a room, booking dialog |
-| `/random-bed` | guests with a code | Destiny Roulette |
+| `/random-bed` | guests with a code | Destiny Roulette; a guest with a spot can nuke it (hold-to-launch warning) and respin |
 | `/special-needs` | guests with a code | Ask for a special-needs spot, see the crew's answer, withdraw |
 | `/legal-notice` | everyone | Legal notice (Impressum), details from the server's `.env`; `/impressum` redirects here |
 | `/privacy` | everyone | Privacy policy; `/datenschutz` redirects here |
@@ -213,7 +213,7 @@ hamburn-cozynights/                 repository root
     │   ├── hooks.server.ts         sessions and the admin gate for every request
     │   ├── routes/                 guest pages, /admin, OAuth callback
     │   └── lib/
-    │       ├── components/         map, markers, slot machine, effigy title, admin widgets
+    │       ├── components/         map, markers, slot machine, nuke warning, effigy title, admin widgets
     │       ├── fx/                 cursor trail, booking fireworks, burning effigy title (canvas)
     │       └── server/             booking, inventory, settings, admin auth, crypto
     ├── pb_migrations/              database schema and API rules

@@ -520,6 +520,35 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		expect(renamed.status).toBe(200);
 	});
 
+	it('nukes a spot for the roulette only as confirmed, then books a new random one', async () => {
+		const { room, beds } = await seedHouse(su, 2);
+		const ticket = await seedTicket(su);
+		const cookie = await guestLogin(ticket.code);
+		await setBookingOpen(true);
+		expect((await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id }, cookie)).status).toBe(
+			200
+		);
+
+		// a warning that showed another spot (stale tab) deletes nothing
+		const stale = await post('/random-bed?/releaseBed', { bedId: beds[1].id }, cookie);
+		expect(stale.status).toBe(409);
+		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
+
+		// the ☢ launch deletes the booking right away …
+		const nuked = await post('/random-bed?/releaseBed', { bedId: beds[0].id }, cookie);
+		expect(nuked.status).toBe(200);
+		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(false);
+
+		// … and the roulette books the spot it rolled
+		const rolled = await post(
+			'/random-bed?/bookRandom',
+			{ bedId: beds[1].id, guestName: 'Plasma Puma #404' },
+			cookie
+		);
+		expect(rolled.status).toBe(200);
+		expect((await su.collection('beds').getOne(beds[1].id)).order).toBe(ticket.order.id);
+	});
+
 	it('lets a superuser keep or release the guest bookings when switching back to Staging', async () => {
 		const { room, beds } = await seedHouse(su, 1);
 		const ticket = await seedTicket(su);

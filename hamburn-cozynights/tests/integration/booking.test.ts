@@ -3,7 +3,11 @@
 // here the real filters, relations and the service account do the work.
 import { describe, it, expect, beforeAll } from 'vitest';
 import type PocketBase from 'pocketbase';
-import { BookingService, BedUnavailableError } from '../../src/lib/server/booking';
+import {
+	BookingService,
+	BedUnavailableError,
+	SpotChangedError
+} from '../../src/lib/server/booking';
 import { createLookupHash, decrypt } from '../../src/lib/server/crypto';
 import { anonymous, seedHouse, seedTicket, serviceAccount } from '../stack-helpers';
 
@@ -141,5 +145,22 @@ describe('one ticket = one bed', () => {
 		expect(bed.occupied).toBe(false);
 		expect(bed.order).toBe('');
 		expect(await booking.getBedForOrder(order.id)).toBeNull();
+	});
+
+	it('nukes only the spot the guest confirmed (☢ respin from a stale tab)', async () => {
+		const { beds } = await seedHouse(su, 2);
+		const { order } = await seedTicket(su);
+		await booking.bookBed(order as any, beds[1].id, 'Nuker');
+
+		// the warning showed beds[0], but the ticket holds beds[1] by now
+		await expect(booking.unbookOrder(order.id, { onlyBed: beds[0].id })).rejects.toBeInstanceOf(
+			SpotChangedError
+		);
+		expect((await su.collection('beds').getOne(beds[1].id)).order).toBe(order.id);
+
+		expect(await booking.unbookOrder(order.id, { onlyBed: beds[1].id })).toBe(1);
+		expect(await booking.getBedForOrder(order.id)).toBeNull();
+		// nothing left to nuke: no error, nothing released
+		expect(await booking.unbookOrder(order.id, { onlyBed: beds[1].id })).toBe(0);
 	});
 });

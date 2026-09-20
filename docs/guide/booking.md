@@ -83,9 +83,16 @@ Can't decide? On the map press <kbd>🎰 DESTINY ROULETTE</kbd>, then <kbd>ROLL 
 
 ![Destiny Roulette before the first roll](../assets/screenshots/guest-roulette.webp)
 
-The roulette only hands out a spot if you don't have one yet. Already booked? The page shows your current spot with <kbd>Visit My Room</kbd> and <kbd>Release This Spot 🔓</kbd>. After a booking it offers <kbd>Visit My Room</kbd> and <kbd>Back to Map</kbd>.
+After a booking the roulette offers <kbd>Visit My Room</kbd> and <kbd>Back to Map</kbd>.
 
 The roulette button is only on the map during Live Booking. Opened at another time, the page says *Booking is not open yet. Come back when Live Booking starts.* or *Booking is closed. The roulette is resting until the next burn.*; with every spot taken, it says so and asks you to check back later.
+
+### Already booked? ☢ Nuke & Respin
+
+The roulette page then shows your spot with <kbd>Visit My Room</kbd> and <kbd>☢ Nuke & Respin</kbd>. Nuking opens a red alert with your spot as the target: hold the big red button for two seconds (on a keyboard: hold Space). Letting go early, <kbd>Abort — keep my spot</kbd> or <kbd>Esc</kbd> stops it. The moment it fires, your booking is deleted and the roulette rolls a new spot and a new burner name.
+
+> [!WARNING] Nuked means gone
+> Your old spot is free for everyone the moment you launch, and there is no undo. Until you accept a new spot you have none, so don't leave the page halfway. The roulette may even hand you your old spot again.
 
 ## Changing your mind
 
@@ -94,7 +101,7 @@ Open your room, click **Your Spot**, change the burner name and press <kbd>Save 
 :::
 
 ::: tip Move to another bed
-One ticket holds one spot, so release your current spot first: <kbd>Release</kbd> in the spot dialog, <kbd>Release Current Spot</kbd> on a house or room page, or <kbd>Release This Spot 🔓</kbd> on the roulette page. Then book the new one.
+One ticket holds one spot, so release your current spot first: <kbd>Release</kbd> in the spot dialog or <kbd>Release Current Spot</kbd> on a house or room page. Then book the new one. Or leave it to fate: <kbd>☢ Nuke & Respin</kbd> on the roulette page deletes your booking and rolls a new spot right away.
 :::
 
 ![Another house while you hold a spot: the note with your spot as a small ticket, and Release Current Spot](../assets/screenshots/guest-house-own-spot.webp)

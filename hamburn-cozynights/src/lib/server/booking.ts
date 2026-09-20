@@ -11,6 +11,11 @@ import { CHECKED_IN_NOTE } from '$lib/check-in';
 export class BedUnavailableError extends Error {}
 /** The new spot was claimed, but the previous one could not be released: the claim was undone. */
 export class ReleaseFailedError extends Error {}
+/**
+ * The guest confirmed deleting one spot, but the ticket holds another one by
+ * now (booked in a second tab): nothing was released.
+ */
+export class SpotChangedError extends Error {}
 /** The guest was checked in at the spot: releasing or moving it is for the crew only. */
 export class CheckedInError extends Error {
 	constructor() {
@@ -267,20 +272,35 @@ export class BookingService {
 	 * @param orderId The ID of the order to release spots for.
 	 * @param options.allowCheckedIn The crew may release a spot whose guest is
 	 *   checked in; guests can't.
+	 * @param options.onlyBed The spot the guest confirmed deleting (the ☢ nuke).
+	 *   If the ticket holds another one, nothing is released.
+	 * @returns How many spots were released (0: the ticket held none).
 	 * @throws {CheckedInError} if a spot is checked in and `allowCheckedIn` isn't set.
+	 * @throws {SpotChangedError} if the ticket holds a spot other than `onlyBed`.
 	 */
-	async unbookOrder(orderId: string, options: { allowCheckedIn?: boolean } = {}): Promise<void> {
-		await withLock(`order:${orderId}`, async () => {
+	async unbookOrder(
+		orderId: string,
+		options: { allowCheckedIn?: boolean; onlyBed?: string } = {}
+	): Promise<number> {
+		return withLock(`order:${orderId}`, async () => {
 			const beds = await this.adminPb.collection('beds').getFullList<BedsResponse>({
 				filter: this.adminPb.filter('order = {:orderId}', { orderId })
 			});
+			// Both checks run under the order lock, so neither a check-in nor a
+			// booking made in a second tab can slip in before the release.
 			if (!options.allowCheckedIn && beds.some((bed) => !!bed.checked_in_at)) {
 				throw new CheckedInError();
+			}
+			if (options.onlyBed && beds.some((bed) => bed.id !== options.onlyBed)) {
+				throw new SpotChangedError(
+					'Your ticket holds a different spot by now (changed in another tab?), so nothing was deleted. Reload the page and check your spot.'
+				);
 			}
 
 			for (const bed of beds) {
 				await this.adminPb.collection('beds').update(bed.id, { occupied: false, order: null });
 			}
+			return beds.length;
 		});
 	}
 

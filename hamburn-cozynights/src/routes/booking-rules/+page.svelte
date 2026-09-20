@@ -52,6 +52,10 @@ decided.
 			While booking is open you can change or release your bed. After that, the crew helps you.
 		</li>
 		<li>Destiny Roulette suggests a random free bed; it is only booked when you confirm.</li>
+		<li>
+			Already have a bed? The roulette can nuke it and roll a new one. Your booking is deleted the
+			moment you launch, and until you accept a new bed you have none.
+		</li>
 		<li>Beds the crew has locked ("Reserved by the crew") can't be booked.</li>
 	</ul>
 

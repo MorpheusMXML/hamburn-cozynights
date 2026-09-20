@@ -2,20 +2,25 @@
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
-	import { enhance } from '$app/forms';
+	import NukeConfirm from '$lib/components/NukeConfirm.svelte';
+	import { tick } from 'svelte';
+	import { deserialize, enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import SlotMachine from '$lib/components/SlotMachine.svelte';
 	import SuccessFireworks from '$lib/components/SuccessFireworks.svelte';
 	import type { PageData } from './$types';
 	import { onDestroy } from 'svelte';
 	import { fade, scale } from 'svelte/transition';
-	import { confirmDialog, toast } from '$lib/dialogs';
 
 	export let data: PageData;
 	$: ({ freeBeds, isBookingActive, userBed, spotFixed, checkedIn, phase } = data);
 
-	let isReleasing = false;
-	let releaseError = '';
+	// ☢ Nuke & Respin: the spot in the warning, and the one deleted for this
+	// roll (the page says so until a new spot is booked).
+	let nukeTarget: { id: string; label: string; roomName?: string; houseName?: string } | null =
+		null;
+	let nukedSpot: { id: string; label: string } | null = null;
+	let freshSpots: Promise<void> = Promise.resolve();
 
 	let isSpinning = false;
 	let isBooking = false;
@@ -46,6 +51,8 @@
 
 	const NO_CONNECTION =
 		'We could not reach the server, so nothing was changed. Check your internet connection and try again.';
+	/** How long the nuke waits for the server before it gives up. */
+	const NUKE_TIMEOUT_MS = 20000;
 
 	function spinBed() {
 		if (isSpinning || isBooking || freeBeds.length === 0) return;
@@ -101,6 +108,76 @@
 		finalName = '';
 		await invalidateAll();
 	}
+
+	function openNuke() {
+		if (!userBed) return;
+		nukeTarget = {
+			id: userBed.id,
+			label: userBed.label,
+			roomName: userBed.roomName,
+			houseName: userBed.houseName
+		};
+	}
+
+	/**
+	 * The warning's launch: deletes the booking right away. Resolves null once
+	 * it is gone, else the message the warning shows. The free spots reload
+	 * while the blast plays.
+	 */
+	async function nukeSpot(): Promise<string | null> {
+		if (!nukeTarget) return null;
+		const body = new FormData();
+		// Only this spot: if the ticket holds another one by now, nothing is deleted.
+		body.set('bedId', nukeTarget.id);
+		// Bad reception must not leave the guest staring at "Launching…".
+		const stop = new AbortController();
+		const timer = setTimeout(() => stop.abort(), NUKE_TIMEOUT_MS);
+		let result;
+		try {
+			const response = await fetch('?/releaseBed', {
+				method: 'POST',
+				body,
+				cache: 'no-store',
+				signal: stop.signal,
+				headers: { accept: 'application/json', 'x-sveltekit-action': 'true' }
+			});
+			result = deserialize(await response.text());
+		} catch {
+			return stop.signal.aborted
+				? 'The server did not answer. Reload the page and check whether your spot is still there.'
+				: NO_CONNECTION;
+		} finally {
+			clearTimeout(timer);
+		}
+		if (result.type === 'failure') {
+			return (
+				(result.data as { error?: string } | undefined)?.error ||
+				'Your spot could not be deleted. It is still yours.'
+			);
+		}
+		if (result.type !== 'success') {
+			return 'Your spot could not be deleted. It is still yours. Reload the page and try again.';
+		}
+		nukedSpot = { id: nukeTarget.id, label: nukeTarget.label };
+		bookingError = '';
+		freshSpots = invalidateAll().catch(() => {});
+		return null;
+	}
+
+	/** The blast is over: roll a new spot from the fresh list of free ones. */
+	async function afterNuke() {
+		await freshSpots;
+		nukeTarget = null;
+		await tick();
+		if (userBed) {
+			// The spot is deleted, but the reload of the free spots failed: this
+			// page still shows the old one, so ask for a reload instead of rolling.
+			bookingError =
+				'Your spot is deleted, but the free spots could not be loaded. Please reload the page, then roll the dice.';
+			return;
+		}
+		spinBed();
+	}
 </script>
 
 <svelte:head>
@@ -120,6 +197,12 @@
 			<p class="error-msg" role="alert">{bookingError}</p>
 		{/if}
 
+		{#if nukedSpot && !userBed && !showBookingSuccess}
+			<p class="nuked-note" role="status">
+				☢ Spot {nukedSpot.label} is gone and you have no spot right now. Accept a new one before you leave.
+			</p>
+		{/if}
+
 		{#if userBed && !showBookingSuccess}
 			<div class="already-booked" in:fade>
 				<span class="icon" aria-hidden="true">🏠</span>
@@ -136,58 +219,17 @@
 						crew can change it.
 					</p>
 				{:else if isBookingActive}
-					<p class="hint">Release your spot first if you want to roll for a different one.</p>
+					<p class="hint">
+						Feeling lucky? Nuke this spot and the roulette rolls you a new one. Your booking is
+						deleted the moment you launch.
+					</p>
 				{:else}
 					<p class="hint">{ownSpotNote(phase)}</p>
-				{/if}
-				{#if releaseError}
-					<p class="error-msg" role="alert">{releaseError}</p>
 				{/if}
 				<div class="already-booked-actions">
 					<a href="/room/{userBed.roomId}" class="btn-goto">Visit My Room</a>
 					{#if isBookingActive && !spotFixed && !checkedIn}
-						<form
-							method="POST"
-							action="?/releaseBed"
-							use:enhance={async ({ cancel }) => {
-								const confirmed = await confirmDialog(
-									'Your spot becomes free for everyone else right away. The roulette may give you a completely different one.',
-									{
-										title: 'Release your spot?',
-										tone: 'warning',
-										confirmLabel: 'Release spot',
-										cancelLabel: 'Keep my spot'
-									}
-								);
-								if (!confirmed) {
-									cancel();
-									return;
-								}
-								releaseError = '';
-								isReleasing = true;
-								return async ({ result, update }) => {
-									isReleasing = false;
-									if (result.type === 'failure') {
-										releaseError =
-											(result.data as { error?: string } | undefined)?.error ||
-											'Your spot could not be released. Please try again.';
-										return;
-									}
-									if (result.type === 'error') {
-										releaseError = NO_CONNECTION;
-										return;
-									}
-									if (result.type === 'success') {
-										toast('Your spot is released. Roll the dice!', 'success');
-									}
-									await update();
-								};
-							}}
-						>
-							<button class="respin-btn secondary" type="submit" disabled={isReleasing}>
-								{isReleasing ? 'RELEASING...' : 'Release This Spot 🔓'}
-							</button>
-						</form>
+						<button type="button" class="nuke-btn" on:click={openNuke}>☢ Nuke &amp; Respin</button>
 					{/if}
 				</div>
 			</div>
@@ -295,6 +337,15 @@
 		{/if}
 	</div>
 
+	{#if nukeTarget}
+		<NukeConfirm
+			target={nukeTarget}
+			launch={nukeSpot}
+			on:abort={() => (nukeTarget = null)}
+			on:done={afterNuke}
+		/>
+	{/if}
+
 	{#if showBookingSuccess && selectedBed}
 		<div class="success-overlay" in:fade>
 			<div
@@ -313,6 +364,13 @@
 					<strong>{selectedBed.expand?.room?.name}</strong>
 					({selectedBed.expand?.room?.expand?.house?.name}).
 				</p>
+				{#if nukedSpot}
+					<p class="nuked-line">
+						{nukedSpot.id === selectedBed.id
+							? `Fate sent you straight back to spot ${nukedSpot.label}.`
+							: `Spot ${nukedSpot.label} is history.`}
+					</p>
+				{/if}
 				<div class="actions">
 					<a href="/room/{selectedBed.room}" class="btn-goto">Visit My Room</a>
 					<a href="/map" class="btn-map">Back to Map</a>
@@ -737,21 +795,53 @@
 		line-height: 1.45;
 		margin: 1.5rem 0 0 0;
 	}
-	.already-booked .error-msg {
-		margin: 1rem 0 0;
-	}
 	.already-booked-actions {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.75rem;
 		margin-top: 1rem;
 	}
-	.already-booked-actions form {
+
+	/* ☢ Nuke & Respin: hazard stripes, it deletes the booking. */
+	.nuke-btn {
 		flex: 1 1 140px;
-		display: flex;
+		min-height: 48px;
+		padding: 0.9rem 1rem;
+		border-radius: 12px;
+		border: 2px solid #ef4444;
+		background:
+			repeating-linear-gradient(-45deg, rgba(250, 204, 21, 0.16) 0 10px, transparent 10px 20px),
+			#1a0505;
+		color: #fecaca;
+		font-weight: 900;
+		letter-spacing: 1px;
+		text-transform: uppercase;
+		cursor: pointer;
 	}
-	.already-booked-actions .respin-btn {
-		width: 100%;
-		height: 100%;
+	.nuke-btn:hover {
+		color: #fff;
+		box-shadow: 0 0 24px rgba(239, 68, 68, 0.45);
+	}
+	.nuke-btn:focus-visible {
+		outline: 3px solid #facc15;
+		outline-offset: 3px;
+	}
+
+	.nuked-note {
+		margin: 0 0 1.5rem;
+		padding: 0.75rem 1rem;
+		border: 1px solid #ef4444;
+		border-left-width: 4px;
+		border-radius: 12px;
+		background: rgba(239, 68, 68, 0.1);
+		color: #fecaca;
+		font-weight: 700;
+		line-height: 1.45;
+		text-align: left;
+		overflow-wrap: anywhere;
+	}
+	.success-card .nuked-line {
+		color: #fca5a5;
+		font-weight: 700;
 	}
 </style>
