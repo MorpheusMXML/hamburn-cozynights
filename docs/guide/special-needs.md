@@ -16,7 +16,7 @@ Some spots are kept for guests who need something special: a lower bunk or a bed
 
 ![The special-needs form: what you need, a few words for the crew, an optional burner name and the consent box](../assets/screenshots/guest-special-needs.webp)
 
-If something is missing, the form says so: tick at least one thing (or *Something else*), write at least a few words, and tick the consent box, because without it the crew may not use what you wrote. Sending the form more than ten times within an hour is refused for a while.
+If something is missing, the form says so right where it is: the part to fix gets a red border, the reason appears under it, and the cursor jumps to the first one. Tick at least one thing (or *Something else*), write at least a few words, and tick the consent box, because without it the crew may not use what you wrote. Sending the form more than ten times within an hour is refused for a while.
 
 Once it is sent, the page shows your request and its status, where messages about it go (the address of your ticket, shortened like `m•••@example.com`) and <kbd>Get updates on Telegram</kbd>. You get an e-mail that your request arrived, and another one when the crew has decided. The link on the map now reads ♿ **See your special-needs request** or ♿ **My request**, also when the crew no longer takes new requests.
 

@@ -25,6 +25,8 @@ flowchart LR
 
    Open the CozyNights start page, type your code into the **TICKET CODE** field and press <kbd>ENTER THE DUST 🌵</kbd>.
 
+   If the code is refused, the box around it turns red and gives a short shake, the reason appears right under it, and the cursor is back in the field — fix the code and press the button again. The [FAQ](./faq#for-guests) explains every message.
+
    ![Start page with the ticket code field](../assets/screenshots/guest-landing.webp)
 
    Your browser remembers the code for 30 days. Back on the start page later, <kbd>Already signed in on this device? Continue to the map →</kbd> takes you straight to the map, and <kbd>Not your ticket? Sign out</kbd> removes the code from this device (see [Shared devices](#shared-devices)).

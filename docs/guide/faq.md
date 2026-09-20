@@ -2,6 +2,10 @@
 
 ## For guests
 
+::: details A field turned red and shook — what now?
+That field is what needs fixing. The reason stands right under it (or, for the whole form, in a red box above the button), and the cursor is already in the field. Correct it and send again: the red disappears as soon as you start typing. If your device is set to *reduce motion*, nothing shakes — the red border and the message are the same.
+:::
+
 ::: details "We could not find this ticket code. Check it for typos (0 vs. O, 1 vs. I) and try again…"
 Check the code for typos: it's on your ticket and contains only letters, digits, `-` and `_`. Copy and paste works best. Only **Indoor memberships** include a bed, so only their codes work here; Camper memberships don't need CozyNights. Still not working? Contact the Hamburn crew; your ticket may not be in the ticket list yet.
 :::
