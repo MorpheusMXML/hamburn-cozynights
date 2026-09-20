@@ -30,6 +30,7 @@ import {
 	cleanTicketCode,
 	defaultTicketName,
 	diffRoster,
+	holderName,
 	isValidGuestEmail,
 	maskTicketCode,
 	normalizeEmail,
@@ -110,7 +111,7 @@ async function describeTicket(
 	}
 
 	const code = order.order_number ?? '';
-	const name = order.customer_name === defaultTicketName(code) ? '' : order.customer_name;
+	const name = holderName(order);
 	return {
 		id: order.id,
 		code: maskCode ? maskTicketCode(code) : code,

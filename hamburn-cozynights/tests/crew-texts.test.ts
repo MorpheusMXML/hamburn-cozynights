@@ -94,3 +94,36 @@ describe('crew chat texts about message texts', () => {
 		);
 	});
 });
+
+describe('crew chat texts about guests', () => {
+	it('names a ticket it could not reach by its masked code, never by its holder', () => {
+		// The crew chat runs on Telegram: this line may sit right below a
+		// "🧡 New special-needs request", and the two must not add up to a person.
+		const text = eventText(
+			event('guest_notice_failed', 'server', 'Ticket H•••', {
+				channels: 'e-mail a•••@x.de',
+				attempts: 7,
+				error: 'dial tcp: i/o timeout'
+			})
+		);
+		expect(text).toBe(
+			'📭 Could not notify ticket "Ticket H•••" (e-mail a•••@x.de) after 7 attempts: dial tcp: i/o timeout'
+		);
+	});
+
+	it('says in words what a withdrawn special-needs request was', () => {
+		const withdrawn = (status: string) =>
+			eventText(event('special_request_withdrawn', 'server', '', { status }));
+		expect(withdrawn('pending')).toBe(
+			'🧡 A guest withdrew their special-needs request (was still waiting for a decision)'
+		);
+		expect(withdrawn('approved')).toBe(
+			'🧡 A guest withdrew their special-needs request (had been approved)'
+		);
+		expect(withdrawn('declined')).toBe(
+			'🧡 A guest withdrew their special-needs request (had been declined)'
+		);
+		// nothing stored, and never the stored word itself
+		expect(withdrawn('')).toBe('🧡 A guest withdrew their special-needs request');
+	});
+});

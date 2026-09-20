@@ -340,6 +340,23 @@ function windowText(d) {
 }
 
 /** The crew chat text of an admin_events record. cfg (optional) adds links. */
+/**
+ * What a special-needs request was when the guest withdrew it, in words. The
+ * crew chat reads like a sentence; the stored word ('pending') is for code.
+ */
+function requestStatusNote(status) {
+	switch (status) {
+		case 'pending':
+			return ' (was still waiting for a decision)';
+		case 'approved':
+			return ' (had been approved)';
+		case 'declined':
+			return ' (had been declined)';
+		default:
+			return '';
+	}
+}
+
 function eventText(ev, cfg) {
 	const action = ev.getString('action');
 	const actor = ev.getString('actor');
@@ -418,10 +435,7 @@ function eventText(ev, cfg) {
 				(requestsUrl ? '\n' + requestsUrl : '')
 			);
 		case 'special_request_withdrawn':
-			return (
-				'🧡 A guest withdrew their special-needs request' +
-				(d.status ? ' (was ' + d.status + ')' : '')
-			);
+			return '🧡 A guest withdrew their special-needs request' + requestStatusNote(d.status);
 		case 'special_request_approved':
 			return '✅ Special-needs request approved' + by;
 		case 'special_request_declined':
@@ -745,11 +759,21 @@ function textCatalogue() {
 	return { groups: CATALOGUE.GROUPS, placeholders: CATALOGUE.PLACEHOLDERS, items: CATALOGUE.TEXTS };
 }
 
+// How a ticket is named: the same rules the app uses (src/lib/tickets.ts).
+const TICKETS = require(__hooks + '/lib/tickets.js');
+
+/** The name to greet the guest with, '' for a ticket without one. */
 function greetingName(order) {
-	const name = order.getString('customer_name').trim();
-	// the CLI's default label for tickets without a name
-	if (!name || name === 'Ticket ' + order.getString('order_number')) return '';
-	return name;
+	return TICKETS.holderName(order.getString('customer_name'), order.getString('order_number'));
+}
+
+/**
+ * How the crew chat may name this ticket: "Ticket H•••", or a short record id
+ * when the ticket has no code. Never the holder, never a full code — an alert
+ * about a ticket must not name the person another alert just wrote about.
+ */
+function ticketLabel(order) {
+	return TICKETS.maskedTicketLabel(order.getString('order_number')) || '#' + order.id.slice(0, 5);
 }
 
 function spotLines(spot) {
@@ -1427,7 +1451,7 @@ function deliverOne(app, cfg, rec, force) {
 		// after the save: a failing save must not repeat this alert every pass
 		logEvent(app, 'guest_notice_failed', {
 			actor: 'server',
-			subject: order.getString('customer_name') || order.id,
+			subject: ticketLabel(order),
 			details: { channels: channels.join(', '), attempts: attempts, error: error }
 		});
 	}
