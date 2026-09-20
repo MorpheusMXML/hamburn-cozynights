@@ -561,7 +561,10 @@ describe('cozy-admin tickets import and notify', () => {
 	it('reports an invite from the server as an invite, not as an access request', async () => {
 		const email = `invited-${uid()}@mauersegler.art`;
 		expect(cozyAdmin(['add', email])).toContain(`invited: ${email} (role admin)`);
-		expect(cozyAdmin(['remove', email])).toContain(`removed app admin access: ${email}`);
+		// Destructive: without --yes it only says what it would remove.
+		expect(() => cozyAdmin(['remove', email])).toThrow(/removes the app admin access.*--yes/);
+		expect(cozyAdmin(['list'])).toContain(email);
+		expect(cozyAdmin(['remove', email, '--yes'])).toContain(`removed app admin access: ${email}`);
 		await flush();
 
 		const texts = (await telegramTo(CREW_CHAT)).map((m) => m.text);

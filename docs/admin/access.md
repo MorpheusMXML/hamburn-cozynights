@@ -91,7 +91,7 @@ Approving, inviting and removing admins deliberately happens **outside the web a
 ./scripts/cozy-admin.sh approve someone@mauersegler.art      # approve an access request as admin
 ./scripts/cozy-admin.sh approve someone@mauersegler.art superuser  # … or straight as superuser
 ./scripts/cozy-admin.sh add someone@mauersegler.art          # invite before the first sign-in
-./scripts/cozy-admin.sh remove someone@mauersegler.art       # reject a request or revoke access
+./scripts/cozy-admin.sh remove someone@mauersegler.art --yes # reject a request or revoke access
 ```
 
 The few superusers who also need the PocketBase dashboard on the server get that from an operator; `./scripts/cozy-admin.sh --help` lists every command of the tool.
@@ -127,7 +127,7 @@ Access requests, approvals, role changes, removals and every admin sign-in show 
 ## Why Google only?
 
 - **No passwords** that could leak, be reused or need resetting.
-- **Leaving the Workspace means losing access,** at the latest at the next weekly sign-in. To end it at once, also run `./scripts/cozy-admin.sh remove`.
+- **Leaving the Workspace means losing access,** at the latest at the next weekly sign-in. To end it at once, also run `./scripts/cozy-admin.sh remove <email> --yes`.
 - **2-Step Verification comes from Google.** Make it mandatory for the Workspace in the Google Admin console (Security → Authentication → 2-Step Verification), ideally with passkeys or security keys for superusers. CozyNights has no second factor of its own on purpose: Google's is stronger than a code by e-mail or chat, and the weekly sign-in makes sure it applies.
 - **Checked twice, independently.** Both the database and the app verify the domain, the verified address and the Workspace membership, and a new account can never start with more than *pending*.
 
