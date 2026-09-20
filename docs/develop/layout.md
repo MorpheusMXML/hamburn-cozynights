@@ -39,7 +39,7 @@ It runs on the same throwaway stack as the smoke tests (`scripts/test-stack.sh l
 
 | Problem | Meaning |
 | --- | --- |
-| `page-overflow` | The page scrolls sideways. |
+| `page-overflow` | The page scrolls sideways by more than 1 % of its width (at least 4 px). Below that is the noise floor of font metrics: the same page is 2 px wider in WebKit on Linux than on macOS. |
 | `broken-word` | A word of up to 16 letters is split across lines: its box was squeezed below the word. Longer words, e-mail addresses and links may break. |
 | `text-outside` | Text sticks out of the box it belongs to. |
 | `clipped-text` | Text is cut off by an `overflow: hidden` ancestor (text shortened with `…` on purpose is fine). |

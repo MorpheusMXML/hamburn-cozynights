@@ -60,6 +60,7 @@ export function findLayoutProblems(options: LayoutCheckOptions): LayoutProblem[]
 	}
 
 	function describe(el: Element): string {
+		if (el === document.body) return 'body';
 		const parts: string[] = [];
 		let node: Element | null = el;
 		while (node && node !== document.body && parts.length < 4) {
@@ -119,31 +120,61 @@ export function findLayoutProblems(options: LayoutCheckOptions): LayoutProblem[]
 
 	const viewportWidth = document.documentElement.clientWidth;
 
-	// 1. The page itself must not scroll sideways.
+	// 1. The page itself must not scroll sideways. A couple of pixels are the
+	// noise floor of font metrics (the same page is 2px wider in WebKit on
+	// Linux than on macOS); a real overflow is hundreds of pixels wide.
+	const pageTolerance = Math.max(4, viewportWidth * 0.01);
 	const pageWidth = document.documentElement.scrollWidth;
-	if (pageWidth > viewportWidth + TOLERANCE) {
+	if (pageWidth > viewportWidth + pageTolerance) {
 		// Follow the too-wide content down the tree: the deepest element that is
 		// still wider than the screen is the one to look at. (Its box may well
 		// look narrow — a <select> hands WebKit the width of its longest option.)
 		let culprit: Element | null = null;
 		let node: Element | null = document.body;
 		while (node) {
-			const wider: Element | null =
-				[...node.children].find(
-					(child) =>
-						!isIgnored(child) &&
-						isShown(child) &&
-						(child.scrollWidth > viewportWidth + TOLERANCE ||
-							child.getBoundingClientRect().right > viewportWidth + TOLERANCE)
-				) ?? null;
+			// The widest child carries the page's width; a decorative box that
+			// merely sticks out a little must not lead the search astray.
+			let wider: Element | null = null;
+			let widest = viewportWidth + pageTolerance;
+			// `display: contents` wrappers have no box of their own: look through them.
+			const boxes = (parent: Element): Element[] =>
+				[...parent.children].flatMap((child) =>
+					getComputedStyle(child).display === 'contents' ? boxes(child) : [child]
+				);
+			// Layout width first: a transformed decoration (the tilted grid in the
+			// background) has a huge painted box but carries no content width.
+			for (const reach of [
+				(child: Element) => child.scrollWidth,
+				(child: Element) => child.getBoundingClientRect().right
+			]) {
+				for (const child of boxes(node)) {
+					if (isIgnored(child) || !isShown(child)) continue;
+					if (reach(child) > widest) {
+						widest = reach(child);
+						wider = child;
+					}
+				}
+				if (wider) break;
+			}
 			if (wider) culprit = wider;
 			node = wider;
 		}
+		// Nothing stands out (a few pixels from a font, say): name the widest boxes.
+		const widest = [...document.body.querySelectorAll('*')]
+			.filter((el) => isShown(el) && !isIgnored(el))
+			.map((el) => ({ el, over: el.getBoundingClientRect().right - viewportWidth }))
+			.filter((x) => x.over > pageTolerance - 1)
+			.sort((a, b) => b.over - a.over)
+			.slice(0, 3);
+		const where = culprit ?? widest[0]?.el ?? document.body;
 		report(
 			'page-overflow',
-			culprit ?? document.body,
-			culprit?.textContent?.trim() ?? '',
-			`page is ${pageWidth}px wide on a ${viewportWidth}px screen`
+			where,
+			(where.textContent ?? '').trim(),
+			`page is ${pageWidth}px wide on a ${viewportWidth}px screen` +
+				(widest.length
+					? `; right edges: ${widest.map((x) => `${describe(x.el)} +${Math.round(x.over)}px`).join(', ')}`
+					: '')
 		);
 	}
 
