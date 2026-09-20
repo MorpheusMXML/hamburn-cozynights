@@ -489,6 +489,9 @@ describe('crew alerts', () => {
 
 		const first = await signIn(); // creates the access request
 		expect(first.record.role).toBe('pending');
+		// Recorded before the sign-in completes (pb_hooks/admins_oauth_guard.pb.js):
+		// without it the app would end the session on the next request.
+		expect(first.record.last_sign_in).toBeTruthy();
 		await su.collection('admins').update(first.record.id, { role: 'admin' });
 
 		const before = Date.now();

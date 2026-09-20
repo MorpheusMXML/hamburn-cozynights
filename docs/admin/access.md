@@ -120,6 +120,7 @@ Access requests, approvals, role changes, removals and every admin sign-in show 
 | **SIGN-IN CANCELLED** | You cancelled on Google's page. | Try again whenever you're ready. |
 | **SIGN-IN EXPIRED ⏳** | The sign-in took longer than 10 minutes, or was started in another tab. | Start again at `/admin/login`. |
 | **WEEKLY CHECK 🔐** | Your last Google sign-in was more than 7 days ago. | Sign in with Google again. |
+| **SIGN-IN NOT RECORDED ⚠️** | Google accepted you, but PocketBase couldn't store the sign-in date (`last_sign_in`), so no session was started; it would have ended on the next request. | Try again; if it persists, the operators check the PocketBase log for `[admins-guard] last_sign_in not saved`. |
 | **BACKEND UNREACHABLE 📡** | CozyNights can't reach its database right now. | Try again shortly; tell the operators if it persists. |
 | **SIGN-IN FAILED** | Google didn't complete the sign-in. | Try again. |
 | *Google sign-in is not configured on this server yet.* | This installation has no Google sign-in set up, typical for a fresh local install. | Operators: see [Local development](../develop/#admin-sign-in-locally). |

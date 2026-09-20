@@ -126,6 +126,10 @@ Your Google sign-in worked, and your access request is waiting for a superuser. 
 Admins sign in with Google again every 7 days, even when they use the admin area every day. Press the Google button once and you're back. See [Sessions](../admin/access#sessions).
 :::
 
+::: details "SIGN-IN NOT RECORDED ⚠️" at sign-in
+Google accepted the account, but PocketBase could not record the sign-in (the `last_sign_in` date of the admin account), so no session was started: without that date the next request would end the session again and send you back to the sign-in page. Try again. If it keeps happening, the operator looks at the PocketBase log for `[admins-guard] last_sign_in not saved` and at the sign-in hook, `pb_hooks/admins_oauth_guard.pb.js`.
+:::
+
 ::: details "WRONG ACCOUNT 🛑" at sign-in
 You picked a Google account outside the `@mauersegler.art` Workspace (for example a private Gmail address). Press <kbd>SIGN IN WITH GOOGLE ⚡️</kbd> again and choose your Workspace account in Google's account chooser.
 :::
