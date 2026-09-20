@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { loadHookModule } from './hook-module';
 import {
 	checkWindowEdit,
 	effectivePhase,
@@ -241,6 +242,89 @@ describe('checkWindowEdit', () => {
 		expect(checkWindowEdit(planned, empty, { ...admin, now: NOW + 3 * DAY }).next.basePhase).toBe(
 			'live'
 		);
+	});
+});
+
+// pb_hooks/lib/phase.js mirrors the rules above for PocketBase's records API,
+// which an admin's token reaches without going through the app. The two are
+// written out twice (one TypeScript module, one CommonJS module for the JSVM),
+// so the cases that matter are checked against both.
+describe('the PocketBase mirror (pb_hooks/lib/phase.js)', () => {
+	const phase = loadHookModule('lib/phase.js');
+	const hookError = (current: BookingWindow, next: Partial<BookingWindow>, now = NOW) =>
+		phase.windowEditError(current, { ...current, ...next }, now) as string;
+
+	it('agrees with effectivePhase', () => {
+		for (const now of [NOW, NOW + 3 * DAY, NOW + 6 * DAY]) {
+			for (const w of [staging, planned, { ...planned, paused: true }]) {
+				expect(phase.effectivePhase(w, now)).toBe(effectivePhase(w, now));
+			}
+		}
+	});
+
+	it('refuses an opening sooner than one day and a window shorter than one day', () => {
+		expect(hookError(staging, { opensAt: at(DAY - HOUR), closesAt: at(3 * DAY) })).toMatch(
+			/one day from now at the earliest/
+		);
+		expect(hookError(staging, { opensAt: at(2 * DAY), closesAt: at(2 * DAY + 20 * HOUR) })).toMatch(
+			/stay open for at least one day/
+		);
+		expect(hookError(staging, { opensAt: at(3 * DAY), closesAt: at(2 * DAY) })).toMatch(
+			/close after it opens/
+		);
+	});
+
+	it('lets a window a day ahead and a day long through, like the app', () => {
+		expect(hookError(staging, { opensAt: at(2 * DAY), closesAt: at(5 * DAY) })).toBe('');
+		expect(hookError(staging, { opensAt: at(DAY), closesAt: at(2 * DAY) })).toBe('');
+	});
+
+	it('does not re-check times an armed timer already had', () => {
+		const now = NOW + DAY + 4 * HOUR; // the opening is 20 hours away
+		expect(hookError(planned, { closesAt: at(6 * DAY) }, now)).toBe('');
+		// … but re-arming a paused timer checks everything again.
+		expect(hookError({ ...planned, paused: true }, { paused: false }, now)).toMatch(
+			/at the earliest/
+		);
+	});
+
+	it('leaves updates that do not touch the window alone', () => {
+		// The app never asks about those; PocketBase sees every app_settings
+		// write, e.g. the special-needs switch while a short window is armed.
+		const short: BookingWindow = { ...staging, opensAt: at(HOUR), closesAt: at(2 * HOUR) };
+		expect(hookError(short, {})).toBe('');
+		expect(phase.windowChanged(short, short)).toBe(false);
+		// Pausing is always allowed: nothing switches by itself any more.
+		expect(hookError(short, { paused: true })).toBe('');
+	});
+
+	it('agrees with the app on the cases the app also sees', () => {
+		const cases: [BookingWindow, Partial<BookingWindow>, number][] = [
+			[staging, { opensAt: at(2 * DAY), closesAt: at(5 * DAY) }, NOW],
+			[staging, { opensAt: at(DAY - HOUR), closesAt: at(3 * DAY) }, NOW],
+			[staging, { opensAt: at(2 * DAY), closesAt: at(2 * DAY + 20 * HOUR) }, NOW],
+			[staging, { opensAt: at(3 * DAY), closesAt: at(2 * DAY) }, NOW],
+			[planned, { closesAt: at(6 * DAY) }, NOW + DAY + 4 * HOUR],
+			[planned, { closesAt: at(4 * DAY + HOUR) }, NOW + 3 * DAY],
+			[planned, { closesAt: at(3 * DAY + 20 * HOUR) }, NOW + 3 * DAY],
+			[planned, { opensAt: '', closesAt: '' }, NOW]
+		];
+		for (const [current, next, now] of cases) {
+			const edited = { ...current, ...next };
+			const app = checkWindowEdit(
+				current,
+				{ opensAt: edited.opensAt, closesAt: edited.closesAt, paused: edited.paused },
+				{ isSuperuser: false, now }
+			).error;
+			const hook = hookError(current, next, now);
+			// The wording differs (the app names the earliest time); refused or
+			// allowed must not.
+			expect({ opensAt: edited.opensAt, closesAt: edited.closesAt, refused: !!hook }).toEqual({
+				opensAt: edited.opensAt,
+				closesAt: edited.closesAt,
+				refused: !!app
+			});
+		}
 	});
 });
 
