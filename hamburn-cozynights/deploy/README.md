@@ -217,6 +217,12 @@ docker logs cozynights-staging-pocketbase 2>&1 | grep -E 'cozy-settings|encrypti
   PocketBase-Container: Der Entrypoint des Images würde damit ein
   `superuser upsert` ohne das Flag ausführen, und der Container käme gar nicht
   erst hoch.
+- **Rollback auf einen Stand ohne das Flag** (auch der automatische des
+  Deploy-Skripts): Dort startet PocketBase mit den schon verschlüsselten
+  Settings nicht mehr, der Rollback bleibt „unhealthy“. Dann wie unter
+  „Schlüssel verloren“ die Settings-Zeile löschen (die Hooks des alten Stands
+  tragen SMTP & Co. ebenfalls aus der `.env` wieder ein) oder das
+  Deploy-Archiv einspielen (Abschnitt Rollback → Daten).
 
 **Schlüssel verloren oder wechseln:** Alles Geheime in den Settings kommt aus
 der `.env` und wird beim Start von den Hooks wieder eingetragen (SMTP,
