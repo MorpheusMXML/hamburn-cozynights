@@ -13,8 +13,15 @@ Mounted once in the root layout.
 	let primaryButton: HTMLButtonElement | undefined;
 	let altButton: HTMLButtonElement | undefined;
 	let cancelButton: HTMLButtonElement | undefined;
+	let optionBox: HTMLInputElement | undefined;
 	let previouslyFocused: HTMLElement | null = null;
 	let shownId: number | null = null;
+	/** The dialog's checkbox, reset to its start value for every new dialog. */
+	let checked = false;
+
+	function settle(choice: 'confirm' | 'alt' | 'cancel') {
+		if (current) settleDialog(current.id, choice, checked);
+	}
 
 	// Focus moves into the dialog when it opens and back when it closes. A
 	// destructive confirm starts on "cancel", so Enter can't confirm by accident.
@@ -24,6 +31,7 @@ Mounted once in the root layout.
 		if (id === shownId || typeof document === 'undefined') return;
 		if (shownId === null) previouslyFocused = document.activeElement as HTMLElement | null;
 		shownId = id;
+		checked = current?.checkbox?.checked ?? false;
 		await tick();
 		if (id === null) {
 			previouslyFocused?.focus?.();
@@ -38,15 +46,15 @@ Mounted once in the root layout.
 		if (!current) return;
 		if (event.key === 'Escape') {
 			event.preventDefault();
-			settleDialog(current.id, 'cancel');
+			settle('cancel');
 		} else if (event.key === 'Tab') {
-			// Three buttons at most: keep the focus inside the dialog.
-			const buttons = [cancelButton, altButton, primaryButton].filter(
+			// A checkbox and three buttons at most: keep the focus inside the dialog.
+			const buttons = [optionBox, cancelButton, altButton, primaryButton].filter(
 				Boolean
-			) as HTMLButtonElement[];
+			) as HTMLElement[];
 			if (buttons.length === 0) return;
 			event.preventDefault();
-			const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+			const index = buttons.indexOf(document.activeElement as HTMLElement);
 			const next = (index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length;
 			buttons[next].focus();
 		}
@@ -69,13 +77,22 @@ Mounted once in the root layout.
 				<h2 id="app-dialog-title">{current.title}</h2>
 			{/if}
 			<p id="app-dialog-message">{current.message}</p>
+			{#if current.checkbox}
+				<label class="dialog-option">
+					<input type="checkbox" bind:this={optionBox} bind:checked />
+					<span>
+						<strong>{current.checkbox.label}</strong>
+						{#if current.checkbox.hint}<small>{current.checkbox.hint}</small>{/if}
+					</span>
+				</label>
+			{/if}
 			<div class="dialog-actions">
 				{#if current.kind === 'confirm'}
 					<button
 						type="button"
 						class="dialog-btn ghost"
 						bind:this={cancelButton}
-						on:click={() => settleDialog(current.id, 'cancel')}
+						on:click={() => settle('cancel')}
 					>
 						{current.cancelLabel}
 					</button>
@@ -85,7 +102,7 @@ Mounted once in the root layout.
 						type="button"
 						class="dialog-btn alt"
 						bind:this={altButton}
-						on:click={() => settleDialog(current.id, 'alt')}
+						on:click={() => settle('alt')}
 					>
 						{current.altLabel}
 					</button>
@@ -94,7 +111,7 @@ Mounted once in the root layout.
 					type="button"
 					class="dialog-btn primary"
 					bind:this={primaryButton}
-					on:click={() => settleDialog(current.id, 'confirm')}
+					on:click={() => settle('confirm')}
 				>
 					{current.confirmLabel}
 				</button>
@@ -164,6 +181,38 @@ Mounted once in the root layout.
 		line-height: 1.5;
 		white-space: pre-line;
 		overflow-wrap: anywhere;
+	}
+
+	.dialog-option {
+		display: flex;
+		gap: 0.75rem;
+		align-items: flex-start;
+		margin-top: 1.25rem;
+		padding: 0.75rem 0.9rem;
+		border: 1px solid #333;
+		border-radius: 10px;
+		cursor: pointer;
+	}
+	.dialog-option input {
+		flex: none;
+		width: 1.2rem;
+		height: 1.2rem;
+		margin: 0.1rem 0 0;
+		accent-color: var(--accent);
+		cursor: pointer;
+	}
+	.dialog-option span {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		min-width: 0;
+		font-size: 0.9rem;
+		line-height: 1.4;
+		overflow-wrap: anywhere;
+	}
+	.dialog-option small {
+		color: #aaa;
+		font-size: 0.8rem;
 	}
 
 	.dialog-actions {

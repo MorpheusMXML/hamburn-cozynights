@@ -53,6 +53,8 @@ const LOCK_SECONDS = 30;
 // LOCK_SECONDS: it is what stops a send that outlives the lock from being
 // delivered a second time by the run that takes over (deliverOne).
 const LEASE_SECONDS = 300;
+// Longest the crew can mute guest messages in one go (setQuiet).
+const QUIET_MAX_SECONDS = 600;
 // guest_notify.mail_label / tg_label
 const LABEL_MAX = 400;
 
@@ -676,13 +678,48 @@ function updateNotify(app, id, change) {
 	return saved;
 }
 
+// --- muted releases ------------------------------------------------------------
+//
+// Going back to Staging releases every guest booking. After the event that
+// would tell every guest "your spot was released", so the Control Center can
+// mute guest messages for the moment of that release (POST
+// /api/cozy/notify/quiet; docs/admin/event-checklist.md). Crew alerts are
+// admin_events and never pass through markDue: they go out either way.
+
+/** Are guest messages muted right now? */
+function isQuiet(app) {
+	return Date.now() < (app.store().get('cozy_notify_quiet') || 0);
+}
+
+/**
+ * Mutes guest messages for `seconds` (capped at QUIET_MAX_SECONDS; 0 or less
+ * ends it). Lives in the process's store, so it ends by itself even if the
+ * app never comes back to end it.
+ * @returns ms since the epoch when it ends (0: not muted)
+ */
+function setQuiet(app, seconds) {
+	const wanted = Math.min(Number(seconds) || 0, QUIET_MAX_SECONDS);
+	const until = wanted > 0 ? Date.now() + wanted * 1000 : 0;
+	app.store().set('cozy_notify_quiet', until);
+	return until;
+}
+
 /**
  * Marks a ticket for a delivery run. Called from the bed and order hooks,
  * inside the same transaction as the change itself.
+ *
+ * While guest messages are muted (setQuiet) nothing is queued. Instead the
+ * ticket's channels take its state as it is now as already told: a later
+ * booking is then news ("booked") instead of a change from a spot that was
+ * released in silence — and nothing about the muted change goes out later.
  */
 function markDue(app, orderId, options) {
 	if (!orderId) return;
 	const opts = options || {};
+	if (isQuiet(app)) {
+		acceptSilently(app, orderId);
+		return;
+	}
 	const due = pbDate(Date.now() + (opts.now ? 0 : SETTLE_SECONDS * 1000));
 	app.runInTransaction((tx) => {
 		let rec = findOne(tx, 'guest_notify', 'order = {:order}', { order: orderId });
@@ -699,6 +736,27 @@ function markDue(app, orderId, options) {
 			rec.set('order', orderId);
 		}
 		rec.set('due', due);
+		rec.set('attempts', 0);
+		tx.save(rec);
+	});
+}
+
+/** The muted counterpart of markDue: the current spot counts as told, nothing is queued. */
+function acceptSilently(app, orderId) {
+	app.runInTransaction((tx) => {
+		const rec = findOne(tx, 'guest_notify', 'order = {:order}', { order: orderId });
+		if (!rec) return; // never told anything, so nothing to bring up to date
+		const spot = currentSpot(tx, orderId);
+		const key = spot ? spot.bedId : '';
+		const label = spot ? spot.label : '';
+		// Both channels, whichever is in use: deliverOne only reads the one
+		// that belongs to a known address or a linked chat.
+		rec.set('mail_spot', key);
+		rec.set('mail_label', label);
+		rec.set('tg_spot', key);
+		rec.set('tg_label', label);
+		// A message that was waiting to settle is about the old state: dropped.
+		rec.set('due', '');
 		rec.set('attempts', 0);
 		tx.save(rec);
 	});
@@ -1958,6 +2016,8 @@ module.exports = {
 	currentRequest: currentRequest,
 	requestKindOf: requestKindOf,
 	markDue: markDue,
+	isQuiet: isQuiet,
+	setQuiet: setQuiet,
 	deliverOne: deliverOne,
 	deliverDue: deliverDue,
 	guestMail: guestMail,

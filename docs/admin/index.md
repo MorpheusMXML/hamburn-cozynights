@@ -25,7 +25,7 @@ Right under the header, the **🎟 BOOKING WINDOW** panel holds everything about
 | Let it run by itself | Flip the switch to **Timer armed** | admins |
 | Hold it | Flip the switch back (paused, the times stay) | admins |
 | Open, close or go back to Staging now | <kbd>⚡ Switch right now</kbd> | superusers only |
-| Release every guest booking | The switch back to Staging asks: <kbd>Switch & release …</kbd> (every guest with an address or Telegram gets a *spot was released* message) or <kbd>Switch & keep the bookings</kbd>; <kbd>🧨 Clear all bookings</kbd> (same place, Staging only, greyed out while no guest booking is left) does it later | superusers only |
+| Release every guest booking | The switch back to Staging asks: <kbd>Switch & release …</kbd> (every guest with an address or Telegram gets a *spot was released* message, unless *Don't notify the guests* is ticked — it is, once booking has closed) or <kbd>Switch & keep the bookings</kbd>; <kbd>🧨 Clear all bookings</kbd> (same place, Staging only, greyed out while no guest booking is left) does it later | superusers only |
 
 Times are Europe/Berlin (CET/CEST). The rules and what each switch does to the timer are in [The booking window](../guide/phases#the-booking-window).
 

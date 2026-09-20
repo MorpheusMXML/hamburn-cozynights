@@ -9,6 +9,7 @@ import {
 	nextTransition,
 	openingCountdownAt,
 	ownSpotNote,
+	quietReleaseByDefault,
 	saveTimesEdit,
 	showCountdownBar,
 	splitDuration,
@@ -325,6 +326,26 @@ describe('the PocketBase mirror (pb_hooks/lib/phase.js)', () => {
 				refused: !!app
 			});
 		}
+	});
+});
+
+describe('quietReleaseByDefault (switching back to Staging)', () => {
+	it('tells the guests while booking is still ahead or running: they have to book again', () => {
+		expect(quietReleaseByDefault(staging, NOW)).toBe(false);
+		expect(quietReleaseByDefault(planned, NOW)).toBe(false); // opens in two days
+		expect(quietReleaseByDefault(planned, NOW + 3 * DAY)).toBe(false); // live right now
+		expect(quietReleaseByDefault({ ...staging, basePhase: 'live' }, NOW)).toBe(false);
+	});
+
+	it('keeps quiet once booking is over', () => {
+		// the timer closed it
+		expect(quietReleaseByDefault(planned, NOW + 6 * DAY)).toBe(true);
+		// a superuser closed it by hand, which drops a closing time still ahead
+		expect(quietReleaseByDefault({ ...staging, basePhase: 'closed' }, NOW)).toBe(true);
+		// the closing time passed while the timer was paused
+		expect(
+			quietReleaseByDefault({ ...planned, paused: true, basePhase: 'live' }, NOW + 6 * DAY)
+		).toBe(true);
 	});
 });
 

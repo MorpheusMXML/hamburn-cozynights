@@ -152,6 +152,32 @@ class ReleaseStoppedError extends Error {
 	namesLeft: number | null = null;
 }
 
+/**
+ * How long guest messages stay muted around a quiet release. Released spots
+ * are accepted in silence while their own update runs (pb_hooks/lib/notify.js,
+ * markDue), so this only has to outlast the release loop; it is ended right
+ * after, and ends by itself if the app never gets there.
+ */
+const QUIET_RELEASE_SECONDS = 120;
+
+/**
+ * Mutes guest messages in PocketBase (POST /api/cozy/notify/quiet) for
+ * `seconds`, or ends that with 0. Crew alerts are not affected. Never throws.
+ * @returns whether PocketBase took it
+ */
+async function muteGuestMessages(adminPb: TypedPocketBase, seconds: number): Promise<boolean> {
+	try {
+		await adminPb.send('/api/cozy/notify/quiet', { method: 'POST', body: { seconds } });
+		return true;
+	} catch (err) {
+		console.error(
+			`[Bookings] Could not ${seconds > 0 ? 'mute' : 'unmute'} guest messages:`,
+			(err as Error)?.message
+		);
+		return false;
+	}
+}
+
 /** What a release left behind, as a sentence to append (empty when all is clean). */
 function namesNote(namesLeft: number | null): string {
 	if (namesLeft === null) return ' Whether burner names were left behind is unknown.';
@@ -253,6 +279,9 @@ export const actions: Actions = {
 		// superuser's explicit choice in the dialog, not a side effect: without
 		// it the bookings stay and "clear all bookings" can do it later.
 		const clearBookings = form?.get('clearBookings') === '1';
+		// "Don't notify the guests": the release happens without a message to
+		// anyone whose spot goes (the crew alert still goes out).
+		const quiet = to === 'staging' && clearBookings && form?.get('quietRelease') === '1';
 
 		try {
 			const { exists, window } = await readWindow(locals.pb);
@@ -260,53 +289,74 @@ export const actions: Actions = {
 			const phaseBefore = effectivePhase(window, now);
 			if (phaseBefore === to) return { success: true, phase: to, phaseBefore, pausedTimer: false };
 
-			const next = switchPhase(window, to, now);
-			await writeWindow(locals.pb, exists, next);
-			console.log(`[Action:setPhase] SUCCESS: ${phaseBefore} → ${to}`);
+			// Muted before anything changes: when PocketBase can't mute the guest
+			// messages, the switch doesn't happen either — a release the
+			// superuser asked to keep quiet must never go out loud.
+			if (quiet && !(await muteGuestMessages(locals.adminPb, QUIET_RELEASE_SECONDS))) {
+				return fail(503, {
+					error:
+						"The guest messages could not be muted, so nothing was changed. Try again, or untick “Don't notify the guests”."
+				});
+			}
+			try {
+				const next = switchPhase(window, to, now);
+				await writeWindow(locals.pb, exists, next);
+				console.log(`[Action:setPhase] SUCCESS: ${phaseBefore} → ${to}`);
 
-			// Editing the layout with guest bookings in it is what the dialog
-			// warns about; only a "yes, release them" gets here. Spots the crew
-			// booked for special-needs requests stay.
-			let cleared: { released: number; kept: number; namesLeft: number | null } | null = null;
-			if (to === 'staging' && clearBookings) {
-				try {
-					cleared = await releaseGuestBookings(locals.adminPb);
-					await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
-						...cleared,
-						reason: 'staging'
-					});
-					console.log(
-						`[Action:setPhase] ${cleared.released} bookings released, ${cleared.kept} special-needs spots kept, ${cleared.namesLeft ?? '?'} burner names left.`
-					);
-				} catch (err) {
-					console.error('[Action:setPhase] Staging is on, but releasing the bookings failed:', err);
-					const stopped = err instanceof ReleaseStoppedError ? err : null;
-					const released = stopped?.released ?? 0;
-					// The crew-booked spots were never part of the release, so the
-					// count belongs in the log even when it stopped halfway.
-					if (released > 0) {
+				// Editing the layout with guest bookings in it is what the dialog
+				// warns about; only a "yes, release them" gets here. Spots the crew
+				// booked for special-needs requests stay.
+				let cleared: { released: number; kept: number; namesLeft: number | null } | null = null;
+				if (to === 'staging' && clearBookings) {
+					try {
+						cleared = await releaseGuestBookings(locals.adminPb);
 						await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
-							released,
-							kept: stopped?.kept ?? 0,
-							namesLeft: stopped?.namesLeft ?? null,
-							reason: 'staging',
-							stopped: stopped?.total
+							...cleared,
+							guestsNotified: !quiet,
+							reason: 'staging'
+						});
+						console.log(
+							`[Action:setPhase] ${cleared.released} bookings released${quiet ? ' quietly' : ''}, ${cleared.kept} special-needs spots kept, ${cleared.namesLeft ?? '?'} burner names left.`
+						);
+					} catch (err) {
+						console.error(
+							'[Action:setPhase] Staging is on, but releasing the bookings failed:',
+							err
+						);
+						const stopped = err instanceof ReleaseStoppedError ? err : null;
+						const released = stopped?.released ?? 0;
+						// The crew-booked spots were never part of the release, so the
+						// count belongs in the log even when it stopped halfway.
+						if (released > 0) {
+							await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
+								released,
+								kept: stopped?.kept ?? 0,
+								namesLeft: stopped?.namesLeft ?? null,
+								guestsNotified: !quiet,
+								reason: 'staging',
+								stopped: stopped?.total
+							});
+						}
+						return fail(500, {
+							error: `Staging Mode is on, but the bookings could not all be released (${released} of ${stopped?.total ?? '?'} done).${namesNote(stopped?.namesLeft ?? null)} Use "Clear all bookings" for the rest.`
 						});
 					}
-					return fail(500, {
-						error: `Staging Mode is on, but the bookings could not all be released (${released} of ${stopped?.total ?? '?'} done).${namesNote(stopped?.namesLeft ?? null)} Use "Clear all bookings" for the rest.`
-					});
 				}
+				return {
+					success: true,
+					phase: to,
+					phaseBefore,
+					pausedTimer: next.paused && !window.paused,
+					released: cleared?.released,
+					kept: cleared?.kept,
+					namesLeft: cleared?.namesLeft,
+					guestsNotified: cleared ? !quiet : undefined
+				};
+			} finally {
+				// Right after the release, not at the end of the window: guest
+				// messages about anything else must not stay muted.
+				if (quiet) await muteGuestMessages(locals.adminPb, 0);
 			}
-			return {
-				success: true,
-				phase: to,
-				phaseBefore,
-				pausedTimer: next.paused && !window.paused,
-				released: cleared?.released,
-				kept: cleared?.kept,
-				namesLeft: cleared?.namesLeft
-			};
 		} catch (err) {
 			return phaseFailure('setPhase', err, 'The booking phase was not changed.');
 		}

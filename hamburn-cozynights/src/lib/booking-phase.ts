@@ -195,6 +195,21 @@ export function windowToRecord(w: BookingWindow): Required<StoredPhaseFields> {
 	};
 }
 
+/**
+ * Whether releasing the bookings on the way back to Staging keeps quiet about
+ * it unless the superuser says otherwise ("Don't notify the guests" ticked).
+ * Once booking is over — closed right now, or past the window's closing time —
+ * "your spot was released" only confuses guests after the event. Before that,
+ * a release is news they need: they have to book again. Closed right now counts
+ * on its own because a superuser who closes by hand drops a closing time that
+ * was still ahead (switchPhase), so there may be no closing time to go by.
+ */
+export function quietReleaseByDefault(w: BookingWindow, now = Date.now()): boolean {
+	if (effectivePhase(w, now) === 'closed') return true;
+	const closes = toMs(w.closesAt);
+	return closes !== null && closes <= now;
+}
+
 /** The same window with the phase the timers have reached written as its base phase. */
 export function materialize(w: BookingWindow, now = Date.now()): BookingWindow {
 	return { ...w, basePhase: effectivePhase(w, now) };

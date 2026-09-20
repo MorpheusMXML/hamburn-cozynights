@@ -419,3 +419,71 @@ describe('guest delivery does not send twice when a send outlives the lock', () 
 		expect(app.findRecordById('guest_notify', 'n1').getString('due')).toBe(before);
 	});
 });
+
+describe('a release the crew keeps quiet (pb_hooks/lib/notify.js, setQuiet)', () => {
+	const notify = loadHookModule('lib/notify.js');
+
+	/** A ticket that was told about bed1, which is free again now. */
+	function toldThenReleased() {
+		return fakeHookApp({
+			orders: [{ id: 'order1', email: 'guest@example.com' }],
+			beds: [{ id: 'bed1', order: '', label: 'B1', room: 'room1' }],
+			rooms: [{ id: 'room1', name: 'Dorm', room_number: 1, house: 'house1' }],
+			houses: [{ id: 'house1', name: 'Villa' }],
+			guest_notify: [
+				{
+					id: 'n1',
+					order: 'order1',
+					due: '',
+					mail_to: 'guest@example.com',
+					mail_spot: 'bed1',
+					mail_label: 'B1 · Dorm #1 · Villa',
+					tg_spot: 'bed1',
+					tg_label: 'B1 · Dorm #1 · Villa'
+				}
+			]
+		});
+	}
+	const stored = (app: any) => app.findRecordById('guest_notify', 'n1');
+
+	it('queues nothing and takes the new state as told', () => {
+		const app = toldThenReleased();
+		notify.setQuiet(app, 60);
+		expect(notify.isQuiet(app)).toBe(true);
+
+		notify.markDue(app, 'order1');
+
+		expect(stored(app).getString('due')).toBe('');
+		// so a booking at the next opening is "booked", not "changed" from B1
+		expect(stored(app).getString('mail_spot')).toBe('');
+		expect(stored(app).getString('tg_spot')).toBe('');
+	});
+
+	it('queues as usual again once it has ended', () => {
+		const app = toldThenReleased();
+		notify.setQuiet(app, 60);
+		notify.setQuiet(app, 0);
+		expect(notify.isQuiet(app)).toBe(false);
+
+		notify.markDue(app, 'order1');
+
+		expect(stored(app).getString('due')).not.toBe('');
+		expect(stored(app).getString('mail_spot')).toBe('bed1'); // still to be told
+	});
+
+	it('creates nothing for a ticket that was never told anything', () => {
+		const app = fakeHookApp({ orders: [{ id: 'order2', email: 'new@example.com' }] });
+		notify.setQuiet(app, 60);
+		notify.markDue(app, 'order2');
+		expect(app.findRecordsByFilter('guest_notify', "order = 'order2'", '', 0, 0)).toHaveLength(0);
+	});
+
+	it('lasts ten minutes at most, whatever is asked for', () => {
+		const app = fakeHookApp({});
+		const until = notify.setQuiet(app, 86_400);
+		expect(until - Date.now()).toBeLessThanOrEqual(600_000);
+		expect(until - Date.now()).toBeGreaterThan(590_000);
+		expect(notify.setQuiet(app, -5)).toBe(0);
+		expect(notify.setQuiet(app, 'nonsense')).toBe(0);
+	});
+});
