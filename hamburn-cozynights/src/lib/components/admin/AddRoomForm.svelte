@@ -180,9 +180,14 @@
 	.form-group {
 		display: flex;
 		flex-direction: column;
-		flex: 1 1 140px;
 		min-width: 0;
 		gap: 0.5rem;
+	}
+	/* Only the fields in a row share it. On the name field (a direct child of
+	   the column form) the same flex-basis was a 140 px HEIGHT: an empty band
+	   between the name and ROOM #. */
+	.form-row > .form-group {
+		flex: 1 1 140px;
 	}
 
 	label {
