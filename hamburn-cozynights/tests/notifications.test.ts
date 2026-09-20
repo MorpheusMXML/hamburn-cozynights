@@ -23,6 +23,7 @@ import {
 import { getBookingSettings } from '../src/lib/server/settings';
 import { logAdminEvent } from '../src/lib/server/admin-events';
 import { actions as roomActions } from '../src/routes/room/[id]/+page.server';
+import { loadHookModule } from './hook-module';
 
 /** A PocketBase client stand-in: collection(name) → the service below. */
 function fakePb(service: Record<string, any>) {
@@ -234,5 +235,187 @@ describe('logAdminEvent', () => {
 			logAdminEvent(fakePb({ create }), null, 'template_imported', 'Camp', {})
 		).resolves.toBeUndefined();
 		log.mockRestore();
+	});
+});
+
+// --- the delivery lock (pb_hooks/lib/notify.js) -------------------------------
+//
+// Delivery runs in PocketBase, so this drives the hook module directly with an
+// in-memory stand-in for the JSVM's `app`. Real sending is covered by
+// tests/integration/notifications.test.ts; what is checked here is what that
+// stack can't provoke on purpose: a send that outlives the delivery lock.
+
+type HookRow = Record<string, any>;
+
+/** A PocketBase record as the JSVM hands it to a hook: getters, set, save-back. */
+function hookRecord(collection: string, row: HookRow) {
+	const draft: HookRow = { ...row };
+	return {
+		id: draft.id,
+		raw: draft,
+		getString: (field: string) => String(draft[field] ?? ''),
+		getBool: (field: string) => !!draft[field],
+		getInt: (field: string) => Number(draft[field] ?? 0),
+		set: (field: string, value: unknown) => {
+			draft[field] = value;
+		},
+		collection: () => ({ id: collection, name: collection }),
+		original: () => hookRecord(collection, row)
+	};
+}
+
+/** `due != '' && due <= @now`, `order = {:order}` — the filters delivery uses. */
+function hookMatches(row: HookRow, filter: string, params: HookRow, now: number): boolean {
+	return filter.split('&&').every((clause) => {
+		const match = /^\s*(\w+)\s*(!=|<=|=)\s*(.+?)\s*$/.exec(clause);
+		if (!match) throw new Error(`fake app: unsupported filter clause "${clause}"`);
+		const [, field, op, rawWanted] = match;
+		const have = String(row[field] ?? '');
+		if (rawWanted === '@now') {
+			if (op !== '<=') throw new Error(`fake app: @now with "${op}"`);
+			return !!have && Date.parse(have.replace(' ', 'T')) <= now;
+		}
+		const wanted = rawWanted.startsWith('{:')
+			? String(params[rawWanted.slice(2, -1)] ?? '')
+			: rawWanted.replace(/^(['"])(.*)\1$/, '$2');
+		return op === '=' ? have === wanted : have !== wanted;
+	});
+}
+
+function fakeHookApp(tables: Record<string, HookRow[]>) {
+	const store = new Map<string, unknown>();
+	const sent: { to: string; subject: string }[] = [];
+	const rows = (name: string) => (tables[name] ??= []);
+	const app: any = {
+		sent,
+		findRecordById(collection: string, id: string) {
+			const row = rows(collection).find((r) => r.id === id);
+			if (!row) throw new Error(`${collection}/${id} not found`);
+			return hookRecord(collection, row);
+		},
+		findRecordsByFilter(
+			collection: string,
+			filter: string,
+			_sort: string,
+			limit: number,
+			_offset: number,
+			params: HookRow = {}
+		) {
+			return rows(collection)
+				.filter((row) => hookMatches(row, filter, params, Date.now()))
+				.slice(0, limit || undefined)
+				.map((row) => hookRecord(collection, row));
+		},
+		runInTransaction(fn: (tx: unknown) => void) {
+			fn(app);
+		},
+		save(record: { id: string; raw: HookRow; collection: () => { name: string } }) {
+			const row = rows(record.collection().name).find((r) => r.id === record.id);
+			if (row) Object.assign(row, record.raw);
+		},
+		delete: () => {},
+		store: () => ({
+			get: (key: string) => store.get(key),
+			set: (key: string, value: unknown) => store.set(key, value),
+			setFunc: (key: string, fn: (old: unknown) => unknown) => store.set(key, fn(store.get(key)))
+		}),
+		settings: () => ({
+			smtp: { enabled: true, host: 'smtp.test' },
+			meta: {
+				senderAddress: 'camp@cozy.test',
+				senderName: 'CozyNights',
+				appURL: 'https://cozy.test'
+			}
+		}),
+		newMailClient: () => ({
+			send: (message: { to: { address: string }[]; subject: string }) => {
+				sent.push({ to: message.to[0].address, subject: message.subject });
+				app.onSend?.();
+			}
+		}),
+		onSend: null as null | (() => void)
+	};
+	return app;
+}
+
+describe('guest delivery does not send twice when a send outlives the lock', () => {
+	const notify = loadHookModule('lib/notify.js', {
+		MailerMessage: class {
+			constructor(fields: Record<string, unknown>) {
+				Object.assign(this, fields);
+			}
+		}
+	});
+	const cfg = {
+		appUrl: 'https://cozy.test',
+		label: '',
+		mail: { enabled: true, replyTo: '' },
+		telegram: { token: '', chatId: '', threadId: '', apiBase: '', guests: false },
+		mailsPerMinute: 20,
+		texts: {}
+	};
+
+	/** One ticket with an e-mail, a booked spot and a delivery that is due now. */
+	function camp() {
+		const due = new Date(Date.now() - 1000).toISOString().replace('T', ' ');
+		return fakeHookApp({
+			orders: [
+				{
+					id: 'order1',
+					email: 'guest@example.com',
+					customer_name: 'Ada',
+					order_number: 'TICKET-1',
+					pass_code: 'AAAABBBBCCCC'
+				}
+			],
+			beds: [{ id: 'bed1', order: 'order1', label: 'B1', room: 'room1' }],
+			rooms: [{ id: 'room1', name: 'Dorm', room_number: 1, house: 'house1' }],
+			houses: [{ id: 'house1', name: 'Villa' }],
+			special_requests: [],
+			guest_notify: [{ id: 'n1', order: 'order1', due, attempts: 0 }]
+		});
+	}
+
+	it('leases the record before the first send, so the next run skips it', () => {
+		const app = camp();
+		// The lock is gone by the time the send returns, and the run that takes
+		// over goes looking for due records — exactly what the cron job does.
+		let takeovers = 0;
+		app.onSend = () => {
+			if (takeovers++ > 0) return;
+			notify.deliverDue(app, cfg, false, 0, () => true);
+		};
+
+		notify.deliverDue(app, cfg, false, 0, () => true);
+
+		expect(app.sent).toHaveLength(1);
+		expect(app.sent[0]).toMatchObject({ to: 'guest@example.com' });
+		// Delivered: nothing is due any more, and the lease is gone with it.
+		expect(app.findRecordById('guest_notify', 'n1').getString('due')).toBe('');
+	});
+
+	it('holds the record for minutes, not seconds, while the send runs', () => {
+		const app = camp();
+		let leaseDuringSend = '';
+		app.onSend = () => {
+			leaseDuringSend = app.findRecordById('guest_notify', 'n1').getString('due');
+		};
+
+		notify.deliverDue(app, cfg, false, 0, () => true);
+
+		const heldFor = Date.parse(leaseDuringSend.replace(' ', 'T')) - Date.now();
+		expect(heldFor).toBeGreaterThan(60_000);
+		expect(app.sent).toHaveLength(1);
+	});
+
+	it('sends nothing once the loop has lost its lock', () => {
+		const app = camp();
+		const before = app.findRecordById('guest_notify', 'n1').getString('due');
+
+		notify.deliverDue(app, cfg, false, 0, () => false);
+
+		expect(app.sent).toHaveLength(0);
+		// Untouched, so the next run picks it up straight away.
+		expect(app.findRecordById('guest_notify', 'n1').getString('due')).toBe(before);
 	});
 });

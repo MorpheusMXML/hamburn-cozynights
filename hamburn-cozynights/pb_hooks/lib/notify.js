@@ -49,6 +49,10 @@ const BOT_CACHE_SECONDS = 1800;
 const TG_POLL_PAUSE_SECONDS = 60;
 // The delivery lock: renewed on every pass and before every delivery.
 const LOCK_SECONDS = 30;
+// How long a record is held while it is being delivered. Has to be well over
+// LOCK_SECONDS: it is what stops a send that outlives the lock from being
+// delivered a second time by the run that takes over (deliverOne).
+const LEASE_SECONDS = 300;
 // guest_notify.mail_label / tg_label
 const LABEL_MAX = 400;
 
@@ -1266,6 +1270,13 @@ function previewMessages(cfg) {
 	return { mail: mail, telegram: telegram, bot: bot };
 }
 
+/**
+ * Hands one message to PocketBase's mail client. This blocks for as long as
+ * the SMTP server takes: PocketBase 0.40 has no timeout for it, in the
+ * settings or anywhere else the JSVM can reach (unlike telegramCall, which
+ * passes one to $http.send). A hanging send is therefore survived rather than
+ * cut short — deliverOne leases the record before it gets here.
+ */
 function sendMail(app, cfg, to, msg) {
 	const meta = app.settings().meta;
 	const headers = { 'Auto-Submitted': 'auto-generated' };
@@ -1322,10 +1333,14 @@ function kindOf(lastKey, key) {
  * it was read, sends, then writes back only what it decided (updateNotify):
  * if the ticket was marked again meanwhile, that newer mark stays and the next
  * pass handles the newer state.
+ *
+ * Before the first send the record is leased (`due` pushed LEASE_SECONDS out),
+ * so a send that takes longer than the loop's lock can't be delivered twice.
+ * `keepAlive` renews that lock and is checked right before the lease.
  */
-function deliverOne(app, cfg, rec, force) {
+function deliverOne(app, cfg, rec, force, keepAlive) {
 	const now = Date.now();
-	const loadedDue = rec.getString('due');
+	let loadedDue = rec.getString('due');
 	let order;
 	try {
 		order = app.findRecordById('orders', rec.getString('order'));
@@ -1344,6 +1359,22 @@ function deliverOne(app, cfg, rec, force) {
 			return 'cooldown';
 		}
 	}
+
+	// Take the record out of reach before anything goes out. Without this a
+	// send that hangs longer than LOCK_SECONDS lets the next cron run take the
+	// lock, find the same record still due, and send everything a second time —
+	// and the mail client has no timeout of its own (sendMail). The closing
+	// write below replaces the lease with the real result; a run that dies
+	// mid-send leaves it in place, so the record is retried in LEASE_SECONDS
+	// instead of right away.
+	if (keepAlive && !keepAlive()) return 'lock-lost';
+	const lease = pbDate(now + LEASE_SECONDS * 1000);
+	const leased = updateNotify(app, rec.id, (fresh) => {
+		if (fresh.getString('due') !== loadedDue) return false; // another run has it
+		fresh.set('due', lease);
+	});
+	if (!leased) return 'skipped';
+	loadedDue = lease; // what the closing write checks against from here on
 
 	const spot = currentSpot(app, order.id);
 	const key = spot ? spot.bedId : '';
@@ -1531,12 +1562,14 @@ function deliverDue(app, cfg, force, deadline, keepAlive) {
 		if (keepAlive && !keepAlive()) break;
 		let result;
 		try {
-			result = deliverOne(app, cfg, rec, force);
+			result = deliverOne(app, cfg, rec, force, keepAlive);
 		} catch (err) {
 			console.error(
 				'[cozy-notify] delivery for ' + rec.getString('order') + ' failed: ' + safeError(err)
 			);
-			// Not again on the next pass: the same error would repeat every few seconds.
+			// Not again on the next pass: the same error would repeat every few
+			// seconds. A record that was already leased keeps the lease instead —
+			// same effect, and the lease is the newer value.
 			try {
 				updateNotify(app, rec.id, (fresh) => {
 					if (fresh.getString('due') !== rec.getString('due')) return false;
@@ -1925,6 +1958,8 @@ module.exports = {
 	currentRequest: currentRequest,
 	requestKindOf: requestKindOf,
 	markDue: markDue,
+	deliverOne: deliverOne,
+	deliverDue: deliverDue,
 	guestMail: guestMail,
 	guestTelegram: guestTelegram,
 	loadTexts: loadTexts,
