@@ -92,6 +92,29 @@ If animations bother you, the browser setting *reduce motion* (macOS: System
 Settings → Accessibility → Display; Windows: Settings → Accessibility → Visual
 effects) stops the breathing — the colours stay.
 
+## When something is refused
+
+Every form in the admin area — a new house, a room, a spot, a ticket's address,
+the ticket search, message texts — says no the same way:
+
+- the field to fix gets a **red border**, one soft ping and a short sideways
+  nudge, and the cursor jumps into it (the first one, if several are wrong);
+- the reason stands **right under the field**, starting with ⚠️;
+- a refusal about the whole form (the server couldn't be reached, the layout is
+  locked) appears as a **red box** above the buttons;
+- a dialog that says no — *Switch not changed*, *🔒 Locked during Live Booking* —
+  rings a few times in red or orange before it holds still. Dialogs that only
+  ask (*Delete this house?*) stay calm.
+
+The red disappears the moment you start correcting the field. Clicking the
+button again with the same mistake nudges the field again — it never fails
+silently.
+
+> [!TIP]
+> On a ticket, a half-typed e-mail address isn't an error yet: the field only
+> turns red once you leave it or press <kbd>Save</kbd>. <kbd>Save</kbd> stays
+> clickable and tells you what's missing instead of greying out.
+
 ## Red alert: sanity checks
 
 When the layout has gaps, a red **RED ALERT: THE CAMP LAYOUT IS INCOMPLETE** panel (with the number of issues) lists them, each with a shortcut to fix it:

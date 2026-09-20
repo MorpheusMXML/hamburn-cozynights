@@ -1,7 +1,8 @@
 # States, colours and live numbers
 
-Two things in this app are easy to get subtly wrong: showing a state, and
-showing a number that has since changed. Both have one home now.
+Three things in this app are easy to get subtly wrong: showing a state,
+pointing at the field a form refused, and showing a number that has since
+changed. All three have one home now.
 
 ## One state vocabulary
 
@@ -54,6 +55,76 @@ side by side.
 `countSpots()` partitions the active spots into `occupied + free + locked +
 special = total`, which is what lets the ring add up. `checkedIn` is a subset
 of `occupied`, and `deactivated` counts the switched-off spots outside `total`.
+
+## Refused input
+
+A refused field uses the same vocabulary — the `danger` state — and one switch:
+**`aria-invalid="true"`**. Forms set it anyway for screen readers; `state.css`
+turns it into the look for every form at once:
+
+| Element | Gets |
+| --- | --- |
+| `input`/`select`/`textarea` with `aria-invalid="true"` | red border, one ping (`field-refused`), then a steady faint glow |
+| `.field-error` | the reason under the field: red, ⚠️ from CSS, slides in |
+| `.form-error` | a refusal of the whole form: red box, ⚠️ from CSS, slides in |
+| `.field-box` + `data-state="danger"` + `state-ring state-ring-alert` | a wrapper that *is* the visible box (the ticket box on `/`, a group of checkboxes): three quick beats of the ring, then still |
+
+A control inside a `.field-box` is skipped by the field rule, so nothing glows
+twice. Don't type ⚠️ into a message — the CSS adds it.
+
+```svelte
+<input
+	id="room-name"
+	name="name"
+	aria-invalid={!!errors.name}
+	aria-describedby={errors.name ? 'room-name-error' : undefined}
+	on:input={() => (errors = { ...errors, name: undefined })}
+/>
+{#if errors.name}
+	<p class="field-error" id="room-name-error" role="alert">{errors.name}</p>
+{/if}
+```
+
+**After a refused submit** — by the browser-side check or by the server — call
+`revealInvalid(formElement)` from `$lib/field-alert`. It waits a tick for the
+error markup, puts the cursor into the first refused field (scrolled into
+view), nudges every refused box sideways for 320 ms (`transform` only) and
+replays the ping, so a second click with the same mistake is never silent:
+
+```ts
+const handleSubmit: SubmitFunction = ({ formData, formElement, cancel }) => {
+	errors = validate(formData);
+	if (Object.keys(errors).length) {
+		cancel();
+		revealInvalid(formElement);
+		return;
+	}
+	return async ({ result }) => {
+		if (result.type === 'failure') {
+			errors = result.data?.errors ?? {};
+			revealInvalid(formElement);
+		}
+	};
+};
+```
+
+Two UX rules the forms follow:
+
+- **Punish late, reward early.** Don't mark a field red while it's being typed
+  (half an e-mail address isn't wrong yet): mark it once it was left or a save
+  was tried, and clear it on the first keystroke that fixes it
+  (`TicketCard.svelte` shows the pattern).
+- **Don't grey out Save to signal an error.** A disabled button doesn't say
+  why. Keep it clickable and let `revealInvalid` show what to fix.
+
+The **forwards-filled animation** is deliberate: an animation outranks the
+forms' own `:focus` glow in the cascade without `!important`, so the refused
+field stays red while the cursor is in it. With `prefers-reduced-motion` the
+animation runs for 1 ms and lands on the steady glow; the nudge is skipped.
+
+`tests/field-alert.test.ts` covers the helper; the layout suite measures the
+refused states of the start page, the special-needs form, the new-house form
+and the add-room form in both engines.
 
 ## Live numbers
 
