@@ -5,6 +5,7 @@ import { bookingRefusal } from '$lib/booking-phase';
 import {
 	BookingService,
 	BedUnavailableError,
+	BookingClosedError,
 	CheckedInError,
 	SpotChangedError
 } from '$lib/server/booking';
@@ -152,10 +153,12 @@ export const actions: Actions = {
 			// two guests hitting "random bed" at the same moment can't both win the
 			// same bed, and one ticket can't end up with two beds.
 			await bookingService.bookBed(order, bedId, guestName.slice(0, 80), {
-				allowLocked: !!locals.admin
+				allowLocked: !!locals.admin,
+				requireLivePhase: true
 			});
 			return { success: true, bedId };
 		} catch (err: any) {
+			if (err instanceof BookingClosedError) return fail(403, { error: err.message });
 			if (err instanceof BedUnavailableError || err?.status === 404) {
 				return fail(409, {
 					error: 'Someone was faster: this spot was just taken. Roll the dice again.'

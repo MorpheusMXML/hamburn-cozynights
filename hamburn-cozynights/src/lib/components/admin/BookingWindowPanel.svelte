@@ -54,6 +54,13 @@
 	onDestroy(() => clearInterval(ticker));
 	const motion = (duration: number) => (reduceMotion ? 0 : duration);
 
+	/** Burner names a release could not clear — the spots are free regardless. */
+	function namesNote(namesLeft: number | null | undefined): string {
+		if (namesLeft === null) return ' Whether burner names were left behind is unknown.';
+		if (!namesLeft || namesLeft <= 0) return '';
+		return ` ${namesLeft} burner name${namesLeft === 1 ? '' : 's'} could not be cleared; those spots are free but still show a name.`;
+	}
+
 	let expanded = false;
 	let editing = false;
 	let overrideOpen = false;
@@ -358,12 +365,18 @@
 		busy = false;
 		if (result.type === 'success') {
 			const data = result.data as
-				{ phaseBefore?: BookingPhase; released?: number; kept?: number } | undefined;
+				| {
+						phaseBefore?: BookingPhase;
+						released?: number;
+						kept?: number;
+						namesLeft?: number | null;
+				  }
+				| undefined;
 			const releasedNote =
 				to !== 'staging'
 					? ''
 					: clearBookings
-						? ` ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}.`
+						? ` ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}.${namesNote(data?.namesLeft)}`
 						: guestBooked > 0
 							? ` The ${guestBooked} guest booking${guestBooked === 1 ? '' : 's'} stay${guestBooked === 1 ? 's' : ''}: clear them with 🧨 Clear all bookings when the camp should be empty.`
 							: '';
@@ -404,10 +417,12 @@
 		const result = await submitAction('?/clearAllBookings', new FormData());
 		busy = false;
 		if (result.type === 'success') {
-			const data = result.data as { released?: number; kept?: number } | undefined;
+			const data = result.data as
+				{ released?: number; kept?: number; namesLeft?: number | null } | undefined;
+			const left = namesNote(data?.namesLeft);
 			toast(
-				`✨ ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}.`,
-				'success'
+				`✨ ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}.${left}`,
+				left ? 'warning' : 'success'
 			);
 		} else {
 			await alertDialog(

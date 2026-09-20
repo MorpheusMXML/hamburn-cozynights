@@ -1,14 +1,16 @@
 // tests/integration/booking.test.ts — the app's BookingService on a real database.
 // tests/booking-rules.test.ts checks the same rules against an in-memory fake;
 // here the real filters, relations and the service account do the work.
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import type PocketBase from 'pocketbase';
 import {
 	BookingService,
 	BedUnavailableError,
+	BookingClosedError,
 	SpotChangedError
 } from '../../src/lib/server/booking';
 import { createLookupHash, decrypt } from '../../src/lib/server/crypto';
+import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
 import { anonymous, seedHouse, seedTicket, serviceAccount } from '../stack-helpers';
 
 let su: PocketBase;
@@ -162,5 +164,73 @@ describe('one ticket = one bed', () => {
 		expect(await booking.getBedForOrder(order.id)).toBeNull();
 		// nothing left to nuke: no error, nothing released
 		expect(await booking.unbookOrder(order.id, { onlyBed: beds[1].id })).toBe(0);
+	});
+});
+
+/**
+ * A guest's own booking has to survive the phase switch cleanly: the switch
+ * back to Staging writes app_settings first and releases the bookings right
+ * after (src/routes/admin/+page.server.ts), so bookBed re-reads the phase
+ * once the claim is through and undoes it when booking has ended.
+ */
+describe('a booking that arrives as booking closes', () => {
+	const PHASE_FIELDS = ['is_booking_active', 'booking_closed', 'booking_timer_paused'] as const;
+	let before: Record<string, unknown>;
+
+	beforeAll(async () => {
+		const settings = await su.collection('app_settings').getOne(APP_SETTINGS_ID);
+		before = Object.fromEntries(PHASE_FIELDS.map((f) => [f, settings[f] ?? false]));
+	});
+	afterAll(async () => {
+		await su.collection('app_settings').update(APP_SETTINGS_ID, before);
+	});
+
+	const setPhase = (fields: Record<string, boolean>) =>
+		su.collection('app_settings').update(APP_SETTINGS_ID, {
+			is_booking_active: false,
+			booking_closed: false,
+			booking_timer_paused: false,
+			...fields
+		});
+
+	it('goes through while booking is live', async () => {
+		await setPhase({ is_booking_active: true });
+		const { beds } = await seedHouse(su, 1);
+		const { order } = await seedTicket(su);
+
+		await booking.bookBed(order as any, beds[0].id, 'In Time', { requireLivePhase: true });
+		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(true);
+	});
+
+	it('is undone when booking is closed or back in Staging', async () => {
+		for (const [label, fields] of [
+			['closed', { booking_closed: true }],
+			['staging', {}]
+		] as const) {
+			await setPhase(fields);
+			const { beds } = await seedHouse(su, 1);
+			const { order } = await seedTicket(su);
+
+			await expect(
+				booking.bookBed(order as any, beds[0].id, `Too Late (${label})`, {
+					requireLivePhase: true
+				})
+			).rejects.toBeInstanceOf(BookingClosedError);
+
+			const bed = await su.collection('beds').getOne(beds[0].id);
+			expect(bed.occupied).toBe(false);
+			expect(bed.order).toBe('');
+			// The name is written after the phase check, so it never got there.
+			expect((await su.collection('orders').getOne(order.id)).burner_name).toBe('');
+		}
+	});
+
+	it('still lets the crew book in Staging', async () => {
+		await setPhase({});
+		const { beds } = await seedHouse(su, 1);
+		const { order } = await seedTicket(su);
+
+		await booking.bookBed(order as any, beds[0].id, 'Crew Pick');
+		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(true);
 	});
 });
