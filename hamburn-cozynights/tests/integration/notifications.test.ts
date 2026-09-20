@@ -267,6 +267,8 @@ describe('booking confirmations by e-mail', () => {
 			)
 		).toBe(true);
 		expect(alerts.some((m) => m.text.includes('Test Guest'))).toBe(false);
+		// the server's reply quotes the address it refused: that is shortened too
+		expect(alerts.some((m) => m.text.includes(guest.email))).toBe(false);
 	});
 });
 

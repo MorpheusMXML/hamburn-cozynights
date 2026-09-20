@@ -768,6 +768,17 @@ function greetingName(order) {
 }
 
 /**
+ * Every address in a server's reply, shortened. A mail server echoes the
+ * recipient back ("550 5.1.1 <ada@example.com> unknown"), and that reply is
+ * quoted in the crew chat: the alert may say which ticket failed, never who.
+ */
+function maskEmailsIn(text) {
+	return String(text || '').replace(/[^\s<>()[\],;:"']+@[^\s<>()[\],;:"']+/g, (match) =>
+		maskEmail(match)
+	);
+}
+
+/**
  * Forgets that the ticket was passed on: used up by the first message to the
  * new address, so a spot they book themselves later is an ordinary booking.
  * A ticket whose new address never gets a message (no address, mail off)
@@ -1490,7 +1501,11 @@ function deliverOne(app, cfg, rec, force) {
 		logEvent(app, 'guest_notice_failed', {
 			actor: 'server',
 			subject: ticketLabel(order),
-			details: { channels: channels.join(', '), attempts: attempts, error: error }
+			details: {
+				channels: channels.join(', '),
+				attempts: attempts,
+				error: maskEmailsIn(error)
+			}
 		});
 	}
 	if (problems.length > 0) return 'retry';
