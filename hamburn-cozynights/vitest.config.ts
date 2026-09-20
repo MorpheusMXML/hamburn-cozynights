@@ -6,12 +6,18 @@ export default defineConfig({
 	test: {
 		globals: true,
 		environment: 'node',
-		// tests/e2e/** uses the Playwright test API (npm run test:e2e), not
-		// Vitest's — without this exclude, Vitest's default glob picks it up
-		// too and fails on the API mismatch.
+		// tests/e2e/** and tests/layout/** use the Playwright test API
+		// (npm run test:e2e / test:layout), not Vitest's — without this exclude,
+		// Vitest's default glob picks them up too and fails on the API mismatch.
 		// tests/integration/** and tests/smoke/** need running services and have
 		// their own config (vitest.stack.config.ts, npm run test:integration/smoke).
-		exclude: ['**/node_modules/**', 'tests/e2e/**', 'tests/integration/**', 'tests/smoke/**']
+		exclude: [
+			'**/node_modules/**',
+			'tests/e2e/**',
+			'tests/layout/**',
+			'tests/integration/**',
+			'tests/smoke/**'
+		]
 	},
 	resolve: {
 		alias: {

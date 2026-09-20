@@ -16,6 +16,10 @@ export const MAP_IMAGE = '/lageplan-brahmsee-2026.jpg';
 /** Two pins closer than this (in map units) can't be told apart or tapped. */
 export const MIN_HOUSE_DISTANCE = 25;
 
+/** A pin's name label: its height and its distance from the pin (marker units). */
+export const MARKER_LABEL_HEIGHT = 20;
+export const MARKER_LABEL_GAP = 18;
+
 export interface MapPoint {
 	x: number;
 	y: number;

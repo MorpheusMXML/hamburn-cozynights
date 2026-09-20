@@ -14,6 +14,7 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 <svelte:options namespace="svg" />
 
 <script lang="ts">
+	import { MAP_WIDTH, MARKER_LABEL_GAP, MARKER_LABEL_HEIGHT } from '$lib/map-geometry';
 	import type { HouseMarkerStatus } from '$lib/occupancy';
 
 	export let name: string;
@@ -24,11 +25,17 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 	export let dragging = false;
 	/** Radius of the invisible hit circle, in map units. */
 	export let hitRadius = 30;
+	/** Where the pin sits (map units) and how much it is scaled: the label is
+	 * shifted sideways so it never hangs over the edge of the map. */
+	export let x = MAP_WIDTH / 2;
+	export let scale = 1;
 
 	const FONT_SIZE = 11;
-	const LABEL_HEIGHT = 20;
+	const LABEL_HEIGHT = MARKER_LABEL_HEIGHT;
 	const LABEL_PADDING = 9;
-	const LABEL_GAP = 18;
+	const LABEL_GAP = MARKER_LABEL_GAP;
+	/** Distance the label keeps from the map's left and right edge (map units). */
+	const EDGE_MARGIN = 4;
 
 	$: isOccupied = status === 'full';
 	$: isEmpty = status === 'empty';
@@ -48,11 +55,22 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 	$: estimatedWidth = label.length * (FONT_SIZE * 0.72 + 1);
 	$: labelWidth = (measuredWidth || estimatedWidth) + LABEL_PADDING * 2;
 	$: labelY = labelPosition === 'top' ? -(LABEL_GAP + LABEL_HEIGHT) : LABEL_GAP;
+	$: labelX = labelLeft(x, scale, labelWidth);
+
+	/** Centred under the pin, but inside the map (marker units, i.e. before `scale`). */
+	function labelLeft(pinX: number, pinScale: number, width: number): number {
+		const min = (EDGE_MARGIN - pinX) / pinScale;
+		const max = (MAP_WIDTH - EDGE_MARGIN - pinX) / pinScale - width;
+		if (max < min) return -width / 2; // wider than the map: nothing better than centred
+		return Math.min(max, Math.max(min, -width / 2));
+	}
 
 	function measure(node: SVGTextElement, _text: string) {
 		const update = () => {
 			try {
-				measuredWidth = node.getComputedTextLength();
+				// The drawn width. WebKit leaves the CSS letter-spacing out of
+				// getComputedTextLength(), so the text stuck out of its background.
+				measuredWidth = node.getBBox().width;
 			} catch {
 				measuredWidth = 0;
 			}
@@ -81,9 +99,9 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 	<circle class="pin" r="9" pointer-events="none" />
 
 	<g class="label" transform="translate(0 {labelY})" pointer-events="none">
-		<rect x={-labelWidth / 2} y="0" width={labelWidth} height={LABEL_HEIGHT} rx="4" />
+		<rect x={labelX} y="0" width={labelWidth} height={LABEL_HEIGHT} rx="4" />
 		<text
-			x="0"
+			x={labelX + labelWidth / 2}
 			y={LABEL_HEIGHT / 2}
 			font-size={FONT_SIZE}
 			text-anchor="middle"

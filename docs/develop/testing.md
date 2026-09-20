@@ -8,7 +8,7 @@ One command runs everything that GitHub runs:
 npm run verify
 ```
 
-It needs Node and a running Docker (Docker Desktop on a Mac). Nothing else — no `.env`, no local database, no accounts. It never touches your dev database. Like all app commands, it runs in the inner `hamburn-cozynights/` folder (see [Local development](./)).
+It needs Node, a running Docker (Docker Desktop on a Mac) and, for the layout test, the Playwright browsers once (`npx playwright install chromium webkit`). Nothing else — no `.env`, no local database, no accounts. It never touches your dev database. Like all app commands, it runs in the inner `hamburn-cozynights/` folder (see [Local development](./)).
 
 ## The layers
 
@@ -18,6 +18,7 @@ It needs Node and a running Docker (Docker Desktop on a Mac). Nothing else — n
 | Unit | `npm test` | – | The logic in isolation, PocketBase mocked: admin sign-in flow and session handling, role checks, booking rules, encryption, rate limit, special-needs requests (with the in-memory stand-in `tests/fake-pb.ts`), and every guest message text for each mix of spot change and request news (`tests/notify-messages.test.ts`), including the message texts admins change (`tests/message-texts.test.ts`). Fast (< 1 s) — run it all the time. |
 | Integration | `npm run test:integration` | Docker | The **database**: a real, empty PocketBase applies `pb_migrations/` and loads `pb_hooks/`; then availability, schema, read/write, API rules, admin roles, booking service. |
 | Smoke | `npm run test:smoke` | Docker | The **whole app**: the same Docker image staging builds, driven over HTTP — guest login, booking, admin area protection, superuser-only actions. |
+| Layout | `npm run test:layout` (part of `verify`) | Docker, Playwright browsers | The **rendered pages**: every guest and admin page with awkward names (80-character burner names, compound words, long e-mail addresses) at every width from 320 to 1440 px, in Chromium and WebKit — no squeezed, cut-off, pushed-out or covered text. See [Layout](./layout). |
 | Post-deploy | `npm run smoke:remote` | a URL | A **deployment**: the read-only part of the smoke tests against a real site. Runs automatically after every staging deploy. |
 | Browser E2E | `npm run test:e2e` | dev setup | Optional, local: Playwright clicks through the UI against your dev server and dev database. Not part of the automatic checks. |
 | Title & legal E2E | `npx playwright test tests/e2e/landing.test.ts tests/e2e/legal.test.ts` | `npx vite dev` | Optional, local: the start page title and the legal pages in Chromium and on an emulated iPhone (WebKit). Needs no PocketBase. |

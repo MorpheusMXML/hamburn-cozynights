@@ -633,7 +633,8 @@
 	   they wrap onto a second row instead of cutting their words. */
 	.bed-actions {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(3.75rem, 1fr));
+		/* Wide enough for the longest label ("DEACTIVATE"), which was cut to "DEACTIV…". */
+		grid-template-columns: repeat(auto-fill, minmax(4.75rem, 1fr));
 		gap: 0.5rem;
 		flex-basis: 100%;
 		padding-top: 1rem;

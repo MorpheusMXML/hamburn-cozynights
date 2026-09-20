@@ -794,9 +794,18 @@
 		padding: clamp(1rem, 4vw, 1.5rem);
 		min-width: 0;
 		min-height: 72px;
-		display: flex;
+		/* The spot label gets the whole width next to the icon, the status goes
+		   underneath: side by side, a long burner name or "Reserved by the crew"
+		   squeezed the label down to a letter per line ("U / pp / er / 1"). */
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		grid-template-areas:
+			'icon label'
+			'icon status';
 		align-items: center;
-		gap: clamp(0.75rem, 3vw, 1.5rem);
+		align-content: center;
+		column-gap: clamp(0.75rem, 3vw, 1.25rem);
+		row-gap: 0.35rem;
 		text-align: left;
 		color: inherit;
 		transition: all 0.2s;
@@ -838,29 +847,24 @@
 	}
 
 	.icon {
+		grid-area: icon;
 		font-size: 1.5rem;
-		flex-shrink: 0;
 	}
-	/* Long spot labels and burner names wrap inside the card instead of pushing
-	   the status out of it. */
+	/* Words stay whole; only a word longer than the whole line (a compound
+	   like "Kuschelzeltplatzverwaltungsbett") breaks. */
 	.label {
+		grid-area: label;
 		font-weight: 900;
 		font-size: 1.25rem;
 		line-height: 1.2;
-		flex: 1 1 0;
-		min-width: 0;
-		overflow-wrap: anywhere;
+		overflow-wrap: break-word;
 	}
 
 	.status-box {
+		grid-area: status;
 		display: flex;
 		flex-direction: column;
-		align-items: flex-end;
-		text-align: right;
-		flex: 0 1 auto;
-		min-width: 0;
-		max-width: 60%;
-		overflow-wrap: anywhere;
+		overflow-wrap: break-word;
 	}
 	.status-text {
 		font-size: 0.7rem;
@@ -877,12 +881,13 @@
 	.my-status .status-text {
 		color: #2dd4bf;
 	}
-	.free span {
+	/* Only the status: the spot label keeps its size on free spots too. */
+	.status-box.free span {
 		font-weight: 900;
 		color: #f472b6;
 		font-size: 0.85rem;
 	}
-	.free small {
+	.status-box.free small {
 		font-size: 0.7rem;
 		color: #9a9a9a;
 	}
