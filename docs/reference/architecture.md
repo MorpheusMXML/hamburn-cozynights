@@ -41,7 +41,7 @@ flowchart TB
 | --- | --- |
 | Web app | [SvelteKit 2](https://svelte.dev/docs/kit) with Svelte 5, TypeScript, Vite; [`adapter-node`](https://svelte.dev/docs/kit/adapter-node) |
 | Styling | Tailwind CSS 4 plus component styles (the "laser" look), WebGL cursor trail and booking fireworks |
-| Charts | Chart.js |
+| Charts | Inline SVG and CSS — no charting library |
 | Database & auth | [PocketBase](https://pocketbase.io) 0.40 (SQLite); schema and API rules as migrations, server hooks in JavaScript |
 | Admin sign-in | Google OAuth 2.0 through PocketBase, limited to a Google Workspace domain |
 | Hosting | Docker Compose, nginx with Let's Encrypt certificates |

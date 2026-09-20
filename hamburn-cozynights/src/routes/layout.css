@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+/* State colours and the breathing ring both areas of the app share. */
+@import './state.css';
 @plugin '@tailwindcss/forms';
 
 /* Form controls never get wider than their box. A <select> is as wide as its

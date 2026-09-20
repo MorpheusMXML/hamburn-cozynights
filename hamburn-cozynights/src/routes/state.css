@@ -1,0 +1,171 @@
+/*
+ * One vocabulary for "what state is this in".
+ *
+ * Every state the crew reads off a screen — a house filling up, a spot held
+ * back, booking live or closed, a field that was refused — uses the same
+ * colour and the same quiet breathing ring here, so a glance is enough. The
+ * colours are the ones the app already used; only "locked" is new.
+ *
+ * The ring is drawn by a ::after overlay and animates `opacity` alone: that
+ * stays on the compositor, so a list of forty house cards costs no repaints
+ * per frame (unlike animating box-shadow or border-color).
+ */
+:root {
+	--state-open: #4ade80;
+	--state-open-soft: rgba(74, 222, 128, 0.12);
+	--state-filling: #fb923c;
+	--state-filling-soft: rgba(251, 146, 60, 0.12);
+	--state-full: #f87171;
+	--state-full-soft: rgba(248, 113, 113, 0.12);
+	--state-idle: #a3a3a3;
+	--state-idle-soft: rgba(163, 163, 163, 0.1);
+	--state-checked-in: #2dd4bf;
+	--state-checked-in-soft: rgba(45, 212, 191, 0.12);
+	--state-special: #f472b6;
+	--state-special-soft: rgba(244, 114, 182, 0.12);
+	--state-locked: #a78bfa;
+	--state-locked-soft: rgba(167, 139, 250, 0.12);
+	--state-danger: #f87171;
+	--state-danger-soft: rgba(248, 113, 113, 0.12);
+
+	/* Booking phases, as the status bar and the window panel show them. */
+	--state-staging: #2dd4bf;
+	--state-staging-soft: rgba(45, 212, 191, 0.08);
+	--state-live: #f472b6;
+	--state-live-soft: rgba(244, 114, 182, 0.08);
+	--state-closed: #d4d4d4;
+	--state-closed-soft: rgba(255, 255, 255, 0.05);
+
+	/* One beat for the whole app. Live booking breathes a touch faster. */
+	--state-beat: 2.8s;
+}
+
+[data-state='open'] {
+	--state: var(--state-open);
+	--state-soft: var(--state-open-soft);
+}
+[data-state='filling'] {
+	--state: var(--state-filling);
+	--state-soft: var(--state-filling-soft);
+}
+[data-state='full'] {
+	--state: var(--state-full);
+	--state-soft: var(--state-full-soft);
+}
+[data-state='unconfigured'],
+[data-state='idle'] {
+	--state: var(--state-idle);
+	--state-soft: var(--state-idle-soft);
+}
+[data-state='checked-in'] {
+	--state: var(--state-checked-in);
+	--state-soft: var(--state-checked-in-soft);
+}
+[data-state='special'] {
+	--state: var(--state-special);
+	--state-soft: var(--state-special-soft);
+}
+[data-state='locked'] {
+	--state: var(--state-locked);
+	--state-soft: var(--state-locked-soft);
+}
+[data-state='danger'] {
+	--state: var(--state-danger);
+	--state-soft: var(--state-danger-soft);
+}
+[data-state='staging'] {
+	--state: var(--state-staging);
+	--state-soft: var(--state-staging-soft);
+}
+[data-state='live'] {
+	--state: var(--state-live);
+	--state-soft: var(--state-live-soft);
+	--state-beat: 2s;
+}
+[data-state='closed'] {
+	--state: var(--state-closed);
+	--state-soft: var(--state-closed-soft);
+}
+
+/*
+ * The breathing ring. `inset: 0` with `border-radius: inherit` follows any
+ * card shape, and the element keeps a dimmed border of its own so the state is
+ * readable while the animation is paused, off, or still starting.
+ */
+.state-ring {
+	position: relative;
+	border-color: var(--state);
+}
+.state-ring::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	border: 1px solid var(--state);
+	border-radius: inherit;
+	pointer-events: none;
+	opacity: 0.9;
+	animation: state-breathe var(--state-beat) ease-in-out infinite;
+}
+/* Two rings on top of each other read as a glow, which is the point. */
+.state-ring.state-ring-strong::after {
+	border-width: 2px;
+}
+
+@keyframes state-breathe {
+	0%,
+	100% {
+		opacity: 0.95;
+	}
+	50% {
+		opacity: 0.4;
+	}
+}
+
+/* A state that needs the eye now: three quick beats, then it settles. */
+.state-ring.state-ring-alert::after {
+	animation: state-alert 0.45s ease-in-out 3;
+	opacity: 1;
+}
+
+@keyframes state-alert {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.25;
+	}
+}
+
+/* The legend's and the chips' dot: same colours, no animation to avoid
+   forty pulsing specks in one list. */
+.state-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--state, var(--state-idle));
+	box-shadow: 0 0 10px var(--state, var(--state-idle));
+	flex-shrink: 0;
+}
+
+/* A small label in its state colour: the badges on the house cards. */
+.state-chip {
+	padding: 4px 8px;
+	border-radius: 6px;
+	font-size: 0.6rem;
+	font-weight: 900;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+	white-space: nowrap;
+	color: var(--state, var(--state-idle));
+	background: var(--state-soft, transparent);
+	border: 1px solid var(--state, var(--state-idle));
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.state-ring::after,
+	.state-ring.state-ring-alert::after {
+		animation: none;
+		opacity: 1;
+	}
+}

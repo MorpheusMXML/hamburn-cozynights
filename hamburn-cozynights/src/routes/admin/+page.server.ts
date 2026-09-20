@@ -9,7 +9,8 @@ import type {
 import { APP_SETTINGS_ID } from '$lib/server/constants';
 import { getBookingSettings } from '$lib/server/settings';
 import { berlinLocalToIso } from '$lib/time';
-import { countSpots } from '$lib/occupancy';
+import { deriveLiveStats } from '$lib/server/stats';
+import type { LiveStats } from '$lib/live-stats';
 import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
 import { parseTemplate, TEMPLATE_LIMITS, type TemplateParseResult } from '$lib/template';
 import { defaultSelection } from '$lib/template-diff';
@@ -591,9 +592,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const [houses, allRooms, allBeds, settings] = await Promise.all([
 		locals.pb.collection('houses').getFullList<HousesResponse>({ sort: 'name' }),
 		locals.pb.collection('rooms').getFullList<RoomsResponse>(),
-		locals.pb
-			.collection('beds')
-			.getFullList<BedsResponse<{ room: RoomsResponse }>>({ expand: 'room' }),
+		// No `expand: 'room'`: the rooms are already here, and the spot rows are
+		// the biggest answer on this page — a camp with 400 spots used to carry
+		// a copy of its room record on every one of them.
+		locals.pb.collection('beds').getFullList<BedsResponse>(),
 		getBookingSettings(locals.pb)
 	]);
 
@@ -633,66 +635,31 @@ export const load: PageServerLoad = async ({ locals }) => {
 		(bed) => !!bed.order && crewBooked.get(bed.id) === bed.order
 	).length;
 
+	// The same derivation the live endpoint (/admin/api/stats) runs, so the
+	// first paint and every poll afterwards count spots identically.
+	const live = deriveLiveStats(houses, allRooms, allBeds);
+	const liveByHouse = new Map(live.houses.map((house) => [house.id, house]));
+
 	const housesWithStats: HouseStats[] = houses.map((house: HousesResponse) => {
-		const bedsInHouse = allBeds.filter((b: BedsResponse<{ room: RoomsResponse }>) => {
-			return b.expand?.room?.house === house.id;
-		});
-
-		// Same counting as the house page: deactivated spots don't count, locked
-		// ones aren't free.
-		const spots = countSpots(bedsInHouse);
-		const occupancyRate = spots.total > 0 ? Math.round((spots.occupied / spots.total) * 100) : 0;
-
+		const spots = liveByHouse.get(house.id);
+		const total = spots?.total ?? 0;
 		return {
 			...structuredClone(house),
-			totalBeds: spots.total,
-			occupiedBeds: spots.occupied,
-			freeBeds: spots.free,
-			checkedInBeds: spots.checkedIn,
-			occupancyRate
+			totalBeds: total,
+			occupiedBeds: spots?.occupied ?? 0,
+			freeBeds: spots?.free ?? 0,
+			checkedInBeds: spots?.checkedIn ?? 0,
+			occupancyRate: total > 0 ? Math.round(((spots?.occupied ?? 0) / total) * 100) : 0
 		};
 	});
 
-	// Spots booked per day, last 7 days (including today): PocketBase stamps
-	// beds.booked_at whenever a spot gets a ticket (pb_hooks/cozy_booked.pb.js),
-	// so a ticket import is not a booking wave. A released spot drops out, a
-	// moved booking counts on the day of the move.
-	// Bucket by Berlin calendar day (the event's timezone), not UTC — a raw
-	// UTC slice would misfile any booking made in the CET/CEST evening into
-	// "tomorrow".
-	const berlinDay = new Intl.DateTimeFormat('en-CA', {
-		timeZone: 'Europe/Berlin',
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit'
-	});
-	const berlinWeekday = new Intl.DateTimeFormat('en-US', {
-		timeZone: 'Europe/Berlin',
-		weekday: 'short'
-	});
-	const days: { key: string; label: string }[] = [];
-	for (let i = 6; i >= 0; i--) {
-		const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-		days.push({ key: berlinDay.format(d), label: berlinWeekday.format(d) });
-	}
-	const countsByDay = new Map(days.map((d) => [d.key, 0]));
-	for (const bed of allBeds) {
-		if (!bed.order || !bed.booked_at) continue;
-		const key = berlinDay.format(new Date(bed.booked_at));
-		if (countsByDay.has(key)) {
-			countsByDay.set(key, (countsByDay.get(key) || 0) + 1);
-		}
-	}
-	const history = {
-		bookingTrend: days.map((d) => countsByDay.get(d.key) || 0),
-		labels: days.map((d) => d.label)
-	};
+	const stats: LiveStats = { changedAt: new Date().toISOString(), ...live };
 
 	return {
 		houses: housesWithStats,
 		crewBookedSpots,
 		sanityWarnings,
-		history,
+		stats,
 		phase: settings.phase,
 		isBookingActive: settings.isBookingActive,
 		bookingUnlockAt: settings.bookingUnlockAt,

@@ -1,6 +1,12 @@
 // tests/occupancy.test.ts — how spots are counted in the admin views and shown on the map
 import { describe, it, expect, vi } from 'vitest';
-import { countSpots, houseMarkerStatus, type SpotCounts } from '../src/lib/occupancy';
+import {
+	countSpots,
+	houseMarkerStatus,
+	houseState,
+	houseStateLabel,
+	type SpotCounts
+} from '../src/lib/occupancy';
 import { load as dashboardLoad } from '../src/routes/admin/+page.server';
 import { load as houseAdminLoad } from '../src/routes/admin/house/[id]/+page.server';
 
@@ -32,11 +38,27 @@ function makePb(records: Records) {
 
 describe('countSpots', () => {
 	it('ignores deactivated spots and does not count locked ones as free', () => {
-		expect(countSpots(beds)).toEqual({ total: 3, occupied: 1, free: 1, checkedIn: 0 });
+		expect(countSpots(beds)).toEqual({
+			total: 3,
+			occupied: 1,
+			free: 1,
+			checkedIn: 0,
+			locked: 1,
+			special: 0,
+			deactivated: 2
+		});
 	});
 
 	it('is empty for no spots', () => {
-		expect(countSpots([])).toEqual({ total: 0, occupied: 0, free: 0, checkedIn: 0 });
+		expect(countSpots([])).toEqual({
+			total: 0,
+			occupied: 0,
+			free: 0,
+			checkedIn: 0,
+			locked: 0,
+			special: 0,
+			deactivated: 0
+		});
 	});
 
 	it('counts checked-in guests among the booked spots', () => {
@@ -49,7 +71,15 @@ describe('countSpots', () => {
 				{ ...booked, order: '', checked_in_at: '2026-09-19 12:00:00.000Z' },
 				{ ...booked, order: 'o3', enabled: false, checked_in_at: '2026-09-19 12:00:00.000Z' }
 			])
-		).toEqual({ total: 3, occupied: 3, free: 0, checkedIn: 1 });
+		).toEqual({
+			total: 3,
+			occupied: 3,
+			free: 0,
+			checkedIn: 1,
+			locked: 0,
+			special: 0,
+			deactivated: 1
+		});
 	});
 });
 
@@ -101,6 +131,32 @@ describe('admin occupancy numbers', () => {
 			occupancyRate: 33
 		});
 		expect(dashboard.houses[1]).toMatchObject({ totalBeds: 0, occupiedBeds: 0, freeBeds: 0 });
-		expect(housePage.rooms[0].stats).toEqual({ total: 3, occupied: 1, free: 1, checkedIn: 0 });
+		expect(housePage.rooms[0].stats).toMatchObject({
+			total: 3,
+			occupied: 1,
+			free: 1,
+			checkedIn: 0
+		});
+	});
+});
+
+describe('houseState', () => {
+	it('separates "nothing booked yet" from "no spots configured"', () => {
+		expect(houseState({ totalBeds: 0, occupiedBeds: 0, freeBeds: 0 })).toBe('unconfigured');
+		expect(houseState({ totalBeds: 4, occupiedBeds: 0, freeBeds: 4 })).toBe('open');
+	});
+
+	it('is full as soon as nothing is left to book, booked or held back', () => {
+		expect(houseState({ totalBeds: 4, occupiedBeds: 2, freeBeds: 2 })).toBe('filling');
+		expect(houseState({ totalBeds: 4, occupiedBeds: 4, freeBeds: 0 })).toBe('full');
+		// Two spots left, but both locked: nothing free, so the badge says full.
+		expect(houseState({ totalBeds: 4, occupiedBeds: 2, freeBeds: 0 })).toBe('full');
+	});
+
+	it('writes the label the badge shows', () => {
+		expect(houseStateLabel('unconfigured', 0)).toBe('Not setup');
+		expect(houseStateLabel('full', 0)).toBe('Fully booked');
+		expect(houseStateLabel('filling', 1)).toBe('1 spot free');
+		expect(houseStateLabel('open', 4)).toBe('4 spots free');
 	});
 });
