@@ -229,3 +229,25 @@ describe('the admin page', () => {
 		).rejects.toMatchObject({ status: 400 });
 	});
 });
+
+describe('the hand-over e-mail (a ticket passed on)', () => {
+	it('has its texts like every other message: in the catalogue, editable, in the preview', async () => {
+		const pb = stack();
+		expect(catalogue.groups.map((g: { id: string }) => g.id)).toContain('mail.handed_over');
+		await saveMessageText(db(pb), admin, 'mail.handed_over.intro', 'this ticket is yours now:');
+		// the pass line may only use the pass placeholders
+		await expect(
+			saveMessageText(db(pb), admin, 'mail.handed_over.pass', 'Hi {name}: {passUrl}')
+		).rejects.toThrow(/cannot use \{name\}/);
+
+		const request = new Request('http://cozy.test/admin/messages/preview', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ texts: { 'mail.handed_over.pass': 'Your pass: {passUrl}' } })
+		});
+		const preview = await (await previewEndpoint(event(pb, request))).json();
+		const handedOver = preview.mail.find((m: { id: string }) => m.id === 'handed_over');
+		expect(handedOver.text).toContain('this ticket is yours now:');
+		expect(handedOver.text).toContain('Your pass: https://cozy.test/pass/AAAA-BBBB-CCCC');
+	});
+});
