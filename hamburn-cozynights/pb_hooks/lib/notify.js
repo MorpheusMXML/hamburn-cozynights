@@ -786,8 +786,19 @@ function maskEmailsIn(text) {
  */
 function clearHandedOver(app, order) {
 	try {
-		order.set('handed_over_at', '');
-		app.save(order);
+		// Re-read like updateNotify does: this run's copy of the ticket is older
+		// than the pass PocketBase just made for the confirmation, and saving it
+		// as it is would throw that pass away.
+		app.runInTransaction((tx) => {
+			let fresh;
+			try {
+				fresh = tx.findRecordById('orders', order.id);
+			} catch (_) {
+				return; // the ticket is gone meanwhile
+			}
+			fresh.set('handed_over_at', '');
+			tx.save(fresh);
+		});
 	} catch (err) {
 		console.error('[cozy-notify] hand-over mark of ' + order.id + ': ' + safeError(err));
 	}
