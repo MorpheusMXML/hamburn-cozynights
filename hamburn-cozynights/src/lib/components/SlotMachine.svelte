@@ -5,6 +5,7 @@
 	 * It features a technical "laser" aesthetic with exponential deceleration and confetti effects.
 	 */
 	import { createEventDispatcher, onMount } from 'svelte';
+	import { BURNER_NAMES, randomBurnerName } from '$lib/burner-names';
 	const dispatch = createEventDispatcher();
 
 	/** @type {boolean} Whether the slot machine should start spinning automatically on mount. */
@@ -13,33 +14,6 @@
 	export let delay = 0;
 	/** @type {boolean} Whether to show the internal "GET RANDOM NAME" button. */
 	export let showButton = true;
-
-	const burnerNames = [
-		'Dusty Nomad',
-		'Neon Lizard',
-		'Spark Plug',
-		'Glow Worm',
-		'Cactus Jack',
-		'Desert Rose',
-		'Fire Starter',
-		'Solar Flare',
-		'Prism Pilot',
-		'Laser Lynx',
-		'Vortex Voyager',
-		'Cosmic Coyote',
-		'Quartz Queen',
-		'Mirage Maker',
-		'Zenith Zephyr',
-		'Oasis Owl',
-		'Stardust Scout',
-		'Thunder Thistle',
-		'Midnight Muse',
-		'Silver Streak',
-		'Neon Nebula',
-		'Plasma Puma',
-		'Quantum Quokka',
-		'Cyber Cipher'
-	];
 
 	let isSpinning = false;
 	let currentName = '???';
@@ -59,7 +33,8 @@
 	}
 
 	function runSpin() {
-		currentName = burnerNames[Math.floor(Math.random() * burnerNames.length)];
+		// The same list the server draws from when a booking comes without a name.
+		currentName = BURNER_NAMES[Math.floor(Math.random() * BURNER_NAMES.length)];
 		iterations++;
 
 		if (iterations < maxIterations) {
@@ -69,8 +44,7 @@
 			setTimeout(runSpin, nextDelay);
 		} else {
 			isSpinning = false;
-			const finalSuffix = Math.floor(100 + Math.random() * 900);
-			const finalResult = `${currentName} #${finalSuffix}`;
+			const finalResult = randomBurnerName(currentName);
 			currentName = finalResult;
 			showConfetti = true;
 
