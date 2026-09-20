@@ -31,6 +31,7 @@ const PLACEHOLDERS = [
 const GROUPS = [
 	{ id: 'mail.common', channel: 'mail', title: 'E-mail · in every message' },
 	{ id: 'mail.booked', channel: 'mail', title: 'E-mail · spot booked' },
+	{ id: 'mail.handed_over', channel: 'mail', title: 'E-mail · ticket passed on' },
 	{ id: 'mail.changed', channel: 'mail', title: 'E-mail · spot changed' },
 	{ id: 'mail.released', channel: 'mail', title: 'E-mail · spot released' },
 	{ id: 'mail.request', channel: 'mail', title: 'E-mail · special-needs request' },
@@ -66,6 +67,12 @@ const TEXTS = [
 		text: 'your spot is booked:' },
 	{ key: 'mail.booked.change', group: 'mail.booked', label: 'How to change or release it', hint: 'Also in "spot changed", when the guest may change the spot themselves.', placeholders: ['roomUrl'],
 		text: 'To change or release it, open {roomUrl}, sign in with your ticket code and tap your spot — as long as booking is open.' },
+
+	// --- e-mail: the ticket was passed on ---------------------------------------------
+	{ key: 'mail.handed_over.subject', group: 'mail.handed_over', label: 'Subject', hint: '', placeholders: ['spot'],
+		text: 'A CozyNights spot came with your ticket: {spot}' },
+	{ key: 'mail.handed_over.intro', group: 'mail.handed_over', label: 'First line', hint: 'After the greeting; house, room and spot follow. The lines about changing the spot and the booking pass are the ones of "spot booked".', placeholders: [],
+		text: 'this ticket was passed on to you, and it holds this spot:' },
 
 	// --- e-mail: spot changed ---------------------------------------------------------
 	{ key: 'mail.changed.subject', group: 'mail.changed', label: 'Subject', hint: '', placeholders: ['spot'],

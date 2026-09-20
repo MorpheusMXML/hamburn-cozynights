@@ -13,6 +13,7 @@ import path from 'path';
 import type PocketBase from 'pocketbase';
 import { BookingService } from '../../src/lib/server/booking';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
+import { maskedTicketLabel } from '../../src/lib/tickets';
 import {
 	anonymous,
 	createAdmin,
@@ -257,11 +258,15 @@ describe('booking confirmations by e-mail', () => {
 		expect(rec?.attempts).toBe(8);
 		expect(rec?.due).toBe(''); // given up
 		const alerts = await telegramTo(CREW_CHAT);
+		// the ticket by its masked code, never its holder: this line sits in the
+		// crew chat next to alerts about special-needs requests
+		const label = maskedTicketLabel(guest.code);
 		expect(
 			alerts.some((m) =>
-				m.text.includes('Could not notify ticket "Test Guest" (e-mail b•••@refused.test)')
+				m.text.includes(`Could not notify ticket "${label}" (e-mail b•••@refused.test)`)
 			)
 		).toBe(true);
+		expect(alerts.some((m) => m.text.includes('Test Guest'))).toBe(false);
 	});
 });
 

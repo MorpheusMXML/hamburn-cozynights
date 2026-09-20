@@ -286,3 +286,25 @@ describe('message texts from the catalogue (pb_hooks/lib/texts.js)', () => {
 		expect(catalogue.items).toEqual(texts.TEXTS);
 	});
 });
+
+describe('a ticket that was passed on', () => {
+	it('tells the new holder the spot came with the ticket, not that they booked it', () => {
+		const m = mail('handed_over', true, none);
+		expect(m.subject).toBe('A CozyNights spot came with your ticket: B1 · Dorm #1 · Villa');
+		expect(m.text).toContain('this ticket was passed on to you, and it holds this spot:');
+		expect(m.text).toContain('Spot:');
+		expect(m.text).toContain('Dorm #1');
+		// the new pass, and how to change the spot, as in every booked message
+		expect(m.text).toContain(pass.url);
+		expect(m.text).toContain('To change or release it');
+		expect(m.text).not.toContain('your spot is booked');
+	});
+
+	it('is in the preview for the crew, but not as a Telegram message', () => {
+		const preview = notify.previewMessages({ appUrl: 'https://cozy.test', label: '' });
+		const sample = preview.mail.find((m: { id: string }) => m.id === 'handed_over');
+		expect(sample.subject).toContain('came with your ticket');
+		// the hand-over cuts the Telegram link, so there is no such message
+		expect(preview.telegram.some((m: { id: string }) => m.id === 'handed_over')).toBe(false);
+	});
+});

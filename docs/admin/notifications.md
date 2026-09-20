@@ -34,6 +34,7 @@ A guest hears from CozyNights when their spot changes:
 | When | Message |
 | --- | --- |
 | A spot is booked | **Your CozyNights spot:** house, room and spot, with links to the room and to the [booking pass](./passes) |
+| The ticket was [passed on](./tickets#a-ticket-passed-on-to-someone-else) and holds a spot | **A CozyNights spot came with your ticket:** the spot and the new pass — not a confirmation of a booking the new holder never made. Only to the new address; the old one hears nothing. |
 | The spot changes (the guest moves, or the crew moves them) | **Your CozyNights spot changed**, with the old and the new spot and the pass link |
 | The spot is gone (released by the guest, freed by an admin, its room or house deleted, **Clear all bookings**, a template import) | **Your CozyNights spot was released**, with a link to the map |
 | A [special-needs request](./special-needs) arrives · is approved · is declined | **We got your special-needs request** · **…was approved** · **About your special-needs request**. Approved and booked at once: one message, **Your special-needs spot:** with the pass. What the guest wrote is never in a message. |
@@ -65,11 +66,11 @@ Every message here is also kept in the audit log (collection `admin_events` in t
 | 📥 Ticket list imported | A superuser loaded the list on the Tickets page: how many tickets were created, updated and handed over |
 | 🏚️ House deleted | Every deletion, with the number of bookings released |
 | 🧡 New special-needs request | With the number waiting for a decision and a link to ♿ **Special needs**; never the guest's name or text |
-| 🧡 A guest withdrew their special-needs request | With the status it had (*was pending*, *approved* or *declined*); never the guest's name or text |
+| 🧡 A guest withdrew their special-needs request | With what it was in words (*was still waiting for a decision*, *had been approved*, *had been declined*); never the guest's name or text |
 | ✅ approved · ✋ declined · ♿ spot booked · ♿ spot released | An admin decided on a [special-needs request](./special-needs), with their e-mail address |
 | 🧡 Special-needs requests OPENED · closed | Somebody flips the requests switch, with their e-mail address |
 | ✏️ Message text changed · ↩️ reset to its default | An admin changed a [message text](#message-texts) or took it back, with their e-mail address and the text's key |
-| 📭 Could not notify ticket | A guest message failed for good |
+| 📭 Could not notify ticket | A guest message failed for good. The ticket is named by its shortened code (*Ticket H•••*), never by its holder: this line can stand right next to 🧡 *New special-needs request*, and the two must not add up to a person. |
 
 If Telegram is down, a crew message is tried again after 1, 5, 15 and 60 minutes; after the fifth failed attempt it is marked *failed* in the audit log (`notify status` shows it). Guest messages keep being retried for about two days, see above.
 

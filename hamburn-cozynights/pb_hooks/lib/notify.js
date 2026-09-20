@@ -768,6 +768,21 @@ function greetingName(order) {
 }
 
 /**
+ * Forgets that the ticket was passed on: used up by the first message to the
+ * new address, so a spot they book themselves later is an ordinary booking.
+ * A ticket whose new address never gets a message (no address, mail off)
+ * keeps the mark until the next hand-over overwrites it.
+ */
+function clearHandedOver(app, order) {
+	try {
+		order.set('handed_over_at', '');
+		app.save(order);
+	} catch (err) {
+		console.error('[cozy-notify] hand-over mark of ' + order.id + ': ' + safeError(err));
+	}
+}
+
+/**
  * How the crew chat may name this ticket: "Ticket H•••", or a short record id
  * when the ticket has no code. Never the holder, never a full code — an alert
  * about a ticket must not name the person another alert just wrote about.
@@ -859,6 +874,13 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
 		}
 		if (req.kind === 'declined') after.unshift(T('mail.released.also_declined'));
 		if (req.kind === 'received') after.unshift(T('mail.released.also_received'));
+	} else if (kind === 'handed_over') {
+		// The ticket changed hands: its spot is news to this address, but it is
+		// not a booking they made. Pass and "how to change it" as in "spot booked".
+		subject = T('mail.handed_over.subject');
+		intro = T('mail.handed_over.intro');
+		if (passLine) after.push(passLine);
+		after.push(req.fixed ? fixedLine : T('mail.booked.change'));
 	} else {
 		subject = kind === 'changed' ? T('mail.changed.subject') : T('mail.booked.subject');
 		intro = kind === 'changed' ? T('mail.changed.intro') : T('mail.booked.intro');
@@ -1066,6 +1088,13 @@ function previewMessages(cfg) {
 			before: before,
 			req: none
 		},
+		{
+			id: 'handed_over',
+			title: 'Ticket passed on: the new holder and the spot it holds',
+			kind: 'handed_over',
+			spot: true,
+			req: none
+		},
 		{ id: 'released', title: 'Spot released', kind: 'released', before: before, req: none },
 		{
 			id: 'released_unknown',
@@ -1208,7 +1237,10 @@ function previewMessages(cfg) {
 			req: req('', 'declined')
 		}
 	];
-	const telegram = connected.concat(cases).map((c) => ({
+	// A hand-over cuts the Telegram link with everything else of the old
+	// holder, so there is no such Telegram message to show.
+	const tgCases = cases.filter((c) => c.kind !== 'handed_over');
+	const telegram = connected.concat(tgCases).map((c) => ({
 		id: c.id,
 		title: c.title,
 		text: guestTelegram(cfg, c.kind || '', c.spot ? spot : null, c.before || '', pass, c.req)
@@ -1330,12 +1362,17 @@ function deliverOne(app, cfg, rec, force) {
 	const email = order.getString('email');
 	if (email && cfg.mail.enabled) {
 		const known = rec.getString('mail_to') === email;
-		const kind = kindOf(known ? rec.getString('mail_spot') : '', key);
+		// The ticket was passed on and this address has heard nothing yet: the
+		// spot is not a booking they made (docs/admin/tickets.md).
+		const handedOver = !known && !!order.getString('handed_over_at');
+		let kind = kindOf(known ? rec.getString('mail_spot') : '', key);
+		if (handedOver && kind === 'booked') kind = 'handed_over';
 		const lastReq = known ? rec.getString('mail_req') : '';
 		const reqKind = requestKindOf(lastReq, request);
 		if (!known && !key && !reqKind) {
 			// a new address, no spot, no request news: nothing to confirm
 			mailDone = { to: email, key: '', label: '', req: reqKey, sent: '' };
+			if (handedOver) clearHandedOver(app, order);
 		} else if (kind || reqKind) {
 			if (!takeMailSlot(app, cfg)) {
 				deferred = true;
@@ -1356,6 +1393,7 @@ function deliverOne(app, cfg, rec, force) {
 						)
 					);
 					mailDone = { to: email, key: key, label: label, req: reqKey, sent: pbDate(now) };
+					if (handedOver) clearHandedOver(app, order);
 				} catch (err) {
 					problems.push('mail: ' + safeError(err));
 					channels.push('e-mail ' + maskEmail(email));

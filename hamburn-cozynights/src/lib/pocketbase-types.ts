@@ -155,6 +155,7 @@ export type OrdersRecord = {
 	customer_name: string;
 	burner_name?: string;
 	email?: string;
+	handed_over_at?: IsoDateString;
 	id: string;
 	order_number: string;
 	pass_code?: string;

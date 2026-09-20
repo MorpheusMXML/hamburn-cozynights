@@ -94,11 +94,18 @@ describe('a ticket passed on to someone else', () => {
 		expect(mails[0].Subject).toContain(beds[0].label);
 		const text = await mailText(mails[0].ID);
 		expect(text).toContain('Hi New Holder,');
+		// their own text: the spot came with the ticket, they did not book it
+		expect(mails[0].Subject).toContain('came with your ticket');
+		expect(text).toContain('this ticket was passed on to you');
+		expect(text).not.toContain('your spot is booked');
 		expect(text).toContain(format(stored.pass_code));
 		expect(text).not.toContain(format(oldPass));
 		expect(text).not.toContain(ticket.code);
+		// the mark is used up: a spot they book later is an ordinary booking
+		expect(stored.handed_over_at).toBe('');
 
-		// nothing more for the old holder
+		// nothing more for the old holder: no mail about the hand-over, no chat
+		expect(await mailsTo(oldEmail)).toHaveLength(1);
 		expect(await telegramTo(chat)).toHaveLength(telegramBefore);
 		const notify = await su
 			.collection('guest_notify')
@@ -121,7 +128,11 @@ describe('a ticket passed on to someone else', () => {
 		const stored = await su.collection('orders').getOne(ticket.order.id);
 		expect(stored.pass_code).toBe(pass);
 		expect(stored.burner_name).not.toBe('');
-		expect(await mailsTo(email)).toHaveLength(1);
+		expect(stored.handed_over_at).toBe('');
+		const mails = await mailsTo(email);
+		expect(mails).toHaveLength(1);
+		// a corrected address confirms the booking, it was not passed on
+		expect(await mailText(mails[0].ID)).toContain('your spot is booked');
 	});
 });
 
