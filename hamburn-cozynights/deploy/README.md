@@ -22,7 +22,8 @@ GitHub Actions „Deploy staging“ → Run workflow (Branch wählen)
 ```
 
 Das Skript bricht **ohne Änderung** ab, wenn der Checkout lokale Änderungen
-hat, der Build fehlschlägt oder kein Backup möglich ist. Das PocketBase-Image
+hat, der Build fehlschlägt (auch wenn der `.env` ein Pflichtwert wie
+`PB_ENCRYPTION_KEY` fehlt) oder kein Backup möglich ist. Das PocketBase-Image
 wird nicht automatisch aktualisiert: Es gilt die Version aus der
 Compose-Datei des deployten Commits.
 
@@ -170,6 +171,67 @@ COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME docker compose -f docker-compose.stag
 docker run --rm -v "$VOLUME":/pb_data -v /var/backups/cozynights-staging:/backup alpine \
   sh -c "find /pb_data -mindepth 1 -delete && tar xzf /backup/$BACKUP -C /pb_data"
 COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME docker compose -f docker-compose.staging.yml up -d
+```
+
+## PocketBase-Settings-Schlüssel
+
+PocketBase startet mit `--encryptionEnv=PB_ENCRYPTION_KEY`
+(`docker-compose.staging.yml`): seine eigenen Settings — SMTP-Passwort,
+Absender, Backup-Plan — liegen damit AES-256-GCM-verschlüsselt in der
+Datenbank statt im Klartext, also auch verschlüsselt in jedem Backup. Was der
+Schlüssel abdeckt und was nicht (das Google-Client-Secret bleibt Klartext):
+`docs/develop/deployment.md`, Abschnitt „PocketBase settings key“.
+
+**Einmalig, bevor der erste Deploy mit diesem Stand freigegeben wird** (als
+root). Die Compose-Datei verlangt den Wert: Fehlt er, bricht das Deploy beim
+Build ab und die alte Version läuft weiter.
+
+```bash
+source /etc/cozynights/deploy-staging.conf
+ENV_FILE="$APP_DIR/hamburn-cozynights/.env"
+if grep -q '^PB_ENCRYPTION_KEY=.\{32\}$' "$ENV_FILE"; then echo "schon gesetzt"; else
+  KEY=$(openssl rand -hex 16)
+  grep -q '^PB_ENCRYPTION_KEY=' "$ENV_FILE" && sed -i "s/^PB_ENCRYPTION_KEY=.*/PB_ENCRYPTION_KEY=$KEY/" "$ENV_FILE" || printf 'PB_ENCRYPTION_KEY=%s\n' "$KEY" >> "$ENV_FILE"
+fi
+grep '^PB_ENCRYPTION_KEY=' "$ENV_FILE"   # 32 Zeichen → Vaultwarden (Notiz zur Staging-.env) und Notfallblatt
+```
+
+Beim Deploy passiert der Rest von selbst: PocketBase liest die alten
+Klartext-Settings, `pb_hooks/cozy_settings.pb.js` speichert sie einmal neu
+(Log: `settings were stored in plain text and are now encrypted`; die Zeile
+fehlt nur, wenn ein anderer Hook beim Start schon gespeichert hat). Prüfen:
+
+```bash
+docker logs cozynights-staging-pocketbase 2>&1 | grep -E 'cozy-settings|encryption'
+/opt/hamburn-cozynights-staging/hamburn-cozynights/scripts/cozy-admin.sh notify status
+```
+
+- Ohne (oder mit falschem) Schlüssel startet PocketBase danach nicht mehr:
+  `invalid settings db data or missing encryption key` bzw.
+  `cipher: message authentication failed` im Log. Der Hook verweigert außerdem
+  jeden Schlüssel, der nicht genau 32 Zeichen hat, bevor etwas gespeichert wird.
+- Jeder `pocketbase`-Befehl im Container braucht das Flag ebenfalls;
+  `scripts/cozy-admin.sh` gibt es mit. Von Hand:
+  `docker compose exec pocketbase /usr/local/bin/pocketbase <befehl> --dir=/pb_data --encryptionEnv=PB_ENCRYPTION_KEY`.
+- `PB_ADMIN_EMAIL`/`PB_ADMIN_PASSWORD` dürfen weiterhin nie an den
+  PocketBase-Container: Der Entrypoint des Images würde damit ein
+  `superuser upsert` ohne das Flag ausführen, und der Container käme gar nicht
+  erst hoch.
+
+**Schlüssel verloren oder wechseln:** Alles Geheime in den Settings kommt aus
+der `.env` und wird beim Start von den Hooks wieder eingetragen (SMTP,
+Absender, Backup-Plan, Dashboard-Schalter, Log-Dauer). Nur von Hand im
+Dashboard gesetzte Werte (Rate-Limits, Trusted Proxy, …) wären danach neu zu
+setzen. Mit dem neuen Wert in der `.env`:
+
+```bash
+source /etc/cozynights/deploy-staging.conf
+cd "$APP_DIR/hamburn-cozynights"
+VOLUME=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/pb_data"}}{{.Name}}{{end}}{{end}}' cozynights-staging-pocketbase)
+COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME docker compose -f docker-compose.staging.yml stop pocketbase
+docker run --rm -v "$VOLUME":/pb_data alpine:3.21 sh -c "apk add -q sqlite && sqlite3 /pb_data/data.db \"DELETE FROM _params WHERE id='settings';\""
+COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME docker compose -f docker-compose.staging.yml up -d --force-recreate pocketbase
+docker logs cozynights-staging-pocketbase 2>&1 | grep 'cozy-'
 ```
 
 ## Wartung
