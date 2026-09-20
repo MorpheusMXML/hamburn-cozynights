@@ -101,6 +101,7 @@ const sections: Section[] = [
 					{ text: 'Local development', link: '/develop/' },
 					{ text: 'Testing & release checks', link: '/develop/testing' },
 					{ text: 'Layout: no squeezed text', link: '/develop/layout' },
+					{ text: 'States, colours & live numbers', link: '/develop/states' },
 					{ text: 'Environments & deployment', link: '/develop/deployment' },
 					{ text: 'Branches, integration & releases', link: '/develop/integration' },
 					{ text: 'Landing page title', link: '/develop/effigy-title' },
