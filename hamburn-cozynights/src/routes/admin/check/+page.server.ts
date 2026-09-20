@@ -58,6 +58,8 @@ function describe(
 /** Checks the posted pass in, or takes its check-in back. */
 async function step(event: RequestEvent, kind: 'checkin' | 'undo') {
 	const { request, locals } = event;
+	// src/hooks.server.ts has already refused every other session for admin
+	// actions; this check stays as the second line (and narrows the type).
 	if (!locals.admin) return fail(403, { error: 'Only admins can check guests in.' });
 
 	const input = (await request.formData()).get('code');

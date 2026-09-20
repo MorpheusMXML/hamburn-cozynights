@@ -6,9 +6,9 @@ export class InventoryService {
 
 	/**
 	 * Fetches the entire house/room/bed hierarchy with statistics. 🛰️📊
+	 * Runs on every guest map request, so it logs nothing but failures.
 	 */
 	async getFullTree(): Promise<HouseData[]> {
-		console.log('[Inventory] Fetching full tree...');
 		try {
 			// Fetch all data in parallel
 			const [housesRaw, roomsRaw, bedsRaw] = await Promise.all([
@@ -16,16 +16,6 @@ export class InventoryService {
 				this.pb.collection('rooms').getFullList({ sort: 'room_number' }),
 				this.pb.collection('beds').getFullList({ sort: 'label' })
 			]);
-
-			console.log(
-				`[Inventory] Raw data fetched: ${housesRaw.length} houses, ${roomsRaw.length} rooms, ${bedsRaw.length} beds.`
-			);
-
-			if (housesRaw.length > 0) {
-				console.log(
-					`[Inventory] Sample house: ${housesRaw[0].name} (ID: ${housesRaw[0].id}) at ${housesRaw[0].x},${housesRaw[0].y}`
-				);
-			}
 
 			// Serialize everything to plain objects to ensure compatibility.
 			// This tree is the public guest map: deactivated beds are left out,
@@ -85,7 +75,6 @@ export class InventoryService {
 				};
 			});
 
-			console.log(`[Inventory] Tree built with ${tree.length} houses.`);
 			return tree;
 		} catch (err) {
 			console.error('[Inventory] getFullTree failed:', err);

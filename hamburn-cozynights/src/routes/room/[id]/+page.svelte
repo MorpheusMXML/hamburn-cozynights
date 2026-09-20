@@ -50,8 +50,10 @@
 
 	onDestroy(() => clearTimeout(bannerTimer));
 
-	// `form` only matters without JavaScript; with it, the enhance callbacks
-	// below report errors where the guest is looking (modal or banner).
+	// The banner forms (release, Telegram) work without JavaScript: `form`
+	// carries their result then. With JavaScript, the enhance callbacks below
+	// report errors where the guest is looking (modal or banner). The booking
+	// dialog itself needs JavaScript: it only opens from a click.
 	let modalError = '';
 	let bannerError = form?.error ?? '';
 	let isSaving = false;
