@@ -19,10 +19,13 @@ services:
   pocketbase:
     # Same pinned version as docker-compose.yml / docker-compose.staging.yml
     image: ghcr.io/muchobien/pocketbase:0.40.4
-    command: ['--http=0.0.0.0:8090', '--automigrate=false']
+    # --encryptionEnv like staging: the settings are stored encrypted with the
+    # per-run key from scripts/test-stack.sh, so every run exercises that path.
+    command: ['--http=0.0.0.0:8090', '--automigrate=false', '--encryptionEnv=PB_ENCRYPTION_KEY']
     tmpfs:
       - /pb_data
     environment:
+      PB_ENCRYPTION_KEY: ${PB_ENCRYPTION_KEY:?run this stack through scripts/test-stack.sh}
       # pb_hooks/cozy_notify.pb.js against the stand-ins below
       SMTP_HOST: mailpit
       SMTP_PORT: '1025'

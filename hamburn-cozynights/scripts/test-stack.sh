@@ -26,7 +26,7 @@ export TEST_PB_PORT="${TEST_PB_PORT:-8290}"
 export TEST_APP_PORT="${TEST_APP_PORT:-3290}"
 export TEST_MOCK_PORT="${TEST_MOCK_PORT:-8292}"
 export TEST_MAILPIT_PORT="${TEST_MAILPIT_PORT:-8293}"
-PB_FLAGS=(--dir=/pb_data --hooksDir=/pb_hooks --migrationsDir=/pb_migrations)
+PB_FLAGS=(--dir=/pb_data --hooksDir=/pb_hooks --migrationsDir=/pb_migrations --encryptionEnv=PB_ENCRYPTION_KEY)
 
 compose() { docker compose -f "$APP_DIR/docker-compose.test.yml" "$@"; }
 log() { printf '\n[test-stack] %s\n' "$*"; }
@@ -38,6 +38,8 @@ log() { printf '\n[test-stack] %s\n' "$*"; }
 export PB_ADMIN_EMAIL="app-service@cozynights.test"
 export PB_ADMIN_PASSWORD="${PB_ADMIN_PASSWORD:-$(openssl rand -hex 16)}"
 export ENCRYPTION_KEY="${ENCRYPTION_KEY:-$(openssl rand -hex 32)}"
+# PocketBase's settings key (--encryptionEnv in docker-compose.test.yml), 32 characters.
+export PB_ENCRYPTION_KEY="${PB_ENCRYPTION_KEY:-$(openssl rand -hex 16)}"
 
 if [[ "$1" == "down" ]]; then
 	compose --profile app down --volumes --remove-orphans
