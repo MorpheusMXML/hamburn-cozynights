@@ -1924,6 +1924,7 @@ module.exports = {
 	currentSpot: currentSpot,
 	currentRequest: currentRequest,
 	requestKindOf: requestKindOf,
+	kindOf: kindOf,
 	markDue: markDue,
 	guestMail: guestMail,
 	guestTelegram: guestTelegram,

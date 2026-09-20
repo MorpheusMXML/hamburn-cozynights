@@ -321,3 +321,34 @@ describe('a ticket that was passed on', () => {
 		expect(preview.telegram.some((m: { id: string }) => m.id === 'handed_over')).toBe(false);
 	});
 });
+
+// Which message a channel gets is decided by the spot it last confirmed
+// against the spot the ticket holds now — not by the events in between. That
+// is what lets the ☢ nuke hold the release back (holdGuestMessage in
+// src/lib/server/notifications.ts, tests/respin.test.ts): while the guest
+// rolls, the channel still knows the old spot, so the new one is a change.
+describe('☢ Nuke & Respin ends in one message', () => {
+	it('is "changed", not "released" and then "booked"', () => {
+		const old = 'bed9';
+
+		// Delivered while the guest is still rolling — the message to avoid.
+		expect(notify.kindOf(old, '')).toBe('released');
+		// Held back until the respin booked a spot: one message about the move.
+		expect(notify.kindOf(old, 'bed1')).toBe('changed');
+		// The roulette rolled the spot the ticket already had: no news at all.
+		expect(notify.kindOf(old, old)).toBe('');
+		// Nobody rolled and the hold ran out, so the release is the news; a
+		// booking after that is a first spot again.
+		expect(notify.kindOf('', 'bed1')).toBe('booked');
+	});
+
+	it('names the nuked spot as the one before', () => {
+		const m = mail('changed', true, none, 'B9 · Loft #2 · Hut');
+		expect(m.subject).toBe('Your CozyNights spot changed: B1 · Dorm #1 · Villa');
+		expect(m.text).toContain('Before: B9 · Loft #2 · Hut');
+
+		const tg = telegram('changed', true, none, 'B9 · Loft #2 · Hut');
+		expect(tg).toContain('Now: B1 · Dorm #1 · Villa');
+		expect(tg).toContain('B9 · Loft #2 · Hut');
+	});
+});
