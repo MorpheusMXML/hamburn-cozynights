@@ -64,11 +64,11 @@ export function lockedDuring(phase: BookingPhase): string {
 	return phase === 'closed' ? 'while booking is closed' : 'during Live Booking';
 }
 
-/** What a guest reads under their own spot when they can't change it right now. */
+/** What a guest reads under their own spot when they can't move or release it right now. */
 export function ownSpotNote(phase: BookingPhase): string {
 	return phase === 'closed'
 		? 'Spots are final now; this one stays yours.'
-		: 'It stays reserved for you. Changes are possible again once Live Booking starts.';
+		: 'It stays reserved for you, and its burner name can be changed on its room page any time. Moving or releasing it is possible again once Live Booking starts.';
 }
 
 /**

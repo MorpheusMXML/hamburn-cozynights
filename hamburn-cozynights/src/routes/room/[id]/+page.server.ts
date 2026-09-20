@@ -142,7 +142,11 @@ export const actions: Actions = {
 		}
 
 		const { isBookingActive, phase } = await getBookingSettings(locals.pb);
-		if (!isBookingActive) return fail(403, { error: bookingRefusal(phase) });
+		// Closed: nothing changes any more, not even a name. Outside Live Booking
+		// only the burner name of the spot the ticket already holds may change
+		// (decided below, once that spot is known): a handed-over ticket comes
+		// without a name, and booking may not have opened yet.
+		if (phase === 'closed') return fail(403, { error: bookingRefusal(phase) });
 
 		const formData = await request.formData();
 		const bedId = formData.get('bedId') as string;
@@ -163,6 +167,8 @@ export const actions: Actions = {
 			}
 
 			const currentBed = await bookingService.getBedForOrder(order.id);
+			const renaming = !!currentBed && currentBed.id === bedId;
+			if (!renaming && !isBookingActive) return fail(403, { error: bookingRefusal(phase) });
 			if (currentBed && currentBed.id !== bedId) {
 				// A spot the crew picked for a special-needs request stays where it
 				// is; giving it a new burner name is fine.
