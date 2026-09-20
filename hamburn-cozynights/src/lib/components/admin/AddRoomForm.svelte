@@ -2,6 +2,7 @@
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { enhance } from '$app/forms';
 	import { toast } from '$lib/dialogs';
+	import { revealInvalid } from '$lib/field-alert';
 	import { TEMPLATE_LIMITS } from '$lib/template';
 
 	export let disabled = false;
@@ -47,7 +48,7 @@
 		const firstInvalid = Object.keys(errors)[0];
 		if (firstInvalid) {
 			cancel();
-			formElement.querySelector<HTMLInputElement>(`[name="${firstInvalid}"]`)?.focus();
+			revealInvalid(formElement);
 			return;
 		}
 
@@ -65,6 +66,8 @@
 					Object.keys(errors).length > 0
 						? ''
 						: data?.message || 'The room was not added. Reload the page and try again.';
+				// The server said no to a field: point at it like the check above.
+				revealInvalid(formElement);
 			} else if (result.type === 'error') {
 				formError =
 					'The room was not added because the server could not be reached. Check your connection and try again.';
@@ -92,14 +95,13 @@
 				placeholder="e.g. Skyline Sanctuary"
 				autocomplete="off"
 				maxlength={TEMPLATE_LIMITS.roomNameLength}
-				class:error={!!errors.name}
 				aria-invalid={!!errors.name}
 				aria-describedby={errors.name ? 'room-name-error' : undefined}
 				on:input={() => (errors = { ...errors, name: undefined })}
 				{disabled}
 			/>
 			{#if errors.name}
-				<p class="field-error" id="room-name-error" role="alert">⚠️ {errors.name}</p>
+				<p class="field-error" id="room-name-error" role="alert">{errors.name}</p>
 			{/if}
 		</div>
 
@@ -113,14 +115,13 @@
 					name="room_number"
 					placeholder="101"
 					autocomplete="off"
-					class:error={!!errors.room_number}
 					aria-invalid={!!errors.room_number}
 					aria-describedby={errors.room_number ? 'room-number-error' : undefined}
 					on:input={() => (errors = { ...errors, room_number: undefined })}
 					{disabled}
 				/>
 				{#if errors.room_number}
-					<p class="field-error" id="room-number-error" role="alert">⚠️ {errors.room_number}</p>
+					<p class="field-error" id="room-number-error" role="alert">{errors.room_number}</p>
 				{/if}
 			</div>
 
@@ -133,20 +134,19 @@
 					name="amount_beds"
 					placeholder="0"
 					autocomplete="off"
-					class:error={!!errors.amount_beds}
 					aria-invalid={!!errors.amount_beds}
 					aria-describedby={errors.amount_beds ? 'room-beds-error' : undefined}
 					on:input={() => (errors = { ...errors, amount_beds: undefined })}
 					{disabled}
 				/>
 				{#if errors.amount_beds}
-					<p class="field-error" id="room-beds-error" role="alert">⚠️ {errors.amount_beds}</p>
+					<p class="field-error" id="room-beds-error" role="alert">{errors.amount_beds}</p>
 				{/if}
 			</div>
 		</div>
 
 		{#if formError}
-			<p class="field-error" role="alert">⚠️ {formError}</p>
+			<p class="form-error" role="alert">{formError}</p>
 		{/if}
 
 		<button
@@ -213,20 +213,9 @@
 		border-color: #2dd4bf;
 		box-shadow: 0 0 10px rgba(45, 212, 191, 0.2);
 	}
-	input.error {
-		border-color: #f87171;
-	}
 	input:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
-	}
-
-	.field-error {
-		margin: 0;
-		color: #f87171;
-		font-size: 0.8rem;
-		font-weight: 700;
-		line-height: 1.4;
 	}
 
 	.btn-ignite {

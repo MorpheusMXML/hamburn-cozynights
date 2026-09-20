@@ -2,6 +2,7 @@
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { enhance } from '$app/forms';
 	import { toast } from '$lib/dialogs';
+	import { revealInvalid } from '$lib/field-alert';
 	import { TEMPLATE_LIMITS } from '$lib/template';
 
 	export let disabled = false;
@@ -22,7 +23,7 @@
 		}
 		if (error) {
 			cancel();
-			formElement.querySelector<HTMLInputElement>('[name="label"]')?.focus();
+			revealInvalid(formElement);
 			return;
 		}
 
@@ -35,6 +36,7 @@
 			} else if (result.type === 'failure') {
 				const data = result.data as { message?: string } | undefined;
 				error = data?.message || 'The spot was not added. Reload the page and try again.';
+				revealInvalid(formElement);
 			} else if (result.type === 'error') {
 				error =
 					'The spot was not added because the server could not be reached. Check your connection and try again.';
@@ -54,7 +56,6 @@
 			aria-label="Spot label"
 			autocomplete="off"
 			maxlength={TEMPLATE_LIMITS.bedLabelLength}
-			class:error={!!error}
 			aria-invalid={!!error}
 			aria-describedby={error ? 'add-bed-error' : undefined}
 			on:input={() => (error = '')}
@@ -70,7 +71,7 @@
 		</button>
 	</div>
 	{#if error}
-		<p class="field-error" id="add-bed-error" role="alert">⚠️ {error}</p>
+		<p class="field-error" id="add-bed-error" role="alert">{error}</p>
 	{/if}
 </form>
 
@@ -103,20 +104,13 @@
 		border-color: #fb923c;
 		box-shadow: 0 0 10px rgba(251, 146, 60, 0.2);
 	}
-	input.error {
-		border-color: #f87171;
-	}
 	input:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}
 
 	.field-error {
-		margin: 0.75rem 0 0;
-		color: #f87171;
-		font-size: 0.8rem;
-		font-weight: 700;
-		line-height: 1.4;
+		margin-top: 0.75rem;
 	}
 
 	.btn-add {

@@ -11,6 +11,7 @@
 	import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
 	import { createEventDispatcher } from 'svelte';
 	import { fade } from 'svelte/transition';
+	import { revealInvalid } from '$lib/field-alert';
 
 	export let x: number;
 	export let y: number;
@@ -26,6 +27,7 @@
 
 	let bedCount = 4;
 	let showValidationError = false;
+	let container: HTMLElement;
 
 	$: isEditing = !!houseId;
 
@@ -49,6 +51,7 @@
 		const nextY = parseMapCoordinate(yInput, MAP_HEIGHT);
 		if (nextX === null || nextY === null) {
 			positionError = `Enter whole numbers: X from 0 to ${MAP_WIDTH}, Y from 0 to ${MAP_HEIGHT}.`;
+			revealInvalid(container);
 			return;
 		}
 		positionError = '';
@@ -58,6 +61,7 @@
 	function handleSave() {
 		if (!name || name.trim() === '') {
 			showValidationError = true;
+			revealInvalid(container);
 			return;
 		}
 		showValidationError = false;
@@ -65,7 +69,7 @@
 	}
 </script>
 
-<div class="editor-card-container" class:edit-mode={isEditing} class:flat>
+<div class="editor-card-container" class:edit-mode={isEditing} class:flat bind:this={container}>
 	<div class="editor-card">
 		<header class="editor-header">
 			<div class="mode-badge">{isEditing ? 'RECONFIGURING' : 'IGNITING NEW'} ⚡️</div>
@@ -81,11 +85,12 @@
 				id="house-name"
 				bind:value={name}
 				placeholder="e.g. Neon Cave"
-				class:error={showValidationError}
+				aria-invalid={showValidationError}
+				aria-describedby={showValidationError ? 'house-name-error' : undefined}
 				on:input={() => (showValidationError = false)}
 			/>
 			{#if showValidationError}
-				<span class="error-msg" transition:fade>⚠️ NAME REQUIRED FOR LOCALIZATION</span>
+				<p class="field-error" id="house-name-error" role="alert">Enter a name for the house.</p>
 			{/if}
 		</div>
 
@@ -110,7 +115,8 @@
 							inputmode="numeric"
 							autocomplete="off"
 							bind:value={xInput}
-							class:error={!!positionError}
+							aria-invalid={!!positionError}
+							aria-describedby={positionError ? 'house-position-error' : undefined}
 							on:keydown={(e) => e.key === 'Enter' && handleMove()}
 						/>
 					</label>
@@ -122,7 +128,8 @@
 							inputmode="numeric"
 							autocomplete="off"
 							bind:value={yInput}
-							class:error={!!positionError}
+							aria-invalid={!!positionError}
+							aria-describedby={positionError ? 'house-position-error' : undefined}
 							on:keydown={(e) => e.key === 'Enter' && handleMove()}
 						/>
 					</label>
@@ -131,7 +138,7 @@
 					</button>
 				</div>
 				{#if positionError}
-					<span class="error-msg" transition:fade>⚠️ {positionError}</span>
+					<p class="field-error" id="house-position-error" role="alert">{positionError}</p>
 				{:else}
 					<p class="hint">
 						Drag the pin on the map, use the arrow keys, or type a position (X 0–{MAP_WIDTH}, Y 0–{MAP_HEIGHT}).
@@ -262,15 +269,8 @@
 	.edit-mode input:focus {
 		border-color: #f472b6;
 	}
-	input.error {
-		border-color: #ef4444;
-		background: rgba(239, 68, 68, 0.05);
-	}
-
-	.error-msg {
-		font-size: 0.65rem;
-		color: #ef4444;
-		font-weight: bold;
+	.field-error {
+		font-size: 0.75rem;
 		margin-top: 0.25rem;
 	}
 	.hint {

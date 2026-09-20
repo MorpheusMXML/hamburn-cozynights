@@ -2,12 +2,13 @@
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { onMount, tick } from 'svelte';
+	import { onMount } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
 	import { countdownKind } from '$lib/booking-phase';
 	import CountdownTimer from '$lib/components/CountdownTimer.svelte';
 	import EffigyTitle from '$lib/components/EffigyTitle.svelte';
 	import LegalLinks from '$lib/components/LegalLinks.svelte';
+	import { revealInvalid } from '$lib/field-alert';
 	import MadeInHamburg from '$lib/components/MadeInHamburg.svelte';
 	import type { ActionData, PageData } from './$types';
 
@@ -46,7 +47,6 @@
 	const TICKET_CODE_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
 	const SURROUNDING_BLANKS = /^[\s\u200B-\u200D\uFEFF]+|[\s\u200B-\u200D\uFEFF]+$/g;
 
-	let codeInput: HTMLInputElement;
 	let code = form?.code ?? '';
 	let clientError = '';
 	let isSubmitting = false;
@@ -77,10 +77,12 @@
 		return '';
 	}
 
+	let ticketForm: HTMLFormElement;
+
 	async function showClientError(message: string) {
 		clientError = message;
-		await tick();
-		codeInput?.focus();
+		// Focus, nudge and ping the ticket box: the same signal every form gives.
+		await revealInvalid(ticketForm);
 	}
 </script>
 
@@ -142,8 +144,12 @@
 				method="POST"
 				action="?/login"
 				novalidate
-				class="input-group"
+				class="input-group field-box"
 				class:has-error={!!errorMessage}
+				class:state-ring={!!errorMessage}
+				class:state-ring-alert={!!errorMessage}
+				data-state={errorMessage ? 'danger' : undefined}
+				bind:this={ticketForm}
 				use:enhance={({ formData, cancel }) => {
 					const cleaned = code.replace(SURROUNDING_BLANKS, '');
 					const problem = checkTicketCode(cleaned);
@@ -168,10 +174,7 @@
 							return;
 						}
 						await update({ reset: false });
-						if (result.type === 'failure') {
-							await tick();
-							codeInput?.focus();
-						}
+						if (result.type === 'failure') await revealInvalid(ticketForm);
 					};
 				}}
 			>
@@ -179,7 +182,6 @@
 					type="text"
 					name="bookingCode"
 					id="ticket-code"
-					bind:this={codeInput}
 					bind:value={code}
 					on:input={() => (clientError = '')}
 					placeholder="TICKET CODE"
@@ -222,7 +224,7 @@
 			</form>
 
 			{#if errorMessage}
-				<p class="error-msg" id="ticket-code-error" role="alert" in:fade={{ duration: 150 }}>
+				<p class="form-error" id="ticket-code-error" role="alert">
 					{errorMessage}
 				</p>
 			{/if}
@@ -548,7 +550,7 @@
 	}
 
 	.login-hint,
-	.error-msg {
+	.form-error {
 		margin: 1rem 0 0;
 		padding: 0.75rem 1rem;
 		border-radius: 14px;
@@ -565,7 +567,7 @@
 		color: #d1faf5;
 	}
 
-	.error-msg {
+	.form-error {
 		border: 1px solid #f87171;
 		color: #fecaca;
 		text-shadow: 0 0 10px rgba(248, 113, 113, 0.3);

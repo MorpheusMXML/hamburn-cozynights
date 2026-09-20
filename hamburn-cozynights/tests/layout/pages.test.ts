@@ -119,9 +119,28 @@ const PAGES: PageCase[] = [
 			await page.getByRole('dialog').waitFor();
 		}
 	},
+	{
+		name: 'start page: refused ticket code',
+		path: () => '/',
+		as: 'anonymous',
+		open: async (page) => {
+			await page.locator('#ticket-code').fill('no such code!');
+			await page.locator('#ticket-code').press('Enter');
+			await page.locator('#ticket-code-error').waitFor();
+		}
+	},
 	{ name: 'random spot', path: () => '/random-bed', as: 'guestWithoutSpot' },
 	{ name: 'special needs: request sent', path: () => '/special-needs', as: 'guestWithRequest' },
 	{ name: 'special needs: new request', path: () => '/special-needs', as: 'guestWithoutSpot' },
+	{
+		name: 'special needs: refused request',
+		path: () => '/special-needs',
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.getByRole('button', { name: 'Send request' }).click();
+			await page.locator('#consent-error').waitFor();
+		}
+	},
 	{ name: 'admin dashboard', path: () => '/admin', as: 'admin', phases: ALL_PHASES },
 	{ name: 'admin dashboard (superuser)', path: () => '/admin', as: 'superuser' },
 	{
@@ -138,6 +157,30 @@ const PAGES: PageCase[] = [
 	{ name: 'admin house', path: (c) => `/admin/house/${c.houseId}`, as: 'admin' },
 	{ name: 'admin room', path: (c) => `/admin/room/${c.roomId}`, as: 'admin' },
 	{ name: 'admin new house', path: () => '/admin/house/new', as: 'admin' },
+	{
+		name: 'admin new house: refused',
+		path: () => '/admin/house/new',
+		as: 'admin',
+		// Staging: Live and Closed lock the layout, and these forms with it.
+		phases: ['staging'],
+		open: async (page) => {
+			await page.locator('#bedCount').fill('999');
+			await page.getByRole('button', { name: 'Save House' }).click();
+			await page.locator('#bedcount-error').waitFor();
+		}
+	},
+	{
+		name: 'admin house: refused room',
+		path: (c) => `/admin/house/${c.houseId}`,
+		as: 'admin',
+		// Staging: Live and Closed lock the layout, and these forms with it.
+		phases: ['staging'],
+		open: async (page) => {
+			await page.locator('#room-number').fill('x');
+			await page.getByRole('button', { name: /IGNITE ROOM/ }).click();
+			await page.locator('#room-number-error').waitFor();
+		}
+	},
 	{ name: 'admin tickets', path: () => '/admin/tickets', as: 'superuser' },
 	{
 		name: 'admin tickets: search result',

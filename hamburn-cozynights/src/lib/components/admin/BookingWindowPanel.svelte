@@ -654,8 +654,8 @@
 					</p>
 
 					{#if draftError || serverError}
-						<p class="editor-error" role="alert" transition:slide={{ duration: motion(200) }}>
-							⚠️ {serverError || draftError}
+						<p class="editor-error form-error" role="alert">
+							{serverError || draftError}
 						</p>
 					{:else if draft.paused && armCheck.error}
 						<p class="editor-note" transition:slide={{ duration: motion(200) }}>

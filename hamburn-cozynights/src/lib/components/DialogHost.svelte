@@ -9,6 +9,11 @@ Mounted once in the root layout.
 	import { tick } from 'svelte';
 
 	$: current = $dialogQueue[0];
+	// A message that says "no" (not saved, not allowed) rings like a refused
+	// field: a few quick beats in its colour, then it holds still. Confirms
+	// ask before something happens and stay calm.
+	$: refusal =
+		current?.kind === 'alert' && (current.tone === 'danger' || current.tone === 'warning');
 
 	let primaryButton: HTMLButtonElement | undefined;
 	let altButton: HTMLButtonElement | undefined;
@@ -67,6 +72,9 @@ Mounted once in the root layout.
 	<div class="dialog-backdrop" transition:fade={{ duration: 120 }}>
 		<div
 			class="dialog-card {current.tone}"
+			class:state-ring={refusal}
+			class:state-ring-alert={refusal}
+			data-state={refusal ? current.tone : undefined}
 			role="alertdialog"
 			aria-modal="true"
 			aria-labelledby={current.title ? 'app-dialog-title' : undefined}

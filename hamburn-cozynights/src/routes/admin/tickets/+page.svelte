@@ -306,6 +306,8 @@
 				autocapitalize="off"
 				spellcheck="false"
 				enterkeyhint="search"
+				aria-invalid={!!searchError}
+				aria-describedby={searchError ? 'ticket-query-error' : undefined}
 				on:input={() => (searchError = '')}
 				on:keydown={submitOnEnter}
 			/>
@@ -318,7 +320,9 @@
 			address show their code hidden.
 		</p>
 
-		{#if searchError}<p class="error" role="alert">⚠️ {searchError}</p>{/if}
+		{#if searchError}
+			<p class="field-error" id="ticket-query-error" role="alert">{searchError}</p>
+		{/if}
 
 		{#if search}
 			<div class="results" in:fade={{ duration: 150 }}>
@@ -366,16 +370,18 @@
 				on:file={pickFile}
 			/>
 
-			{#if fileError}<p class="error" role="alert">⚠️ {fileError}</p>{/if}
+			{#if fileError}<p class="form-error" role="alert">{fileError}</p>{/if}
 
 			{#if imported}
 				<div class="note good" role="status" in:fade>
 					<strong>✨ Imported</strong>
 					<span>
 						{plural(imported.created, 'new ticket')}, {plural(imported.updated, 'ticket')} updated{imported.newHolders
-							? ` (${imported.newHolders} handed over${imported.requestsRemoved
-									? `, ${plural(imported.requestsRemoved, 'special-needs request')} deleted`
-									: ''})`
+							? ` (${imported.newHolders} handed over${
+									imported.requestsRemoved
+										? `, ${plural(imported.requestsRemoved, 'special-needs request')} deleted`
+										: ''
+								})`
 							: ''}.
 						{#if imported.confirmations}
 							{plural(imported.confirmations, 'new address', 'new addresses')} get a confirmation of their
@@ -775,9 +781,11 @@
 		font-size: 0.8rem;
 		line-height: 1.5;
 	}
-	.error {
-		margin: 0.8rem 0 0;
-		color: #f87171;
+	.field-error,
+	.form-error {
+		margin-top: 0.8rem;
+	}
+	.field-error {
 		font-size: 0.9rem;
 	}
 	.results {

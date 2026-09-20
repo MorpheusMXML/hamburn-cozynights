@@ -125,7 +125,7 @@
 	</div>
 
 	{#if form?.message}
-		<div class="error-banner" role="alert" in:fade>⚠️ {form.message}</div>
+		<div class="error-banner form-error" role="alert">{form.message}</div>
 	{/if}
 
 	{#if isLayoutLocked}

@@ -202,7 +202,7 @@ shown here and nowhere else.
 	</p>
 
 	{#if form && 'error' in form && form.error}
-		<p class="form-error" role="alert">⚠️ {form.error}</p>
+		<p class="form-error" role="alert">{form.error}</p>
 	{/if}
 
 	{#if data.requests.length === 0}
@@ -691,8 +691,7 @@ shown here and nowhere else.
 	.dim {
 		color: #a3a3a3;
 	}
-	.warn,
-	.form-error {
+	.warn {
 		margin: 0;
 		padding: 0.6rem 0.9rem;
 		border-radius: 10px;

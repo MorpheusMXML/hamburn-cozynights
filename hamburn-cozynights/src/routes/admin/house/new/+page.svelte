@@ -3,6 +3,7 @@
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import { toast } from '$lib/dialogs';
+	import { revealInvalid } from '$lib/field-alert';
 
 	export let data: PageData;
 	$: ({ x, y, isLayoutLocked, phase } = data);
@@ -45,9 +46,7 @@
 		}
 		if (nameError || bedCountError) {
 			cancel();
-			formElement
-				.querySelector<HTMLInputElement>(nameError ? '[name="name"]' : '[name="bedCount"]')
-				?.focus();
+			revealInvalid(formElement);
 			return;
 		}
 
@@ -59,6 +58,7 @@
 				await goto('/admin', { invalidateAll: true });
 			} else if (result.type === 'failure') {
 				showFailure(result.data as Failure);
+				revealInvalid(formElement);
 			} else if (result.type === 'error') {
 				formError =
 					'The house was not created because the server could not be reached. Check your connection and try again.';
@@ -103,14 +103,13 @@
 				placeholder="e.g. Eagle's Nest"
 				autocomplete="off"
 				maxlength="100"
-				class:error={!!nameError}
 				aria-invalid={!!nameError}
 				aria-describedby={nameError ? 'name-error' : undefined}
 				on:input={() => (nameError = '')}
 				disabled={isLayoutLocked}
 			/>
 			{#if nameError}
-				<p class="field-error" id="name-error" role="alert">⚠️ {nameError}</p>
+				<p class="field-error" id="name-error" role="alert">{nameError}</p>
 			{/if}
 		</div>
 
@@ -124,7 +123,6 @@
 				bind:value={bedCount}
 				placeholder="0"
 				autocomplete="off"
-				class:error={!!bedCountError}
 				aria-invalid={!!bedCountError}
 				aria-describedby={bedCountError ? 'bedcount-error' : 'bedcount-hint'}
 				on:input={() => (bedCountError = '')}
@@ -134,12 +132,12 @@
 				Creates a first room "Main Module" with this many active spots. Enter 0 to add rooms later.
 			</p>
 			{#if bedCountError}
-				<p class="field-error" id="bedcount-error" role="alert">⚠️ {bedCountError}</p>
+				<p class="field-error" id="bedcount-error" role="alert">{bedCountError}</p>
 			{/if}
 		</div>
 
 		{#if formError}
-			<p class="field-error" role="alert">⚠️ {formError}</p>
+			<p class="form-error" role="alert">{formError}</p>
 		{/if}
 
 		<div class="actions">
@@ -242,19 +240,12 @@
 		outline: none;
 		border-color: #2dd4bf;
 	}
-	input.error {
-		border-color: #f87171;
-	}
 	input:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}
 	.field-error {
-		margin: 0;
-		color: #f87171;
 		font-size: 0.85rem;
-		font-weight: 700;
-		line-height: 1.4;
 	}
 	.actions {
 		display: flex;

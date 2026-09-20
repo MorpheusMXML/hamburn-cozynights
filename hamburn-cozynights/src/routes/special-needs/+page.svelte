@@ -9,6 +9,7 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 	import { page } from '$app/stores';
 	import type { ActionData, PageData } from './$types';
 	import { confirmDialog, toast } from '$lib/dialogs';
+	import { revealInvalid } from '$lib/field-alert';
 	import {
 		BURNER_NAME_MAX,
 		REQUEST_TEXT_MAX,
@@ -227,7 +228,7 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 				method="POST"
 				action="?/save"
 				novalidate
-				use:enhance={() => {
+				use:enhance={({ formElement }) => {
 					isSaving = true;
 					errors = {};
 					formError = '';
@@ -241,6 +242,7 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 								(failed.errors ? 'Please check the marked fields.' : 'Nothing was sent.');
 							// Refused because the crew decided meanwhile: show the decision.
 							if (result.status === 409) await invalidateAll();
+							else revealInvalid(formElement);
 							return;
 						}
 						if (result.type === 'error') {
@@ -257,7 +259,13 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 					};
 				}}
 			>
-				<fieldset aria-describedby={errors.needs ? 'needs-error' : undefined}>
+				<fieldset
+					class="field-box"
+					class:state-ring={!!errors.needs}
+					class:state-ring-alert={!!errors.needs}
+					data-state={errors.needs ? 'danger' : undefined}
+					aria-describedby={errors.needs ? 'needs-error' : undefined}
+				>
 					<legend>What do you need?</legend>
 					{#each SPECIAL_NEEDS as need}
 						<label class="check">
@@ -309,6 +317,7 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 						bind:value={burnerName}
 						on:input={() => fixed('burnerName')}
 						aria-describedby="request-burner-hint{errors.burnerName ? ' request-burner-error' : ''}"
+						aria-invalid={!!errors.burnerName}
 					/>
 					<small id="request-burner-hint" class="hint">
 						Others in your room see it next to your spot. Leave it empty and you get a random one.
@@ -318,13 +327,19 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 					{/if}
 				</div>
 
-				<label class="check consent">
+				<label
+					class="check consent field-box"
+					class:state-ring={!!errors.consent}
+					class:state-ring-alert={!!errors.consent}
+					data-state={errors.consent ? 'danger' : undefined}
+				>
 					<input
 						type="checkbox"
 						name="consent"
 						value="yes"
 						bind:checked={consent}
 						on:change={() => fixed('consent')}
+						aria-invalid={!!errors.consent}
 						aria-describedby={errors.consent ? 'consent-error' : undefined}
 					/>
 					<span>
@@ -506,6 +521,12 @@ into the URL or the browser's storage, and the page asks what is needed, not why
 		border: none;
 		margin: 0 0 1.25rem;
 		padding: 0;
+	}
+	/* A refused group of checkboxes: the state ring sits just outside it, so
+	   marking the group never moves the layout. */
+	.field-box.state-ring::after {
+		inset: -0.4rem -0.6rem;
+		border-radius: 12px;
 	}
 	legend,
 	.field label {

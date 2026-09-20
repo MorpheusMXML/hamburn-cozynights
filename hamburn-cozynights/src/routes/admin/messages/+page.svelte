@@ -165,7 +165,7 @@ messages rendered by PocketBase — the same code that sends them.
 	</p>
 
 	{#if form && 'error' in form && form.error}
-		<p class="form-error" role="alert">⚠️ {form.error}</p>
+		<p class="form-error" role="alert">{form.error}</p>
 	{/if}
 
 	<details class="placeholders">
@@ -258,7 +258,7 @@ messages rendered by PocketBase — the same code that sends them.
 				</select>
 			</div>
 			{#if previewError}
-				<p class="form-error" role="alert">⚠️ {previewError}</p>
+				<p class="form-error" role="alert">{previewError}</p>
 			{:else if !current}
 				<p class="empty">Loading the preview…</p>
 			{:else if current.subject !== undefined}
@@ -540,14 +540,5 @@ messages rendered by PocketBase — the same code that sends them.
 		border: 0;
 		border-radius: 10px;
 		background: #f6f3ee;
-	}
-	.form-error {
-		margin: 0;
-		padding: 0.6rem 0.9rem;
-		border-radius: 10px;
-		background: rgba(251, 146, 60, 0.1);
-		border: 1px solid rgba(251, 146, 60, 0.4);
-		color: #fed7aa;
-		font-weight: 700;
 	}
 </style>

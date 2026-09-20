@@ -73,6 +73,11 @@
 	--state: var(--state-danger);
 	--state-soft: var(--state-danger-soft);
 }
+/* Not an error, but not allowed right now (e.g. the layout is locked). */
+[data-state='warning'] {
+	--state: var(--state-filling);
+	--state-soft: var(--state-filling-soft);
+}
 [data-state='staging'] {
 	--state: var(--state-staging);
 	--state-soft: var(--state-staging-soft);
@@ -167,5 +172,105 @@
 	.state-ring.state-ring-alert::after {
 		animation: none;
 		opacity: 1;
+	}
+}
+
+/*
+ * Refused input.
+ *
+ * Every form already marks a field it refuses with aria-invalid="true" (for
+ * screen readers). That attribute is the switch for the look, so no form can
+ * forget it and every form looks the same: a red border, one soft ping that
+ * rings out from the field, then a steady faint glow while the value is still
+ * wrong. Typing clears aria-invalid in each form, and the field calms down.
+ *
+ * The glow is a forwards-filled animation rather than a plain box-shadow: an
+ * animation outranks the forms' own :focus styles (the turquoise focus glow)
+ * without !important, so the field stays red while the cursor is in it.
+ * Only the border colour needs !important — it isn't animated.
+ *
+ * A control whose visible box is a wrapper (the ticket field on the start
+ * page, a group of checkboxes) sits inside .field-box; the wrapper takes the
+ * state ring instead, so the field doesn't glow twice.
+ */
+:is(input, select, textarea)[aria-invalid='true']:not(.field-box *) {
+	border-color: var(--state-danger) !important;
+	animation: field-refused 1.1s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+@keyframes field-refused {
+	0% {
+		box-shadow:
+			0 0 0 0 rgba(248, 113, 113, 0.6),
+			0 0 0 0 rgba(248, 113, 113, 0);
+	}
+	35% {
+		box-shadow:
+			0 0 0 5px rgba(248, 113, 113, 0.22),
+			0 0 18px 2px rgba(248, 113, 113, 0.35);
+	}
+	100% {
+		box-shadow:
+			0 0 0 1px rgba(248, 113, 113, 0.5),
+			0 0 12px rgba(248, 113, 113, 0.16);
+	}
+}
+
+/* The composite box (see above) wears the alert ring of the state module. */
+.field-box[data-state='danger'] {
+	border-color: var(--state-danger);
+}
+
+/* What is wrong: right under the field (.field-error), or for the whole form
+   (.form-error, a box). Both slide in, never pop. A page with its own look
+   overrides colour and spacing in its component styles; the motion and the
+   icon stay the same everywhere. */
+.field-error {
+	display: block;
+	margin: 0;
+	color: var(--state-danger);
+	font-size: 0.8rem;
+	font-weight: 700;
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+	animation: field-error-in 0.22s ease-out both;
+}
+.form-error {
+	margin: 0;
+	padding: 0.6rem 0.9rem;
+	border-radius: 10px;
+	background: var(--state-danger-soft);
+	border: 1px solid rgba(248, 113, 113, 0.4);
+	color: #fecaca;
+	font-weight: 700;
+	line-height: 1.45;
+	overflow-wrap: anywhere;
+	animation: field-error-in 0.22s ease-out both;
+}
+.field-error::before,
+.form-error::before {
+	content: '⚠️ ';
+}
+
+@keyframes field-error-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+/* No ping, no slide: the colours alone. The forwards fill still lands on the
+   steady glow, just without getting there. */
+@media (prefers-reduced-motion: reduce) {
+	:is(input, select, textarea)[aria-invalid='true']:not(.field-box *) {
+		animation-duration: 1ms;
+	}
+	.field-error,
+	.form-error {
+		animation: none;
 	}
 }
