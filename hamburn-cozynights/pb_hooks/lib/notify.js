@@ -1914,6 +1914,7 @@ module.exports = {
 	safeError: safeError,
 	storedValue: storedValue,
 	maskEmail: maskEmail,
+	maskEmailsIn: maskEmailsIn,
 	berlinTime: berlinTime,
 	telegramCall: telegramCall,
 	botUsername: botUsername,

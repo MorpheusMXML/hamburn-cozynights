@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { loadHookModule } from './hook-module';
 
-const { eventText } = loadHookModule('lib/notify.js');
+const { eventText, maskEmailsIn } = loadHookModule('lib/notify.js');
 
 const event = (action: string, actor: string, subject: string, details: object) => ({
 	getString: (field: string) =>
@@ -109,6 +109,22 @@ describe('crew chat texts about guests', () => {
 		expect(text).toBe(
 			'📭 Could not notify ticket "Ticket H•••" (e-mail a•••@x.de) after 7 attempts: dial tcp: i/o timeout'
 		);
+	});
+
+	it('shortens every address a mail server quotes back in its reply', () => {
+		// The 📭 alert repeats the reply as it came; a rejection usually echoes
+		// the recipient, which would name the guest the masked ticket leaves out.
+		expect(maskEmailsIn('mail: 550 5.1.1 <anna.schmidt@example.com>: unknown')).toBe(
+			'mail: 550 5.1.1 <a•••@example.com>: unknown'
+		);
+		expect(maskEmailsIn('mail: refused anna@x.de, bea@y.org | telegram: 400 x')).toBe(
+			'mail: refused a•••@x.de, b•••@y.org | telegram: 400 x'
+		);
+		expect(maskEmailsIn('telegram: 400 Bad Request: chat not found')).toBe(
+			'telegram: 400 Bad Request: chat not found'
+		);
+		expect(maskEmailsIn('')).toBe('');
+		expect(maskEmailsIn(undefined)).toBe('');
 	});
 
 	it('says in words what a withdrawn special-needs request was', () => {
