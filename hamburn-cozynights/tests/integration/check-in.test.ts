@@ -6,6 +6,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import type PocketBase from 'pocketbase';
 import { BookingService, CheckedInError } from '../../src/lib/server/booking';
 import { changeTicket } from '../../src/lib/server/tickets';
+import { maskedTicketLabel } from '../../src/lib/tickets';
+import { actions as checkActions } from '../../src/routes/admin/check/+page.server';
 import {
 	anonymous,
 	createAdmin,
@@ -68,6 +70,31 @@ describe('who can check a guest in', () => {
 		expect(await anonymous().collection('beds').getFullList()).toEqual([]);
 
 		expect((await bed(beds[0].id)).checked_in_at).toBe('');
+	});
+});
+
+describe('the pass check at the gate', () => {
+	it('names a ticket without a name by its masked code, never by the code itself', async () => {
+		const { ticket } = await booked();
+		// the label the CLI gives a ticket without a name; the code signs its guest in
+		await su
+			.collection('orders')
+			.update(ticket.order.id, { customer_name: `Ticket ${ticket.code}` });
+		const passCode = (await su.collection('orders').getOne(ticket.order.id)).pass_code as string;
+		const crew = await createAdmin(su, 'admin');
+
+		const body = new FormData();
+		body.set('code', passCode);
+		const answer: any = await (checkActions.checkin as any)({
+			request: { formData: async () => body },
+			locals: { admin: { email: crew.email, role: 'admin' }, pb: crew.client, adminPb: su }
+		});
+
+		expect(answer.result).toMatchObject({
+			status: 'checkedin',
+			ticketName: maskedTicketLabel(ticket.code)
+		});
+		expect(JSON.stringify(answer)).not.toContain(ticket.code);
 	});
 });
 
