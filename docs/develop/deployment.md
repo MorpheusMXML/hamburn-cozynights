@@ -73,7 +73,14 @@ The old containers keep serving while the new image builds.
 
 ### nginx in front of the app
 
-The vhost in [`deploy/nginx/test-cozynights.hamburn.de.conf`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/nginx/test-cozynights.hamburn.de.conf) is applied by hand on the server; the deploy never touches it. Two things in it are load-bearing: the header block (`server_tokens off`, HSTS, `X-Robots-Tag`; the post-deploy smoke test expects HSTS on every HTTPS page) and `proxy_buffer_size 16k` in `location /`, because a signed-in browser's response headers (session cookie, SvelteKit's `Link` preload header, the CSP headers) exceed nginx's default 4 KB buffer, which shows up as a `502 Bad Gateway` for admins only ("upstream sent too big header" in the error log). After editing: `nginx -t && systemctl reload nginx`.
+The vhost in [`deploy/nginx/test-cozynights.hamburn.de.conf`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/nginx/test-cozynights.hamburn.de.conf) and the host-wide defaults in [`deploy/nginx/10-hardening.conf`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/nginx/10-hardening.conf) (installed as `/etc/nginx/conf.d/10-hardening.conf`) are applied by hand on the server; the deploy never touches them. Four things in them are load-bearing:
+
+- The header block: `server_tokens off`, HSTS and `X-Robots-Tag`. The post-deploy smoke test expects HSTS on every HTTPS page.
+- `proxy_buffer_size 16k`, because a signed-in browser's response headers (session cookie, SvelteKit's `Link` preload header, the CSP headers) exceed nginx's default 4 KB buffer, which shows up as a `502 Bad Gateway` for admins only ("upstream sent too big header" in the error log). The hardening file sets it for every proxied vhost.
+- HTTP/2 on the `listen` lines. nginx 1.22 (Debian 12) takes the protocol there; the `http2 on;` directive only exists from 1.25.1.
+- The per-address request limit: `location /` allows 20 requests per second with a burst of 60 and answers `429` beyond that, using the zone `perip` declared in the hardening file. The content-hashed build assets under `/_app/` are exempt, so a page load with its roughly 25 files never trips the limit for several guests behind one address. The app's own limits for ticket-code and pass guessing are separate and stricter.
+
+After editing: `nginx -t && systemctl reload nginx`.
 
 ### After a deploy
 
