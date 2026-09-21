@@ -79,7 +79,7 @@ The crew group gets a *🗺️ Layout template applied* message with what change
 	"version": "2.0",
 	"name": "CozyNights camp layout",
 	"exported_at": "2026-09-17T15:04:05.000Z",
-	"map": { "image": "/lageplan-brahmsee-2026.jpg", "width": 1000, "height": 700 },
+	"map": { "image": "/lageplan-brahmsee-2026-v2.jpg", "width": 1000, "height": 700 },
 	"houses": [
 		{
 			"name": "Neon Cave",
