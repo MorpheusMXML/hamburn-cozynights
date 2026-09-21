@@ -57,7 +57,7 @@ Fill in **ADD ROOM ➕**:
 | ROOM # | *101* | Required: a whole number from 1 to 9999, used only once in the house. Rooms are sorted by this number. |
 | BED CAPACITY 🛌 | *4* | Creates spots *Spot 1 … Spot 4* right away. |
 
-A house holds up to 50 rooms, a room up to 50 spots.
+A house holds up to 50 rooms, a room up to 50 spots. In a hut group the form asks for a *hut designation* and ignites a hut — the house's kind decides the wording.
 
 Press <kbd>IGNITE ROOM ✨</kbd>.
 
@@ -71,7 +71,7 @@ Press <kbd>IGNITE ROOM ✨</kbd>.
 | Field | What it is |
 | --- | --- |
 | NAME | Only in Staging Mode: the name belongs to the layout. The field is gone while booking is live or closed. |
-| KIND | Room · Hut · Tent · Other. |
+| KIND | Room · Hut · Tent · Other. A room added to a hut group starts as a **hut** (and in a tent area as a tent), so you rarely have to set it. |
 | FEATURES | ♿ Wheelchair accessible · ⬇️ Ground floor · 🛁 Own bathroom · 🔥 Heated · ❄️ No heating · 🤫 Quiet zone · 🔌 Power socket. They come **on top of** the house's: a heated room in an unheated hut group counts as heated. |
 | DESCRIPTION | Up to 500 characters, shown to guests. |
 
