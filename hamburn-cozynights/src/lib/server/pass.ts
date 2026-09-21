@@ -150,7 +150,8 @@ export async function passSummary(
 		room: roomLabel(room),
 		spot: bed.label,
 		burnerName: burnerNameOf(order),
-		bed: bedTypeLabel(bed.bed_type)
+		// Only when the crew wrote it down, like every other detail.
+		...(bedTypeLabel(bed.bed_type) ? { bed: bedTypeLabel(bed.bed_type) } : {})
 	};
 }
 

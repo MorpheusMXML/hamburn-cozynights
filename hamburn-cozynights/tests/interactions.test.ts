@@ -149,7 +149,11 @@ describe('Room Load & Booking Logic', () => {
 		]); // beds list
 		mockAdminPb.update.mockResolvedValueOnce({}); // migration update
 
-		const result: any = await roomLoad({ params: { id: 'room1' }, locals: mockLocals } as any);
+		const result: any = await roomLoad({
+			url: new URL('http://test.local/'),
+			params: { id: 'room1' },
+			locals: mockLocals
+		} as any);
 
 		expect(result.room.id).toBe('room1');
 		expect(result.beds.length).toBe(2);
@@ -161,7 +165,10 @@ describe('Room Load & Booking Logic', () => {
 			label: 'A2',
 			occupied: true,
 			bookable: false,
-			burnerName: 'Dusty Nomad #123'
+			burnerName: 'Dusty Nomad #123',
+			// what kind of bed it is and what only this spot has; nobody said here
+			bedType: '',
+			features: []
 		});
 	});
 
@@ -182,7 +189,11 @@ describe('Room Load & Booking Logic', () => {
 			}
 		]);
 
-		const result: any = await roomLoad({ params: { id: 'room1' }, locals: mockLocals } as any);
+		const result: any = await roomLoad({
+			url: new URL('http://test.local/'),
+			params: { id: 'room1' },
+			locals: mockLocals
+		} as any);
 		const serialized = JSON.stringify(result);
 
 		expect(serialized).not.toContain('SECRET-CODE-42');

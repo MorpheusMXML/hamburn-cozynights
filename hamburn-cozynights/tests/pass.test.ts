@@ -243,12 +243,14 @@ describe("the guest's own pass on other pages", () => {
 	it('house and room pages give guests with a spot their ticket', async () => {
 		const c = campWithGuest();
 		const house: any = await houseLoad({
+			url: new URL('http://test.local/'),
 			params: { id: c.huts.id },
 			locals: guestLocals(c.pb),
 			cookies
 		} as any);
 		expect(house.pass).toEqual(TICKET);
 		const room: any = await roomLoad({
+			url: new URL('http://test.local/'),
 			params: { id: c.hut.id },
 			locals: guestLocals(c.pb),
 			cookies
@@ -256,6 +258,7 @@ describe("the guest's own pass on other pages", () => {
 		expect(room.pass).toEqual(TICKET);
 
 		const noSpot: any = await houseLoad({
+			url: new URL('http://test.local/'),
 			params: { id: c.huts.id },
 			locals: guestLocals(c.pb, 'HB-2002'),
 			cookies
@@ -272,6 +275,7 @@ describe("the guest's own pass on other pages", () => {
 		});
 		const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const house: any = await houseLoad({
+			url: new URL('http://test.local/'),
 			params: { id: c.huts.id },
 			locals: guestLocals(c.pb),
 			cookies
@@ -283,23 +287,37 @@ describe("the guest's own pass on other pages", () => {
 
 	it('the map shows it on the Closed panel, and knows tickets without a spot', async () => {
 		const closed = campWithGuest();
-		expect(await mapLoad({ locals: guestLocals(closed.pb) } as any)).toMatchObject({
+		expect(
+			await mapLoad({ url: new URL('http://test.local/'), locals: guestLocals(closed.pb) } as any)
+		).toMatchObject({
 			phase: 'closed',
 			pass: TICKET,
 			noSpot: false
 		});
-		expect(await mapLoad({ locals: guestLocals(closed.pb, 'HB-2002') } as any)).toMatchObject({
+		expect(
+			await mapLoad({
+				url: new URL('http://test.local/'),
+				locals: guestLocals(closed.pb, 'HB-2002')
+			} as any)
+		).toMatchObject({
 			pass: null,
 			noSpot: true
 		});
 		// the map is public: nobody signed in, nothing to show
-		expect(await mapLoad({ locals: guestLocals(closed.pb, '') } as any)).toMatchObject({
+		expect(
+			await mapLoad({
+				url: new URL('http://test.local/'),
+				locals: guestLocals(closed.pb, '')
+			} as any)
+		).toMatchObject({
 			pass: null,
 			noSpot: false
 		});
 
 		const live = campWithGuest({ phase: 'live' });
-		expect(await mapLoad({ locals: guestLocals(live.pb) } as any)).toMatchObject({
+		expect(
+			await mapLoad({ url: new URL('http://test.local/'), locals: guestLocals(live.pb) } as any)
+		).toMatchObject({
 			phase: 'live',
 			pass: null,
 			noSpot: false

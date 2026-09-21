@@ -148,6 +148,7 @@ describe('guest pages', () => {
 	it('the room page says the spot is final and refuses to release it', async () => {
 		const c = camp();
 		const data: any = await roomLoad({
+			url: new URL('http://test.local/'),
 			params: { id: c.room.id },
 			locals: c.locals,
 			cookies: { delete: () => {} }
@@ -164,12 +165,14 @@ describe('guest pages', () => {
 	it('so do the house page and the roulette', async () => {
 		const c = camp();
 		const house: any = await houseLoad({
+			url: new URL('http://test.local/'),
 			params: { id: c.house.id },
 			locals: c.locals,
 			cookies: { delete: () => {} }
 		} as any);
 		expect(house.checkedIn).toBe(true);
 		const roulette: any = await rouletteLoad({
+			url: new URL('http://test.local/'),
 			locals: c.locals,
 			cookies: { delete: () => {} }
 		} as any);
@@ -189,6 +192,7 @@ describe('guest pages', () => {
 	it('guests who are not checked in still release as before', async () => {
 		const c = camp({ checkedIn: false });
 		const data: any = await roomLoad({
+			url: new URL('http://test.local/'),
 			params: { id: c.room.id },
 			locals: c.locals,
 			cookies: { delete: () => {} }
