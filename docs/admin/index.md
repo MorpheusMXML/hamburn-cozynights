@@ -10,7 +10,7 @@ After signing in you land in the **Control Center** at `/admin`: one page to bui
 | --- | --- |
 | <kbd>ADMIN GUIDE 📖</kbd> | Opens this documentation in a new tab, admin pages included. |
 | <kbd>TEMPLATES 💾</kbd> | Opens the **Burn Template Manager** to export the camp layout, or compare a layout file with the camp and take over what you pick. See [Layout templates](./templates). |
-| <kbd>SHOW INTEL 📊</kbd> | Shows or hides the statistics panel. |
+| <kbd>SHOW INTEL 📊</kbd> | Shows or hides the [Intel panel](#intel-panel-the-live-picture): what needs the crew, bookings and check-ins, every house, tickets and messages — live, filterable by house and time. |
 | <kbd>🛰️ LIST VIEW</kbd> / <kbd>🗺️ MAP VIEW</kbd> | Switches between the map editor and house cards. |
 
 The top bar on every admin page shows <kbd>🎟️ Tickets</kbd> (find a ticket, change its e-mail address, load the ticket list; see [Tickets & e-mail addresses](./tickets)), <kbd>♿ Special needs</kbd> with the number of requests waiting for a decision (see [Special-needs requests](./special-needs)), <kbd>🎫 Check-in</kbd> (check guests in with their booking pass; see [Booking passes & check-in](./passes)), <kbd>✉️ Messages</kbd> (every text guests get, see [Message texts](./notifications#message-texts)), the account you're signed in with (not on phones), a **SUPERUSER ⚡️** badge if you are one, and <kbd>Eject 🚀</kbd> to sign out. While a countdown runs, a slim bar above it shows when booking opens or closes, the same one guests see.
@@ -33,19 +33,78 @@ Below it, the row **♿ Special-needs requests: OPEN** (or **CLOSED**, with *· 
 
 ## Intel panel: the live picture
 
-![Intel panel with occupancy and booking trend](../assets/screenshots/admin-intel.webp)
+The operations view of the whole camp. Like everything under `/admin` it is
+only there for approved admins: a Google sign-in that still waits for approval
+sees nothing of it, and neither does anybody without a session. Only numbers
+leave the server for it — no guest names, no e-mail addresses, no request texts.
+
+![Intel panel: what needs attention, the spot tiles, the ring and the bookings chart](../assets/screenshots/admin-intel.webp)
 
 The panel updates itself. You don't need to reload the page to watch booking
 come in: the numbers, the house cards and the map pins follow along every few
 seconds, on their own.
 
+### Needs attention
+
+The first block lists what somebody on the crew should act on, most urgent
+first, and says *All clear* when nothing is. Red is what went wrong, orange what
+waits for someone, grey what is worth knowing. A line only appears while it is
+true:
+
+| Line | When | Link |
+| --- | --- | --- |
+| ✉️ *… guest messages could not be delivered* | A booking message still failed after two days of retries. | [Notifications](./notifications) |
+| 📣 *… crew alerts never reached the crew chat* | The crew chat refused an alert five times. | [Notifications](./notifications) |
+| ♿ *… special-needs requests wait for a decision* | Requests are waiting. | *Special needs* |
+| 🔑 *… admin sign-ins wait for a superuser's approval* | Somebody signed in with Google without an invite. | [Admin access](./access) |
+| 🎟 *… tickets have no spot, and booking is closed* | After booking closed: guests with a ticket but no spot. | *Tickets* |
+| ⏳ *… guest messages are being retried* | A delivery failed and waits for its next try. | [Notifications](./notifications) |
+| 🛖 *… houses have no active spots* | Houses without spots (orange in Staging, where they can still be fixed). | – |
+| 🎟 *… tickets have no spot yet* | During Live Booking: guests who still have to book. | *Tickets* |
+| 📭 *… tickets have no e-mail address* | E-mail to guests is on, until booking closes. | *Tickets* |
+| 🚪 *… booked guests are not checked in yet* | After booking closed, once the first guest was checked in. | *Check-in* |
+
+### Spots & bookings
+
+Everything in this block follows the two filters above it: **House** (*All
+houses* or one of them) and the chart's time range — <kbd>24 h</kbd> (one bar
+per hour), <kbd>7 days</kbd> (one per day, where it starts) or <kbd>All</kbd>
+(every day since the first booking, every week once that would be more than 45
+days). Picking a house in the house table does the same as the House filter;
+<kbd>✕ Whole camp</kbd> goes back.
+
 | Widget | Shows |
 | --- | --- |
-| **LOAD** | The ring: how the active spots are split between taken, free, held back 🔒 and reserved ♿. The number in the middle is the share that is taken. The four slices always add up to the spots that exist. |
-| **TAKEN · FREE · CHECKED IN · HELD BACK** | The same four numbers to read off, each in its own colour. *Checked in* counts guests the crew checked in at arrival, and is part of *taken*. |
-| **New bookings · last 7 days** | Spots booked per day over the last week, by the day the spot got its ticket (event time). Today's bar is highlighted. A released spot drops out; a moved booking counts on the day of the move. |
-| **Empty houses · Filling · Full · Not set up** | How many houses have no bookings yet, some bookings, no free spot left, or no spots at all. |
-| **PLAYA PROTOCOLS** | Quick reminders of the editor gestures below. |
+| **TAKEN · FREE · CHECKED IN · HELD BACK · ♿ RESERVED** | The spots in each state. *Taken* adds of how many and the share, *Checked in* how many booked guests are still to come. Click a tile to sort the house table by it; click it again for the names. A line below counts spots marked as taken without a ticket and switched-off spots, when there are any. |
+| **LOAD** | The ring: how the active spots are split between taken, free, held back 🔒 and reserved ♿; the slices always add up to the spots that exist. The number in the middle is the share that is taken. Point at a slice to read its number, click it to sort the houses like its tile. |
+| **Bookings & check-ins** | Bookings (the moment a spot got its ticket, event time) and check-ins per hour or per day. The line above the bars sums up the range and says when the last booking came in; point at a bar, or tab to the chart and use <kbd>←</kbd> <kbd>→</kbd>, to read that hour or day. The two buttons switch a series off and on. <kbd>Show the numbers as a table</kbd> lists every bar. A released spot drops out; a moved booking counts at the moment of the move. |
+
+### Houses
+
+![The house table sorted by free spots, and the camp-wide cards below it](../assets/screenshots/admin-intel-houses.webp)
+
+One row per house: its state, *taken / spots* with a bar in its state colour,
+free spots, *checked in / booked*, held back 🔒 and ♿ reserved spots, and
+<kbd>Rooms →</kbd> to its house page. *Find a house* searches the names (ü is u),
+the chips show only empty, filling, full or not set up houses, and **Sort** puts
+the fullest, the most free spots, the most guests still to check in, the most
+held back or the most ♿ spots first. Click a house's name to narrow the numbers
+above to it, click it again for the whole camp. Ten houses show at first,
+<kbd>Show all</kbd> lists the rest; on a phone every house is a small card.
+
+### Tickets, messages & crew
+
+Counts for the whole camp — the House filter doesn't touch them:
+
+| Card | Counts |
+| --- | --- |
+| 🎟 **Tickets** | Loaded, with a spot, without a spot, with an e-mail address, Telegram linked. |
+| ✉️ **Guest messages** | Whether e-mail and the Telegram bot are on; guests e-mailed; messages waiting to go out, being retried, failed for good. |
+| ♿ **Special-needs requests** | Waiting for a decision, approved, declined. |
+| 👥 **Crew** | Admins, sign-ins waiting for approval, crew alerts waiting and failed. |
+
+A number the server could not read right now shows as —; the rest of the panel
+still works.
 
 ### Are these numbers current?
 
