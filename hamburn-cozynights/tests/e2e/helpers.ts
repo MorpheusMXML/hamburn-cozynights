@@ -38,7 +38,10 @@ export async function adminSessionCookie(pb: PocketBase, role: 'admin' | 'superu
 			passwordConfirm: password
 		});
 	}
-	if (admin.role !== role) admin = await pb.collection('admins').update(admin.id, { role });
+	// A recent last_sign_in stands in for the Google sign-in the app asks for weekly.
+	admin = await pb
+		.collection('admins')
+		.update(admin.id, { role, last_sign_in: new Date().toISOString() });
 
 	const impersonated = await pb.collection('admins').impersonate(admin.id, 3600);
 	const exported = impersonated.authStore.exportToCookie({ httpOnly: false, secure: false });

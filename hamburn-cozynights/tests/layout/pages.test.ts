@@ -38,6 +38,9 @@ const IGNORE = ['[data-layout-ignore]'];
 /** The camp map lies under the floating header and buttons on purpose. */
 const CANVAS = ['.map-wrapper'];
 
+/** Floating layers that cover the page on purpose, like a dialog (the lock hint). */
+const OVERLAYS = ['[data-layout-overlay]'];
+
 const MARK = 'data-layout-problem';
 
 type Who =
@@ -154,9 +157,60 @@ const PAGES: PageCase[] = [
 			await page.locator('.intel-dashboard .tiles').waitFor();
 		}
 	},
-	{ name: 'admin house', path: (c) => `/admin/house/${c.houseId}`, as: 'admin' },
-	{ name: 'admin room', path: (c) => `/admin/room/${c.roomId}`, as: 'admin' },
+	{
+		// Staging says the layout can be changed; Live locks it (notice, greyed
+		// controls with padlocks).
+		name: 'admin house',
+		path: (c) => `/admin/house/${c.houseId}`,
+		as: 'admin',
+		phases: ['staging', 'live']
+	},
+	{
+		name: 'admin room',
+		path: (c) => `/admin/room/${c.roomId}`,
+		as: 'admin',
+		phases: ['staging', 'live']
+	},
 	{ name: 'admin new house', path: () => '/admin/house/new', as: 'admin' },
+	{
+		// A typed key in a locked field answers with the lock hint next to it.
+		// The field keeps the focus, so the hint stays while the width changes.
+		name: 'admin new house: lock hint',
+		path: () => '/admin/house/new',
+		as: 'admin',
+		phases: ['live'],
+		open: async (page) => {
+			await page.locator('#name').focus();
+			await page.keyboard.press('x');
+			await page.locator('.lock-hint.ready').waitFor();
+		}
+	},
+	{
+		// The house editor next to the map (below it on a phone), read-only
+		// while the layout is locked; the house with the long compound name.
+		name: 'admin dashboard: locked house editor',
+		path: () => '/admin',
+		as: 'admin',
+		phases: ['live'],
+		open: async (page) => {
+			await page.locator(`g.house-group[aria-label="House ${TEXTS.houseCompound}"]`).focus();
+			await page.keyboard.press('Enter');
+			const sidebar = page.locator('.details-sidebar');
+			await sidebar.locator('.locked-badge').waitFor();
+			// The sidebar flies in (Svelte transitions ignore reduced motion):
+			// measure it where it lands, not on its way.
+			await sidebar.evaluate((el) =>
+				Promise.all(
+					el
+						.getAnimations({ subtree: true })
+						.filter((a) => a.effect?.getTiming().iterations !== Infinity)
+						.map((a) => a.finished)
+				)
+			);
+			// Opening it scrolled the page; the other cases measure from the top.
+			await page.evaluate(() => window.scrollTo(0, 0));
+		}
+	},
 	{
 		name: 'admin new house: refused',
 		path: () => '/admin/house/new',
@@ -287,7 +341,8 @@ async function sweep(page: Page): Promise<Finding[]> {
 		const problems = await page.evaluate(findLayoutProblems, {
 			maxWordLength: MAX_WORD_LENGTH,
 			ignore: IGNORE,
-			canvas: CANVAS
+			canvas: CANVAS,
+			overlays: OVERLAYS
 		});
 		for (const problem of problems) {
 			const key = `${problem.kind}|${problem.where}|${problem.text}`;
@@ -342,6 +397,7 @@ for (const pageCase of PAGES) {
 					maxWordLength: MAX_WORD_LENGTH,
 					ignore: IGNORE,
 					canvas: CANVAS,
+					overlays: OVERLAYS,
 					markAttribute: MARK
 				});
 				await page.addStyleTag({

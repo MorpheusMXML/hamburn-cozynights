@@ -96,7 +96,40 @@ test.describe('Camp map', () => {
 		await page.mouse.move(start.x + 40, start.y + 40, { steps: 6 });
 		await page.mouse.up();
 
-		await expect(page.locator('.toast')).toContainText('locked');
+		// The lock hint points at the pin that didn't move.
+		const hint = page.locator('.lock-hint');
+		await expect(hint).toContainText('Locked during Live Booking');
+		await expect(hint).toContainText('To move houses');
+		const after = await pb.collection('houses').getOne(house.id);
+		expect([after.x, after.y]).toEqual([before.x, before.y]);
+	});
+
+	test('admin: typed coordinates are locked during Live Booking too', async ({
+		page,
+		context
+	}) => {
+		await setBookingPhase(pb, true);
+		const before = await pb.collection('houses').getOne(house.id);
+		await context.addCookies([await adminSessionCookie(pb)]);
+		await page.goto('/admin', { waitUntil: 'networkidle' });
+
+		await page.locator(`g.house-group[aria-label="House ${house.name}"]`).focus();
+		await page.keyboard.press('Enter');
+		const x = page.locator('#house-x');
+		await expect(x).toHaveAttribute('readonly', '');
+		await expect(x).toHaveAttribute('aria-disabled', 'true');
+
+		// Typing changes nothing and says why; MOVE PIN explains itself too.
+		await x.focus();
+		await page.keyboard.type('9');
+		await expect(x).toHaveValue(String(before.x));
+		await expect(page.locator('.lock-hint')).toContainText('To move houses');
+		// force: Playwright waits for aria-disabled controls to become enabled.
+		await page.getByRole('button', { name: 'MOVE PIN' }).click({ force: true });
+		// The previous hint fades out while the new one comes in.
+		await expect(page.locator('.lock-hint')).toHaveCount(1);
+		await expect(page.locator('.lock-hint')).toContainText('To move houses');
+
 		const after = await pb.collection('houses').getOne(house.id);
 		expect([after.x, after.y]).toEqual([before.x, before.y]);
 	});
