@@ -526,6 +526,7 @@ function eventText(ev, cfg) {
 				(d.updated || 0) +
 				' updated' +
 				(d.newHolders ? ' (' + d.newHolders + ' passed on)' : '') +
+				(d.removed ? ', ' + d.removed + ' cancelled ticket(s) deleted' : '') +
 				(d.requestsRemoved ? ', ' + d.requestsRemoved + ' special-needs request(s) removed' : '') +
 				(d.failed ? ', ' + d.failed + ' failed' : '')
 			);

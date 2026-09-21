@@ -113,6 +113,8 @@
 	let preview: RosterPreview | null = null;
 	let selected = new Set<string>();
 	let newHolders = new Set<string>();
+	/** Ids of cancelled tickets ticked for removal (only ones without a spot). */
+	let removals = new Set<string>();
 	let imported: RosterImportOutcome | null = null;
 	let filter = '';
 
@@ -187,6 +189,8 @@
 			const start = defaultRosterSelection(preview.diff);
 			selected = new Set(start.selected);
 			newHolders = new Set(start.newHolders);
+			// Deleting is never preselected.
+			removals = new Set();
 			filter = '';
 		} else if (result.type === 'redirect') {
 			await applyAction(result);
@@ -219,11 +223,21 @@
 	$: confirmations = chosen.filter(
 		(change) => change.kind === 'changed' && change.emailChanged && change.hasSpot && change.email
 	).length;
+	// A ticket the file no longer lists can be deleted — but only when it holds
+	// no spot. One that does stays, whatever the file says.
+	$: removable = preview ? preview.diff.notInFile.filter((ticket) => !ticket.hasSpot) : [];
+	$: chosenRemovals = removable.filter((ticket) => removals.has(ticket.id)).length;
 
 	function toggle(key: string) {
 		if (selected.has(key)) selected.delete(key);
 		else selected.add(key);
 		selected = selected;
+	}
+
+	function toggleRemoval(id: string) {
+		if (removals.has(id)) removals.delete(id);
+		else removals.add(id);
+		removals = removals;
 	}
 
 	function toggleHolder(key: string) {
@@ -247,7 +261,7 @@
 	}
 
 	async function runImport() {
-		if (!preview || chosen.length === 0) return;
+		if (!preview || (chosen.length === 0 && chosenRemovals === 0)) return;
 		importing = true;
 		const form = new FormData();
 		form.set('rows', JSON.stringify(rows));
@@ -255,6 +269,10 @@
 		form.set(
 			'newHolders',
 			JSON.stringify(chosen.filter((c) => newHolders.has(c.key)).map((c) => c.key))
+		);
+		form.set(
+			'remove',
+			JSON.stringify(removable.filter((t) => removals.has(t.id)).map((t) => t.id))
 		);
 		const result = await post('importRoster', form);
 		importing = false;
@@ -381,6 +399,9 @@
 							{plural(imported.confirmations, 'new address', 'new addresses')} get a confirmation of their
 							spot.
 						{/if}
+						{#if imported.removed}
+							{plural(imported.removed, 'cancelled ticket')} deleted.
+						{/if}
 						{#if imported.skipped}{plural(imported.skipped, 'ticket')} needed nothing anymore.{/if}
 					</span>
 					{#if imported.failed.length > 0}
@@ -448,6 +469,7 @@
 								{plural(diff.problems.length, 'problem')}
 							</li>{/if}
 						{#if diff.notInFile.length}<li>{diff.notInFile.length} not in the file</li>{/if}
+						{#if chosenRemovals}<li class="bad">{plural(chosenRemovals, 'to delete')}</li>{/if}
 					</ul>
 
 					{#if changes.length === 0}
@@ -633,16 +655,35 @@
 							nested
 							tone="muted"
 							title="Not in the file"
-							summary={`${diff.notInFile.length} ticket(s) stay as they are`}
+							summary={chosenRemovals
+								? `${chosenRemovals} of ${diff.notInFile.length} to delete`
+								: `${diff.notInFile.length} ticket(s) stay as they are`}
 							open={false}
 						>
 							<p class="hint">
-								The import never deletes tickets. Their codes are shown shortened. Cancelled tickets
-								are removed on the server (<code>cozy-admin.sh tickets remove</code>).
+								These tickets are in the database but not in the file — cancelled in the ticket shop,
+								or from another file. They stay unless you tick one: a ticked ticket is deleted with
+								the import, together with its Telegram link and its special-needs request. Their
+								codes are shown shortened, and a ticket that holds a spot 🛏 cannot be deleted here
+								— free the spot first.
 							</p>
 							<ul class="code-list">
 								{#each diff.notInFile as ticket}
-									<li><code>{ticket.code}</code>{ticket.hasSpot ? ' 🛏' : ''}</li>
+									<li>
+										{#if ticket.hasSpot}
+											<code>{ticket.code}</code> 🛏
+										{:else}
+											<label class="drop-row">
+												<input
+													type="checkbox"
+													checked={removals.has(ticket.id)}
+													on:change={() => toggleRemoval(ticket.id)}
+												/>
+												<code>{ticket.code}</code>
+												<span class="muted">{removals.has(ticket.id) ? 'delete' : 'keep'}</span>
+											</label>
+										{/if}
+									</li>
 								{/each}
 							</ul>
 						</FoldPanel>
@@ -662,21 +703,26 @@
 						</FoldPanel>
 					{/if}
 
-					{#if changes.length > 0}
+					{#if changes.length > 0 || removable.length > 0}
 						<div class="action-bar">
 							<span class="action-text">
 								{plural(chosen.filter((c) => c.kind === 'new').length, 'new ticket')} ·
 								{plural(chosen.filter((c) => c.kind === 'changed').length, 'update')}
 								{#if chosenHolders}· {chosenHolders} handed over{/if}
 								{#if confirmations}· {plural(confirmations, 'confirmation')}{/if}
+								{#if chosenRemovals}· <span class="alarm">{chosenRemovals} deleted</span>{/if}
 							</span>
 							<button
 								type="button"
 								class="btn-primary"
-								disabled={importing || checking || chosen.length === 0}
+								disabled={importing || checking || (chosen.length === 0 && chosenRemovals === 0)}
 								on:click={runImport}
 							>
-								{importing ? 'Importing…' : `Import ${chosen.length} selected`}
+								{importing
+									? 'Importing…'
+									: chosen.length === 0
+										? `Delete ${chosenRemovals} cancelled`
+										: `Import ${chosen.length} selected`}
 							</button>
 						</div>
 					{/if}
@@ -1008,6 +1054,13 @@
 		font-size: 0.85rem;
 		line-height: 1.6;
 	}
+	.drop-row {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		cursor: pointer;
+	}
+
 	.code-list {
 		margin: 0;
 		padding: 0;

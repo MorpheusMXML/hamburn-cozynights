@@ -23,6 +23,7 @@ import { BookingService } from '$lib/server/booking';
 import { disconnectTelegram } from '$lib/server/notifications';
 import { checkInOf } from '$lib/server/pass';
 import { forgetRequest } from '$lib/server/special-requests';
+import { formatPassCode } from '$lib/pass';
 import {
 	TICKET_CODE_PATTERN,
 	TICKET_LIMITS,
@@ -122,7 +123,7 @@ async function describeTicket(
 		spot,
 		burnerName,
 		telegram: links.length > 0,
-		pass: !!order.pass_code
+		passCode: order.pass_code ? formatPassCode(order.pass_code) : ''
 	};
 }
 
@@ -381,7 +382,8 @@ export async function previewRoster(
 	const { entries, problems } = checkRosterRows(rows);
 	const stored = await loadStoredTickets(adminPb);
 	const diff = diffRoster(entries, stored, problems);
-	// The file doesn't have these codes: only show enough to recognise them.
+	// The file doesn't have these codes: only show enough to recognise them. The
+	// id stays, so the review can tick one for removal.
 	diff.notInFile = diff.notInFile.map((ticket) => ({
 		...ticket,
 		code: maskTicketCode(ticket.code)
@@ -422,7 +424,7 @@ let importRunning = false;
 export async function importRoster(
 	adminPb: TypedPocketBase,
 	rows: RosterRow[],
-	options: { selected: string[]; newHolders: string[] }
+	options: { selected: string[]; newHolders: string[]; remove?: string[] }
 ): Promise<RosterImportOutcome> {
 	if (importRunning) {
 		throw new TicketError(
@@ -433,14 +435,26 @@ export async function importRoster(
 	importRunning = true;
 	try {
 		const { entries, problems } = checkRosterRows(rows);
-		const diff = diffRoster(entries, await loadStoredTickets(adminPb), problems);
+		const stored = await loadStoredTickets(adminPb);
+		const diff = diffRoster(entries, stored, problems);
 		const wanted = new Set(options.selected.map((key) => String(key).toLowerCase()));
 		const handOver = new Set(options.newHolders.map((key) => String(key).toLowerCase()));
 		const todo = diff.changes.filter((change) => wanted.has(change.key));
+		// Tickets the file no longer lists, ticked for removal in the review. They
+		// are named by id: the review only ever sees their codes shortened. What
+		// the browser sends is a wish — only a ticket that is really missing from
+		// the file and really holds no spot is deleted. Its Telegram link and its
+		// special-needs request go with it (both cascade in PocketBase).
+		const drop = new Set((options.remove ?? []).map((key) => String(key)));
+		const gone = new Set(diff.notInFile.filter((t) => !t.hasSpot).map((t) => t.id));
+		const cancelled = drop.size
+			? stored.filter((ticket) => !ticket.hasSpot && drop.has(ticket.id) && gone.has(ticket.id))
+			: [];
 
 		const outcome: RosterImportOutcome = {
 			created: 0,
 			updated: 0,
+			removed: 0,
 			newHolders: 0,
 			requestsRemoved: 0,
 			confirmations: 0,
@@ -483,6 +497,16 @@ export async function importRoster(
 			} catch (err) {
 				console.error(`[Tickets] Import of ${maskTicketCode(change.code)} failed:`, err);
 				outcome.failed.push({ code: change.code, error: describeError(err) });
+			}
+		});
+
+		await inPool(cancelled, IMPORT_CONCURRENCY, async (ticket) => {
+			try {
+				await adminPb.collection('orders').delete(ticket.id);
+				outcome.removed++;
+			} catch (err) {
+				console.error(`[Tickets] Removing ${maskTicketCode(ticket.code)} failed:`, err);
+				outcome.failed.push({ code: ticket.code, error: describeError(err) });
 			}
 		});
 		return outcome;

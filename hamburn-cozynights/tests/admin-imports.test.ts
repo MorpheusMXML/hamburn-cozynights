@@ -106,7 +106,7 @@ describe('finding tickets', () => {
 			spot: { house: 'Neon Cave', room: 'Bunks #1', spot: 'B1', roomId: 'r1', checkIn: null },
 			burnerName: 'Sparkle',
 			telegram: true,
-			pass: true
+			passCode: 'PASS-CODE-2345'
 		});
 	});
 
@@ -180,7 +180,7 @@ describe('changing a ticket', () => {
 			codeMasked: true,
 			name: '',
 			burnerName: '',
-			pass: false,
+			passCode: '',
 			telegram: false
 		});
 		expect(outcome.confirmation).toBe(true);
@@ -288,6 +288,32 @@ describe('importing the ticket list', () => {
 		{ line: 5, code: 'HB-2001', email: 'other@example.org', name: '' }, // new, not chosen
 		{ line: 6, code: 'bad code', email: '', name: '' } // problem
 	];
+
+	it('deletes the cancelled tickets that are ticked, and only those', async () => {
+		// HB-1002 (o2) is in the database but not in the file, and holds no spot.
+		// HB-1001 (o1) is in the file, so it can never be a removal candidate.
+		const outcome = await importRoster(db.pb, rows, {
+			selected: ['hb-1003'],
+			newHolders: [],
+			remove: ['o2', 'o1']
+		});
+		expect(outcome.removed).toBe(1);
+		expect(outcome.failed).toEqual([]);
+		expect(db.data.orders.map((o) => o.id)).toEqual(['o1', 'o3']);
+	});
+
+	it('never deletes a cancelled ticket that still holds a spot', async () => {
+		// Now HB-1001 is missing from the file too — but it sleeps in b1.
+		const withoutAda = rows.filter((row) => row.code !== 'HB-1001');
+		const outcome = await importRoster(db.pb, withoutAda, {
+			selected: [],
+			newHolders: [],
+			remove: ['o1', 'o2']
+		});
+		expect(outcome.removed).toBe(1); // only o2
+		expect(order('o1')).toBeTruthy();
+		expect(db.data.beds.find((b) => b.id === 'b1')?.order).toBe('o1');
+	});
 
 	it('imports only the chosen tickets, and hands over only where it applies', async () => {
 		const bed = db.data.beds.find((b) => b.id === 'b1')!;

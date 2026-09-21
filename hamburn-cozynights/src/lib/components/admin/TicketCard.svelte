@@ -59,7 +59,7 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 	$: handOver = [
 		ticket.spot ? 'The spot stays with the ticket.' : '',
 		ticket.telegram ? 'Telegram updates to the old holder stop.' : '',
-		ticket.pass ? 'The booking pass gets a new code: the old pass link stops working.' : '',
+		ticket.passCode ? 'The booking pass gets a new code: the old pass link stops working.' : '',
 		ticket.burnerName ? `The burner name "${ticket.burnerName}" is forgotten.` : '',
 		ticket.spot?.checkIn
 			? 'The check-in is reset: the new holder checks in with the new pass when they arrive.'
@@ -148,6 +148,15 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 			{#if ticket.spot?.checkIn}
 				<li class="good" title={ticket.spot.checkIn.by ? `by ${ticket.spot.checkIn.by}` : ''}>
 					✅ Checked in {formatBerlin(ticket.spot.checkIn.at, { year: false })}
+				</li>
+			{/if}
+			{#if ticket.passCode}
+				<li>
+					<a
+						href="/pass/{ticket.passCode}"
+						title="Open the booking pass — check the guest in when their phone is dead"
+						>🎫 {ticket.passCode}</a
+					>
 				</li>
 			{/if}
 			{#if ticket.burnerName}<li>🔥 {ticket.burnerName}</li>{/if}

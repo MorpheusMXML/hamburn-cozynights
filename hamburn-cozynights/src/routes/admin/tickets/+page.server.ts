@@ -110,23 +110,25 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const selected = readKeys(form.get('selected'));
 		const newHolders = readKeys(form.get('newHolders'));
+		const remove = readKeys(form.get('remove')) ?? [];
 		if (!selected || !newHolders) {
 			return fail(400, { error: 'The chosen tickets did not arrive. Check the file again.' });
 		}
-		if (selected.length === 0) {
+		if (selected.length === 0 && remove.length === 0) {
 			return fail(400, { error: 'Nothing is selected. Tick the tickets to import first.' });
 		}
 
 		try {
 			const rows = readRosterRows(form.get('rows'));
-			const outcome = await importRoster(locals.adminPb, rows, { selected, newHolders });
+			const outcome = await importRoster(locals.adminPb, rows, { selected, newHolders, remove });
 			console.log(
-				`[Tickets] ${locals.admin.email} imported the ticket list: ${outcome.created} new, ${outcome.updated} updated, ${outcome.failed.length} failed.`
+				`[Tickets] ${locals.admin.email} imported the ticket list: ${outcome.created} new, ${outcome.updated} updated, ${outcome.removed} removed, ${outcome.failed.length} failed.`
 			);
-			if (outcome.created + outcome.updated > 0) {
+			if (outcome.created + outcome.updated + outcome.removed > 0) {
 				await logAdminEvent(locals.adminPb, locals.admin, 'tickets_imported', '', {
 					created: outcome.created,
 					updated: outcome.updated,
+					removed: outcome.removed,
 					newHolders: outcome.newHolders,
 					requestsRemoved: outcome.requestsRemoved,
 					confirmations: outcome.confirmations,

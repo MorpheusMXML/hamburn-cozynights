@@ -422,8 +422,12 @@ export interface RosterDiff {
 	unchanged: { code: string; line: number }[];
 	/** Lines that can't be imported: broken, or in conflict with the stored tickets. */
 	problems: RosterProblem[];
-	/** Stored tickets that are not in the file. They are left alone. */
-	notInFile: { code: string; hasSpot: boolean }[];
+	/**
+	 * Stored tickets the file doesn't list. The import leaves them alone unless
+	 * the review ticks them for removal — which refers to `id`, because the
+	 * preview shortens their codes (previewRoster).
+	 */
+	notInFile: { id: string; code: string; hasSpot: boolean }[];
 	/** Addresses used by several tickets of the file (allowed, worth a look). */
 	sharedEmails: { email: string; codes: string[] }[];
 }
@@ -526,7 +530,7 @@ export function diffRoster(
 
 	const notInFile = stored
 		.filter((ticket) => !inFile.has(ticket.code.toLowerCase()))
-		.map((ticket) => ({ code: ticket.code, hasSpot: ticket.hasSpot }))
+		.map((ticket) => ({ id: ticket.id, code: ticket.code, hasSpot: ticket.hasSpot }))
 		.sort((a, b) => a.code.localeCompare(b.code, 'en', { numeric: true }));
 
 	const codesByEmail = new Map<string, string[]>();
@@ -580,8 +584,13 @@ export interface TicketView {
 	spot: TicketSpot | null;
 	burnerName: string;
 	telegram: boolean;
-	/** A booking pass was issued (pb_hooks/cozy_pass.pb.js). */
-	pass: boolean;
+	/**
+	 * The booking pass as it is written, "7F3K-9QXM-2CWD", or '' when the ticket
+	 * has none yet (pb_hooks/cozy_pass.pb.js makes one with the first spot).
+	 * Admins see it so the crew can check a guest in whose phone is dead
+	 * (docs/admin/passes.md).
+	 */
+	passCode: string;
 }
 
 export interface TicketSearch {
@@ -617,6 +626,8 @@ export interface RosterPreview {
 export interface RosterImportOutcome {
 	created: number;
 	updated: number;
+	/** Stored tickets the file no longer lists, deleted on request (no spot, superusers only). */
+	removed: number;
 	/** Updated tickets that were handed over to a new holder. */
 	newHolders: number;
 	/** Handed-over tickets whose old holder's special-needs request was deleted. */
