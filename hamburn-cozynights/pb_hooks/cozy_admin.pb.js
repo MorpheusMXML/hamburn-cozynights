@@ -717,7 +717,13 @@ const cozyTicketsImport = new Command({
 					// Empty cells leave the stored value alone.
 					let changed = false;
 					const newAddress = !!entry.email && exact.getString('email') !== entry.email;
-					if (newAddress) {
+					// Only an address that REPLACES one can hand the ticket to
+					// somebody else. A ticket that had none yet simply becomes
+					// reachable — its pass and burner name belong to the guest who
+					// booked with its code. The app draws the same line
+					// (canBeNewHolder in src/lib/tickets.ts).
+					const replaces = newAddress && !!exact.getString('email');
+					if (replaces) {
 						const state = handover.holderState(txApp, exact);
 						if (state.any && !handOverAllowed) {
 							refusals.push(
@@ -744,6 +750,8 @@ const cozyTicketsImport = new Command({
 									')'
 							);
 						}
+					}
+					if (newAddress) {
 						exact.set('email', entry.email);
 						changed = true;
 						if (cozyBedOfTicket(txApp, exact.id)) counts.confirmations++;

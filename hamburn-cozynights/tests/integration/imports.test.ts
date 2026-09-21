@@ -4,6 +4,8 @@
 // list import, the search, and applying chosen template changes while the
 // other bookings stay.
 import { describe, it, expect, beforeAll } from 'vitest';
+import { spawnSync } from 'child_process';
+import path from 'path';
 import type PocketBase from 'pocketbase';
 import { BookingService } from '../../src/lib/server/booking';
 import { changeTicket, importRoster, searchTickets } from '../../src/lib/server/tickets';
@@ -11,7 +13,40 @@ import { applyTemplate, compareTemplate } from '../../src/lib/server/template';
 import { findPass } from '../../src/lib/server/pass';
 import { defaultSelection } from '../../src/lib/template-diff';
 import type { LayoutTemplate } from '../../src/lib/template';
+import { saveRequest } from '../../src/lib/server/special-requests';
 import { seedHouse, seedTicket, serviceAccount, uid } from '../stack-helpers';
+
+const COMPOSE_FILE = path.resolve(__dirname, '../../docker-compose.test.yml');
+
+/**
+ * Runs the cozy-admin CLI inside the test stack's PocketBase container, like
+ * scripts/cozy-admin.sh does. Returns stdout+stderr; `ok: false` when it
+ * refused, so a test can look at what it said.
+ */
+function cozyAdmin(args: string[], input = ''): { ok: boolean; out: string } {
+	const run = spawnSync(
+		'docker',
+		[
+			'compose',
+			'-f',
+			COMPOSE_FILE,
+			'exec',
+			'-T',
+			'pocketbase',
+			'/usr/local/bin/pocketbase',
+			'cozy-admin',
+			...args,
+			'--dir=/pb_data',
+			'--hooksDir=/pb_hooks',
+			'--migrationsDir=/pb_migrations'
+		],
+		{ input, encoding: 'utf8' }
+	);
+	return { ok: run.status === 0, out: `${run.stdout}${run.stderr}` };
+}
+
+const csv = (rows: [string, string, string][]) =>
+	['code,email,name', ...rows.map((row) => row.join(','))].join('\n');
 
 const MOCK_URL = process.env.MOCK_URL || '';
 const MAILPIT_URL = process.env.MAILPIT_URL || '';
@@ -279,5 +314,149 @@ describe('applying chosen template changes', () => {
 		const again = await compareTemplate(su as any, template);
 		expect([...defaultSelection(again)].filter(mine)).toEqual([]);
 		expect((await su.backups.getFullList()).some((b) => b.key === outcome.backup)).toBe(true);
+	});
+});
+
+// --- the server CLI ----------------------------------------------------------------
+
+describe('cozy-admin tickets import', () => {
+	/** A ticket carrying everything a holder can leave behind. */
+	async function loadedTicket() {
+		const { beds } = await seedHouse(su, 1);
+		const ticket = await seedTicket(su);
+		const email = `old-${uid()}@example.com`;
+		await su.collection('orders').update(ticket.order.id, { email });
+		await booking.bookBed(ticket.order as any, beds[0].id, 'Old Holder');
+		await saveRequest(su as any, ticket.order as any, {
+			needs: ['step_free'],
+			text: 'I need a step-free path',
+			burnerName: 'Rolling Thunder',
+			consent: true
+		});
+		await flush(); // the booking confirmation, and a guest_notify record to link
+		const notify = await su
+			.collection('guest_notify')
+			.getFirstListItem(su.filter('order = {:o}', { o: ticket.order.id }));
+		const chat = String(800000 + Math.floor(Math.random() * 99999));
+		await su.collection('guest_notify').update(notify.id, { tg_chat: chat });
+		await new BookingService(su as any).checkIn(ticket.order.id, 'crew@mauersegler.art');
+		const stored = await su.collection('orders').getOne(ticket.order.id);
+		return { ticket, bed: beds[0], email, chat, passCode: stored.pass_code as string };
+	}
+
+	/** The state a hand-over has to produce, whoever did it. */
+	async function shapeOf(orderId: string) {
+		const order = await su.collection('orders').getOne(orderId);
+		const notify = await su
+			.collection('guest_notify')
+			.getFirstListItem(su.filter('order = {:o}', { o: orderId }))
+			.catch(() => null);
+		const requests = await su
+			.collection('special_requests')
+			.getFullList({ filter: su.filter('order = {:o}', { o: orderId }) });
+		const beds = await su
+			.collection('beds')
+			.getFullList({ filter: su.filter('order = {:o}', { o: orderId }) });
+		return {
+			name: order.customer_name,
+			burnerName: order.burner_name,
+			hasPass: !!order.pass_code,
+			handedOver: !!order.handed_over_at,
+			telegram: notify?.tg_chat ?? '',
+			requests: requests.length,
+			spots: beds.length,
+			checkedIn: beds.filter((bed) => bed.checked_in_at).length
+		};
+	}
+
+	it('refuses to swap the address of a ticket that still carries its holder', async () => {
+		const t = await loadedTicket();
+		const result = cozyAdmin(
+			['tickets', 'import', '-'],
+			csv([[t.ticket.code, `new-${uid()}@example.com`, 'New Holder']])
+		);
+		expect(result.ok).toBe(false);
+		expect(result.out).toContain(t.ticket.code);
+		expect(result.out).toContain('a booking pass');
+		expect(result.out).toContain('--hand-over');
+
+		const stored = await su.collection('orders').getOne(t.ticket.order.id);
+		expect(stored.email).toBe(t.email);
+		expect(stored.pass_code).toBe(t.passCode);
+	});
+
+	it('corrects an address when the ticket has nothing to lose', async () => {
+		const ticket = await seedTicket(su); // no spot, no pass, no chat, no request
+		const email = `typo-${uid()}@example.com`;
+		const result = cozyAdmin(['tickets', 'import', '-'], csv([[ticket.code, email, '']]));
+		expect(result.ok).toBe(true);
+		expect((await su.collection('orders').getOne(ticket.order.id)).email).toBe(email);
+	});
+
+	it('gives a booked ticket its FIRST address without asking for --hand-over', async () => {
+		// Nobody is displaced: the pass and the burner name belong to the guest
+		// who booked with this code, the roster just makes them reachable.
+		const { beds } = await seedHouse(su, 1);
+		const ticket = await seedTicket(su);
+		await booking.bookBed(ticket.order as any, beds[0].id, 'Booked Early');
+		const email = `first-${uid()}@example.com`;
+
+		const result = cozyAdmin(['tickets', 'import', '-'], csv([[ticket.code, email, '']]));
+		expect(result.ok).toBe(true);
+		const stored = await su.collection('orders').getOne(ticket.order.id);
+		expect(stored.email).toBe(email);
+		expect(stored.handed_over_at).toBe(''); // not a hand-over
+		expect(stored.pass_code).not.toBe(''); // the pass stays
+	});
+
+	it('shows with --dry-run what --hand-over would drop, and changes nothing', async () => {
+		const t = await loadedTicket();
+		const result = cozyAdmin(
+			['tickets', 'import', '-', '--hand-over', '--dry-run'],
+			csv([[t.ticket.code, `new-${uid()}@example.com`, 'New Holder']])
+		);
+		expect(result.ok).toBe(true);
+		expect(result.out).toContain('DRY RUN');
+		expect(result.out).toContain(`hand-over: ${t.ticket.code}`);
+		expect(result.out).toContain('a booking pass');
+
+		const stored = await su.collection('orders').getOne(t.ticket.order.id);
+		expect(stored.email).toBe(t.email);
+		expect(stored.pass_code).toBe(t.passCode);
+		expect(stored.handed_over_at).toBe('');
+	});
+
+	it('with --hand-over leaves the same record behind as the Tickets page', async () => {
+		const viaApp = await loadedTicket();
+		const viaCli = await loadedTicket();
+		const appEmail = `app-${uid()}@example.com`;
+		const cliEmail = `cli-${uid()}@example.com`;
+
+		await changeTicket(su as any, viaApp.ticket.order.id, {
+			email: appEmail,
+			name: 'New Holder',
+			newHolder: true
+		});
+		const result = cozyAdmin(
+			['tickets', 'import', '-', '--hand-over'],
+			csv([[viaCli.ticket.code, cliEmail, 'New Holder']])
+		);
+		expect(result.ok).toBe(true);
+		expect(result.out).toContain('1 ticket(s) changed hands');
+
+		// The whole point: both ways produce the same state.
+		expect(await shapeOf(viaCli.ticket.order.id)).toEqual(await shapeOf(viaApp.ticket.order.id));
+		// The old holder's pass is dead and their data is gone
+		expect(await findPass(su as any, viaCli.passCode)).toBeNull();
+		expect(await telegramTo(viaCli.chat)).toHaveLength(
+			(await telegramTo(viaApp.chat)).length // both: nothing after the hand-over
+		);
+
+		// …and the new address is told it was passed on to them (Paket P1)
+		await flush();
+		const mails = await mailsTo(cliEmail);
+		expect(mails).toHaveLength(1);
+		expect(mails[0].Subject).toContain('came with your ticket');
+		expect(await mailsTo(viaCli.email)).toHaveLength(1); // only the old confirmation
 	});
 });
