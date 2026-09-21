@@ -101,18 +101,9 @@
 		};
 	};
 
-	// Management Summary Calculations
-	$: totalBeds = houses.reduce((sum, h) => sum + (h.totalBeds || 0), 0);
+	// What the booking window panel warns about before releasing bookings.
 	$: occupiedBeds = houses.reduce((sum, h) => sum + (h.occupiedBeds || 0), 0);
 	$: checkedInBeds = houses.reduce((sum, h) => sum + (h.checkedInBeds || 0), 0);
-
-	// "Full" means nothing left to book, like the cards' "Fully booked" badge.
-	$: houseStats = {
-		empty: houses.filter((h) => h.occupiedBeds === 0 && h.freeBeds > 0).length,
-		partial: houses.filter((h) => h.occupiedBeds > 0 && h.freeBeds > 0).length,
-		full: houses.filter((h) => h.totalBeds > 0 && h.freeBeds === 0).length,
-		unconfigured: houses.filter((h) => h.totalBeds === 0).length
-	};
 
 	// Main View state
 	let showMap = true;
@@ -449,60 +440,31 @@
 
 	{#if showGuide}
 		<section class="intel-panel" transition:slide>
-			<div class="intel-container">
-				<div class="dashboard-section">
-					<div class="section-header">
-						<span class="laser-dot pink"></span>
-						<h3>LIVE OPERATIONS INTEL</h3>
-						<span class="live-chip" data-status={$poll.status} title={liveLabel}>
-							<span class="live-dot"></span>
-							<span class="live-text">{liveLabel}</span>
-						</span>
-						<button
-							class="btn-refresh"
-							on:click={() => poll.refresh()}
-							title="Fetch the numbers again now"
-							aria-label="Refresh the numbers now">↻</button
-						>
-					</div>
-
-					{#if layoutChanged}
-						<p class="layout-changed" role="status">
-							🛖 The camp layout changed while this page was open.
-							<button class="btn-inline" on:click={() => invalidateAll()}>Reload the page</button>
-							to see the houses themselves.
-						</p>
-					{/if}
-
-					<IntelDashboard stats={live} />
+			<div class="dashboard-section">
+				<div class="section-header">
+					<span class="laser-dot pink"></span>
+					<h3>LIVE OPERATIONS INTEL</h3>
+					<span class="live-chip" data-status={$poll.status} title={liveLabel}>
+						<span class="live-dot"></span>
+						<span class="live-text">{liveLabel}</span>
+					</span>
+					<button
+						class="btn-refresh"
+						on:click={() => poll.refresh()}
+						title="Fetch the numbers again now"
+						aria-label="Refresh the numbers now">↻</button
+					>
 				</div>
 
-				<div class="dashboard-section">
-					<div class="section-header">
-						<span class="laser-dot turquoise"></span>
-						<h3>PLAYA PROTOCOLS</h3>
-					</div>
-					<div class="intel-grid">
-						<div class="intel-card turquoise" class:locked={isLayoutLocked}>
-							<span class="icon">📍</span>
-							<p>Click map to ignite house. (STAGING ONLY)</p>
-							{#if isLayoutLocked}<LockGlyph size={13} />{/if}
-						</div>
-						<div class="intel-card pink" class:locked={isLayoutLocked}>
-							<span class="icon">🖱️</span>
-							<p>Drag to reposition. (STAGING ONLY)</p>
-							{#if isLayoutLocked}<LockGlyph size={13} />{/if}
-						</div>
-						<div class="intel-card orange">
-							<span class="icon">⚙️</span>
-							<p>Click house for House Intel sidebar.</p>
-						</div>
-						<div class="intel-card green">
-							<span class="icon">🎟</span>
-							<p>Plan the booking window, arm the timer: it opens & closes by itself.</p>
-						</div>
-					</div>
-				</div>
+				{#if layoutChanged}
+					<p class="layout-changed" role="status">
+						🛖 The camp layout changed while this page was open.
+						<button class="btn-inline" on:click={() => invalidateAll()}>Reload the page</button>
+						to see the houses themselves.
+					</p>
+				{/if}
+
+				<IntelDashboard stats={live} {phase} />
 			</div>
 		</section>
 	{/if}
@@ -815,27 +777,14 @@
 			0 0 20px rgba(0, 0, 0, 0.5);
 	}
 
-	.intel-container {
-		display: grid;
-		grid-template-columns: 1.5fr 1fr;
-		gap: 3rem;
-	}
-
-	@media (max-width: 1000px) {
-		.intel-container {
-			grid-template-columns: 1fr;
-			gap: 2rem;
-		}
-	}
-
 	.dashboard-section {
 		display: flex;
 		flex-direction: column;
 		gap: 1.5rem;
-		/* A grid item may not shrink below its content unless it is told to:
-		   without this the live chip's one long line ("Live · last change 4 min
-		   ago", never wrapping) made the whole page 430 px wide on a 320 px
-		   phone. Found by the layout suite. */
+		/* Never wider than the panel: when the panel was a two-column grid, the
+		   live chip's one long line ("Live · last change 4 min ago", never
+		   wrapping) made the whole page 430 px wide on a 320 px phone. Found by
+		   the layout suite. */
 		min-width: 0;
 	}
 
@@ -855,46 +804,6 @@
 		font-weight: 900;
 		letter-spacing: 2.5px;
 		color: #666;
-	}
-
-	.intel-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
-		gap: 1rem;
-	}
-
-	.intel-card {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 1rem;
-		padding: 1rem;
-		background: #111;
-		border-radius: 10px;
-		border: 1px solid #1a1a1a;
-	}
-	.intel-card p {
-		margin: 0;
-		font-size: 0.75rem;
-		color: #888;
-		line-height: 1.2;
-		font-weight: bold;
-	}
-	/* The staging-only protocols while the layout is locked. */
-	.intel-card.locked {
-		border-style: dashed;
-		color: #666;
-	}
-	.intel-card.locked p,
-	.intel-card.locked .icon {
-		opacity: 0.45;
-	}
-	.intel-card.locked :global(.lock-glyph) {
-		margin-left: auto;
-		--lock-glyph-hole: #111;
-	}
-	.icon {
-		font-size: 1rem;
 	}
 
 	.live-chip {

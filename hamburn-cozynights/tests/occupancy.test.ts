@@ -43,6 +43,8 @@ describe('countSpots', () => {
 			occupied: 1,
 			free: 1,
 			checkedIn: 0,
+			// "taken" carries no ticket: marked as taken by the crew
+			booked: 0,
 			locked: 1,
 			special: 0,
 			deactivated: 2
@@ -55,6 +57,7 @@ describe('countSpots', () => {
 			occupied: 0,
 			free: 0,
 			checkedIn: 0,
+			booked: 0,
 			locked: 0,
 			special: 0,
 			deactivated: 0
@@ -76,6 +79,7 @@ describe('countSpots', () => {
 			occupied: 3,
 			free: 0,
 			checkedIn: 1,
+			booked: 2,
 			locked: 0,
 			special: 0,
 			deactivated: 1

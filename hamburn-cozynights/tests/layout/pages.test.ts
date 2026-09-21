@@ -193,13 +193,35 @@ const PAGES: PageCase[] = [
 	{ name: 'admin dashboard (superuser)', path: () => '/admin', as: 'superuser' },
 	{
 		// The panel starts closed, so the dashboard case above never measured it.
+		// Each phase lists other things under "Needs attention".
 		name: 'admin dashboard: intel panel',
 		path: () => '/admin',
 		as: 'admin',
-		phases: ['staging', 'live'],
+		phases: ['staging', 'live', 'closed'],
 		open: async (page) => {
 			await page.getByRole('button', { name: /SHOW INTEL/ }).click();
 			await page.locator('.intel-dashboard .tiles').waitFor();
+		}
+	},
+	{
+		// Narrowed to the house with the longest name, by the hour, sorted by
+		// free spots, with the chart's numbers open as a table.
+		name: 'admin dashboard: intel panel for one house',
+		path: () => '/admin',
+		as: 'admin',
+		phases: ['live'],
+		open: async (page) => {
+			await page.getByRole('button', { name: /SHOW INTEL/ }).click();
+			const panel = page.locator('.intel-dashboard');
+			await panel.locator('.houses-pick', { hasText: TEXTS.houseLong.slice(0, 40) }).click();
+			await panel.locator('.intel-reset').waitFor();
+			await panel.getByRole('button', { name: '24 h' }).click();
+			await panel.locator('.tile[data-state="open"]').click();
+			await panel.getByRole('button', { name: 'Show the numbers as a table' }).click();
+			await panel.locator('.activity-data').waitFor();
+			// The clicks scrolled the page; the other cases measure from the top
+			// (scrolled, the sticky admin header lies over the booking panel).
+			await page.evaluate(() => window.scrollTo(0, 0));
 		}
 	},
 	{
