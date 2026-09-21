@@ -4,9 +4,14 @@ services:
     image: ghcr.io/muchobien/pocketbase:0.40.4
     container_name: pocketbase
     restart: unless-stopped
-    # Expliziter Befehl: Bindet an 0.0.0.0, damit Docker Ports weiterleiten kann
-    command: --http=0.0.0.0:8090
+    # Expliziter Befehl: Bindet an 0.0.0.0, damit Docker Ports weiterleiten kann.
+    # --encryptionEnv wie auf den Servern: steht PB_ENCRYPTION_KEY in der .env
+    # (genau 32 Zeichen), liegen die PocketBase-Settings verschlüsselt in
+    # pb_data; ohne Wert bleiben sie im Klartext. Einmal gesetzt, startet
+    # PocketBase ohne den Schlüssel nicht mehr (docs/develop/deployment.md).
+    command: ['--http=0.0.0.0:8090', '--encryptionEnv=PB_ENCRYPTION_KEY']
     environment:
+      PB_ENCRYPTION_KEY: ${PB_ENCRYPTION_KEY:-}
       # Optional lokal: Google-OAuth-Client für den Admin-Login (siehe .env.example).
       # Ohne Werte startet PocketBase normal, nur der Google-Login ist dann aus.
       PB_GOOGLE_CLIENT_ID: ${PB_GOOGLE_CLIENT_ID:-}

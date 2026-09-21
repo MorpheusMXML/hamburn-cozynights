@@ -11,8 +11,24 @@ services:
     # --hooksWatch=false: the deploy script stops and starts PocketBase itself;
     # a git checkout of the bind-mounted tree must never restart the live
     # instance (that would apply new migrations before the deploy's snapshot).
-    command: ['--http=0.0.0.0:8090', '--automigrate=false', '--hooksWatch=false']
+    # --encryptionEnv: PocketBase stores its app settings (SMTP password, S3
+    # keys, ...) AES-256-GCM encrypted with the 32-character PB_ENCRYPTION_KEY
+    # from .env instead of in plain text, so a database backup alone does not
+    # give them away. pb_hooks/cozy_settings.pb.js encrypts settings that are
+    # still plain text on the first start with the key. Without the key
+    # PocketBase refuses to start (docs/develop/deployment.md).
+    command:
+      [
+        '--http=0.0.0.0:8090',
+        '--automigrate=false',
+        '--hooksWatch=false',
+        '--encryptionEnv=PB_ENCRYPTION_KEY'
+      ]
     environment:
+      # Key for the encrypted settings (see the command above): exactly 32
+      # characters, `openssl rand -hex 16`. Required on purpose: a deploy
+      # without it fails at the build step, before anything is stopped.
+      PB_ENCRYPTION_KEY: ${PB_ENCRYPTION_KEY:?set PB_ENCRYPTION_KEY in .env (32 characters, see deploy/staging.env.template)}
       # Google OAuth client for the admin login (auth collection `admins`),
       # interpolated from .env — see .env.example and docs/develop/deployment.md.
       PB_GOOGLE_CLIENT_ID: ${PB_GOOGLE_CLIENT_ID:?set PB_GOOGLE_CLIENT_ID in .env}
@@ -49,7 +65,9 @@ services:
       COZY_MAILS_PER_MINUTE: ${COZY_MAILS_PER_MINUTE:-}
       # NOTE: never pass PB_ADMIN_EMAIL/PB_ADMIN_PASSWORD to this container —
       # the image's entrypoint would re-upsert that superuser on every start,
-      # which revokes the app's cached service-account token.
+      # which revokes the app's cached service-account token, and it runs that
+      # upsert without --encryptionEnv, so the container would not even start
+      # once the settings are encrypted.
     security_opt:
       - no-new-privileges:true
     ports:

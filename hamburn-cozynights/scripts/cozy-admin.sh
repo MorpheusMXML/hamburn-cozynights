@@ -66,7 +66,10 @@ if [[ -z "${COMPOSE_PROJECT_NAME:-}" ]]; then
 fi
 # Always explicit: without --dir the binary silently uses an empty database
 # next to itself, and the cozy-admin command from pb_hooks isn't loaded.
-PB_FLAGS=(--dir=/pb_data --hooksDir=/pb_hooks --migrationsDir=/pb_migrations)
+# --encryptionEnv as in the compose files: every command here is a second
+# PocketBase process that has to read the (encrypted) settings; without the
+# flag it stops with "invalid settings db data or missing encryption key".
+PB_FLAGS=(--dir=/pb_data --hooksDir=/pb_hooks --migrationsDir=/pb_migrations --encryptionEnv=PB_ENCRYPTION_KEY)
 MIN_PASSWORD_LENGTH=12
 
 die() {
