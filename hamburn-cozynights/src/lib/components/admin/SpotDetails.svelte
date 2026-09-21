@@ -13,7 +13,6 @@
 
 	export let bed: {
 		id: string;
-		room: string;
 		label?: string;
 		bed_type?: string;
 		features?: string[] | string;
@@ -65,7 +64,6 @@
 	{#if open}
 		<form method="POST" action="?/saveSpot" novalidate use:enhance={handleSubmit}>
 			<input type="hidden" name="id" value={bed.id} />
-			<input type="hidden" name="room" value={bed.room} />
 
 			{#if canRename}
 				<div class="field">

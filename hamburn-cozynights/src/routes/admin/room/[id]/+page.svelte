@@ -364,7 +364,6 @@
 						<SpotDetails
 							bed={{
 								id: bed.id,
-								room: room.id,
 								label: bed.label,
 								bed_type: bed.bed_type,
 								features: bed.features

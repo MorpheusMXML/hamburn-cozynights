@@ -219,7 +219,7 @@ export const actions: Actions = {
 	},
 
 	/** What one spot is like: its bed type, a socket at the bed, and its label in Staging Mode. */
-	saveSpot: async ({ request, locals }) => {
+	saveSpot: async ({ request, params, locals }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
 
 		const data = await request.formData();
@@ -241,16 +241,12 @@ export const actions: Actions = {
 					message: `The label is too long. Use at most ${TEMPLATE_LIMITS.bedLabelLength} characters.`
 				});
 			}
-			const room = String(data.get('room') ?? '');
+			// The room of the page, not one the form claims: a label is unique per room.
 			const siblings = await locals.pb.collection('beds').getFullList<BedsResponse>({
-				filter: locals.pb.filter('room = {:id}', { id: room }),
+				filter: locals.pb.filter('room = {:id} && id != {:bed}', { id: params.id, bed: id }),
 				fields: 'id,label'
 			});
-			if (
-				siblings.some(
-					(bed) => bed.id !== id && bed.label.trim().toLowerCase() === label.toLowerCase()
-				)
-			) {
+			if (siblings.some((bed) => bed.label.trim().toLowerCase() === label.toLowerCase())) {
 				return fail(400, {
 					message: `This room already has a spot called "${label}". Pick another label.`
 				});
