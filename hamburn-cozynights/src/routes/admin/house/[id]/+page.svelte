@@ -1,6 +1,14 @@
 <script lang="ts">
 	import type { PageData, SubmitFunction } from './$types';
 	import AddRoomForm from '$lib/components/admin/AddRoomForm.svelte';
+	import DetailsPanel from '$lib/components/admin/DetailsPanel.svelte';
+	import {
+		featureEntry,
+		houseKindEntry,
+		readFeatures,
+		roomKindEntry,
+		roomWord
+	} from '$lib/accommodation';
 	import { fade, fly } from 'svelte/transition';
 	import { enhance } from '$app/forms';
 	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
@@ -88,10 +96,30 @@
 		</div>
 	{/if}
 
+	<section class="form-section" in:fade={{ delay: 150 }}>
+		<header class="section-header">
+			<span class="laser-dot turquoise"></span>
+			<h3>HOUSE DETAILS 🏷️</h3>
+		</header>
+		<p class="section-hint">
+			What this house is like. Guests see it when they pick a spot, and the crew matches ♿ requests
+			with it. Every room and spot inside inherits these features. Can be changed in every phase.
+		</p>
+		<div class="form-wrapper">
+			<DetailsPanel
+				level="house"
+				action="?/saveHouse"
+				kind={house.kind ?? ''}
+				features={readFeatures(house.features, 'house')}
+				description={house.description ?? ''}
+			/>
+		</div>
+	</section>
+
 	<section class="form-section" in:fade={{ delay: 200 }} class:disabled={isLayoutLocked}>
 		<header class="section-header">
 			<span class="laser-dot turquoise"></span>
-			<h3>ADD ROOM ➕</h3>
+			<h3>ADD {roomWord(house.kind).toUpperCase()} ➕</h3>
 		</header>
 		<div class="form-wrapper">
 			<AddRoomForm disabled={isLayoutLocked} />
@@ -100,7 +128,10 @@
 
 	<header class="section-title-row">
 		<span class="laser-dot pink"></span>
-		<h2 class="section-title">ACTIVE ROOMS 🚪</h2>
+		<h2 class="section-title">
+			ACTIVE {roomWord(house.kind, true).toUpperCase()}
+			{houseKindEntry(house.kind)?.icon ?? '🚪'}
+		</h2>
 	</header>
 
 	<div class="grid">
@@ -117,6 +148,18 @@
 						<span class="room-number">#{room.room_number}</span>
 						<span class="room-name">{room.name}</span>
 					</header>
+
+					{#if roomKindEntry(room.kind) || readFeatures(room.features, 'room').length > 0 || room.bedMix}
+						<div class="room-details">
+							{#if roomKindEntry(room.kind)}
+								<span class="chip">{roomKindEntry(room.kind)?.icon} {roomKindEntry(room.kind)?.label}</span>
+							{/if}
+							{#each readFeatures(room.features, 'room') as feature}
+								<span class="chip">{featureEntry(feature)?.icon} {featureEntry(feature)?.label}</span>
+							{/each}
+							{#if room.bedMix}<span class="bed-mix">{room.bedMix}</span>{/if}
+						</div>
+					{/if}
 
 					<div class="card-body">
 						<div class="progress-container">
@@ -334,6 +377,34 @@
 	}
 
 	/* Room Card */
+	.section-hint {
+		margin: 0 0 0.9rem;
+		font-size: 0.8rem;
+		color: #8a8f98;
+		line-height: 1.4;
+		max-width: 60ch;
+	}
+	.room-details {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.35rem;
+		margin: 0.5rem 0 0.2rem;
+		min-width: 0;
+	}
+	.chip {
+		border: 1px solid rgba(255, 255, 255, 0.18);
+		border-radius: 999px;
+		padding: 0.1rem 0.5rem;
+		font-size: 0.68rem;
+		color: #cfd6dd;
+		overflow-wrap: anywhere;
+	}
+	.bed-mix {
+		font-size: 0.7rem;
+		color: #8a8f98;
+		overflow-wrap: anywhere;
+	}
 	.room-card {
 		background: #111;
 		border: 1px solid #222;

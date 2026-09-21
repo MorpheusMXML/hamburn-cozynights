@@ -10,13 +10,14 @@ import {
 } from '$lib/server/booking';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
 import type { BedsResponse, RoomsResponse, HousesResponse } from '$lib/pocketbase-types';
+import { readFilters, spotFacts, spotMatchesFilters } from '$lib/accommodation';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 const SIGNED_OUT =
 	'You are not signed in anymore. Go to the start page and enter your ticket code again.';
 const CODE_UNKNOWN = 'Your ticket code was not found. Go to the start page and enter it again.';
 
-export const load: PageServerLoad = async ({ locals, cookies }) => {
+export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 	if (!locals.orderNumber) throw redirect(303, '/?login=required');
 
 	// Orders contain PII and are never readable via the public `pb` connection
@@ -45,23 +46,39 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 			)
 			.catch(() => null);
 
+		// What the guest wants the dice to respect. The wishes live in the URL, so
+		// a roll can be repeated and the page works without JavaScript.
+		const wishes = readFilters(url.searchParams.get('w'));
+
 		// Only fetch the (possibly large) free-bed list when the user doesn't
 		// already have a spot — they can't roll again without nuking it first,
 		// and the page reloads this list right after the nuke.
 		// Deactivated, locked and special-needs beds are never part of the roulette.
-		const freeBeds = userBed
+		const allFree = userBed
 			? []
 			: // beds are admin-only in PocketBase: the service account reads them
-				(
-					await locals.adminPb
-						.collection('beds')
-						.getFullList<BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>>({
-							filter:
-								'occupied = false && enabled = true && is_locked = false && is_special = false',
-							expand: 'room,room.house',
-							sort: 'label'
+				await locals.adminPb
+					.collection('beds')
+					.getFullList<BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>>({
+						filter: 'occupied = false && enabled = true && is_locked = false && is_special = false',
+						expand: 'room,room.house',
+						sort: 'label'
+					});
+		const freeBeds = allFree
+			.filter(
+				(bed) =>
+					wishes.length === 0 ||
+					spotMatchesFilters(
+						wishes,
+						spotFacts({
+							bedType: bed.bed_type,
+							house: bed.expand?.room?.expand?.house?.features,
+							room: bed.expand?.room?.features,
+							spot: bed.features
 						})
-				).map((bed) => ({
+					)
+			)
+			.map((bed) => ({
 					id: bed.id,
 					label: bed.label,
 					room: bed.room,
@@ -85,6 +102,9 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 
 		return {
 			freeBeds,
+			wishes,
+			/** All free spots, so the page can say how many the wishes left out. */
+			freeTotal: allFree.length,
 			isBookingActive,
 			spotFixed,
 			// The crew checked the guest in at arrival: only the crew changes the spot now.

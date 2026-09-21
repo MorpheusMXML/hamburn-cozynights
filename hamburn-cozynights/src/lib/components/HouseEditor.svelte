@@ -66,6 +66,9 @@
 			occupied: false,
 			x,
 			y,
+			kind: '',
+			features: [],
+			description: '',
 			rooms: [
 				{
 					id: 'temp-room',
@@ -78,6 +81,9 @@
 					house: houseId || '',
 					amount_beds: bedCount,
 					occupied: false,
+					kind: '',
+					features: [],
+					description: '',
 					beds: Array.from({ length: bedCount }, (_, i) => ({
 						id: String(Date.now() + i),
 						collectionId: '',
@@ -92,6 +98,8 @@
 						booked_at: '',
 						checked_in_at: '',
 						checked_in_by: '',
+						bed_type: '',
+						features: [],
 						room: 'temp-room',
 						order: ''
 					}))

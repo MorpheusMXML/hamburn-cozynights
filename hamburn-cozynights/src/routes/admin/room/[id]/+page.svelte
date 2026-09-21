@@ -2,6 +2,9 @@
 	import type { PageData, SubmitFunction } from './$types';
 	import type { ActionResult } from '@sveltejs/kit';
 	import AddBedForm from '$lib/components/admin/AddBedForm.svelte';
+	import DetailsPanel from '$lib/components/admin/DetailsPanel.svelte';
+	import SpotDetails from '$lib/components/admin/SpotDetails.svelte';
+	import { bedTypeEntry, bedTypeMix, featureEntry, readFeatures } from '$lib/accommodation';
 	import { fade, fly } from 'svelte/transition';
 	import { enhance } from '$app/forms';
 	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
@@ -19,6 +22,9 @@
 	type Bed = PageData['beds'][number];
 
 	let deletingBedId: string | null = null;
+	let bedTypePattern = 'bunks';
+
+	$: bedMix = bedTypeMix(beds.map((bed) => bed.bed_type));
 
 	const spotName = (bed: Bed) => (bed.label ? `"${bed.label}"` : 'the unnamed spot');
 
@@ -166,6 +172,46 @@
 				<p class="hint">Define spot label (e.g. "Upper Deck")</p>
 				<AddBedForm disabled={isLayoutLocked} />
 			</section>
+
+			<section class="form-panel turquoise">
+				<header class="panel-header">
+					<span class="laser-dot turquoise"></span>
+					<h3>ROOM DETAILS 🏷️</h3>
+				</header>
+				<p class="hint">
+					What this room is like. Guests see it, and the crew matches ♿ requests with it. Can be
+					changed in every phase.
+				</p>
+				<DetailsPanel
+					level="room"
+					action="?/saveRoom"
+					kind={room.kind ?? ''}
+					features={readFeatures(room.features, 'room')}
+					description={room.description ?? ''}
+					name={isLayoutLocked ? undefined : room.name}
+					nameHint="Only in Staging Mode: the name belongs to the layout."
+				/>
+			</section>
+
+			<section class="form-panel pink">
+				<header class="panel-header">
+					<span class="laser-dot pink"></span>
+					<h3>SPOT TYPES 🛏️</h3>
+				</header>
+				<p class="hint">
+					{bedMix || 'No spot of this room says what kind of bed it is yet.'}
+				</p>
+				<form method="POST" action="?/setBedTypes" class="bulk-form" use:enhance={toggleSpot('Spot types not changed')}>
+					<label class="sr-only" for="bed-type-pattern">Set the bed of every spot</label>
+					<select id="bed-type-pattern" name="pattern" bind:value={bedTypePattern}>
+						<option value="bunks">Bunk beds: lower, upper, lower…</option>
+						<option value="single">All single beds</option>
+						<option value="clear">Not specified</option>
+					</select>
+					<button class="btn-apply" type="submit">APPLY TO ALL {beds.length} SPOTS</button>
+				</form>
+				<p class="hint">In label order, so B1 is a lower bunk and B2 the upper one above it.</p>
+			</section>
 		</aside>
 
 		<main class="beds-column" in:fade={{ delay: 400 }}>
@@ -207,6 +253,14 @@
 							</span>
 							{#if bed.is_special}
 								<span class="bed-status special">SPECIAL NEEDS ♿</span>
+							{/if}
+							{#if bedTypeEntry(bed.bed_type) || readFeatures(bed.features, 'spot').length > 0}
+								<span class="bed-detail">
+									{bedTypeEntry(bed.bed_type)?.label ?? ''}
+									{#each readFeatures(bed.features, 'spot') as feature}
+										<span title={featureEntry(feature)?.label}>{featureEntry(feature)?.icon}</span>
+									{/each}
+								</span>
 							{/if}
 							{#if bed.order && bed.checked_in_at}
 								<span
@@ -306,6 +360,17 @@
 								</button>
 							</form>
 						</div>
+
+						<SpotDetails
+							bed={{
+								id: bed.id,
+								room: room.id,
+								label: bed.label,
+								bed_type: bed.bed_type,
+								features: bed.features
+							}}
+							canRename={!isLayoutLocked}
+						/>
 					</div>
 				{/each}
 
@@ -620,6 +685,53 @@
 		color: #888;
 		font-weight: 900;
 		letter-spacing: 1px;
+	}
+	.bed-detail {
+		font-size: 0.72rem;
+		color: #9fb3c8;
+		overflow-wrap: anywhere;
+	}
+	.bulk-form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		min-width: 0;
+	}
+	.bulk-form select {
+		width: 100%;
+		box-sizing: border-box;
+		background: rgba(0, 0, 0, 0.4);
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		border-radius: 8px;
+		padding: 0.55rem 0.6rem;
+		color: #eee;
+		font: inherit;
+		font-size: 0.85rem;
+	}
+	.btn-apply {
+		background: rgba(255, 45, 149, 0.15);
+		border: 1px solid rgba(255, 45, 149, 0.6);
+		color: #ffb3d4;
+		border-radius: 8px;
+		padding: 0.55rem 0.7rem;
+		font-weight: 900;
+		font-size: 0.72rem;
+		letter-spacing: 0.08em;
+		cursor: pointer;
+	}
+	.btn-apply:hover {
+		background: rgba(255, 45, 149, 0.3);
+	}
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 	.occupied .bed-status {
 		color: #f87171;

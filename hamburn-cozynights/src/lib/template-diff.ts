@@ -173,7 +173,7 @@ const shorten = (text: string | undefined): FieldValue =>
 function detailChanges(
 	before: { kind?: string; features?: Feature[]; description?: string },
 	after: { kind?: string; features?: Feature[]; description?: string },
-	kindLabel: (value: unknown) => string
+	kindLabel: (value: unknown) => FieldValue
 ): FieldChange[] {
 	const changes: FieldChange[] = [];
 	if ((before.kind ?? '') !== (after.kind ?? '')) {

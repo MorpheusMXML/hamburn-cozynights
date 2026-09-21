@@ -68,6 +68,16 @@ describe('the catalogue', () => {
 		expect(list('BED_FEATURES')).toEqual(featuresFor('spot').map((f) => f.value));
 	});
 
+	it('keeps the labels PocketBase sends in step with it', () => {
+		const hook = readFileSync('pb_hooks/lib/beds.js', 'utf8');
+		for (const type of BED_TYPES) {
+			expect(hook).toContain(`${type.value}: '${type.label}'`);
+		}
+		// no bed type in the hook that the catalogue doesn't know
+		const inHook = [...hook.matchAll(/^\t(\w+): '/gm)].map((match) => match[1]);
+		expect(inHook.sort()).toEqual(BED_TYPES.map((type) => type.value).sort());
+	});
+
 	it('calls a room of a hut group a hut', () => {
 		expect(roomWord('hut_group')).toBe('hut');
 		expect(roomWord('hut_group', true)).toBe('huts');

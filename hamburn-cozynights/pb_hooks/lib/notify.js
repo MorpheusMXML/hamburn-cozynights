@@ -602,6 +602,8 @@ function currentSpot(app, orderId) {
 	} catch (_) {
 		// a dangling relation: the spot label has to do
 	}
+	// What kind of bed it is, when the crew wrote it down (src/lib/accommodation.ts).
+	spot.bed = require(`${__hooks}/lib/beds.js`).bedTypeLabel(bed.getString('bed_type'));
 	spot.label = clip([spot.spot, spot.room, spot.house].filter((s) => !!s).join(' · '), LABEL_MAX);
 	return spot;
 }
@@ -756,7 +758,8 @@ function spotLines(spot) {
 	return [
 		['House', spot.house],
 		['Room', spot.room],
-		['Spot', spot.spot]
+		['Spot', spot.spot],
+		['Bed', spot.bed]
 	].filter((row) => !!row[1]);
 }
 

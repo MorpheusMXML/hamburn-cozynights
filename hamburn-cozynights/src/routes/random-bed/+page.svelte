@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { SPOT_FILTERS, type SpotFilter } from '$lib/accommodation';
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
@@ -14,6 +15,13 @@
 
 	export let data: PageData;
 	$: ({ freeBeds, isBookingActive, userBed, spotFixed, checkedIn, phase } = data);
+
+	// Wishes the dice respect. They live in the URL, like on the map.
+	$: wishes = data.wishes as SpotFilter[];
+	const wishLink = (filter: SpotFilter, on: boolean, current: SpotFilter[]) => {
+		const next = on ? current.filter((wish) => wish !== filter) : [...current, filter];
+		return next.length > 0 ? `/random-bed?w=${next.join(',')}` : '/random-bed';
+	};
 
 	// ☢ Nuke & Respin: the spot in the warning, and the one deleted for this
 	// roll (the page says so until a new spot is booked).
@@ -244,13 +252,48 @@
 			</div>
 		{:else if freeBeds.length === 0 && !showBookingSuccess}
 			<div class="empty-state">
-				<span class="icon" aria-hidden="true">🏜️</span>
-				<p>
-					Every spot is taken right now. Check back later: a spot gets free again when someone
-					releases theirs.
-				</p>
+				<span class="icon" aria-hidden="true">{wishes.length > 0 ? '🔍' : '🏜️'}</span>
+				{#if wishes.length > 0 && data.freeTotal > 0}
+					<p>
+						No free spot fits your wishes. {data.freeTotal}
+						{data.freeTotal === 1 ? 'spot is' : 'spots are'} free without them — the crew may not have
+						filled in every detail.
+					</p>
+					<a class="btn-goto" href="/random-bed">Roll without wishes</a>
+				{:else}
+					<p>
+						Every spot is taken right now. Check back later: a spot gets free again when someone
+						releases theirs.
+					</p>
+				{/if}
 			</div>
 		{:else}
+			{#if !userBed && !showBookingSuccess}
+				<nav class="wish-bar" aria-label="What should the dice respect?">
+					<span class="wish-title">The dice respect…</span>
+					{#each SPOT_FILTERS as filter}
+						{@const on = wishes.includes(filter.value)}
+						<a
+							class="wish"
+							class:on
+							href={wishLink(filter.value, on, wishes)}
+							data-sveltekit-noscroll
+							aria-current={on ? 'true' : undefined}
+							title={filter.hint ?? ''}
+						>
+							<span aria-hidden="true">{filter.icon}</span>
+							{filter.label}
+						</a>
+					{/each}
+					<span class="wish-result" role="status">
+						{freeBeds.length}
+						{freeBeds.length === 1 ? 'spot' : 'spots'} in the drum{wishes.length > 0
+							? ` of ${data.freeTotal} free`
+							: ''}
+					</span>
+				</nav>
+			{/if}
+
 			<div class="machine-container">
 				<div class="bed-display" class:spinning={isSpinning && !hasBedBeenSelected}>
 					<div class="bed-label">
@@ -460,6 +503,50 @@
 		font-weight: 600;
 		line-height: 1.45;
 		text-align: left;
+		overflow-wrap: anywhere;
+	}
+
+	.wish-bar {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4rem;
+		margin: 0 auto 1rem;
+		max-width: 44rem;
+		min-width: 0;
+	}
+	.wish-title {
+		font-size: 0.72rem;
+		font-weight: 900;
+		letter-spacing: 0.08em;
+		color: #8a8f98;
+		text-transform: uppercase;
+	}
+	.wish {
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		border-radius: 999px;
+		padding: 0.2rem 0.65rem;
+		font-size: 0.78rem;
+		color: #dbe3ea;
+		text-decoration: none;
+		background: rgba(255, 255, 255, 0.04);
+		overflow-wrap: anywhere;
+	}
+	.wish:hover,
+	.wish:focus-visible {
+		border-color: rgba(255, 45, 149, 0.7);
+		color: #fff;
+	}
+	.wish.on {
+		background: rgba(255, 45, 149, 0.2);
+		border-color: rgba(255, 45, 149, 0.8);
+		color: #ffd2e6;
+		font-weight: 700;
+	}
+	.wish-result {
+		font-size: 0.78rem;
+		color: #9fb3c8;
 		overflow-wrap: anywhere;
 	}
 

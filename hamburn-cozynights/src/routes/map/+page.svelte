@@ -11,9 +11,20 @@
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import { onMount } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
+	import { SPOT_FILTERS, type SpotFilter } from '$lib/accommodation';
 
 	export let data: PageData;
 	$: ({ houses, isBookingActive, phase, bookingUnlockAt } = data);
+
+	// What the guest is looking for. The wishes live in the URL, so the map can
+	// be shared, works without JavaScript and survives a reload.
+	$: wishes = data.wishes as SpotFilter[];
+	$: matchingHouses = houses?.filter((house) => (house.fittingFree ?? 0) > 0).length ?? 0;
+
+	const wishLink = (filter: SpotFilter, on: boolean) => {
+		const next = on ? wishes.filter((wish) => wish !== filter) : [...wishes, filter];
+		return next.length > 0 ? `/map?w=${next.join(',')}` : '/map';
+	};
 
 	// Closed: a panel like the one in Staging covers the blurred map until
 	// the guest wants to look around (houses still open, read-only).
@@ -106,6 +117,34 @@
 		</div>
 	</div>
 
+	{#if data.houses && !closedPanel}
+		<nav class="wish-bar" aria-label="What are you looking for?">
+			<span class="wish-title">Looking for…</span>
+			{#each SPOT_FILTERS as filter}
+				{@const on = wishes.includes(filter.value)}
+				<a
+					class="wish"
+					class:on
+					href={wishLink(filter.value, on)}
+					data-sveltekit-noscroll
+					aria-current={on ? 'true' : undefined}
+					title={filter.hint ?? ''}
+				>
+					<span aria-hidden="true">{filter.icon}</span>
+					{filter.label}
+				</a>
+			{/each}
+			{#if wishes.length > 0}
+				<span class="wish-result" role="status">
+					{matchingHouses === 0
+						? 'No house has a free spot that fits — the crew may not have filled in every detail.'
+						: `${matchingHouses} ${matchingHouses === 1 ? 'house has' : 'houses have'} a fitting free spot`}
+				</span>
+				<a class="wish-clear" href="/map" data-sveltekit-noscroll>Clear</a>
+			{/if}
+		</nav>
+	{/if}
+
 	{#if data.houses}
 		<div class="map-container">
 			<Map
@@ -114,6 +153,7 @@
 				isBookingActive={data.isBookingActive}
 				phase={data.phase}
 				dimmed={closedPanel}
+				wishes={wishes.length > 0}
 			/>
 		</div>
 	{:else}
@@ -491,6 +531,52 @@
 		font-size: 0.95rem;
 		line-height: 1.5;
 		color: #d4d4d4;
+	}
+
+	.wish-bar {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.5rem clamp(0.5rem, 2vw, 1rem);
+		min-width: 0;
+	}
+	.wish-title {
+		font-size: 0.72rem;
+		font-weight: 900;
+		letter-spacing: 0.08em;
+		color: #8a8f98;
+		text-transform: uppercase;
+	}
+	.wish {
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		border-radius: 999px;
+		padding: 0.2rem 0.65rem;
+		font-size: 0.78rem;
+		color: #dbe3ea;
+		text-decoration: none;
+		background: rgba(255, 255, 255, 0.04);
+		overflow-wrap: anywhere;
+	}
+	.wish:hover,
+	.wish:focus-visible {
+		border-color: rgba(0, 255, 224, 0.6);
+		color: #eafcff;
+	}
+	.wish.on {
+		background: rgba(0, 255, 224, 0.18);
+		border-color: rgba(0, 255, 224, 0.8);
+		color: #b8fff4;
+		font-weight: 700;
+	}
+	.wish-result {
+		font-size: 0.78rem;
+		color: #9fb3c8;
+		overflow-wrap: anywhere;
+	}
+	.wish-clear {
+		font-size: 0.78rem;
+		color: #00ffe0;
 	}
 
 	.special-needs-cta {

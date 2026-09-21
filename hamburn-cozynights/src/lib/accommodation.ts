@@ -14,7 +14,7 @@
  * Nothing is ever guessed: a field nobody filled in stays empty and counts as
  * "not specified", never as "no".
  */
-import { cleanRequestText, type SpecialNeed } from './special-needs';
+import { SPECIAL_NEEDS, cleanRequestText, needLabel, type SpecialNeed } from './special-needs';
 
 export type HouseKind = 'house' | 'hut_group' | 'tent_area' | 'other';
 export type RoomKind = 'room' | 'hut' | 'tent' | 'other';
@@ -250,6 +250,66 @@ export function cleanDescription(raw: unknown): string {
 	return cleanRequestText(raw);
 }
 
+export interface DetailsInput {
+	kind: string;
+	features: Feature[];
+	description: string;
+}
+
+export type DetailsResult =
+	| { ok: true; value: DetailsInput }
+	| { ok: false; value: DetailsInput; error: string };
+
+/**
+ * Reads the details form of a house or room. Never throws; the messages are
+ * written for the crew. The server checks the same rules the file import does.
+ */
+export function parseDetailsForm(form: FormData, level: 'house' | 'room'): DetailsResult {
+	const raw = String(form.get('kind') ?? '').trim();
+	const known = level === 'house' ? isHouseKind(raw) : isRoomKind(raw);
+	const kind = known ? raw : '';
+	const features = readFeatures(form.getAll('features'), level);
+	const description = cleanDescription(form.get('description'));
+	const value: DetailsInput = { kind, features, description };
+
+	if (raw && !known) {
+		return { ok: false, value, error: 'Pick a kind from the list, or leave it open.' };
+	}
+	const clash = FEATURES.find(
+		(feature) =>
+			feature.opposite && features.includes(feature.value) && features.includes(feature.opposite)
+	);
+	if (clash) {
+		return {
+			ok: false,
+			value,
+			error: `"${clash.label}" and "${featureLabel(clash.opposite)}" say the opposite of each other. Tick only one of them.`
+		};
+	}
+	if (description.length > DESCRIPTION_MAX) {
+		return {
+			ok: false,
+			value,
+			error: `The description is too long: at most ${DESCRIPTION_MAX} characters (now ${description.length}).`
+		};
+	}
+	return { ok: true, value };
+}
+
+/** The same for one spot: its bed type and the features of the spot itself. */
+export function parseSpotForm(form: FormData):
+	| { ok: true; value: { bed_type: BedType | ''; features: Feature[] } }
+	| { ok: false; error: string } {
+	const raw = String(form.get('bed_type') ?? '').trim();
+	if (raw && !isBedType(raw)) {
+		return { ok: false, error: 'Pick a bed from the list, or leave it open.' };
+	}
+	return {
+		ok: true,
+		value: { bed_type: raw as BedType | '', features: readFeatures(form.getAll('features'), 'spot') }
+	};
+}
+
 export interface SpotFacts {
 	bedType: BedType | '';
 	/** House, room and spot features together. */
@@ -286,6 +346,18 @@ export function effectiveFeatures(source: FeatureSource): Feature[] {
 
 export function spotFacts(source: FeatureSource & { bedType?: unknown }): SpotFacts {
 	return { bedType: bedType(source.bedType), features: effectiveFeatures(source) };
+}
+
+/**
+ * The same from a list that is already the sum of house, room and spot (what a
+ * page or the ♿ picker was given), so no level filter narrows it again.
+ */
+export function factsOf(type: unknown, features: readonly string[] | undefined): SpotFacts {
+	const chosen = new Set((features ?? []).filter((value): value is Feature => isFeature(value)));
+	return {
+		bedType: bedType(type),
+		features: FEATURES.filter((feature) => chosen.has(feature.value)).map((feature) => feature.value)
+	};
 }
 
 export function hasFeature(facts: SpotFacts, feature: Feature): boolean {
@@ -347,6 +419,36 @@ export function matchNeeds(needs: readonly SpecialNeed[], facts: SpotFacts): Nee
 		}
 	}
 	return match;
+}
+
+/** One need of the open ♿ requests against the free spots that answer it. */
+export interface NeedCapacity {
+	need: SpecialNeed;
+	label: string;
+	/** Open requests that ticked this need. */
+	asked: number;
+	/** Free spots that fit it. */
+	fitting: number;
+	/** Fewer fitting spots than requests: the crew has to free or mark more. */
+	short: boolean;
+}
+
+/**
+ * What the open requests need and what the camp still has free for them.
+ * "Something else" is left out: only a human can answer it.
+ */
+export function needCapacity(
+	open: readonly { needs: readonly SpecialNeed[] }[],
+	spots: readonly { bedType: string; features: readonly string[] }[]
+): NeedCapacity[] {
+	const facts = spots.map((spot) => factsOf(spot.bedType, spot.features));
+	return SPECIAL_NEEDS.filter((need) => need.value !== 'other')
+		.map(({ value }) => {
+			const asked = open.filter((request) => request.needs.includes(value)).length;
+			const fitting = facts.filter((spot) => needFit(value, spot) === 'fits').length;
+			return { need: value, label: needLabel(value), asked, fitting, short: fitting < asked };
+		})
+		.filter((entry) => entry.asked > 0);
 }
 
 /**
@@ -438,7 +540,7 @@ export function spotSummary(facts: SpotFacts, own: readonly Feature[] = []): str
 }
 
 /** How many spots of each bed type: "4 lower bunks · 4 upper bunks". */
-export function bedTypeMix(types: readonly (BedType | '' | undefined)[]): string {
+export function bedTypeMix(types: readonly (string | undefined)[]): string {
 	const counts = new Map<BedType, number>();
 	let unknown = 0;
 	for (const value of types) {

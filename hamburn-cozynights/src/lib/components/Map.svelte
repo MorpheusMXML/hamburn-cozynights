@@ -25,6 +25,8 @@
 	export let layoutLocked: boolean | null = null;
 	/** Guests: blurs the map like in Staging while a panel covers it (Closed). */
 	export let dimmed = false;
+	/** The guest filtered the map: houses without a fitting free spot fade back. */
+	export let wishes = false;
 
 	$: browsable = phase ? phase !== 'staging' : isBookingActive;
 
@@ -384,6 +386,8 @@
 							<MapHouseMarker
 								name={house.name}
 								status={houseMarkerStatus(house)}
+								kind={house.kind ?? ''}
+								faded={wishes && !(house.fittingFree > 0)}
 								labelPosition={labelPositions[house.id]}
 								hovered={hoveredHouseId === house.id}
 								selected={selectedHouseId === house.id}

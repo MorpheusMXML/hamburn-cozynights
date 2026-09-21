@@ -2,6 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
 import { getBookingSettings } from '$lib/server/settings';
+import { bedTypeMix, parseDetailsForm } from '$lib/accommodation';
 import { countSpots } from '$lib/occupancy';
 import { TEMPLATE_LIMITS } from '$lib/template';
 
@@ -32,7 +33,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		// 5. Map statistics 📊 (deactivated spots don't count, locked ones aren't free)
 		const roomsWithStats = rooms.map((room) => ({
 			...room,
-			stats: countSpots(beds.filter((b) => b.room === room.id))
+			stats: countSpots(beds.filter((b) => b.room === room.id)),
+			// "4 × lower bunk · 4 × upper bunk" for the card
+			bedMix: bedTypeMix(beds.filter((b) => b.room === room.id).map((b) => b.bed_type))
 		}));
 
 		return {
@@ -56,6 +59,27 @@ function parseWholeNumber(value: string): number | null {
 }
 
 export const actions: Actions = {
+	/**
+	 * What the house is like: kind, features and description (src/lib/accommodation.ts).
+	 * Allowed in every phase, like the room details: they describe the place.
+	 */
+	saveHouse: async ({ request, params, locals }) => {
+		if (!locals.admin) return fail(403, { message: 'Only admins can change houses.' });
+
+		const details = parseDetailsForm(await request.formData(), 'house');
+		if (!details.ok) return fail(400, { message: details.error });
+
+		try {
+			await locals.pb.collection('houses').update(params.id, details.value);
+			return { success: true };
+		} catch (err) {
+			console.error('[Action:saveHouse] FAILED:', err);
+			return fail(500, {
+				message: 'The server could not save the details. Reload the page and try again.'
+			});
+		}
+	},
+
 	createRoom: async ({ request, locals, params }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can create rooms.' });
 

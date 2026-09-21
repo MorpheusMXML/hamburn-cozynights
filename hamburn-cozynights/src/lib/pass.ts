@@ -43,6 +43,8 @@ export interface PassSummary {
 	room: string;
 	spot: string;
 	burnerName: string;
+	/** What kind of bed it is ("Lower bunk"), empty when nobody said. */
+	bed?: string;
 }
 
 export function isPassCode(value: string): boolean {
