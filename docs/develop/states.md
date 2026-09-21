@@ -193,8 +193,11 @@ there is no socket to subscribe to. The control center polls instead.
   address, with Telegram), guest messages queued / retrying / given up
   (`guest_notify.due` and `attempts`, the states `pb_hooks/lib/notify.js`
   leaves behind), special-needs requests by status, admins and access requests,
-  crew alerts by `alert_status`. One small `getList(1, 1)` per count; each may
-  fail on its own and then reads as `null` (shown as —), it never throws.
+  crew alerts by `alert_status` — and how many of the failed ones came after
+  the last alert that was sent (`failingAlertsFilter`: only those still mean
+  a broken chat, older failures are history). One small `getList(1, 1)` per
+  count; each may fail on its own and then reads as `null` (shown as —), it
+  never throws.
   **`opsSnapshot(pb)`** caches that for `OPS_TTL_MS` (10 s).
 - **`liveStatsSnapshot(pb)`** caches the whole answer for `SNAPSHOT_TTL_MS`
   (3 s) and single-flights concurrent callers: ten open dashboards are one

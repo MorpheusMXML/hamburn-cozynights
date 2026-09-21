@@ -10,6 +10,7 @@ import type PocketBase from 'pocketbase';
 import { BookingService } from '../../src/lib/server/booking';
 import {
 	OPS_FILTERS,
+	failingAlertsFilter,
 	liveStatsSnapshot,
 	readOpsStats,
 	resetStatsCache,
@@ -45,7 +46,7 @@ describe('the camp-wide counts in the real PocketBase', () => {
 			ops.messages.failed,
 			...Object.values(ops.crew)
 		];
-		expect(counts).toHaveLength(14);
+		expect(counts).toHaveLength(15);
 		for (const count of counts) expect(typeof count).toBe('number');
 	});
 
@@ -93,6 +94,24 @@ describe('the camp-wide counts in the real PocketBase', () => {
 		expect(await selects('admin_events', OPS_FILTERS.alertsFailed, failed.id)).toBe(true);
 		expect(await selects('admin_events', OPS_FILTERS.alertsFailed, sent.id)).toBe(false);
 		expect(await selects('admin_events', OPS_FILTERS.alertsQueued, pending.id)).toBe(true);
+	});
+
+	it('calls a failed crew alert history once a later one got through', async () => {
+		const alert = async (alert_status: string) => {
+			const record = await su
+				.collection('admin_events')
+				.create({ action: 'intel_test', actor: 'test', alert_status });
+			// `updated` has millisecond precision: keep the three stamps apart.
+			await new Promise((resolve) => setTimeout(resolve, 15));
+			return record;
+		};
+		const before = await alert('failed');
+		const sent = await alert('sent');
+		const after = await alert('failed');
+		const filter = failingAlertsFilter(sent.updated);
+		expect(await selects('admin_events', filter, before.id)).toBe(false);
+		expect(await selects('admin_events', filter, after.id)).toBe(true);
+		expect(typeof (await readOpsStats(su)).crew.alertsFailing).toBe('number');
 	});
 
 	it('counts an access request apart from the approved admins', async () => {

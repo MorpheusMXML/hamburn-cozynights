@@ -3,6 +3,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
 	deriveLiveStats,
+	failingAlertsFilter,
 	lastBooking,
 	lastCheckIn,
 	liveStatsSnapshot,
@@ -215,7 +216,13 @@ describe('lastBooking and lastCheckIn', () => {
  * PocketBase stand-in for the camp-wide counts: `getList` answers the number
  * of records the filter selects, from plain arrays.
  */
-function opsPb(options: { broken?: string[]; reads?: { ops: number } } = {}) {
+function opsPb(
+	options: {
+		broken?: string[];
+		reads?: { ops: number };
+		alerts?: Record<string, unknown>[];
+	} = {}
+) {
 	const data: Record<string, Record<string, unknown>[]> = {
 		orders: [
 			{ id: 'o1', email: 'a@example.org' },
@@ -239,10 +246,12 @@ function opsPb(options: { broken?: string[]; reads?: { ops: number } } = {}) {
 			{ id: 'a3', role: 'admin' },
 			{ id: 'a4', role: 'pending' }
 		],
-		admin_events: [
-			{ id: 'e1', alert_status: 'sent' },
-			{ id: 'e2', alert_status: 'failed' },
-			{ id: 'e3', alert_status: 'pending' }
+		// e2 failed before the last alert got through (history), e4 after it.
+		admin_events: options.alerts ?? [
+			{ id: 'e1', alert_status: 'sent', updated: '2026-09-21 12:00:00.000Z' },
+			{ id: 'e2', alert_status: 'failed', updated: '2026-09-21 10:00:00.000Z' },
+			{ id: 'e3', alert_status: 'pending', updated: '2026-09-21 11:00:00.000Z' },
+			{ id: 'e4', alert_status: 'failed', updated: '2026-09-21 13:00:00.000Z' }
 		]
 	};
 	// The filters readOpsStats sends, and which records each one selects.
@@ -254,7 +263,16 @@ function opsPb(options: { broken?: string[]; reads?: { ops: number } } = {}) {
 		"due != '' && attempts > 0": (r) => r.due !== '' && Number(r.attempts) > 0,
 		"due = '' && attempts > 0": (r) => r.due === '' && Number(r.attempts) > 0,
 		"alert_status = 'pending'": (r) => r.alert_status === 'pending',
-		"alert_status = 'failed'": (r) => r.alert_status === 'failed'
+		"alert_status = 'failed'": (r) => r.alert_status === 'failed',
+		"alert_status = 'sent'": (r) => r.alert_status === 'sent'
+	};
+	/** `alert_status = 'failed' && updated > "<stamp>"`, as failingAlertsFilter builds it. */
+	const matcher = (filter: string) => {
+		const since = /^alert_status = 'failed' && updated > "(.+)"$/.exec(filter)?.[1];
+		if (since)
+			return (r: Record<string, unknown>) =>
+				r.alert_status === 'failed' && String(r.updated) > since;
+		return FILTERS[filter];
 	};
 	return {
 		collection: (name: string) => {
@@ -262,13 +280,20 @@ function opsPb(options: { broken?: string[]; reads?: { ops: number } } = {}) {
 				throw Object.assign(new Error(`missing collection ${name}`), { status: 404 });
 			};
 			return {
-				getList: async (_page: number, _perPage: number, query: { filter?: string } = {}) => {
+				getList: async (
+					_page: number,
+					perPage: number,
+					query: { filter?: string; sort?: string } = {}
+				) => {
 					if (options.broken?.includes(name)) fail();
 					if (options.reads && name === 'orders' && !query.filter) options.reads.ops++;
-					const records = data[name] ?? [];
-					const match = query.filter ? FILTERS[query.filter] : () => true;
+					const match = query.filter ? matcher(query.filter) : () => true;
 					if (!match) throw new Error(`unexpected filter ${query.filter}`);
-					return { totalItems: records.filter(match).length, items: [] };
+					const records = (data[name] ?? []).filter(match);
+					if (query.sort === '-updated') {
+						records.sort((a, b) => String(b.updated).localeCompare(String(a.updated)));
+					}
+					return { totalItems: records.length, items: records.slice(0, perPage) };
 				},
 				getFullList: async () => {
 					if (options.broken?.includes(name)) fail();
@@ -296,7 +321,7 @@ describe('the camp-wide counts', () => {
 			tickets: { total: 3, withEmail: 2, telegram: 1, mailed: 1 },
 			requests: { pending: 2, approved: 1, declined: 0 },
 			messages: { mailOn: true, telegramOn: false, queued: 2, retrying: 1, failed: 1 },
-			crew: { admins: 3, accessRequests: 1, alertsQueued: 1, alertsFailed: 1 }
+			crew: { admins: 3, accessRequests: 1, alertsQueued: 1, alertsFailed: 2, alertsFailing: 1 }
 		});
 	});
 
@@ -305,7 +330,33 @@ describe('the camp-wide counts', () => {
 		expect(ops.tickets.total).toBe(3);
 		expect(ops.tickets.telegram).toBeNull();
 		expect(ops.messages).toMatchObject({ queued: null, retrying: null, failed: null });
-		expect(ops.crew).toMatchObject({ admins: null, accessRequests: null, alertsFailed: 1 });
+		expect(ops.crew).toMatchObject({ admins: null, accessRequests: null, alertsFailed: 2 });
+	});
+
+	it('stops calling crew alerts failing once one got through after them', async () => {
+		const back = await readOpsStats(
+			opsPb({
+				alerts: [
+					{ id: 'f1', alert_status: 'failed', updated: '2026-09-21 16:00:00.000Z' },
+					{ id: 'f2', alert_status: 'failed', updated: '2026-09-21 17:00:00.000Z' },
+					{ id: 's1', alert_status: 'sent', updated: '2026-09-21 20:40:00.000Z' }
+				]
+			})
+		);
+		expect(back.crew).toMatchObject({ alertsFailed: 2, alertsFailing: 0 });
+		const never = await readOpsStats(
+			opsPb({ alerts: [{ id: 'f1', alert_status: 'failed', updated: '2026-09-21 16:00:00.000Z' }] })
+		);
+		// No alert ever reached the chat: every failure still counts.
+		expect(never.crew).toMatchObject({ alertsFailed: 1, alertsFailing: 1 });
+	});
+
+	it('builds the failing-alerts filter from a PocketBase date only', () => {
+		expect(failingAlertsFilter(null)).toBe("alert_status = 'failed'");
+		expect(failingAlertsFilter('2026-09-21 20:40:00.123Z')).toBe(
+			'alert_status = \'failed\' && updated > "2026-09-21 20:40:00.123Z"'
+		);
+		expect(() => failingAlertsFilter('" || id != "')).toThrow();
 	});
 
 	it('never throws, even when nothing can be read', async () => {

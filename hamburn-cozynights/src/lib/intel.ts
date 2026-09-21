@@ -321,12 +321,14 @@ export function attentionItems(stats: LiveStats, phase: BookingPhase): Attention
 			linkLabel: 'What to do'
 		});
 	}
-	if (positive(ops?.crew.alertsFailed)) {
+	// Only while the chat still refuses them: once an alert gets through again,
+	// the failures are history and stay counted in the Crew card.
+	if (positive(ops?.crew.alertsFailing)) {
 		items.push({
 			key: 'alerts-failed',
 			tone: 'danger',
 			icon: '📣',
-			text: `${plural(ops.crew.alertsFailed, 'crew alert', 'crew alerts')} never reached the crew chat.`,
+			text: `${plural(ops.crew.alertsFailing, 'crew alert', 'crew alerts')} never reached the crew chat, and none got through since.`,
 			href: `${docs}notifications`,
 			linkLabel: 'Check the setup'
 		});

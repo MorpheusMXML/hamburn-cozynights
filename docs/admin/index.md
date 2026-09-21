@@ -54,7 +54,7 @@ true:
 | Line | When | Link |
 | --- | --- | --- |
 | ✉️ *… guest messages could not be delivered* | A booking message still failed after two days of retries. | [Notifications](./notifications) |
-| 📣 *… crew alerts never reached the crew chat* | The crew chat refused an alert five times. | [Notifications](./notifications) |
+| 📣 *… crew alerts never reached the crew chat* | The crew chat refused alerts five times each, and none got through after them — the chat may be unreachable. The line goes away by itself with the next alert that arrives; the Crew card keeps counting the old failures. | [Notifications](./notifications) |
 | ♿ *… special-needs requests wait for a decision* | Requests are waiting. | *Special needs* |
 | 🔑 *… admin sign-ins wait for a superuser's approval* | Somebody signed in with Google without an invite. | [Admin access](./access) |
 | 🎟 *… tickets have no spot, and booking is closed* | After booking closed: guests with a ticket but no spot. | *Tickets* |
@@ -101,7 +101,7 @@ Counts for the whole camp — the House filter doesn't touch them:
 | 🎟 **Tickets** | Loaded, with a spot, without a spot, with an e-mail address, Telegram linked. |
 | ✉️ **Guest messages** | Whether e-mail and the Telegram bot are on; guests e-mailed; messages waiting to go out, being retried, failed for good. |
 | ♿ **Special-needs requests** | Waiting for a decision, approved, declined. |
-| 👥 **Crew** | Admins, sign-ins waiting for approval, crew alerts waiting and failed. |
+| 👥 **Crew** | Admins, sign-ins waiting for approval, crew alerts waiting and failed (red only while no alert has got through since). |
 
 A number the server could not read right now shows as —; the rest of the panel
 still works.

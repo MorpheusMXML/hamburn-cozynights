@@ -241,7 +241,14 @@ const ops = (
 		failed: 0,
 		...overrides.messages
 	},
-	crew: { admins: 2, accessRequests: 0, alertsQueued: 0, alertsFailed: 0, ...overrides.crew }
+	crew: {
+		admins: 2,
+		accessRequests: 0,
+		alertsQueued: 0,
+		alertsFailed: 0,
+		alertsFailing: 0,
+		...overrides.crew
+	}
 });
 
 function camp(overrides: Partial<LiveStats> = {}): LiveStats {
@@ -280,7 +287,7 @@ describe('what needs attention', () => {
 				ops: ops({
 					messages: { failed: 2, retrying: 1 },
 					requests: { pending: 3 },
-					crew: { alertsFailed: 1, accessRequests: 1 }
+					crew: { alertsFailed: 1, alertsFailing: 1, accessRequests: 1 }
 				})
 			}),
 			'live'
@@ -296,6 +303,19 @@ describe('what needs attention', () => {
 		]);
 		expect(items[2].text).toBe('3 special-needs requests wait for a decision.');
 		expect(items[6].text).toBe('3 tickets have no spot yet.');
+	});
+
+	it('warns about crew alerts only while none got through since', () => {
+		const history = camp({ ops: ops({ crew: { alertsFailed: 10, alertsFailing: 0 } }) });
+		expect(attentionItems(history, 'live')).toEqual([]);
+		const stuck = camp({ ops: ops({ crew: { alertsFailed: 10, alertsFailing: 2 } }) });
+		expect(attentionItems(stuck, 'live')).toEqual([
+			expect.objectContaining({
+				key: 'alerts-failed',
+				tone: 'danger',
+				text: '2 crew alerts never reached the crew chat, and none got through since.'
+			})
+		]);
 	});
 
 	it('treats a ticket without a spot as normal while booking is live, not once it closed', () => {

@@ -168,8 +168,26 @@ export const OPS_FILTERS = {
 	retrying: "due != '' && attempts > 0",
 	failed: "due = '' && attempts > 0",
 	alertsQueued: "alert_status = 'pending'",
-	alertsFailed: "alert_status = 'failed'"
+	alertsFailed: "alert_status = 'failed'",
+	alertsSent: "alert_status = 'sent'"
 } as const;
+
+/**
+ * Failed crew alerts with nothing delivered after them: marked failed after
+ * the last alert that reached the chat. Once any alert gets through again, the
+ * older failures are history (the card still counts them), not a broken chat
+ * — a Telegram group that became a supergroup lost ten alerts on 21 Sep, and
+ * the panel kept them red long after the bot was back.
+ *
+ * `since` is the `updated` stamp of the last sent alert as PocketBase wrote it
+ * ("2026-09-21 18:00:00.123Z"), or null when no alert was ever sent.
+ */
+export function failingAlertsFilter(since: string | null): string {
+	if (since === null) return OPS_FILTERS.alertsFailed;
+	// Only a PocketBase date goes into the filter: nothing in it needs escaping.
+	if (!/^[0-9TZ:. -]+$/.test(since)) throw new Error(`not a PocketBase date: ${since}`);
+	return `${OPS_FILTERS.alertsFailed} && updated > "${since}"`;
+}
 
 /**
  * The camp-wide counts. Each one is its own small query, and each one may
@@ -207,6 +225,20 @@ export async function readOpsStats(pb: TypedPocketBase): Promise<OpsStats> {
 			return Object.fromEntries(values.map((value) => [value, null])) as Record<T, Count>;
 		}
 	};
+	/** The `updated` stamp of the last alert that reached the chat; null: none yet, undefined: unknown. */
+	const lastSentAlert = async (): Promise<string | null | undefined> => {
+		try {
+			const page = await pb.collection('admin_events').getList<{ updated: string }>(1, 1, {
+				filter: OPS_FILTERS.alertsSent,
+				sort: '-updated',
+				fields: 'updated',
+				requestKey: null
+			});
+			return page.items[0]?.updated ?? null;
+		} catch {
+			return undefined;
+		}
+	};
 	const readSettings = async () => {
 		try {
 			return await pb
@@ -229,7 +261,8 @@ export async function readOpsStats(pb: TypedPocketBase): Promise<OpsStats> {
 		requests,
 		roles,
 		alertsQueued,
-		alertsFailed
+		alertsFailed,
+		lastSent
 	] = await Promise.all([
 		readSettings(),
 		count('orders'),
@@ -242,8 +275,17 @@ export async function readOpsStats(pb: TypedPocketBase): Promise<OpsStats> {
 		tally('special_requests', 'status', ['pending', 'approved', 'declined'] as const),
 		tally('admins', 'role', ['superuser', 'admin', 'pending'] as const),
 		count('admin_events', OPS_FILTERS.alertsQueued),
-		count('admin_events', OPS_FILTERS.alertsFailed)
+		count('admin_events', OPS_FILTERS.alertsFailed),
+		lastSentAlert()
 	]);
+	let alertsFailing: Count = null;
+	if (lastSent !== undefined) {
+		try {
+			alertsFailing = await count('admin_events', failingAlertsFilter(lastSent));
+		} catch {
+			alertsFailing = null;
+		}
+	}
 
 	const approved =
 		roles.superuser === null || roles.admin === null ? null : roles.superuser + roles.admin;
@@ -257,7 +299,13 @@ export async function readOpsStats(pb: TypedPocketBase): Promise<OpsStats> {
 			retrying,
 			failed
 		},
-		crew: { admins: approved, accessRequests: roles.pending, alertsQueued, alertsFailed }
+		crew: {
+			admins: approved,
+			accessRequests: roles.pending,
+			alertsQueued,
+			alertsFailed,
+			alertsFailing
+		}
 	};
 }
 

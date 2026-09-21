@@ -103,7 +103,8 @@
 					{
 						label: 'Crew alerts failed',
 						value: count(crew?.alertsFailed),
-						state: flag(crew?.alertsFailed, 'danger')
+						// Red only while none got through since; older failures are history.
+						state: flag(crew?.alertsFailing, 'danger')
 					}
 				]
 			}

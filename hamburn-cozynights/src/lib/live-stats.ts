@@ -60,6 +60,11 @@ export interface OpsStats {
 		alertsQueued: Count;
 		/** Crew-chat alerts given up after their last retry. */
 		alertsFailed: Count;
+		/**
+		 * Of those, the ones with no alert delivered after them: the crew chat may
+		 * be unreachable right now. 0 once any alert gets through again.
+		 */
+		alertsFailing: Count;
 	};
 }
 
