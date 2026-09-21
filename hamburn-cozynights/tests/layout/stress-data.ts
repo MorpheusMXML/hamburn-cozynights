@@ -12,6 +12,7 @@ import { fileURLToPath } from 'url';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
 import { BURNER_NAME_MAX } from '../../src/lib/special-needs';
 import { TEMPLATE_LIMITS } from '../../src/lib/template';
+import { BED_TYPES, DESCRIPTION_MAX } from '../../src/lib/accommodation';
 import { TICKET_LIMITS } from '../../src/lib/tickets';
 
 export const TEXTS = {
@@ -28,6 +29,8 @@ export const TEXTS = {
 	customerLong: 'Maximilian-Alexander Freiherr von und zu Musterstadt-Langenhagen-Ost',
 	emailLong:
 		'maximilian.alexander.freiherr.von.und.zu.musterstadt@a-very-long-subdomain.example.org',
+	descriptionLong:
+		'Die Waldhüttengruppe liegt hinter dem Wäscherei- und Sanitärgebäude, etwa fünfzig Meter den Waldweg hinauf: Duschen und Toiletten sind im Waschhaus, nicht in den Hütten selbst. Der Weg ist geschottert und bei Regen rutschig, eine Taschenlampe ist abends unbedingt zu empfehlen. Die Hütten werden nicht geheizt; bitte einen warmen Schlafsack mitbringen, in den Nächten Ende Oktober wird es am Brahmsee empfindlich kalt. Steckdosen gibt es nur im Gemeinschaftsraum des Haupthauses.',
 	requestText:
 		'I use a wheelchair, so I need step-free access from the parking area to the room and to a toilet. A lower bed would be great, too — thank you so much for sorting this out!'
 };
@@ -47,6 +50,7 @@ export const BED_LABELS = [
 
 for (const [what, value, max] of [
 	['house name', TEXTS.houseLong, TEMPLATE_LIMITS.houseNameLength],
+	['description', TEXTS.descriptionLong, DESCRIPTION_MAX],
 	['room name', TEXTS.roomLong, TEMPLATE_LIMITS.roomNameLength],
 	['burner name', TEXTS.burnerLong, BURNER_NAME_MAX],
 	['customer name', TEXTS.customerLong, TICKET_LIMITS.nameLength],
@@ -202,7 +206,16 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 	// stay on the map. Far enough apart that labels don't cover each other.
 	const house = await pb
 		.collection('houses')
-		.create({ name: `${TEXTS.houseLong.slice(0, 90)} ${tag}`, x: 12, y: 330 });
+		.create({
+			name: `${TEXTS.houseLong.slice(0, 90)} ${tag}`,
+			x: 12,
+			y: 330,
+			// The details of a place at their worst: every chip a house can have
+			// and a description at the limit (src/lib/accommodation.ts).
+			kind: 'hut_group',
+			features: ['wheelchair', 'ground_floor', 'toilets_inside', 'heated', 'quiet'],
+			description: TEXTS.descriptionLong
+		});
 	const otherHouseIds: string[] = [];
 	const otherRoomIds: string[] = [];
 	for (const [name, x, y] of [
@@ -224,7 +237,10 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		name: TEXTS.roomLong,
 		room_number: TEMPLATE_LIMITS.roomNumber,
 		house: house.id,
-		amount_beds: BED_LABELS.length
+		amount_beds: BED_LABELS.length,
+		kind: 'hut',
+		features: ['wheelchair', 'ground_floor', 'own_bathroom', 'heated', 'quiet', 'power'],
+		description: TEXTS.descriptionLong
 	});
 	const beds: Record<string, string> = {};
 	for (const label of BED_LABELS) {
@@ -234,7 +250,10 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 			enabled: true,
 			occupied: false,
 			is_locked: label === 'Upper 1',
-			is_special: label.startsWith('Doppelbett')
+			is_special: label.startsWith('Doppelbett'),
+			// One of every kind of bed, and a socket at the longest label.
+			bed_type: BED_TYPES[BED_LABELS.indexOf(label) % BED_TYPES.length].value,
+			features: label.startsWith('Doppelbett') ? ['power'] : []
 		});
 		beds[label] = bed.id;
 	}
