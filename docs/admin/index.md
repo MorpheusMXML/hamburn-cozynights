@@ -102,13 +102,26 @@ the ticket search, message texts — says no the same way:
 - the reason stands **right under the field**, starting with ⚠️;
 - a refusal about the whole form (the server couldn't be reached, the layout is
   locked) appears as a **red box** above the buttons;
-- a dialog that says no — *Switch not changed*, *🔒 Locked during Live Booking* —
-  rings a few times in red or orange before it holds still. Dialogs that only
-  ask (*Delete this house?*) stay calm.
+- a dialog that says no — *Switch not changed*, *House not deleted* — rings a
+  few times in red or orange before it holds still. Dialogs that only ask
+  (*Delete this house?*) stay calm.
 
 The red disappears the moment you start correcting the field. Clicking the
 button again with the same mistake nudges the field again — it never fails
 silently.
+
+### Locked: not now
+
+During Live Booking and after booking closed, everything that changes the camp
+layout is locked (see [below](#during-live-booking-and-after-it-closed)). Those
+buttons and fields don't disappear: they stay where they are, **greyed out with
+a small padlock**, and they still answer. Click one or type into the field and
+it shakes its head once, the padlock rattles, and a small bubble next to it says
+why and who can lift the lock — for example *Locked during Live Booking: … To
+delete spots, a superuser has to switch back to Staging Mode first.* Spot
+buttons add what works instead (*lock it 🔒*). The bubble goes away by itself
+after a few seconds, with <kbd>Esc</kbd> or a click elsewhere. Hovering a
+locked control shows the same title.
 
 > [!TIP]
 > On a ticket, a half-typed e-mail address isn't an error yet: the field only
@@ -129,7 +142,7 @@ When the layout has gaps, a red **RED ALERT: THE CAMP LAYOUT IS INCOMPLETE** pan
 
 ## Map view: the editor
 
-In Staging Mode the map is a live editor. A status bar reads *🛠 EDITOR ACTIVE*; during Live Booking and after booking closed it switches to *🔒 LOCKED* and the map becomes read-only.
+In Staging Mode the map is a live editor. A status bar reads *🛠 EDITOR ACTIVE* next to an open padlock, and while an opening time is armed it says when the layout will lock. During Live Booking and after booking closed the padlock swings shut, the bar switches to *LOCKED* and the map becomes read-only: a dragged pin shakes its head and stays put, a click on an empty place starts no new house, and the *HOUSE INTEL* sidebar turns *VIEW ONLY* — name, position, <kbd>MOVE PIN</kbd> and <kbd>SYNC MODULE</kbd> greyed out, <kbd>CLOSE</kbd> instead of *ABORT*. Each of them [says why](#locked-not-now) when you try it. If the phase changes while the page is open (the timer opens booking, a superuser switches), the page locks or unlocks in place.
 
 Pins are teal while a house has free spots, red when none is left, and grey while it has no active spots at all.
 
@@ -156,7 +169,7 @@ Every house as a card with its occupancy badge (*n spots free*, *Fully booked* o
 
 ![Control Center during Live Booking](../assets/screenshots/admin-live.webp)
 
-The Control Center stays fully usable for watching: statistics, occupancy, template export. Structural buttons are greyed out and refused by the server. What you can still change: on the [room page](./camp-layout#spots), lock or unlock single spots and mark spots ♿ special or normal; on ♿ **Special needs**, decide requests and book spots for them.
+The Control Center stays fully usable for watching: statistics, occupancy, template export. Structural buttons and fields stay in place, greyed out with a padlock, and [explain themselves](#locked-not-now) when you try them; the server refuses those changes too. The house, room and new-house pages say at the top whether the layout can be changed right now. What you can still change: on the [room page](./camp-layout#spots), lock or unlock single spots and mark spots ♿ special or normal; on ♿ **Special needs**, decide requests and book spots for them.
 
 ## Next
 

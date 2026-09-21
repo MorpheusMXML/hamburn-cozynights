@@ -56,4 +56,4 @@ Add an entry to `PAGES` in `tests/layout/pages.test.ts`: the path, who looks at 
 
 ### When something is meant to overflow
 
-Mark the element with `data-layout-ignore` (moving or decorative text whose clipping is the effect itself) and say why in a comment. Backgrounds meant to lie under floating controls, like the camp map, are listed as `CANVAS` in the test: their text may be covered, but not cut off.
+Mark the element with `data-layout-ignore` (moving or decorative text whose clipping is the effect itself) and say why in a comment. Backgrounds meant to lie under floating controls, like the camp map, are listed as `CANVAS` in the test: their text may be covered, but not cut off. A small floating layer that covers the page on purpose, like the lock hint, carries `data-layout-overlay` (`OVERLAYS` in the test): what lies under it doesn't count as covered, its own text is still measured.
