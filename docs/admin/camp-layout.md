@@ -3,7 +3,7 @@
 The camp is a simple tree: **houses** on the map contain **rooms**, and rooms contain **spots**, one per bed.
 
 > [!IMPORTANT] Staging only
-> All structural changes need Staging Mode. During Live Booking and after booking closed the server refuses them. Only locking/unlocking 🔒 and marking spots ♿ special or normal still work. See [Staging, Live Booking & Closed](../guide/phases).
+> All structural changes need Staging Mode. During Live Booking and after booking closed the server refuses them. Only locking/unlocking 🔒 and marking spots ♿ special or normal still work. The pages show it: a line on top says whether the layout can be changed, and every locked button or field is greyed out with a padlock and [says why](./index#locked-not-now) when you try it. See [Staging, Live Booking & Closed](../guide/phases).
 
 ## Houses
 

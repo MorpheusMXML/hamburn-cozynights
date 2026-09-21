@@ -126,6 +126,50 @@ animation runs for 1 ms and lands on the steady glow; the nudge is skipped.
 refused states of the start page, the special-needs form, the new-house form
 and the add-room form in both engines.
 
+## Locked controls
+
+Some controls exist but can't be used right now. During Live Booking and after
+booking closed the camp layout is locked: adding, moving, renaming and deleting
+houses, rooms and spots, (de)activating spots and marking them taken is refused
+(`isLayoutLocked`, the actions and `pb_hooks/cozy_layout.pb.js` decide — the UI
+only shows it). Such a control stays **where it is, greyed out with a
+padlock**, and a try is answered right next to it. Don't hide it, and don't
+use `disabled` for it: a disabled button can't be focused or clicked, so it
+could never say why.
+
+| Piece | Where | Does |
+| --- | --- | --- |
+| `layoutLock(phase, isSuperuser)` | `$lib/layout-lock.ts` | the hint for one kind of change: `lock('delete spots')` → *Locked during Live Booking* and who can lift it; an optional tip (`LOCK_SPOT_TIP`: lock the spot instead) |
+| `lockAttrs(hint)` | `$lib/layout-lock.ts` | what to spread on the control: `aria-disabled="true"`, `title`, `data-locked` and the hint; `{}` while unlocked. Rendered on the server, so a locked page never flashes up as editable |
+| `LockHintHost.svelte` | admin layout, once | one capture listener for the admin area: a click, <kbd>Enter</kbd> or a typed key on a `[data-locked]` element never reaches the control's handler or the browser (no submit, no navigation); the control shakes, its padlock rattles, a bubble explains, a live region reads it out |
+| `showLockHint(anchor, hint)` | `$lib/layout-lock.ts` | the same bubble for what isn't a locked control: the map's `layoutLocked` event (a pin that can't be dragged, a click on an empty place) |
+| "Locked controls" | `src/routes/state.css` | the look: greyed out, a padlock badge on buttons and inside fields, no hover lift or glow; `data-lock-rattle` plays the refusal with `translate` (`transform: none !important` switches the hover lifts off and would outrank an animated transform) |
+| `LayoutLockNotice.svelte` | house, room, new-house page | the line on top: quiet in Staging (*the layout can be changed*, and when an armed opening locks it), orange during Live Booking and Closed with what is locked, what still works and who can unlock |
+| `LockGlyph.svelte` | notices, map status bar, hint | the padlock that swings shut or open when the phase changes while the page is open |
+
+```svelte
+<script lang="ts">
+	import { layoutLock, lockAttrs } from '$lib/layout-lock';
+	$: lock = isLayoutLocked ? layoutLock(phase, isSuperuser) : null;
+</script>
+
+<input name="label" readonly={!!lock} {...lockAttrs(lock?.('add spots'))} />
+<button class="btn-icon" title="Delete this spot" {...lockAttrs(lock?.('delete spots'))}>
+	🗑 DELETE
+</button>
+```
+
+A field gets `readonly` as well. Put the spread **after** the control's own
+`title`: while locked, the lock's title replaces it. And keep the server check
+— the look is a courtesy, not the rule.
+
+`tests/layout-lock.test.ts` covers texts, attributes, keys and where the
+bubble goes; the layout suite measures the house and room pages in both
+states, the read-only house editor and an open hint in both engines; the
+map's e2e test drags a pin and types coordinates during Live Booking.
+Playwright treats `aria-disabled="true"` as disabled: a test that clicks a
+locked control needs `click({ force: true })`, or focuses it and presses a key.
+
 ## Live numbers
 
 The browser never talks to PocketBase (see `$lib/server/pocketbase.ts`), so

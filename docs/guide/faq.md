@@ -155,7 +155,7 @@ First the phase: guests book only during 🎪 Live Booking. Then check the spot 
 :::
 
 ::: details A house won't move when I drag it
-Either the layout is locked (Live Booking, or booking closed: dragging is switched off), or you are pushing it right on top of another house: houses keep a small distance from each other. Wait for Staging, or drop it a little further away.
+Either the layout is locked (Live Booking, or booking closed: the pin shakes its head and a small bubble next to it says so), or you are pushing it right on top of another house: houses keep a small distance from each other. Wait for Staging, or drop it a little further away.
 :::
 
 ::: details I can't find "Clear all bookings", or I can't apply a template

@@ -37,7 +37,10 @@ summary,
 		border-color 0.3s ease,
 		box-shadow 0.3s ease,
 		background-color 0.3s ease,
-		transform 0.2s ease;
+		transform 0.2s ease,
+		/* A control that locks or unlocks while the page is open fades over. */
+		filter 0.4s ease,
+		opacity 0.4s ease;
 }
 
 /* Laser Glass Effect for the large surfaces. The card grids (one card per
@@ -109,7 +112,8 @@ summary,
 	animation: pulse-glow 3s infinite ease-in-out;
 }
 .btn-ignite:disabled::after,
-.btn-confirm:disabled::after {
+.btn-confirm:disabled::after,
+.btn-ignite[data-locked]::after {
 	display: none;
 }
 @media (prefers-reduced-motion: reduce) {

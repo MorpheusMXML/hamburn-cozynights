@@ -2,7 +2,10 @@
 	import type { PageData, SubmitFunction } from './$types';
 	import type { ActionResult } from '@sveltejs/kit';
 	import AddBedForm from '$lib/components/admin/AddBedForm.svelte';
-	import { fade, fly } from 'svelte/transition';
+	import LayoutLockNotice from '$lib/components/admin/LayoutLockNotice.svelte';
+	import LockGlyph from '$lib/components/LockGlyph.svelte';
+	import { LOCK_SPOT_TIP, layoutLock, lockAttrs } from '$lib/layout-lock';
+	import { fade, fly, scale } from 'svelte/transition';
 	import { enhance } from '$app/forms';
 	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
 	import { formatBerlin } from '$lib/booking-phase';
@@ -10,7 +13,10 @@
 	export let data: PageData;
 	export let form: { message?: string } | null = null;
 	// Only admins reach this page (hooks + layout)
-	$: ({ room, beds, isLayoutLocked, phase } = data);
+	$: ({ room, beds, isLayoutLocked, phase, isSuperuser, booking } = data);
+	// Live Booking and Closed: locking 🔒 and ♿ still work, everything else on
+	// the spots is locked; those buttons stay and explain themselves.
+	$: lock = isLayoutLocked ? layoutLock(phase, isSuperuser) : null;
 	$: house = room.expand?.house;
 	// Guests the crew checked in at arrival (the booking pass check).
 	$: checkedIn = beds.filter((b) => !!b.order && !!b.checked_in_at).length;
@@ -128,14 +134,14 @@
 		<div class="error-banner form-error" role="alert">{form.message}</div>
 	{/if}
 
-	{#if isLayoutLocked}
-		<div class="lockdown-notice" role="status">
-			🔒 {phase === 'closed' ? 'Booking is closed' : 'Live Booking is active'}. You can still lock
-			🔒 and unlock 🔓 spots and mark them ♿ special or normal. To add, delete, deactivate or free
-			spots, a superuser has to switch back to Staging Mode in the
-			<a href="/admin">Control Center</a>.
-		</div>
-	{/if}
+	<LayoutLockNotice
+		locked={isLayoutLocked}
+		{phase}
+		{isSuperuser}
+		next={booking?.next}
+		blocks="Spots can't be added, deleted, deactivated or marked taken or free."
+		still="Locking 🔒 and unlocking 🔓 spots and marking them ♿ special or normal still work."
+	/>
 
 	<div class="content-split">
 		<aside class="info-column" in:fly={{ x: -20, duration: 500, delay: 200 }}>
@@ -158,13 +164,18 @@
 				</div>
 			</div>
 
-			<section class="form-panel orange" class:disabled={isLayoutLocked}>
+			<section class="form-panel orange" class:locked={isLayoutLocked}>
 				<header class="panel-header">
 					<span class="laser-dot orange"></span>
 					<h3>ADD SPOT ➕</h3>
+					{#if isLayoutLocked}
+						<span class="lock-chip" transition:scale={{ start: 0.6, duration: 250 }}>
+							<LockGlyph size={11} /> STAGING ONLY
+						</span>
+					{/if}
 				</header>
 				<p class="hint">Define spot label (e.g. "Upper Deck")</p>
-				<AddBedForm disabled={isLayoutLocked} />
+				<AddBedForm lock={lock?.('add spots') ?? null} />
 			</section>
 		</aside>
 
@@ -266,11 +277,10 @@
 								<button
 									class="btn-icon"
 									class:orange={bed.enabled === false}
-									class:disabled={isLayoutLocked}
-									disabled={isLayoutLocked}
 									title={bed.enabled === false
 										? 'Activate: the spot counts and can be booked'
 										: 'Deactivate: the spot is not in use and does not count'}
+									{...lockAttrs(lock?.('activate or deactivate spots', LOCK_SPOT_TIP))}
 								>
 									<span class="btn-emoji">{bed.enabled === false ? '⚡️' : '❄️'}</span>
 									<span class="btn-text">{bed.enabled === false ? 'ACTIVATE' : 'DEACTIVATE'}</span>
@@ -285,8 +295,13 @@
 									title={bed.occupied
 										? 'Free this spot'
 										: 'Mark this spot as taken without a ticket'}
-									disabled={isLayoutLocked || bed.enabled === false}
-									class:disabled={isLayoutLocked || bed.enabled === false}
+									disabled={!lock && bed.enabled === false}
+									class:disabled={!lock && bed.enabled === false}
+									{...lockAttrs(
+										bed.occupied
+											? lock?.('free booked spots')
+											: lock?.('mark spots as taken', LOCK_SPOT_TIP)
+									)}
 								>
 									<span class="btn-emoji">🔄</span>
 									<span class="btn-text">{bed.occupied ? 'FREE' : 'TAKEN'}</span>
@@ -298,8 +313,7 @@
 								<button
 									class="btn-icon vanish"
 									title="Delete this spot"
-									disabled={isLayoutLocked}
-									class:disabled={isLayoutLocked}
+									{...lockAttrs(lock?.('delete spots'))}
 								>
 									<span class="btn-emoji">🗑</span>
 									<span class="btn-text">DELETE</span>
@@ -477,24 +491,25 @@
 	.form-panel.orange {
 		border-top: 2px solid #fb923c;
 	}
-	.form-panel.disabled {
-		opacity: 0.4;
-		filter: grayscale(1);
-		pointer-events: none;
+	.form-panel.locked .laser-dot.orange {
+		background: #555;
+		box-shadow: none;
 	}
-	.lockdown-notice {
+	.lock-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin-left: auto;
+		padding: 3px 8px;
+		border-radius: 6px;
+		border: 1px solid rgba(251, 146, 60, 0.5);
 		background: rgba(251, 146, 60, 0.08);
-		border: 1px solid rgba(251, 146, 60, 0.3);
 		color: #fb923c;
-		padding: 1rem 1.5rem;
-		border-radius: 12px;
-		font-weight: 700;
-		font-size: 0.85rem;
-		line-height: 1.5;
-		margin-bottom: 2rem;
-	}
-	.lockdown-notice a {
-		color: #fdba74;
+		font-size: 0.6rem;
+		font-weight: 900;
+		letter-spacing: 1px;
+		white-space: nowrap;
+		--lock-glyph-hole: #1a120b;
 	}
 	.panel-header {
 		display: flex;
@@ -679,21 +694,21 @@
 		opacity: 0.3;
 		cursor: not-allowed !important;
 	}
-	.btn-icon:hover:not(.disabled) {
+	.btn-icon:hover:not(.disabled, [data-locked]) {
 		color: #fff;
 		transform: scale(1.05);
 	}
-	.btn-icon.turquoise:hover:not(.disabled) {
+	.btn-icon.turquoise:hover:not(.disabled, [data-locked]) {
 		border-color: #2dd4bf;
 		color: #2dd4bf;
 		box-shadow: 0 0 10px rgba(45, 212, 191, 0.2);
 	}
-	.btn-icon.orange:hover:not(.disabled) {
+	.btn-icon.orange:hover:not(.disabled, [data-locked]) {
 		border-color: #fb923c;
 		color: #fb923c;
 		box-shadow: 0 0 10px rgba(251, 146, 60, 0.2);
 	}
-	.btn-icon.pink:hover:not(.disabled),
+	.btn-icon.pink:hover:not(.disabled, [data-locked]),
 	.btn-icon.pink.active {
 		border-color: #f472b6;
 		color: #f472b6;
@@ -707,7 +722,7 @@
 		display: block;
 		color: #2dd4bf;
 	}
-	.btn-icon.vanish:hover:not(.disabled) {
+	.btn-icon.vanish:hover:not(.disabled, [data-locked]) {
 		border-color: #f87171;
 		color: #f87171;
 		background: #211;

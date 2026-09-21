@@ -4,8 +4,10 @@
 	import { toast } from '$lib/dialogs';
 	import { revealInvalid } from '$lib/field-alert';
 	import { TEMPLATE_LIMITS } from '$lib/template';
+	import { lockAttrs, type LockHint } from '$lib/layout-lock';
 
-	export let disabled = false;
+	/** The layout is locked: the fields are read-only and say why when tried. */
+	export let lock: LockHint | null = null;
 
 	type FieldErrors = { name?: string; room_number?: string; amount_beds?: string };
 
@@ -43,6 +45,11 @@
 	}
 
 	const handleSubmit: SubmitFunction = ({ formData, formElement, cancel }) => {
+		if (lock) {
+			// LockHintHost stops the clicks; this is the net for anything else.
+			cancel();
+			return;
+		}
 		formError = '';
 		errors = validate(formData);
 		const firstInvalid = Object.keys(errors)[0];
@@ -98,7 +105,8 @@
 				aria-invalid={!!errors.name}
 				aria-describedby={errors.name ? 'room-name-error' : undefined}
 				on:input={() => (errors = { ...errors, name: undefined })}
-				{disabled}
+				readonly={!!lock}
+				{...lockAttrs(lock)}
 			/>
 			{#if errors.name}
 				<p class="field-error" id="room-name-error" role="alert">{errors.name}</p>
@@ -118,7 +126,8 @@
 					aria-invalid={!!errors.room_number}
 					aria-describedby={errors.room_number ? 'room-number-error' : undefined}
 					on:input={() => (errors = { ...errors, room_number: undefined })}
-					{disabled}
+					readonly={!!lock}
+					{...lockAttrs(lock)}
 				/>
 				{#if errors.room_number}
 					<p class="field-error" id="room-number-error" role="alert">{errors.room_number}</p>
@@ -137,7 +146,8 @@
 					aria-invalid={!!errors.amount_beds}
 					aria-describedby={errors.amount_beds ? 'room-beds-error' : undefined}
 					on:input={() => (errors = { ...errors, amount_beds: undefined })}
-					{disabled}
+					readonly={!!lock}
+					{...lockAttrs(lock)}
 				/>
 				{#if errors.amount_beds}
 					<p class="field-error" id="room-beds-error" role="alert">{errors.amount_beds}</p>
@@ -152,8 +162,9 @@
 		<button
 			type="submit"
 			class="btn-ignite"
-			class:disabled={disabled || submitting}
-			disabled={disabled || submitting}
+			class:disabled={submitting}
+			disabled={submitting}
+			{...lockAttrs(lock)}
 		>
 			{submitting ? 'IGNITING…' : 'IGNITE ROOM ✨'}
 		</button>
@@ -212,10 +223,6 @@
 		outline: none;
 		border-color: #2dd4bf;
 		box-shadow: 0 0 10px rgba(45, 212, 191, 0.2);
-	}
-	input:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
 	}
 
 	.btn-ignite {

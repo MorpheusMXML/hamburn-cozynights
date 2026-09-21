@@ -1,3 +1,14 @@
+<script lang="ts" module>
+	/**
+	 * The editor refused a gesture because the layout is locked: the page
+	 * explains it next to `anchor` (the pin, or where the map was clicked).
+	 */
+	export interface LayoutLockedDetail {
+		change: 'move' | 'add';
+		anchor: Element | { x: number; y: number };
+	}
+</script>
+
 <script lang="ts">
 	import MapHouseMarker from './MapHouseMarker.svelte';
 	import { houseMarkerStatus } from '$lib/occupancy';
@@ -12,6 +23,7 @@
 		screenToMap
 	} from '$lib/map-geometry';
 	import { toast } from '$lib/dialogs';
+	import { prefersReducedMotion } from '$lib/field-alert';
 	import { goto } from '$app/navigation';
 	import { createEventDispatcher } from 'svelte';
 	import type { BookingPhase } from '$lib/booking-phase';
@@ -52,7 +64,29 @@
 	// The layout can only be edited in the admin's editor during Staging.
 	$: canEditLayout = isEditorMode && !(layoutLocked ?? isBookingActive);
 
-	const dispatch = createEventDispatcher();
+	const dispatch = createEventDispatcher<{
+		layoutLocked: LayoutLockedDetail;
+		locationSelected: { x: number; y: number };
+		houseMoved: { id: string; x: number; y: number };
+		renameHouse: any;
+		deleteHouse: any;
+	}>();
+
+	/** A pin that can't move right now shakes its head; the page says why. */
+	function refuseMove(group: Element) {
+		const shaker = group.querySelector('.shaker');
+		if (shaker && typeof shaker.animate === 'function' && !prefersReducedMotion()) {
+			// Map units: as big on a phone as on a laptop, like the pin itself.
+			const step = 6 * markerScale;
+			shaker.animate(
+				[0, -step, step * 0.8, -step * 0.5, step * 0.25, 0].map((dx) => ({
+					transform: `translateX(${dx}px)`
+				})),
+				{ duration: 420, easing: 'ease-in-out' }
+			);
+		}
+		dispatch('layoutLocked', { change: 'move', anchor: group.querySelector('.pin') ?? group });
+	}
 
 	// Mouse Glow State
 	let mouseX = 0;
@@ -154,9 +188,10 @@
 			if (!canEditLayout) {
 				// Someone tries to move a house while the layout is locked: say so
 				// instead of silently doing nothing.
+				const group = event.currentTarget as Element;
 				endGesture(event);
 				suppressNextClick = true;
-				dispatch('layoutLocked');
+				refuseMove(group);
 				return;
 			}
 			gesture.dragging = true;
@@ -262,7 +297,7 @@
 		if (!step || !isEditorMode) return;
 		event.preventDefault();
 		if (!canEditLayout) {
-			dispatch('layoutLocked');
+			refuseMove(event.currentTarget as Element);
 			return;
 		}
 		const size = event.shiftKey ? 10 : 1;
@@ -289,7 +324,7 @@
 		}
 		if (!isEditorMode) return;
 		if (!canEditLayout) {
-			dispatch('layoutLocked');
+			dispatch('layoutLocked', { change: 'add', anchor: { x: event.clientX, y: event.clientY } });
 			return;
 		}
 		const point = toMapPoint(event);
@@ -380,18 +415,22 @@
 						tabindex="0"
 						aria-label="House {house.name}"
 					>
-						<g transform="scale({markerScale})">
-							<MapHouseMarker
-								name={house.name}
-								status={houseMarkerStatus(house)}
-								labelPosition={labelPositions[house.id]}
-								hovered={hoveredHouseId === house.id}
-								selected={selectedHouseId === house.id}
-								dragging={draggingHouseId === house.id}
-								{hitRadius}
-								x={house.x}
-								scale={markerScale}
-							/>
+						<!-- No transform attribute here: the refusal shake animates this group's
+						     CSS transform, which would replace an SVG one. -->
+						<g class="shaker">
+							<g transform="scale({markerScale})">
+								<MapHouseMarker
+									name={house.name}
+									status={houseMarkerStatus(house)}
+									labelPosition={labelPositions[house.id]}
+									hovered={hoveredHouseId === house.id}
+									selected={selectedHouseId === house.id}
+									dragging={draggingHouseId === house.id}
+									{hitRadius}
+									x={house.x}
+									scale={markerScale}
+								/>
+							</g>
 						</g>
 					</g>
 				{/each}

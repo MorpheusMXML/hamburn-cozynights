@@ -274,3 +274,132 @@
 		animation: none;
 	}
 }
+
+/*
+ * Locked controls.
+ *
+ * A control that is there but can't be used right now — the camp layout is
+ * locked during Live Booking and after booking closed — carries data-locked
+ * and aria-disabled="true" ($lib/layout-lock.ts, lockAttrs). Unlike
+ * `disabled` it stays focusable and clickable on purpose: a click, Enter or a
+ * typed key is answered by a short hint next to it (LockHintHost), never by
+ * silence.
+ *
+ * The look: greyed out, a small padlock (a badge on buttons, inside the box
+ * on fields), no hover lift, no glow. A refused try shakes the control once
+ * and rattles its padlock (data-lock-rattle, set by the host for 0.7 s). The
+ * shake animates `translate`, not `transform`: `transform: none !important`
+ * switches off the pages' hover lifts, and an !important declaration would
+ * outrank an animated transform.
+ */
+:root {
+	--lock-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.5 11V8.5a4.5 4.5 0 0 1 9 0V11' fill='none' stroke='%23d4d4d4' stroke-width='2.6' stroke-linecap='round'/%3E%3Crect x='4.5' y='10.5' width='15' height='10.5' rx='2.5' fill='%23d4d4d4'/%3E%3C/svg%3E");
+	--lock-icon-field: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.5 11V8.5a4.5 4.5 0 0 1 9 0V11' fill='none' stroke='%23737373' stroke-width='2.4' stroke-linecap='round'/%3E%3Crect x='4.5' y='10.5' width='15' height='10.5' rx='2.5' fill='%23737373'/%3E%3C/svg%3E");
+}
+
+:is(button, a)[data-locked] {
+	position: relative;
+	cursor: not-allowed !important;
+	filter: grayscale(1);
+	opacity: 0.5;
+	box-shadow: none !important;
+	transform: none !important;
+}
+:is(button, a)[data-locked]:hover,
+:is(button, a)[data-locked]:focus-visible {
+	opacity: 0.7;
+}
+/* The padlock badge, on the top right corner. */
+:is(button, a)[data-locked]::before {
+	content: '';
+	position: absolute;
+	top: -7px;
+	right: -7px;
+	z-index: 1;
+	width: 17px;
+	height: 17px;
+	box-sizing: border-box;
+	border-radius: 50%;
+	border: 1px solid rgba(255, 255, 255, 0.25);
+	background: #171717 var(--lock-icon) center / 9px no-repeat;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+	pointer-events: none;
+	animation: lock-badge-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+:is(input, textarea)[data-locked] {
+	cursor: not-allowed;
+	color: #8a8a8a !important;
+	border-style: dashed !important;
+	border-color: #3a3a3a !important;
+	box-shadow: none !important;
+	background-image: var(--lock-icon-field) !important;
+	background-repeat: no-repeat !important;
+	background-position: right 0.75rem center !important;
+	background-size: 13px !important;
+	padding-right: 2.25rem !important;
+}
+
+/* No spinner arrows that can't turn. */
+input[type='number'][data-locked] {
+	appearance: textfield;
+}
+input[type='number'][data-locked]::-webkit-inner-spin-button,
+input[type='number'][data-locked]::-webkit-outer-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+/* A refused try: the control shakes once, its padlock rattles and warms up. */
+[data-locked][data-lock-rattle] {
+	opacity: 0.8;
+	animation: lock-refuse 0.4s ease-in-out;
+}
+:is(button, a)[data-locked][data-lock-rattle]::before {
+	border-color: var(--state-filling);
+	animation:
+		lock-badge-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+		lock-badge-rattle 0.55s ease-in-out;
+}
+
+@keyframes lock-badge-in {
+	from {
+		opacity: 0;
+		scale: 0.4;
+		rotate: -30deg;
+	}
+}
+@keyframes lock-refuse {
+	20% {
+		translate: -4px 0;
+	}
+	45% {
+		translate: 3px 0;
+	}
+	70% {
+		translate: -2px 0;
+	}
+}
+@keyframes lock-badge-rattle {
+	20% {
+		rotate: -24deg;
+		scale: 1.3;
+	}
+	45% {
+		rotate: 18deg;
+		scale: 1.3;
+	}
+	70% {
+		rotate: -9deg;
+		scale: 1.15;
+	}
+}
+
+/* No motion: the padlock only warms up. */
+@media (prefers-reduced-motion: reduce) {
+	:is(button, a)[data-locked]::before,
+	[data-locked][data-lock-rattle],
+	:is(button, a)[data-locked][data-lock-rattle]::before {
+		animation: none;
+	}
+}
