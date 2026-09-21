@@ -53,7 +53,7 @@ describe('the catalogue', () => {
 	});
 
 	it('keeps the PocketBase migration in step with it', () => {
-		const migration = readFileSync('pb_migrations/1759800000_accommodation.js', 'utf8');
+		const migration = readFileSync('pb_migrations/1759900000_accommodation.js', 'utf8');
 		const list = (name: string) =>
 			(new RegExp(`const ${name} = \\[([^\\]]*)\\]`).exec(migration)?.[1] ?? '')
 				.split(',')

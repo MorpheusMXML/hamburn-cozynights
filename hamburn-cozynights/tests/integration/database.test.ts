@@ -62,7 +62,7 @@ describe('schema from pb_migrations/', () => {
 	});
 });
 
-describe('the details of a place (pb_migrations/1759800000_accommodation.js)', () => {
+describe('the details of a place (pb_migrations/1759900000_accommodation.js)', () => {
 	it('gave houses, rooms and spots their kind, features and description', async () => {
 		const fieldsOf = async (name: string) =>
 			(await su.collections.getOne(name)).fields.map((f: { name: string }) => f.name);

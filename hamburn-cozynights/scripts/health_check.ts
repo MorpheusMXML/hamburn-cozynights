@@ -44,7 +44,7 @@ async function run() {
 	} catch {
 		console.error('❌ Authentication failed for', PB_ADMIN_EMAIL);
 		console.error(
-			'💡 Fix: Create the service superuser, e.g. `docker compose exec pocketbase /usr/local/bin/pocketbase superuser upsert <email> <password> --dir=/pb_data`.'
+			'💡 Fix: Create the service superuser, e.g. `docker compose exec pocketbase /usr/local/bin/pocketbase superuser upsert <email> <password> --dir=/pb_data --encryptionEnv=PB_ENCRYPTION_KEY`.'
 		);
 		process.exit(1);
 	}

@@ -48,7 +48,7 @@ export interface KindEntry<V extends string> {
 	hint?: string;
 }
 
-/** Keep in sync with `houses.kind` in pb_migrations/1759800000_accommodation.js. */
+/** Keep in sync with `houses.kind` in pb_migrations/1759900000_accommodation.js. */
 export const HOUSE_KINDS: (KindEntry<HouseKind> & { room: RoomKind; word: string; plural: string })[] =
 	[
 		{ value: 'house', label: 'House', icon: '🏠', room: 'room', word: 'room', plural: 'rooms' },
@@ -73,7 +73,7 @@ export const HOUSE_KINDS: (KindEntry<HouseKind> & { room: RoomKind; word: string
 		{ value: 'other', label: 'Other', icon: '📍', room: 'other', word: 'place', plural: 'places' }
 	];
 
-/** Keep in sync with `rooms.kind` in pb_migrations/1759800000_accommodation.js. */
+/** Keep in sync with `rooms.kind` in pb_migrations/1759900000_accommodation.js. */
 export const ROOM_KINDS: KindEntry<RoomKind>[] = [
 	{ value: 'room', label: 'Room', icon: '🚪' },
 	{ value: 'hut', label: 'Hut', icon: '🛖' },
@@ -86,7 +86,7 @@ export interface BedTypeEntry extends KindEntry<BedType> {
 	ladder: boolean;
 }
 
-/** Keep in sync with `beds.bed_type` in pb_migrations/1759800000_accommodation.js. */
+/** Keep in sync with `beds.bed_type` in pb_migrations/1759900000_accommodation.js. */
 export const BED_TYPES: BedTypeEntry[] = [
 	{ value: 'single', label: 'Single bed', icon: '🛏️', ladder: false },
 	{ value: 'bunk_lower', label: 'Lower bunk', icon: '🛏️', ladder: false },
@@ -109,7 +109,7 @@ export interface FeatureEntry extends KindEntry<Feature> {
 	opposite?: Feature;
 }
 
-/** Keep in sync with the `features` fields in pb_migrations/1759800000_accommodation.js. */
+/** Keep in sync with the `features` fields in pb_migrations/1759900000_accommodation.js. */
 export const FEATURES: FeatureEntry[] = [
 	{
 		value: 'wheelchair',

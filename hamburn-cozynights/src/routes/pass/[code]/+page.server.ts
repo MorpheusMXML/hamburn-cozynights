@@ -10,6 +10,7 @@ import type { PageServerLoad } from './$types';
 import { formatPassCode, normalizePassInput } from '$lib/pass';
 import { findPass, passQrSvg, passUrl, unknownPassCodes } from '$lib/server/pass';
 import { maskEmail } from '$lib/server/notifications';
+import { displayTicketName } from '$lib/tickets';
 
 export const load: PageServerLoad = async ({
 	params,
@@ -63,7 +64,7 @@ export const load: PageServerLoad = async ({
 		// Only for the crew: who the ticket belongs to, and anything odd about the spot.
 		check: locals.admin
 			? {
-					ticketName: pass.order.customer_name,
+					ticketName: displayTicketName(pass.order),
 					email: maskEmail(pass.order.email),
 					roomId: pass.spot?.roomId ?? null,
 					enabled: pass.spot?.enabled ?? true,

@@ -71,6 +71,7 @@ The old containers keep serving while the new image builds.
 - The **PocketBase version** comes from the compose file of the deployed commit. It is pinned and never updated implicitly.
 - The **data volume** is pinned by name (`hamburn-cozynights_pb_data_staging`). Without that, its real name would follow `COMPOSE_PROJECT_NAME`, and a deploy run with a different project name would come up with an empty database.
 - The **app container** gets only the variables it reads (PocketBase URL and service account, `ENCRYPTION_KEY`, `ORIGIN`, the `LEGAL_*` values). The rest of `.env` — Google client secret, SMTP password, bot token — goes to PocketBase only. A new `LEGAL_*` key has to be added to the compose file too, next to `deploy/staging.env.template`.
+- **PocketBase's settings are encrypted** with `PB_ENCRYPTION_KEY` from `.env` (`--encryptionEnv` in the compose file). The value is required: a deploy without it stops at the build step, before anything is touched. See [PocketBase settings key](#pocketbase-settings-key).
 - The one-time server setup, restoring a data backup, and maintenance are in the operator runbook [`hamburn-cozynights/deploy/README.md`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md) (German).
 
 ### nginx in front of the app
@@ -99,7 +100,7 @@ The `smoke` job has already confirmed that pages are served and the app reaches 
 | What | Source of truth |
 | --- | --- |
 | Code, schema (`pb_migrations/`), hooks, location templates | Git |
-| Secrets (each environment's `.env`, `ENCRYPTION_KEY`) | the server, the team's password manager and an offline emergency sheet |
+| Secrets (each environment's `.env` with `ENCRYPTION_KEY` and `PB_ENCRYPTION_KEY`) | the server, the team's password manager and an offline emergency sheet |
 | Live data (ticket codes, bookings, admins) | the PocketBase volume on the server, plus backups |
 
 The live database stays on the server's local disk. SQLite must not run on a network share: file locking over the network is unreliable and can corrupt the database. A Storage Box is a backup target only.
@@ -121,9 +122,22 @@ During stage 1 every layer shares the server's disk. Until the Storage Box is th
 
 Setup, restore, the move to the Storage Box and the emergency sheet are in the operator runbook [`hamburn-cozynights/deploy/backup/README.md`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/backup/README.md) (German).
 
-::: warning Keep the encryption key outside the server too
-Without an environment's `ENCRYPTION_KEY`, a restored database is useless: burner names can't be decrypted and ticket codes no longer match.
+::: warning Keep both keys outside the server too
+Without an environment's `ENCRYPTION_KEY`, a restored database is useless: burner names can't be decrypted and ticket codes no longer match. Without its `PB_ENCRYPTION_KEY`, PocketBase refuses to start on the restored database until its settings are reset (next section).
 :::
+
+## PocketBase settings key
+
+PocketBase keeps its own settings — the SMTP password for booking e-mails, the sender, the backup schedule, S3 credentials if any — in one row of its database. By default that row is plain text, so every database backup carried the SMTP password. Every compose file therefore starts PocketBase with `--encryptionEnv=PB_ENCRYPTION_KEY`: the row is stored AES-256-GCM encrypted with the 32-character key from the environment's `.env` (`openssl rand -hex 16`; optional for local development, required on servers).
+
+What this does and does not cover, verified against PocketBase 0.40.4 with a copy of a real database:
+
+- **Existing databases keep working.** PocketBase reads plain-text settings with or without the key and only encrypts when the row is saved. `pb_hooks/cozy_settings.pb.js` does that save once on the first start with the key (log: `settings were stored in plain text and are now encrypted`, unless another hook's start-up save got there first). Nothing has to be re-entered, and the plain text is gone from the database file after that save; older backups keep the old row.
+- **Without the key PocketBase does not start** once the settings are encrypted (`invalid settings db data or missing encryption key`), and neither with a wrong one (`cipher: message authentication failed`). That includes every `pocketbase` command run inside the container: `scripts/cozy-admin.sh` and the test stack pass the flag, a bare `docker compose exec pocketbase /usr/local/bin/pocketbase …` has to add `--encryptionEnv=PB_ENCRYPTION_KEY`. `PB_ADMIN_EMAIL`/`PB_ADMIN_PASSWORD` must never reach the PocketBase container: the image's entrypoint would run a `superuser upsert` without the flag and the container would not come up.
+- **The key must be exactly 32 characters.** The hook refuses to start with any other length, before any setting is saved: AES would silently accept 16 or 24 characters (a weaker cipher) and fail every save with any other length, which only shows as "An error occurred while saving the new settings" in the dashboard and as `.env` values that never reach the settings.
+- **Losing or changing the key is recoverable.** Everything secret in the settings comes from `.env` and is re-applied by the hooks on start (SMTP, sender, backup schedule, dashboard controls, log retention). With PocketBase stopped, delete the settings row and start with the new key; only values set by hand in the dashboard (rate limits, trusted proxy headers, …) have to be re-entered. The commands are in the runbook, section "PocketBase-Settings-Schlüssel".
+- **Not covered: a collection's OAuth2 provider settings.** PocketBase keeps those outside this encryption, so a database backup still holds the admin sign-in's client secret: backups stay secret material, and an exposed one means rotating that secret.
+- The key belongs next to `ENCRYPTION_KEY` in the team's password manager and on the emergency sheet (`deploy/backup/README.md`): a restic snapshot includes `.env`, so a restore on the same server has it; a rebuilt server does not.
 
 ## Google sign-in per environment
 

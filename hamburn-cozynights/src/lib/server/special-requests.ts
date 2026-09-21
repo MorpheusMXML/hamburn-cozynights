@@ -23,6 +23,7 @@ import type { AdminSession } from '$lib/server/admin-auth';
 import { logAdminEvent, logGuestEvent } from '$lib/server/admin-events';
 import { BookingService, randomBurnerName } from '$lib/server/booking';
 import { APP_SETTINGS_ID } from '$lib/server/constants';
+import { holderName } from '$lib/tickets';
 import { decrypt, encrypt } from '$lib/server/crypto';
 import { compareNatural } from '$lib/template';
 import { effectiveFeatures } from '$lib/accommodation';
@@ -74,14 +75,11 @@ function readSecret(value: string | undefined | null): string {
 }
 
 /**
- * The ticket holder's name from the ticket list. The CLI labels tickets
- * without a name "Ticket <code>", and the code signs the guest in: such a
- * label is never shown.
+ * The ticket holder's name from the ticket list, '' when the ticket has none.
+ * One rule for the whole app: $lib/tickets holderName.
  */
 export function ticketName(order: Pick<OrdersResponse, 'customer_name' | 'order_number'>): string {
-	const name = (order.customer_name || '').trim();
-	if (!name || (order.order_number && name.includes(order.order_number))) return '';
-	return name;
+	return holderName(order);
 }
 
 export function toSpot(bed: BedWithRoom): SpotInfo {

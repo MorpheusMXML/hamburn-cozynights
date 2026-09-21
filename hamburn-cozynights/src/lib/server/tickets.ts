@@ -30,6 +30,7 @@ import {
 	cleanTicketCode,
 	defaultTicketName,
 	diffRoster,
+	holderName,
 	isValidGuestEmail,
 	maskTicketCode,
 	normalizeEmail,
@@ -110,7 +111,7 @@ async function describeTicket(
 	}
 
 	const code = order.order_number ?? '';
-	const name = order.customer_name === defaultTicketName(code) ? '' : order.customer_name;
+	const name = holderName(order);
 	return {
 		id: order.id,
 		code: maskCode ? maskTicketCode(code) : code,
@@ -227,6 +228,16 @@ function readNameInput(raw: unknown): string {
 const NEW_HOLDER_FIELDS = { pass_code: '', burner_name: '' } as const;
 
 /**
+ * What a hand-over leaves for PocketBase: the first message to the new address
+ * tells them the ticket was passed on to them, instead of confirming a booking
+ * they never made (pb_hooks/lib/notify.js, which clears the mark once it is
+ * used). The server CLI writes the same fields.
+ */
+function newHolderFields(): Record<string, string> {
+	return { ...NEW_HOLDER_FIELDS, handed_over_at: new Date().toISOString() };
+}
+
+/**
  * Changes a ticket's address and name. With `newHolder`, also disconnects the
  * old holder's Telegram, invalidates their booking pass and forgets their
  * burner name; the spot stays with the ticket.
@@ -258,7 +269,7 @@ export async function changeTicket(
 	const data: Record<string, string> = {};
 	if (emailChanged) data.email = email;
 	if (nameChanged) data.customer_name = name;
-	if (input.newHolder) Object.assign(data, NEW_HOLDER_FIELDS);
+	if (input.newHolder) Object.assign(data, newHolderFields());
 
 	let requestRemoved = false;
 	let checkInReset = false;
@@ -455,7 +466,7 @@ export async function importRoster(
 				if (change.nameChanged) data.customer_name = change.name;
 				let requestRemoved = false;
 				if (newHolder) {
-					Object.assign(data, NEW_HOLDER_FIELDS);
+					Object.assign(data, newHolderFields());
 					await disconnectTelegram(adminPb, id);
 					// the old holder's health data goes with them, before the
 					// address changes (see changeTicket)

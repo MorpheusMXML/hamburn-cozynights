@@ -22,6 +22,13 @@ Die ZIPs schreibt PocketBase selbst (`pb_hooks/cozy_backups.pb.js`, läuft ab
 dem ersten Deploy mit diesem Stand; Takt und Anzahl: `PB_BACKUP_CRON` /
 `PB_BACKUP_KEEP` in der `.env`). Die Archive zieht das Deploy-Skript.
 
+Beide enthalten die komplette Datenbank. Die PocketBase-Settings darin
+(SMTP-Passwort) sind mit `PB_ENCRYPTION_KEY` verschlüsselt, das
+Google-Client-Secret des Admin-Logins aber nicht (PocketBase legt es in den
+Collection-Optionen ab, außerhalb dieser Verschlüsselung). Backups bleiben
+deshalb Geheimnisträger: nur root liest sie, und ein abgeflossenes Backup
+heißt, das Client-Secret in der Google-Console zu erneuern.
+
 ### Was das lokale restic-Repository dazu bringt
 
 - **Versioniert:** stündliche Stände für 24 Stunden, danach tägliche für
@@ -32,8 +39,8 @@ dem ersten Deploy mit diesem Stand; Takt und Anzahl: `PB_BACKUP_CRON` /
   kaputte Kopie ergeben), sondern über die Online-Backup-API von SQLite
   (`sqlite3 .backup`) bzw. `pg_dump`. Jede Kopie wird mit
   `PRAGMA integrity_check` geprüft.
-- **Dazu alles für den Wiederaufbau:** `.env`-Dateien, nginx, Zertifikate,
-  Vaultwarden-Daten.
+- **Dazu alles für den Wiederaufbau:** `.env`-Dateien (darin `ENCRYPTION_KEY`
+  und `PB_ENCRYPTION_KEY`), nginx, Zertifikate, Vaultwarden-Daten.
 - **Verschlüsselt und dedupliziert:** Ein Lauf ohne Änderungen kostet ein paar
   Kilobyte. Weil das Repository verschlüsselt ist, darf eine Kopie davon auch
   auf einem Laptop liegen.
@@ -292,6 +299,12 @@ selbst neu an. Der Ordner `backups/` mit den ZIPs bleibt stehen. Liegt ein
 `storage`-Ordner im Backup (siehe Wartung), ihn vor dem `up -d` aus
 `/tmp/restore` zurück in das Volume kopieren.
 
+Die Settings in der Datenbank sind mit dem `PB_ENCRYPTION_KEY` der `.env`
+verschlüsselt, die zum selben Stand gehört (sie liegt im selben Snapshot).
+Mit einem anderen Schlüssel startet PocketBase nicht — dann die
+Settings-Zeile löschen, wie unter „PocketBase-Settings-Schlüssel“ in
+[`deploy/README.md`](../README.md#pocketbase-settings-schlüssel) beschrieben.
+
 ### D. Vaultwarden aus restic
 
 ```bash
@@ -509,5 +522,8 @@ Vereinsordner oder in einem zweiten Passwortmanager:
 - `ENCRYPTION_KEY` **jeder** Umgebung (Staging, Produktion). Ohne ihn sind
   Burner-Namen und Ticket-Codes in einem wiederhergestellten Backup
   unbrauchbar, egal aus welcher Ebene es stammt.
+- `PB_ENCRYPTION_KEY` **jeder** Umgebung: der Schlüssel der
+  PocketBase-Settings. Ohne ihn startet PocketBase aus einem Backup nicht;
+  der Ausweg (Settings neu aus der `.env`) steht in `deploy/README.md`.
 - Zugang zur Hetzner Console (mit 2FA-Wiederherstellungscodes)
 - ab Stufe 2: Benutzername und Passwort der Storage Box

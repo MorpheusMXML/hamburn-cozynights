@@ -136,7 +136,8 @@ function cozyAdmin(args: string[]): string {
 			...args,
 			'--dir=/pb_data',
 			'--hooksDir=/pb_hooks',
-			'--migrationsDir=/pb_migrations'
+			'--migrationsDir=/pb_migrations',
+			'--encryptionEnv=PB_ENCRYPTION_KEY'
 		],
 		{ encoding: 'utf8' }
 	);

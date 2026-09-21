@@ -21,8 +21,8 @@ keywords = ["--password", "superuser create", "superuser update", "superuser ups
 [[rules]]
 id = "cozy-env-secret-value"
 description = "A secret from the server .env with a real-looking value"
-regex = '''(?i)\b(PB_ADMIN_PASSWORD|SMTP_PASSWORD|TELEGRAM_BOT_TOKEN|GOOGLE_CLIENT_SECRET|ENCRYPTION_KEY|RESTIC_PASSWORD|COZY_SU_PASSWORD|COZY_ADMIN_WEBHOOK_URL|STAGING_DEPLOY_SSH_KEY)\s*[=:]\s*["']?[A-Za-z0-9+/=_.:@-]{12,}'''
-keywords = ["PB_ADMIN_PASSWORD", "SMTP_PASSWORD", "TELEGRAM_BOT_TOKEN", "GOOGLE_CLIENT_SECRET", "ENCRYPTION_KEY", "RESTIC_PASSWORD", "COZY_SU_PASSWORD", "COZY_ADMIN_WEBHOOK_URL", "STAGING_DEPLOY_SSH_KEY"]
+regex = '''(?i)\b(PB_ADMIN_PASSWORD|SMTP_PASSWORD|TELEGRAM_BOT_TOKEN|GOOGLE_CLIENT_SECRET|PB_ENCRYPTION_KEY|ENCRYPTION_KEY|RESTIC_PASSWORD|COZY_SU_PASSWORD|COZY_ADMIN_WEBHOOK_URL|STAGING_DEPLOY_SSH_KEY)\s*[=:]\s*["']?[A-Za-z0-9+/=_.:@-]{12,}'''
+keywords = ["PB_ADMIN_PASSWORD", "SMTP_PASSWORD", "TELEGRAM_BOT_TOKEN", "GOOGLE_CLIENT_SECRET", "PB_ENCRYPTION_KEY", "ENCRYPTION_KEY", "RESTIC_PASSWORD", "COZY_SU_PASSWORD", "COZY_ADMIN_WEBHOOK_URL", "STAGING_DEPLOY_SSH_KEY"]
   [[rules.allowlists]]
   description = "Placeholders and references, never real values"
   regexTarget = "match"

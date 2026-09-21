@@ -14,13 +14,17 @@ import {
 	defaultTicketName,
 	detectColumns,
 	diffRoster,
+	displayTicketName,
+	holderName,
 	maskTicketCode,
+	maskedTicketLabel,
 	parseCsv,
 	parseRoster,
 	readRosterFile,
 	type RosterRow,
 	type StoredTicket
 } from '../src/lib/tickets';
+import { loadHookModule } from './hook-module';
 
 const ZWSP = String.fromCharCode(0x200b);
 const BOM = String.fromCharCode(0xfeff);
@@ -328,5 +332,51 @@ describe('same rules as the server CLI (pb_hooks/cozy_admin.pb.js)', () => {
 
 	it('knows the same column names', () => {
 		expect(constant('CSV_COLUMNS')).toEqual(TICKET_CSV_COLUMNS);
+	});
+});
+
+describe('how a ticket is named', () => {
+	const pb = loadHookModule('lib/tickets.js');
+
+	it('shows the holder, but nothing that carries the ticket code', () => {
+		const code = 'HB-1001';
+		expect(holderName({ customer_name: 'Ada Lovelace', order_number: code })).toBe('Ada Lovelace');
+		// the label of a ticket without a name, and anything else with the code in it
+		expect(holderName({ customer_name: defaultTicketName(code), order_number: code })).toBe('');
+		expect(holderName({ customer_name: 'Ada (HB-1001)', order_number: code })).toBe('');
+		expect(holderName({ customer_name: '   ', order_number: code })).toBe('');
+		expect(holderName({ customer_name: 'Ada Lovelace' })).toBe('Ada Lovelace');
+		expect(holderName({})).toBe('');
+	});
+
+	it('names a ticket without a holder by its masked code', () => {
+		expect(maskedTicketLabel('HB-1001')).toBe('Ticket H•••');
+		expect(maskedTicketLabel('')).toBe('');
+		expect(displayTicketName({ customer_name: 'Ticket HB-1001', order_number: 'HB-1001' })).toBe(
+			'Ticket H•••'
+		);
+		expect(displayTicketName({ customer_name: 'Ada Lovelace', order_number: 'HB-1001' })).toBe(
+			'Ada Lovelace'
+		);
+	});
+
+	it('is the same rule in PocketBase (pb_hooks/lib/tickets.js)', () => {
+		const cases: [string, string][] = [
+			['Ada Lovelace', 'HB-1001'],
+			['Ticket HB-1001', 'HB-1001'],
+			['Ada (HB-1001)', 'HB-1001'],
+			['', 'Q7ZQ2'],
+			['   ', 'HB-1001'],
+			['Ada Lovelace', ''],
+			['Ticket q7x2k9m4p8w3r6t5', 'q7x2k9m4p8w3r6t5']
+		];
+		for (const [name, code] of cases) {
+			const order = { customer_name: name, order_number: code };
+			expect(pb.holderName(name, code)).toBe(holderName(order));
+			expect(pb.displayTicketName(name, code)).toBe(displayTicketName(order));
+			expect(pb.maskedTicketLabel(code)).toBe(maskedTicketLabel(code));
+			expect(pb.maskTicketCode(code)).toBe(maskTicketCode(code));
+			expect(pb.defaultTicketName(code)).toBe(defaultTicketName(code));
+		}
 	});
 });

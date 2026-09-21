@@ -339,6 +339,23 @@ function windowText(d) {
 	return parts.length ? parts.join(' · ') : 'no times';
 }
 
+/**
+ * What a special-needs request was when the guest withdrew it, in words. The
+ * crew chat reads like a sentence; the stored word ('pending') is for code.
+ */
+function requestStatusNote(status) {
+	switch (status) {
+		case 'pending':
+			return ' (was still waiting for a decision)';
+		case 'approved':
+			return ' (had been approved)';
+		case 'declined':
+			return ' (had been declined)';
+		default:
+			return '';
+	}
+}
+
 /** The crew chat text of an admin_events record. cfg (optional) adds links. */
 function eventText(ev, cfg) {
 	const action = ev.getString('action');
@@ -418,10 +435,7 @@ function eventText(ev, cfg) {
 				(requestsUrl ? '\n' + requestsUrl : '')
 			);
 		case 'special_request_withdrawn':
-			return (
-				'🧡 A guest withdrew their special-needs request' +
-				(d.status ? ' (was ' + d.status + ')' : '')
-			);
+			return '🧡 A guest withdrew their special-needs request' + requestStatusNote(d.status);
 		case 'special_request_approved':
 			return '✅ Special-needs request approved' + by;
 		case 'special_request_declined':
@@ -747,11 +761,32 @@ function textCatalogue() {
 	return { groups: CATALOGUE.GROUPS, placeholders: CATALOGUE.PLACEHOLDERS, items: CATALOGUE.TEXTS };
 }
 
+// How a ticket is named: the same rules the app uses (src/lib/tickets.ts).
+const TICKETS = require(__hooks + '/lib/tickets.js');
+
+/** The name to greet the guest with, '' for a ticket without one. */
 function greetingName(order) {
-	const name = order.getString('customer_name').trim();
-	// the CLI's default label for tickets without a name
-	if (!name || name === 'Ticket ' + order.getString('order_number')) return '';
-	return name;
+	return TICKETS.holderName(order.getString('customer_name'), order.getString('order_number'));
+}
+
+/**
+ * Every address in a server's reply, shortened. A mail server echoes the
+ * recipient back ("550 5.1.1 <ada@example.com> unknown"), and that reply is
+ * quoted in the crew chat: the alert may say which ticket failed, never who.
+ */
+function maskEmailsIn(text) {
+	return String(text || '').replace(/[^\s<>()[\],;:"']+@[^\s<>()[\],;:"']+/g, (match) =>
+		maskEmail(match)
+	);
+}
+
+/**
+ * How the crew chat may name this ticket: "Ticket H•••", or a short record id
+ * when the ticket has no code. Never the holder, never a full code — an alert
+ * about a ticket must not name the person another alert just wrote about.
+ */
+function ticketLabel(order) {
+	return TICKETS.maskedTicketLabel(order.getString('order_number')) || '#' + order.id.slice(0, 5);
 }
 
 function spotLines(spot) {
@@ -765,7 +800,9 @@ function spotLines(spot) {
 
 /**
  * Subject, plain text and HTML of a guest e-mail. kind: booked | changed |
- * released, or '' when only the special-needs request changed. pass: { code,
+ * released | handed_over (the ticket was passed on, and this address hears
+ * about its spot for the first time), or '' when only the special-needs
+ * request changed. pass: { code,
  * url } of the ticket's booking pass, or null. request (optional): { kind:
  * received | approved | declined | '' (what to tell about the request),
  * status: its current status, fixed: the ticket's spot is the one the crew
@@ -795,6 +832,16 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
 	const passUrl = pass && showSpot ? pass.url : '';
 	const passLine = passUrl ? T('mail.pass') : '';
 	const fixedLine = T('mail.fixed');
+	// News about a request that arrives while a spot message is still due rides
+	// along with it: one message per settled state, so a line left out is lost.
+	const alsoRequest =
+		req.kind === 'received'
+			? T('mail.also.received')
+			: req.kind === 'approved'
+				? T('mail.also.approved')
+				: req.kind === 'declined'
+					? T('mail.also.declined')
+					: '';
 	let subject;
 	let intro;
 	let after = [];
@@ -838,16 +885,19 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
 		}
 		if (req.kind === 'declined') after.unshift(T('mail.released.also_declined'));
 		if (req.kind === 'received') after.unshift(T('mail.released.also_received'));
+	} else if (kind === 'handed_over') {
+		// The ticket changed hands: its spot is news to this address, but it is
+		// not a booking they made. The pass line is its own — the new holder is
+		// the one person who may still have the old link, from the seller.
+		subject = T('mail.handed_over.subject');
+		intro = T('mail.handed_over.intro');
+		if (alsoRequest) after.push(alsoRequest);
+		if (passUrl) after.push(T('mail.handed_over.pass'));
+		after.push(req.fixed ? fixedLine : T('mail.booked.change'));
 	} else {
 		subject = kind === 'changed' ? T('mail.changed.subject') : T('mail.booked.subject');
 		intro = kind === 'changed' ? T('mail.changed.intro') : T('mail.booked.intro');
-		if (req.kind === 'received') {
-			after.push(T('mail.also.received'));
-		} else if (req.kind === 'approved') {
-			after.push(T('mail.also.approved'));
-		} else if (req.kind === 'declined') {
-			after.push(T('mail.also.declined'));
-		}
+		if (alsoRequest) after.push(alsoRequest);
 		if (kind === 'changed' && previousLabel) after.push(T('mail.changed.before'));
 		if (kind === 'changed') {
 			after.push(req.fixed ? T('mail.changed.by_crew') : T('mail.changed.maybe_crew'));
@@ -1045,6 +1095,13 @@ function previewMessages(cfg) {
 			before: before,
 			req: none
 		},
+		{
+			id: 'handed_over',
+			title: 'Ticket passed on: the new holder and the spot it holds',
+			kind: 'handed_over',
+			spot: true,
+			req: none
+		},
 		{ id: 'released', title: 'Spot released', kind: 'released', before: before, req: none },
 		{
 			id: 'released_unknown',
@@ -1187,7 +1244,10 @@ function previewMessages(cfg) {
 			req: req('', 'declined')
 		}
 	];
-	const telegram = connected.concat(cases).map((c) => ({
+	// A hand-over cuts the Telegram link with everything else of the old
+	// holder, so there is no such Telegram message to show.
+	const tgCases = cases.filter((c) => c.kind !== 'handed_over');
+	const telegram = connected.concat(tgCases).map((c) => ({
 		id: c.id,
 		title: c.title,
 		text: guestTelegram(cfg, c.kind || '', c.spot ? spot : null, c.before || '', pass, c.req)
@@ -1294,6 +1354,7 @@ function deliverOne(app, cfg, rec, force) {
 	const pass = spot ? bookingPass(app, cfg, order) : null;
 	// The special-needs request, remembered per channel as "<id>:<status>".
 	const request = currentRequest(app, order.id);
+	const handover = order.getString('handed_over_at');
 	const reqKey = requestKey(request);
 	const reqStatus = request ? request.status : '';
 	// only the spot the crew booked for the approved request is theirs to change
@@ -1301,7 +1362,8 @@ function deliverOne(app, cfg, rec, force) {
 	const problems = [];
 	const channels = [];
 	let deferred = false;
-	let mailDone = null; // what the address now knows: { to, key, label, req, sent }
+	// what the address now knows: { to, key, label, req, sent, handover }
+	let mailDone = null;
 	let tgDone = ''; // 'sent' | 'gone'
 	let tgReqOnly = false; // nothing to send, but the chat's request state is outdated
 
@@ -1309,12 +1371,18 @@ function deliverOne(app, cfg, rec, force) {
 	const email = order.getString('email');
 	if (email && cfg.mail.enabled) {
 		const known = rec.getString('mail_to') === email;
-		const kind = kindOf(known ? rec.getString('mail_spot') : '', key);
+		// The ticket was passed on and this address has not been told yet: the
+		// spot is not a booking they made (docs/admin/tickets.md). Remembered
+		// here like everything else an address knows, so the run never writes to
+		// the ticket — handed_over_at stays as the date it changed hands.
+		const handedOver = !known && !!handover && rec.getString('mail_handover') !== handover;
+		let kind = kindOf(known ? rec.getString('mail_spot') : '', key);
+		if (handedOver && kind === 'booked') kind = 'handed_over';
 		const lastReq = known ? rec.getString('mail_req') : '';
 		const reqKind = requestKindOf(lastReq, request);
 		if (!known && !key && !reqKind) {
 			// a new address, no spot, no request news: nothing to confirm
-			mailDone = { to: email, key: '', label: '', req: reqKey, sent: '' };
+			mailDone = { to: email, key: '', label: '', req: reqKey, sent: '', handover: handover };
 		} else if (kind || reqKind) {
 			if (!takeMailSlot(app, cfg)) {
 				deferred = true;
@@ -1334,7 +1402,14 @@ function deliverOne(app, cfg, rec, force) {
 							{ kind: reqKind, status: reqStatus, fixed: fixed }
 						)
 					);
-					mailDone = { to: email, key: key, label: label, req: reqKey, sent: pbDate(now) };
+					mailDone = {
+						to: email,
+						key: key,
+						label: label,
+						req: reqKey,
+						sent: pbDate(now),
+						handover: handover
+					};
 				} catch (err) {
 					problems.push('mail: ' + safeError(err));
 					channels.push('e-mail ' + maskEmail(email));
@@ -1347,7 +1422,8 @@ function deliverOne(app, cfg, rec, force) {
 				key: rec.getString('mail_spot'),
 				label: rec.getString('mail_label'),
 				req: reqKey,
-				sent: ''
+				sent: '',
+				handover: handover
 			};
 		}
 	}
@@ -1396,6 +1472,7 @@ function deliverOne(app, cfg, rec, force) {
 			fresh.set('mail_spot', mailDone.key);
 			fresh.set('mail_label', mailDone.label);
 			fresh.set('mail_req', mailDone.req);
+			fresh.set('mail_handover', mailDone.handover || '');
 			if (mailDone.sent) fresh.set('mail_sent', mailDone.sent);
 		}
 		// Only for the chat this run wrote to: the guest may have turned
@@ -1430,8 +1507,12 @@ function deliverOne(app, cfg, rec, force) {
 		// after the save: a failing save must not repeat this alert every pass
 		logEvent(app, 'guest_notice_failed', {
 			actor: 'server',
-			subject: order.getString('customer_name') || order.id,
-			details: { channels: channels.join(', '), attempts: attempts, error: error }
+			subject: ticketLabel(order),
+			details: {
+				channels: channels.join(', '),
+				attempts: attempts,
+				error: maskEmailsIn(error)
+			}
 		});
 	}
 	if (problems.length > 0) return 'retry';
@@ -1836,6 +1917,7 @@ module.exports = {
 	safeError: safeError,
 	storedValue: storedValue,
 	maskEmail: maskEmail,
+	maskEmailsIn: maskEmailsIn,
 	berlinTime: berlinTime,
 	telegramCall: telegramCall,
 	botUsername: botUsername,
