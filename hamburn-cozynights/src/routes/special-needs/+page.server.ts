@@ -3,6 +3,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { OrdersResponse } from '$lib/pocketbase-types';
 import { BookingService } from '$lib/server/booking';
+import { clearGuestSession, signInUrl } from '$lib/server/guest-session';
 import { getBookingSettings } from '$lib/server/settings';
 import {
 	disconnectTelegram,
@@ -48,20 +49,23 @@ async function sessionOrder(
 }
 
 export const load: PageServerLoad = async ({ locals, cookies, setHeaders }) => {
-	if (!locals.orderNumber) throw redirect(303, '/?login=required');
+	if (!locals.orderNumber) throw redirect(303, signInUrl(locals));
 	// The page shows what the guest wrote about their needs: never keep it in a cache.
 	setHeaders({ 'cache-control': 'no-store' });
 
-	let order;
+	// hooks.server.ts read the ticket for this request already; it only looks it
+	// up here when PocketBase couldn't answer there.
+	let order = locals.order ?? null;
 	try {
-		order = await new BookingService(locals.adminPb).getOrderByNumber(locals.orderNumber);
+		if (!order)
+			order = await new BookingService(locals.adminPb).getOrderByNumber(locals.orderNumber);
 	} catch (err) {
 		console.error('[SpecialNeeds] Order lookup failed:', (err as Error)?.message);
 		throw error(503, UNAVAILABLE);
 	}
 	if (!order) {
 		console.warn('[Security] Special needs load: unknown ticket code in cookie.');
-		cookies.delete('bookingCode', { path: '/' });
+		clearGuestSession(cookies);
 		throw redirect(303, '/?login=expired');
 	}
 
@@ -99,6 +103,8 @@ export const load: PageServerLoad = async ({ locals, cookies, setHeaders }) => {
 			request,
 			requestsOpen: settings.requestsOpen,
 			isBookingActive: settings.isBookingActive,
+			// what this page says about booking; Closed with an opening armed reads as "not open yet"
+			guestPhase: settings.guestPhase,
 			spot: spot ? { label: spot.label, roomId: spot.roomId, fixed } : null,
 			passCode,
 			notify

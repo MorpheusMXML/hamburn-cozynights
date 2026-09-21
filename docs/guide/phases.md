@@ -18,7 +18,7 @@ stateDiagram-v2
 
 - **🛠 Staging** is for building. Admins shape the camp; guests can sign in and look at the (blurred) map, but can't book.
 - **🎪 Live Booking** is for booking. Guests claim spots; the camp's structure is frozen so nothing moves under their feet. A countdown shows when booking closes: a big box on the start page, a slim bar at the top of every other page.
-- **🔒 Closed** follows the booking window. Spots are final: guests still see their spot and their booking pass, but can't book, change or release anything. The layout stays frozen, because it holds the bookings.
+- **🔒 Closed** follows the booking window. Spots are final: guests still see their spot and their booking pass, but can't book, change or release anything. The layout stays frozen, because it holds the bookings. As soon as a new opening time is armed, guests read the countdown to it instead of "spots are final" — nothing is final while booking is about to open again.
 
 ## Who can do what
 
@@ -105,8 +105,10 @@ Your spot stays yours, and your booking pass keeps working. Nothing can be booke
 
 The map greets you with a panel over the blurred camp, like before booking opened: **BOOKING CLOSED**, your spot as a small ticket (tap it for your [booking pass](./booking#your-booking-pass)) and, if you sent one, your special-needs request. <kbd>🗺️ LOOK AROUND</kbd> clears the view; houses and rooms still open, read-only.
 
+When the crew has planned a new opening time, the same panel counts down to it — **IGNITION IN**, *booking is not open yet* — and the pages drop the "final" wording: your spot stays yours and can be changed again once booking is live.
+
 ![The map after booking closed: the panel with your spot as a small ticket and LOOK AROUND](../assets/screenshots/guest-map-closed.webp)
 <!-- /audience -->
 <!-- audience:admin -->
-The layout stays locked; locking and unlocking single spots, ♿ marks and booking spots for special-needs requests still work. For another booking round, plan a new window: the camp stays closed until its opening time. Only a superuser can switch back to Staging, for example to rebuild the layout.
+The layout stays locked; locking and unlocking single spots, ♿ marks and booking spots for special-needs requests still work. For another booking round, plan a new window: the camp stays closed until its opening time, and guests see the countdown to it instead of final spots. Nobody is signed out and the bookings stay — releasing them is the switch back to Staging, which only a superuser can make (for example to rebuild the layout).
 <!-- /audience -->

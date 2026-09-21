@@ -64,11 +64,19 @@ export function lockedDuring(phase: BookingPhase): string {
 	return phase === 'closed' ? 'while booking is closed' : 'during Live Booking';
 }
 
-/** What a guest reads under their own spot when they can't move or release it right now. */
-export function ownSpotNote(phase: BookingPhase): string {
-	return phase === 'closed'
+/**
+ * What a guest reads under their own spot when they can't move or release it
+ * right now. `guest` is the phase as guests are told about it (guestPhase):
+ * Closed with an opening armed isn't final, but the burner name stays fixed
+ * there too — renaming follows the real phase.
+ */
+export function ownSpotNote(phase: BookingPhase, guest: BookingPhase = phase): string {
+	if (phase !== 'closed') {
+		return 'It stays reserved for you, and its burner name can be changed on its room page any time. Moving or releasing it is possible again once Live Booking starts.';
+	}
+	return guest === 'closed'
 		? 'Spots are final now; this one stays yours.'
-		: 'It stays reserved for you, and its burner name can be changed on its room page any time. Moving or releasing it is possible again once Live Booking starts.';
+		: 'It stays reserved for you. Changes are possible again once Live Booking starts.';
 }
 
 /**
@@ -131,6 +139,20 @@ export function countdownKind(
 }
 
 /**
+ * The phase as guests are told about it. Closed with an armed opening still
+ * ahead — a window planned while booking was closed — is "not open yet" to
+ * them, not "final": the countdown in front of them says when it opens. What
+ * guests may do stays with the real phase (the layout is locked, houses can
+ * still be looked at); only the wording follows this one.
+ */
+export function guestPhase(
+	phase: BookingPhase,
+	next: PhaseTransition | null | undefined
+): BookingPhase {
+	return phase === 'closed' && countdownKind(phase, next) === 'opens' ? 'staging' : phase;
+}
+
+/**
  * The opening time the guest map counts down to: only an ARMED window whose
  * opening is still ahead. A planned-but-paused window, or an elapsed opening
  * kept for the Control Center, shows no countdown (nothing would happen).
@@ -144,9 +166,9 @@ export function openingCountdownAt(
 
 /**
  * Whether the slim countdown bar shows on a page. The start page always draws
- * the big countdown itself (above the ticket-code field), the map only its
- * "IGNITION IN" in Staging: in Closed with a later window armed, the bar is
- * the only countdown the map has.
+ * the big countdown itself (above the ticket-code field), and the map its
+ * "IGNITION IN" whenever booking is not open yet for guests (Staging, and
+ * Closed with an opening armed) — the bar would count the same seconds twice.
  */
 export function showCountdownBar(
 	phase: BookingPhase,
@@ -155,7 +177,7 @@ export function showCountdownBar(
 ): boolean {
 	const kind = countdownKind(phase, next);
 	if (!kind || pathname === '/') return false;
-	return kind === 'closes' || !(phase === 'staging' && pathname === '/map');
+	return kind === 'closes' || !(guestPhase(phase, next) === 'staging' && pathname === '/map');
 }
 
 /**

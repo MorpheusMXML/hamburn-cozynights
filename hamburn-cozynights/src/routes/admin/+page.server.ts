@@ -7,6 +7,7 @@ import type {
 	TypedPocketBase
 } from '$lib/pocketbase-types';
 import { APP_SETTINGS_ID } from '$lib/server/constants';
+import { bumpGuestRound } from '$lib/server/guest-session';
 import { getBookingSettings } from '$lib/server/settings';
 import { berlinLocalToIso } from '$lib/time';
 import { deriveLiveStats } from '$lib/server/stats';
@@ -194,6 +195,10 @@ function namesNote(namesLeft: number | null): string {
  * drops a check-in with its booking). Spots the crew booked for approved
  * special-needs requests stay: they were handed out on purpose, usually
  * before booking opened.
+ *
+ * A released camp starts a new booking round: every device signs in with its
+ * ticket code again (bumpGuestRound), so nobody keeps a session — and a
+ * "continue to the map" — for a spot that is gone.
  * @throws {ReleaseStoppedError} when the database refuses halfway
  */
 async function releaseGuestBookings(
@@ -217,7 +222,12 @@ async function releaseGuestBookings(
 	}
 	// The spots are free by now; the burner names only describe them. A name
 	// left behind is worth reporting, never a failed release.
-	return { released, kept, namesLeft: await clearBurnerNames(adminPb, keep) };
+	const namesLeft = await clearBurnerNames(adminPb, keep);
+	// The bookings are gone either way: a failed bump must not fail the reset.
+	await bumpGuestRound(adminPb).catch((err) =>
+		console.error('[Reset] Guest sessions were not ended:', (err as Error)?.message)
+	);
+	return { released, kept, namesLeft };
 }
 
 /**

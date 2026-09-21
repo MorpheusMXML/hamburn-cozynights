@@ -5,6 +5,7 @@ import {
 	effectivePhase,
 	formatBerlin,
 	formatDuration,
+	guestPhase,
 	materialize,
 	nextTransition,
 	openingCountdownAt,
@@ -407,8 +408,9 @@ describe('what guests see of the window', () => {
 		const opens = nextTransition(armed, NOW);
 		expect(showCountdownBar('staging', opens, '/map')).toBe(false);
 		expect(showCountdownBar('staging', opens, '/house/x')).toBe(true);
-		// closed with a later window armed: the map has no countdown of its own
-		expect(showCountdownBar('closed', opens, '/map')).toBe(true);
+		// closed with a later window armed: the map counts down in its own panel
+		expect(showCountdownBar('closed', opens, '/map')).toBe(false);
+		expect(showCountdownBar('closed', opens, '/house/x')).toBe(true);
 		const closes = nextTransition({ ...armed, basePhase: 'live', opensAt: at(-DAY) }, NOW);
 		expect(showCountdownBar('live', closes, '/map')).toBe(true);
 		expect(showCountdownBar('staging', null, '/house/x')).toBe(false);
@@ -421,5 +423,36 @@ describe('what guests see of the window', () => {
 	it('words the own-spot note by phase', () => {
 		expect(ownSpotNote('closed')).toMatch(/final/);
 		expect(ownSpotNote('staging')).toMatch(/Live Booking starts/);
+	});
+});
+
+describe('guestPhase', () => {
+	const armed = { ...planned, basePhase: 'closed' as const, opensAt: at(2 * DAY), closesAt: '' };
+
+	it('tells guests "not open yet" while booking is closed but an opening is armed', () => {
+		const opens = nextTransition(armed, NOW);
+		expect(effectivePhase(armed, NOW)).toBe('closed');
+		expect(guestPhase('closed', opens)).toBe('staging');
+		// so the pages don't call the spot final — but they don't offer a new
+		// burner name either: renaming follows the real phase (every one but Closed)
+		const note = ownSpotNote('closed', guestPhase('closed', opens));
+		expect(note).toMatch(/Live Booking starts/);
+		expect(note).not.toMatch(/final/);
+		expect(note).not.toMatch(/burner name/);
+		expect(ownSpotNote('closed', 'closed')).toMatch(/final/);
+	});
+
+	it('keeps Closed when nothing is planned, or only a paused window', () => {
+		expect(guestPhase('closed', null)).toBe('closed');
+		expect(guestPhase('closed', nextTransition({ ...armed, paused: true }, NOW))).toBe('closed');
+		// an opening that has passed is no countdown either
+		expect(guestPhase('closed', nextTransition({ ...armed, opensAt: at(-DAY) }, NOW))).toBe(
+			'closed'
+		);
+	});
+
+	it('leaves Staging and Live alone', () => {
+		expect(guestPhase('staging', nextTransition(planned, NOW))).toBe('staging');
+		expect(guestPhase('live', nextTransition({ ...planned, basePhase: 'live' }, NOW))).toBe('live');
 	});
 });

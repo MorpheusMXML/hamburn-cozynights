@@ -198,6 +198,7 @@ export type AppSettingsRecord = {
 	notify_mail?: boolean;
 	telegram_bot?: string;
 	special_requests_open?: boolean;
+	guest_round?: number;
 	updated: IsoAutoDateString;
 };
 

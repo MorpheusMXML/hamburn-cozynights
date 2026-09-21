@@ -217,8 +217,10 @@ const TICKET = {
 	burnerName: 'Disco Druid'
 };
 
+/** Like hooks.server.ts: the ticket of the cookie, read once per request. */
 function guestLocals(pb: FakePb, orderNumber = 'HB-1001') {
-	return { pb, adminPb: pb, orderNumber, admin: null };
+	const order = pb.tables.orders?.find((row) => row.order_number === orderNumber) ?? null;
+	return { pb, adminPb: pb, orderNumber, order, admin: null };
 }
 const cookies = { delete: () => {} };
 

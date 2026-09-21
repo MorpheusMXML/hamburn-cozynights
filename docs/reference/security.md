@@ -13,7 +13,9 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 
 - **Looked up by a keyed hash.** Sign-in compares a keyed hash (HMAC-SHA256) of the code, not the code itself.
 - **Never logged.** Neither successful nor failed codes end up in log files.
-- **Kept in a protected cookie.** The browser stores the code in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie that scripts on the page can't read.
+- **Kept in a protected cookie.** The browser stores the code in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie (`bookingCode`, 30 days) that scripts on the page can't read. A second cookie next to it (`bookingRound`) holds the booking round it was signed in for.
+- **Checked on every request.** The server looks the code up before any page runs (`src/lib/server/guest-session.ts`): a code that is no longer in the ticket list, and a code from an earlier booking round, end the session then and there — both cookies go and the start page asks for the code again. A PocketBase that can't be reached signs nobody out.
+- **A reset ends every session.** Releasing all bookings (the switch back to Staging, 🧨 Clear all bookings) counts the round up in `app_settings.guest_round`, so a new round never starts with devices still signed in for the last one.
 - **Guessing is slowed down.** Too many wrong codes from one address pause sign-in for that address for a few minutes. Correct codes never count, so a crowd behind one festival network isn't locked out.
 
 ### Names and visibility

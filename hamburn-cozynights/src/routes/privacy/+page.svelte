@@ -120,8 +120,10 @@ variables in the server's .env (`$lib/server/legal`).
 	</p>
 	<p>
 		After you sign in, your browser keeps the ticket code in a cookie (<code>bookingCode</code>) for
-		30 days so you stay signed in. Scripts on the page can't read it. The cookie is strictly
-		necessary (§ 25(2) no. 2 TDDDG).
+		30 days so you stay signed in, and next to it the booking round you signed in for (<code
+			>bookingRound</code
+		>), so a new round asks for your code again. Scripts on the page can't read them. Both cookies
+		are strictly necessary (§ 25(2) no. 2 TDDDG).
 	</p>
 	<p>
 		We delete bookings, burner names, special-needs requests and the ticket list with its email
