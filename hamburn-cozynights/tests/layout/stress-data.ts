@@ -68,10 +68,12 @@ export interface StressCamp {
 	/** Houses and rooms without the stress guest's spot (the "you already have a spot" banner). */
 	otherHouseIds: string[];
 	otherRoomIds: string[];
-	/** Cookie values (not headers) for the browser. */
+	/** Cookie values (not headers) for the browser: the ticket codes. */
 	guestWithSpot: string;
 	guestWithoutSpot: string;
 	guestWithRequest: string;
+	/** The booking round those codes were signed in for (cookie bookingRound). */
+	guestRound: string;
 	passCode: string;
 	adminAuth: string;
 	superuserAuth: string;
@@ -147,11 +149,24 @@ async function post(
 	return res;
 }
 
-async function guestLogin(base: string, code: string): Promise<string> {
+/**
+ * Signs a guest in like a browser does: the answer sets the ticket code and the
+ * booking round it belongs to, and both ride along from then on. The smoke
+ * suite runs first on the same stack and releases bookings, which starts a new
+ * round — a code sent without its round counts as signed out.
+ */
+async function guestLogin(
+	base: string,
+	code: string
+): Promise<{ code: string; round: string; header: string }> {
 	const res = await post(base, '/?/login', { bookingCode: code });
-	const cookie = (res.headers.get('set-cookie') || '').split(';')[0];
-	if (!cookie.startsWith('bookingCode=')) throw new Error(`guest login with ${code} failed`);
-	return cookie.slice('bookingCode='.length);
+	const pairs = res.headers.getSetCookie().map((c) => c.split(';')[0]);
+	const value = (name: string) =>
+		pairs.find((pair) => pair.startsWith(`${name}=`))?.slice(name.length + 1);
+	const signedIn = value('bookingCode');
+	if (!signedIn) throw new Error(`guest login with ${code} failed`);
+	const round = value('bookingRound') ?? '0';
+	return { code: signedIn, round, header: `bookingCode=${signedIn}; bookingRound=${round}` };
 }
 
 async function ticket(pb: PocketBase, customerName = 'Test Guest', email = '') {
@@ -182,15 +197,17 @@ async function setWindow(pb: PocketBase, fields: Record<string, unknown>) {
  * The booking phase as the Control Center sets it. `opening` is Staging with
  * the opening timer armed, `closing` Live with the closing timer armed: they
  * bring the countdowns (start page, map, the bar on top of every page).
+ * `reopening` is Closed with an opening armed — a window planned while booking
+ * was closed, where guests read a countdown instead of "spots are final".
  */
-export type Phase = 'staging' | 'live' | 'closed' | 'opening' | 'closing';
+export type Phase = 'staging' | 'live' | 'closed' | 'opening' | 'closing' | 'reopening';
 
 export async function setPhase(pb: PocketBase, phase: Phase) {
 	const inTwoDays = new Date(Date.now() + 2 * 24 * 3600_000).toISOString();
 	await setWindow(pb, {
 		is_booking_active: phase === 'live' || phase === 'closing',
-		booking_closed: phase === 'closed',
-		booking_unlock_at: phase === 'opening' ? inTwoDays : '',
+		booking_closed: phase === 'closed' || phase === 'reopening',
+		booking_unlock_at: phase === 'opening' || phase === 'reopening' ? inTwoDays : '',
 		booking_close_at: phase === 'closing' ? inTwoDays : '',
 		booking_timer_paused: false
 	});
@@ -243,14 +260,14 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 	await setPhase(pb, 'live');
 	const book = async (label: string, burnerName: string, customer?: string, email?: string) => {
 		const t = await ticket(pb, customer, email);
-		const cookie = await guestLogin(base, t.code);
+		const session = await guestLogin(base, t.code);
 		await post(
 			base,
 			`/room/${room.id}?/bookBed`,
 			{ bedId: beds[label], guestName: burnerName },
-			`bookingCode=${cookie}`
+			session.header
 		);
-		return { ...t, cookie };
+		return { ...t, cookie: session.code, round: session.round };
 	};
 	await book('Upper 2', TEXTS.burnerLong);
 	await book('Lower 1', TEXTS.burnerWord);
@@ -259,12 +276,12 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 	const mine = await book('Lower 2', TEXTS.burnerMine, TEXTS.customerLong, TEXTS.emailLong);
 	const passCode = (await pb.collection('orders').getOne(mine.order.id)).pass_code as string;
 
-	const guestWithoutSpot = await guestLogin(base, (await ticket(pb)).code);
+	const guestWithoutSpot = (await guestLogin(base, (await ticket(pb)).code)).code;
 
 	// A special-needs request (pending), written through the app like a guest does.
 	await setWindow(pb, { special_requests_open: true });
 	const asker = await ticket(pb, TEXTS.customerLong, TEXTS.emailLong);
-	const guestWithRequest = await guestLogin(base, asker.code);
+	const requester = await guestLogin(base, asker.code);
 	const form = new URLSearchParams({
 		text: TEXTS.requestText,
 		burnerName: TEXTS.burnerLong,
@@ -272,7 +289,7 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 	});
 	for (const need of ['lower_bunk', 'step_free', 'near_toilet', 'power'])
 		form.append('needs', need);
-	await post(base, '/special-needs?/save', form, `bookingCode=${guestWithRequest}`);
+	await post(base, '/special-needs?/save', form, requester.header);
 
 	return {
 		houseId: house.id,
@@ -282,7 +299,9 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		otherRoomIds,
 		guestWithSpot: mine.cookie,
 		guestWithoutSpot,
-		guestWithRequest,
+		guestWithRequest: requester.code,
+		// Nothing in the seed releases bookings, so every sign-in above got the same round.
+		guestRound: mine.round,
 		passCode,
 		adminAuth: await adminSession(pb, 'admin', `layout-admin-${tag}@mauersegler.art`),
 		superuserAuth: await adminSession(

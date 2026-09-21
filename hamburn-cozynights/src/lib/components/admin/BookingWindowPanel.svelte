@@ -322,7 +322,7 @@
 			notes.push(
 				to === 'closed'
 					? 'Guests can no longer book, change or release a spot. The layout stays locked.'
-					: `Guests can no longer book, change or release a spot; the layout can be edited again.${guestBooked > 0 ? ` ${guestBooked} guest booking${guestBooked === 1 ? ' is' : 's are'} in the camp right now.` : ''}${arrivedNote} Choose below whether they are released (they book again once booking opens, ticket codes stay valid — this cannot be undone) or stay as they are.${crewBookedSpots > 0 ? ` The ${crewBookedSpots} spot${crewBookedSpots === 1 ? '' : 's'} the crew booked for special-needs requests stay either way.` : ' Spots the crew booked for special-needs requests stay either way.'}`
+					: `Guests can no longer book, change or release a spot; the layout can be edited again.${guestBooked > 0 ? ` ${guestBooked} guest booking${guestBooked === 1 ? ' is' : 's are'} in the camp right now.` : ''}${arrivedNote} Choose below whether they are released (ticket codes stay valid: every guest signs in again on their device and books once booking opens — this cannot be undone) or stay as they are.${crewBookedSpots > 0 ? ` The ${crewBookedSpots} spot${crewBookedSpots === 1 ? '' : 's'} the crew booked for special-needs requests stay either way.` : ' Spots the crew booked for special-needs requests stay either way.'}`
 			);
 			if (to === 'closed' && bookingWindow.closesAt && !after.closesAt) {
 				notes.push('The planned closing time is dropped.');
@@ -415,7 +415,7 @@
 	async function clearAllBookings() {
 		if (busy || !isSuperuser || current !== 'staging') return;
 		const ok = await confirmDialog(
-			`${guestBooked} booked spot${guestBooked === 1 ? '' : 's'} become${guestBooked === 1 ? 's' : ''} free and lose${guestBooked === 1 ? 's' : ''} the burner name.${arrivedNote}${crewBookedSpots > 0 ? ` The ${crewBookedSpots} spot${crewBookedSpots === 1 ? '' : 's'} the crew booked for special-needs requests stay as long as those requests exist.` : ''} Ticket codes keep working. This cannot be undone.`,
+			`${guestBooked} booked spot${guestBooked === 1 ? '' : 's'} become${guestBooked === 1 ? 's' : ''} free and lose${guestBooked === 1 ? 's' : ''} the burner name.${arrivedNote}${crewBookedSpots > 0 ? ` The ${crewBookedSpots} spot${crewBookedSpots === 1 ? '' : 's'} the crew booked for special-needs requests stay as long as those requests exist.` : ''} Ticket codes keep working: every guest signs in again on their device. This cannot be undone.`,
 			{
 				title: '🧨 Clear all bookings?',
 				tone: 'danger',

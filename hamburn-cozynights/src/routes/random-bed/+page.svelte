@@ -13,7 +13,7 @@
 	import { fade, scale } from 'svelte/transition';
 
 	export let data: PageData;
-	$: ({ freeBeds, isBookingActive, userBed, spotFixed, checkedIn, phase } = data);
+	$: ({ freeBeds, isBookingActive, userBed, spotFixed, checkedIn, phase, guestPhase } = data);
 
 	// ☢ Nuke & Respin: the spot in the warning, and the one deleted for this
 	// roll (the page says so until a new spot is booked).
@@ -224,7 +224,7 @@
 						deleted the moment you launch.
 					</p>
 				{:else}
-					<p class="hint">{ownSpotNote(phase)}</p>
+					<p class="hint">{ownSpotNote(phase, guestPhase)}</p>
 				{/if}
 				<div class="already-booked-actions">
 					<a href="/room/{userBed.roomId}" class="btn-goto">Visit My Room</a>
@@ -237,7 +237,7 @@
 			<div class="empty-state">
 				<span class="icon" aria-hidden="true">🔒</span>
 				<p>
-					{data.phase === 'closed'
+					{guestPhase === 'closed'
 						? 'Booking is closed. The roulette is resting until the next burn.'
 						: 'Booking is not open yet. Come back when Live Booking starts.'}
 				</p>

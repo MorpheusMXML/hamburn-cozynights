@@ -157,7 +157,7 @@
 		<h1>{data.room.name || 'Room'} <small>#{data.room.room_number}</small></h1>
 	</header>
 
-	{#if data.phase === 'closed'}
+	{#if data.guestPhase === 'closed'}
 		<div class="booking-locked-banner" role="status">
 			<div class="locked-icon" aria-hidden="true">🔒</div>
 			<div class="locked-content">
@@ -198,7 +198,7 @@
 							your current spot first.
 						</p>
 					{:else}
-						<p>{ownSpotNote(data.phase)}</p>
+						<p>{ownSpotNote(data.phase, data.guestPhase)}</p>
 					{/if}
 					{#if data.pass}
 						<PassTicket pass={data.pass} />
@@ -373,7 +373,9 @@
 						<span class="guest-name">{bed.burnerName}</span>
 						<small class="edit-hint"
 							>{nameFinal
-								? 'Spots are final now'
+								? data.guestPhase === 'closed'
+									? 'Spots are final now'
+									: 'Not open yet'
 								: isLocked || data.spotFixed || data.checkedIn
 									? 'Tap to change your burner name'
 									: 'Tap to change or release'}</small
@@ -401,7 +403,7 @@
 					<div class="status-box free">
 						<span
 							>{isLocked
-								? data.phase === 'closed'
+								? data.guestPhase === 'closed'
 									? 'Booking closed'
 									: 'Not open yet'
 								: iHaveAnotherBooking
@@ -410,7 +412,7 @@
 						>
 						<small
 							>{isLocked
-								? data.phase === 'closed'
+								? data.guestPhase === 'closed'
 									? 'Spots are final'
 									: 'Booking opens soon'
 								: iHaveAnotherBooking

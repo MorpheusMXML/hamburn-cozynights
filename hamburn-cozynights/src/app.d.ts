@@ -1,6 +1,7 @@
 // src/app.d.ts
-import type { TypedPocketBase } from '$lib/pocketbase-types'; // <--- IMPORTANT: Your generated types 🛠️
+import type { OrdersResponse, TypedPocketBase } from '$lib/pocketbase-types'; // <--- IMPORTANT: Your generated types 🛠️
 import type { AdminSession, PendingAdmin } from '$lib/server/admin-auth';
+import type { GuestSignOut } from '$lib/server/guest-session';
 
 declare global {
 	namespace App {
@@ -13,6 +14,10 @@ declare global {
 			adminPb: TypedPocketBase;
 			// The current burner's booking code from the cookie 🎫
 			orderNumber: string | null;
+			// Their ticket, read once per request; undefined when PocketBase could not be asked 🎟️
+			order?: OrdersResponse | null;
+			// This request ended the session: the code is gone, or a new booking round started 🚪
+			guestSignOut?: GuestSignOut;
 			// Optional field for storing the guest name session-wide 📛
 			burner_Name?: string;
 

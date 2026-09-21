@@ -1,5 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { clearGuestSession, signInUrl } from '$lib/server/guest-session';
 import { getBookingSettings } from '$lib/server/settings';
 import { bookingRefusal } from '$lib/booking-phase';
 import {
@@ -19,25 +20,27 @@ const SIGNED_OUT =
 const CODE_UNKNOWN = 'Your ticket code was not found. Go to the start page and enter it again.';
 
 export const load: PageServerLoad = async ({ locals, cookies }) => {
-	if (!locals.orderNumber) throw redirect(303, '/?login=required');
+	if (!locals.orderNumber) throw redirect(303, signInUrl(locals));
 
 	// Orders contain PII and are never readable via the public `pb` connection
 	// (see BookingService.getOrderByNumber, which uses the privileged adminPb).
 	const bookingService = new BookingService(locals.adminPb);
-	let order;
+	// hooks.server.ts read the ticket for this request already; it only looks it
+	// up here when PocketBase couldn't answer there.
+	let order = locals.order ?? null;
 	try {
-		order = await bookingService.getOrderByNumber(locals.orderNumber);
+		if (!order) order = await bookingService.getOrderByNumber(locals.orderNumber);
 	} catch (err) {
 		console.error('[RandomBed] Order lookup failed:', (err as Error)?.message);
 		throw error(503, UNAVAILABLE);
 	}
 	if (!order) {
-		cookies.delete('bookingCode', { path: '/' });
+		clearGuestSession(cookies);
 		throw redirect(303, '/?login=expired');
 	}
 
 	try {
-		const { isBookingActive, phase } = await getBookingSettings(locals.pb);
+		const { isBookingActive, phase, guestPhase } = await getBookingSettings(locals.pb);
 
 		const userBed = await locals.adminPb
 			.collection('beds')
@@ -92,6 +95,8 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 			// The crew checked the guest in at arrival: only the crew changes the spot now.
 			checkedIn: !!userBed?.checked_in_at,
 			phase,
+			// what the page says; what is allowed still follows `phase`
+			guestPhase,
 			userBed: userBed
 				? {
 						id: userBed.id,
@@ -118,8 +123,8 @@ export const actions: Actions = {
 			});
 		}
 
-		const { isBookingActive, phase } = await getBookingSettings(locals.pb);
-		if (!isBookingActive) return fail(403, { error: bookingRefusal(phase) });
+		const { isBookingActive, guestPhase } = await getBookingSettings(locals.pb);
+		if (!isBookingActive) return fail(403, { error: bookingRefusal(guestPhase) });
 
 		const formData = await request.formData();
 		const bedId = formData.get('bedId') as string;

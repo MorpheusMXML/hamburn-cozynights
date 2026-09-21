@@ -1,6 +1,12 @@
 <script lang="ts" module>
-	/** Closed: once a guest looked around, back from a house the panel stays away. */
-	let lookedAround = false;
+	import type { BookingPhase } from '$lib/booking-phase';
+
+	/**
+	 * Closed: once a guest looked around, coming back from a house leaves the
+	 * panel away. Remembered with the phase it happened in, so a new phase
+	 * (booking opened again, a window was armed) greets them with it again.
+	 */
+	let lookedAroundIn: BookingPhase | null = null;
 </script>
 
 <script lang="ts">
@@ -13,15 +19,25 @@
 	import { invalidateAll } from '$app/navigation';
 
 	export let data: PageData;
-	$: ({ isBookingActive, phase, bookingUnlockAt } = data);
+	$: ({ isBookingActive, phase, guestPhase, bookingUnlockAt } = data);
 
-	// Closed: a panel like the one in Staging covers the blurred map until
-	// the guest wants to look around (houses still open, read-only).
-	let lookingAround = lookedAround;
-	$: closedPanel = phase === 'closed' && !lookingAround;
+	// A panel covers the blurred map whenever guests can't book. It counts down
+	// while booking is not open yet — Staging, and Closed with an opening armed,
+	// where the spots are anything but final — and says BOOKING CLOSED once
+	// nothing is planned any more. In Closed the guest can put it away and look
+	// around (houses stay open, read-only).
+	$: notOpenYet = guestPhase === 'staging';
+	let lookingAround = data.phase === lookedAroundIn;
+	let panelPhase = data.phase;
+	$: if (phase !== panelPhase) {
+		panelPhase = phase;
+		lookingAround = false;
+	}
+	$: showPanel = guestPhase !== 'live' && !(phase === 'closed' && lookingAround);
 
 	function lookAround() {
-		lookingAround = lookedAround = true;
+		lookingAround = true;
+		lookedAroundIn = phase;
 	}
 
 	onMount(() => {
@@ -110,28 +126,44 @@
 				isEditorMode={false}
 				isBookingActive={data.isBookingActive}
 				phase={data.phase}
-				dimmed={closedPanel}
+				dimmed={showPanel}
 			/>
 		</div>
 	{:else}
 		<div class="loading">Igniting Sensors...</div>
 	{/if}
 
-	{#if phase === 'staging'}
+	{#if showPanel}
 		<div class="phase-overlay">
 			<div class="phase-panel">
-				{#if bookingUnlockAt}
-					<div class="timer-wrapper">
-						<h2 class="laser-text pink">IGNITION IN</h2>
-						<CountdownTimer targetDate={bookingUnlockAt} on:elapsed={() => invalidateAll()} />
-					</div>
-				{/if}
+				{#if notOpenYet}
+					{#if bookingUnlockAt}
+						<div class="timer-wrapper">
+							<h2 class="laser-text pink">IGNITION IN</h2>
+							<CountdownTimer targetDate={bookingUnlockAt} on:elapsed={() => invalidateAll()} />
+						</div>
+					{/if}
 
-				<p class="phase-note">
-					Booking is not open yet. {bookingUnlockAt
-						? 'This page unlocks by itself when the countdown ends.'
-						: 'The crew is still setting up the houses. Check back soon.'}
-				</p>
+					<p class="phase-note">
+						Booking is not open yet. {bookingUnlockAt
+							? 'This page unlocks by itself when the countdown ends.'
+							: 'The crew is still setting up the houses. Check back soon.'}
+					</p>
+				{:else}
+					<h2 class="laser-text closed">BOOKING CLOSED</h2>
+
+					<p class="phase-note">
+						Spots are final now: nothing can be booked, changed or released anymore.
+						{#if data.noSpot}Your ticket holds no spot. If you need one, please contact the crew.{/if}
+					</p>
+
+					<!-- Final: the spot of the ticket signed in here, as a small ticket. While
+					     a countdown runs, the panel stays short — the spot is on its room page,
+					     and a taller panel reaches into the legal links below the map. -->
+					{#if data.pass}
+						<PassTicket pass={data.pass} />
+					{/if}
+				{/if}
 
 				{#if data.specialNeeds.requestSent}
 					<a class="special-needs-cta" href="/special-needs">
@@ -143,39 +175,21 @@
 					</a>
 				{/if}
 
-				<button class="panel-button" class:smashed={isShaking} on:click={handleReloadSensors}>
-					<span class="icon">📡</span>
-					RELOAD SENSORS
-					{#if clickCount > 5}
-						<span class="warning-text">CALIBRATING INTENSELY!</span>
-					{/if}
-				</button>
-			</div>
-		</div>
-	{:else if closedPanel}
-		<div class="phase-overlay">
-			<div class="phase-panel">
-				<h2 class="laser-text closed">BOOKING CLOSED</h2>
-
-				<p class="phase-note">
-					Spots are final now: nothing can be booked, changed or released anymore.
-					{#if data.noSpot}Your ticket holds no spot. If you need one, please contact the crew.{/if}
-				</p>
-
-				{#if data.pass}
-					<PassTicket pass={data.pass} />
+				{#if phase === 'closed'}
+					<!-- Closed: the houses stay open, read-only. -->
+					<button class="panel-button" on:click={lookAround}>
+						<span class="icon">🗺️</span>
+						LOOK AROUND
+					</button>
+				{:else}
+					<button class="panel-button" class:smashed={isShaking} on:click={handleReloadSensors}>
+						<span class="icon">📡</span>
+						RELOAD SENSORS
+						{#if clickCount > 5}
+							<span class="warning-text">CALIBRATING INTENSELY!</span>
+						{/if}
+					</button>
 				{/if}
-
-				{#if data.specialNeeds.requestSent}
-					<a class="special-needs-cta" href="/special-needs">
-						<span aria-hidden="true">♿</span> See your special-needs request
-					</a>
-				{/if}
-
-				<button class="panel-button" on:click={lookAround}>
-					<span class="icon">🗺️</span>
-					LOOK AROUND
-				</button>
 			</div>
 		</div>
 	{/if}

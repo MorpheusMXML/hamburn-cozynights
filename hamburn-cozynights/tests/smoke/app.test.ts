@@ -185,14 +185,24 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		});
 	}
 
+	/**
+	 * Signs a guest in and returns what a browser would send from then on: the
+	 * ticket code and the booking round it was signed in for. A reset between
+	 * rounds (releasing every booking) ends sessions of earlier rounds, so the
+	 * round cookie has to ride along like in a real browser.
+	 */
 	async function guestLogin(code: string): Promise<string> {
 		const res = await post('/?/login', { bookingCode: code });
 		expect(res.status).toBe(303);
 		expect(res.headers.get('location')).toBe('/map');
-		const setCookie = res.headers.get('set-cookie') || '';
-		expect(setCookie).toContain('bookingCode=');
-		expect(setCookie).toContain('HttpOnly');
-		return setCookie.split(';')[0];
+		const setCookies = res.headers.getSetCookie();
+		expect(setCookies.some((c) => c.startsWith('bookingCode=') && c.includes('HttpOnly'))).toBe(
+			true
+		);
+		expect(setCookies.some((c) => c.startsWith('bookingRound=') && c.includes('HttpOnly'))).toBe(
+			true
+		);
+		return setCookies.map((c) => c.split(';')[0]).join('; ');
 	}
 
 	beforeAll(async () => {
@@ -571,6 +581,8 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		const kept = await post('/admin?/setPhase', { phase: 'staging' }, adminCookie(boss.client));
 		expect(kept.status).toBe(200);
 		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
+		// keeping the bookings keeps the guests signed in
+		expect((await get(`/room/${room.id}`, cookie)).status).toBe(200);
 
 		// back to live, then switch again and release them this time
 		await setBookingOpen(true);
@@ -587,8 +599,17 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		expect((await su.collection('app_settings').getOne(APP_SETTINGS_ID)).is_booking_active).toBe(
 			false
 		);
-		// the ticket roster survives
-		await guestLogin(ticket.code);
+		// releasing them starts a new booking round: the device signs in again,
+		// told why, and both cookies are deleted
+		const signedOut = await get(`/room/${room.id}`, cookie);
+		expect(signedOut.status).toBe(303);
+		expect(signedOut.headers.get('location')).toBe('/?login=round');
+		const cleared = signedOut.headers.getSetCookie();
+		expect(cleared.some((c) => c.startsWith('bookingCode=;'))).toBe(true);
+		expect(cleared.some((c) => c.startsWith('bookingRound=;'))).toBe(true);
+		// the ticket roster survives: the same code signs in again and stays
+		const again = await guestLogin(ticket.code);
+		expect((await get(`/room/${room.id}`, again)).status).toBe(200);
 	});
 
 	it('reserves "clear all bookings" for superusers and keeps the tickets', async () => {

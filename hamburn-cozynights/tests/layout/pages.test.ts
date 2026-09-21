@@ -52,8 +52,8 @@ interface PageCase {
 	open?: (page: Page) => Promise<void>;
 }
 
-/** The three phases, plus both armed timers (countdown box, countdown bar). */
-const ALL_PHASES: Phase[] = ['staging', 'live', 'closed', 'opening', 'closing'];
+/** The three phases, plus every armed timer (countdown box, countdown bar). */
+const ALL_PHASES: Phase[] = ['staging', 'live', 'closed', 'opening', 'closing', 'reopening'];
 
 const PAGES: PageCase[] = [
 	{ name: 'start page', path: () => '/', as: 'anonymous', phases: ALL_PHASES },
@@ -263,11 +263,16 @@ async function openAs(browser: Browser, who: Who) {
 	const context = await browser.newContext({ baseURL: BASE, reducedMotion: 'reduce' });
 	const session =
 		who === 'anonymous'
-			? null
+			? []
 			: who === 'admin' || who === 'superuser'
-				? { name: 'pb_auth', value: who === 'admin' ? camp.adminAuth : camp.superuserAuth }
-				: { name: 'bookingCode', value: camp[who] };
-	if (session) await context.addCookies([{ ...session, url: BASE }]);
+				? [{ name: 'pb_auth', value: who === 'admin' ? camp.adminAuth : camp.superuserAuth }]
+				: [
+						{ name: 'bookingCode', value: camp[who] },
+						// the round the code was signed in for: without it, a reset in an
+						// earlier suite on this stack would count the session as over
+						{ name: 'bookingRound', value: camp.guestRound }
+					];
+	await context.addCookies(session.map((cookie) => ({ ...cookie, url: BASE })));
 	return context;
 }
 

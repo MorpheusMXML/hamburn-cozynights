@@ -12,6 +12,7 @@ import {
 	isBedBookable,
 	randomBurnerName
 } from '$lib/server/booking';
+import { clearGuestSession, signInUrl } from '$lib/server/guest-session';
 import { getBookingSettings } from '$lib/server/settings';
 import { bookingRefusal } from '$lib/booking-phase';
 import {
@@ -35,13 +36,15 @@ function cleanBurnerName(raw: FormDataEntryValue | null): string {
 }
 
 export const load: PageServerLoad = async ({ params, locals, cookies }) => {
-	if (!locals.orderNumber) throw redirect(303, '/?login=required');
+	if (!locals.orderNumber) throw redirect(303, signInUrl(locals));
 
 	// Always use the adminPb instance for backend operations
 	const bookingService = new BookingService(locals.adminPb);
-	let order;
+	// hooks.server.ts read the ticket for this request already; it only looks it
+	// up here when PocketBase couldn't answer there.
+	let order = locals.order ?? null;
 	try {
-		order = await bookingService.getOrderByNumber(locals.orderNumber);
+		if (!order) order = await bookingService.getOrderByNumber(locals.orderNumber);
 	} catch (err) {
 		console.error('[Room] Order lookup failed:', (err as Error)?.message);
 		throw error(503, UNAVAILABLE);
@@ -49,7 +52,7 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 
 	if (!order) {
 		console.warn('[Security] Room load: unknown ticket code in cookie.');
-		cookies.delete('bookingCode', { path: '/' });
+		clearGuestSession(cookies);
 		throw redirect(303, '/?login=expired');
 	}
 
@@ -120,6 +123,8 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			userBedId: userBed?.id || null,
 			isBookingActive: settings.isBookingActive,
 			phase: settings.phase,
+			// what the banners say; what is allowed still follows `phase`
+			guestPhase: settings.guestPhase,
 			bookingUnlockAt: settings.bookingUnlockAt
 		};
 	} catch (err: any) {

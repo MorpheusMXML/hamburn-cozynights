@@ -59,15 +59,20 @@
 	// reloaded and the server says which phase it is now.
 	$: countdown = countdownKind(data.booking.phase, data.booking.next);
 
-	// Guest pages send visitors here when the ticket-code cookie is missing or stale.
+	// Guest pages send visitors here when the ticket-code cookie is missing or
+	// stale; `data.signedOut` is set when this very visit lost its session
+	// (the code is gone, or a new booking round started).
+	$: loginReason = data.signedOut ?? $page.url.searchParams.get('login');
 	$: loginHint =
-		$page.url.searchParams.get('login') === 'expired'
+		loginReason === 'expired'
 			? 'Your ticket code is not valid on this device (anymore). Please enter it again.'
-			: $page.url.searchParams.get('login') === 'required'
-				? 'Please enter your ticket code first. After that you can open the map and pick your spot.'
-				: $page.url.searchParams.get('login') === 'out'
-					? 'Your ticket code was removed from this device. Enter it again whenever you want to change your spot.'
-					: '';
+			: loginReason === 'round'
+				? 'A new booking round has started, so this device was signed out. Please enter your ticket code again — it still works.'
+				: loginReason === 'required'
+					? 'Please enter your ticket code first. After that you can open the map and pick your spot.'
+					: loginReason === 'out'
+						? 'Your ticket code was removed from this device. Enter it again whenever you want to change your spot.'
+						: '';
 
 	function checkTicketCode(value: string): string {
 		if (!value) return 'Please enter your ticket code.';

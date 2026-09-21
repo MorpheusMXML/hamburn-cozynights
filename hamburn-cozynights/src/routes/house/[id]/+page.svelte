@@ -27,7 +27,7 @@
 		<p class="subtitle">Choose a room for your night</p>
 	</header>
 
-	{#if data.phase === 'closed'}
+	{#if data.guestPhase === 'closed'}
 		<div class="info-banner" role="status">
 			<div class="banner-icon" aria-hidden="true">🔒</div>
 			<div class="banner-content">
@@ -62,7 +62,7 @@
 						One ticket code is one spot. To pick a different one, release your current spot first.
 					</p>
 				{:else}
-					<p>{ownSpotNote(data.phase)}</p>
+					<p>{ownSpotNote(data.phase, data.guestPhase)}</p>
 				{/if}
 				{#if data.pass}
 					<PassTicket pass={data.pass} />

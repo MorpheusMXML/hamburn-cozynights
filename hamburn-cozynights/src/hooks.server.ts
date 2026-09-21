@@ -15,6 +15,17 @@ import {
 	toAdminSession,
 	toPendingAdmin
 } from '$lib/server/admin-auth';
+import { resolveGuestSession } from '$lib/server/guest-session';
+
+/**
+ * Pages that act for a guest's ticket. The crew's area, the OAuth callback,
+ * the health endpoint, the docs and the booking pass (its code is in the URL)
+ * don't, and shouldn't pay for a ticket lookup.
+ */
+function usesGuestSession(pathname: string): boolean {
+	if (isAdminPath(pathname)) return false;
+	return !/^\/(auth|api|docs|pass)(\/|$)/.test(pathname);
+}
 
 // Fail fast: without a valid ENCRYPTION_KEY the app could neither find ticket
 // codes (lookup hashes) nor read names. A container that starts with a wrong
@@ -66,8 +77,18 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// Use the singleton service-account instance (Master Key)
 	event.locals.adminPb = await getAdminPb();
 
-	// 2. Guest session: the ticket code cookie
-	event.locals.orderNumber = event.cookies.get('bookingCode') || null;
+	// 2. Guest session: the ticket code cookie, checked against the ticket list
+	//    and the booking round, so every guest page sees the same answer and a
+	//    session nobody can use anymore ends here (see $lib/server/guest-session).
+	//    Pages of the crew and endpoints that carry their own code (the booking
+	//    pass) never need it.
+	event.locals.orderNumber = null;
+	if (usesGuestSession(event.url.pathname)) {
+		const session = await resolveGuestSession(event.cookies, event.locals.pb, event.locals.adminPb);
+		event.locals.orderNumber = session.code;
+		event.locals.order = session.order;
+		event.locals.guestSignOut = session.signedOut;
+	}
 
 	// 3. Admin session. Only records of the `admins` collection count; the token
 	//    is re-validated against PocketBase on every request, so approving,
