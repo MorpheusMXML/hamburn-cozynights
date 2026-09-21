@@ -1,6 +1,9 @@
 <script lang="ts">
 	import type { PageData, SubmitFunction } from './$types';
 	import AddRoomForm from '$lib/components/admin/AddRoomForm.svelte';
+	import BookingGuest from '$lib/components/admin/BookingGuest.svelte';
+	import FoldPanel from '$lib/components/admin/FoldPanel.svelte';
+	import { bookingsByRoom, countBookings } from '$lib/bookings';
 	import LayoutLockNotice from '$lib/components/admin/LayoutLockNotice.svelte';
 	import LockGlyph from '$lib/components/LockGlyph.svelte';
 	import { layoutLock, lockAttrs } from '$lib/layout-lock';
@@ -15,6 +18,9 @@
 	// Live Booking and Closed: adding and deleting rooms is locked, the buttons
 	// stay and explain themselves ($lib/layout-lock.ts).
 	$: lock = isLayoutLocked ? layoutLock(phase, isSuperuser) : null;
+	// Who holds which spot, room by room (docs/admin/bookings.md).
+	$: bookingRooms = bookingsByRoom(data.bookings ?? [], house.id);
+	$: bookingCounts = countBookings(data.bookings ?? []);
 
 	type RoomCard = PageData['rooms'][number];
 
@@ -72,7 +78,7 @@
 <div class="dashboard-container">
 	<div class="header-row" in:fly={{ y: -20, duration: 500 }}>
 		<nav class="breadcrumbs" aria-label="Breadcrumb">
-			<a href="/admin">Control Center</a> <span class="sep">/</span>
+			<a href="/admin/camp">Map & houses</a> <span class="sep">/</span>
 			<span class="current">{house.name}</span>
 		</nav>
 		<h1>
@@ -172,9 +178,98 @@
 			</div>
 		{/if}
 	</div>
+
+	<div class="who-is-here">
+		<FoldPanel
+			title="Who is here"
+			icon="🛏️"
+			summary="{bookingCounts.booked} booked · {bookingCounts.checkedIn} checked in{bookingCounts.crew
+				? ` · ${bookingCounts.crew} crew`
+				: ''}"
+			open={bookingCounts.booked + bookingCounts.crew > 0}
+		>
+			{#if data.bookings === null}
+				<p class="who-note">The bookings could not be read. Reload the page to try again.</p>
+			{:else if bookingRooms.length === 0}
+				<p class="who-note">Nobody has booked a spot in this house yet.</p>
+			{:else}
+				{#each bookingRooms as group (group.roomId)}
+					<section class="who-room">
+						<a class="who-room-link" href="/admin/room/{group.roomId}">{group.room}</a>
+						<ul class="who-grid">
+							{#each group.rows as row (row.bedId)}
+								<li>
+									<span class="who-spot">{row.spot || 'Spot'}</span>
+									<BookingGuest {row} />
+								</li>
+							{/each}
+						</ul>
+					</section>
+				{/each}
+			{/if}
+			<a class="who-all" href="/admin/bookings?house={house.id}"
+				>This house in the bookings list →</a
+			>
+		</FoldPanel>
+	</div>
 </div>
 
 <style>
+	.who-is-here {
+		margin-top: 3rem;
+	}
+	.who-note {
+		margin: 0;
+		color: #888;
+		font-size: 0.85rem;
+	}
+	.who-room {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin-bottom: 1.25rem;
+	}
+	.who-room-link {
+		font-size: 0.75rem;
+		font-weight: 900;
+		letter-spacing: 1px;
+		color: #2dd4bf;
+		text-decoration: none;
+		overflow-wrap: anywhere;
+	}
+	.who-room-link:hover {
+		text-decoration: underline;
+	}
+	.who-grid {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
+		gap: 0.75rem;
+	}
+	.who-grid li {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		min-width: 0;
+	}
+	.who-spot {
+		font-size: 0.72rem;
+		font-weight: 800;
+		color: #bbb;
+		overflow-wrap: anywhere;
+	}
+	.who-all {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		font-size: 0.8rem;
+		font-weight: 800;
+		color: #2dd4bf;
+		text-decoration: none;
+	}
+
 	.dashboard-container {
 		max-width: 1200px;
 		margin: 0 auto;

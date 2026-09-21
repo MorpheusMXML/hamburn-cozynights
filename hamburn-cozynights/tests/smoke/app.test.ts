@@ -102,6 +102,17 @@ describe('any deployment (read-only)', () => {
 			403
 		);
 		expect((await post('/admin/messages/preview')).status).toBe(403);
+
+		// who booked which spot: the camp editor, the bookings list and its
+		// check-in, the rows behind them and "Open ticket" are for admins only
+		for (const path of ['/admin/camp', '/admin/templates', '/admin/bookings']) {
+			const res = await get(path);
+			expect(res.status, path).toBe(303);
+			expect(res.headers.get('location'), path).toBe('/admin/login');
+		}
+		expect((await get('/admin/api/bookings')).status).toBe(403);
+		expect((await post('/admin/bookings?/checkin', { order: 'doesnotexist000' })).status).toBe(403);
+		expect((await post('/admin/tickets?/open', { ticket: 'doesnotexist000' })).status).toBe(403);
 	});
 
 	it('ignores a forged admin cookie', async () => {
@@ -340,6 +351,63 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		).toBe(200);
 		expect(await checkedIn()).toBe('');
 		expect((await post(`/room/${room.id}?/unbookBed`, {}, guest)).status).toBe(200);
+	});
+
+	it('shows admins who booked a spot, masked, and checks guests in from the list', async () => {
+		const { room, beds } = await seedHouse(su, 1);
+		const ticket = await seedTicket(su);
+		const guest = await guestLogin(ticket.code);
+		await setBookingOpen(true);
+		await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[0].id, guestName: 'List Arriver' },
+			guest
+		);
+		const checkedIn = async () => (await su.collection('beds').getOne(beds[0].id)).checked_in_at;
+
+		// the ticket holder and a pending access request get nothing
+		const pending = await createAdmin(su, 'pending');
+		for (const cookie of [guest, adminCookie(pending.client)]) {
+			expect((await get(`/admin/api/bookings?room=${room.id}`, cookie)).status).toBe(403);
+			expect(
+				(await post('/admin/bookings?/checkin', { order: ticket.order.id }, cookie)).status
+			).toBe(403);
+		}
+
+		// an admin sees the booking: names, the ticket code masked, never in full
+		const admin = await createAdmin(su, 'admin');
+		const cookie = adminCookie(admin.client);
+		const api = await get(`/admin/api/bookings?room=${room.id}`, cookie);
+		expect(api.status).toBe(200);
+		expect(api.headers.get('cache-control')).toContain('no-store');
+		const body = await api.text();
+		expect(body).not.toContain(ticket.code);
+		const [row] = JSON.parse(body).bookings;
+		expect(row).toMatchObject({
+			bedId: beds[0].id,
+			guest: { orderId: ticket.order.id, name: 'Test Guest', burnerName: 'List Arriver' },
+			checkIn: null
+		});
+		const roomPage = await (await get(`/admin/room/${room.id}`, cookie)).text();
+		expect(roomPage).toContain('List Arriver');
+		expect(roomPage).toContain('action="/admin/tickets?/open"');
+		expect(roomPage).not.toContain(ticket.code);
+
+		// check in without the pass, and back
+		const checked = await post('/admin/bookings?/checkin', { order: ticket.order.id }, cookie);
+		expect(checked.status).toBe(200);
+		expect((await su.collection('beds').getOne(beds[0].id)).checked_in_by).toBe(admin.email);
+		expect((await post('/admin/bookings?/undo', { order: ticket.order.id }, cookie)).status).toBe(
+			200
+		);
+		expect(await checkedIn()).toBe('');
+
+		// Open ticket: the full card, the code still masked (the admin didn't type it)
+		const opened = await post('/admin/tickets?/open', { ticket: ticket.order.id }, cookie);
+		expect(opened.status).toBe(200);
+		const card = await opened.text();
+		expect(card).toContain('The ticket booked on');
+		expect(card).not.toContain(ticket.code);
 	});
 
 	it('opens the admin area for approved admins only', async () => {

@@ -1,89 +1,19 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { fly } from 'svelte/transition';
-	import { page } from '$app/state';
 	import LockHintHost from '$lib/components/admin/LockHintHost.svelte';
+	import AdminNav from '$lib/components/admin/AdminNav.svelte';
 
 	// Get data from server (admin session; null on the login page)
 	export let data;
-
-	let mounted = false;
-	onMount(() => {
-		mounted = true;
-	});
 </script>
 
-<div class="admin-layout">
-	{#if mounted && data.admin}
-		<header class="admin-header" in:fly={{ y: -50, duration: 500 }}>
-			<div class="logo-area">
-				<a href="/admin" class="logo-link">
-					<span class="logo-text">Hamburn</span>
-					<span class="logo-badge">Admin</span>
-				</a>
-				{#if data.isSuperuser}
-					<span class="badge-role">SUPERUSER ⚡️</span>
-				{/if}
-			</div>
-
-			<nav class="admin-nav" aria-label="Admin pages">
-				<a
-					href="/admin/tickets"
-					class="nav-link"
-					class:active={page.url.pathname === '/admin/tickets'}
-					title="Find tickets, change e-mail addresses, load the ticket list">🎟️ Tickets</a
-				>
-				<a
-					href="/admin/requests"
-					class="nav-link requests-link"
-					class:active={page.url.pathname === '/admin/requests'}
-					title="Special-needs requests{data.openRequests
-						? `: ${data.openRequests} waiting for a decision`
-						: ''}"
-				>
-					♿ Special needs
-					{#if data.openRequests}<span class="request-count">{data.openRequests}</span>{/if}
-				</a>
-				<a
-					href="/admin/check"
-					class="nav-link"
-					class:active={page.url.pathname === '/admin/check'}
-					title="Check guests in with their booking pass">🎫 Check-in</a
-				>
-				<a
-					href="/admin/messages"
-					class="nav-link"
-					class:active={page.url.pathname === '/admin/messages'}
-					title="Message texts: what guests get by e-mail, on Telegram and from the bot"
-					>✉️ Messages</a
-				>
-			</nav>
-			<div class="user-info">
-				<span class="user-label">Burner:</span>
-				<span class="user-email" title={data.admin.email}>{data.admin.email}</span>
-			</div>
-
-			<form action="/admin/logout" method="POST" class="logout-form">
-				<button type="submit" class="logout-btn" title="Sign out {data.admin.email}">
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="18"
-						height="18"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-						<polyline points="16 17 21 12 16 7"></polyline>
-						<line x1="21" y1="12" x2="9" y2="12"></line>
-					</svg>
-					<span>Eject 🚀</span>
-				</button>
-			</form>
-		</header>
+<div class="admin-layout" class:with-nav={!!data.admin}>
+	{#if data.admin}
+		<AdminNav
+			email={data.admin.email}
+			isSuperuser={data.isSuperuser}
+			counts={data.navCounts}
+			phase={data.booking?.phase ?? 'staging'}
+		/>
 	{/if}
 
 	<main class="admin-content">
@@ -111,242 +41,29 @@
 		background: radial-gradient(circle at top right, #111, #050505);
 	}
 
-	.admin-header {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: space-between;
-		align-items: center;
-		gap: 0.5rem 1rem;
-		padding: 1rem 2rem;
-		background: rgba(15, 15, 15, 0.8);
-		backdrop-filter: blur(12px);
-		border-bottom: 1px solid #222;
-		position: sticky;
-		/* below the booking countdown bar, if shown (+layout.svelte) */
-		top: var(--booking-bar-height, 0px);
-		z-index: 100;
-		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-	}
-
-	/* One row on wide screens: logo, pages, account, sign-out. The pages never
-	   shrink; the account (a long e-mail address) gives way and is cut with "…".
-	   Squeezed next to the account, the pages once stacked up in a column
-	   (tests/layout checks every width). */
-	.admin-nav {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-		flex-shrink: 0;
-	}
-	.nav-link {
-		display: inline-flex;
-		align-items: center;
-		min-height: 40px;
-		padding: 0 0.9rem;
-		border-radius: 10px;
-		border: 1px solid #2dd4bf;
-		color: #2dd4bf;
-		font-weight: 800;
-		text-decoration: none;
-		white-space: nowrap;
-	}
-	.nav-link:hover {
-		background: rgba(45, 212, 191, 0.1);
-	}
-	.nav-link.active {
-		background: #2dd4bf;
-		color: #000;
-	}
-	.requests-link {
-		gap: 0.4rem;
-		border-color: #f472b6;
-		color: #f9a8d4;
-	}
-	.requests-link:hover {
-		background: rgba(244, 114, 182, 0.1);
-	}
-	.request-count {
-		min-width: 1.4rem;
-		padding: 0 0.35rem;
-		border-radius: 999px;
-		background: #f472b6;
-		color: #111;
-		font-size: 0.8rem;
-		text-align: center;
-	}
-
-	/* Logo Area */
-	.logo-area {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.5rem 1rem;
-		min-width: 0;
-	}
-	.logo-link {
-		min-height: 40px;
-		text-decoration: none;
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		transition: transform 0.2s;
-	}
-	.logo-link:hover {
-		transform: scale(1.02);
-	}
-
-	.logo-text {
-		font-weight: 900;
-		font-size: 1.5rem;
-		letter-spacing: -1px;
-		background: linear-gradient(to right, #2dd4bf, #f472b6);
-		background-clip: text;
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		text-transform: uppercase;
-	}
-
-	.logo-badge {
-		background: #222;
-		color: #888;
-		font-size: 0.7rem;
-		padding: 2px 6px;
-		border-radius: 4px;
-		border: 1px solid #333;
-		text-transform: uppercase;
-		font-weight: bold;
-	}
-
-	/* Account and sign-out */
-	.user-info {
-		flex: 1 1 6rem;
-		margin-left: auto;
-		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		min-width: 0;
-	}
-	.logout-form {
-		display: flex;
-		flex-shrink: 0;
-	}
-
-	.user-label {
-		font-size: 0.65rem;
-		color: #666;
-		text-transform: uppercase;
-		font-weight: bold;
-		letter-spacing: 1px;
-	}
-
-	.user-email {
-		font-size: 0.85rem;
-		color: #2dd4bf;
-		font-family: monospace;
-		max-width: 100%;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.logout-btn {
-		background: transparent;
-		border: 1px solid #f87171;
-		min-height: 40px;
-		white-space: nowrap;
-		padding: 0.5rem 1.25rem;
-		border-radius: 8px;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		color: #f87171;
-		font-size: 0.85rem;
-		font-weight: bold;
-		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-		position: relative;
-		overflow: hidden;
-	}
-
-	.logout-btn:hover {
-		background: rgba(248, 113, 113, 0.1);
-		box-shadow: 0 0 15px rgba(248, 113, 113, 0.3);
-		transform: translateY(-1px);
-	}
-
-	.badge-role {
-		background: rgba(45, 212, 191, 0.1);
-		color: #2dd4bf;
-		padding: 4px 12px;
-		border-radius: 20px;
-		font-size: 0.7rem;
-		font-weight: 900;
-		border: 1px solid #2dd4bf;
-		white-space: nowrap;
-		box-shadow: 0 0 10px rgba(45, 212, 191, 0.2);
-	}
-
 	.admin-content {
 		padding: 2rem;
 		max-width: 1400px;
 		margin: 0 auto;
 		width: 100%;
+		min-width: 0;
 		box-sizing: border-box;
 	}
 
-	/* Narrower: logo, account and sign-out on top, the pages in a row of their own. */
-	@media (max-width: 1400px) {
-		.user-info {
-			order: 1;
+	/* From 1100 px the menu is a sidebar next to the page (AdminNav). */
+	@media (min-width: 1100px) {
+		.admin-layout.with-nav {
+			flex-direction: row;
+			align-items: flex-start;
 		}
-		.logout-form {
-			order: 2;
-		}
-		.admin-nav {
-			order: 3;
-			flex-basis: 100%;
+		.with-nav .admin-content {
+			flex: 1 1 auto;
 		}
 	}
 
 	@media (max-width: 640px) {
-		.admin-header {
-			padding: 0.6rem 1rem;
-		}
-		.logo-text {
-			font-size: 1.2rem;
-		}
-		/* Phones: logo and sign-out on top, no account line. */
-		.logo-area {
-			flex: 1 1 8rem;
-		}
-		.user-info {
-			display: none;
-		}
-		.admin-nav {
-			gap: 0.4rem;
-		}
-		.nav-link {
-			padding: 0 0.6rem;
-			font-size: 0.8rem;
-		}
-		.logout-btn {
-			min-height: 40px;
-			padding: 0.4rem 0.7rem;
-		}
 		.admin-content {
 			padding: 1rem;
 		}
-	}
-
-	/* Laser Line Effect */
-	.admin-header::after {
-		content: '';
-		position: absolute;
-		bottom: -1px;
-		left: 0;
-		width: 100%;
-		height: 1px;
-		background: linear-gradient(90deg, transparent, #2dd4bf, #f472b6, transparent);
-		opacity: 0.5;
 	}
 </style>

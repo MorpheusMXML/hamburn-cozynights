@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
 import { getBookingSettings } from '$lib/server/settings';
 import { countSpots } from '$lib/occupancy';
+import { readBookings } from '$lib/server/bookings';
 import { TEMPLATE_LIMITS } from '$lib/template';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -26,8 +27,15 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			filter: locals.pb.filter('room.house = {:id}', { id: houseId })
 		});
 
-		// 4. Fetch app settings for booking status
-		const settings = await getBookingSettings(locals.pb);
+		// 4. Fetch app settings for booking status, and who holds which spot
+		// (masked like at the check-in desk)
+		const [settings, bookings] = await Promise.all([
+			getBookingSettings(locals.pb),
+			readBookings(locals.adminPb, { houseId }).catch((err) => {
+				console.error('[House] Bookings could not be read:', (err as Error)?.message);
+				return null;
+			})
+		]);
 
 		// 5. Map statistics 📊 (deactivated spots don't count, locked ones aren't free)
 		const roomsWithStats = rooms.map((room) => ({
@@ -38,6 +46,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		return {
 			house,
 			rooms: roomsWithStats,
+			bookings,
 			isLayoutLocked: settings.isLayoutLocked,
 			phase: settings.phase
 		};

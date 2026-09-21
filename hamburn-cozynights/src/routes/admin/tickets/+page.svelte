@@ -57,7 +57,8 @@
 	function showFormResult(result: NonNullable<ActionData>) {
 		if ('search' in result && result.search) {
 			search = result.search as TicketSearch;
-			query = search.query;
+			// Opened from a booked spot: the box stays free for the next search.
+			query = search.by === 'booking' ? '' : search.query;
 		} else if ('updated' in result && result.updated) {
 			const ticket = result.updated.ticket as TicketView;
 			search = { by: 'code', query: ticket.code, tickets: [ticket], more: false };
@@ -354,9 +355,13 @@
 					</p>
 				{:else}
 					<p class="result-meta">
-						{plural(search.tickets.length, 'ticket')}
-						{search.by === 'code' ? 'with the code' : 'with the address'}
-						<strong>{search.query}</strong>{search.more ? ' (only the first ones are shown)' : ''}
+						{#if search.by === 'booking'}
+							The ticket booked on <strong>{search.query || 'no spot any more'}</strong>
+						{:else}
+							{plural(search.tickets.length, 'ticket')}
+							{search.by === 'code' ? 'with the code' : 'with the address'}
+							<strong>{search.query}</strong>{search.more ? ' (only the first ones are shown)' : ''}
+						{/if}
 					</p>
 					{#each search.tickets as ticket (ticket.id)}
 						<TicketCard {ticket} on:saved={(event) => ticketSaved(event.detail)} />

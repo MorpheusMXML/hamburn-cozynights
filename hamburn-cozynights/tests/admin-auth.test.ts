@@ -328,12 +328,13 @@ describe('admin layout', () => {
 			locals: { admin: toAdminSession(ADMIN_RECORD) },
 			url: new URL('http://x/admin')
 		} as any);
-		// openRequests: special-needs requests waiting for a decision (no
-		// database here, so 0)
+		// openRequests and the menu's counts: special-needs requests waiting for
+		// a decision, booked spots, arrivals (no database here, so 0)
 		expect(data).toEqual({
 			admin: { email: 'max@mauersegler.art', name: 'Max', role: 'superuser' },
 			isSuperuser: true,
-			openRequests: 0
+			openRequests: 0,
+			navCounts: { openRequests: 0, booked: 0, arriving: 0 }
 		});
 	});
 });

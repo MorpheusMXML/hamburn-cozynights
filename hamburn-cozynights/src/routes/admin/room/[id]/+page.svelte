@@ -2,13 +2,14 @@
 	import type { PageData, SubmitFunction } from './$types';
 	import type { ActionResult } from '@sveltejs/kit';
 	import AddBedForm from '$lib/components/admin/AddBedForm.svelte';
+	import BookingGuest from '$lib/components/admin/BookingGuest.svelte';
 	import LayoutLockNotice from '$lib/components/admin/LayoutLockNotice.svelte';
 	import LockGlyph from '$lib/components/LockGlyph.svelte';
 	import { LOCK_SPOT_TIP, layoutLock, lockAttrs } from '$lib/layout-lock';
 	import { fade, fly, scale } from 'svelte/transition';
 	import { enhance } from '$app/forms';
 	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
-	import { formatBerlin } from '$lib/booking-phase';
+	import { bookingsBySpot, guestLabel } from '$lib/bookings';
 
 	export let data: PageData;
 	export let form: { message?: string } | null = null;
@@ -20,6 +21,8 @@
 	$: house = room.expand?.house;
 	// Guests the crew checked in at arrival (the booking pass check).
 	$: checkedIn = beds.filter((b) => !!b.order && !!b.checked_in_at).length;
+	// Who holds each booked spot: name, masked e-mail and ticket, check-in.
+	$: bookingOf = bookingsBySpot(data.bookings ?? []);
 	$: roomTitle = room.name || `Room ${room.room_number}`;
 
 	type Bed = PageData['beds'][number];
@@ -54,8 +57,9 @@
 		return async ({ cancel }) => {
 			// A spot with a ticket attached is a guest's booking, not a test flag.
 			if (bed.occupied && bed.order) {
+				const guest = bookingOf[bed.id]?.guest;
 				const confirmed = await confirmDialog(
-					`Spot ${spotName(bed)} was booked by a guest.` +
+					`Spot ${spotName(bed)} was booked by ${guest ? guestLabel(guest) : 'a guest'}.` +
 						(bed.checked_in_at ? ' The guest is checked in, so they are on site.' : '') +
 						' Freeing it cancels that booking: the guest loses the spot and has to book again. Their ticket code stays valid.',
 					{
@@ -117,7 +121,7 @@
 <div class="dashboard-container">
 	<div class="header-row" in:fly={{ y: -20, duration: 500 }}>
 		<nav class="breadcrumbs" aria-label="Breadcrumb">
-			<a href="/admin">Control Center</a>
+			<a href="/admin/camp">Map & houses</a>
 			<span class="sep">/</span>
 			{#if house}<a href="/admin/house/{house.id}">{house.name}</a> <span class="sep">/</span>{/if}
 			<span class="current">Room {room.room_number}</span>
@@ -219,14 +223,15 @@
 							{#if bed.is_special}
 								<span class="bed-status special">SPECIAL NEEDS ♿</span>
 							{/if}
-							{#if bed.order && bed.checked_in_at}
-								<span
-									class="bed-status checked-in"
-									title={bed.checked_in_by ? `Checked in by ${bed.checked_in_by}` : 'Checked in'}
-									>CHECKED IN ✅ {formatBerlin(bed.checked_in_at, { year: false })}</span
-								>
-							{/if}
 						</div>
+
+						{#if bookingOf[bed.id]}
+							<div class="bed-booking">
+								<BookingGuest row={bookingOf[bed.id]} />
+							</div>
+						{:else if bed.occupied && data.bookings === null}
+							<p class="bed-booking-missing">Who booked it could not be read. Reload the page.</p>
+						{/if}
 
 						<div class="bed-actions">
 							<form
@@ -646,6 +651,20 @@
 	/* Own row below the label: the five buttons don't fit next to it in a card of
 	   the grid's minimum width, and the card would clip them. In a narrow card
 	   they wrap onto a second row instead of cutting their words. */
+	/* Who holds the spot: its own row between the label and the buttons. */
+	.bed-booking {
+		flex-basis: 100%;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+	}
+	.bed-booking-missing {
+		flex-basis: 100%;
+		margin: 0;
+		font-size: 0.75rem;
+		color: #fb923c;
+	}
+
 	.bed-actions {
 		display: grid;
 		/* Wide enough for the longest label ("DEACTIVATE"), which was cut to "DEACTIV…". */
@@ -717,10 +736,6 @@
 	.bed-status.special {
 		display: block;
 		color: #f472b6;
-	}
-	.bed-status.checked-in {
-		display: block;
-		color: #2dd4bf;
 	}
 	.btn-icon.vanish:hover:not(.disabled, [data-locked]) {
 		border-color: #f87171;

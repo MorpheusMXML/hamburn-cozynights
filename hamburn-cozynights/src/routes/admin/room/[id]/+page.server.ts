@@ -2,6 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { RoomsResponse, BedsResponse, HousesResponse } from '$lib/pocketbase-types';
 import { getBookingSettings } from '$lib/server/settings';
+import { readBookings } from '$lib/server/bookings';
 import { TEMPLATE_LIMITS } from '$lib/template';
 
 // 1. Define the type including "expand" for related records 🔗
@@ -25,9 +26,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			sort: 'label'
 		});
 
-		const { isLayoutLocked, phase } = await getBookingSettings(locals.pb);
+		const [{ isLayoutLocked, phase }, bookings] = await Promise.all([
+			getBookingSettings(locals.pb),
+			// Who holds each booked spot (masked like at the check-in desk).
+			readBookings(locals.adminPb, { roomId }).catch((err) => {
+				console.error('[Room] Bookings could not be read:', (err as Error)?.message);
+				return null;
+			})
+		]);
 
-		return { room, beds, isLayoutLocked, phase };
+		return { room, beds, bookings, isLayoutLocked, phase };
 	} catch (err) {
 		console.error('Error fetching house spots:', err);
 		throw error(404, 'House room lost in the dust.');
