@@ -169,7 +169,11 @@
 					<a class="special-needs-cta" href="/special-needs">
 						<span aria-hidden="true">♿</span> See your special-needs request
 					</a>
-				{:else if data.specialNeeds.open}
+				{:else if data.specialNeeds.open && notOpenYet}
+					<!-- Before booking opens only, as the guides say. Once it has closed the
+					     ♿ button at the top of the map is the way in, and the final panel with
+					     the pass ticket has no room left: with a line more, LOOK AROUND slid
+					     under the legal links at 320 px (Linux fonts, CI run 35621290451). -->
 					<a class="special-needs-cta" href="/special-needs">
 						<span aria-hidden="true">♿</span> Need a special-needs spot? Ask the crew now
 					</a>
