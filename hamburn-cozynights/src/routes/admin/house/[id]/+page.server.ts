@@ -2,7 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
 import { getBookingSettings } from '$lib/server/settings';
-import { bedTypeMix, parseDetailsForm } from '$lib/accommodation';
+import { bedTypeMix, defaultRoomKind, parseDetailsForm } from '$lib/accommodation';
 import { countSpots } from '$lib/occupancy';
 import { TEMPLATE_LIMITS } from '$lib/template';
 
@@ -136,10 +136,14 @@ export const actions: Actions = {
 				});
 			}
 
+			// A hut group's rooms are huts, a tent area's are tents: the crew can
+			// still change the kind in the room's details.
+			const house = await locals.pb.collection('houses').getOne<HousesResponse>(houseId);
 			const room = await locals.pb.collection('rooms').create({
 				name,
 				room_number: roomNumber,
 				amount_beds: amountBeds,
+				kind: defaultRoomKind(house.kind),
 				house: houseId
 			});
 

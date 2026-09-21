@@ -122,7 +122,7 @@
 			<h3>ADD {roomWord(house.kind).toUpperCase()} ➕</h3>
 		</header>
 		<div class="form-wrapper">
-			<AddRoomForm disabled={isLayoutLocked} />
+			<AddRoomForm disabled={isLayoutLocked} word={roomWord(house.kind)} />
 		</div>
 	</section>
 

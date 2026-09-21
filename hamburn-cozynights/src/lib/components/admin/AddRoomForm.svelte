@@ -5,6 +5,8 @@
 	import { TEMPLATE_LIMITS } from '$lib/template';
 
 	export let disabled = false;
+	/** What a room of this house is called: "room", "hut", "tent" (accommodation.ts). */
+	export let word = 'room';
 
 	type FieldErrors = { name?: string; room_number?: string; amount_beds?: string };
 
@@ -56,7 +58,7 @@
 		return async ({ result, update }) => {
 			submitting = false;
 			if (result.type === 'success') {
-				toast(`🚪 Room "${name}" was added.`, 'success');
+				toast(`🚪 ${word.charAt(0).toUpperCase()}${word.slice(1)} "${name}" was added.`, 'success');
 				await update();
 			} else if (result.type === 'failure') {
 				const data = result.data as { message?: string; errors?: FieldErrors } | undefined;
@@ -84,7 +86,7 @@
 		use:enhance={handleSubmit}
 	>
 		<div class="form-group">
-			<label for="room-name">ROOM DESIGNATION (NAME)</label>
+			<label for="room-name">{word.toUpperCase()} DESIGNATION (NAME)</label>
 			<input
 				type="text"
 				id="room-name"
@@ -105,7 +107,7 @@
 
 		<div class="form-row">
 			<div class="form-group">
-				<label for="room-number">ROOM #</label>
+				<label for="room-number">{word.toUpperCase()} #</label>
 				<input
 					type="text"
 					inputmode="numeric"
@@ -155,7 +157,7 @@
 			class:disabled={disabled || submitting}
 			disabled={disabled || submitting}
 		>
-			{submitting ? 'IGNITING…' : 'IGNITE ROOM ✨'}
+			{submitting ? 'IGNITING…' : `IGNITE ${word.toUpperCase()} ✨`}
 		</button>
 	</form>
 </div>
