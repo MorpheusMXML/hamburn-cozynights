@@ -527,6 +527,14 @@ export function spotMatchesFilters(filters: readonly SpotFilter[], facts: SpotFa
 	return filters.every((filter) => spotMatchesFilter(filter, facts));
 }
 
+/**
+ * A need in a few words ("No ladder"), for lists where the whole sentence of
+ * the guest form would not fit. Falls back to the sentence itself.
+ */
+export function needShort(need: SpecialNeed): string {
+	return SPOT_FILTERS.find((filter) => filter.need === need)?.label ?? needLabel(need);
+}
+
 export function filterLabel(value: unknown): string {
 	return SPOT_FILTERS.find((filter) => filter.value === value)?.label ?? String(value ?? '');
 }

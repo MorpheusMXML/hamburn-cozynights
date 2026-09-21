@@ -11,7 +11,7 @@ shown here and nowhere else.
 	import type { ActionData, PageData } from './$types';
 	import { confirmDialog, toast } from '$lib/dialogs';
 	import { STATUS_LABELS, needLabel, type AdminRequestView, type SpotInfo } from '$lib/special-needs';
-	import { factsOf, matchNeeds } from '$lib/accommodation';
+	import { factsOf, matchNeeds, needShort } from '$lib/accommodation';
 
 	export let data: PageData;
 	// Without JavaScript a refused step comes back here (with it: a toast).
@@ -42,8 +42,8 @@ shown here and nowhere else.
 
 	function fitText(match: ReturnType<typeof matchNeeds>): string {
 		const parts = [
-			...match.fits.map((need) => `✓ ${needLabel(need).toLowerCase()}`),
-			...match.conflicts.map((need) => `✗ ${needLabel(need).toLowerCase()}`)
+			...match.fits.map((need) => `✓ ${needShort(need)}`),
+			...match.conflicts.map((need) => `✗ ${needShort(need)}`)
 		];
 		return parts.length > 0 ? ` — ${parts.join(', ')}` : '';
 	}
