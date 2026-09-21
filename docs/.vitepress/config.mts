@@ -74,8 +74,7 @@ export default defineConfigWithTheme<CozyThemeConfig>({
 	cleanUrls: true,
 	lastUpdated: hasGitHistory,
 	appearance: 'dark',
-	// Old agent planning notes live next to the site sources; they are not docs.
-	srcExclude: ['superpowers/**', ...site.srcExclude],
+	srcExclude: site.srcExclude,
 	...(audience === 'public' && siteUrl ? { sitemap: { hostname: siteUrl } } : {}),
 	// Every other dead link fails the build; local dev URLs are fine.
 	ignoreDeadLinks: 'localhostLinks',

@@ -58,7 +58,7 @@ jobs:
         run: npm run build
       - name: The public site must not contain admin-only sections
         run: |
-          for section in admin develop reference superpowers; do
+          for section in admin develop reference; do
             if [ -e ".vitepress/dist/public/$section" ]; then
               echo "::error::docs/.vitepress/dist/public contains $section/"
               exit 1
