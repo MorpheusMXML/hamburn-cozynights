@@ -64,19 +64,24 @@ EXCLUDES=(
 	'*/vaultwarden/data/icon_cache'
 )
 
-# Retention (restic forget), applied once a day at PRUNE_HOUR (server time).
-KEEP_HOURLY=24
+# Retention (restic forget), applied once a day by the run in PRUNE_HOUR (UTC).
+# The timer runs at 03:20 UTC, so PRUNE_HOUR must be 3. One snapshot a day for
+# 14 days, then weekly and monthly. KEEP_HOURLY only matters when the timer
+# runs more than once a day: it counts hours that HAVE a snapshot, not clock
+# hours (0 = one snapshot per day, the newest).
+KEEP_HOURLY=0
 KEEP_DAILY=14
 KEEP_WEEKLY=8
 KEEP_MONTHLY=12
 PRUNE_HOUR=3
-# Weekly repository check + restore test on this weekday (1 = Monday, 7 = Sunday).
+# Weekly repository check + restore test on this weekday (1 = Monday,
+# 7 = Sunday), in the run at PRUNE_HOUR.
 CHECK_WEEKDAY=7
 
 # Alert on failure: same webhook format as COZY_ADMIN_WEBHOOK_URL, e.g.
 # 'https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<CHAT_ID>'
 ALERT_WEBHOOK_URL=''
 # Optional dead man's switch (alerts when backups stop running at all), e.g. a
-# free check on https://healthchecks.io with period 1 hour, grace 2 hours:
+# free check on https://healthchecks.io with period 1 day, grace 2 hours:
 # 'https://hc-ping.com/<uuid>'
 HEALTHCHECK_URL=''

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Encrypted, versioned backup of the whole server (CozyNights, Vaultwarden,
 # Listmonk, nginx/certificates, .env files) with restic. Installed as
-# /usr/local/sbin/server-backup and run hourly by server-backup.timer as root;
-# setup and restore: deploy/backup/README.md.
+# /usr/local/sbin/server-backup and run once a day (03:20 UTC) by
+# server-backup.timer as root; setup and restore: deploy/backup/README.md.
 #
 # Where the repository lives is configuration only (RESTIC_REPOSITORY):
 #   /var/backups/restic/<host>       local directory (stage 1)
@@ -14,9 +14,10 @@
 #   1. consistent copies of all live databases into $WORK_DIR/dumps
 #      (SQLite via the online backup API, PostgreSQL via pg_dump)
 #   2. restic backup of the dumps plus the configured files/directories
-#   3. once a day (PRUNE_HOUR): apply the retention policy and prune
-#   4. once a week (CHECK_WEEKDAY at PRUNE_HOUR): verify part of the repository
-#      and test-restore the latest database dumps
+#   3. once a day (the run in PRUNE_HOUR, UTC): apply the retention policy
+#      and prune
+#   4. once a week (CHECK_WEEKDAY at PRUNE_HOUR, UTC): verify part of the
+#      repository and test-restore the latest database dumps
 # Any failure is reported to ALERT_WEBHOOK_URL; HEALTHCHECK_URL (optional) is a
 # dead man's switch that also notices when the timer stops running at all.
 #
@@ -48,7 +49,7 @@ export RESTIC_REPOSITORY RESTIC_PASSWORD_FILE
 # systemd starts the service without HOME; restic wants it for its cache.
 export HOME="${HOME:-/root}"
 WORK_DIR="${WORK_DIR:-/var/backups/server-backup}"
-KEEP_HOURLY="${KEEP_HOURLY:-24}"
+KEEP_HOURLY="${KEEP_HOURLY:-0}"
 KEEP_DAILY="${KEEP_DAILY:-14}"
 KEEP_WEEKLY="${KEEP_WEEKLY:-8}"
 KEEP_MONTHLY="${KEEP_MONTHLY:-12}"
@@ -58,6 +59,12 @@ MIN_FREE_GB="${MIN_FREE_GB:-5}"
 MIN_FREE_PERCENT="${MIN_FREE_PERCENT:-15}"
 ALERT_WEBHOOK_URL="${ALERT_WEBHOOK_URL:-}"
 HEALTHCHECK_URL="${HEALTHCHECK_URL:-}"
+# Hour and weekday of this run (UTC, like OnCalendar in server-backup.timer),
+# taken once at the start: dumps and the backup can run past the full hour,
+# and with one run a day a skipped retention or check would not come back
+# until the next day (or week).
+RUN_HOUR="$(date -u +%-H)"
+RUN_WEEKDAY="$(date -u +%u)"
 [[ -n "${SQLITE_DBS+set}" ]] || SQLITE_DBS=()
 [[ -n "${PG_DUMPS+set}" ]] || PG_DUMPS=()
 [[ -n "${BACKUP_PATHS+set}" ]] || BACKUP_PATHS=()
@@ -263,7 +270,8 @@ restic backup --quiet --host "$HOST" --tag "$TAG" "${exclude_args[@]}" "${source
 log "snapshot created ($(restic snapshots --host "$HOST" --tag "$TAG" --json | jq -r 'max_by(.time).short_id'))"
 
 # --- 3. retention (daily) --------------------------------------------------
-if [[ $mode == check || "$(date +%-H)" -eq "$PRUNE_HOUR" ]]; then
+# PRUNE_HOUR must be the hour of server-backup.timer (UTC).
+if [[ $mode == check || "$RUN_HOUR" -eq "$PRUNE_HOUR" ]]; then
 	# A run killed half-way (reboot, OOM) leaves its lock behind and prune would
 	# refuse to start. This only removes locks whose process is gone.
 	restic unlock --quiet
@@ -274,7 +282,7 @@ if [[ $mode == check || "$(date +%-H)" -eq "$PRUNE_HOUR" ]]; then
 fi
 
 # --- 4. verification and restore test (weekly) ----------------------------
-if [[ $mode == check || ("$(date +%u)" -eq "$CHECK_WEEKDAY" && "$(date +%-H)" -eq "$PRUNE_HOUR") ]]; then
+if [[ $mode == check || ("$RUN_WEEKDAY" -eq "$CHECK_WEEKDAY" && "$RUN_HOUR" -eq "$PRUNE_HOUR") ]]; then
 	restic check --quiet --read-data-subset=10%
 	restore_dir="$(mktemp -d "$WORK_DIR/restore-test.XXXXXX")"
 	restic restore --quiet latest --host "$HOST" --tag "$TAG" --target "$restore_dir" --include "$DUMP_DIR"
