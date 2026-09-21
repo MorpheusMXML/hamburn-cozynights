@@ -98,6 +98,8 @@ Operators can load the same file on the server:
 ./scripts/cozy-admin.sh tickets import roster.csv             # create and update the tickets
 ```
 
+A ticket whose address **changes** while it still carries something of its holder (a booking pass, a Telegram chat, a special-needs request, a burner name or a check-in) is refused, and nothing is imported: such a ticket changed hands, and the server import can't decide that per row. Hand it over on the [Tickets](./tickets#a-ticket-passed-on-to-someone-else) page, or repeat the import with `--hand-over` for a file where every changed address is a new holder. A ticket's first address is never a hand-over.
+
 The file needs a header row with a **code** column and an **email** column; a **name** column is optional. Other spellings work too (`Order code`, `Ticket`, `E-Mail`, `Attendee name`, …), and so do commas, semicolons or tabs between the columns:
 
 ```csv

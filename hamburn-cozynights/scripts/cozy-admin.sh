@@ -20,11 +20,17 @@
 #
 # Ticket codes (the guests' logins, collection `orders`) and the ticket holders'
 # e-mail addresses for booking confirmations (superusers can also load the list
-# in the app, /admin/tickets, which can also hand a ticket over to a new holder):
-#   scripts/cozy-admin.sh tickets import <roster.csv> [--dry-run]
+# in the app, /admin/tickets, which decides per ticket whether it changed hands):
+#   scripts/cozy-admin.sh tickets import <roster.csv> [--dry-run] [--hand-over]
 #                                                       create/update tickets from a CSV file with
 #                                                       the columns code, email (and name); checks
-#                                                       the whole file first
+#                                                       the whole file first. A changed address on
+#                                                       a ticket that still has a pass, a Telegram
+#                                                       chat, a special-needs request, a burner name
+#                                                       or a check-in is refused — use the Tickets
+#                                                       page, or --hand-over to treat EVERY changed
+#                                                       address in the file as a new holder (drops
+#                                                       all of that, keeps the spot)
 #   scripts/cozy-admin.sh tickets add <code> [<code> ...] [--name <label>] [--email <address>]
 #                                                       create tickets for known codes (--email:
 #                                                       one code only)
@@ -173,7 +179,7 @@ case "$cmd" in
 		require_running
 		if [[ "$1" == "import" ]]; then
 			# The file lives on the host; the command reads it from stdin.
-			[[ $# -ge 2 && -f "$2" ]] || die "usage: $0 tickets import <roster.csv> [--dry-run]"
+			[[ $# -ge 2 && -f "$2" ]] || die "usage: $0 tickets import <roster.csv> [--dry-run] [--hand-over]"
 			file="$2"
 			shift 2
 			cozy -- tickets import - "$@" <"$file"

@@ -54,6 +54,9 @@ Choose whatever is at hand; all four check the guest in the same way.
 | **USB barcode scanner** | Plug it in, click into the field on **Check-in**, scan. Scanners type the link and press <kbd>Enter</kbd>, like a keyboard. |
 | **Phone camera** | Open the camera app, point it at the QR code, tap the link. If you are signed in to the admin area in that browser, the pass opens with the booking on top and a big <kbd>✅ Check in</kbd> button. Opening the pass alone changes nothing. |
 
+> [!TIP] The guest can't show their pass?
+> A dead phone, a mail they can't find: look the ticket up on the [Tickets](./tickets) page — by its code or by the holder's address — and the card shows its pass code (🎫 `7F3K-9QXM-2CWD`), linked to the pass itself. Open it and check them in there, or type the code on **Check-in**. A ticket without a spot has no pass code yet.
+
 ![Check-in page: the code field, the camera button and the latest results, one valid and one unknown](../assets/screenshots/admin-check.webp)
 
 ### What the result means

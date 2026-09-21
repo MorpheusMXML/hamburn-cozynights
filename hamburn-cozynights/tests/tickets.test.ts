@@ -238,7 +238,7 @@ describe('diffRoster', () => {
 		expect(created).toMatchObject({ id: null, name: 'Ticket HB-3', email: 'linus@example.org' });
 		// empty cells keep what is stored
 		expect(diff.unchanged.map((u) => u.code)).toEqual(['HB-1', 'HB-4']);
-		expect(diff.notInFile).toEqual([{ code: 'HB-9', hasSpot: true }]);
+		expect(diff.notInFile).toEqual([{ id: 'id-HB-9', code: 'HB-9', hasSpot: true }]);
 	});
 
 	it('treats an address that differs only in case as unchanged', () => {
