@@ -673,8 +673,26 @@ const cozyTicketsImport = new Command({
 		}
 
 		const dryRun = cmd.flags().getBool('dry-run');
-		const counts = { created: 0, updated: 0, unchanged: 0, confirmations: 0, withoutEmail: 0 };
+		const handOverAllowed = cmd.flags().getBool('hand-over');
+		// What handing a ticket over means is described in one place, shared with
+		// the app's Tickets page (pb_hooks/lib/handover.js).
+		const handover = require(`${__hooks}/lib/handover.js`);
+		const counts = {
+			created: 0,
+			updated: 0,
+			unchanged: 0,
+			confirmations: 0,
+			withoutEmail: 0,
+			handedOver: 0
+		};
+		// Tickets whose address would change although they still carry something
+		// of their holder. Without --hand-over the whole file is refused: the CLI
+		// has no per-row choice, and silently swapping the address would leave the
+		// old holder's pass, Telegram chat and special-needs request on the ticket.
+		const refusals = [];
+		const handedOverLines = [];
 		let conflict = '';
+		const pbNow = cozyNotifyModule().pbDate(Date.now());
 		try {
 			$app.runInTransaction((txApp) => {
 				for (const entry of entries) {
@@ -698,7 +716,34 @@ const cozyTicketsImport = new Command({
 					}
 					// Empty cells leave the stored value alone.
 					let changed = false;
-					if (entry.email && exact.getString('email') !== entry.email) {
+					const newAddress = !!entry.email && exact.getString('email') !== entry.email;
+					if (newAddress) {
+						const state = handover.holderState(txApp, exact);
+						if (state.any && !handOverAllowed) {
+							refusals.push(
+								'line ' +
+									entry.line +
+									': ' +
+									entry.code +
+									' still has ' +
+									handover.describeState(state) +
+									' of its current holder'
+							);
+							continue;
+						}
+						if (state.any) {
+							handover.handOver(txApp, exact, pbNow);
+							counts.handedOver++;
+							handedOverLines.push(
+								'  hand-over: ' +
+									entry.code +
+									' → ' +
+									entry.email +
+									' (drops ' +
+									handover.describeState(state) +
+									')'
+							);
+						}
 						exact.set('email', entry.email);
 						changed = true;
 						if (cozyBedOfTicket(txApp, exact.id)) counts.confirmations++;
@@ -714,10 +759,25 @@ const cozyTicketsImport = new Command({
 						counts.unchanged++;
 					}
 				}
+				if (refusals.length > 0) throw new Error('cozy-refused');
 				if (dryRun) throw new Error('cozy-dry-run');
 			});
 		} catch (err) {
-			if (String(err).indexOf('cozy-dry-run') < 0) {
+			const failure = String(err);
+			if (failure.indexOf('cozy-refused') >= 0) {
+				for (const r of refusals.slice(0, MAX_IMPORT_PROBLEMS_SHOWN)) cmd.println(r);
+				if (refusals.length > MAX_IMPORT_PROBLEMS_SHOWN) {
+					cmd.println('… and ' + (refusals.length - MAX_IMPORT_PROBLEMS_SHOWN) + ' more');
+				}
+				cozyFail(
+					cmd,
+					refusals.length +
+						' ticket(s) would change hands — nothing was imported. Hand them over on the ' +
+						'Tickets page (🎟️ Tickets → "🔁 New holder"), which decides per ticket, or run ' +
+						'this import again with --hand-over to do it for every one of them.'
+				);
+			}
+			if (failure.indexOf('cozy-dry-run') < 0) {
 				cozyFail(cmd, 'nothing was imported: ' + (conflict || err));
 			}
 		}
@@ -732,11 +792,24 @@ const cozyTicketsImport = new Command({
 				counts.unchanged +
 				' ticket(s)'
 		);
+		if (counts.handedOver > 0) {
+			cmd.println(
+				'  ' +
+					counts.handedOver +
+					' ticket(s) changed hands: old pass, burner name, Telegram chat, special-needs ' +
+					'request and check-in are gone'
+			);
+			for (const line of handedOverLines.slice(0, MAX_IMPORT_PROBLEMS_SHOWN)) cmd.println(line);
+			if (handedOverLines.length > MAX_IMPORT_PROBLEMS_SHOWN) {
+				cmd.println('  … and ' + (handedOverLines.length - MAX_IMPORT_PROBLEMS_SHOWN) + ' more');
+			}
+		}
 		if (counts.confirmations > 0) {
 			cmd.println(
 				'  ' +
 					counts.confirmations +
-					' of the updated tickets hold a spot: their new address gets a confirmation'
+					' of the updated tickets hold a spot: their new address gets a ' +
+					(counts.handedOver > 0 ? 'message' : 'confirmation')
 			);
 		}
 		if (counts.withoutEmail > 0) {
@@ -765,11 +838,37 @@ const cozyTicketsImport = new Command({
 				'  ' + others + ' ticket(s) in the database are not in this file (left unchanged)'
 			);
 		}
+
+		// The crew group hears about an import from the server the same way it
+		// hears about one from the Tickets page — until now this one was silent.
+		if (!dryRun && counts.created + counts.updated > 0) {
+			try {
+				cozyNotifyModule().logEvent($app, 'tickets_imported', {
+					actor: 'cozy-admin (server)',
+					subject: '',
+					details: {
+						created: counts.created,
+						updated: counts.updated,
+						newHolders: counts.handedOver,
+						failed: 0
+					}
+				});
+			} catch (err) {
+				cmd.println('  note: the crew group could not be told about this import: ' + err);
+			}
+		}
 	}
 });
 cozyTicketsImport
 	.flags()
 	.bool('dry-run', false, 'check the file and show what would change, without changing anything');
+cozyTicketsImport
+	.flags()
+	.bool(
+		'hand-over',
+		false,
+		'treat every changed address as a new holder: drops the old pass, burner name, Telegram chat, special-needs request and check-in'
+	);
 cozyTickets.addCommand(cozyTicketsImport);
 
 cozyTickets.addCommand(
