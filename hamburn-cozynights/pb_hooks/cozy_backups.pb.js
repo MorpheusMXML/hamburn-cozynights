@@ -3,9 +3,12 @@
 // Local PocketBase auto-backups, synced from the environment on every start
 // (config as code, like the Google client in cozy_admin.pb.js):
 //
-//   PB_BACKUP_CRON  cron expression in UTC, default "5 * * * *" (hourly);
-//                   "off" disables the auto-backups
-//   PB_BACKUP_KEEP  number of auto-backups kept in pb_data/backups, default 72
+//   PB_BACKUP_CRON  cron expression in UTC, default "5 3 * * *" (once a day:
+//                   05:05 in Berlin in summer, 04:05 in winter); "off"
+//                   disables the auto-backups
+//   PB_BACKUP_KEEP  number of auto-backups kept in pb_data/backups, default 14
+//                   (two weeks). Right after each auto-backup PocketBase
+//                   deletes the oldest "@auto_pb_backup_*" ZIPs beyond this.
 //
 // These ZIP archives are the quick undo (dashboard → Settings → Backups →
 // Restore). They live on the same disk as the database, so they are no
@@ -18,10 +21,10 @@ onBootstrap((e) => {
 	// Handlers run in an isolated context: everything they use must be
 	// declared in here, not at file level.
 	try {
-		const rawCron = ($os.getenv('PB_BACKUP_CRON') || '5 * * * *').trim();
+		const rawCron = ($os.getenv('PB_BACKUP_CRON') || '5 3 * * *').trim();
 		const cron = rawCron === 'off' ? '' : rawCron;
 		const rawKeep = $os.getenv('PB_BACKUP_KEEP');
-		const keep = rawKeep ? parseInt(rawKeep, 10) : 72;
+		const keep = rawKeep ? parseInt(rawKeep, 10) : 14;
 
 		if (!(keep >= 1)) {
 			console.error('[cozy-backups] PB_BACKUP_KEEP must be a number >= 1, got: ' + rawKeep);

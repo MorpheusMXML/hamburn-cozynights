@@ -107,9 +107,9 @@ The live database stays on the server's local disk. SQLite must not run on a net
 
 Backups come in layers. The first two need no setup:
 
-- **Hourly ZIPs:** PocketBase writes ZIP backups into its volume (`pb_hooks/cozy_backups.pb.js`, `PB_BACKUP_CRON` / `PB_BACKUP_KEEP`; default: hourly, keep 72; `PB_BACKUP_CRON=off` switches them off). A quick undo from the dashboard.
+- **Daily ZIPs:** PocketBase writes a ZIP backup into its volume once a day (`pb_hooks/cozy_backups.pb.js`, `PB_BACKUP_CRON` / `PB_BACKUP_KEEP`; default: 03:05 UTC, keep 14, i.e. two weeks; `PB_BACKUP_CRON=off` switches them off). A quick undo from the dashboard; before a bigger change, start one by hand there.
 - **Before every deploy:** the deploy script archives the volume.
-- **Versioned server backup, hourly:** `deploy/backup/server-backup.sh` copies all live databases of the server consistently and stores them, together with configuration and certificates, in an encrypted [restic](https://restic.net) repository (24 hourly, 14 daily, 8 weekly and 12 monthly snapshots). It alerts on failure and on a disk running full, and test-restores the databases weekly.
+- **Versioned server backup, once a day (needs the setup below):** `deploy/backup/server-backup.sh` (03:20 UTC) copies all live databases of the server consistently and stores them, together with configuration and certificates, in an encrypted [restic](https://restic.net) repository (14 daily, 8 weekly and 12 monthly snapshots). It alerts on failure and on a disk running full, and test-restores the databases weekly.
 
 The restic repository is set up in two stages that differ by one line of configuration:
 

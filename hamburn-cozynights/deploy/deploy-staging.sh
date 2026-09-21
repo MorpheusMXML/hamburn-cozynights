@@ -96,7 +96,7 @@ if [[ -n "$volume" ]]; then
 	backup="pb_data-$(date -u +%Y%m%dT%H%M%SZ)-${prev:0:7}.tar.gz"
 	log "backing up volume $volume → $BACKUP_DIR/$backup"
 	compose stop pocketbase
-	# backups/ holds PocketBase's own hourly ZIPs (pb_hooks/cozy_backups.pb.js):
+	# backups/ holds PocketBase's own auto-backup ZIPs (pb_hooks/cozy_backups.pb.js):
 	# not needed to roll back a deploy, and they would bloat every archive.
 	if ! docker run --rm -v "$volume":/pb_data:ro -v "$BACKUP_DIR":/backup "$HELPER_IMAGE" \
 		tar czf "/backup/$backup" --exclude=./backups -C /pb_data .; then

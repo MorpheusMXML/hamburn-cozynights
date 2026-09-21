@@ -1,9 +1,11 @@
 [Unit]
-Description=Hourly server backup with restic
+Description=Server backup with restic, once a day (03:20 UTC)
 
 [Timer]
-# PocketBase's own local auto-backups run at minute 5 (pb_hooks/cozy_backups.pb.js).
-OnCalendar=*-*-* *:20:00
+# PocketBase's own local auto-backup runs at 03:05 UTC
+# (pb_hooks/cozy_backups.pb.js). PRUNE_HOUR in backup.conf must be the hour
+# here (UTC), or retention and the weekly check never run.
+OnCalendar=*-*-* 03:20:00 UTC
 RandomizedDelaySec=5m
 Persistent=true
 
