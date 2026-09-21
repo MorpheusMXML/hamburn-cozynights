@@ -8,7 +8,7 @@
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { enhance } from '$app/forms';
 	import { toast } from '$lib/dialogs';
-	import { BED_TYPES, featuresFor } from '$lib/accommodation';
+	import { BED_TYPES, featuresFor, readFeatures } from '$lib/accommodation';
 	import { TEMPLATE_LIMITS } from '$lib/template';
 
 	export let bed: {
@@ -16,7 +16,7 @@
 		room: string;
 		label?: string;
 		bed_type?: string;
-		features?: string[];
+		features?: string[] | string;
 	};
 	/** The label belongs to the layout: only in Staging Mode. */
 	export let canRename = false;
@@ -26,7 +26,7 @@
 	let submitting = false;
 
 	$: spotFeatures = featuresFor('spot');
-	$: chosen = new Set(bed.features ?? []);
+	$: chosen = new Set(readFeatures(bed.features, 'spot'));
 	$: name = bed.label || 'this spot';
 
 	const handleSubmit: SubmitFunction = () => {

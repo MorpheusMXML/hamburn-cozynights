@@ -48,6 +48,14 @@ const BED_FEATURES = ['power'];
 
 const DESCRIPTION_MAX = 500;
 
+// A select may pick at most as many values as it has. Where the catalogue
+// allows only one feature today (spots: a power socket), PocketBase stores and
+// returns a single value instead of a list — `readFeatures` in
+// src/lib/accommodation.ts reads both shapes, and a second spot feature later
+// raises this limit in a new migration.
+const featuresField = (values) =>
+	new SelectField({ name: 'features', maxSelect: values.length, values: values });
+
 migrate(
 	(app) => {
 		const addField = (collection, field) => {
@@ -66,14 +74,7 @@ migrate(
 			houses,
 			[
 				addField(houses, new SelectField({ name: 'kind', maxSelect: 1, values: HOUSE_KINDS })),
-				addField(
-					houses,
-					new SelectField({
-						name: 'features',
-						maxSelect: HOUSE_FEATURES.length,
-						values: HOUSE_FEATURES
-					})
-				),
+				addField(houses, featuresField(HOUSE_FEATURES)),
 				addField(houses, new TextField({ name: 'description', max: DESCRIPTION_MAX }))
 			].some(Boolean)
 		);
@@ -83,14 +84,7 @@ migrate(
 			rooms,
 			[
 				addField(rooms, new SelectField({ name: 'kind', maxSelect: 1, values: ROOM_KINDS })),
-				addField(
-					rooms,
-					new SelectField({
-						name: 'features',
-						maxSelect: ROOM_FEATURES.length,
-						values: ROOM_FEATURES
-					})
-				),
+				addField(rooms, featuresField(ROOM_FEATURES)),
 				addField(rooms, new TextField({ name: 'description', max: DESCRIPTION_MAX }))
 			].some(Boolean)
 		);
@@ -100,10 +94,7 @@ migrate(
 			beds,
 			[
 				addField(beds, new SelectField({ name: 'bed_type', maxSelect: 1, values: BED_TYPES })),
-				addField(
-					beds,
-					new SelectField({ name: 'features', maxSelect: BED_FEATURES.length, values: BED_FEATURES })
-				)
+				addField(beds, featuresField(BED_FEATURES))
 			].some(Boolean)
 		);
 	},

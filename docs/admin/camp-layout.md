@@ -3,7 +3,7 @@
 The camp is a simple tree: **houses** on the map contain **rooms**, and rooms contain **spots**, one per bed.
 
 > [!IMPORTANT] Staging only
-> All structural changes need Staging Mode. During Live Booking and after booking closed the server refuses them. Only locking/unlocking 🔒 and marking spots ♿ special or normal still work. See [Staging, Live Booking & Closed](../guide/phases).
+> All structural changes need Staging Mode. During Live Booking and after booking closed the server refuses them. Only locking/unlocking 🔒, marking spots ♿ special or normal and the **details** below still work. See [Staging, Live Booking & Closed](../guide/phases).
 
 ## Houses
 
@@ -24,6 +24,22 @@ CozyNights creates the house, a first room called **Main Module** (#1), and spot
 
 > [!CAUTION] Deleting is final
 > Deleting a house deletes all its rooms and spots too. Any test bookings on them are released first, and ticket codes stay valid. Not sure? [Export a template](./templates) before you delete.
+
+### House details 🏷️
+
+**HOUSE DETAILS 🏷️** on the house page says what the place is like. Guests read it when they pick a spot, and the ♿ picker matches [special-needs requests](./special-needs) with it.
+
+| Field | What it is |
+| --- | --- |
+| KIND | 🏠 House · 🛖 Hut group · ⛺ Tent area · 📍 Other. A **hut group** keeps one pin on the map and its huts are its rooms: the pin gets the 🛖 icon and the guest page says *Choose a hut*. |
+| FEATURES | ♿ Wheelchair accessible · ⬇️ Ground floor · 🚻 Toilets + showers inside · 🔥 Heated · ❄️ No heating · 🤫 Quiet zone. Everything inside the house inherits them. |
+| DESCRIPTION | Up to 500 characters of your own, shown to guests: *"Showers and toilets in the wash house, 50 m along the path."* |
+
+Press <kbd>SAVE DETAILS 🏷️</kbd>. Details can be changed **in every phase** — they describe the place, they don't move a booking.
+
+::: tip Say nothing rather than something wrong
+An empty field means *not specified*, and the app never guesses. A spot the crew didn't describe never matches a guest's wish and never counts as fitting a ♿ request, so it is worth filling in the details before booking opens.
+:::
 
 ## Rooms
 
@@ -48,9 +64,20 @@ Press <kbd>IGNITE ROOM ✨</kbd>.
 > [!NOTE] New spots are active
 > Every new spot, whether it comes with a house, with a room or on its own, is **active**: guests can book it as soon as booking opens. Lock 🔒 or deactivate ❄️ the spots that shouldn't be booked, see [Spot actions](#spot-actions).
 
+### Room details 🏷️
+
+**ROOM DETAILS 🏷️** on the room page works like the house panel, with the room's own list:
+
+| Field | What it is |
+| --- | --- |
+| NAME | Only in Staging Mode: the name belongs to the layout. The field is gone while booking is live or closed. |
+| KIND | Room · Hut · Tent · Other. |
+| FEATURES | ♿ Wheelchair accessible · ⬇️ Ground floor · 🛁 Own bathroom · 🔥 Heated · ❄️ No heating · 🤫 Quiet zone · 🔌 Power socket. They come **on top of** the house's: a heated room in an unheated hut group counts as heated. |
+| DESCRIPTION | Up to 500 characters, shown to guests. |
+
 ### Room cards
 
-Each card under **ACTIVE ROOMS 🚪** shows the room number, name and **SPOTS CLAIMED 📊** (taken / active). Click a card or <kbd>MANAGE SPOTS 🛌</kbd> to manage its spots. <kbd>VANISH ROOM 🌪️</kbd> deletes the room **with all its spots and any bookings on them**; the guests get a *spot was released* message, and their ticket codes stay valid.
+Each card under **ACTIVE ROOMS 🚪** (or *huts*, *tents*, depending on the house's kind) shows the room number, name, its kind and features, what kind of beds it holds and **SPOTS CLAIMED 📊** (taken / active). Click a card or <kbd>MANAGE SPOTS 🛌</kbd> to manage its spots. <kbd>VANISH ROOM 🌪️</kbd> deletes the room **with all its spots and any bookings on them**; the guests get a *spot was released* message, and their ticket codes stay valid.
 
 ## Spots
 
@@ -59,6 +86,18 @@ Open a room by clicking its card on the house page.
 ![Room page with spots in every state](../assets/screenshots/admin-room.webp)
 
 **LOGISTICS 📊** counts taken versus active spots. **ADD SPOT ➕** adds a single spot: give it a label such as *B1* or *Top Bunk* (each label only once per room) and press <kbd>IGNITE ⚡️</kbd>.
+
+### What kind of bed a spot is
+
+**SPOT TYPES 🛏️** in the room's sidebar sets every spot of the room at once, in label order:
+
+| Choice | Result |
+| --- | --- |
+| Bunk beds: lower, upper, lower… | B1 is a lower bunk, B2 the upper one above it, and so on — a room of four bunk beds in one click. |
+| All single beds | Every spot a single bed. |
+| Not specified | Clears the bed type again. |
+
+<kbd>🏷️ DETAILS</kbd> on a spot card opens its own editor: the **BED** (single bed, lower or upper bunk, one half of a double bed, sofa, mattress, camp bed), a **🔌 power socket** at that spot, and in Staging Mode its **LABEL**. Guests see the bed under the spot's label, and the ♿ picker uses it: *a lower bunk or a bed without a ladder* fits every bed but an upper bunk.
 
 ### Spot states
 
@@ -78,6 +117,7 @@ Open a room by clicking its card on the house page.
 | ♿ SPECIAL / NORMAL | Keep the spot for [special-needs requests](./special-needs), or give it back to all guests | <span class="yes">✓</span> allowed |
 | ❄️ DEACTIVATE / ⚡️ ACTIVATE | Take the spot out of use / back in | <span class="no">✗</span> |
 | 🔄 TAKEN / FREE | Mark the spot as taken without a ticket, or free it | <span class="no">✗</span> |
+| 🏷️ DETAILS | Bed type and 🔌 socket of this spot (its label only in Staging Mode) | <span class="yes">✓</span> allowed |
 | 🗑 DELETE | Delete the spot | <span class="no">✗</span> |
 
 ::: tip Lock or deactivate?

@@ -139,8 +139,12 @@ export type BedsRecord = {
 	checked_in_by?: string;
 	/** What kind of bed this spot is (src/lib/accommodation.ts); empty = not specified. */
 	bed_type?: string;
-	/** What is true for this spot itself; it inherits its room's and house's features. */
-	features?: string[];
+	/**
+	 * What is true for this spot itself; it inherits its room's and house's
+	 * features. PocketBase returns a single value rather than a list while the
+	 * catalogue allows only one spot feature — read it with `readFeatures`.
+	 */
+	features?: string[] | string;
 };
 
 export type HousesRecord = {

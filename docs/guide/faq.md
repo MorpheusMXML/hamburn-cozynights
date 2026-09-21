@@ -18,6 +18,10 @@ After many wrong codes from the same network, CozyNights pauses sign-in attempts
 CozyNights couldn't reach its database for a moment. Your code is fine. Try again shortly.
 :::
 
+::: details A spot says nothing about its bed, or my wish finds no spot
+CozyNights only shows what the crew filled in: an empty spot card means *nobody said*, not *no bed*. The wishes above the map (**Looking for…**) are strict for the same reason — they only keep spots the crew actually described, so nothing is promised that isn't written down. Ask the crew if a detail matters to you, and use the [special-needs request](./special-needs) if you need a particular kind of spot.
+:::
+
 ::: details The map is blurry and houses don't open ("Booking is not open yet…")
 Booking hasn't opened yet. Once the crew has armed the timer, a countdown shows when it starts, and the map unlocks by itself when it ends. Without a countdown the map says *Booking is not open yet. The crew is still setting up the houses. Check back soon.* <kbd>📡 RELOAD SENSORS</kbd> refreshes the page state.
 :::

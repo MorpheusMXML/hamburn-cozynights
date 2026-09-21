@@ -157,7 +157,8 @@ export interface LayoutRecords {
 		is_locked?: boolean;
 		is_special?: boolean;
 		bed_type?: string;
-		features?: string[];
+		/** A list, or the single value PocketBase returns for a one-value select. */
+		features?: string[] | string;
 	}[];
 }
 

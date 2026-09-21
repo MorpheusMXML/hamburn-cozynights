@@ -317,9 +317,10 @@ export interface SpotFacts {
 }
 
 export interface FeatureSource {
-	house?: readonly string[] | null;
-	room?: readonly string[] | null;
-	spot?: readonly string[] | null;
+	house?: readonly string[] | string | null;
+	room?: readonly string[] | string | null;
+	/** PocketBase returns a single value for a select that allows only one. */
+	spot?: readonly string[] | string | null;
 }
 
 /**

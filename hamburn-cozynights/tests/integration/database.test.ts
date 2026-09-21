@@ -4,6 +4,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type PocketBase from 'pocketbase';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
+import { readFeatures } from '../../src/lib/accommodation';
 import {
 	anonymous,
 	createAdmin,
@@ -58,6 +59,66 @@ describe('schema from pb_migrations/', () => {
 				'created'
 			])
 		);
+	});
+});
+
+describe('the details of a place (pb_migrations/1759800000_accommodation.js)', () => {
+	it('gave houses, rooms and spots their kind, features and description', async () => {
+		const fieldsOf = async (name: string) =>
+			(await su.collections.getOne(name)).fields.map((f: { name: string }) => f.name);
+
+		expect(await fieldsOf('houses')).toEqual(
+			expect.arrayContaining(['kind', 'features', 'description'])
+		);
+		expect(await fieldsOf('rooms')).toEqual(
+			expect.arrayContaining(['kind', 'features', 'description'])
+		);
+		expect(await fieldsOf('beds')).toEqual(expect.arrayContaining(['bed_type', 'features']));
+	});
+
+	it('stores what the catalogue allows on the level it belongs to', async () => {
+		const { house, room, beds } = await seedHouse(su, 1);
+		const saved = await su.collection('houses').update(house.id, {
+			kind: 'hut_group',
+			features: ['ground_floor', 'toilets_inside'],
+			description: 'Wash house 50 m away.'
+		});
+		expect(saved.kind).toBe('hut_group');
+		expect(saved.features).toEqual(['ground_floor', 'toilets_inside']);
+		expect(saved.description).toBe('Wash house 50 m away.');
+
+		const savedRoom = await su
+			.collection('rooms')
+			.update(room.id, { kind: 'hut', features: ['own_bathroom', 'power'] });
+		expect(savedRoom.features).toEqual(['own_bathroom', 'power']);
+
+		const savedBed = await su
+			.collection('beds')
+			.update(beds[0].id, { bed_type: 'bunk_lower', features: ['power'] });
+		expect(savedBed.bed_type).toBe('bunk_lower');
+		// A select that allows one value comes back as that value, not as a list.
+		expect(readFeatures(savedBed.features, 'spot')).toEqual(['power']);
+	});
+
+	it('refuses values the catalogue does not know, and features of another level', async () => {
+		const { house, room, beds } = await seedHouse(su, 1);
+		await expectRefused(su.collection('houses').update(house.id, { kind: 'castle' }));
+		// own_bathroom describes a room, not a building
+		await expectRefused(su.collection('houses').update(house.id, { features: ['own_bathroom'] }));
+		await expectRefused(su.collection('rooms').update(room.id, { features: ['toilets_inside'] }));
+		await expectRefused(su.collection('beds').update(beds[0].id, { bed_type: 'hammock' }));
+		await expectRefused(su.collection('beds').update(beds[0].id, { features: ['quiet'] }));
+	});
+
+	it('leaves a place that nobody described empty', async () => {
+		const { house, beds } = await seedHouse(su, 1);
+		const fresh = await su.collection('houses').getOne(house.id);
+		expect(fresh.kind).toBe('');
+		expect(fresh.features).toEqual([]);
+		expect(fresh.description).toBe('');
+		const bed = await su.collection('beds').getOne(beds[0].id);
+		expect(bed.bed_type).toBe('');
+		expect(readFeatures(bed.features, 'spot')).toEqual([]);
 	});
 });
 

@@ -73,9 +73,39 @@ That's it: fireworks go up from your new spot 🎆, and the spot now shows **You
 
 ![A booked room: the Welcome Home box with the booking pass, the e-mail address and Telegram; your spot, other guests' burner names and spots reserved by the crew](../assets/screenshots/guest-room.webp)
 
+## What a place is like
+
+Houses and rooms can carry a few details, and spots say what kind of bed they are:
+
+| You see | Meaning |
+| --- | --- |
+| 🏠 House · 🛖 Hut group · ⛺ Tent area | What the place on the map is. A hut group is one pin with several huts; the map pin carries the icon, and the house page then asks you to choose a **hut**. |
+| ♿ Wheelchair accessible · ⬇️ Ground floor | A step-free way in with an accessible bathroom, or no stairs to the bed. |
+| 🚻 Toilets + showers inside · 🛁 Own bathroom | In the building itself, or in the room. Nothing written means the toilets are somewhere else on the site — the description usually says where. |
+| 🔥 Heated · ❄️ No heating | Late October nights are cold; this is worth reading. |
+| 🤫 Quiet zone · 🔌 Power socket | A calm corner of the camp; a socket in the room or at the bed. |
+| *Lower bunk · Upper bunk · Single bed · Double bed (shared) · Sofa · Mattress · Camp bed* | What you actually sleep in, under the spot's label. |
+
+A room shows what its house says too, and the crew can add a sentence of their own ("Showers in the wash house, 50 m along the path").
+
+> [!NOTE] Nothing is invented
+> The app only shows what the crew filled in. An empty spot card means *nobody said*, not *no* — ask the crew if a detail matters to you. If you need a particular kind of spot, [ask for a special-needs spot](./special-needs) instead of guessing.
+
+## Looking for something special?
+
+Above the map, **Looking for…** turns your wishes on and off: <kbd>🛏️ No ladder</kbd>, <kbd>⬇️ Step-free</kbd>, <kbd>🚻 Toilets inside</kbd>, <kbd>🔥 Heated</kbd>, <kbd>🤫 Quiet</kbd>, <kbd>🔌 Power socket</kbd>.
+
+- Houses without a fitting free spot fade back, and the bar says how many houses are left.
+- Open a house and each room tells you how many of its free spots fit.
+- The wishes are part of the address, so a filtered map can be shared or bookmarked. <kbd>Clear</kbd> shows everything again.
+
+Only spots the crew described can match, so a wish never promises more than the crew wrote down.
+
 ## Destiny Roulette
 
 Can't decide? On the map press <kbd>🎰 DESTINY ROULETTE</kbd>, then <kbd>ROLL THE DICE 🎲</kbd>. The machine picks a random free spot anywhere in the camp and rolls a burner name to go with it.
+
+**The dice respect…** above the machine takes the same wishes as the map: tap <kbd>🛏️ No ladder</kbd> or <kbd>🔥 Heated</kbd> and only fitting spots go into the drum. The line next to the chips says how many that is. If none fits, the page offers <kbd>Roll without wishes</kbd>.
 
 - <kbd>New Name 🎲</kbd> keeps the spot and rolls a new name.
 - <kbd>Full Respin 🔥</kbd> rolls spot and name again.
