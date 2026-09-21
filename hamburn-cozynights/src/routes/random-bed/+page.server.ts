@@ -11,7 +11,24 @@ import {
 } from '$lib/server/booking';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
 import { holdGuestMessage } from '$lib/server/notifications';
+import { burnerNameOf, passSummary, roomLabel } from '$lib/server/pass';
+import type { PassSummary } from '$lib/pass';
+import type { RouletteSpot } from '$lib/roulette';
 import type { BedsResponse, RoomsResponse, HousesResponse } from '$lib/pocketbase-types';
+
+type BedWithHouse = BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>;
+
+/** A spot as the slot machine's reels show it: house, room (as the pass names it), label. */
+function rouletteSpot(bed: BedWithHouse): RouletteSpot {
+	const room = bed.expand?.room;
+	return {
+		id: bed.id,
+		label: bed.label,
+		roomId: bed.room,
+		roomName: room ? roomLabel(room) : '',
+		houseName: room?.expand?.house?.name ?? ''
+	};
+}
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 const SIGNED_OUT =
@@ -41,49 +58,44 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 
 		const userBed = await locals.adminPb
 			.collection('beds')
-			.getFirstListItem<BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>>(
+			.getFirstListItem<BedWithHouse>(
 				locals.adminPb.filter('order = {:orderId}', { orderId: order.id }),
 				{ expand: 'room,room.house' }
 			)
 			.catch(() => null);
 
 		// Only fetch the (possibly large) free-bed list when the user doesn't
-		// already have a spot — they can't roll again without nuking it first,
-		// and the page reloads this list right after the nuke.
+		// already have a spot — they can't spin again without Leave No Trace
+		// first, and the page reloads this list right after the sweep.
 		// Deactivated, locked and special-needs beds are never part of the roulette.
-		const freeBeds = userBed
+		const freeBeds: RouletteSpot[] = userBed
 			? []
 			: // beds are admin-only in PocketBase: the service account reads them
 				(
-					await locals.adminPb
-						.collection('beds')
-						.getFullList<BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>>({
-							filter:
-								'occupied = false && enabled = true && is_locked = false && is_special = false',
-							expand: 'room,room.house',
-							sort: 'label'
-						})
-				).map((bed) => ({
-					id: bed.id,
-					label: bed.label,
-					room: bed.room,
-					expand: {
-						room: {
-							name: bed.expand?.room?.name,
-							expand: { house: { name: bed.expand?.room?.expand?.house?.name } }
-						}
-					}
-				}));
+					await locals.adminPb.collection('beds').getFullList<BedWithHouse>({
+						filter: 'occupied = false && enabled = true && is_locked = false && is_special = false',
+						expand: 'room,room.house',
+						sort: 'label'
+					})
+				).map(rouletteSpot);
 
-		const spotFixed = userBed
-			? await isSpotFixed(locals.adminPb, order.id, userBed.id).catch((err) => {
-					console.error(
-						'[RandomBed] Special-needs request lookup failed:',
-						(err as Error)?.message
-					);
-					return false;
-				})
-			: false;
+		// A guest with a spot sees it as the small booking pass, like on the
+		// house, room and map pages; the Destiny Fulfilled card shows it too.
+		const [spotFixed, pass]: [boolean, PassSummary | null] = userBed
+			? await Promise.all([
+					isSpotFixed(locals.adminPb, order.id, userBed.id).catch((err) => {
+						console.error(
+							'[RandomBed] Special-needs request lookup failed:',
+							(err as Error)?.message
+						);
+						return false;
+					}),
+					passSummary(locals.adminPb, order, userBed).catch((err) => {
+						console.error('[RandomBed] Booking pass failed:', (err as Error)?.message);
+						return null;
+					})
+				])
+			: [false, null];
 
 		return {
 			freeBeds,
@@ -92,15 +104,11 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 			// The crew checked the guest in at arrival: only the crew changes the spot now.
 			checkedIn: !!userBed?.checked_in_at,
 			phase,
-			userBed: userBed
-				? {
-						id: userBed.id,
-						label: userBed.label,
-						roomId: userBed.room,
-						roomName: userBed.expand?.room?.name,
-						houseName: userBed.expand?.room?.expand?.house?.name
-					}
-				: null
+			// The ticket's burner name: the name plate starts with it, so a guest
+			// who spins again keeps their name unless they change it.
+			burnerName: burnerNameOf(order),
+			pass,
+			userBed: userBed ? rouletteSpot(userBed) : null
 		};
 	} catch (err) {
 		console.error('[RandomBed] Load failed:', (err as Error)?.message);
@@ -128,7 +136,7 @@ export const actions: Actions = {
 		if (!locals.orderNumber) return fail(401, { error: SIGNED_OUT });
 		if (!bedId || !guestName) {
 			return fail(400, {
-				error: 'The roll was incomplete, so nothing was booked. Please roll the dice again.'
+				error: 'The spin was incomplete, so nothing was booked. Please spin again.'
 			});
 		}
 
@@ -141,12 +149,12 @@ export const actions: Actions = {
 			}
 
 			// Roulette is only for claiming a first spot — a guest who has one
-			// nukes it first (releaseBed, behind the hold-to-launch warning) and
-			// re-rolls deliberately, never by silently rebooking.
+			// sweeps it away first (releaseBed, behind the Leave No Trace hold)
+			// and spins again deliberately, never by silently rebooking.
 			const existingBed = await bookingService.getBedForOrder(order.id);
 			if (existingBed) {
 				return fail(409, {
-					error: 'You already have a spot. Release it first, then you can roll again.'
+					error: 'You already have a spot. Release it first, then you can spin again.'
 				});
 			}
 
@@ -162,20 +170,20 @@ export const actions: Actions = {
 			if (err instanceof BookingClosedError) return fail(403, { error: err.message });
 			if (err instanceof BedUnavailableError || err?.status === 404) {
 				return fail(409, {
-					error: 'Someone was faster: this spot was just taken. Roll the dice again.'
+					error: 'Someone was faster: this spot was just taken. Spin again.'
 				});
 			}
 			console.error('[RandomBed] bookRandom failed:', err?.message);
 			return fail(500, {
-				error: 'The booking did not go through. Please reload the page and roll again.'
+				error: 'The booking did not go through. Please reload the page and spin again.'
 			});
 		}
 	},
 
 	/**
-	 * The ☢ nuke before a respin: deletes the guest's booking right away, then
-	 * the page rolls a new spot. `bedId` is the spot the warning showed; if the
-	 * ticket holds another one by now, nothing is deleted.
+	 * ✨ Leave No Trace before a respin: deletes the guest's booking right away,
+	 * then the page spins a new spot. `bedId` is the spot the dialog showed; if
+	 * the ticket holds another one by now, nothing is deleted.
 	 */
 	releaseBed: async ({ request, locals }) => {
 		if (!locals.adminPb.authStore.isValid) {

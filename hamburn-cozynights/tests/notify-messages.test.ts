@@ -324,10 +324,10 @@ describe('a ticket that was passed on', () => {
 
 // Which message a channel gets is decided by the spot it last confirmed
 // against the spot the ticket holds now — not by the events in between. That
-// is what lets the ☢ nuke hold the release back (holdGuestMessage in
+// is what lets Leave No Trace hold the release back (holdGuestMessage in
 // src/lib/server/notifications.ts, tests/respin.test.ts): while the guest
-// rolls, the channel still knows the old spot, so the new one is a change.
-describe('☢ Nuke & Respin ends in one message', () => {
+// spins, the channel still knows the old spot, so the new one is a change.
+describe('✨ Leave No Trace & Respin ends in one message', () => {
 	it('is "changed", not "released" and then "booked"', () => {
 		const old = 'bed9';
 
@@ -342,7 +342,7 @@ describe('☢ Nuke & Respin ends in one message', () => {
 		expect(notify.kindOf('', 'bed1')).toBe('booked');
 	});
 
-	it('names the nuked spot as the one before', () => {
+	it('names the swept spot as the one before', () => {
 		const m = mail('changed', true, none, 'B9 · Loft #2 · Hut');
 		expect(m.subject).toBe('Your CozyNights spot changed: B1 · Dorm #1 · Villa');
 		expect(m.text).toContain('Before: B9 · Loft #2 · Hut');

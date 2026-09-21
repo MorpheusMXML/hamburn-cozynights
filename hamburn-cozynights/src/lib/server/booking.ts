@@ -311,7 +311,7 @@ export class BookingService {
 	 * @param orderId The ID of the order to release spots for.
 	 * @param options.allowCheckedIn The crew may release a spot whose guest is
 	 *   checked in; guests can't.
-	 * @param options.onlyBed The spot the guest confirmed deleting (the ☢ nuke).
+	 * @param options.onlyBed The spot the guest confirmed giving up (✨ Leave No Trace).
 	 *   If the ticket holds another one, nothing is released.
 	 * @returns How many spots were released (0: the ticket held none).
 	 * @throws {CheckedInError} if a spot is checked in and `allowCheckedIn` isn't set.

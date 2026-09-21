@@ -188,7 +188,7 @@ describe('booking confirmations by e-mail', () => {
 		expect((await mailBody(mails[1].ID)).Text).toContain(`Before: ${beds[0].label}`);
 	});
 
-	it('hold the release of a ☢ respin back, so the guest gets one "changed" e-mail', async () => {
+	it('hold the release of a ✨ respin back, so the guest gets one "changed" e-mail', async () => {
 		const { beds } = await seedHouse(su, 2);
 		const guest = await ticketWithEmail();
 
