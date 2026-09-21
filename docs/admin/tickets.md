@@ -2,7 +2,7 @@
 
 A guest's whole login is the code of their ticket, and booking confirmations go to the e-mail address stored with it. The **Tickets** page is where the crew looks a ticket up, fixes its address and hands it over when it changed hands. Superusers also load the ticket shop's list there.
 
-Open it with <kbd>🎟️ Tickets</kbd> in the top bar of every admin page. Both parts fold away with <kbd>+</kbd> / <kbd>−</kbd>.
+Open it with <kbd>🎟️ Tickets</kbd> in the admin menu, or with <kbd>Open ticket →</kbd> on a booked spot (see [Bookings & check-ins](./bookings)). Both parts fold away with <kbd>+</kbd> / <kbd>−</kbd>.
 
 ![A ticket found by its code, about to be handed over](../assets/screenshots/admin-tickets.webp)
 

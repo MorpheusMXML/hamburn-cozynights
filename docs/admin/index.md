@@ -1,19 +1,30 @@
 # The Control Center
 
-After signing in you land in the **Control Center** at `/admin`: one page to build the camp, open booking and keep an eye on occupancy. Don't have access yet? Start with [Admin access & roles](./access).
+After signing in you land in the **Control Center** at `/admin`: the booking window, what needs the crew, the latest bookings and check-ins, and the live numbers of the whole camp. The camp itself is built on its own page, [Map & houses](#map-houses-the-camp-editor). Don't have access yet? Start with [Admin access & roles](./access).
 
 ![The Control Center in staging, map view](../assets/screenshots/admin-control-center.webp)
 
-## Header
+## The admin menu
 
-| Control | What it does |
-| --- | --- |
-| <kbd>ADMIN GUIDE 📖</kbd> | Opens this documentation in a new tab, admin pages included. |
-| <kbd>TEMPLATES 💾</kbd> | Opens the **Burn Template Manager** to export the camp layout, or compare a layout file with the camp and take over what you pick. See [Layout templates](./templates). |
-| <kbd>SHOW INTEL 📊</kbd> | Shows or hides the [Intel panel](#intel-panel-the-live-picture): what needs the crew, bookings and check-ins, every house, tickets and messages — live, filterable by house and time. |
-| <kbd>🛰️ LIST VIEW</kbd> / <kbd>🗺️ MAP VIEW</kbd> | Switches between the map editor and house cards. |
+Every admin page has the same menu. On a wide screen (from about 1100 px) it is a **sidebar** on the left; <kbd>« Shrink menu</kbd> at its foot shrinks it to its icons (pointing at an icon names it) and <kbd>»</kbd> brings the names back — the browser remembers your choice. On phones and tablets a slim bar sits on top instead: <kbd>☰</kbd> slides the same menu in, <kbd>✕</kbd>, <kbd>Esc</kbd> or a tap next to it closes it again, and so does following a link.
 
-The top bar on every admin page shows <kbd>🎟️ Tickets</kbd> (find a ticket, change its e-mail address, load the ticket list; see [Tickets & e-mail addresses](./tickets)), <kbd>♿ Special needs</kbd> with the number of requests waiting for a decision (see [Special-needs requests](./special-needs)), <kbd>🎫 Check-in</kbd> (check guests in with their booking pass; see [Booking passes & check-in](./passes)), <kbd>✉️ Messages</kbd> (every text guests get, see [Message texts](./notifications#message-texts)), the account you're signed in with (not on phones), a **SUPERUSER ⚡️** badge if you are one, and <kbd>Eject 🚀</kbd> to sign out. While a countdown runs, a slim bar above it shows when booking opens or closes, the same one guests see.
+| Group | Entry | Opens |
+| --- | --- | --- |
+| **Overview** | <kbd>📊 Control Center</kbd> | This page. |
+| **Camp** | <kbd>🗺️ Map & houses</kbd> | The [camp editor](#map-houses-the-camp-editor): the map and the list of houses; the house and room pages belong to it. |
+| | <kbd>💾 Templates</kbd> | The **Burn Template Manager**: export the layout, compare a file with the camp, apply it. See [Layout templates](./templates). |
+| **Guests** | <kbd>🛏️ Bookings</kbd> | [Who booked which spot](./bookings), who is checked in, who is still to arrive. |
+| | <kbd>🎟️ Tickets</kbd> | Find a ticket, change its e-mail address, load the ticket list. See [Tickets & e-mail addresses](./tickets). |
+| | <kbd>♿ Special needs</kbd> | The requests. See [Special-needs requests](./special-needs). |
+| | <kbd>🎫 Check-in desk</kbd> | Check guests in with their booking pass. See [Booking passes & check-in](./passes). |
+| **Crew** | <kbd>✉️ Messages</kbd> | Every text guests get. See [Message texts](./notifications#message-texts). |
+| | <kbd>📖 Admin guide ↗</kbd> | This documentation, in a new tab, admin pages included. |
+
+Numbers next to an entry say what waits: at <kbd>♿ Special needs</kbd> the requests waiting for a decision (pink), at <kbd>🛏️ Bookings</kbd> how many spots are booked (grey) — and after booking closed, how many booked guests are still to arrive (pink). Below the entries: the account you're signed in with, a **SUPERUSER ⚡️** badge if you are one, and <kbd>🚀 Eject</kbd> to sign out (on phones: <kbd>Eject 🚀</kbd> in the top bar). While a countdown runs, a slim bar above everything shows when booking opens or closes, the same one guests see.
+
+## What's on this page
+
+From top to bottom: the [🎟 BOOKING WINDOW](#booking-window) with the ♿ requests switch below it, [NEEDS ATTENTION](#needs-attention) — with a red line when the camp layout is incomplete, see [Red alert](#red-alert-sanity-checks) —, [BOOKINGS & CHECK-INS](#bookings-check-ins), and the [Intel panel](#intel-panel-the-live-picture).
 
 ## Booking window
 
@@ -31,12 +42,18 @@ Times are Europe/Berlin (CET/CEST). The rules and what each switch does to the t
 
 Below it, the row **♿ Special-needs requests: OPEN** (or **CLOSED**, with *· n waiting for a decision* while requests wait) opens or closes requests for guests with <kbd>Open requests</kbd> / <kbd>Close requests</kbd>, independent of the phase. <kbd>Review requests →</kbd> leads to the requests. See [Special-needs requests](./special-needs#_2-open-requests).
 
+## Bookings & check-ins
+
+Four counts — **booked**, **checked in**, **still to arrive**, **held by the crew** (taken without a ticket, or ♿ assigned to a request) — and below them the five **latest bookings** with guest, spot and how long ago. After booking closed the five **latest check-ins** take their place. Each count opens the [bookings list](./bookings) with that filter; <kbd>All bookings →</kbd> opens it unfiltered. Names show the way the check-in desk shows them: the holder, the burner name, masked e-mail and ticket code. The card updates itself like the Intel panel.
+
 ## Intel panel: the live picture
 
-The operations view of the whole camp. Like everything under `/admin` it is
-only there for approved admins: a Google sign-in that still waits for approval
-sees nothing of it, and neither does anybody without a session. Only numbers
-leave the server for it — no guest names, no e-mail addresses, no request texts.
+The operations view of the whole camp, always open at the bottom of the
+Control Center. Like everything under `/admin` it is only there for approved
+admins: a Google sign-in that still waits for approval sees nothing of it, and
+neither does anybody without a session. Only numbers leave the server for it —
+no guest names, no e-mail addresses, no request texts. Who booked what is on the
+[bookings list](./bookings), fetched only when those numbers change.
 
 ![Intel panel: what needs attention, the spot tiles, the ring and the bookings chart](../assets/screenshots/admin-intel.webp)
 
@@ -62,7 +79,7 @@ true:
 | 🛖 *… houses have no active spots* | Houses without spots (orange in Staging, where they can still be fixed). | – |
 | 🎟 *… tickets have no spot yet* | During Live Booking: guests who still have to book. | *Tickets* |
 | 📭 *… tickets have no e-mail address* | E-mail to guests is on, until booking closes. | *Tickets* |
-| 🚪 *… booked guests are not checked in yet* | After booking closed, once the first guest was checked in. | *Check-in* |
+| 🚪 *… booked guests are not checked in yet* | After booking closed, once the first guest was checked in. | *Who* — the [bookings list](./bookings), still to arrive |
 
 ### Spots & bookings
 
@@ -71,7 +88,8 @@ houses* or one of them) and the chart's time range — <kbd>24 h</kbd> (one bar
 per hour), <kbd>7 days</kbd> (one per day, where it starts) or <kbd>All</kbd>
 (every day since the first booking, every week once that would be more than 45
 days). Picking a house in the house table does the same as the House filter;
-<kbd>✕ Whole camp</kbd> goes back.
+<kbd>✕ Whole camp</kbd> goes back. <kbd>Who booked →</kbd> next to the block's
+title opens the [bookings list](./bookings) for the same house (or the whole camp).
 
 | Widget | Shows |
 | --- | --- |
@@ -189,7 +207,7 @@ locked control shows the same title.
 
 ## Red alert: sanity checks
 
-When the layout has gaps, a red **RED ALERT: THE CAMP LAYOUT IS INCOMPLETE** panel (with the number of issues) lists them, each with a shortcut to fix it:
+When the layout has gaps, [Map & houses](#map-houses-the-camp-editor) shows a red **RED ALERT: THE CAMP LAYOUT IS INCOMPLETE** panel (with the number of issues) above the map, and the Control Center a red line *The camp layout is incomplete* under *Needs attention*. The panel lists the gaps, each with a shortcut to fix it:
 
 | Warning | Fix button | Where it takes you |
 | --- | --- | --- |
@@ -199,7 +217,11 @@ When the layout has gaps, a red **RED ALERT: THE CAMP LAYOUT IS INCOMPLETE** pan
 > [!TIP]
 > During Live Booking and after booking closed, houses without any active spot don't appear on the guest map. Clear the red alert before booking opens.
 
-## Map view: the editor
+## Map & houses: the camp editor
+
+<kbd>🗺️ Map & houses</kbd> in the menu (`/admin/camp`) shows the camp as a map or as a list of houses: <kbd>🗺️ MAP</kbd> / <kbd>🛰️ LIST</kbd> on top switches (the list can also be opened directly as `/admin/camp?view=list`). <kbd>TEMPLATES 💾</kbd> and <kbd>BOOKINGS 🛏️</kbd> next to them lead to the template manager and the bookings list. Adding, moving, renaming and deleting houses happens here — in Staging Mode; the switch back to Staging is on the Control Center.
+
+### Map view
 
 In Staging Mode the map is a live editor. A status bar reads *🛠 EDITOR ACTIVE* next to an open padlock, and while an opening time is armed it says when the layout will lock. During Live Booking and after booking closed the padlock swings shut, the bar switches to *LOCKED* and the map becomes read-only: a dragged pin shakes its head and stays put, a click on an empty place starts no new house, and the *HOUSE INTEL* sidebar turns *VIEW ONLY* — name, position, <kbd>MOVE PIN</kbd> and <kbd>SYNC MODULE</kbd> greyed out, <kbd>CLOSE</kbd> instead of *ABORT*. Each of them [says why](#locked-not-now) when you try it. If the phase changes while the page is open (the timer opens booking, a superuser switches), the page locks or unlocks in place.
 
@@ -210,17 +232,18 @@ Pins are teal while a house has free spots, red when none is left, and grey whil
 | **Click an empty place** | Sidebar *GENERATE SANCTUARY*: name the new house and set its initial number of beds, then <kbd>IGNITE HOUSE ✨</kbd>. |
 | **Drag a house** | Moves it. The new position is saved when you let go. |
 | **Arrow keys** on a selected pin | Move it one unit per press (with <kbd>Shift</kbd>: ten), saved when you let go of the key. |
-| **Click a house** | Sidebar *HOUSE INTEL*: rename it (<kbd>SYNC MODULE ✨</kbd>), type an exact **MAP POSITION 📍** (X 0–1000, Y 0–700) and press <kbd>MOVE PIN</kbd>, <kbd>MANAGE ROOMS ⚙️</kbd>, or <kbd>VANISH FROM PLAYA 🌪️</kbd> to delete it. Moves are saved right away. |
+| **Click a house** | Sidebar *HOUSE INTEL*: rename it (<kbd>SYNC MODULE ✨</kbd>), type an exact **MAP POSITION 📍** (X 0–1000, Y 0–700) and press <kbd>MOVE PIN</kbd>, see **WHO IS HERE 🛏️** (the house's bookings room by room, see [Bookings & check-ins](./bookings)), <kbd>MANAGE ROOMS ⚙️</kbd>, or <kbd>VANISH FROM PLAYA 🌪️</kbd> to delete it. Moves are saved right away. |
 
 ![A selected house with the House Intel sidebar](../assets/screenshots/admin-house-selected.webp)
 
-## List view: house cards
+### List view: house cards
 
 ![House cards in list view](../assets/screenshots/admin-list-view.webp)
 
 Every house as a card with its occupancy badge (*n spots free*, *Fully booked* or *Not setup*), **Spots Claimed** with a progress bar, and its map coordinates. The card's border breathes in [the colour of its state](#the-state-colours). Locked 🔒 and special-needs ♿ spots never count as free, and deactivated spots don't count at all. These numbers update live, the same way the Intel panel does.
 
-- Click a card to manage its rooms.
+- Click a card to manage its rooms. **Latest Booking 🎟** says how long ago its newest booking came in.
+- <kbd>BOOKINGS 🛏️</kbd> (while something is booked) opens the [bookings list](./bookings) for that house.
 - <kbd>VANISH 🌪️</kbd> deletes the house after a confirmation.
 - <kbd>RENAME ✏️</kbd> and the **Ignite New House** card switch to the map view and open the editor sidebar there. A new house starts in the middle of the map (or at the nearest free place, if a pin is already there), ready to be dragged into place.
 
@@ -228,10 +251,11 @@ Every house as a card with its occupancy badge (*n spots free*, *Fully booked* o
 
 ![Control Center during Live Booking](../assets/screenshots/admin-live.webp)
 
-The Control Center stays fully usable for watching: statistics, occupancy, template export. Structural buttons and fields stay in place, greyed out with a padlock, and [explain themselves](#locked-not-now) when you try them; the server refuses those changes too. The house, room and new-house pages say at the top whether the layout can be changed right now. What you can still change: on the [room page](./camp-layout#spots), lock or unlock single spots and mark spots ♿ special or normal; on ♿ **Special needs**, decide requests and book spots for them.
+The Control Center, the camp editor and the bookings list stay fully usable for watching: statistics, occupancy, who is where, template export. Structural buttons and fields stay in place, greyed out with a padlock, and [explain themselves](#locked-not-now) when you try them; the server refuses those changes too. The house, room and new-house pages say at the top whether the layout can be changed right now. What you can still change: on the [room page](./camp-layout#spots), lock or unlock single spots and mark spots ♿ special or normal; on ♿ **Special needs**, decide requests and book spots for them.
 
 ## Next
 
+- [Bookings & check-ins](./bookings): who booked which spot, who is still to arrive, check-in without the pass
 - [Houses, rooms & spots](./camp-layout): building the camp in detail
 - [Tickets & e-mail addresses](./tickets): find a ticket, fix its address, hand it over, load the ticket list
 - [Special-needs requests](./special-needs): mark ♿ spots, decide requests, book spots for guests

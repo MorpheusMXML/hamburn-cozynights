@@ -37,7 +37,7 @@ Every switch goes to the crew group with the admin's e-mail address.
 
 ## 3. Decide and book
 
-<kbd>♿ Special needs</kbd> in the admin header, with the number of requests waiting for a decision. The page groups the requests into *Waiting for a decision*, *Approved* and *Declined*.
+<kbd>♿ Special needs</kbd> in the admin menu, with the number of requests waiting for a decision. The page groups the requests into *Waiting for a decision*, *Approved* and *Declined*.
 
 ![A waiting request with Approve, Decline and Approve & book, and an approved one with the spot the crew booked](../assets/screenshots/admin-requests.webp)
 

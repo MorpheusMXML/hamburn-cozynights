@@ -2,7 +2,7 @@
 
 A template is the camp layout in one JSON file: every house with its position on the map, every room and every spot. Use it as a backup before big changes, to move a layout between installations, or to set up the camp for the next burn.
 
-Open the **Burn Template Manager** with <kbd>TEMPLATES 💾</kbd> in the Control Center header.
+Open the **Burn Template Manager** with <kbd>💾 Templates</kbd> in the admin menu (group *Camp*), or <kbd>TEMPLATES 💾</kbd> on [Map & houses](./#map-houses-the-camp-editor). It is a page of its own, `/admin/templates`.
 
 ![The review of a layout file: new, changed and missing houses](../assets/screenshots/admin-templates.webp)
 

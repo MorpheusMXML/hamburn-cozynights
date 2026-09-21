@@ -80,7 +80,7 @@ A request can also be approved straight to superuser.
 | **Clear all bookings** (Staging Mode only) | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
 | Approve, invite and remove admins | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> on the server |
 
-Superusers carry a **SUPERUSER ⚡️** badge in the admin header.
+Superusers carry a **SUPERUSER ⚡️** badge in the admin menu (a ⚡️ in the top bar on phones).
 
 ## Managing admins
 
