@@ -158,6 +158,19 @@ const PAGES: PageCase[] = [
 		path: () => '/random-bed',
 		as: 'guestWithSpot',
 		open: async (page) => {
+			// "admin pass check: results" checks this guest in, and a checked-in
+			// guest can't give the spot up (no button). The second engine runs
+			// after the first one's pass check: undo the check-in first.
+			const order = await pb
+				.collection('orders')
+				.getFirstListItem(pb.filter('pass_code = {:code}', { code: camp.passCode }));
+			const bed = await pb
+				.collection('beds')
+				.getFirstListItem(pb.filter('order = {:order}', { order: order.id }));
+			if (bed.checked_in_at) {
+				await pb.collection('beds').update(bed.id, { checked_in_at: '', checked_in_by: '' });
+				await page.reload({ waitUntil: 'networkidle' });
+			}
 			await page.getByRole('button', { name: /Leave No Trace/ }).click();
 			await page.getByRole('alertdialog').waitFor();
 		}
