@@ -46,13 +46,13 @@ function isNotFound(err: unknown): boolean {
 	return (err as ClientResponseError | undefined)?.status === 404;
 }
 
-/** "Blue Room #2" */
-function roomLabel(room: Pick<RoomsResponse, 'name' | 'room_number'>): string {
+/** "Blue Room #2": a room as passes, confirmations and the roulette name it. */
+export function roomLabel(room: Pick<RoomsResponse, 'name' | 'room_number'>): string {
 	return `${room.name || 'Room'} #${room.room_number}`;
 }
 
 /** The ticket's burner name, or '' when it has none or it can't be read. */
-function burnerNameOf(order: Pick<OrdersResponse, 'burner_name'>): string {
+export function burnerNameOf(order: Pick<OrdersResponse, 'burner_name'>): string {
 	if (!order.burner_name) return '';
 	try {
 		return decrypt(order.burner_name);

@@ -53,8 +53,8 @@ decided.
 		</li>
 		<li>Destiny Roulette suggests a random free bed; it is only booked when you confirm.</li>
 		<li>
-			Already have a bed? The roulette can nuke it and roll a new one. Your booking is deleted the
-			moment you launch, and until you accept a new bed you have none.
+			Already have a bed? On the roulette, Leave No Trace gives it up and spins a new one. Your
+			booking is deleted the moment the sweep is done, and until you book a new bed you have none.
 		</li>
 		<li>Beds the crew has locked ("Reserved by the crew") can't be booked.</li>
 	</ul>

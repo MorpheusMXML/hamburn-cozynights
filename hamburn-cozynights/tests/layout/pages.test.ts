@@ -129,7 +129,52 @@ const PAGES: PageCase[] = [
 			await page.locator('#ticket-code-error').waitFor();
 		}
 	},
-	{ name: 'random spot', path: () => '/random-bed', as: 'guestWithoutSpot' },
+	// The roulette's slot machine: idle while booking is live, asleep in every other phase.
+	{ name: 'random spot', path: () => '/random-bed', as: 'guestWithoutSpot', phases: ALL_PHASES },
+	{
+		// Landed, with the name plate. The machine picks at random: spin until the
+		// house reel shows the stress camp's longest house name.
+		name: 'random spot: landed',
+		path: () => '/random-bed',
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.getByRole('button', { name: /^Spin/ }).click();
+			const house = page.locator('.reel.house .face');
+			for (let i = 0; i < 40 && !/Waldhütte/.test(await house.innerText()); i++) {
+				await page.getByRole('button', { name: /Spin again/ }).click();
+			}
+			await page.locator('#guestName').waitFor();
+		}
+	},
+	{
+		// A guest with a spot: it stands on the reels, with the booking pass below.
+		name: 'random spot: my spot',
+		path: () => '/random-bed',
+		as: 'guestWithSpot',
+		phases: ['staging', 'live', 'closed']
+	},
+	{
+		name: 'random spot: leave no trace',
+		path: () => '/random-bed',
+		as: 'guestWithSpot',
+		open: async (page) => {
+			// "admin pass check: results" checks this guest in, and a checked-in
+			// guest can't give the spot up (no button). The second engine runs
+			// after the first one's pass check: undo the check-in first.
+			const order = await pb
+				.collection('orders')
+				.getFirstListItem(pb.filter('pass_code = {:code}', { code: camp.passCode }));
+			const bed = await pb
+				.collection('beds')
+				.getFirstListItem(pb.filter('order = {:order}', { order: order.id }));
+			if (bed.checked_in_at) {
+				await pb.collection('beds').update(bed.id, { checked_in_at: '', checked_in_by: '' });
+				await page.reload({ waitUntil: 'networkidle' });
+			}
+			await page.getByRole('button', { name: /Leave No Trace/ }).click();
+			await page.getByRole('alertdialog').waitFor();
+		}
+	},
 	{ name: 'special needs: request sent', path: () => '/special-needs', as: 'guestWithRequest' },
 	{ name: 'special needs: new request', path: () => '/special-needs', as: 'guestWithoutSpot' },
 	{

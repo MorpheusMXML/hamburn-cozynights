@@ -149,12 +149,12 @@ describe('one ticket = one bed', () => {
 		expect(await booking.getBedForOrder(order.id)).toBeNull();
 	});
 
-	it('nukes only the spot the guest confirmed (☢ respin from a stale tab)', async () => {
+	it('sweeps away only the spot the guest confirmed (✨ respin from a stale tab)', async () => {
 		const { beds } = await seedHouse(su, 2);
 		const { order } = await seedTicket(su);
-		await booking.bookBed(order as any, beds[1].id, 'Nuker');
+		await booking.bookBed(order as any, beds[1].id, 'Dust Devil');
 
-		// the warning showed beds[0], but the ticket holds beds[1] by now
+		// the dialog showed beds[0], but the ticket holds beds[1] by now
 		await expect(booking.unbookOrder(order.id, { onlyBed: beds[0].id })).rejects.toBeInstanceOf(
 			SpotChangedError
 		);
@@ -162,7 +162,7 @@ describe('one ticket = one bed', () => {
 
 		expect(await booking.unbookOrder(order.id, { onlyBed: beds[1].id })).toBe(1);
 		expect(await booking.getBedForOrder(order.id)).toBeNull();
-		// nothing left to nuke: no error, nothing released
+		// nothing left to sweep: no error, nothing released
 		expect(await booking.unbookOrder(order.id, { onlyBed: beds[1].id })).toBe(0);
 	});
 });

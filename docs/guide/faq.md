@@ -58,8 +58,8 @@ Open the room link in your confirmation e-mail or Telegram message. During Live 
 First look at the room page: if the spot shows as **Your Spot**, all is fine. *Something went wrong* means the booking may or may not have gone through, so check before booking again. *Technical problem. Nothing was booked* is one for the crew. *This spot doesn't exist anymore* means the crew changed the layout meanwhile: pick another spot.
 :::
 
-::: details Destiny Roulette says "Someone was faster", "The roll was incomplete" or "You already have a spot"
-Roll again: another guest took that spot in the meantime, or the roll didn't finish. *You already have a spot* means the roulette only hands out spots to tickets without one; release yours first if you want to roll.
+::: details Destiny Roulette says "Someone was faster", "The spin was incomplete" or "You already have a spot"
+Spin again: another guest took that spot in the meantime, or the spin didn't finish. *You already have a spot* means the roulette only hands out spots to tickets without one; give yours up first (✨ *Leave No Trace & Respin* on the roulette page) if you want to spin.
 :::
 
 ::: details "This house doesn't exist (anymore)", "This room doesn't exist (anymore)", "The map could not be loaded right now"

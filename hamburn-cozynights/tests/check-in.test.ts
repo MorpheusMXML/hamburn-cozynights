@@ -176,7 +176,7 @@ describe('guest pages', () => {
 		expect(roulette.checkedIn).toBe(true);
 
 		for (const release of [houseActions.unbookBed, rouletteActions.releaseBed]) {
-			// The roulette's release reads the confirmed spot from the form (☢ nuke);
+			// The roulette's release reads the confirmed spot from the form (Leave No Trace);
 			// an empty form is what a plain "release" sends.
 			const request = { formData: async () => new FormData() };
 			const result: any = await (release as any)({ locals: c.locals, request });

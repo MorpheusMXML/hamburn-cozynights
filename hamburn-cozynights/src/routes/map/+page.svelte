@@ -363,19 +363,40 @@
 		}
 	}
 
+	/* The roulette button breathes: its glow sits on a pseudo-element whose
+	   opacity animates (composited), not on the button's own box-shadow,
+	   which would repaint the button over the map every frame. */
 	.pulsing-laser {
+		position: relative;
+		isolation: isolate;
 		animation: destiny-pulse 2s infinite;
+	}
+	.pulsing-laser::after {
+		content: '';
+		position: absolute;
+		inset: -2px;
+		z-index: -1;
+		border-radius: inherit;
+		box-shadow: 0 0 40px rgba(244, 114, 182, 0.7);
+		opacity: 0;
+		pointer-events: none;
+		animation: destiny-glow 2s infinite;
 	}
 
 	@keyframes destiny-pulse {
-		0%,
-		100% {
-			box-shadow: 0 0 20px rgba(244, 114, 182, 0.4);
-			transform: scale(1);
-		}
 		50% {
-			box-shadow: 0 0 40px rgba(244, 114, 182, 0.7);
 			transform: scale(1.02);
+		}
+	}
+	@keyframes destiny-glow {
+		50% {
+			opacity: 1;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.pulsing-laser,
+		.pulsing-laser::after {
+			animation: none;
 		}
 	}
 

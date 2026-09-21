@@ -29,6 +29,7 @@ import { actions as checkActions } from '../src/routes/admin/check/+page.server'
 import { load as houseLoad } from '../src/routes/house/[id]/+page.server';
 import { load as roomLoad } from '../src/routes/room/[id]/+page.server';
 import { load as mapLoad } from '../src/routes/map/+page.server';
+import { load as rouletteLoad } from '../src/routes/random-bed/+page.server';
 
 const CODE = '7F3K9QXM2CWD';
 const notFound = Object.assign(new Error('not found'), { status: 404 });
@@ -306,6 +307,62 @@ describe("the guest's own pass on other pages", () => {
 			pass: null,
 			noSpot: false
 		});
+	});
+});
+
+describe("the roulette's own pass and name", () => {
+	it('shows a guest with a spot that spot as the booking pass, in every phase', async () => {
+		for (const phase of ['live', 'closed']) {
+			const c = campWithGuest({ phase });
+			const page: any = await rouletteLoad({ locals: guestLocals(c.pb), cookies } as any);
+			expect(page.pass).toEqual(TICKET);
+			expect(page.userBed).toEqual({
+				id: c.bed.id,
+				label: 'B1',
+				roomId: c.bed.room,
+				roomName: 'Blue Room #2',
+				houseName: 'Brahmsee-Villa'
+			});
+			// a guest with a spot spins nothing: no list of free spots is sent
+			expect(page.freeBeds).toEqual([]);
+		}
+	});
+
+	it("gives the name plate the ticket's burner name, and the reels flat free spots", async () => {
+		const c = campWithGuest({ phase: 'live' });
+		const mine: any = await rouletteLoad({ locals: guestLocals(c.pb), cookies } as any);
+		expect(mine.burnerName).toBe('Disco Druid');
+
+		const fresh: any = await rouletteLoad({
+			locals: guestLocals(c.pb, 'HB-2002'),
+			cookies
+		} as any);
+		expect(fresh.burnerName).toBe('');
+		expect(fresh.pass).toBeNull();
+		expect(fresh.userBed).toBeNull();
+		expect(fresh.freeBeds).toEqual([
+			{
+				id: expect.any(String),
+				label: 'H1',
+				roomId: c.hut.id,
+				roomName: 'Hut #1',
+				houseName: 'Waldhütten'
+			}
+		]);
+	});
+
+	it('a pass that cannot be made leaves the roulette working', async () => {
+		const c = campWithGuest({ phase: 'live', passCode: '' });
+		Object.assign(c.pb, {
+			send: vi.fn(async () => {
+				throw new Error('PocketBase is down');
+			})
+		});
+		const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const page: any = await rouletteLoad({ locals: guestLocals(c.pb), cookies } as any);
+		quiet.mockRestore();
+		expect(page.userBed.id).toBe(c.bed.id);
+		expect(page.pass).toBeNull();
 	});
 });
 
