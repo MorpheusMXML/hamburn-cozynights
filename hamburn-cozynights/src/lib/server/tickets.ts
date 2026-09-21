@@ -505,8 +505,10 @@ export async function importRoster(
 				await adminPb.collection('orders').delete(ticket.id);
 				outcome.removed++;
 			} catch (err) {
+				// Shortened like everywhere else about these tickets: the review
+				// never showed their full codes, and a failure must not either.
 				console.error(`[Tickets] Removing ${maskTicketCode(ticket.code)} failed:`, err);
-				outcome.failed.push({ code: ticket.code, error: describeError(err) });
+				outcome.failed.push({ code: maskTicketCode(ticket.code), error: describeError(err) });
 			}
 		});
 		return outcome;
