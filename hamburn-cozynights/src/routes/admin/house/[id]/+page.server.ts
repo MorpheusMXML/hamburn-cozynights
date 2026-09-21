@@ -137,13 +137,17 @@ export const actions: Actions = {
 			}
 
 			// A hut group's rooms are huts, a tent area's are tents: the crew can
-			// still change the kind in the room's details.
-			const house = await locals.pb.collection('houses').getOne<HousesResponse>(houseId);
+			// still change the kind in the room's details. A house that can't be
+			// read right now only costs the default, not the room.
+			const house = await locals.pb
+				.collection('houses')
+				.getOne<HousesResponse>(houseId)
+				.catch(() => null);
 			const room = await locals.pb.collection('rooms').create({
 				name,
 				room_number: roomNumber,
 				amount_beds: amountBeds,
-				kind: defaultRoomKind(house.kind),
+				kind: defaultRoomKind(house?.kind),
 				house: houseId
 			});
 
