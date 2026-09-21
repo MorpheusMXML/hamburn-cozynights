@@ -34,7 +34,7 @@ features:
     linkText: The booking flow
   - icon: 🎰
     title: Destiny Roulette
-    details: Can't decide? Roll for a random free bed and a burner name to go with it.
+    details: Can't decide? Pull the lever of a neon slot machine for a random free bed, then keep, type or roll a burner name.
     link: /guide/booking#destiny-roulette
     linkText: Feeling lucky
   - icon: 📬

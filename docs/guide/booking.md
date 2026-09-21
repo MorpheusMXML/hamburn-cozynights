@@ -77,24 +77,29 @@ That's it: fireworks go up from your new spot 🎆, and the spot now shows **You
 
 ## Destiny Roulette
 
-Can't decide? On the map press <kbd>🎰 DESTINY ROULETTE</kbd>, then <kbd>ROLL THE DICE 🎲</kbd>. The machine picks a random free spot anywhere in the camp and rolls a burner name to go with it.
+Can't decide? On the map press <kbd>🎰 DESTINY ROULETTE</kbd>. A neon slot machine waits with three reels, **House**, **Room** and **Spot**: grab its lever, pull it down and let go, or press <kbd>SPIN 🎰</kbd>. The reels stop one after the other on a random free spot anywhere in the camp. Every free spot has the same chance; how hard you pull only changes how long the reels run.
 
-- <kbd>New Name 🎲</kbd> keeps the spot and rolls a new name.
-- <kbd>Full Respin 🔥</kbd> rolls spot and name again.
-- <kbd>Accept Fate & Book 🌵</kbd> books it: *Destiny Fulfilled!*, with fireworks.
+Then the burner name that goes with the spot:
 
-![Destiny Roulette before the first roll](../assets/screenshots/guest-roulette.webp)
+- If your ticket already has a burner name, it is filled in. Keep it or change it.
+- Type your own name into **Your burner name**, or press <kbd>🎲</kbd> to roll one (something like *Cosmic Coyote #562*). A rolled name can still be changed.
+- <kbd>SPIN AGAIN 🎰</kbd> spins for another spot and keeps the name.
+- <kbd>BOOK IT 🌵</kbd> books the spot. With the name field empty, the first tap rolls a name; the next one books.
 
-After a booking the roulette offers <kbd>Visit My Room</kbd> and <kbd>Back to Map</kbd>.
+*Destiny Fulfilled!* Fireworks go up and your [booking pass](#your-booking-pass) prints out on the card, with <kbd>Visit My Room</kbd> and <kbd>Back to Map</kbd>.
 
-The roulette button is only on the map during Live Booking. Opened at another time, the page says *Booking is not open yet. Come back when Live Booking starts.* or *Booking is closed. The roulette is resting until the next burn.*; with every spot taken, it says so and asks you to check back later.
+The 🔈 button on the machine turns its sounds on: lever, reels and the jackpot jingle. They are off until you turn them on, and the machine remembers your choice on that device.
 
-### Already booked? ☢ Nuke & Respin
+![Destiny Roulette after a spin: the spot on the three reels, the name plate with the dice, BOOK IT and SPIN AGAIN](../assets/screenshots/guest-roulette.webp)
 
-The roulette page then shows your spot with <kbd>Visit My Room</kbd> and <kbd>☢ Nuke & Respin</kbd>. Nuking opens a red alert with your spot as the target: hold the big red button for two seconds (on a keyboard: hold Space). Letting go early, <kbd>Abort — keep my spot</kbd> or <kbd>Esc</kbd> stops it. The moment it fires, your booking is deleted and the roulette rolls a new spot and a new burner name.
+The roulette button is only on the map during Live Booking. Opened at another time, the machine rests with its lights down and says *Booking is not open yet. Come back when Live Booking starts.* or *Booking is closed. The roulette is resting until the next burn.*; with every spot taken, it says so and asks you to check back later.
 
-> [!WARNING] Nuked means gone
-> Your old spot is free for everyone the moment you launch, and there is no undo. Until you accept a new spot you have none, so don't leave the page halfway. The roulette may even hand you your old spot again.
+### Already booked? ✨ Leave No Trace & Respin
+
+The machine then shows your spot on its reels, with your booking pass below it, <kbd>Visit My Room</kbd> and <kbd>✨ Leave No Trace & Respin</kbd>. That button opens the Leave No Trace spell: hold the round <kbd>Hold to sweep ✨</kbd> button for two seconds (on a keyboard: hold Space). Letting go early, <kbd>Keep my spot</kbd> or <kbd>Esc</kbd> stops it. The moment the sweep is done, your booking is deleted, a little dust devil blows your spot away in glitter, and the machine spins a new spot for you. Your burner name stays on the name plate: keep it or change it before you book.
+
+> [!WARNING] Swept means gone
+> Your old spot is free for everyone the moment the sweep is done, and there is no undo. Until you book a new spot you have none, so don't leave the page halfway. The roulette may even hand you your old spot again.
 
 ## Changing your mind
 
@@ -103,7 +108,7 @@ Open your room, click **Your Spot**, change the burner name and press <kbd>Save 
 :::
 
 ::: tip Move to another bed
-One ticket holds one spot, so release your current spot first: <kbd>Release</kbd> in the spot dialog or <kbd>Release Current Spot</kbd> on a house or room page. Then book the new one. Or leave it to fate: <kbd>☢ Nuke & Respin</kbd> on the roulette page deletes your booking and rolls a new spot right away.
+One ticket holds one spot, so release your current spot first: <kbd>Release</kbd> in the spot dialog or <kbd>Release Current Spot</kbd> on a house or room page. Then book the new one. Or leave it to fate: <kbd>✨ Leave No Trace & Respin</kbd> on the roulette page deletes your booking and spins a new spot right away.
 :::
 
 ![Another house while you hold a spot: the note with your spot as a small ticket, and Release Current Spot](../assets/screenshots/guest-house-own-spot.webp)
@@ -123,7 +128,7 @@ When your spot is booked, changes or is released, CozyNights sends an e-mail to 
 
 ### Your booking pass
 
-Once you hold a spot, your room page shows <kbd>🎫 Show booking pass</kbd>, every other house and room shows your spot as a small ticket that opens it (so does the map once booking has closed), and every confirmation links to it: a page with your spot, a QR code and a short code like `7F3K-9QXM-2CWD`. Show it when you arrive — or a screenshot of it: the crew scans it and checks you in. From then on your spot is final: you can still change your burner name while booking is open, but only the crew can release or move the spot.
+Once you hold a spot, your room page shows <kbd>🎫 Show booking pass</kbd>, every other house and room shows your spot as a small ticket that opens it (so do the roulette page and, once booking has closed, the map), and every confirmation links to it: a page with your spot, a QR code and a short code like `7F3K-9QXM-2CWD`. Show it when you arrive — or a screenshot of it: the crew scans it and checks you in. From then on your spot is final: you can still change your burner name while booking is open, but only the crew can release or move the spot.
 
 <p align="center"><img src="../assets/screenshots/guest-pass.webp" alt="A booking pass on a phone: house, room, spot, burner name, QR code and pass code" width="300" /></p>
 
