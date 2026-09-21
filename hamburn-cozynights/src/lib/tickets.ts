@@ -83,6 +83,46 @@ export function maskTicketCode(code: string): string {
 	return `${value.charAt(0)}•••`;
 }
 
+/** The stored fields the name rules below need: a record of `orders`. */
+export interface TicketNameSource {
+	customer_name?: string;
+	order_number?: string;
+}
+
+/**
+ * The holder's name from the ticket list, or '' when the ticket has none.
+ * Tickets without a name are labelled "Ticket <code>" (defaultTicketName), and
+ * the code signs the guest in: a name that carries the code is not a name and
+ * is never shown. The one rule for the whole app — PocketBase has the same one
+ * in pb_hooks/lib/tickets.js, and tests/tickets.test.ts compares them.
+ */
+export function holderName(order: TicketNameSource): string {
+	const name = String(order.customer_name ?? '').trim();
+	const code = String(order.order_number ?? '').trim();
+	if (!name) return '';
+	if (code && name.includes(code)) return '';
+	return name;
+}
+
+/**
+ * How the crew chat and the audit log name a ticket: "Ticket H•••" — never the
+ * holder, never a full code. The crew chat runs on Telegram, so a line there
+ * must not tie a person to what another line said about them.
+ */
+export function maskedTicketLabel(code: string): string {
+	const masked = maskTicketCode(code);
+	return masked ? `Ticket ${masked}` : '';
+}
+
+/**
+ * What an admin sees when they look at a ticket (pass check, ticket list): the
+ * holder's name, and for a ticket without one the masked label instead of the
+ * code that would sign its guest in.
+ */
+export function displayTicketName(order: TicketNameSource): string {
+	return holderName(order) || maskedTicketLabel(String(order.order_number ?? ''));
+}
+
 // --- reading the CSV file -------------------------------------------------------
 
 /**

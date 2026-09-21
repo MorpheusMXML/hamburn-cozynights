@@ -344,6 +344,17 @@ describe('pass page', () => {
 		});
 	});
 
+	it('never shows the code of a ticket without a name, not even to admins', async () => {
+		// "Ticket HB-1001" is the label such a ticket gets, and HB-1001 signs its
+		// guest in — so the crew sees the masked label instead.
+		const admin = { email: 'crew@mauersegler.art', role: 'admin' };
+		const order = { ...ORDER, customer_name: 'Ticket HB-1001' };
+		const { event } = passEvent('7F3K-9QXM-2CWD', { adminPb: fakeAdminPb({ order }), admin });
+		const data: any = await passLoad(event);
+		expect(data.check.ticketName).toBe('Ticket H•••');
+		expect(JSON.stringify(data)).not.toContain('HB-1001');
+	});
+
 	it('shows admins the check-in, and guests nothing about it', async () => {
 		const bed = {
 			...BED,
@@ -482,6 +493,14 @@ describe('admin check page', () => {
 			'unknown'
 		);
 		expect(c.pb.rows('beds').some((b) => b.checked_in_at)).toBe(false);
+	});
+
+	it('names a ticket without a name by its masked code at the gate', async () => {
+		const c = campWithGuest();
+		c.pb.rows('orders')[0].customer_name = 'Ticket HB-1001';
+		const result = (await act('checkin', CODE, crewLocals(c.pb))).result;
+		expect(result).toMatchObject({ status: 'checkedin', ticketName: 'Ticket H•••' });
+		expect(JSON.stringify(result)).not.toContain('HB-1001');
 	});
 
 	it('says when the spot was deactivated or locked, and checks in anyway', async () => {

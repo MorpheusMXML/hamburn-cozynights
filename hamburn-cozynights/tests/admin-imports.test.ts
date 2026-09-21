@@ -145,6 +145,8 @@ describe('changing a ticket', () => {
 			newHolder: false
 		});
 		expect(order('o1')).toMatchObject({ email: 'new@example.org', pass_code: 'PASSCODE2345' });
+		// a corrected address is not a hand-over
+		expect(order('o1').handed_over_at).toBeUndefined();
 		expect(outcome).toMatchObject({
 			emailBefore: 'ada@example.org',
 			emailChanged: true,
@@ -182,6 +184,8 @@ describe('changing a ticket', () => {
 			telegram: false
 		});
 		expect(outcome.confirmation).toBe(true);
+		// PocketBase greets the new address with its own text, once
+		expect(order('o1').handed_over_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 	});
 
 	it("resets the old holder's check-in: the new holder checks in with the new pass", async () => {
@@ -216,8 +220,22 @@ describe('changing a ticket', () => {
 
 	it("deletes the old holder's special-needs request when a ticket is passed on", async () => {
 		db.data.special_requests = [
-			{ id: 'sr1', order: 'o1', status: 'approved', needs: 'x', reason: 'y', consent_at: '2026-09-01' },
-			{ id: 'sr3', order: 'o3', status: 'pending', needs: 'x', reason: 'y', consent_at: '2026-09-01' }
+			{
+				id: 'sr1',
+				order: 'o1',
+				status: 'approved',
+				needs: 'x',
+				reason: 'y',
+				consent_at: '2026-09-01'
+			},
+			{
+				id: 'sr3',
+				order: 'o3',
+				status: 'pending',
+				needs: 'x',
+				reason: 'y',
+				consent_at: '2026-09-01'
+			}
 		];
 		const outcome = await changeTicket(db.pb, 'o1', {
 			email: 'new@example.org',
@@ -231,7 +249,11 @@ describe('changing a ticket', () => {
 		expect(db.data.beds.find((b) => b.id === 'b1')).toMatchObject({ occupied: true, order: 'o1' });
 
 		// an address change alone keeps the request
-		const kept = await changeTicket(db.pb, 'o3', { email: 'g@example.org', name: '', newHolder: false });
+		const kept = await changeTicket(db.pb, 'o3', {
+			email: 'g@example.org',
+			name: '',
+			newHolder: false
+		});
 		expect(kept.requestRemoved).toBe(false);
 		expect(db.data.special_requests).toHaveLength(1);
 	});
@@ -290,8 +312,10 @@ describe('importing the ticket list', () => {
 		expect(db.data.guest_notify[0].tg_chat).toBe('');
 		// the new holder checks in with the new pass; the spot stays booked
 		expect(bed).toMatchObject({ order: 'o1', checked_in_at: '', checked_in_by: '' });
+		expect(order('o1').handed_over_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 		// HB-1003 had no address and no spot: nothing to hand over
 		expect(order('o3')).toMatchObject({ email: 'grace@example.org', customer_name: 'Grace' });
+		expect(order('o3').handed_over_at).toBeUndefined();
 		expect(db.data.orders.map((o) => o.order_number)).toEqual([
 			'HB-1001',
 			'HB-1002',

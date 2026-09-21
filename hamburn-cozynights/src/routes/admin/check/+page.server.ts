@@ -16,6 +16,7 @@ import { checkInOf, findPass, type PassLookup } from '$lib/server/pass';
 import { BookingService, type CheckInOutcome } from '$lib/server/booking';
 import { logAdminEvent } from '$lib/server/admin-events';
 import { maskEmail } from '$lib/server/notifications';
+import { displayTicketName } from '$lib/tickets';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	// Runs in parallel with the layout load, so it guards itself too.
@@ -44,7 +45,7 @@ function describe(
 		status: outcome.status,
 		code: formatPassCode(code),
 		checkedAt,
-		ticketName: pass.order.customer_name,
+		ticketName: displayTicketName(pass.order),
 		email: maskEmail(pass.order.email),
 		spot: spot
 			? { house: spot.house, room: spot.room, spot: spot.spot, roomId: spot.roomId }
