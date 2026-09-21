@@ -124,6 +124,17 @@ const PAGES: PageCase[] = [
 	{ name: 'special needs: new request', path: () => '/special-needs', as: 'guestWithoutSpot' },
 	{ name: 'admin dashboard', path: () => '/admin', as: 'admin', phases: ALL_PHASES },
 	{ name: 'admin dashboard (superuser)', path: () => '/admin', as: 'superuser' },
+	{
+		// The panel starts closed, so the dashboard case above never measured it.
+		name: 'admin dashboard: intel panel',
+		path: () => '/admin',
+		as: 'admin',
+		phases: ['staging', 'live'],
+		open: async (page) => {
+			await page.getByRole('button', { name: /SHOW INTEL/ }).click();
+			await page.locator('.intel-dashboard .tiles').waitFor();
+		}
+	},
 	{ name: 'admin house', path: (c) => `/admin/house/${c.houseId}`, as: 'admin' },
 	{ name: 'admin room', path: (c) => `/admin/room/${c.roomId}`, as: 'admin' },
 	{ name: 'admin new house', path: () => '/admin/house/new', as: 'admin' },

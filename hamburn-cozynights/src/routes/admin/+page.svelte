@@ -12,7 +12,10 @@
 	import { invalidateAll } from '$app/navigation';
 	import { fade, fly, slide } from 'svelte/transition';
 	import { MAP_WIDTH, MAP_HEIGHT, clampToMap, isTooCloseToOtherHouse } from '$lib/map-geometry';
-	import { tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
+	import { createLivePoll } from '$lib/live-stats-poll';
+	import { houseState, houseStateLabel } from '$lib/occupancy';
+	import { relativeTime } from '$lib/time';
 	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
 	import { actionErrorMessage, submitAction } from '$lib/admin-actions';
 	import { lockedDuring } from '$lib/booking-phase';
@@ -21,16 +24,50 @@
 
 	// Only admins reach this page (hooks + layout); superusers additionally get
 	// the destructive tools (clear all bookings, template import).
-	$: ({
-		houses,
-		crewBookedSpots,
-		sanityWarnings,
-		history,
-		isSuperuser,
-		phase,
-		isLayoutLocked,
-		bookingWindow
-	} = data);
+	$: ({ crewBookedSpots, sanityWarnings, isSuperuser, phase, isLayoutLocked, bookingWindow } =
+		data);
+
+	// Live booking picture. The page load brings the first set of numbers, the
+	// poll keeps them current (see $lib/live-stats-poll.ts: hidden tabs cost
+	// nothing, unchanged numbers come back as 304).
+	const poll = createLivePoll({ initial: data.stats });
+	onMount(() => poll.start());
+	// The poll hands back the same object while nothing changes (its answer is
+	// a 304), and so does the page load. Only swapping `live` when the object
+	// really is a different one keeps the map and sixty house cards from
+	// re-rendering every five seconds for nothing.
+	let live = data.stats;
+	$: newest = $poll.stats ?? data.stats;
+	$: if (newest !== live) live = newest;
+	// A plain record, not a Map: in this file `Map` is the camp map component.
+	$: liveByHouse = Object.fromEntries(live.houses.map((house) => [house.id, house]));
+	// Spot numbers follow the poll; the layout (which houses exist, where they
+	// stand) still comes from the page load.
+	$: houses = data.houses.map((house) => {
+		const spots = liveByHouse[house.id];
+		if (!spots) return house;
+		return {
+			...house,
+			totalBeds: spots.total,
+			occupiedBeds: spots.occupied,
+			freeBeds: spots.free,
+			checkedInBeds: spots.checkedIn,
+			occupancyRate: spots.total > 0 ? Math.round((spots.occupied / spots.total) * 100) : 0
+		};
+	});
+	// Another admin added or vanished a house: the numbers know, this page's
+	// map doesn't. Offer the reload instead of silently drifting apart.
+	$: layoutChanged = live.houses.length !== data.houses.length;
+	$: liveLabel =
+		$poll.status === 'live'
+			? `Live · last change ${relativeTime(live.changedAt)}`
+			: $poll.signedOut
+				? 'Signed out — sign in again for live numbers'
+				: $poll.status === 'offline'
+					? 'No connection — numbers may be out of date'
+					: $poll.status === 'stale'
+						? 'Catching up…'
+						: 'Starting…';
 	// Special-needs requests (/admin/requests): own switch, independent of the phase.
 	$: ({ requestsOpen, openRequests } = data);
 	let requestsSaving = false;
@@ -80,19 +117,6 @@
 	// Compute the currently active house for the sidebar
 	$: activeHouse =
 		houses.find((h) => h.id === selectedHouseId) || (editingHouse?.id ? null : editingHouse);
-
-	function getStatusColor(free: number, total: number) {
-		if (total === 0) return 'gray';
-		if (free === 0) return 'red';
-		if (free < 3) return 'orange';
-		return 'green';
-	}
-
-	function getStatusText(free: number, total: number) {
-		if (total === 0) return 'Not setup';
-		if (free === 0) return 'Fully booked';
-		return free === 1 ? '1 spot free' : `${free} spots free`;
-	}
 
 	let lastLockedToast = 0;
 
@@ -418,34 +442,27 @@
 					<div class="section-header">
 						<span class="laser-dot pink"></span>
 						<h3>LIVE OPERATIONS INTEL</h3>
+						<span class="live-chip" data-status={$poll.status} title={liveLabel}>
+							<span class="live-dot"></span>
+							<span class="live-text">{liveLabel}</span>
+						</span>
+						<button
+							class="btn-refresh"
+							on:click={() => poll.refresh()}
+							title="Fetch the numbers again now"
+							aria-label="Refresh the numbers now">↻</button
+						>
 					</div>
 
-					<IntelDashboard {totalBeds} {occupiedBeds} {history} />
+					{#if layoutChanged}
+						<p class="layout-changed" role="status">
+							🛖 The camp layout changed while this page was open.
+							<button class="btn-inline" on:click={() => invalidateAll()}>Reload the page</button>
+							to see the houses themselves.
+						</p>
+					{/if}
 
-					<div class="visual-progress">
-						<div class="status-legend">
-							<div class="legend-item">
-								<span class="dot empty"></span>
-								<span class="count">{houseStats.empty}</span>
-								<span class="text">EMPTY HOUSES</span>
-							</div>
-							<div class="legend-item">
-								<span class="dot partial"></span>
-								<span class="count">{houseStats.partial}</span>
-								<span class="text">FILLING</span>
-							</div>
-							<div class="legend-item">
-								<span class="dot full"></span>
-								<span class="count">{houseStats.full}</span>
-								<span class="text">FULL</span>
-							</div>
-							<div class="legend-item">
-								<span class="dot checked-in"></span>
-								<span class="count">{checkedInBeds}</span>
-								<span class="text">SPOTS CHECKED IN</span>
-							</div>
-						</div>
-					</div>
+					<IntelDashboard stats={live} />
 				</div>
 
 				<div class="dashboard-section">
@@ -481,7 +498,7 @@
 	<main class="view-container">
 		{#if showMap}
 			<div class="map-view" in:fade={{ duration: 300 }}>
-				<div class="map-status-bar" class:live={phase === 'live'} class:closed={phase === 'closed'}>
+				<div class="map-status-bar state-ring" data-state={phase}>
 					{#if isLayoutLocked}
 						<span class="status-msg"
 							>🔒 LOCKED: {phase === 'closed' ? 'Booking is closed' : 'Live Booking is active'}.
@@ -561,12 +578,16 @@
 			<div class="grid-view" in:fade={{ duration: 300 }}>
 				{#each houses as house}
 					<div class="house-card-wrapper">
-						<a href="/admin/house/{house.id}" class="house-card">
+						<a
+							href="/admin/house/{house.id}"
+							class="house-card state-ring"
+							data-state={houseState(house)}
+						>
 							<div class="card-glow"></div>
 							<header class="card-header">
 								<h2>{house.name} 🛖</h2>
-								<span class="badge {getStatusColor(house.freeBeds, house.totalBeds)}">
-									{getStatusText(house.freeBeds, house.totalBeds)}
+								<span class="state-chip">
+									{houseStateLabel(houseState(house), house.freeBeds)}
 								</span>
 							</header>
 
@@ -786,74 +807,29 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1.5rem;
+		/* A grid item may not shrink below its content unless it is told to:
+		   without this the live chip's one long line ("Live · last change 4 min
+		   ago", never wrapping) made the whole page 430 px wide on a 320 px
+		   phone. Found by the layout suite. */
+		min-width: 0;
 	}
 
 	.section-header {
 		display: flex;
 		align-items: center;
+		flex-wrap: wrap;
 		gap: 12px;
 		border-bottom: 1px solid #1a1a1a;
 		padding-bottom: 0.75rem;
 	}
 	.section-header h3 {
+		flex: 1 1 auto;
+		min-width: 0;
 		margin: 0;
 		font-size: 0.7rem;
 		font-weight: 900;
 		letter-spacing: 2.5px;
 		color: #666;
-	}
-
-	.visual-progress {
-		background: #111;
-		padding: 1.5rem;
-		border-radius: 12px;
-		border: 1px solid #222;
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
-	}
-
-	.status-legend {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: space-around;
-		gap: 0.75rem 1.5rem;
-	}
-	.legend-item {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-	.legend-item .dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-	}
-	.legend-item .dot.empty {
-		background: #444;
-	}
-	.legend-item .dot.partial {
-		background: #fb923c;
-		box-shadow: 0 0 10px #fb923c;
-	}
-	.legend-item .dot.full {
-		background: #f87171;
-		box-shadow: 0 0 10px #f87171;
-	}
-	.legend-item .dot.checked-in {
-		background: #2dd4bf;
-		box-shadow: 0 0 10px #2dd4bf;
-	}
-	.legend-item .count {
-		font-weight: 900;
-		color: #fff;
-		font-size: 0.9rem;
-	}
-	.legend-item .text {
-		font-size: 0.6rem;
-		font-weight: 900;
-		color: #666;
-		letter-spacing: 1px;
 	}
 
 	.intel-grid {
@@ -883,6 +859,106 @@
 		font-size: 1rem;
 	}
 
+	.live-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		/* Narrow screens: the chip drops to its own line and, if even that is
+		   tight, its text ends in an ellipsis instead of pushing the page. */
+		flex: 0 1 auto;
+		min-width: 0;
+		max-width: 100%;
+		padding: 0.25rem 0.6rem;
+		border-radius: 999px;
+		font-size: 0.55rem;
+		font-weight: 900;
+		letter-spacing: 1px;
+		text-transform: uppercase;
+		background: rgba(255, 255, 255, 0.03);
+		border: 1px solid #222;
+		color: #737373;
+	}
+	.live-text {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.live-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: #737373;
+		flex-shrink: 0;
+	}
+	/* The only thing that blinks on this page: proof the numbers are moving. */
+	.live-chip[data-status='live'] {
+		color: var(--state-open);
+		border-color: rgba(74, 222, 128, 0.3);
+	}
+	.live-chip[data-status='live'] .live-dot {
+		background: var(--state-open);
+		box-shadow: 0 0 8px var(--state-open);
+		animation: live-pulse 2s ease-in-out infinite;
+	}
+	.live-chip[data-status='stale'] {
+		color: var(--state-filling);
+		border-color: rgba(251, 146, 60, 0.3);
+	}
+	.live-chip[data-status='stale'] .live-dot {
+		background: var(--state-filling);
+	}
+	.live-chip[data-status='offline'] {
+		color: var(--state-full);
+		border-color: rgba(248, 113, 113, 0.3);
+	}
+	.live-chip[data-status='offline'] .live-dot {
+		background: var(--state-full);
+	}
+
+	@keyframes live-pulse {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.25;
+		}
+	}
+
+	.btn-refresh {
+		background: transparent;
+		border: 1px solid #222;
+		color: #737373;
+		border-radius: 8px;
+		width: 28px;
+		height: 28px;
+		font-size: 0.9rem;
+		line-height: 1;
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+	.btn-refresh:hover {
+		color: #2dd4bf;
+		border-color: #2dd4bf;
+	}
+
+	.layout-changed {
+		margin: 0;
+		font-size: 0.7rem;
+		font-weight: 700;
+		color: #fb923c;
+		line-height: 1.5;
+	}
+	.btn-inline {
+		background: none;
+		border: none;
+		padding: 0;
+		font: inherit;
+		color: #2dd4bf;
+		text-decoration: underline;
+		cursor: pointer;
+	}
+
 	.laser-dot {
 		width: 6px;
 		height: 6px;
@@ -904,24 +980,14 @@
 	}
 	.map-status-bar {
 		padding: 0.75rem 1.5rem;
-		background: rgba(45, 212, 191, 0.05);
-		border: 1px solid rgba(45, 212, 191, 0.1);
+		background: var(--state-soft);
+		border: 1px solid transparent;
 		border-radius: 12px;
 		font-size: 0.7rem;
 		font-weight: 900;
-		color: #2dd4bf;
+		color: var(--state);
 		letter-spacing: 1px;
 		line-height: 1.5;
-	}
-	.map-status-bar.live {
-		color: #f472b6;
-		background: rgba(244, 114, 182, 0.05);
-		border-color: rgba(244, 114, 182, 0.1);
-	}
-	.map-status-bar.closed {
-		color: #d4d4d4;
-		background: rgba(255, 255, 255, 0.03);
-		border-color: rgba(255, 255, 255, 0.08);
 	}
 
 	.map-layout-split {
@@ -1155,7 +1221,6 @@
 	}
 	.house-card:hover {
 		transform: translateY(-5px);
-		border-color: #444;
 		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 	}
 
@@ -1183,36 +1248,6 @@
 		color: #fff;
 		min-width: 0;
 		overflow-wrap: anywhere;
-	}
-
-	.badge {
-		padding: 4px 8px;
-		border-radius: 6px;
-		font-size: 0.6rem;
-		font-weight: 900;
-		text-transform: uppercase;
-		letter-spacing: 1px;
-		white-space: nowrap;
-	}
-	.badge.green {
-		background: rgba(74, 222, 128, 0.1);
-		color: #4ade80;
-		border: 1px solid #4ade80;
-	}
-	.badge.orange {
-		background: rgba(251, 146, 60, 0.1);
-		color: #fb923c;
-		border: 1px solid #fb923c;
-	}
-	.badge.red {
-		background: rgba(248, 113, 113, 0.1);
-		color: #f87171;
-		border: 1px solid #f87171;
-	}
-	.badge.gray {
-		background: rgba(102, 102, 102, 0.1);
-		color: #666;
-		border: 1px solid #666;
 	}
 
 	.stat-group {
@@ -1365,9 +1400,6 @@
 			white-space: normal;
 		}
 		.intel-panel {
-			padding: 1rem;
-		}
-		.visual-progress {
 			padding: 1rem;
 		}
 		.map-status-bar {

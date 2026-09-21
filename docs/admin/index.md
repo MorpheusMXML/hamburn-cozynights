@@ -31,16 +31,66 @@ Times are Europe/Berlin (CET/CEST). The rules and what each switch does to the t
 
 Below it, the row **♿ Special-needs requests: OPEN** (or **CLOSED**, with *· n waiting for a decision* while requests wait) opens or closes requests for guests with <kbd>Open requests</kbd> / <kbd>Close requests</kbd>, independent of the phase. <kbd>Review requests →</kbd> leads to the requests. See [Special-needs requests](./special-needs#_2-open-requests).
 
-## Intel panel
+## Intel panel: the live picture
 
 ![Intel panel with occupancy and booking trend](../assets/screenshots/admin-intel.webp)
 
+The panel updates itself. You don't need to reload the page to watch booking
+come in: the numbers, the house cards and the map pins follow along every few
+seconds, on their own.
+
 | Widget | Shows |
 | --- | --- |
-| **LOAD** | Doughnut chart: share of all spots that are taken. |
-| **New Bookings · Last 7 Days** | Spots booked per day over the last week, by the day the spot got its ticket (event time). A released spot drops out; a moved booking counts on the day of the move. |
-| **EMPTY HOUSES · FILLING · FULL** | How many houses have no bookings yet, some bookings, or no free spot left. |
+| **LOAD** | The ring: how the active spots are split between taken, free, held back 🔒 and reserved ♿. The number in the middle is the share that is taken. The four slices always add up to the spots that exist. |
+| **TAKEN · FREE · CHECKED IN · HELD BACK** | The same four numbers to read off, each in its own colour. *Checked in* counts guests the crew checked in at arrival, and is part of *taken*. |
+| **New bookings · last 7 days** | Spots booked per day over the last week, by the day the spot got its ticket (event time). Today's bar is highlighted. A released spot drops out; a moved booking counts on the day of the move. |
+| **Empty houses · Filling · Full · Not set up** | How many houses have no bookings yet, some bookings, no free spot left, or no spots at all. |
 | **PLAYA PROTOCOLS** | Quick reminders of the editor gestures below. |
+
+### Are these numbers current?
+
+The chip next to **LIVE OPERATIONS INTEL** answers that, always:
+
+| Chip | Meaning |
+| --- | --- |
+| 🟢 **Live · last change 12 s ago** | The page is talking to the server. The time is when a number last *moved*, not when it was last checked — "last change 2 h ago" on a quiet morning is normal. |
+| 🟠 **Catching up…** | An answer is overdue. The page keeps trying. |
+| 🔴 **No connection** | Several attempts failed. The numbers on screen are the last ones that arrived, so treat them as old. |
+| 🔴 **Signed out** | Your session ran out (it does once a week). Sign in again — until then nothing updates. |
+
+<kbd>↻</kbd> fetches immediately, for when you don't want to wait for the next
+round. A tab in the background stops asking altogether and catches up the
+moment you come back to it, so leaving the Control Center open on a second
+screen all weekend is fine.
+
+If another admin adds or deletes a *house* while your page is open, an orange
+line offers a reload: spot numbers update by themselves, the camp layout does
+not.
+
+### The state colours
+
+The same colour means the same thing everywhere on this page — on the ring, on
+the tiles, on the house cards, on the map status bar. Anything in a state
+carries a slowly breathing border in its colour, so a glance at the screen is
+enough.
+
+| Colour | State |
+| --- | --- |
+| 🟢 Green | **Open** — spots are free, nothing booked yet |
+| 🟠 Orange | **Filling** — booked and free spots side by side |
+| 🔴 Red | **Full** — nothing left to book |
+| 🟣 Violet | **Held back** — locked 🔒 by the crew, not bookable |
+| 🩷 Pink | **Reserved ♿** — kept for special-needs requests, and the colour of Live Booking |
+| 🩵 Turquoise | **Checked in**, and the colour of Staging Mode |
+| ⚪️ Grey | **Not set up** — no active spots at all |
+
+> [!NOTE]
+> A house with nothing but locked or ♿ spots left counts as **full**: a guest
+> has nothing to book there. The tiles tell you why.
+
+If animations bother you, the browser setting *reduce motion* (macOS: System
+Settings → Accessibility → Display; Windows: Settings → Accessibility → Visual
+effects) stops the breathing — the colours stay.
 
 ## Red alert: sanity checks
 
@@ -73,7 +123,7 @@ Pins are teal while a house has free spots, red when none is left, and grey whil
 
 ![House cards in list view](../assets/screenshots/admin-list-view.webp)
 
-Every house as a card with its occupancy badge (*n spots free*, *Fully booked* or *Not setup*), **Spots Claimed** with a progress bar, and its map coordinates. Locked 🔒 and special-needs ♿ spots never count as free, and deactivated spots don't count at all.
+Every house as a card with its occupancy badge (*n spots free*, *Fully booked* or *Not setup*), **Spots Claimed** with a progress bar, and its map coordinates. The card's border breathes in [the colour of its state](#the-state-colours). Locked 🔒 and special-needs ♿ spots never count as free, and deactivated spots don't count at all. These numbers update live, the same way the Intel panel does.
 
 - Click a card to manage its rooms.
 - <kbd>VANISH 🌪️</kbd> deletes the house after a confirmation.
