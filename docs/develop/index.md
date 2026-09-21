@@ -153,8 +153,8 @@ Schema and API rules are code: `pb_migrations/*.js`, applied by PocketBase on st
 
 Guests and admins see one picture of the camp, `static/lageplan-brahmsee-<year>.jpg`, drawn over the 1000 × 700 coordinate space in which house pins and [layout templates](../admin/templates) live (`src/lib/map-geometry.ts`). When the next burn gets a new map:
 
-1. **Export it as a JPEG** in A4 landscape proportions, 1754 to 2000 px wide (the 2026 map is 1754 × 1241 px, 0.4 MB). Keep the framing of the previous year, so the houses stay under their pins.
-2. **Save it under a new name,** `static/lageplan-brahmsee-<year>.jpg`, delete the previous year's file and point `MAP_IMAGE` in `src/lib/map-geometry.ts` to the new one. The new name matters: browsers may keep the old picture under the old address.
+1. **Export it as a JPEG** in A4 landscape proportions, 1754 to 2000 px wide (the 2026 map is 1754 × 1241 px, 0.4 MB). Keep the framing of the previous year, so the houses stay under their pins. The picture carries no house names: the app draws those next to its own pins, so a name baked into the artwork would only be a second, outdated label.
+2. **Save it under a new name,** `static/lageplan-brahmsee-<year>.jpg`, delete the previous year's file and point `MAP_IMAGE` in `src/lib/map-geometry.ts` to the new one. The new name matters: browsers may keep the old picture under the old address. A new drawing for a year that already had one gets a suffix instead, `…-<year>-v2.jpg`, for the same reason.
 3. **Put the same name into `map.image`** of `static/templates/brahmsee-starter.json` and of the example in [Layout templates](../admin/templates#file-format); `npm test` checks the starter template.
 4. **Check the pins** on staging in the Control Center's map view and drag any that no longer sit on their house. Templates exported before the swap carry the old name in `map.image`; importing them shows a warning to check the pins, nothing else changes.
 
