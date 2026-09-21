@@ -64,7 +64,7 @@ That's it: fireworks go up from your new spot 馃巻, and the spot now shows **You
 | Spot card | Meaning |
 | --- | --- |
 | **Available** 路 *Grab it now!* | Free. Click it to book. |
-| **Your Spot** 路 *your burner name* | That's you. Click it to rename or release it. |
+| **Your Spot** 路 *your burner name* | That's you. Click it to rename it (any time until booking closes) or to release it (during Live Booking). |
 | **Occupied** 路 *a burner name* | Taken by another guest. *Mystery Burner* means the spot has no name: the crew holds it, or its ticket changed hands. |
 | **Not available** 路 *Reserved by the crew* | Held back by the crew, for example a broken bed, a spot that isn't in use or one kept for [guests with special needs](./special-needs). |
 | **Unavailable** 路 *Release your other spot first* | You already have a spot somewhere else. One ticket code = one spot. |
@@ -97,7 +97,7 @@ The roulette page then shows your spot with <kbd>Visit My Room</kbd> and <kbd>鈽
 ## Changing your mind
 
 ::: tip Rename
-Open your room, click **Your Spot**, change the burner name and press <kbd>Save Spot</kbd>.
+Open your room, click **Your Spot**, change the burner name and press <kbd>Save Spot</kbd>. This works in every phase except Closed: before booking opens too, for example when a ticket was handed to you and its spot shows no name yet.
 :::
 
 ::: tip Move to another bed
@@ -111,7 +111,7 @@ One ticket holds one spot, so release your current spot first: <kbd>Release</kbd
 
 A spot the crew booked for your [special-needs request](./special-needs) can only get a new burner name: to move it or give it back, ask the crew.
 
-Bookings can only be changed during Live Booking. After booking closes your spot is frozen: it stays yours and your booking pass keeps working (see [After booking closed](./phases#after-booking-closed)). Should the crew ever go back to Staging Mode to rebuild the camp, every guest booking is released and you get a *spot was released* e-mail; your ticket code keeps working, so you simply book again once booking reopens. Only spots the crew booked for [special-needs requests](./special-needs) stay.
+Booking, moving and releasing a spot only work during Live Booking; the burner name of your spot can be changed until booking closes. After booking closes your spot is frozen: it stays yours and your booking pass keeps working (see [After booking closed](./phases#after-booking-closed)). Should the crew ever go back to Staging Mode to rebuild the camp, every guest booking is released and you get a *spot was released* e-mail; your ticket code keeps working, so you simply book again once booking reopens. Only spots the crew booked for [special-needs requests](./special-needs) stay.
 
 ## Confirmations
 

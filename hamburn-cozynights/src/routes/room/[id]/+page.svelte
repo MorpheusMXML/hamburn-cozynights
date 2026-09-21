@@ -50,8 +50,10 @@
 
 	onDestroy(() => clearTimeout(bannerTimer));
 
-	// `form` only matters without JavaScript; with it, the enhance callbacks
-	// below report errors where the guest is looking (modal or banner).
+	// The banner forms (release, Telegram) work without JavaScript: `form`
+	// carries their result then. With JavaScript, the enhance callbacks below
+	// report errors where the guest is looking (modal or banner). The booking
+	// dialog itself needs JavaScript: it only opens from a click.
 	let modalError = '';
 	let bannerError = form?.error ?? '';
 	let isSaving = false;
@@ -252,12 +254,16 @@
 						Spot <strong>{myBed.label}</strong> in this room is yours.
 						{#if data.checkedIn}
 							{CHECKED_IN_NOTE}
-							{#if data.isBookingActive}Tap it to change your burner name.{/if}
+							{#if data.phase !== 'closed'}Tap it to change your burner name.{/if}
 						{:else if data.spotFixed}
 							The crew picked it for you because of your special-needs request. To change it, please
 							contact the crew.
-							{#if data.isBookingActive}Tap it to change your burner name.{/if}
-						{:else if data.isBookingActive}Tap it to change your burner name or to release it.{/if}
+							{#if data.phase !== 'closed'}Tap it to change your burner name.{/if}
+						{:else if data.isBookingActive}Tap it to change your burner name or to release it.
+						{:else if data.phase !== 'closed'}
+							Tap it to change your burner name; moving or releasing it is possible again once Live
+							Booking starts.
+						{/if}
 					</p>
 					{#if data.pass}
 						<p class="pass-line">
@@ -338,6 +344,7 @@
 			{@const someoneElseBooked = bed.occupied && !isMyBed}
 			{@const iHaveAnotherBooking = !!data.userBedId && !isMyBed}
 			{@const isLocked = !data.isBookingActive}
+			{@const nameFinal = data.phase === 'closed'}
 
 			{#if someoneElseBooked}
 				<div class="bed-card occupied" data-bed-id={bed.id}>
@@ -351,11 +358,13 @@
 					</div>
 				</div>
 			{:else if isMyBed}
+				<!-- The burner name can change in every phase but Closed (a handed-over
+				     ticket comes without one); moving or releasing needs Live Booking. -->
 				<button
-					class="bed-card mine {isLocked ? 'locked' : ''}"
+					class="bed-card mine {nameFinal ? 'locked' : ''}"
 					data-bed-id={bed.id}
-					on:click={() => !isLocked && openBookingModal(bed.id, bed.burnerName)}
-					disabled={isLocked}
+					on:click={() => !nameFinal && openBookingModal(bed.id, bed.burnerName)}
+					disabled={nameFinal}
 				>
 					<div class="icon" aria-hidden="true">🛏️</div>
 					<span class="label">{bed.label}</span>
@@ -363,11 +372,9 @@
 						<span class="status-text">Your Spot</span>
 						<span class="guest-name">{bed.burnerName}</span>
 						<small class="edit-hint"
-							>{isLocked
-								? data.phase === 'closed'
-									? 'Spots are final now'
-									: 'Not open yet'
-								: data.spotFixed || data.checkedIn
+							>{nameFinal
+								? 'Spots are final now'
+								: isLocked || data.spotFixed || data.checkedIn
 									? 'Tap to change your burner name'
 									: 'Tap to change or release'}</small
 						>
@@ -554,7 +561,7 @@
 							{isSaving ? 'Saving…' : 'Save Spot'}
 						</button>
 						<button type="button" class="btn-cancel" on:click={closeModal}>Cancel</button>
-						{#if selectedBedId === data.userBedId && !data.spotFixed && !data.checkedIn}
+						{#if selectedBedId === data.userBedId && data.isBookingActive && !data.spotFixed && !data.checkedIn}
 							<button type="submit" formaction="?/unbookBed" class="btn-unbook" disabled={isSaving}
 								>Release</button
 							>

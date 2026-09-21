@@ -74,6 +74,10 @@ Enter your ticket code on the start page of the new device. Your booking is atta
 Only with their ticket code. On a shared device, entering another code switches that browser to the other ticket: enter your own code again afterwards, or press <kbd>Not your ticket? Sign out</kbd> on the start page.
 :::
 
+::: details My spot shows no burner name (the ticket was handed to me)
+Open the room of your spot (the room link in your confirmation, or its house on the map), tap **Your Spot**, type a name and press <kbd>Save Spot</kbd>; leave the field empty and the slot machine rolls one. That works before booking opens too. Only once booking has closed is the name final, like the spot itself.
+:::
+
 ::: details I didn't get a confirmation e-mail
 It goes to the address that belongs to your ticket, usually within a minute; right after booking opens, when many people book at once, it can take a few minutes. Check your spam folder. Your room page shows where confirmations go; if that address is wrong or missing, ask the crew to fix it in the ticket list.
 :::
@@ -124,6 +128,10 @@ Your Google sign-in worked, and your access request is waiting for a superuser. 
 
 ::: details "WEEKLY CHECK 🔐" at sign-in
 Admins sign in with Google again every 7 days, even when they use the admin area every day. Press the Google button once and you're back. See [Sessions](../admin/access#sessions).
+:::
+
+::: details "SIGN-IN NOT RECORDED ⚠️" at sign-in
+Google accepted the account, but PocketBase could not record the sign-in (the `last_sign_in` date of the admin account), so no session was started: without that date the next request would end the session again and send you back to the sign-in page. Try again. If it keeps happening, the operator looks at the PocketBase log for `[admins-guard] last_sign_in not saved` and at the sign-in hook, `pb_hooks/admins_oauth_guard.pb.js`.
 :::
 
 ::: details "WRONG ACCOUNT 🛑" at sign-in

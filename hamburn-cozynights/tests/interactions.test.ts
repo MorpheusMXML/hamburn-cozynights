@@ -272,6 +272,69 @@ describe('Room Load & Booking Logic', () => {
 		expect(mockAdminPb.update).not.toHaveBeenCalled();
 	});
 
+	it('lets a guest rename the spot they hold before booking opens, but not book one', async () => {
+		const post = (bedId: string, guestName: string) => {
+			const formData = new FormData();
+			formData.append('bedId', bedId);
+			formData.append('guestName', guestName);
+			return { formData: async () => formData } as any;
+		};
+
+		// Staging (booking not open yet); the ticket holds bed1, e.g. a handed-over
+		// ticket whose spot lost its name, or a spot the crew booked.
+		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: false });
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' }); // order
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({
+			id: 'bed1',
+			occupied: true,
+			order: 'order1'
+		}); // its spot
+		mockAdminPb.getOne.mockResolvedValueOnce({
+			id: 'bed1',
+			occupied: true,
+			order: 'order1',
+			enabled: true
+		}); // under-lock read
+		mockAdminPb.getFullList.mockResolvedValueOnce([]); // no other spots
+		const renamed = (await roomActions.bookBed({
+			request: post('bed1', 'Neon Nebula'),
+			locals: mockLocals
+		} as any)) as any;
+		expect(renamed.success).toBe(true);
+		expect(mockAdminPb.update).toHaveBeenCalledWith(
+			'order1',
+			expect.objectContaining({ burner_name: expect.any(String) })
+		);
+
+		// Taking a spot stays a Live Booking thing.
+		mockAdminPb.update.mockClear();
+		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: false });
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' });
+		mockAdminPb.getFirstListItem.mockRejectedValueOnce({ status: 404 }); // holds no spot
+		const refused = (await roomActions.bookBed({
+			request: post('bed2', 'Alice'),
+			locals: mockLocals
+		} as any)) as any;
+		expect(refused.status).toBe(403);
+		expect(refused.data.error).toMatch(/not open yet/);
+		expect(mockAdminPb.update).not.toHaveBeenCalled();
+	});
+
+	it('refuses to rename once booking has closed, without looking anything up', async () => {
+		mockPb.getOne.mockResolvedValueOnce({ booking_closed: true });
+		const formData = new FormData();
+		formData.append('bedId', 'bed1');
+		formData.append('guestName', 'Neon Nebula');
+		const result = (await roomActions.bookBed({
+			request: { formData: async () => formData },
+			locals: mockLocals
+		} as any)) as any;
+		expect(result.status).toBe(403);
+		expect(result.data.error).toMatch(/closed/);
+		expect(mockAdminPb.getFirstListItem).not.toHaveBeenCalled();
+		expect(mockAdminPb.update).not.toHaveBeenCalled();
+	});
+
 	it('should allow unbooking a bed', async () => {
 		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true }); // Settings
 		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' }); // Order lookup

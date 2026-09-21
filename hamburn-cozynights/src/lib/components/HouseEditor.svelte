@@ -1,5 +1,13 @@
+<script lang="ts" module>
+	/** What "IGNITE HOUSE" / "SYNC MODULE" hands to the parent, which creates or renames the house. */
+	export interface HouseSave {
+		name: string;
+		/** Initial spots of a new house (0 when editing). */
+		bedCount: number;
+	}
+</script>
+
 <script lang="ts">
-	import type { HouseData } from '$lib/types';
 	import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
 	import { createEventDispatcher } from 'svelte';
 	import { fade } from 'svelte/transition';
@@ -10,7 +18,11 @@
 	export let houseId: string | undefined = undefined;
 	export let flat = false;
 
-	const dispatch = createEventDispatcher();
+	const dispatch = createEventDispatcher<{
+		save: HouseSave;
+		move: { x: number; y: number };
+		cancel: void;
+	}>();
 
 	let bedCount = 4;
 	let showValidationError = false;
@@ -46,62 +58,10 @@
 	function handleSave() {
 		if (!name || name.trim() === '') {
 			showValidationError = true;
-			console.error(
-				`[HouseEditor] Validation failed: Empty name for ${isEditing ? 'existing' : 'new'} house at (${x}, ${y})`
-			);
 			return;
 		}
-
 		showValidationError = false;
-		console.log(`[HouseEditor] Saving house: "${name}" (ID: ${houseId || 'NEW'}) at (${x}, ${y})`);
-
-		const now = new Date().toISOString() as any;
-		const newHouse: HouseData = {
-			id: houseId || String(Date.now()),
-			collectionId: '',
-			collectionName: 'houses' as any,
-			created: now,
-			updated: now,
-			name,
-			occupied: false,
-			x,
-			y,
-			rooms: [
-				{
-					id: 'temp-room',
-					collectionId: '',
-					collectionName: 'rooms' as any,
-					created: now,
-					updated: now,
-					name: 'Room 1',
-					room_number: 1,
-					house: houseId || '',
-					amount_beds: bedCount,
-					occupied: false,
-					beds: Array.from({ length: bedCount }, (_, i) => ({
-						id: String(Date.now() + i),
-						collectionId: '',
-						collectionName: 'beds' as any,
-						created: now,
-						updated: now,
-						label: `B${i + 1}`,
-						enabled: false,
-						occupied: false,
-						is_locked: false,
-						is_special: false,
-						booked_at: '',
-						checked_in_at: '',
-						checked_in_by: '',
-						room: 'temp-room',
-						order: ''
-					}))
-				}
-			],
-			totalBeds: bedCount,
-			occupiedBeds: 0,
-			freeBeds: bedCount
-		};
-		dispatch('save', newHouse);
+		dispatch('save', { name: name.trim(), bedCount: isEditing ? 0 : bedCount });
 	}
 </script>
 

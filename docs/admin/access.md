@@ -91,7 +91,7 @@ Approving, inviting and removing admins deliberately happens **outside the web a
 ./scripts/cozy-admin.sh approve someone@mauersegler.art      # approve an access request as admin
 ./scripts/cozy-admin.sh approve someone@mauersegler.art superuser  # … or straight as superuser
 ./scripts/cozy-admin.sh add someone@mauersegler.art          # invite before the first sign-in
-./scripts/cozy-admin.sh remove someone@mauersegler.art       # reject a request or revoke access
+./scripts/cozy-admin.sh remove someone@mauersegler.art --yes # reject a request or revoke access
 ```
 
 The few superusers who also need the PocketBase dashboard on the server get that from an operator; `./scripts/cozy-admin.sh --help` lists every command of the tool.
@@ -120,6 +120,7 @@ Access requests, approvals, role changes, removals and every admin sign-in show 
 | **SIGN-IN CANCELLED** | You cancelled on Google's page. | Try again whenever you're ready. |
 | **SIGN-IN EXPIRED ⏳** | The sign-in took longer than 10 minutes, or was started in another tab. | Start again at `/admin/login`. |
 | **WEEKLY CHECK 🔐** | Your last Google sign-in was more than 7 days ago. | Sign in with Google again. |
+| **SIGN-IN NOT RECORDED ⚠️** | Google accepted you, but PocketBase couldn't store the sign-in date (`last_sign_in`), so no session was started; it would have ended on the next request. | Try again; if it persists, the operators check the PocketBase log for `[admins-guard] last_sign_in not saved`. |
 | **BACKEND UNREACHABLE 📡** | CozyNights can't reach its database right now. | Try again shortly; tell the operators if it persists. |
 | **SIGN-IN FAILED** | Google didn't complete the sign-in. | Try again. |
 | *Google sign-in is not configured on this server yet.* | This installation has no Google sign-in set up, typical for a fresh local install. | Operators: see [Local development](../develop/#admin-sign-in-locally). |
@@ -127,7 +128,7 @@ Access requests, approvals, role changes, removals and every admin sign-in show 
 ## Why Google only?
 
 - **No passwords** that could leak, be reused or need resetting.
-- **Leaving the Workspace means losing access,** at the latest at the next weekly sign-in. To end it at once, also run `./scripts/cozy-admin.sh remove`.
+- **Leaving the Workspace means losing access,** at the latest at the next weekly sign-in. To end it at once, also run `./scripts/cozy-admin.sh remove <email> --yes`.
 - **2-Step Verification comes from Google.** Make it mandatory for the Workspace in the Google Admin console (Security → Authentication → 2-Step Verification), ideally with passkeys or security keys for superusers. CozyNights has no second factor of its own on purpose: Google's is stronger than a code by e-mail or chat, and the weekly sign-in makes sure it applies.
 - **Checked twice, independently.** Both the database and the app verify the domain, the verified address and the Workspace membership, and a new account can never start with more than *pending*.
 

@@ -13,7 +13,7 @@
 	import { invalidateAll } from '$app/navigation';
 
 	export let data: PageData;
-	$: ({ houses, isBookingActive, phase, bookingUnlockAt } = data);
+	$: ({ isBookingActive, phase, bookingUnlockAt } = data);
 
 	// Closed: a panel like the one in Staging covers the blurred map until
 	// the guest wants to look around (houses still open, read-only).
@@ -76,9 +76,6 @@
 		{/if}
 
 		<div class="header-right">
-			<div class="debug-counter">
-				SENSORS: {houses?.length || 0}
-			</div>
 			{#if phase !== 'staging' && (data.specialNeeds.open || data.specialNeeds.requestSent)}
 				<a
 					class="help-link special-link"
@@ -267,19 +264,6 @@
 		border-radius: 50%;
 		border: 1px solid currentColor;
 		font-size: 0.8rem;
-	}
-
-	.debug-counter {
-		background: rgba(10, 10, 10, 0.8);
-		border: 1px solid #333;
-		padding: 0.5rem 1rem;
-		border-radius: 8px;
-		color: #8a8a8a;
-		font-size: 0.7rem;
-		font-weight: 900;
-		letter-spacing: 1px;
-		white-space: nowrap;
-		backdrop-filter: blur(10px);
 	}
 
 	.bottom-dock {
@@ -617,14 +601,9 @@
 		}
 	}
 
-	/* The header boxes never wrap; below these widths they don't fit next to
-	   each other any more (checked by tests/layout at every width). First the
-	   house counter (a gimmick) goes, then the links lose their text. */
-	@media (max-width: 1200px) {
-		.debug-counter {
-			display: none;
-		}
-	}
+	/* The header boxes never wrap; below this width they don't fit next to
+	   each other any more (checked by tests/layout at every width): the links
+	   lose their text. */
 	@media (max-width: 920px) {
 		.help-text {
 			display: none;

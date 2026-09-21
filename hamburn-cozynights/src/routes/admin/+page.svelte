@@ -4,7 +4,7 @@
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { enhance } from '$app/forms';
 	import Map from '$lib/components/Map.svelte';
-	import HouseEditor from '$lib/components/HouseEditor.svelte';
+	import HouseEditor, { type HouseSave } from '$lib/components/HouseEditor.svelte';
 	import IntelDashboard from '$lib/components/admin/IntelDashboard.svelte';
 	import SanityChecks from '$lib/components/admin/SanityChecks.svelte';
 	import TemplateManager from '$lib/components/admin/TemplateManager.svelte';
@@ -280,13 +280,12 @@
 		invalidateAll();
 	}
 
-	async function handleSaveHouse(event: CustomEvent) {
+	async function handleSaveHouse(event: CustomEvent<HouseSave>) {
 		if (isLayoutLocked) {
 			explainLocked('add or rename houses');
 			return;
 		}
-		const newHouseData = event.detail;
-		const name = (newHouseData.name || '').trim();
+		const name = (event.detail.name || '').trim();
 
 		if (!name) {
 			toast('Enter a name for the house first.', 'warning');
@@ -303,7 +302,7 @@
 		} else {
 			formData.append('x', editingHouse?.x.toString() || '0');
 			formData.append('y', editingHouse?.y.toString() || '0');
-			formData.append('bedCount', newHouseData.totalBeds?.toString() || '0');
+			formData.append('bedCount', String(event.detail.bedCount || 0));
 			result = await submitAction('/admin/house/new?/create', formData);
 		}
 

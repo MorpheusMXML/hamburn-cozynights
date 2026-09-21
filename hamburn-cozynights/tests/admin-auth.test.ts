@@ -526,6 +526,64 @@ describe('Google sign-in flow', () => {
 			await callback(usersRecord.locals, 'state=state-123&code=abc', flowCookie).result
 		).toEqual({ status: 303, location: '/admin/login?error=not_authorized' });
 	});
+
+	it('refuses a sign-in the backend did not record (no fresh last_sign_in)', async () => {
+		// The guard hook writes last_sign_in before the sign-in completes. Without
+		// it, hooks.server.ts would end the session on the very next request and
+		// send the admin back here with "sign in again", forever.
+		const unrecorded = makeLocals({
+			authWithOAuth2Code: vi.fn(async function () {
+				unrecorded.locals.pb.authStore.isValid = true;
+				return {
+					record: { ...ADMIN_RECORD, last_sign_in: '' },
+					meta: {
+						email: 'max@mauersegler.art',
+						rawUser: { email: 'max@mauersegler.art', email_verified: true, hd: 'mauersegler.art' }
+					}
+				};
+			})
+		});
+		expect(
+			await callback(unrecorded.locals, 'state=state-123&code=abc', flowCookie).result
+		).toEqual({ status: 303, location: '/admin/login?error=not_recorded' });
+		expect(unrecorded.locals.pb.authStore.isValid).toBe(false);
+
+		// The hook refused the sign-in itself because the write failed.
+		const refused = makeLocals({
+			authWithOAuth2Code: vi.fn(async () => {
+				throw new ClientResponseError({
+					status: 500,
+					response: {
+						message:
+							'The sign-in could not be recorded (admins.last_sign_in), so no session was started.',
+						data: { code: 'sign_in_not_recorded' }
+					}
+				});
+			})
+		});
+		expect(await callback(refused.locals, 'state=state-123&code=abc', flowCookie).result).toEqual({
+			status: 303,
+			location: '/admin/login?error=not_recorded'
+		});
+
+		// A pending access request has no session rights anyway: the waiting page.
+		const pending = makeLocals({
+			authWithOAuth2Code: vi.fn(async function () {
+				pending.locals.pb.authStore.isValid = true;
+				return {
+					record: { ...ADMIN_RECORD, role: 'pending', last_sign_in: '' },
+					meta: {
+						email: 'max@mauersegler.art',
+						rawUser: { email: 'max@mauersegler.art', email_verified: true, hd: 'mauersegler.art' }
+					}
+				};
+			})
+		});
+		expect(await callback(pending.locals, 'state=state-123&code=abc', flowCookie).result).toEqual({
+			status: 303,
+			location: '/admin/login'
+		});
+	});
 });
 
 describe('superuser-only dashboard actions', () => {

@@ -609,7 +609,15 @@
 							{#if opensLocked}
 								<small class="field-hint">Booking is already open.</small>
 							{:else if draftOpens !== null}
-								<small class="field-hint">{relative(draftOpens, 'in', 'passed')}</small>
+								<!-- The field shows the browser's own date format (dd.mm.yyyy, am/pm…):
+								     repeat the parsed time in English so nobody has to guess. -->
+								<small class="field-hint"
+									>{formatBerlin(draft.opensAt)} Berlin time · {relative(
+										draftOpens,
+										'in',
+										'passed'
+									)}</small
+								>
 							{/if}
 						</label>
 
@@ -625,13 +633,16 @@
 								on:input={() => (serverError = '')}
 							/>
 							{#if draftCloses !== null}
-								<small class="field-hint">{closesHint}</small>
+								<small class="field-hint"
+									>{formatBerlin(draft.closesAt)} Berlin time · {closesHint}</small
+								>
 							{/if}
 						</label>
 					</div>
 
 					<p class="rules">
-						Berlin time (CET/CEST).
+						Times are Berlin time (CET/CEST), 24-hour clock; the line under a field repeats what you
+						typed.
 						{#if isSuperuser}
 							⚡ As a superuser you have no minimum times; a save that switches the phase right now
 							asks first.

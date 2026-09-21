@@ -12,7 +12,7 @@
 //      cozy-admin approve <email> [admin|superuser]  approve an access request
 //      cozy-admin superuser <email>               PocketBase superuser (password from
 //                                                 $COZY_SU_PASSWORD) + app role superuser
-//      cozy-admin remove <email>                  revoke/reject: app access + PocketBase superuser
+//      cozy-admin remove <email> --yes            revoke/reject: app access + PocketBase superuser
 //      cozy-admin list                            show pending requests, admins, superusers
 //      cozy-admin service-account <email>         create/rotate the app's service superuser
 //                                                 (password from $COZY_SU_PASSWORD)
@@ -256,33 +256,47 @@ cozyAdmin.addCommand(
 );
 
 cozyAdmin.addCommand(
-	new Command({
-		use: 'remove <email>',
-		short: 'Revoke app admin access and the PocketBase superuser account of this email',
-		run: (cmd, args) => {
-			if (args.length !== 1) cozyFail(cmd, 'usage: cozy-admin remove <email>');
-			cozyAdminsCollection(cmd);
-			const email = cozyNormalizeEmail(cmd, args[0], false);
+	(() => {
+		const remove = new Command({
+			use: 'remove <email>',
+			short: 'Revoke app admin access and the PocketBase superuser account of this email',
+			run: (cmd, args) => {
+				if (args.length !== 1) cozyFail(cmd, 'usage: cozy-admin remove <email> --yes');
+				cozyAdminsCollection(cmd);
+				const email = cozyNormalizeEmail(cmd, args[0], false);
 
-			const rec = cozyFind('admins', email);
-			const su = cozyFind('_superusers', email);
-			if (!rec && !su) cozyFail(cmd, 'no admin or superuser with email ' + email);
-			if (su && $app.countRecords('_superusers') <= 1) {
-				cozyFail(cmd, 'refusing to remove the last PocketBase superuser (' + email + ')');
-			}
+				const rec = cozyFind('admins', email);
+				const su = cozyFind('_superusers', email);
+				if (!rec && !su) cozyFail(cmd, 'no admin or superuser with email ' + email);
+				if (su && $app.countRecords('_superusers') <= 1) {
+					cozyFail(cmd, 'refusing to remove the last PocketBase superuser (' + email + ')');
+				}
+				// Like the other destructive commands: say what goes, then insist on --yes.
+				if (!cmd.flags().getBool('yes')) {
+					const what = [];
+					if (rec) what.push('the app admin access (role ' + rec.getString('role') + ')');
+					if (su) what.push('the PocketBase superuser account');
+					cozyFail(
+						cmd,
+						'this removes ' + what.join(' and ') + ' of ' + email + ' — run it with --yes'
+					);
+				}
 
-			if (rec) {
-				// Deleting the record also deletes its Google link and invalidates
-				// its tokens: the app drops the session on the next request.
-				$app.delete(rec);
-				cmd.println('removed app admin access: ' + email);
+				if (rec) {
+					// Deleting the record also deletes its Google link and invalidates
+					// its tokens: the app drops the session on the next request.
+					$app.delete(rec);
+					cmd.println('removed app admin access: ' + email);
+				}
+				if (su) {
+					$app.delete(su);
+					cmd.println('removed PocketBase superuser: ' + email);
+				}
 			}
-			if (su) {
-				$app.delete(su);
-				cmd.println('removed PocketBase superuser: ' + email);
-			}
-		}
-	})
+		});
+		remove.flags().bool('yes', false, 'really remove the access');
+		return remove;
+	})()
 );
 
 cozyAdmin.addCommand(

@@ -589,6 +589,9 @@ describe('crew alerts', () => {
 
 		const first = await signIn(); // creates the access request
 		expect(first.record.role).toBe('pending');
+		// Recorded before the sign-in completes (pb_hooks/admins_oauth_guard.pb.js):
+		// without it the app would end the session on the next request.
+		expect(first.record.last_sign_in).toBeTruthy();
 		await su.collection('admins').update(first.record.id, { role: 'admin' });
 
 		const before = Date.now();
@@ -661,7 +664,10 @@ describe('cozy-admin tickets import and notify', () => {
 	it('reports an invite from the server as an invite, not as an access request', async () => {
 		const email = `invited-${uid()}@mauersegler.art`;
 		expect(cozyAdmin(['add', email])).toContain(`invited: ${email} (role admin)`);
-		expect(cozyAdmin(['remove', email])).toContain(`removed app admin access: ${email}`);
+		// Destructive: without --yes it only says what it would remove.
+		expect(() => cozyAdmin(['remove', email])).toThrow(/removes the app admin access.*--yes/);
+		expect(cozyAdmin(['list'])).toContain(email);
+		expect(cozyAdmin(['remove', email, '--yes'])).toContain(`removed app admin access: ${email}`);
 		await flush();
 
 		const texts = (await telegramTo(CREW_CHAT)).map((m) => m.text);

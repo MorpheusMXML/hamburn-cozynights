@@ -12,7 +12,7 @@
 #   scripts/cozy-admin.sh add <email> [<email> ...]     invite admin(s) up front
 #   scripts/cozy-admin.sh superuser <email>             PocketBase superuser (prompts for a
 #                                                       password) + app role superuser
-#   scripts/cozy-admin.sh remove <email>                reject/revoke app access + superuser
+#   scripts/cozy-admin.sh remove <email> --yes          reject/revoke app access + superuser
 #   scripts/cozy-admin.sh service-account               create/update the app's service superuser
 #                                                       from PB_ADMIN_EMAIL/PASSWORD in .env
 #                                                       (generates the password if missing) and
@@ -151,9 +151,10 @@ case "$cmd" in
 		cozy -- approve "$@"
 		;;
 	remove)
-		[[ $# -eq 1 ]] || die "usage: $0 remove <email>"
+		# Destructive like the other removals: the command itself insists on --yes.
+		[[ $# -ge 1 ]] || die "usage: $0 remove <email> --yes"
 		require_running
-		cozy -- remove "$1"
+		cozy -- remove "$@"
 		;;
 	list)
 		require_running

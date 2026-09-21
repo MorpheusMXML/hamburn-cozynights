@@ -107,6 +107,18 @@ const PAGES: PageCase[] = [
 			await page.getByRole('dialog').waitFor();
 		}
 	},
+	{
+		// The same dialog before booking opens: only the burner name can change
+		// there, so it has one button less than during Live Booking.
+		name: 'room: rename dialog before booking opens',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithSpot',
+		phases: ['staging'],
+		open: async (page) => {
+			await page.locator('button.bed-card.mine').click();
+			await page.getByRole('dialog').waitFor();
+		}
+	},
 	{ name: 'random spot', path: () => '/random-bed', as: 'guestWithoutSpot' },
 	{ name: 'special needs: request sent', path: () => '/special-needs', as: 'guestWithRequest' },
 	{ name: 'special needs: new request', path: () => '/special-needs', as: 'guestWithoutSpot' },

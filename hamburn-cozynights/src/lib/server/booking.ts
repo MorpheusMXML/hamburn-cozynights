@@ -89,29 +89,9 @@ export function isBedBookable(
 	return true;
 }
 
-const BURNER_NAMES = [
-	'Dusty Nomad',
-	'Neon Shaman',
-	'Sparkle Pony',
-	'Fire Weaver',
-	'LED Lizard',
-	'Gifting Goblin',
-	'Moop Master',
-	'Temple Guardian',
-	'Solar Sprite',
-	'Disco Druid',
-	'Radical Robot',
-	'Dust Bunny',
-	'Prism Pilot',
-	'Bass Beast',
-	'Infinite Improviser'
-];
-
-/** A burner name for a booking made without one, e.g. "Disco Druid #417". */
-export function randomBurnerName(): string {
-	const name = BURNER_NAMES[Math.floor(Math.random() * BURNER_NAMES.length)];
-	return `${name} #${Math.floor(100 + Math.random() * 900)}`;
-}
+// A burner name for a booking made without one, from the same list the
+// slot machine in the browser rolls through ($lib/burner-names).
+export { randomBurnerName } from '$lib/burner-names';
 
 /**
  * Service for managing bed bookings and orders on the playa.
