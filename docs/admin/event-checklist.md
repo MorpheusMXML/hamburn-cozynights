@@ -89,7 +89,7 @@ The ticket shop's export, with e-mail addresses for the booking confirmations. I
 ./scripts/cozy-admin.sh tickets import roster.csv
 ```
 
-The file format and what an import changes: [Notifications](./notifications#ticket-codes-with-e-mail-addresses). The server import never hands a ticket over to a new holder; for tickets that changed hands, use the [Tickets](./tickets) page. Delete the CSV from the server afterwards.
+The file format and what an import changes: [Notifications](./notifications#ticket-codes-with-e-mail-addresses). The server import refuses a changed address on a ticket that still carries its holder (pass, Telegram, request, burner name, check-in) — hand those over on the [Tickets](./tickets) page, or repeat the import with `--hand-over` to treat every changed address in the file as a new holder. Delete the CSV from the server afterwards.
 
 **Only Indoor memberships.** Load the codes of Indoor memberships only: they include a bed, Camper memberships don't.
 
