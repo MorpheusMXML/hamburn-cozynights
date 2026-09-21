@@ -1,6 +1,6 @@
 # Admin access & roles
 
-The admin area lives at **`/admin`**. From the start page you can also get there with the small 🔒 button in the corner.
+The admin area lives at **`/admin`**. From the start page you can also get there with the **🔒 Crew** link at the bottom.
 
 ## Who can get in
 
@@ -67,11 +67,17 @@ A request can also be approved straight to superuser.
 | --- | :---: | :---: | :---: |
 | See the Control Center, statistics and occupancy | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | Build the camp: houses, rooms, spots | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
-| Switch phases, schedule the go-live timer | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
-| Lock and unlock spots | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
-| Export a layout template | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
-| **Import a layout template** | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
-| **Clear all bookings** | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
+| Plan the booking window, arm and pause the timer (at least a day ahead) | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| **Switch the phase right now** (Staging, Live Booking, Closed) | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
+| Lock and unlock spots, mark spots ♿ special or normal | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| Decide [special-needs requests](./special-needs), book spots for them, open and close requests | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| [Check guests in](./passes) with their booking pass, undo a check-in | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| Change the [message texts](./notifications#message-texts) guests get | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| Export a layout template, compare a file with the camp | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| **Apply a layout template** | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
+| Find tickets, change their e-mail address, hand them over | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| **Load the ticket list** | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
+| **Clear all bookings** (Staging Mode only) | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> |
 | Approve, invite and remove admins | <span class="no">✗</span> | <span class="no">✗</span> | <span class="yes">✓</span> on the server |
 
 Superusers carry a **SUPERUSER ⚡️** badge in the admin header.
@@ -81,21 +87,27 @@ Superusers carry a **SUPERUSER ⚡️** badge in the admin header.
 Approving, inviting and removing admins deliberately happens **outside the web app**, on the server that runs CozyNights. Even a hijacked browser session can't hand out access. Superusers use the PocketBase dashboard (collection `admins`, field `role`), which is only reachable from the server itself, or the admin tool that ships with the app:
 
 ```bash
-./scripts/cozy-admin.sh list                             # open requests, admins, superusers
-./scripts/cozy-admin.sh approve someone@mauersegler.art  # approve an access request
-./scripts/cozy-admin.sh add someone@mauersegler.art      # invite before the first sign-in
-./scripts/cozy-admin.sh remove someone@mauersegler.art   # reject a request or revoke access
+./scripts/cozy-admin.sh list                                 # open requests, admins, superusers
+./scripts/cozy-admin.sh approve someone@mauersegler.art      # approve an access request as admin
+./scripts/cozy-admin.sh approve someone@mauersegler.art superuser  # … or straight as superuser
+./scripts/cozy-admin.sh add someone@mauersegler.art          # invite before the first sign-in
+./scripts/cozy-admin.sh remove someone@mauersegler.art       # reject a request or revoke access
 ```
+
+The few superusers who also need the PocketBase dashboard on the server get that from an operator; `./scripts/cozy-admin.sh --help` lists every command of the tool.
 
 Changes apply on the **next click**: CozyNights re-checks the role on every request, so an approved admin gets in with a reload, and a removed admin is out immediately.
 
-::: info Crew chat notifications
-The server can post a message to a crew chat (Telegram, Slack, Google Chat or Discord) whenever someone requests access, so requests don't go unnoticed.
+The same tool creates the guests' ticket codes (`tickets generate`, `add`, `import`, `list`, `remove`), see [Ticket codes](./event-checklist#ticket-codes). The ticket list with e-mail addresses can also be loaded in the app, see [Tickets & e-mail addresses](./tickets).
+
+::: info Crew group
+Access requests, approvals, role changes, removals and every admin sign-in show up in the crew's Telegram group, so nothing goes unnoticed. See [Notifications](./notifications#crew-group).
 :::
 
 ## Sessions
 
 - A session lasts **three days** and is renewed every time you use the admin area.
+- **Once a week you sign in with Google again**, even if you use the admin area every day (**WEEKLY CHECK 🔐**). That's when Google applies what the Workspace decided: a suspended account is out, required 2-Step Verification is asked for.
 - <kbd>Eject 🚀</kbd> in the top-right corner signs you out.
 - The session cookie can't be read by scripts on the page and is only sent over HTTPS.
 
@@ -107,6 +119,7 @@ The server can post a message to a crew chat (Telegram, Slack, Google Chat or Di
 | **NO ACCESS 🛑** | This Google account can't access the Control Center. | Ask a superuser. |
 | **SIGN-IN CANCELLED** | You cancelled on Google's page. | Try again whenever you're ready. |
 | **SIGN-IN EXPIRED ⏳** | The sign-in took longer than 10 minutes, or was started in another tab. | Start again at `/admin/login`. |
+| **WEEKLY CHECK 🔐** | Your last Google sign-in was more than 7 days ago. | Sign in with Google again. |
 | **BACKEND UNREACHABLE 📡** | CozyNights can't reach its database right now. | Try again shortly; tell the operators if it persists. |
 | **SIGN-IN FAILED** | Google didn't complete the sign-in. | Try again. |
 | *Google sign-in is not configured on this server yet.* | This installation has no Google sign-in set up, typical for a fresh local install. | Operators: see [Local development](../develop/#admin-sign-in-locally). |
@@ -114,7 +127,8 @@ The server can post a message to a crew chat (Telegram, Slack, Google Chat or Di
 ## Why Google only?
 
 - **No passwords** that could leak, be reused or need resetting.
-- **Leaving the Workspace means losing access.** Offboarding happens in one place.
+- **Leaving the Workspace means losing access,** at the latest at the next weekly sign-in. To end it at once, also run `./scripts/cozy-admin.sh remove`.
+- **2-Step Verification comes from Google.** Make it mandatory for the Workspace in the Google Admin console (Security → Authentication → 2-Step Verification), ideally with passkeys or security keys for superusers. CozyNights has no second factor of its own on purpose: Google's is stronger than a code by e-mail or chat, and the weekly sign-in makes sure it applies.
 - **Checked twice, independently.** Both the database and the app verify the domain, the verified address and the Workspace membership, and a new account can never start with more than *pending*.
 
 More in [Security & privacy](../reference/security#admin-sign-in).

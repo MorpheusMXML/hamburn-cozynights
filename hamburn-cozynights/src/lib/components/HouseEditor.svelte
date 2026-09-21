@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { HouseData } from '$lib/types';
-	import { createEventDispatcher, onMount } from 'svelte';
-	import { fade, fly } from 'svelte/transition';
+	import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
+	import { createEventDispatcher } from 'svelte';
+	import { fade } from 'svelte/transition';
 
 	export let x: number;
 	export let y: number;
@@ -15,6 +16,32 @@
 	let showValidationError = false;
 
 	$: isEditing = !!houseId;
+
+	// Typed coordinates: follow the pin (drag, arrow keys, another house) until
+	// the admin edits them, then "MOVE PIN" sends them to the parent.
+	let xInput = String(x);
+	let yInput = String(y);
+	let positionError = '';
+	$: syncPositionInputs(x, y);
+
+	function syncPositionInputs(nextX: number, nextY: number) {
+		xInput = String(nextX);
+		yInput = String(nextY);
+		positionError = '';
+	}
+
+	$: positionChanged = xInput !== String(x) || yInput !== String(y);
+
+	function handleMove() {
+		const nextX = parseMapCoordinate(xInput, MAP_WIDTH);
+		const nextY = parseMapCoordinate(yInput, MAP_HEIGHT);
+		if (nextX === null || nextY === null) {
+			positionError = `Enter whole numbers: X from 0 to ${MAP_WIDTH}, Y from 0 to ${MAP_HEIGHT}.`;
+			return;
+		}
+		positionError = '';
+		dispatch('move', { x: nextX, y: nextY });
+	}
 
 	function handleSave() {
 		if (!name || name.trim() === '') {
@@ -61,14 +88,18 @@
 						enabled: false,
 						occupied: false,
 						is_locked: false,
+						is_special: false,
+						booked_at: '',
+						checked_in_at: '',
+						checked_in_by: '',
 						room: 'temp-room',
-						bookedBy: '',
 						order: ''
 					}))
 				}
 			],
 			totalBeds: bedCount,
-			occupiedBeds: 0
+			occupiedBeds: 0,
+			freeBeds: bedCount
 		};
 		dispatch('save', newHouse);
 	}
@@ -108,11 +139,45 @@
 				<p class="hint">Base occupancy for the first module.</p>
 			</div>
 		{:else}
-			<div class="edit-info" in:fade>
-				<p>
-					Position updated to <strong>X:{x} Y:{y}</strong>. Save to confirm the new coordinates in
-					the grid.
-				</p>
+			<div class="input-group position-group" in:fade>
+				<span class="group-label">MAP POSITION 📍</span>
+				<div class="position-row">
+					<label class="coord-field" for="house-x">
+						<span>X</span>
+						<input
+							id="house-x"
+							type="text"
+							inputmode="numeric"
+							autocomplete="off"
+							bind:value={xInput}
+							class:error={!!positionError}
+							on:keydown={(e) => e.key === 'Enter' && handleMove()}
+						/>
+					</label>
+					<label class="coord-field" for="house-y">
+						<span>Y</span>
+						<input
+							id="house-y"
+							type="text"
+							inputmode="numeric"
+							autocomplete="off"
+							bind:value={yInput}
+							class:error={!!positionError}
+							on:keydown={(e) => e.key === 'Enter' && handleMove()}
+						/>
+					</label>
+					<button type="button" class="btn-move" disabled={!positionChanged} on:click={handleMove}>
+						MOVE PIN
+					</button>
+				</div>
+				{#if positionError}
+					<span class="error-msg" transition:fade>⚠️ {positionError}</span>
+				{:else}
+					<p class="hint">
+						Drag the pin on the map, use the arrow keys, or type a position (X 0–{MAP_WIDTH}, Y 0–{MAP_HEIGHT}).
+						Moves are saved right away.
+					</p>
+				{/if}
 			</div>
 		{/if}
 
@@ -132,7 +197,8 @@
 		padding: 2rem;
 		border-radius: 12px;
 		color: white;
-		width: 360px;
+		width: min(360px, 100%);
+		box-sizing: border-box;
 		box-shadow: 0 0 30px rgba(45, 212, 191, 0.2);
 		position: relative;
 		overflow: hidden;
@@ -252,14 +318,40 @@
 		color: #444;
 		font-style: italic;
 	}
-	.edit-info p {
-		margin: 0;
-		font-size: 0.85rem;
-		color: #888;
-		line-height: 1.4;
+	.group-label {
+		font-size: 0.7rem;
+		font-weight: 900;
+		color: #444;
+		letter-spacing: 1px;
 	}
-	.edit-info strong {
+	.position-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: stretch;
+		gap: 0.5rem;
+	}
+	.coord-field {
+		flex: 1 1 5rem;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 		color: #f472b6;
+	}
+	.coord-field input {
+		width: 100%;
+		min-width: 0;
+		padding: 0.75rem;
+	}
+	.btn-move {
+		flex: 1 1 100%;
+		background: transparent;
+		border: 1px solid #f472b6;
+		color: #f472b6;
+	}
+	.btn-move:disabled {
+		opacity: 0.35;
+		cursor: not-allowed;
 	}
 
 	.number-input-wrapper {
@@ -280,9 +372,14 @@
 
 	.actions {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: center;
+		gap: 0.75rem;
 		margin-top: 1rem;
+	}
+	.actions button {
+		flex: 1 1 auto;
 	}
 
 	button {

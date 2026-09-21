@@ -1,47 +1,116 @@
 <script lang="ts">
-	import type { PageData } from './$types';
+	import type { PageData, SubmitFunction } from './$types';
+	import type { ActionResult } from '@sveltejs/kit';
 	import AddBedForm from '$lib/components/admin/AddBedForm.svelte';
 	import { fade, fly } from 'svelte/transition';
-	import { invalidateAll } from '$app/navigation';
 	import { enhance } from '$app/forms';
+	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
+	import { formatBerlin } from '$lib/booking-phase';
 
 	export let data: PageData;
 	export let form: { message?: string } | null = null;
 	// Only admins reach this page (hooks + layout)
-	$: ({ room, beds, isBookingActive } = data);
+	$: ({ room, beds, isLayoutLocked, phase } = data);
 	$: house = room.expand?.house;
+	// Guests the crew checked in at arrival (the booking pass check).
+	$: checkedIn = beds.filter((b) => !!b.order && !!b.checked_in_at).length;
+	$: roomTitle = room.name || `Room ${room.room_number}`;
 
-	function handleAction(bedId: string, actionType: 'delete' | 'toggle') {
-		if (isBookingActive) {
-			alert('🔒 LOCKDOWN ACTIVE: Spots are locked during Live Booking.');
-			return;
-		}
-		return async ({ result, update }: { result: any; update: any }) => {
-			if (actionType === 'delete' && result.type === 'success') {
-				const card = document.querySelector(`.bed-card:has([value="${bedId}"])`);
-				if (card) card.classList.add('disintegrating');
-				await new Promise((r) => setTimeout(r, 550));
+	type Bed = PageData['beds'][number];
+
+	let deletingBedId: string | null = null;
+
+	const spotName = (bed: Bed) => (bed.label ? `"${bed.label}"` : 'the unnamed spot');
+
+	/** Shows why an action failed; the list is reloaded either way. */
+	async function explainFailure(result: ActionResult, title: string) {
+		if (result.type !== 'failure' && result.type !== 'error') return;
+		const reason =
+			result.type === 'failure'
+				? (result.data as { message?: string } | undefined)?.message
+				: undefined;
+		await alertDialog(`${reason || 'The server could not be reached.'} Nothing was changed.`, {
+			title,
+			tone: 'danger'
+		});
+	}
+
+	/** Lock, activate and occupancy switches: no question asked, failures are explained. */
+	function toggleSpot(title: string): SubmitFunction {
+		return () =>
+			async ({ result, update }) => {
+				await explainFailure(result, title);
+				await update({ reset: false });
+			};
+	}
+
+	function toggleOccupied(bed: Bed): SubmitFunction {
+		return async ({ cancel }) => {
+			// A spot with a ticket attached is a guest's booking, not a test flag.
+			if (bed.occupied && bed.order) {
+				const confirmed = await confirmDialog(
+					`Spot ${spotName(bed)} was booked by a guest.` +
+						(bed.checked_in_at ? ' The guest is checked in, so they are on site.' : '') +
+						' Freeing it cancels that booking: the guest loses the spot and has to book again. Their ticket code stays valid.',
+					{
+						title: "Cancel this guest's booking?",
+						tone: 'danger',
+						confirmLabel: 'Free the spot',
+						cancelLabel: 'Keep booking'
+					}
+				);
+				if (!confirmed) {
+					cancel();
+					return;
+				}
 			}
-			await update();
-			await invalidateAll();
+			return async ({ result, update }) => {
+				await explainFailure(result, 'Spot not changed');
+				await update({ reset: false });
+			};
 		};
 	}
 
-	// Locking/unlocking a spot is intentionally allowed during Live Booking too
-	// (e.g. taking a broken bed out of service mid-event) — unlike every other
-	// structural edit on this page, so it doesn't go through handleAction's
-	// blanket lockdown check.
-	function handleLockToggle() {
-		return async ({ update }: { update: any }) => {
-			await update();
-			await invalidateAll();
+	function deleteSpot(bed: Bed): SubmitFunction {
+		return async ({ cancel }) => {
+			const confirmed = await confirmDialog(
+				`Spot ${spotName(bed)} is removed from this room.` +
+					(bed.occupied
+						? ' It is currently taken: that booking is deleted too and the guest has to book again.'
+						: '') +
+					' This cannot be undone.',
+				{
+					title: 'Delete this spot?',
+					tone: 'danger',
+					confirmLabel: 'Delete spot',
+					cancelLabel: 'Keep it'
+				}
+			);
+			if (!confirmed) {
+				cancel();
+				return;
+			}
+			return async ({ result, update }) => {
+				if (result.type === 'success') {
+					deletingBedId = bed.id;
+					await new Promise((r) => setTimeout(r, 550));
+					toast(`🗑 Spot ${spotName(bed)} was deleted.`, 'success');
+				}
+				await explainFailure(result, 'Spot not deleted');
+				await update({ reset: false });
+				deletingBedId = null;
+			};
 		};
 	}
 </script>
 
+<svelte:head>
+	<title>{roomTitle}{house ? ` · ${house.name}` : ''} · CozyNights</title>
+</svelte:head>
+
 <div class="dashboard-container">
 	<div class="header-row" in:fly={{ y: -20, duration: 500 }}>
-		<nav class="breadcrumbs">
+		<nav class="breadcrumbs" aria-label="Breadcrumb">
 			<a href="/admin">Control Center</a>
 			<span class="sep">/</span>
 			{#if house}<a href="/admin/house/{house.id}">{house.name}</a> <span class="sep">/</span>{/if}
@@ -50,13 +119,22 @@
 
 		<h1>
 			<span class="room-icon">🛌</span>
-			{room.name || `Room ${room.room_number}`}
+			<span class="room-title">{roomTitle}</span>
 			<span class="badge turquoise">#{room.room_number}</span>
 		</h1>
 	</div>
 
 	{#if form?.message}
-		<div class="error-banner" in:fade>⚠️ {form.message}</div>
+		<div class="error-banner" role="alert" in:fade>⚠️ {form.message}</div>
+	{/if}
+
+	{#if isLayoutLocked}
+		<div class="lockdown-notice" role="status">
+			🔒 {phase === 'closed' ? 'Booking is closed' : 'Live Booking is active'}. You can still lock
+			🔒 and unlock 🔓 spots and mark them ♿ special or normal. To add, delete, deactivate or free
+			spots, a superuser has to switch back to Staging Mode in the
+			<a href="/admin">Control Center</a>.
+		</div>
 	{/if}
 
 	<div class="content-split">
@@ -69,6 +147,9 @@
 					{beds.filter((b) => b.enabled !== false).length}
 				</div>
 				<p class="label">CLAIMED SPOTS</p>
+				{#if checkedIn > 0}
+					<p class="checked-in-count">✅ {checkedIn} checked in</p>
+				{/if}
 				<div class="capacity-info">
 					Total Capacity: {beds.length} ({(
 						(beds.filter((b) => b.enabled !== false).length / (beds.length || 1)) *
@@ -77,16 +158,13 @@
 				</div>
 			</div>
 
-			<section class="form-panel orange" class:disabled={isBookingActive}>
+			<section class="form-panel orange" class:disabled={isLayoutLocked}>
 				<header class="panel-header">
 					<span class="laser-dot orange"></span>
 					<h3>ADD SPOT ➕</h3>
 				</header>
-				{#if isBookingActive}
-					<div class="lockdown-notice">🔒 LOCKED</div>
-				{/if}
 				<p class="hint">Define spot label (e.g. "Upper Deck")</p>
-				<AddBedForm roomId={room.id} disabled={isBookingActive} />
+				<AddBedForm disabled={isLayoutLocked} />
 			</section>
 		</aside>
 
@@ -101,8 +179,9 @@
 					<div
 						class="bed-card"
 						class:occupied={bed.occupied}
-						class:disabled={isBookingActive}
+						class:disabled={isLayoutLocked}
 						class:inactive={bed.enabled === false}
+						class:disintegrating={deletingBedId === bed.id}
 						in:fade
 					>
 						<div class="bed-glow" class:red={bed.occupied} class:gray={bed.enabled === false}></div>
@@ -126,73 +205,115 @@
 									{bed.occupied ? 'CLAIMED 👥' : 'VACANT ✨'}
 								{/if}
 							</span>
+							{#if bed.is_special}
+								<span class="bed-status special">SPECIAL NEEDS ♿</span>
+							{/if}
+							{#if bed.order && bed.checked_in_at}
+								<span
+									class="bed-status checked-in"
+									title={bed.checked_in_by ? `Checked in by ${bed.checked_in_by}` : 'Checked in'}
+									>CHECKED IN ✅ {formatBerlin(bed.checked_in_at, { year: false })}</span
+								>
+							{/if}
 						</div>
 
 						<div class="bed-actions">
-							<form action="?/toggleLocked" method="POST" use:enhance={handleLockToggle}>
+							<form
+								action="?/toggleLocked"
+								method="POST"
+								use:enhance={toggleSpot('Lock not changed')}
+							>
 								<input type="hidden" name="id" value={bed.id} />
 								<input type="hidden" name="is_locked" value={bed.is_locked?.toString()} />
 								<button
 									class="btn-icon"
 									class:orange={bed.is_locked}
-									title={bed.is_locked ? 'Unlock' : 'Lock (Block Guests)'}
+									title={bed.is_locked
+										? 'Unlock: guests can book this spot again'
+										: 'Lock: guests cannot book this spot'}
 								>
-									{bed.is_locked ? '🔓' : '🔒'}
+									<span class="btn-emoji">{bed.is_locked ? '🔓' : '🔒'}</span>
+									<span class="btn-text">{bed.is_locked ? 'UNLOCK' : 'LOCK'}</span>
+								</button>
+							</form>
+
+							<form
+								action="?/toggleSpecial"
+								method="POST"
+								use:enhance={toggleSpot('Special-needs mark not changed')}
+							>
+								<input type="hidden" name="id" value={bed.id} />
+								<input type="hidden" name="is_special" value={String(!!bed.is_special)} />
+								<button
+									class="btn-icon pink"
+									class:active={bed.is_special}
+									title={bed.is_special
+										? 'Special-needs spot: only the crew assigns it. Click to make it a normal spot again.'
+										: 'Special-needs spot: guests cannot book it, the crew assigns it to approved special-needs requests'}
+								>
+									<span class="btn-emoji">♿</span>
+									<span class="btn-text">{bed.is_special ? 'NORMAL' : 'SPECIAL'}</span>
 								</button>
 							</form>
 
 							<form
 								action="?/toggleEnabled"
 								method="POST"
-								use:enhance={() => handleAction(bed.id, 'toggle')}
+								use:enhance={toggleSpot('Spot not changed')}
 							>
 								<input type="hidden" name="id" value={bed.id} />
 								<input type="hidden" name="enabled" value={bed.enabled !== false} />
 								<button
 									class="btn-icon"
 									class:orange={bed.enabled === false}
-									class:disabled={isBookingActive}
-									disabled={isBookingActive}
-									title={bed.enabled === false ? 'Activate' : 'Deactivate'}
+									class:disabled={isLayoutLocked}
+									disabled={isLayoutLocked}
+									title={bed.enabled === false
+										? 'Activate: the spot counts and can be booked'
+										: 'Deactivate: the spot is not in use and does not count'}
 								>
-									{bed.enabled === false ? '⚡️' : '❄️'}
+									<span class="btn-emoji">{bed.enabled === false ? '⚡️' : '❄️'}</span>
+									<span class="btn-text">{bed.enabled === false ? 'ACTIVATE' : 'DEACTIVATE'}</span>
 								</button>
 							</form>
 
-							<form
-								action="?/toggleOccupied"
-								method="POST"
-								use:enhance={() => handleAction(bed.id, 'toggle')}
-							>
+							<form action="?/toggleOccupied" method="POST" use:enhance={toggleOccupied(bed)}>
 								<input type="hidden" name="id" value={bed.id} />
 								<input type="hidden" name="occupied" value={bed.occupied.toString()} />
 								<button
 									class="btn-icon turquoise"
-									title="Toggle occupancy"
-									disabled={isBookingActive || bed.enabled === false}
-									class:disabled={isBookingActive || bed.enabled === false}>🔄</button
+									title={bed.occupied
+										? 'Free this spot'
+										: 'Mark this spot as taken without a ticket'}
+									disabled={isLayoutLocked || bed.enabled === false}
+									class:disabled={isLayoutLocked || bed.enabled === false}
 								>
+									<span class="btn-emoji">🔄</span>
+									<span class="btn-text">{bed.occupied ? 'FREE' : 'TAKEN'}</span>
+								</button>
 							</form>
 
-							<form
-								action="?/deleteBed"
-								method="POST"
-								use:enhance={() => handleAction(bed.id, 'delete')}
-							>
+							<form action="?/deleteBed" method="POST" use:enhance={deleteSpot(bed)}>
 								<input type="hidden" name="id" value={bed.id} />
 								<button
 									class="btn-icon vanish"
-									title="Delete spot"
-									disabled={isBookingActive}
-									class:disabled={isBookingActive}>🗑</button
+									title="Delete this spot"
+									disabled={isLayoutLocked}
+									class:disabled={isLayoutLocked}
 								>
+									<span class="btn-emoji">🗑</span>
+									<span class="btn-text">DELETE</span>
+								</button>
 							</form>
 						</div>
 					</div>
 				{/each}
 
 				{#if beds.length === 0}
-					<div class="empty-state">Desert wasteland. No spots detected. 🏜️</div>
+					<div class="empty-state">
+						Desert wasteland. 🏜️ This room has no spots yet, so guests cannot book here. Add spots
+						with ADD SPOT ➕.
+					</div>
 				{/if}
 			</div>
 		</main>
@@ -219,6 +340,8 @@
 		color: #666;
 		text-transform: uppercase;
 		margin-bottom: 1rem;
+		line-height: 1.8;
+		overflow-wrap: anywhere;
 	}
 	.breadcrumbs a {
 		color: #2dd4bf;
@@ -236,20 +359,28 @@
 	}
 
 	h1 {
-		font-size: 2.5rem;
+		font-size: clamp(1.6rem, 6vw, 2.5rem);
+		line-height: 1.15;
 		margin: 0;
 		color: #fff;
 		font-weight: 900;
 		letter-spacing: -1px;
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 1rem;
+		gap: 0.5rem 1rem;
+	}
+	.room-title {
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 	.badge {
 		font-size: 0.8rem;
 		padding: 4px 12px;
 		border-radius: 6px;
 		font-weight: 900;
+		letter-spacing: 0;
+		white-space: nowrap;
 	}
 	.badge.turquoise {
 		background: rgba(45, 212, 191, 0.1);
@@ -271,12 +402,13 @@
 	/* Layout */
 	.content-split {
 		display: grid;
-		grid-template-columns: 320px 1fr;
+		grid-template-columns: 320px minmax(0, 1fr);
 		gap: 3rem;
 	}
 	@media (max-width: 900px) {
 		.content-split {
-			grid-template-columns: 1fr;
+			grid-template-columns: minmax(0, 1fr);
+			gap: 2rem;
 		}
 	}
 
@@ -320,10 +452,17 @@
 		font-weight: 900;
 		letter-spacing: 1px;
 	}
+	.checked-in-count {
+		margin: 0.35rem 0 0 0;
+		color: #2dd4bf;
+		font-size: 0.75rem;
+		font-weight: 900;
+		letter-spacing: 1px;
+	}
 	.capacity-info {
 		margin-top: 1rem;
-		font-size: 0.6rem;
-		color: #444;
+		font-size: 0.65rem;
+		color: #888;
 		font-weight: 900;
 		letter-spacing: 1px;
 	}
@@ -344,13 +483,18 @@
 		pointer-events: none;
 	}
 	.lockdown-notice {
-		position: absolute;
-		top: 1.5rem;
-		right: 2rem;
+		background: rgba(251, 146, 60, 0.08);
+		border: 1px solid rgba(251, 146, 60, 0.3);
 		color: #fb923c;
-		font-size: 0.65rem;
-		font-weight: 900;
-		letter-spacing: 1px;
+		padding: 1rem 1.5rem;
+		border-radius: 12px;
+		font-weight: 700;
+		font-size: 0.85rem;
+		line-height: 1.5;
+		margin-bottom: 2rem;
+	}
+	.lockdown-notice a {
+		color: #fdba74;
 	}
 	.panel-header {
 		display: flex;
@@ -379,7 +523,7 @@
 		box-shadow: 0 0 10px #2dd4bf;
 	}
 	.hint {
-		color: #444;
+		color: #888;
 		font-size: 0.75rem;
 		margin-bottom: 1.5rem;
 		font-weight: bold;
@@ -403,7 +547,7 @@
 	}
 	.beds-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
 		gap: 1.5rem;
 	}
 
@@ -413,15 +557,14 @@
 		border-radius: 12px;
 		padding: 1.5rem;
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 1rem;
 		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 		position: relative;
 		overflow: hidden;
-	}
-	.bed-card.disabled {
-		opacity: 0.5;
-		filter: grayscale(0.8);
+		min-width: 0;
+		box-sizing: border-box;
 	}
 	.bed-card.inactive {
 		border-style: dashed;
@@ -461,6 +604,7 @@
 	}
 	.bed-info {
 		flex: 1;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
@@ -469,10 +613,11 @@
 		font-weight: 900;
 		font-size: 1rem;
 		color: #fff;
+		overflow-wrap: anywhere;
 	}
 	.bed-status {
 		font-size: 0.65rem;
-		color: #444;
+		color: #888;
 		font-weight: 900;
 		letter-spacing: 1px;
 	}
@@ -480,21 +625,55 @@
 		color: #f87171;
 	}
 	.inactive .bed-label {
-		color: #444;
+		color: #777;
 	}
 
+	/* Own row below the label: the five buttons don't fit next to it in a card of
+	   the grid's minimum width, and the card would clip them. In a narrow card
+	   they wrap onto a second row instead of cutting their words. */
 	.bed-actions {
-		display: flex;
-		gap: 0.75rem;
+		display: grid;
+		/* Wide enough for the longest label ("DEACTIVATE"), which was cut to "DEACTIV…". */
+		grid-template-columns: repeat(auto-fill, minmax(4.75rem, 1fr));
+		gap: 0.5rem;
+		flex-basis: 100%;
+		padding-top: 1rem;
+		border-top: 1px solid #222;
 	}
+	.bed-actions form {
+		display: flex;
+		min-width: 0;
+	}
+	/* Icon plus word: on a touch screen there is no tooltip to explain an icon. */
 	.btn-icon {
+		flex: 1;
+		min-width: 0;
+		min-height: 48px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 2px;
 		background: #1a1a1a;
 		border: 1px solid #333;
-		color: #666;
+		color: #888;
 		border-radius: 8px;
 		cursor: pointer;
-		padding: 8px;
+		padding: 6px 2px;
+		font-family: inherit;
 		transition: all 0.2s;
+	}
+	.btn-emoji {
+		font-size: 1rem;
+		line-height: 1.2;
+	}
+	.btn-text {
+		font-size: 0.55rem;
+		font-weight: 900;
+		letter-spacing: 0.5px;
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	.btn-icon.disabled {
 		opacity: 0.3;
@@ -502,7 +681,7 @@
 	}
 	.btn-icon:hover:not(.disabled) {
 		color: #fff;
-		transform: scale(1.1);
+		transform: scale(1.05);
 	}
 	.btn-icon.turquoise:hover:not(.disabled) {
 		border-color: #2dd4bf;
@@ -514,6 +693,20 @@
 		color: #fb923c;
 		box-shadow: 0 0 10px rgba(251, 146, 60, 0.2);
 	}
+	.btn-icon.pink:hover:not(.disabled),
+	.btn-icon.pink.active {
+		border-color: #f472b6;
+		color: #f472b6;
+		box-shadow: 0 0 10px rgba(244, 114, 182, 0.2);
+	}
+	.bed-status.special {
+		display: block;
+		color: #f472b6;
+	}
+	.bed-status.checked-in {
+		display: block;
+		color: #2dd4bf;
+	}
 	.btn-icon.vanish:hover:not(.disabled) {
 		border-color: #f87171;
 		color: #f87171;
@@ -524,12 +717,25 @@
 	.empty-state {
 		grid-column: 1/-1;
 		text-align: center;
-		color: #333;
-		padding: 4rem;
+		color: #888;
+		padding: 2.5rem 1.5rem;
 		background: #0a0a0a;
 		border-radius: 16px;
 		border: 1px dashed #222;
-		font-weight: 900;
-		letter-spacing: 2px;
+		font-weight: 700;
+		line-height: 1.5;
+	}
+
+	@media (max-width: 640px) {
+		.header-row {
+			margin-bottom: 1.5rem;
+		}
+		.status-card,
+		.form-panel {
+			padding: 1.25rem 1rem;
+		}
+		.bed-card {
+			padding: 1rem;
+		}
 	}
 </style>

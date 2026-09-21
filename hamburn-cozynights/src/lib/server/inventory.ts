@@ -29,12 +29,30 @@ export class InventoryService {
 
 			// Serialize everything to plain objects to ensure compatibility.
 			// This tree is the public guest map: deactivated beds are left out,
-			// locked beds show as taken, and the booking's order id is not exposed.
-			const houses = housesRaw.map((h) => ({ ...h }));
-			const rooms = roomsRaw.map((r) => ({ ...r }));
+			// locked and special-needs beds show as taken, and neither the booking's
+			// order id nor why a bed is taken is exposed: together with the burner
+			// names on the room pages, a lock or special-needs flag would tell who
+			// has special needs.
+			// Timestamps go too: `booked_at` (and `updated`) of a crew-booked spot
+			// would date the special-needs assignment, and the check-in (when a
+			// guest arrived, which admin checked them in) is for the crew only.
+			const blank = '' as HouseData['created'];
+			const houses = housesRaw.map((h) => ({ ...h, created: blank, updated: blank }));
+			const rooms = roomsRaw.map((r) => ({ ...r, created: blank, updated: blank }));
 			const beds = bedsRaw
 				.filter((b) => b.enabled !== false)
-				.map((b) => ({ ...b, occupied: !!b.occupied || !!b.is_locked, order: '' }));
+				.map((b) => ({
+					...b,
+					occupied: !!b.occupied || !!b.is_locked || !!b.is_special,
+					order: '',
+					is_locked: false,
+					is_special: false,
+					booked_at: '',
+					checked_in_at: '',
+					checked_in_by: '',
+					created: blank,
+					updated: blank
+				}));
 
 			// Build the hierarchy
 			const tree = houses.map((house) => {
@@ -48,10 +66,11 @@ export class InventoryService {
 						};
 					});
 
-				// Calculate stats for the house
+				// Calculate stats for the house (locked and special beds already count as taken here)
 				const allBedsInHouse = houseRooms.flatMap((r) => r.beds);
 				const totalBeds = allBedsInHouse.length;
 				const occupiedBeds = allBedsInHouse.filter((b) => b.occupied).length;
+				const freeBeds = totalBeds - occupiedBeds;
 
 				// A house is bookable ONLY if it has at least one room AND at least one bed
 				const isBookable = houseRooms.length > 0 && totalBeds > 0;
@@ -61,6 +80,7 @@ export class InventoryService {
 					rooms: houseRooms,
 					totalBeds,
 					occupiedBeds,
+					freeBeds,
 					isBookable
 				};
 			});
@@ -70,46 +90,6 @@ export class InventoryService {
 		} catch (err) {
 			console.error('[Inventory] getFullTree failed:', err);
 			return [];
-		}
-	}
-
-	/**
-	 * Fetches a single house with its rooms and beds. 🏠🚪🛌
-	 */
-	async getHouse(houseId: string): Promise<HouseData | null> {
-		try {
-			const [houseRaw, roomsRaw, bedsRaw] = await Promise.all([
-				this.pb.collection('houses').getOne(houseId),
-				this.pb.collection('rooms').getFullList({
-					filter: this.pb.filter('house = {:id}', { id: houseId }),
-					sort: 'room_number'
-				}),
-				this.pb.collection('beds').getFullList({
-					filter: this.pb.filter('room.house = {:id}', { id: houseId }),
-					sort: 'label'
-				})
-			]);
-
-			const houseRooms = roomsRaw.map((room) => {
-				const roomBeds = bedsRaw.filter((bed) => bed.room === room.id);
-				return {
-					...room,
-					beds: roomBeds.map((b) => ({ ...b }))
-				};
-			});
-
-			const totalBeds = bedsRaw.length;
-			const occupiedBeds = bedsRaw.filter((b) => b.occupied).length;
-
-			return {
-				...houseRaw,
-				rooms: houseRooms,
-				totalBeds,
-				occupiedBeds
-			};
-		} catch (error) {
-			console.error(`Error fetching house ${houseId}:`, error);
-			return null;
 		}
 	}
 }

@@ -1,13 +1,36 @@
 <script lang="ts">
-	import UserHouseMarker from './UserHouseMarker.svelte';
-	import { createEventDispatcher, onMount } from 'svelte';
-	import { fade, fly } from 'svelte/transition';
+	import MapHouseMarker from './MapHouseMarker.svelte';
+	import { houseMarkerStatus } from '$lib/occupancy';
+	import {
+		MAP_WIDTH,
+		MAP_HEIGHT,
+		MAP_IMAGE,
+		MARKER_LABEL_GAP,
+		MARKER_LABEL_HEIGHT,
+		clampToMap,
+		isTooCloseToOtherHouse,
+		screenToMap
+	} from '$lib/map-geometry';
+	import { toast } from '$lib/dialogs';
+	import { goto } from '$app/navigation';
+	import { createEventDispatcher } from 'svelte';
+	import type { BookingPhase } from '$lib/booking-phase';
 
 	export let houses: any[] = [];
 	export let isEditorMode = false;
 	export let isBookingActive = false;
+	/** Guests: houses can be opened in Live Booking and after booking closed (read-only). */
+	export let phase: BookingPhase | null = null;
+	/** Editor: the layout is locked (live or closed). Defaults to isBookingActive. */
+	export let layoutLocked: boolean | null = null;
+	/** Guests: blurs the map like in Staging while a panel covers it (Closed). */
+	export let dimmed = false;
 
-	// Calculate label positions to avoid overlaps
+	$: browsable = phase ? phase !== 'staging' : isBookingActive;
+
+	// Labels go below the pin unless another house sits right below it. At the
+	// top or bottom edge of the map the edge decides: a label cut off by the edge
+	// is worse than one overlapping a neighbour's.
 	$: labelPositions = (houses || []).reduce(
 		(acc, house) => {
 			const isSomeoneBelow = houses.some(
@@ -17,13 +40,17 @@
 					other.y > house.y &&
 					other.y - house.y < 60
 			);
-			acc[house.id] = isSomeoneBelow ? 'top' : 'bottom';
+			const labelReach = (MARKER_LABEL_GAP + MARKER_LABEL_HEIGHT) * markerScale;
+			if (house.y + labelReach > MAP_HEIGHT) acc[house.id] = 'top';
+			else if (house.y - labelReach < 0) acc[house.id] = 'bottom';
+			else acc[house.id] = isSomeoneBelow ? 'top' : 'bottom';
 			return acc;
 		},
 		{} as Record<string, 'top' | 'bottom'>
 	);
 
-	$: console.log(`[Map] Houses: ${houses?.length}, Active: ${isBookingActive}`);
+	// The layout can only be edited in the admin's editor during Staging.
+	$: canEditLayout = isEditorMode && !(layoutLocked ?? isBookingActive);
 
 	const dispatch = createEventDispatcher();
 
@@ -32,77 +59,165 @@
 	let mouseY = 0;
 	let svgEl: SVGSVGElement;
 
-	function handleMouseMoveGlobal(event: MouseEvent) {
-		if (!svgEl) return;
-		const CTM = svgEl.getScreenCTM();
-		if (!CTM) return;
-		mouseX = (event.clientX - CTM.e) / CTM.a;
-		mouseY = (event.clientY - CTM.f) / CTM.d;
+	// Screen pixels per map unit. On a phone the whole map is ~390px wide, so
+	// pins and their touch targets are drawn larger there.
+	let mapScale = 1;
+	$: markerScale = Math.min(2.2, Math.max(1, 0.8 / mapScale));
+	$: hitRadius = Math.min(64, Math.max(30, 24 / mapScale)) / markerScale;
+
+	function trackScale(node: SVGSVGElement) {
+		const measure = () => {
+			const box = node.getBoundingClientRect();
+			mapScale = Math.min(box.width / MAP_WIDTH, box.height / MAP_HEIGHT) || 1;
+		};
+		measure();
+		if (typeof ResizeObserver === 'undefined') return {};
+		const observer = new ResizeObserver(measure);
+		observer.observe(node);
+		return { destroy: () => observer.disconnect() };
 	}
 
-	// Drag & Drop State
-	let draggingHouseId: string | null = null;
-	let dragOffset = { x: 0, y: 0 };
-	let hasDragged = false;
+	function toMapPoint(event: { clientX: number; clientY: number }) {
+		const ctm = svgEl?.getScreenCTM();
+		return ctm ? screenToMap(event.clientX, event.clientY, ctm) : null;
+	}
+
+	function handlePointerMoveGlobal(event: PointerEvent) {
+		if (event.pointerType !== 'mouse') return;
+		const point = toMapPoint(event);
+		if (point) ({ x: mouseX, y: mouseY } = point);
+	}
+
+	// Drag & Drop. Pointer events cover mouse, touch and pen alike; the pointer
+	// is captured by the pin, so the drag keeps going when the finger leaves it.
+	const DRAG_THRESHOLD_PX = 5;
+	type Gesture = {
+		houseId: string;
+		pointerId: number;
+		startClientX: number;
+		startClientY: number;
+		startX: number;
+		startY: number;
+		offsetX: number;
+		offsetY: number;
+		dragging: boolean;
+	};
+	let gesture: Gesture | null = null;
+	let suppressNextClick = false;
 	let selectedHouseId: string | null = null;
 	let hoveredHouseId: string | null = null;
 
-	function handleMouseDown(event: MouseEvent, house: any) {
-		if (!isEditorMode || isBookingActive) return;
-		draggingHouseId = house.id;
-		hasDragged = false;
-		const svg = (event.currentTarget as SVGElement).closest('svg');
-		if (!svg || !svg.getScreenCTM()) return;
-		const CTM = svg.getScreenCTM()!;
-		const mX = (event.clientX - CTM.e) / CTM.a;
-		const mY = (event.clientY - CTM.f) / CTM.d;
-		dragOffset = { x: mX - house.x, y: mY - house.y };
-		window.addEventListener('mousemove', handleMouseMove);
-		window.addEventListener('mouseup', handleMouseUp);
+	$: draggingHouseId = gesture?.dragging ? gesture.houseId : null;
+
+	function setHousePosition(houseId: string, x: number, y: number) {
+		const index = houses.findIndex((h) => h.id === houseId);
+		if (index === -1) return;
+		houses[index].x = x;
+		houses[index].y = y;
+		houses = [...houses];
 	}
 
-	function handleMouseMove(event: MouseEvent) {
-		if (!draggingHouseId || !svgEl || !svgEl.getScreenCTM()) return;
-		hasDragged = true;
-		const CTM = svgEl.getScreenCTM()!;
-		const mX = (event.clientX - CTM.e) / CTM.a;
-		const mY = (event.clientY - CTM.f) / CTM.d;
-		const newX = Math.round(mX - dragOffset.x);
-		const newY = Math.round(mY - dragOffset.y);
+	function handlePointerDown(event: PointerEvent, house: any) {
+		if (!isEditorMode) return;
+		if (event.pointerType === 'mouse' && event.button !== 0) return;
+		const point = toMapPoint(event);
+		if (!point) return;
 
-		// Check if new position is too close to any other house (min 25 units)
-		const tooClose = houses.some(
-			(h) =>
-				h.id !== draggingHouseId &&
-				Math.sqrt(Math.pow(h.x - newX, 2) + Math.pow(h.y - newY, 2)) < 25
-		);
-		if (tooClose) return;
-
-		const index = houses.findIndex((h) => h.id === draggingHouseId);
-		if (index !== -1) {
-			houses[index].x = newX;
-			houses[index].y = newY;
-			houses = [...houses];
+		suppressNextClick = false;
+		gesture = {
+			houseId: house.id,
+			pointerId: event.pointerId,
+			startClientX: event.clientX,
+			startClientY: event.clientY,
+			startX: house.x,
+			startY: house.y,
+			offsetX: point.x - house.x,
+			offsetY: point.y - house.y,
+			dragging: false
+		};
+		try {
+			(event.currentTarget as Element).setPointerCapture(event.pointerId);
+		} catch {
+			// No capture (very old browser): the drag still works over the pin.
 		}
 	}
 
-	function handleMouseUp() {
-		if (draggingHouseId) {
-			const house = houses.find((h) => h.id === draggingHouseId);
-			if (house && hasDragged) {
-				dispatch('houseMoved', { id: house.id, x: house.x, y: house.y });
+	function handlePointerMove(event: PointerEvent) {
+		if (!gesture || event.pointerId !== gesture.pointerId) return;
+
+		if (!gesture.dragging) {
+			const distance = Math.hypot(
+				event.clientX - gesture.startClientX,
+				event.clientY - gesture.startClientY
+			);
+			if (distance < DRAG_THRESHOLD_PX) return;
+			if (!canEditLayout) {
+				// Someone tries to move a house while the layout is locked: say so
+				// instead of silently doing nothing.
+				endGesture(event);
+				suppressNextClick = true;
+				dispatch('layoutLocked');
+				return;
 			}
-			draggingHouseId = null;
+			gesture.dragging = true;
+			gesture = gesture;
 		}
-		window.removeEventListener('mousemove', handleMouseMove);
-		window.removeEventListener('mouseup', handleMouseUp);
+
+		event.preventDefault();
+		const point = toMapPoint(event);
+		if (!point) return;
+		const next = clampToMap({ x: point.x - gesture.offsetX, y: point.y - gesture.offsetY });
+		// Pins must not end up on top of each other.
+		if (isTooCloseToOtherHouse(houses, gesture.houseId, next)) return;
+		setHousePosition(gesture.houseId, next.x, next.y);
 	}
 
-	function handleHouseClick(event: MouseEvent, house: any) {
-		event.preventDefault();
-		event.stopPropagation();
+	function endGesture(event: PointerEvent) {
+		const target = event.currentTarget as Element | null;
+		try {
+			if (target?.hasPointerCapture?.(event.pointerId)) {
+				target.releasePointerCapture(event.pointerId);
+			}
+		} catch {
+			// already released
+		}
+		gesture = null;
+	}
+
+	function handlePointerUp(event: PointerEvent) {
+		if (!gesture || event.pointerId !== gesture.pointerId) return;
+		const finished = gesture;
+		endGesture(event);
+
+		// Whatever this gesture was, the browser's own click that may follow it
+		// must not act a second time. (After a prevented touchstart there is none,
+		// so the flag also clears itself.)
+		suppressNextClick = true;
+		setTimeout(() => (suppressNextClick = false), 400);
+
+		const house = houses.find((h) => h.id === finished.houseId);
+		if (!house) return;
+		if (!finished.dragging) {
+			openHouse(house);
+		} else if (house.x !== finished.startX || house.y !== finished.startY) {
+			dispatch('houseMoved', { id: house.id, x: house.x, y: house.y });
+		}
+	}
+
+	/** A touch that starts on a movable pin drags the pin, it never scrolls the page. */
+	function handleTouchStart(event: TouchEvent) {
+		if (canEditLayout && event.cancelable) event.preventDefault();
+	}
+
+	function handlePointerCancel(event: PointerEvent) {
+		if (!gesture || event.pointerId !== gesture.pointerId) return;
+		const cancelled = gesture;
+		endGesture(event);
+		if (cancelled.dragging) setHousePosition(cancelled.houseId, cancelled.startX, cancelled.startY);
+	}
+
+	function openHouse(house: any) {
 		if (isEditorMode) {
-			if (hasDragged) return;
 			if (selectedHouseId === house.id) {
 				selectedHouseId = null;
 			} else {
@@ -111,37 +226,75 @@
 			}
 			return;
 		}
-		if (!isBookingActive) {
-			alert('PATIENCE, BURNER! 🏜️ Staging Mode calibration active.');
+		if (!browsable) {
+			toast('Booking is not open yet. You can look around once Live Booking starts.', 'info');
 			return;
 		}
-		window.location.href = `/house/${house.id}`;
+		goto(`/house/${house.id}`);
 	}
+
+	function handleHouseClick(event: MouseEvent, house: any) {
+		event.preventDefault();
+		event.stopPropagation();
+		if (suppressNextClick) {
+			suppressNextClick = false;
+			return;
+		}
+		openHouse(house);
+	}
+
+	const ARROW_STEPS: Record<string, [number, number]> = {
+		ArrowLeft: [-1, 0],
+		ArrowRight: [1, 0],
+		ArrowUp: [0, -1],
+		ArrowDown: [0, 1]
+	};
+	let nudgedHouseId: string | null = null;
 
 	function handleHouseKeydown(event: KeyboardEvent, house: any) {
 		if (event.key === 'Enter' || event.key === ' ') {
 			event.preventDefault();
-			// Simulate click
-			const mouseEvent = new MouseEvent('click', {
-				bubbles: true,
-				cancelable: true,
-				view: window
-			});
-			handleHouseClick(mouseEvent, house);
+			openHouse(house);
+			return;
 		}
+		// Arrow keys move the focused house (Shift: bigger steps); saved on key up.
+		const step = ARROW_STEPS[event.key];
+		if (!step || !isEditorMode) return;
+		event.preventDefault();
+		if (!canEditLayout) {
+			dispatch('layoutLocked');
+			return;
+		}
+		const size = event.shiftKey ? 10 : 1;
+		const next = clampToMap({ x: house.x + step[0] * size, y: house.y + step[1] * size });
+		if (isTooCloseToOtherHouse(houses, house.id, next)) return;
+		setHousePosition(house.id, next.x, next.y);
+		nudgedHouseId = house.id;
+	}
+
+	function handleHouseKeyup(event: KeyboardEvent, house: any) {
+		if (!ARROW_STEPS[event.key] || nudgedHouseId !== house.id) return;
+		nudgedHouseId = null;
+		dispatch('houseMoved', { id: house.id, x: house.x, y: house.y });
 	}
 
 	function handleMapClick(event: MouseEvent) {
+		if (suppressNextClick) {
+			suppressNextClick = false;
+			return;
+		}
 		if (selectedHouseId) {
 			selectedHouseId = null;
 			return;
 		}
 		if (!isEditorMode) return;
-		if (!svgEl || !svgEl.getScreenCTM()) return;
-		const CTM = svgEl.getScreenCTM()!;
-		const x = Math.round((event.clientX - CTM.e) / CTM.a);
-		const y = Math.round((event.clientY - CTM.f) / CTM.d);
-		dispatch('locationSelected', { x, y });
+		if (!canEditLayout) {
+			dispatch('layoutLocked');
+			return;
+		}
+		const point = toMapPoint(event);
+		if (!point) return;
+		dispatch('locationSelected', clampToMap(point));
 	}
 
 	function handleMapKeydown(event: KeyboardEvent) {
@@ -149,23 +302,18 @@
 			selectedHouseId = null;
 		}
 	}
-
-	function handleMouseEnter(houseId: string) {
-		hoveredHouseId = houseId;
-	}
-
-	function handleMouseLeave() {
-		hoveredHouseId = null;
-	}
 </script>
 
-<div class="map-wrapper" on:mousemove={handleMouseMoveGlobal} role="presentation">
+<div class="map-wrapper" on:pointermove={handlePointerMoveGlobal} role="presentation">
 	<svg
-		viewBox="0 0 1000 700"
+		viewBox="0 0 {MAP_WIDTH} {MAP_HEIGHT}"
 		preserveAspectRatio="xMidYMid meet"
 		on:click={handleMapClick}
 		on:keydown={handleMapKeydown}
 		bind:this={svgEl}
+		use:trackScale
+		class:editor={isEditorMode}
+		class:locked={isEditorMode && !canEditLayout}
 		style="background: #0a0a0a;"
 		role="presentation"
 		aria-label="Interactive house map"
@@ -175,14 +323,28 @@
 				<stop offset="0%" stop-color="rgba(45, 212, 191, 0.2)" />
 				<stop offset="100%" stop-color="rgba(45, 212, 191, 0)" />
 			</radialGradient>
+			<!-- Pin glows by status (MapHouseMarker). Gradients instead of CSS
+			     filters: those are unreliable on SVG children in WebKit. -->
+			<radialGradient id="marker-glow-available">
+				<stop offset="35%" stop-color="rgba(45, 212, 191, 0.75)" />
+				<stop offset="100%" stop-color="rgba(45, 212, 191, 0)" />
+			</radialGradient>
+			<radialGradient id="marker-glow-full">
+				<stop offset="35%" stop-color="rgba(248, 113, 113, 0.75)" />
+				<stop offset="100%" stop-color="rgba(248, 113, 113, 0)" />
+			</radialGradient>
+			<radialGradient id="marker-glow-empty">
+				<stop offset="35%" stop-color="rgba(102, 102, 102, 0.75)" />
+				<stop offset="100%" stop-color="rgba(102, 102, 102, 0)" />
+			</radialGradient>
 		</defs>
 
 		<image
-			href="/lageplan-brahmsee.jpg"
-			width="1000"
-			height="700"
+			href={MAP_IMAGE}
+			width={MAP_WIDTH}
+			height={MAP_HEIGHT}
 			class="map-image"
-			class:blurred={!isBookingActive && !isEditorMode}
+			class:blurred={(!browsable || dimmed) && !isEditorMode}
 		/>
 
 		<!-- Dynamic Mouse Glow -->
@@ -200,30 +362,37 @@
 				{#each houses as house (house.id)}
 					<g
 						class="house-group"
-						class:selected={selectedHouseId === house.id}
-						on:mousedown={(e) => handleMouseDown(e, house)}
+						class:draggable={canEditLayout}
+						transform="translate({house.x} {house.y})"
+						on:pointerdown={(e) => handlePointerDown(e, house)}
+						on:touchstart|nonpassive={handleTouchStart}
+						on:pointermove={handlePointerMove}
+						on:pointerup={handlePointerUp}
+						on:pointercancel={handlePointerCancel}
 						on:click={(e) => handleHouseClick(e, house)}
 						on:keydown={(e) => handleHouseKeydown(e, house)}
-						on:mouseenter={() => handleMouseEnter(house.id)}
-						on:mouseleave={handleMouseLeave}
+						on:keyup={(e) => handleHouseKeyup(e, house)}
+						on:pointerenter={(e) => {
+							if (e.pointerType === 'mouse') hoveredHouseId = house.id;
+						}}
+						on:pointerleave={() => (hoveredHouseId = null)}
 						role="button"
 						tabindex="0"
 						aria-label="House {house.name}"
 					>
-						<foreignObject
-							x={house.x - 60}
-							y={house.y - 60}
-							width="120"
-							height="120"
-							style="overflow: visible; pointer-events: none;"
-						>
-							<UserHouseMarker
+						<g transform="scale({markerScale})">
+							<MapHouseMarker
 								name={house.name}
-								status={house.occupiedBeds >= house.totalBeds ? 'full' : 'available'}
+								status={houseMarkerStatus(house)}
 								labelPosition={labelPositions[house.id]}
 								hovered={hoveredHouseId === house.id}
+								selected={selectedHouseId === house.id}
+								dragging={draggingHouseId === house.id}
+								{hitRadius}
+								x={house.x}
+								scale={markerScale}
 							/>
-						</foreignObject>
+						</g>
 					</g>
 				{/each}
 			</g>
@@ -253,9 +422,23 @@
 	}
 
 	.house-group {
-		cursor: grab;
-		pointer-events: auto;
+		cursor: pointer;
 		outline: none;
+		-webkit-tap-highlight-color: transparent;
+	}
+	/* While the layout is editable a touch on a pin drags it instead of
+	   scrolling the page. */
+	.house-group.draggable,
+	.house-group.draggable :global(.hit) {
+		cursor: grab;
+		touch-action: none;
+	}
+	.house-group:focus-visible :global(.pin) {
+		stroke: #f472b6;
+		stroke-width: 4;
+	}
+	svg.locked {
+		cursor: not-allowed;
 	}
 
 	.marker-layer {

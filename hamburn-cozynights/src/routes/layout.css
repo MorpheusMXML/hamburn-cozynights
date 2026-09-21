@@ -1,9 +1,36 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/forms';
-@plugin '@tailwindcss/typography';
 
-/* Global Transition for all interactive elements */
-* {
+/* Form controls never get wider than their box. A <select> is as wide as its
+   longest option (spot, room and house name together can be 250 characters),
+   and a flex row can't shrink it below that: the page scrolled sideways.
+   More layout rules: docs/develop/layout.md. */
+input,
+select,
+textarea {
+	max-width: 100%;
+}
+
+/* WebKit hands the width of the SELECTED option to the page: picking a spot
+   whose name is long made the page scrollable sideways on iPhones, although
+   the box itself stayed narrow. */
+select {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Transitions for interactive elements and cards. Not `*`: with hundreds of
+   spots on a room page every span would carry them, and a list re-render
+   would animate the whole list at once. */
+a,
+button,
+input,
+select,
+textarea,
+summary,
+[class$='-card'],
+[class$='-panel'],
+[class$='-section'] {
 	transition:
 		border-color 0.3s ease,
 		box-shadow 0.3s ease,
@@ -11,10 +38,10 @@
 		transform 0.2s ease;
 }
 
-/* Laser Glass Effect for Cards */
+/* Laser Glass Effect for the large surfaces. The card grids (one card per
+   room or spot) get the same look with a flat colour: a backdrop blur per
+   card is one compositing layer each, which phones feel. */
 .house-card,
-.room-card,
-.bed-card,
 .intel-card,
 .form-section,
 .status-card,
@@ -22,6 +49,14 @@
 	position: relative;
 	background: rgba(15, 15, 15, 0.7) !important;
 	backdrop-filter: blur(10px) !important;
+	border: 1px solid rgba(255, 255, 255, 0.1) !important;
+	overflow: hidden;
+}
+
+.room-card,
+.bed-card {
+	position: relative;
+	background: rgba(18, 18, 18, 0.88) !important;
 	border: 1px solid rgba(255, 255, 255, 0.1) !important;
 	overflow: hidden;
 }
@@ -75,4 +110,12 @@
 		filter: blur(20px) brightness(2);
 		opacity: 0;
 	}
+}
+
+/* The pause button of the landing page title (EffigyTitle) also stops the
+   decorative CSS animations while it is pressed (WCAG 2.2.2). */
+:root[data-motion='paused'] *,
+:root[data-motion='paused'] *::before,
+:root[data-motion='paused'] *::after {
+	animation-play-state: paused !important;
 }

@@ -17,12 +17,21 @@ vi.mock('$lib/server/pocketbase', () => ({
 	getAdminPb: vi.fn(async () => ({ authStore: { isValid: true } }))
 }));
 
-import { checkGoogleIdentity, toAdminSession, toPendingAdmin } from '../src/lib/server/admin-auth';
+import {
+	checkGoogleIdentity,
+	isSignInFresh,
+	toAdminSession,
+	toPendingAdmin
+} from '../src/lib/server/admin-auth';
 import { handle } from '../src/hooks.server';
 import { actions as loginActions } from '../src/routes/admin/login/+page.server';
 import { GET as oauthCallback } from '../src/routes/auth/callback/[provider]/+server';
 import { actions as dashboardActions } from '../src/routes/admin/+page.server';
 import { load as adminLayoutLoad } from '../src/routes/admin/+layout.server';
+
+const HOUR = 60 * 60 * 1000;
+/** PocketBase's date format, like pb_hooks/cozy_notify.pb.js stores it. */
+const pbDate = (ms: number) => new Date(ms).toISOString().replace('T', ' ');
 
 const ADMIN_RECORD = {
 	id: 'admin1',
@@ -31,7 +40,8 @@ const ADMIN_RECORD = {
 	email: 'max@mauersegler.art',
 	name: 'Max',
 	role: 'superuser',
-	verified: true
+	verified: true,
+	last_sign_in: pbDate(Date.now() - HOUR)
 };
 
 function fakeToken(expiresInSeconds = 3600): string {
@@ -93,6 +103,23 @@ describe('access requests (role pending)', () => {
 		expect(toPendingAdmin(ADMIN_RECORD)).toBeNull();
 		expect(toPendingAdmin({ ...pending, collectionName: 'users' })).toBeNull();
 		expect(toPendingAdmin({ ...pending, email: 'x@gmail.com' })).toBeNull();
+	});
+});
+
+describe('isSignInFresh (weekly Google sign-in)', () => {
+	const now = Date.parse('2026-09-18T12:00:00Z');
+
+	it('accepts a Google sign-in of the last 7 days, in PocketBase and ISO format', () => {
+		expect(isSignInFresh({ last_sign_in: '2026-09-18 11:00:00.000Z' }, now)).toBe(true);
+		expect(isSignInFresh({ last_sign_in: '2026-09-11T12:30:00.000Z' }, now)).toBe(true);
+	});
+
+	it('asks again after 7 days, and when there is no sign-in on record', () => {
+		expect(isSignInFresh({ last_sign_in: '2026-09-11 11:59:00.000Z' }, now)).toBe(false);
+		expect(isSignInFresh({ last_sign_in: '' }, now)).toBe(false);
+		expect(isSignInFresh({}, now)).toBe(false);
+		expect(isSignInFresh(null, now)).toBe(false);
+		expect(isSignInFresh({ last_sign_in: 'not a date' }, now)).toBe(false);
 	});
 });
 
@@ -243,6 +270,29 @@ describe('hooks.server handle', () => {
 		expect(resolve).toHaveBeenCalled();
 	});
 
+	it('ends the session a week after the last Google sign-in, even while it is in use', async () => {
+		const stale = { ...ADMIN_RECORD, last_sign_in: pbDate(Date.now() - 8 * 24 * HOUR) };
+		refreshSpy.mockImplementation(async function (this: any) {
+			this.client.authStore.save(fakeToken(), stale);
+			return { token: '', record: stale } as any;
+		});
+		const resolve = vi.fn(async () => new Response('ok'));
+
+		const post = makeEvent('/admin', { method: 'POST', cookie: authCookie(stale) });
+		expect((await handle({ event: post, resolve })).status).toBe(403);
+		expect(post.locals.admin).toBeNull();
+		expect(post.locals.adminSignInExpired).toBe(true);
+		expect(post.locals.pb.authStore.isValid).toBe(false);
+
+		// the cookie's own (client-side) record doesn't count, only the refreshed one
+		const forged = makeEvent('/admin', {
+			method: 'POST',
+			cookie: authCookie({ ...stale, last_sign_in: pbDate(Date.now()) })
+		});
+		expect((await handle({ event: forged, resolve })).status).toBe(403);
+		expect(resolve).not.toHaveBeenCalled();
+	});
+
 	it('drops the session when PocketBase rejects the token (e.g. admin removed)', async () => {
 		refreshSpy.mockRejectedValue(new ClientResponseError({ status: 401 }));
 		const event = makeEvent('/admin', { method: 'POST', cookie: authCookie(ADMIN_RECORD) });
@@ -263,14 +313,27 @@ describe('admin layout', () => {
 		expect(redirect).toEqual({ status: 303, location: '/admin/login' });
 	});
 
+	it('tells admins why they have to sign in again after a week', async () => {
+		const redirect = await isRedirect(
+			adminLayoutLoad({
+				locals: { admin: null, adminSignInExpired: true },
+				url: new URL('http://x/admin')
+			} as any) as any
+		);
+		expect(redirect).toEqual({ status: 303, location: '/admin/login?error=reauth' });
+	});
+
 	it('exposes only email, name and role', async () => {
 		const data: any = await adminLayoutLoad({
 			locals: { admin: toAdminSession(ADMIN_RECORD) },
 			url: new URL('http://x/admin')
 		} as any);
+		// openRequests: special-needs requests waiting for a decision (no
+		// database here, so 0)
 		expect(data).toEqual({
 			admin: { email: 'max@mauersegler.art', name: 'Max', role: 'superuser' },
-			isSuperuser: true
+			isSuperuser: true,
+			openRequests: 0
 		});
 	});
 });
@@ -466,10 +529,23 @@ describe('Google sign-in flow', () => {
 });
 
 describe('superuser-only dashboard actions', () => {
-	function makeAdminPb() {
+	function makeAdminPb(phase: 'staging' | 'live' = 'staging') {
 		const service = {
+			// app_settings for getBookingSettings: the phase set by hand
+			getOne: vi.fn(async () => ({
+				id: 'appsettings0123',
+				is_booking_active: phase === 'live',
+				booking_closed: false,
+				booking_unlock_at: '',
+				booking_close_at: '',
+				booking_timer_paused: false
+			})),
 			getFullList: vi.fn(async (opts?: any) =>
-				opts?.filter?.includes('burner_name') ? [{ id: 'order1' }] : [{ id: 'bed1' }]
+				opts?.filter?.includes('burner_name')
+					? [{ id: 'order1' }, { id: 'order2' }]
+					: opts?.filter?.includes('approved')
+						? [{ order: 'order2', bed: 'bed2' }] // the crew booked bed2 for a special-needs request
+						: [{ id: 'bed1' }, { id: 'bed2', order: 'order2' }]
 			),
 			update: vi.fn(async () => ({})),
 			delete: vi.fn(async () => ({})),
@@ -509,9 +585,64 @@ describe('superuser-only dashboard actions', () => {
 			locals: { pb, adminPb: pb, admin: boss }
 		} as any);
 
-		expect(result).toEqual({ success: true });
+		expect(result).toEqual({ success: true, released: 1, kept: 1 });
 		expect(service.update).toHaveBeenCalledWith('bed1', { occupied: false, order: null });
 		expect(service.update).toHaveBeenCalledWith('order1', { burner_name: '' });
 		expect(service.delete).not.toHaveBeenCalled();
+		// The spot the crew assigned for a special-needs request stays, with its name.
+		expect(service.update).not.toHaveBeenCalledWith('bed2', expect.anything());
+		expect(service.update).not.toHaveBeenCalledWith('order2', expect.anything());
+	});
+
+	it('keeps the guest bookings when a superuser switches to Staging without saying otherwise', async () => {
+		const { pb, service } = makeAdminPb('live');
+		const form = new FormData();
+		form.set('phase', 'staging');
+		const result: any = await dashboardActions.setPhase({
+			locals: { pb, adminPb: pb, admin: boss },
+			request: { formData: async () => form }
+		} as any);
+
+		expect(result).toMatchObject({ success: true, phase: 'staging' });
+		expect(result.released).toBeUndefined();
+		expect(service.update).not.toHaveBeenCalledWith('bed1', expect.anything());
+	});
+
+	it('releases them when the dialog says so, and never for a regular admin', async () => {
+		const form = () => {
+			const data = new FormData();
+			data.set('phase', 'staging');
+			data.set('clearBookings', '1');
+			return data;
+		};
+		const refused = makeAdminPb('live');
+		const denied: any = await dashboardActions.setPhase({
+			locals: { pb: refused.pb, adminPb: refused.pb, admin: crew },
+			request: { formData: async () => form() }
+		} as any);
+		expect(denied.status).toBe(403);
+		expect(refused.service.update).not.toHaveBeenCalled();
+
+		const { pb, service } = makeAdminPb('live');
+		const result: any = await dashboardActions.setPhase({
+			locals: { pb, adminPb: pb, admin: boss },
+			request: { formData: async () => form() }
+		} as any);
+
+		expect(result).toMatchObject({ success: true, phase: 'staging', released: 1, kept: 1 });
+		expect(service.update).toHaveBeenCalledWith('bed1', { occupied: false, order: null });
+		// the spot the crew booked for a special-needs request stays
+		expect(service.update).not.toHaveBeenCalledWith('bed2', expect.anything());
+	});
+
+	it('clears bookings only in Staging Mode (the switch back asks about them itself)', async () => {
+		const { pb, service } = makeAdminPb('live');
+		const result: any = await dashboardActions.clearAllBookings({
+			locals: { pb, adminPb: pb, admin: boss }
+		} as any);
+
+		expect(result.status).toBe(403);
+		expect(result.data.error).toContain('Staging Mode');
+		expect(service.update).not.toHaveBeenCalled();
 	});
 });

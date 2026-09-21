@@ -8,18 +8,68 @@ services:
     restart: unless-stopped
     # --automigrate=false: schema changes only ever come from committed
     # migrations, never from dashboard edits writing files into the checkout.
-    command: ['--http=0.0.0.0:8090', '--automigrate=false']
+    # --hooksWatch=false: the deploy script stops and starts PocketBase itself;
+    # a git checkout of the bind-mounted tree must never restart the live
+    # instance (that would apply new migrations before the deploy's snapshot).
+    # --encryptionEnv: PocketBase stores its app settings (SMTP password, S3
+    # keys, ...) AES-256-GCM encrypted with the 32-character PB_ENCRYPTION_KEY
+    # from .env instead of in plain text, so a database backup alone does not
+    # give them away. pb_hooks/cozy_settings.pb.js encrypts settings that are
+    # still plain text on the first start with the key. Without the key
+    # PocketBase refuses to start (docs/develop/deployment.md).
+    command:
+      [
+        '--http=0.0.0.0:8090',
+        '--automigrate=false',
+        '--hooksWatch=false',
+        '--encryptionEnv=PB_ENCRYPTION_KEY'
+      ]
     environment:
+      # Key for the encrypted settings (see the command above): exactly 32
+      # characters, `openssl rand -hex 16`. Required on purpose: a deploy
+      # without it fails at the build step, before anything is stopped.
+      PB_ENCRYPTION_KEY: ${PB_ENCRYPTION_KEY:?set PB_ENCRYPTION_KEY in .env (32 characters, see deploy/staging.env.template)}
       # Google OAuth client for the admin login (auth collection `admins`),
       # interpolated from .env — see .env.example and docs/develop/deployment.md.
       PB_GOOGLE_CLIENT_ID: ${PB_GOOGLE_CLIENT_ID:?set PB_GOOGLE_CLIENT_ID in .env}
       PB_GOOGLE_CLIENT_SECRET: ${PB_GOOGLE_CLIENT_SECRET:?set PB_GOOGLE_CLIENT_SECRET in .env}
-      # Optional: chat webhook notified about new admin access requests
-      # (Telegram / Slack / Google Chat / Discord), see .env.example.
+      # Notifications (pb_hooks/cozy_notify.pb.js, docs/admin/notifications.md):
+      # booking confirmations by e-mail, Telegram for guests and the crew.
+      # All optional; without SMTP_HOST / TELEGRAM_BOT_TOKEN nothing is sent.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_TLS: ${SMTP_TLS:-}
+      SMTP_AUTH: ${SMTP_AUTH:-}
+      SMTP_LOCAL_NAME: ${SMTP_LOCAL_NAME:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      TELEGRAM_THREAD_ID: ${TELEGRAM_THREAD_ID:-}
+      TELEGRAM_GUEST_UPDATES: ${TELEGRAM_GUEST_UPDATES:-}
+      # Older crew webhook (Telegram URL, Slack, Google Chat, Discord); used when
+      # TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID are not set.
       COZY_ADMIN_WEBHOOK_URL: ${COZY_ADMIN_WEBHOOK_URL:-}
+      # Links in messages, and the marker in every subject / crew message.
+      COZY_APP_URL: https://test-cozynights.hamburn.de
+      COZY_ENV_LABEL: STAGING
+      # Local auto-backups into the volume's backups/ folder (defaults: hourly,
+      # keep 72), see pb_hooks/cozy_backups.pb.js. Off-site: deploy/backup/.
+      PB_BACKUP_CRON: ${PB_BACKUP_CRON:-}
+      PB_BACKUP_KEEP: ${PB_BACKUP_KEEP:-}
+      # Sending pace (defaults: the loop runs 50 s per minute, 20 mails/minute).
+      COZY_NOTIFY_LOOP_SECONDS: ${COZY_NOTIFY_LOOP_SECONDS:-}
+      COZY_MAILS_PER_MINUTE: ${COZY_MAILS_PER_MINUTE:-}
       # NOTE: never pass PB_ADMIN_EMAIL/PB_ADMIN_PASSWORD to this container —
       # the image's entrypoint would re-upsert that superuser on every start,
-      # which revokes the app's cached service-account token.
+      # which revokes the app's cached service-account token, and it runs that
+      # upsert without --encryptionEnv, so the container would not even start
+      # once the settings are encrypted.
+    security_opt:
+      - no-new-privileges:true
     ports:
       # Only reachable from the host itself (SSH tunnel for the dashboard at /_/),
       # never from the internet.
@@ -38,15 +88,20 @@ services:
 
   app:
     build:
-      context: .
-      dockerfile: Dockerfile
+      # The repository root, not this folder: the image also contains the
+      # documentation site from ../docs (served at /docs and /admin/docs).
+      context: ..
+      dockerfile: hamburn-cozynights/Dockerfile
     container_name: cozynights-staging-app
     restart: unless-stopped
     depends_on:
       pocketbase:
         condition: service_healthy
-    env_file:
-      - .env
+    # No env_file here on purpose: .env also holds PocketBase's secrets (Google
+    # client secret, SMTP password, bot token). The app needs none of them, so
+    # every value it does need is listed explicitly — anything else stays out of
+    # this container's environment (and out of /proc/1/environ, crash dumps and
+    # `docker inspect`).
     environment:
       # Server-side PocketBase URL over the compose network. The browser never
       # talks to PocketBase directly, so there is no public PocketBase URL.
@@ -58,9 +113,50 @@ services:
       # adapter-node behind nginx: the real client IP (used by the ticket-code
       # login rate limit) comes from nginx's X-Real-IP header.
       ADDRESS_HEADER: x-real-ip
+      # Service account for PocketBase and the key for encrypted guest fields.
+      # `:-` and not `:?`: a missing value must not stop the deploy here — the
+      # app itself refuses to start with a blank or placeholder key and says so
+      # in its log (src/lib/server/crypto.ts), which the deploy's health check
+      # turns into a rollback.
+      PB_ADMIN_EMAIL: ${PB_ADMIN_EMAIL:-}
+      PB_ADMIN_PASSWORD: ${PB_ADMIN_PASSWORD:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      # Operator details for /legal-notice and /privacy (src/lib/server/legal.ts).
+      # Keep this list in step with deploy/staging.env.template: a key that is
+      # missing here is silently blank on those pages.
+      LEGAL_NAME: ${LEGAL_NAME:-}
+      LEGAL_ADDRESS: ${LEGAL_ADDRESS:-}
+      LEGAL_REPRESENTATIVE: ${LEGAL_REPRESENTATIVE:-}
+      LEGAL_EMAIL: ${LEGAL_EMAIL:-}
+      LEGAL_PHONE: ${LEGAL_PHONE:-}
+      LEGAL_REGISTER: ${LEGAL_REGISTER:-}
+      LEGAL_VAT_ID: ${LEGAL_VAT_ID:-}
+      LEGAL_CONTENT_RESPONSIBLE: ${LEGAL_CONTENT_RESPONSIBLE:-}
+      LEGAL_PRIVACY_EMAIL: ${LEGAL_PRIVACY_EMAIL:-}
+      LEGAL_HOSTER: ${LEGAL_HOSTER:-}
+      LEGAL_MAIL_PROVIDER: ${LEGAL_MAIL_PROVIDER:-}
+      LEGAL_SUPERVISORY_AUTHORITY: ${LEGAL_SUPERVISORY_AUTHORITY:-}
+      LEGAL_LOG_RETENTION_DAYS: ${LEGAL_LOG_RETENTION_DAYS:-}
+      LEGAL_DELETION_PERIOD: ${LEGAL_DELETION_PERIOD:-}
+      LEGAL_TERMS_URL: ${LEGAL_TERMS_URL:-}
+      LEGAL_CODE_OF_CONDUCT_URL: ${LEGAL_CODE_OF_CONDUCT_URL:-}
+    # The app never needs new privileges or any Linux capability: it listens on
+    # an unprivileged port and writes nothing outside /tmp.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     ports:
       # Only reachable from the host itself; nginx reverse-proxies to this.
       - '127.0.0.1:3001:3000'
+    healthcheck:
+      # Same endpoint the deploy script polls, so a wedged app shows up as
+      # unhealthy in `docker ps` even between deploys.
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:3000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     networks:
       - cozynights_staging_net
 
@@ -70,3 +166,10 @@ networks:
 
 volumes:
   pb_data_staging:
+    # Pinned on purpose. Without `name:` the real volume is called
+    # <COMPOSE_PROJECT_NAME>_pb_data_staging, so a deploy that runs with a
+    # different project name (or none) silently creates an EMPTY database and
+    # the site comes up without houses, tickets or bookings. This is the volume
+    # the staging server has used since the first deploy; production gets its
+    # own compose file with its own fixed name.
+    name: hamburn-cozynights_pb_data_staging

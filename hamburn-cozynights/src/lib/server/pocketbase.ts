@@ -1,14 +1,13 @@
 import PocketBase from 'pocketbase';
-import { env as publicEnv } from '$env/dynamic/public';
 import { env as privateEnv } from '$env/dynamic/private';
 import type { TypedPocketBase } from '$lib/pocketbase-types';
 
 /**
  * Server-side PocketBase URL. The browser never talks to PocketBase, so on a
  * server this is the internal compose address (http://pocketbase:8090), not a
- * public URL. PUBLIC_PB_URL is only honoured as a fallback for older .env files.
+ * public URL.
  */
-export const PB_URL = privateEnv.PB_URL || publicEnv.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
+export const PB_URL = privateEnv.PB_URL || 'http://127.0.0.1:8090';
 
 // Global singleton instance, shared across all concurrent requests from all
 // users. Auto-cancellation is designed for a single browser client deduping

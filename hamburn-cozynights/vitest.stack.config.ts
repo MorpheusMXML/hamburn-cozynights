@@ -16,8 +16,12 @@ export default defineConfig({
 		reporters: ['verbose'],
 		// One shared database / app: run the files one after another.
 		fileParallelism: false,
-		testTimeout: 20_000,
-		hookTimeout: 30_000
+		// Generous on purpose: several of these tests shell into the PocketBase
+		// container (`docker compose exec` for cozy-admin), which takes seconds
+		// when the machine runs other stacks at the same time. A tight limit
+		// turned that into random red runs, not into faster feedback.
+		testTimeout: 40_000,
+		hookTimeout: 60_000
 	},
 	resolve: {
 		alias: {

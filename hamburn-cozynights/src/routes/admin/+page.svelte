@@ -1,30 +1,72 @@
 <script lang="ts">
-	import type { PageData, SubmitFunction } from './$types';
+	import type { PageData } from './$types';
+	import type { ActionResult } from '@sveltejs/kit';
+	import type { SubmitFunction } from '@sveltejs/kit';
+	import { enhance } from '$app/forms';
 	import Map from '$lib/components/Map.svelte';
 	import HouseEditor from '$lib/components/HouseEditor.svelte';
 	import IntelDashboard from '$lib/components/admin/IntelDashboard.svelte';
 	import SanityChecks from '$lib/components/admin/SanityChecks.svelte';
+	import TemplateManager from '$lib/components/admin/TemplateManager.svelte';
+	import BookingWindowPanel from '$lib/components/admin/BookingWindowPanel.svelte';
 	import { invalidateAll } from '$app/navigation';
-	import { enhance } from '$app/forms';
 	import { fade, fly, slide } from 'svelte/transition';
-	import { isoToBerlinLocal } from '$lib/time';
+	import { MAP_WIDTH, MAP_HEIGHT, clampToMap, isTooCloseToOtherHouse } from '$lib/map-geometry';
+	import { tick } from 'svelte';
+	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
+	import { actionErrorMessage, submitAction } from '$lib/admin-actions';
+	import { lockedDuring } from '$lib/booking-phase';
 
 	export let data: PageData;
 
 	// Only admins reach this page (hooks + layout); superusers additionally get
 	// the destructive tools (clear all bookings, template import).
-	$: ({ houses, sanityWarnings, history, isSuperuser, isBookingActive, bookingUnlockAt } = data);
+	$: ({
+		houses,
+		crewBookedSpots,
+		sanityWarnings,
+		history,
+		isSuperuser,
+		phase,
+		isLayoutLocked,
+		bookingWindow
+	} = data);
+	// Special-needs requests (/admin/requests): own switch, independent of the phase.
+	$: ({ requestsOpen, openRequests } = data);
+	let requestsSaving = false;
+
+	const handleToggleRequests: SubmitFunction = () => {
+		requestsSaving = true;
+		return async ({ result, update }) => {
+			requestsSaving = false;
+			if (result.type === 'success') {
+				const open = (result.data as { requestsOpen?: boolean } | undefined)?.requestsOpen;
+				toast(
+					open
+						? '♿ Special-needs requests are open: guests see a link on the map.'
+						: '♿ Special-needs requests are closed.',
+					'success'
+				);
+			} else {
+				await alertDialog(
+					`${actionErrorMessage(result) || 'The server could not be reached.'} Requests were not opened or closed. Reload the page and try again.`,
+					{ title: 'Switch not changed', tone: 'danger' }
+				);
+			}
+			await update();
+		};
+	};
 
 	// Management Summary Calculations
 	$: totalBeds = houses.reduce((sum, h) => sum + (h.totalBeds || 0), 0);
 	$: occupiedBeds = houses.reduce((sum, h) => sum + (h.occupiedBeds || 0), 0);
-	$: freeBeds = totalBeds - occupiedBeds;
-	$: occupancyRate = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
+	$: checkedInBeds = houses.reduce((sum, h) => sum + (h.checkedInBeds || 0), 0);
 
+	// "Full" means nothing left to book, like the cards' "Fully booked" badge.
 	$: houseStats = {
-		empty: houses.filter((h) => h.occupiedBeds === 0 && h.totalBeds > 0).length,
-		partial: houses.filter((h) => h.occupiedBeds > 0 && h.occupiedBeds < h.totalBeds).length,
-		full: houses.filter((h) => h.occupiedBeds >= h.totalBeds && h.totalBeds > 0).length,
+		empty: houses.filter((h) => h.occupiedBeds === 0 && h.freeBeds > 0).length,
+		partial: houses.filter((h) => h.occupiedBeds > 0 && h.freeBeds > 0).length,
+		full: houses.filter((h) => h.totalBeds > 0 && h.freeBeds === 0).length,
 		unconfigured: houses.filter((h) => h.totalBeds === 0).length
 	};
 
@@ -32,8 +74,6 @@
 	let showMap = true;
 	let showGuide = false;
 	let selectedHouseId: string | null = null;
-	let unlockDateInput = bookingUnlockAt ? isoToBerlinLocal(bookingUnlockAt) : '';
-
 	// Editor Sidebar State
 	let editingHouse: { id?: string; x: number; y: number; name: string } | null = null;
 
@@ -51,56 +91,37 @@
 	function getStatusText(free: number, total: number) {
 		if (total === 0) return 'Not setup';
 		if (free === 0) return 'Fully booked';
-		return `${free} spots free`;
+		return free === 1 ? '1 spot free' : `${free} spots free`;
 	}
 
-	const handleTogglePhase: SubmitFunction = ({ cancel }) => {
-		if (isBookingActive) {
-			const proceed = confirm(
-				'⚠️ WARNING: You are about to DEACTIVATE Live Booking mode. Regular users will no longer be able to claim spots. Continue?'
-			);
-			if (!proceed) {
-				cancel();
-				return;
-			}
+	let lastLockedToast = 0;
 
-			if (occupiedBeds > 0 && isSuperuser) {
-				const clear = confirm(
-					`📊 DETECTED: There are currently ${occupiedBeds} active bookings. Would you like to CLEAR ALL BOOKINGS now to reset the database? (This cannot be undone!)`
-				);
-				if (clear) {
-					return async ({ result, update }) => {
-						if (result.type === 'success') {
-							const formData = new FormData();
-							await submitAction('?/clearAllBookings', formData);
-							alert('✨ PLAYA PURGED: All spots are vacant once more.');
-						}
-						await update();
-					};
-				}
-			}
-		}
-		return async ({ update }) => {
-			await update();
-		};
-	};
+	function handleLayoutLocked() {
+		// One hint per gesture is enough.
+		if (Date.now() - lastLockedToast < 2500) return;
+		lastLockedToast = Date.now();
+		toast(
+			`🔒 The layout is locked ${lockedDuring(phase)}. Only a superuser can switch back to Staging Mode to add or move houses.`,
+			'warning'
+		);
+	}
 
-	async function submitAction(actionUrl: string, formData: FormData) {
-		try {
-			const response = await fetch(actionUrl, {
-				method: 'POST',
-				body: formData,
-				headers: {
-					'x-sveltekit-action': 'true',
-					accept: 'application/json'
-				}
-			});
-			const result = await response.json();
-			return result;
-		} catch (err: any) {
-			console.error(`[Action Error] Fetch failed for ${actionUrl}:`, err);
-			return { type: 'error', error: err.message };
-		}
+	/** Explains why a structural action is refused while booking is live or closed. */
+	function explainLocked(action: string) {
+		return alertDialog(
+			`The camp layout is locked ${lockedDuring(phase)}: it holds the guests' bookings. A superuser can switch back to Staging Mode in the 🎟 BOOKING WINDOW panel to ${action}.`,
+			{ title: `🔒 Locked ${lockedDuring(phase)}`, tone: 'warning' }
+		);
+	}
+
+	// Below the split breakpoint the sidebar sits under the map, possibly off
+	// screen: bring it into view when it opens.
+	async function revealSidebar() {
+		await tick();
+		if (!window.matchMedia('(max-width: 1100px)').matches) return;
+		document
+			.querySelector('.details-sidebar')
+			?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 	}
 
 	// When clicking empty space on the map in editor mode
@@ -108,14 +129,12 @@
 		const { x, y } = data;
 		selectedHouseId = null; // Deselect existing
 		editingHouse = { x, y, name: '' };
-		console.log(`[Dashboard] Preparing new house deployment at (${x}, ${y})`);
+		revealSidebar();
 	}
 
 	async function handleHouseMoved(event: CustomEvent) {
-		if (isBookingActive) {
-			alert(
-				'🔒 LOCKDOWN ACTIVE: Map layout is locked during Live Booking. Switch to Staging Mode to reposition houses.'
-			);
+		if (isLayoutLocked) {
+			handleLayoutLocked();
 			invalidateAll();
 			return;
 		}
@@ -134,198 +153,212 @@
 
 		const result = await submitAction('?/updateHouseCoords', formData);
 
-		if (result.type !== 'success') {
-			alert(
-				`🔥 THE PLAYA PROTECTS! 🛡️ ${result.data?.error || 'This house has active bookings and cannot be moved.'}`
+		if (result.type === 'success') {
+			toast(`📍 ${house.name} moved to X ${x} / Y ${y}. Saved.`, 'success', 3000);
+			// Reload so the list view and the sidebar show the stored position.
+			await invalidateAll();
+		} else {
+			toast(
+				`The new position was not saved: ${actionErrorMessage(result) || 'the server could not be reached.'} The pin is back where it was.`,
+				'danger',
+				8000
 			);
 			editingHouse = null;
 			selectedHouseId = null;
-			invalidateAll();
+			await invalidateAll();
 		}
+	}
+
+	/** Typed coordinates from the sidebar. */
+	function handleMoveFromEditor(event: CustomEvent<{ x: number; y: number }>) {
+		if (!selectedHouseId) return;
+		handleHouseMoved(
+			new CustomEvent('houseMoved', { detail: { id: selectedHouseId, ...event.detail } })
+		);
 	}
 
 	function handleSelectHouse(event: CustomEvent) {
 		const house = event.detail;
 		selectedHouseId = house.id;
 		editingHouse = { id: house.id, x: house.x, y: house.y, name: house.name };
-		console.log(`[Dashboard] House selected: ${house.name}`);
+		revealSidebar();
+	}
+
+	// The editor sidebar belongs to the map view. List-view actions that open it
+	// switch to the map first, otherwise nothing visible would happen.
+	async function showEditorOnMap() {
+		if (showMap) return;
+		showMap = true;
+		await tick();
+		document
+			.querySelector('.details-sidebar')
+			?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 	}
 
 	function handleRenameHouse(house: any) {
-		if (isBookingActive) {
-			alert(
-				'🔒 LOCKDOWN ACTIVE: House names are locked during Live Booking. Switch to Staging Mode to manage.'
-			);
+		if (isLayoutLocked) {
+			explainLocked('rename houses');
 			return;
 		}
 		selectedHouseId = house.id;
 		editingHouse = { id: house.id, x: house.x, y: house.y, name: house.name };
-		console.log(`[Dashboard] House selected for rename: ${house.name}`);
+		showEditorOnMap();
+	}
+
+	/** The map centre, or the nearest place around it where no other pin sits. */
+	function freeSpotNearCentre() {
+		const centre = { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 };
+		for (let ring = 0; ring <= 6; ring++) {
+			const steps = Math.max(1, ring * 6);
+			for (let step = 0; step < steps; step++) {
+				const angle = (step / steps) * 2 * Math.PI;
+				const point = clampToMap({
+					x: centre.x + Math.cos(angle) * ring * 45,
+					y: centre.y + Math.sin(angle) * ring * 45
+				});
+				if (!isTooCloseToOtherHouse(houses, null, point, 40)) return point;
+			}
+		}
+		return centre;
+	}
+
+	function handleIgniteFromList() {
+		if (isLayoutLocked) {
+			explainLocked('add houses');
+			return;
+		}
+		handleLocationSelected(freeSpotNearCentre());
+		showEditorOnMap();
+	}
+
+	function confirmDeleteHouse(house: { name: string; totalBeds?: number; occupiedBeds?: number }) {
+		const booked = house.occupiedBeds || 0;
+		return confirmDialog(
+			`"${house.name}" is removed from the map together with all its rooms and spots.` +
+				(booked > 0
+					? ` ${booked} booked ${booked === 1 ? 'spot is' : 'spots are'} released first; those guests have to book again.`
+					: '') +
+				' Ticket codes stay valid. This cannot be undone.',
+			{
+				title: 'Delete this house?',
+				tone: 'danger',
+				confirmLabel: 'Delete house',
+				cancelLabel: 'Keep it'
+			}
+		);
+	}
+
+	function showDeleteFailed(result: ActionResult) {
+		return alertDialog(
+			`${actionErrorMessage(result) || 'The server could not be reached.'} The house was not deleted. Reload the page and try again.`,
+			{ title: 'House not deleted', tone: 'danger' }
+		);
 	}
 
 	async function handleDeleteHouse(house: any) {
-		if (isBookingActive) {
-			alert(
-				'🔒 LOCKDOWN ACTIVE: You cannot vanish sanctuaries while bookings are live! Switch to Staging Mode first.'
-			);
+		if (isLayoutLocked) {
+			explainLocked('delete houses');
 			return;
 		}
 		if (!house || !house.id) return;
+		if (!(await confirmDeleteHouse(house))) return;
 
-		if (
-			confirm(
-				`⚠️ DANGER! ⚠️ Are you sure you want to vanish "${house.name}"? This will evaporate all rooms and spots! 🌪️`
-			)
-		) {
-			const formData = new FormData();
-			formData.append('id', house.id);
+		const formData = new FormData();
+		formData.append('id', house.id);
 
-			const result = await submitAction('?/deleteHouse', formData);
+		const result = await submitAction('?/deleteHouse', formData);
 
-			if (result.type !== 'success') {
-				alert(`❌ VANISH FAILED! ${result.data?.error || 'The playa protects this sanctuary.'}`);
+		if (result.type === 'success') {
+			toast(`🌪️ "${house.name}" was deleted.`, 'success');
+			if (selectedHouseId === house.id) {
+				selectedHouseId = null;
+				editingHouse = null;
 			}
-			invalidateAll();
+		} else {
+			await showDeleteFailed(result);
 		}
+		invalidateAll();
 	}
 
 	async function handleSaveHouse(event: CustomEvent) {
-		if (isBookingActive) {
-			alert('🔒 LOCKDOWN ACTIVE: House deployment is locked during Live Booking.');
-			editingHouse = null;
-			selectedHouseId = null;
+		if (isLayoutLocked) {
+			explainLocked('add or rename houses');
 			return;
 		}
 		const newHouseData = event.detail;
+		const name = (newHouseData.name || '').trim();
 
-		if (!newHouseData.name || newHouseData.name.trim() === '') {
-			alert('⚠️ NAME REQUIRED! A sanctuary needs a name to exist in the dust.');
+		if (!name) {
+			toast('Enter a name for the house first.', 'warning');
 			return;
 		}
 
 		const formData = new FormData();
-		formData.append('name', newHouseData.name);
+		formData.append('name', name);
 
+		let result: ActionResult;
 		if (editingHouse?.id) {
 			formData.append('id', editingHouse.id);
-			const result = await submitAction('?/renameHouse', formData);
-			if (result.type !== 'success')
-				alert(`❌ RENAME FAILED! ${result.data?.error || 'The desert winds are too strong.'}`);
+			result = await submitAction('?/renameHouse', formData);
 		} else {
 			formData.append('x', editingHouse?.x.toString() || '0');
 			formData.append('y', editingHouse?.y.toString() || '0');
 			formData.append('bedCount', newHouseData.totalBeds?.toString() || '0');
-
-			const result = await submitAction('/admin/house/new?/create', formData);
-			if (result.type !== 'success')
-				alert(`❌ CREATION FAILED! ${result.data?.error || 'The dust has clogged the gears.'}`);
+			result = await submitAction('/admin/house/new?/create', formData);
 		}
 
+		if (result.type !== 'success') {
+			// Keep the sidebar open so the entry can be corrected.
+			await alertDialog(
+				`${actionErrorMessage(result) || 'The server could not be reached.'} Nothing was saved. Check your entry and try again.`,
+				{ title: editingHouse?.id ? 'House not renamed' : 'House not created', tone: 'danger' }
+			);
+			invalidateAll();
+			return;
+		}
+
+		toast(editingHouse?.id ? `✏️ Renamed to "${name}".` : `🛖 "${name}" was created.`, 'success');
 		editingHouse = null;
 		selectedHouseId = null;
 		invalidateAll();
 	}
 
 	async function handleDeleteActiveHouse() {
-		if (isBookingActive) {
-			alert('🔒 LOCKDOWN ACTIVE: You cannot vanish sanctuaries while bookings are live!');
+		if (isLayoutLocked) {
+			explainLocked('delete houses');
 			return;
 		}
-		if (!activeHouse || !activeHouse.id) return;
+		const house = houses.find((h) => h.id === selectedHouseId);
+		if (!house) return;
+		if (!(await confirmDeleteHouse(house))) return;
 
-		if (
-			confirm(
-				`⚠️ DANGER! ⚠️ Are you sure you want to vanish "${activeHouse.name}"? This will evaporate all rooms and spots! 🌪️`
-			)
-		) {
-			console.log(`[Dashboard] Requesting VANISH for house ID: ${activeHouse.id}`);
+		const sidebar = document.querySelector('.details-sidebar');
+		if (sidebar) sidebar.classList.add('disintegrating');
 
-			const card = document.querySelector(`.house-card-wrapper:has([href*="${activeHouse.id}"])`);
-			if (card) card.classList.add('disintegrating');
-			const sidebar = document.querySelector('.details-sidebar');
-			if (sidebar) sidebar.classList.add('disintegrating');
+		const formData = new FormData();
+		formData.append('id', house.id);
 
-			const formData = new FormData();
-			formData.append('id', activeHouse.id);
+		await new Promise((resolve) => setTimeout(resolve, 500));
 
-			await new Promise((resolve) => setTimeout(resolve, 500));
+		const result = await submitAction('?/deleteHouse', formData);
 
-			const result = await submitAction('?/deleteHouse', formData);
-
-			if (result.type !== 'success') {
-				console.error('[Dashboard] Vanish FAILED:', result);
-				if (card) card.classList.remove('disintegrating');
-				if (sidebar) sidebar.classList.remove('disintegrating');
-				alert(`❌ VANISH FAILED: ${result.data?.error || 'The playa protects this sanctuary.'}`);
-			} else {
-				console.log('[Dashboard] Vanish SUCCESS. Clearing state...');
-				selectedHouseId = null;
-				editingHouse = null;
-				await invalidateAll();
-			}
+		if (result.type !== 'success') {
+			if (sidebar) sidebar.classList.remove('disintegrating');
+			await showDeleteFailed(result);
+			invalidateAll();
+		} else {
+			toast(`🌪️ "${house.name}" was deleted.`, 'success');
+			selectedHouseId = null;
+			editingHouse = null;
+			await invalidateAll();
 		}
 	}
 	let showTemplates = false;
-	let isImporting = false;
-	let isExporting = false;
-	let selectedFileName = '';
-
-	function handleFileChange(event: Event) {
-		const input = event.target as HTMLInputElement;
-		if (input.files && input.files.length > 0) {
-			selectedFileName = input.files[0].name;
-		} else {
-			selectedFileName = '';
-		}
-	}
-
-	async function handleExportTemplate() {
-		isExporting = true;
-		try {
-			const response = await fetch('/admin/api/export-template');
-			if (!response.ok) throw new Error('Export failed');
-
-			const blob = await response.blob();
-			const url = window.URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = `burn-template-${new Date().toISOString().slice(0, 10)}.json`;
-			document.body.appendChild(a);
-			a.click();
-			window.URL.revokeObjectURL(url);
-			document.body.removeChild(a);
-		} catch (err) {
-			console.error('[Export] Error:', err);
-			alert('❌ EXPORT FAILED: The data stream was interrupted.');
-		} finally {
-			// Stay in loading state a bit longer for visual fun
-			setTimeout(() => {
-				isExporting = false;
-			}, 1500);
-		}
-	}
-
-	const handleImportTemplate: SubmitFunction = ({ cancel }) => {
-		if (
-			!confirm(
-				'☢️ NUCLEAR WARNING ☢️\n\nImporting a template will PERMANENTLY ERASE:\n- All current Houses\n- All current Rooms\n- All current Beds\n- ALL ACTIVE BOOKINGS AND ORDERS\n\nThis cannot be undone. Are you absolutely sure the playa is ready for a reset?'
-			)
-		) {
-			cancel();
-			return;
-		}
-
-		isImporting = true;
-		return async ({ result, update }) => {
-			isImporting = false;
-			if (result.type === 'success') {
-				showTemplates = false;
-				alert('✨ PLAYA REBORN: Template applied successfully.');
-			}
-			await update();
-		};
-	};
 </script>
+
+<svelte:head>
+	<title>Control Center · CozyNights</title>
+</svelte:head>
 
 <div class="dashboard-wrapper">
 	<header class="page-header">
@@ -335,6 +368,8 @@
 		</div>
 
 		<div class="header-right">
+			<a class="btn-docs" href="/admin/docs/" target="_blank" rel="noopener">ADMIN GUIDE 📖</a>
+
 			<button class="btn-secondary" on:click={() => (showTemplates = !showTemplates)}>
 				{showTemplates ? 'CLOSE TOOLS 🛠' : 'TEMPLATES 💾'}
 			</button>
@@ -343,143 +378,38 @@
 				{showGuide ? 'CLOSE INTEL 📡' : 'SHOW INTEL 📊'}
 			</button>
 
-			<form method="POST" action="?/togglePhase" use:enhance={handleTogglePhase}>
-				<button type="submit" class="btn-laser" class:live={isBookingActive}>
-					{isBookingActive ? '🎪 LIVE BOOKING ACTIVE' : '🛠 STAGING MODE'}
-					<div class="laser-glow"></div>
-				</button>
-			</form>
-
 			<button class="btn-toggle" on:click={() => (showMap = !showMap)}>
 				{showMap ? '🛰️ LIST VIEW' : '🗺️ MAP VIEW'}
 			</button>
 		</div>
 	</header>
 
-	<section class="timer-panel">
-		{#if bookingUnlockAt}
-			<div class="timer-active">
-				<span class="timer-icon">⏱</span>
-				<span
-					>Auto-opens live booking on <strong
-						>{new Date(bookingUnlockAt).toLocaleString('de-DE', {
-							timeZone: 'Europe/Berlin',
-							dateStyle: 'medium',
-							timeStyle: 'short'
-						})}</strong
-					> (CET/CEST)</span
-				>
-				<form method="POST" action="?/cancelUnlockTimer" use:enhance>
-					<button type="submit" class="btn-timer-cancel">Cancel Timer ✕</button>
-				</form>
-			</div>
-		{:else}
-			<form method="POST" action="?/setUnlockTimer" use:enhance class="timer-set-form">
-				<span class="timer-icon">⏱</span>
-				<span class="timer-label">Schedule automatic go-live:</span>
-				<input type="datetime-local" name="unlockAt" bind:value={unlockDateInput} required />
-				<button type="submit" class="btn-timer-set" disabled={!unlockDateInput}>
-					Schedule ✨
-				</button>
-			</form>
-		{/if}
+	<BookingWindowPanel
+		{phase}
+		{bookingWindow}
+		{isSuperuser}
+		{occupiedBeds}
+		{crewBookedSpots}
+		{checkedInBeds}
+	/>
+
+	<section class="requests-panel" class:open={requestsOpen}>
+		<span class="requests-icon" aria-hidden="true">♿</span>
+		<span class="requests-text">
+			Special-needs requests: <strong>{requestsOpen ? 'OPEN' : 'CLOSED'}</strong>
+			{#if openRequests}· {openRequests} waiting for a decision{/if}
+		</span>
+		<form method="POST" action="/admin/requests?/toggleRequests" use:enhance={handleToggleRequests}>
+			<input type="hidden" name="open" value={String(!requestsOpen)} />
+			<button type="submit" class="btn-requests" disabled={requestsSaving}>
+				{requestsOpen ? 'Close requests' : 'Open requests'}
+			</button>
+		</form>
+		<a class="requests-review" href="/admin/requests">Review requests →</a>
 	</section>
 
 	{#if showTemplates}
-		<section class="templates-overlay" in:fade out:fade>
-			<div class="templates-content" in:fly={{ y: 20 }}>
-				<div class="modal-header">
-					<h2>Burn Template Manager</h2>
-					<button class="btn-close" on:click={() => (showTemplates = false)}>✕</button>
-				</div>
-
-				<div class="templates-grid">
-					<div class="tool-card export-card">
-						<div class="icon">📡</div>
-						<h3>Export Current Layout</h3>
-						<p>
-							Download the entire structure of houses, rooms, and beds as a JSON file. Use this for
-							backups or starting new burns.
-						</p>
-						<button class="btn-action" on:click={handleExportTemplate} disabled={isExporting}>
-							{isExporting ? 'ENCODING...' : 'DOWNLOAD JSON 💾'}
-						</button>
-
-						{#if isExporting}
-							<div class="card-loading-overlay" in:fade>
-								<div class="data-stream">
-									{#each Array(10) as _, i}
-										<div class="bit" style="--delay: {i * 0.1}s; --left: {Math.random() * 100}%">
-											{Math.random() > 0.5 ? '1' : '0'}
-										</div>
-									{/each}
-								</div>
-								<p>PACKAGING THE PLAYA...</p>
-							</div>
-						{/if}
-					</div>
-
-					{#if isSuperuser}
-						<div class="tool-card import-card">
-							<div class="icon">🌀</div>
-							<h3>Import New Layout</h3>
-							<p>
-								Wipe all houses, rooms and beds and rebuild the playa from a JSON template. Ticket
-								codes are kept, existing bookings are released. <strong
-									>Warning: This replaces the whole layout!</strong
-								>
-							</p>
-
-							<form
-								method="POST"
-								action="?/importTemplate"
-								enctype="multipart/form-data"
-								use:enhance={handleImportTemplate}
-							>
-								<div class="file-input-wrapper">
-									<input
-										type="file"
-										name="template"
-										accept=".json"
-										required
-										id="template-upload"
-										on:change={handleFileChange}
-									/>
-									<label for="template-upload" class:selected={selectedFileName}>
-										<span class="file-icon">{selectedFileName ? '📄' : '📁'}</span>
-										{selectedFileName || 'CHOOSE TEMPLATE FILE'}
-									</label>
-								</div>
-								<button
-									type="submit"
-									class="btn-action danger"
-									disabled={isImporting || !selectedFileName}
-								>
-									{isImporting ? 'IGNITING...' : 'APPLY TEMPLATE 🔥'}
-								</button>
-							</form>
-						</div>
-					{:else}
-						<div class="tool-card import-card">
-							<div class="icon">🔒</div>
-							<h3>Import New Layout</h3>
-							<p>
-								Importing a template replaces all houses, rooms and beds. Only superusers can do
-								this.
-							</p>
-						</div>
-					{/if}
-				</div>
-
-				{#if isImporting}
-					<div class="loading-overlay" in:fade>
-						<div class="spinner"></div>
-						<p>REBUILDING THE PLAYA STRUCTURE...</p>
-						<small>The desert winds are reshaping the dust.</small>
-					</div>
-				{/if}
-			</div>
-		</section>
+		<TemplateManager {isSuperuser} on:close={() => (showTemplates = false)} />
 	{/if}
 
 	{#if showGuide}
@@ -510,6 +440,11 @@
 								<span class="count">{houseStats.full}</span>
 								<span class="text">FULL</span>
 							</div>
+							<div class="legend-item">
+								<span class="dot checked-in"></span>
+								<span class="count">{checkedInBeds}</span>
+								<span class="text">SPOTS CHECKED IN</span>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -533,8 +468,8 @@
 							<p>Click house for House Intel sidebar.</p>
 						</div>
 						<div class="intel-card green">
-							<span class="icon">🎪</span>
-							<p>Go LIVE to lock layout & allow bookings.</p>
+							<span class="icon">🎟</span>
+							<p>Plan the booking window, arm the timer: it opens & closes by itself.</p>
 						</div>
 					</div>
 				</div>
@@ -547,10 +482,11 @@
 	<main class="view-container">
 		{#if showMap}
 			<div class="map-view" in:fade={{ duration: 300 }}>
-				<div class="map-status-bar" class:live={isBookingActive}>
-					{#if isBookingActive}
+				<div class="map-status-bar" class:live={phase === 'live'} class:closed={phase === 'closed'}>
+					{#if isLayoutLocked}
 						<span class="status-msg"
-							>🔒 LOCKDOWN: Map layout is locked. Switch to 🛠 STAGING to manage.</span
+							>🔒 LOCKED: {phase === 'closed' ? 'Booking is closed' : 'Live Booking is active'}.
+							Only a superuser can switch back to 🛠 STAGING MODE to add, move or delete houses.</span
 						>
 					{:else}
 						<span class="status-msg"
@@ -563,9 +499,10 @@
 						<Map
 							{houses}
 							isEditorMode={true}
-							{isBookingActive}
+							layoutLocked={isLayoutLocked}
 							on:locationSelected={(e) => handleLocationSelected(e.detail)}
 							on:houseMoved={handleHouseMoved}
+							on:layoutLocked={handleLayoutLocked}
 							on:renameHouse={handleSelectHouse}
 							on:deleteHouse={(e) => handleDeleteHouse(e.detail)}
 						/>
@@ -578,6 +515,7 @@
 								<h3>{selectedHouseId ? 'HOUSE INTEL' : 'NEW DEPLOYMENT'}</h3>
 								<button
 									class="btn-close-sidebar"
+									aria-label="Close sidebar"
 									on:click={() => {
 										selectedHouseId = null;
 										editingHouse = null;
@@ -593,6 +531,7 @@
 									houseId={selectedHouseId || undefined}
 									flat={true}
 									on:save={handleSaveHouse}
+									on:move={handleMoveFromEditor}
 									on:cancel={() => {
 										selectedHouseId = null;
 										editingHouse = null;
@@ -608,7 +547,7 @@
 										<button
 											class="btn-vanish-big"
 											on:click={handleDeleteActiveHouse}
-											class:disabled={isBookingActive}
+											class:disabled={isLayoutLocked}
 										>
 											VANISH FROM PLAYA 🌪️
 										</button>
@@ -637,6 +576,12 @@
 									<span class="stat-label">Spots Claimed 👥</span>
 									<span class="stat-value">{house.occupiedBeds} / {house.totalBeds}</span>
 								</div>
+								{#if house.checkedInBeds > 0}
+									<div class="stat-group">
+										<span class="stat-label">Checked In ✅</span>
+										<span class="stat-value">{house.checkedInBeds} / {house.occupiedBeds}</span>
+									</div>
+								{/if}
 
 								<div class="progress-bar">
 									<div
@@ -656,12 +601,12 @@
 							<button
 								class="btn-action-small"
 								on:click={() => handleRenameHouse(house)}
-								class:disabled={isBookingActive}>RENAME ✏️</button
+								class:disabled={isLayoutLocked}>RENAME ✏️</button
 							>
 							<button
 								class="btn-action-small vanish"
 								on:click={() => handleDeleteHouse(house)}
-								class:disabled={isBookingActive}>VANISH 🌪️</button
+								class:disabled={isLayoutLocked}>VANISH 🌪️</button
 							>
 						</div>
 					</div>
@@ -669,15 +614,12 @@
 
 				<button
 					class="add-house-card"
-					on:click={() =>
-						isBookingActive
-							? alert('🔒 LOCKDOWN ACTIVE: Switch to 🛠 STAGING to ignite new sanctuaries.')
-							: handleLocationSelected({ x: 500, y: 350 })}
-					class:disabled={isBookingActive}
+					on:click={handleIgniteFromList}
+					class:disabled={isLayoutLocked}
 				>
 					<span class="plus">+</span>
 					<span>Ignite New House</span>
-					<small>Auto-centered at 500/350</small>
+					<small>Starts in the middle of the map</small>
 				</button>
 			</div>
 		{/if}
@@ -692,13 +634,16 @@
 		padding: 2rem;
 		background: #050505;
 		min-height: 100vh;
+		min-height: 100dvh;
 		color: #fff;
 	}
 
 	.page-header {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: center;
+		gap: 1rem 2rem;
 		border-bottom: 1px solid #1a1a1a;
 		padding-bottom: 1.5rem;
 	}
@@ -718,44 +663,19 @@
 
 	.header-right {
 		display: flex;
-		gap: 1rem;
+		flex-wrap: wrap;
+		gap: 0.75rem;
 		align-items: center;
 	}
-
-	.btn-laser {
-		background: #111;
-		border: 1px solid #333;
-		color: #fff;
-		padding: 0.75rem 1.5rem;
-		border-radius: 8px;
-		font-weight: 900;
-		cursor: pointer;
-		position: relative;
-		overflow: hidden;
-		transition: all 0.3s;
-		font-size: 0.8rem;
-		letter-spacing: 1px;
-	}
-	.btn-laser.live {
-		border-color: #f472b6;
-		color: #f472b6;
-	}
-	.btn-laser.live .laser-glow {
-		background: rgba(244, 114, 182, 0.2);
-		box-shadow: 0 0 20px rgba(244, 114, 182, 0.2);
-	}
-
-	.laser-glow {
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		pointer-events: none;
+	.header-right button,
+	.header-right a {
+		min-height: 44px;
+		white-space: nowrap;
 	}
 
 	.btn-toggle,
-	.btn-guide {
+	.btn-guide,
+	.btn-docs {
 		background: #111;
 		border: 1px solid #222;
 		color: #888;
@@ -766,8 +686,15 @@
 		font-size: 0.75rem;
 		transition: all 0.2s;
 	}
+	.btn-docs {
+		display: inline-flex;
+		align-items: center;
+		box-sizing: border-box;
+		text-decoration: none;
+	}
 	.btn-toggle:hover,
-	.btn-guide:hover {
+	.btn-guide:hover,
+	.btn-docs:hover {
 		background: rgba(45, 212, 191, 0.1);
 		color: #2dd4bf;
 		border-color: #2dd4bf;
@@ -778,69 +705,59 @@
 		border-color: #2dd4bf;
 	}
 
-	.timer-panel {
-		background: rgba(251, 146, 60, 0.05);
-		border: 1px solid rgba(251, 146, 60, 0.2);
-		border-radius: 12px;
-		padding: 0.85rem 1.5rem;
-	}
-	.timer-active,
-	.timer-set-form {
+	.requests-panel {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
 		flex-wrap: wrap;
+		gap: 0.75rem;
 		font-size: 0.8rem;
-		color: #888;
-		font-weight: 700;
+		font-weight: 800;
+		letter-spacing: 0.5px;
+		background: rgba(115, 115, 115, 0.05);
+		border: 1px solid #333;
+		border-radius: 12px;
+		padding: 0.6rem 1.5rem;
+		color: #a3a3a3;
 	}
-	.timer-icon {
+	.requests-panel.open {
+		background: rgba(244, 114, 182, 0.05);
+		border-color: rgba(244, 114, 182, 0.3);
+	}
+	.requests-panel strong {
+		color: #f472b6;
+	}
+	.requests-icon {
 		font-size: 1rem;
 	}
-	.timer-active strong {
-		color: #fb923c;
+	.requests-text {
+		flex: 1 1 12rem;
+		min-width: 0;
 	}
-	.timer-label {
-		color: #888;
-	}
-	.timer-set-form input[type='datetime-local'] {
-		background: #050505;
-		border: 1px solid #333;
-		color: #fff;
-		padding: 0.5rem 0.75rem;
-		border-radius: 8px;
-		font-size: 0.8rem;
-		font-family: inherit;
-	}
-	.btn-timer-set,
-	.btn-timer-cancel {
-		background: #fb923c;
-		border: none;
-		color: #000;
+	.btn-requests {
+		min-height: 44px;
 		padding: 0.5rem 1rem;
 		border-radius: 8px;
+		border: 1px solid #f472b6;
+		background: transparent;
+		color: #f472b6;
 		font-weight: 900;
 		font-size: 0.75rem;
 		cursor: pointer;
-		transition: all 0.2s;
 		white-space: nowrap;
 	}
-	.btn-timer-set:hover:not(:disabled) {
-		transform: scale(1.05);
+	.btn-requests:hover {
+		background: rgba(244, 114, 182, 0.12);
 	}
-	.btn-timer-set:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
+	.btn-requests:disabled {
+		opacity: 0.5;
+		cursor: progress;
 	}
-	.btn-timer-cancel {
-		background: transparent;
-		border: 1px solid #444;
-		color: #888;
-		margin-left: auto;
-	}
-	.btn-timer-cancel:hover {
-		border-color: #ef4444;
-		color: #f87171;
+	.requests-review {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		color: #2dd4bf;
+		text-decoration: none;
 	}
 
 	.intel-panel {
@@ -899,7 +816,9 @@
 
 	.status-legend {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-around;
+		gap: 0.75rem 1.5rem;
 	}
 	.legend-item {
 		display: flex;
@@ -922,6 +841,10 @@
 		background: #f87171;
 		box-shadow: 0 0 10px #f87171;
 	}
+	.legend-item .dot.checked-in {
+		background: #2dd4bf;
+		box-shadow: 0 0 10px #2dd4bf;
+	}
 	.legend-item .count {
 		font-weight: 900;
 		color: #fff;
@@ -936,7 +859,7 @@
 
 	.intel-grid {
 		display: grid;
-		grid-template-columns: repeat(2, 1fr);
+		grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
 		gap: 1rem;
 	}
 
@@ -989,20 +912,29 @@
 		font-weight: 900;
 		color: #2dd4bf;
 		letter-spacing: 1px;
+		line-height: 1.5;
 	}
 	.map-status-bar.live {
 		color: #f472b6;
 		background: rgba(244, 114, 182, 0.05);
 		border-color: rgba(244, 114, 182, 0.1);
 	}
+	.map-status-bar.closed {
+		color: #d4d4d4;
+		background: rgba(255, 255, 255, 0.03);
+		border-color: rgba(255, 255, 255, 0.08);
+	}
 
 	.map-layout-split {
 		display: flex;
+		align-items: flex-start;
 		gap: 2rem;
-		height: 700px;
 	}
 	.map-frame {
 		flex: 1;
+		min-width: 0;
+		/* MAP_WIDTH / MAP_HEIGHT */
+		aspect-ratio: 1000 / 700;
 		background: #0a0a0a;
 		border: 2px solid #222;
 		border-radius: 16px;
@@ -1013,6 +945,8 @@
 
 	.details-sidebar {
 		width: 400px;
+		flex-shrink: 0;
+		box-sizing: border-box;
 		background: #0a0a0a;
 		border: 1px solid #222;
 		border-top: 2px solid #f472b6;
@@ -1023,6 +957,25 @@
 		gap: 1.5rem;
 		box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
 		animation: sidebarSlide 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+
+	/* Narrow screens: the sidebar goes below the map. revealSidebar() uses the
+	   same breakpoint. */
+	@media (max-width: 1100px) {
+		.map-layout-split {
+			flex-direction: column;
+			align-items: stretch;
+			gap: 1rem;
+		}
+		.map-frame {
+			flex: none;
+			width: 100%;
+			box-sizing: border-box;
+		}
+		.details-sidebar {
+			width: 100%;
+			scroll-margin-top: 6rem;
+		}
 	}
 
 	@keyframes sidebarSlide {
@@ -1054,10 +1007,13 @@
 	.btn-close-sidebar {
 		background: none;
 		border: none;
-		color: #444;
+		color: #888;
 		font-size: 1.5rem;
 		cursor: pointer;
 		line-height: 1;
+		min-width: 44px;
+		min-height: 44px;
+		margin: -0.5rem -0.75rem -0.5rem 0;
 	}
 	.btn-close-sidebar:hover {
 		color: #fff;
@@ -1096,6 +1052,11 @@
 		font-size: 0.8rem;
 		letter-spacing: 1px;
 		transition: all 0.2s;
+		min-height: 44px;
+		box-sizing: border-box;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 	.btn-manage-link:hover {
 		background: #222;
@@ -1139,7 +1100,7 @@
 
 	.grid-view {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
 		gap: 2rem;
 	}
 
@@ -1147,6 +1108,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+		min-width: 0;
 	}
 
 	.card-admin-actions {
@@ -1157,6 +1119,7 @@
 
 	.btn-action-small {
 		flex: 1;
+		min-height: 44px;
 		background: #1a1a1a;
 		border: 1px solid #333;
 		color: #888;
@@ -1209,14 +1172,18 @@
 
 	.card-header {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: flex-start;
+		gap: 0.5rem 1rem;
 	}
 	.card-header h2 {
 		margin: 0;
 		font-size: 1.25rem;
 		font-weight: 900;
 		color: #fff;
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.badge {
@@ -1226,6 +1193,7 @@
 		font-weight: 900;
 		text-transform: uppercase;
 		letter-spacing: 1px;
+		white-space: nowrap;
 	}
 	.badge.green {
 		background: rgba(74, 222, 128, 0.1);
@@ -1301,6 +1269,7 @@
 		color: #444;
 		transition: all 0.3s;
 		min-height: 200px;
+		font-family: inherit;
 	}
 	.add-house-card:hover:not(.disabled) {
 		border-color: #2dd4bf;
@@ -1368,262 +1337,48 @@
 		border-color: #666;
 	}
 
-	/* Templates UI */
-	.templates-overlay {
-		position: fixed;
-		top: 0;
-		left: 0;
-		width: 100vw;
-		height: 100vh;
-		background: rgba(0, 0, 0, 0.9);
-		backdrop-filter: blur(20px);
-		z-index: 1000;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 2rem;
-	}
-
-	.templates-content {
-		background: #0a0a0a;
-		border: 1px solid #222;
-		border-top: 4px solid #fb923c;
-		border-radius: 32px;
-		width: 100%;
-		max-width: 900px;
-		padding: 3rem;
-		position: relative;
-		box-shadow: 0 50px 100px rgba(0, 0, 0, 0.8);
-	}
-
-	.modal-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 3rem;
-	}
-	.modal-header h2 {
-		font-size: 2.5rem;
-		font-weight: 900;
-		letter-spacing: -1px;
-		margin: 0;
-	}
-	.btn-close {
-		background: transparent;
-		border: none;
-		color: #444;
-		font-size: 1.5rem;
-		cursor: pointer;
-		transition: color 0.2s;
-	}
-	.btn-close:hover {
-		color: #fff;
-	}
-
-	.templates-grid {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 2rem;
-	}
-
-	.tool-card {
-		background: #111;
-		border: 1px solid #222;
-		border-radius: 24px;
-		padding: 2.5rem;
-		text-align: center;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 1.5rem;
-		transition: border-color 0.3s;
-	}
-	.tool-card:hover {
-		border-color: #333;
-	}
-	.tool-card .icon {
-		font-size: 3rem;
-	}
-	.tool-card h3 {
-		margin: 0;
-		font-weight: 900;
-		text-transform: uppercase;
-		letter-spacing: 1px;
-	}
-	.tool-card p {
-		color: #666;
-		font-size: 0.9rem;
-		line-height: 1.6;
-		margin: 0;
-	}
-
-	.btn-action {
-		display: inline-block;
-		width: 100%;
-		padding: 1.2rem;
-		background: #2dd4bf;
-		color: #000;
-		text-decoration: none;
-		border-radius: 16px;
-		font-weight: 900;
-		text-transform: uppercase;
-		letter-spacing: 1px;
-		font-size: 0.9rem;
-		cursor: pointer;
-		border: none;
-		transition: all 0.2s;
-	}
-	.btn-action:hover:not(:disabled) {
-		background: #fff;
-		transform: scale(1.02);
-	}
-	.btn-action.danger {
-		background: transparent;
-		border: 2px solid #ef4444;
-		color: #ef4444;
-	}
-	.btn-action.danger:hover:not(:disabled) {
-		background: #ef4444;
-		color: #000;
-	}
-
-	.file-input-wrapper {
-		width: 100%;
-		margin-bottom: 1rem;
-	}
-	.file-input-wrapper input {
-		display: none;
-	}
-	.file-input-wrapper label {
-		display: block;
-		padding: 1.2rem;
-		background: #050505;
-		border: 1px dashed #333;
-		border-radius: 12px;
-		color: #444;
-		font-weight: 900;
-		cursor: pointer;
-		transition: all 0.3s;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		font-size: 0.8rem;
-		letter-spacing: 1px;
-	}
-	.file-input-wrapper label:hover {
-		border-color: #666;
-		color: #888;
-	}
-	.file-input-wrapper label.selected {
-		border: 2px solid #2dd4bf;
-		background: rgba(45, 212, 191, 0.05);
-		color: #fff;
-		border-style: solid;
-		box-shadow: 0 0 20px rgba(45, 212, 191, 0.1);
-	}
-	.file-icon {
-		margin-right: 0.5rem;
-		font-size: 1.1rem;
-	}
-
-	/* Loading Overlay */
-	.loading-overlay {
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		background: rgba(0, 0, 0, 0.9);
-		border-radius: 32px;
-		z-index: 10;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 1.5rem;
-	}
-	.spinner {
-		width: 50px;
-		height: 50px;
-		border: 4px solid #2dd4bf;
-		border-top-color: transparent;
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
-	}
-	.loading-overlay p {
-		font-weight: 900;
-		letter-spacing: 2px;
-		margin: 0;
-	}
-	.loading-overlay small {
-		color: #444;
-		text-transform: uppercase;
-		font-weight: 900;
-		letter-spacing: 1px;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
+	@media (max-width: 640px) {
+		.dashboard-wrapper {
+			gap: 1.25rem;
+			padding: 1rem 0.75rem;
 		}
-	}
-
-	/* Card Specific Loading */
-	.card-loading-overlay {
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		background: rgba(0, 0, 0, 0.95);
-		border-radius: 24px;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		z-index: 5;
-		overflow: hidden;
-	}
-	.card-loading-overlay p {
-		font-weight: 900;
-		color: #2dd4bf;
-		font-size: 0.8rem;
-		letter-spacing: 2px;
-		margin-top: 1rem;
-	}
-
-	.data-stream {
-		position: relative;
-		width: 60px;
-		height: 60px;
-	}
-	.bit {
-		position: absolute;
-		top: -20px;
-		left: var(--left);
-		color: #2dd4bf;
-		font-family: 'JetBrains Mono', monospace;
-		font-weight: 900;
-		font-size: 1.2rem;
-		opacity: 0;
-		animation: fall-bit 1s linear infinite;
-		animation-delay: var(--delay);
-	}
-
-	@keyframes fall-bit {
-		0% {
-			top: -20px;
-			opacity: 0;
+		.header-left h1 {
+			font-size: 1.6rem;
 		}
-		20% {
-			opacity: 1;
+		/* Two buttons per row, each as wide as its cell */
+		.header-right {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 0.5rem;
+			width: 100%;
 		}
-		80% {
-			opacity: 1;
+		.header-right > * {
+			min-width: 0;
 		}
-		100% {
-			top: 60px;
-			opacity: 0;
+		.header-right button,
+		.header-right a {
+			width: 100%;
+			justify-content: center;
+			padding-left: 0.5rem;
+			padding-right: 0.5rem;
+			font-size: 0.7rem;
+			letter-spacing: 0.5px;
+			white-space: normal;
+		}
+		.intel-panel {
+			padding: 1rem;
+		}
+		.visual-progress {
+			padding: 1rem;
+		}
+		.map-status-bar {
+			padding: 0.75rem 1rem;
+		}
+		.details-sidebar {
+			padding: 1rem;
+		}
+		.grid-view {
+			gap: 1.25rem;
 		}
 	}
 </style>

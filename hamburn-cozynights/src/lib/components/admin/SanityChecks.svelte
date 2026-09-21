@@ -13,15 +13,23 @@
 	}>;
 
 	$: hasWarnings = warnings.length > 0;
+	$: issueCount = warnings.reduce(
+		(sum, warning) => sum + (warning.noRooms ? 1 : 0) + warning.roomsWithNoBeds.length,
+		0
+	);
 </script>
 
 {#if hasWarnings}
 	<div class="sanity-wrapper" transition:slide>
 		<header class="sanity-header">
 			<span class="alert-icon">⚠️</span>
-			<h3>RED ALERT: ARCHITECTURAL DEVIATIONS</h3>
-			<span class="count">{warnings.length} ISSUES DETECTED</span>
+			<h3>RED ALERT: THE CAMP LAYOUT IS INCOMPLETE</h3>
+			<span class="count">{issueCount} {issueCount === 1 ? 'ISSUE' : 'ISSUES'}</span>
 		</header>
+		<p class="sanity-intro">
+			Guests cannot book anything in the places listed here. Add what is missing, or delete the
+			house or room if it is not needed.
+		</p>
 
 		<div class="tree-container">
 			{#each warnings as warning}
@@ -30,8 +38,8 @@
 						<span class="icon">🛖</span>
 						<span class="name">{warning.name}</span>
 						{#if warning.noRooms}
-							<span class="error-tag">NO ROOMS DETECTED</span>
-							<a href="/admin/house/{warning.id}" class="fix-btn">EXPAND ➕</a>
+							<span class="error-tag">This house has no rooms yet.</span>
+							<a href="/admin/house/{warning.id}" class="fix-btn">ADD ROOMS ➕</a>
 						{/if}
 					</div>
 
@@ -42,7 +50,7 @@
 									<div class="node-content">
 										<span class="icon">🚪</span>
 										<span class="name">{room.name || `Room ${room.number}`}</span>
-										<span class="error-tag">EMPTY MODULE (NO BEDS)</span>
+										<span class="error-tag">This room has no spots yet.</span>
 										<a href="/admin/room/{room.id}" class="fix-btn">ADD SPOTS 🛌</a>
 									</div>
 								</div>
@@ -67,8 +75,9 @@
 		background: rgba(239, 68, 68, 0.1);
 		padding: 0.75rem 1.5rem;
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 1rem;
+		gap: 0.5rem 1rem;
 		border-bottom: 1px solid rgba(239, 68, 68, 0.1);
 	}
 	.sanity-header h3 {
@@ -76,8 +85,10 @@
 		font-size: 0.7rem;
 		font-weight: 900;
 		letter-spacing: 2px;
+		line-height: 1.5;
 		color: #f87171;
-		flex: 1;
+		flex: 1 1 12rem;
+		min-width: 0;
 	}
 	.count {
 		font-size: 0.6rem;
@@ -86,10 +97,18 @@
 		color: #000;
 		padding: 2px 8px;
 		border-radius: 4px;
+		white-space: nowrap;
+	}
+	.sanity-intro {
+		margin: 0;
+		padding: 1rem 1.5rem 0;
+		font-size: 0.8rem;
+		line-height: 1.5;
+		color: #d4a5a5;
 	}
 
 	.tree-container {
-		padding: 1.5rem;
+		padding: 1rem 1.5rem 1.5rem;
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
@@ -97,17 +116,20 @@
 
 	.node-content {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 1rem;
+		gap: 0.5rem 1rem;
 		padding: 0.5rem 0;
 	}
 	.name {
 		font-weight: 900;
 		font-size: 0.85rem;
 		color: #fff;
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 	.error-tag {
-		font-size: 0.65rem;
+		font-size: 0.75rem;
 		color: #f87171;
 		font-weight: bold;
 		letter-spacing: 0.5px;
@@ -115,7 +137,7 @@
 
 	.fix-btn {
 		margin-left: auto;
-		font-size: 0.6rem;
+		font-size: 0.65rem;
 		font-weight: 900;
 		color: #2dd4bf;
 		text-decoration: none;
@@ -123,6 +145,7 @@
 		padding: 4px 10px;
 		border-radius: 4px;
 		transition: all 0.2s;
+		white-space: nowrap;
 	}
 	.fix-btn:hover {
 		background: #2dd4bf;
@@ -146,10 +169,40 @@
 	.room-node::before {
 		content: '';
 		position: absolute;
-		top: 50%;
+		top: 1.25rem;
 		left: -1.5rem;
 		width: 1rem;
 		height: 1px;
 		background: #333;
+	}
+
+	@media (max-width: 640px) {
+		.sanity-header,
+		.sanity-intro {
+			padding-left: 1rem;
+			padding-right: 1rem;
+		}
+		.tree-container {
+			padding: 0.75rem 1rem 1rem;
+		}
+		.children {
+			margin-left: 0.5rem;
+			padding-left: 1rem;
+		}
+		.room-node::before {
+			left: -1rem;
+			width: 0.75rem;
+		}
+		/* Finger-sized link on its own line */
+		.fix-btn {
+			flex-basis: 100%;
+			margin-left: 0;
+			box-sizing: border-box;
+			min-height: 44px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-size: 0.75rem;
+		}
 	}
 </style>

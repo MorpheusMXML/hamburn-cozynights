@@ -1,0 +1,63 @@
+# gitleaks configuration for hamburn-cozynights (docs/reference/security.md,
+# "No secrets in git"). Runs as the pre-commit hook in .githooks/ and as the
+# "Secrets" job in .github/workflows/ci.yml.
+#
+# The repository is public: anything committed here is published. gitleaks'
+# default rules find provider tokens and private keys; the rules below add
+# what this project actually uses (PocketBase, SMTP, Telegram, the encryption
+# key) and the mistake of 2026 (a password on a command line in package.json).
+
+title = "hamburn-cozynights"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "cozy-password-on-command-line"
+description = "A password written into a command line (pocketbase-typegen --password, superuser update, …)"
+regex = '''(?i)(--password[= ]+|superuser (create|update|upsert) \S+ )["']?[^\s"'$<-][^\s"']{5,}'''
+keywords = ["--password", "superuser create", "superuser update", "superuser upsert"]
+
+[[rules]]
+id = "cozy-env-secret-value"
+description = "A secret from the server .env with a real-looking value"
+regex = '''(?i)\b(PB_ADMIN_PASSWORD|SMTP_PASSWORD|TELEGRAM_BOT_TOKEN|GOOGLE_CLIENT_SECRET|PB_ENCRYPTION_KEY|ENCRYPTION_KEY|RESTIC_PASSWORD|COZY_SU_PASSWORD|COZY_ADMIN_WEBHOOK_URL|STAGING_DEPLOY_SSH_KEY)\s*[=:]\s*["']?[A-Za-z0-9+/=_.:@-]{12,}'''
+keywords = ["PB_ADMIN_PASSWORD", "SMTP_PASSWORD", "TELEGRAM_BOT_TOKEN", "GOOGLE_CLIENT_SECRET", "PB_ENCRYPTION_KEY", "ENCRYPTION_KEY", "RESTIC_PASSWORD", "COZY_SU_PASSWORD", "COZY_ADMIN_WEBHOOK_URL", "STAGING_DEPLOY_SSH_KEY"]
+  [[rules.allowlists]]
+  description = "Placeholders and references, never real values"
+  regexTarget = "match"
+  regexes = [
+    '''(?i)(change[-_ ]?me|example|placeholder|your[-_ ]|secret[-_ ]here|<[^>]+>|\$\{?[A-Z_]+|xxxx|00000000|generated)''',
+  ]
+
+[[allowlists]]
+description = "Lock files and build output carry hashes, never secrets"
+paths = [
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)\.vitepress/(cache|dist)/''',
+]
+
+[[allowlists]]
+description = "Fixed dummy values of the unit tests and the throwaway test stack (docs/develop/testing.md)"
+regexTarget = "match"
+regexes = [
+  '''00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff''',
+  '''123456:TEST-token''',
+]
+
+[[allowlists]]
+description = """Known and closed: the typegen password of 2026-01 to 2026-09 (rotated, Baustelle i31) and
+old example values in scripts and .env.example (gone since 2026-04). History is not rewritten on purpose."""
+commits = [
+  "95e9b13f1f0aad5ee0a710e1de6c1c5d3b0a2f09",
+  "544a8a6e6aa11be9fe3344f51189d6304ce575a6",
+  "986ddd40360b43738bd44332c286e1f8ea41f31c",
+  "6c1c194a48581bcf1e13a4e71663052b1e961815",
+  "7d0f6c0ef3c0299dbb9660198953eb2325728bc9",
+  "0af8d4027a3d0ca75541b23dcdce78ddd61a0fc1",
+  "c4f21ebcae8b65996faf28efefa1ab383aa17142",
+  "4dc3b227f15824cf24cc63c76245f8739045bfb5",
+  "fbf7d379c148bcad2c4a27987060d56455b62061",
+  "042720999044290e0540819c3e6c36f3746c043f",
+  "7ea4473e2bb7695b563df7b9fcdc115f6ac87656",
+]

@@ -14,7 +14,8 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: true });
 
 test.describe('Booking Flow', () => {
 	const TEST_CODE = 'XXXXX';
-	const ROOM_ID = 'brahmseevill001';
+	// Any room with a bookable spot; the fixture ids of the old snapshot DB are gone.
+	let ROOM_ID = '';
 	let pb: any;
 
 	test.beforeAll(async () => {
@@ -36,6 +37,10 @@ test.describe('Booking Flow', () => {
 
 			// Ensure bookings are active for testing
 			await pb.collection('app_settings').update(APP_SETTINGS_ID, { is_booking_active: true });
+			const bed = await pb
+				.collection('beds')
+				.getFirstListItem('enabled = true && is_locked = false && occupied = false');
+			ROOM_ID = bed.room;
 		} catch (e) {
 			console.warn(
 				'[E2E Setup] Admin Auth failed. Skipping staging mode toggle. Test may fail if locked.',
@@ -97,6 +102,8 @@ test.describe('Booking Flow', () => {
 		const releaseBtn = page.locator('.btn-unbook');
 		await expect(releaseBtn).toBeVisible();
 		await releaseBtn.click();
+		// The app's own confirmation dialog (no browser confirm()).
+		await page.locator('[role="alertdialog"] button.primary').click();
 
 		// 8. Verify it's free again
 		await expect(page.locator('.bed-card.free').filter({ hasText: bedLabel })).toBeVisible();

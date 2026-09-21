@@ -1,7 +1,24 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { Chart, registerables } from 'chart.js';
-	Chart.register(...registerables);
+	import { onDestroy, onMount } from 'svelte';
+	import {
+		ArcElement,
+		BarController,
+		BarElement,
+		CategoryScale,
+		Chart,
+		DoughnutController,
+		LinearScale
+	} from 'chart.js';
+	// Only the parts of chart.js the two charts use (a doughnut and bars,
+	// no legend, tooltip or line charts): the rest would be ~30 KB for nothing.
+	Chart.register(
+		ArcElement,
+		BarController,
+		BarElement,
+		CategoryScale,
+		DoughnutController,
+		LinearScale
+	);
 
 	export let totalBeds: number;
 	export let occupiedBeds: number;
@@ -9,10 +26,28 @@
 
 	let occupancyChart: HTMLCanvasElement;
 	let trendChart: HTMLCanvasElement;
+	let occupancy: Chart | undefined;
+	let trend: Chart | undefined;
+
+	// Keep the charts in step with the numbers, e.g. after "clear all bookings".
+	$: if (occupancy) {
+		occupancy.data.datasets[0].data = [occupiedBeds, Math.max(0, totalBeds - occupiedBeds)];
+		occupancy.update();
+	}
+	$: if (trend) {
+		trend.data.labels = history.labels;
+		trend.data.datasets[0].data = history.bookingTrend;
+		trend.update();
+	}
+
+	onDestroy(() => {
+		occupancy?.destroy();
+		trend?.destroy();
+	});
 
 	onMount(() => {
 		// 1. Occupancy Pie Chart (Cookie Diagram)
-		new Chart(occupancyChart, {
+		occupancy = new Chart(occupancyChart, {
 			type: 'doughnut',
 			data: {
 				labels: ['Occupied', 'Free'],
@@ -35,14 +70,14 @@
 			}
 		});
 
-		// 2. New bookings per day, last 7 days (real order counts)
-		new Chart(trendChart, {
+		// 2. Spots booked per day, last 7 days (beds.booked_at, stamped by PocketBase)
+		trend = new Chart(trendChart, {
 			type: 'bar',
 			data: {
 				labels: history.labels,
 				datasets: [
 					{
-						label: 'New Bookings',
+						label: 'Booked spots',
 						data: history.bookingTrend,
 						backgroundColor: '#2dd4bf',
 						borderRadius: 4,
@@ -80,16 +115,20 @@
 	</div>
 	<div class="chart-container line-box">
 		<span class="chart-title">New Bookings · Last 7 Days</span>
-		<canvas bind:this={trendChart}></canvas>
+		<div class="canvas-wrap">
+			<canvas bind:this={trendChart}></canvas>
+		</div>
 	</div>
 </div>
 
 <style>
 	.intel-dashboard {
 		display: flex;
-		gap: 2rem;
-		height: 180px;
+		flex-wrap: wrap;
+		gap: 1rem 2rem;
+		min-height: 180px;
 		align-items: center;
+		justify-content: center;
 	}
 	.chart-container {
 		position: relative;
@@ -104,10 +143,18 @@
 		flex-shrink: 0;
 	}
 	.line-box {
-		flex: 1;
+		flex: 1 1 220px;
+		min-width: 0;
 		height: 150px;
 		display: flex;
 		flex-direction: column;
+	}
+	/* Chart.js sizes the canvas from this box; without it the bar chart grows
+	   past the card in a column flexbox. */
+	.line-box .canvas-wrap {
+		position: relative;
+		flex: 1;
+		min-height: 0;
 	}
 	.chart-title {
 		font-size: 0.6rem;

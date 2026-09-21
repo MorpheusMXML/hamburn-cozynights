@@ -1,12 +1,26 @@
 // src/routes/+page.server.ts
 import { fail, redirect } from '@sveltejs/kit';
 import { dev } from '$app/environment';
-import type { Actions } from './$types';
+import type { Actions, PageServerLoad } from './$types';
 import { BookingService } from '$lib/server/booking';
 import { FailureRateLimiter } from '$lib/server/rate-limit';
 
 // Ticket codes are bearer secrets: slow down guessing them.
-const failedLogins = new FailureRateLimiter(20, 10 * 60 * 1000);
+const RATE_LIMIT_WINDOW_MINUTES = 10;
+const failedLogins = new FailureRateLimiter(20, RATE_LIMIT_WINDOW_MINUTES * 60 * 1000);
+
+// Keep in sync with the client-side check in +page.svelte.
+const TICKET_CODE_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+const SURROUNDING_BLANKS = /^[\s\u200B-\u200D\uFEFF]+|[\s\u200B-\u200D\uFEFF]+$/g;
+
+/** Copy-pasted codes often carry spaces, line breaks or zero-width characters around them. */
+function cleanTicketCode(raw: FormDataEntryValue | null): string {
+	return (typeof raw === 'string' ? raw : '').replace(SURROUNDING_BLANKS, '');
+}
+
+export const load: PageServerLoad = async ({ locals }) => {
+	return { hasTicket: !!locals.orderNumber };
+};
 
 export const actions: Actions = {
 	login: async ({ request, cookies, locals, getClientAddress }) => {
@@ -17,41 +31,61 @@ export const actions: Actions = {
 			/* no address header (e.g. direct local request) */
 		}
 
-		if (failedLogins.isBlocked(client)) {
-			return fail(429, { error: 'Too many invalid codes. Please wait a few minutes.' });
-		}
-
 		const data = await request.formData();
-		const bookingCode = data.get('bookingCode')?.toString().trim();
+		const code = cleanTicketCode(data.get('bookingCode'));
 
-		if (!bookingCode) {
-			return fail(400, { error: 'Please enter a booking code.' });
-		}
-
-		// Basic alphanumeric validation
-		if (!/^[a-zA-Z0-9_-]{1,64}$/.test(bookingCode)) {
-			failedLogins.recordFailure(client);
-			return fail(400, { error: 'Invalid booking code format.' });
-		}
-
-		const bookingService = new BookingService(locals.adminPb);
-		let order;
-		try {
-			order = await bookingService.getOrderByNumber(bookingCode);
-		} catch (err) {
-			console.error('[Login] Order lookup failed:', (err as Error)?.message);
-			return fail(503, {
-				error: 'The booking system is temporarily unavailable. Please try again.'
+		if (failedLogins.isBlocked(client)) {
+			return fail(429, {
+				code,
+				error: `Too many wrong ticket codes from your connection. Please wait up to ${RATE_LIMIT_WINDOW_MINUTES} minutes, then try again.`
 			});
 		}
 
-		if (!order) {
+		if (!code) {
+			return fail(400, { code, error: 'Please enter your ticket code.' });
+		}
+
+		if (!TICKET_CODE_PATTERN.test(code)) {
 			failedLogins.recordFailure(client);
-			return fail(404, { error: 'This booking code was not found.' });
+			return fail(400, {
+				code,
+				error: 'Ticket codes only contain letters, digits, - and _. Check for spaces or typos.'
+			});
+		}
+
+		// The code field shows everything in capitals and phone keyboards like to
+		// capitalise, so a code that differs only in case is accepted as well.
+		const candidates = [...new Set([code, code.toUpperCase(), code.toLowerCase()])];
+
+		const bookingService = new BookingService(locals.adminPb);
+		let matchedCode: string | null = null;
+		try {
+			for (const candidate of candidates) {
+				if (await bookingService.getOrderByNumber(candidate)) {
+					matchedCode = candidate;
+					break;
+				}
+			}
+		} catch (err) {
+			console.error('[Login] Order lookup failed:', (err as Error)?.message);
+			return fail(503, {
+				code,
+				error:
+					'The booking system is not reachable right now. Your code was not checked. Please try again in a minute.'
+			});
+		}
+
+		if (!matchedCode) {
+			failedLogins.recordFailure(client);
+			return fail(404, {
+				code,
+				error:
+					'We could not find this ticket code. Check it for typos (0 vs. O, 1 vs. I) and try again. If it still fails, ask the crew.'
+			});
 		}
 
 		// The code is the guest's session: one ticket code = one booking.
-		cookies.set('bookingCode', bookingCode, {
+		cookies.set('bookingCode', matchedCode, {
 			path: '/',
 			httpOnly: true,
 			secure: !dev,
@@ -60,5 +94,15 @@ export const actions: Actions = {
 		});
 
 		throw redirect(303, '/map');
+	},
+
+	/**
+	 * Forgets the ticket code on this device. The code is the guest's key to
+	 * their booking (docs: Security & privacy), so a shared or borrowed phone
+	 * needs a way to give it back.
+	 */
+	signOut: async ({ cookies }) => {
+		cookies.delete('bookingCode', { path: '/' });
+		throw redirect(303, '/?login=out');
 	}
 };

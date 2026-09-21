@@ -44,20 +44,22 @@ if (!password) {
 
 console.log(`🚀 Running typegen for ${url} (${email})...`);
 
+// The credentials go through the child's environment, never through its
+// command line: arguments are world-readable in `ps` for as long as the
+// process runs. pocketbase-typegen reads PB_TYPEGEN_* when it is called with
+// --env (and only then — passing --url would take precedence again).
 const typegen = spawnSync(
 	'npx',
-	[
-		'pocketbase-typegen',
-		'--url',
-		url,
-		'--email',
-		email,
-		'--password',
-		password,
-		'--out',
-		'src/lib/pocketbase-types.ts'
-	],
-	{ stdio: 'inherit' }
+	['pocketbase-typegen', '--env', '--out', 'src/lib/pocketbase-types.ts'],
+	{
+		stdio: 'inherit',
+		env: {
+			...process.env,
+			PB_TYPEGEN_URL: url,
+			PB_TYPEGEN_EMAIL: email,
+			PB_TYPEGEN_PASSWORD: password
+		}
+	}
 );
 
 if (typegen.status === 0) {

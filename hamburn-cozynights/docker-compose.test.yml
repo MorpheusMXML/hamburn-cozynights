@@ -8,6 +8,9 @@
 #   smoke tests (compose profile "app").
 # - Credentials are generated per run by scripts/test-stack.sh; nothing in here
 #   is a real secret and nothing in here ever touches real data.
+# - Outside services are stand-ins: `mailpit` catches every e-mail (SMTP 1025,
+#   API/UI on TEST_MAILPIT_PORT), `mocks` plays the Telegram Bot API and
+#   Google's OAuth2 endpoints (tests/fixtures/mock-services.mjs).
 # - No container_name and an own project name: never collides with a dev or
 #   staging stack on the same machine.
 name: cozynights-verify
@@ -16,9 +19,30 @@ services:
   pocketbase:
     # Same pinned version as docker-compose.yml / docker-compose.staging.yml
     image: ghcr.io/muchobien/pocketbase:0.40.4
-    command: ['--http=0.0.0.0:8090', '--automigrate=false']
+    # --encryptionEnv like staging: the settings are stored encrypted with the
+    # per-run key from scripts/test-stack.sh, so every run exercises that path.
+    command: ['--http=0.0.0.0:8090', '--automigrate=false', '--encryptionEnv=PB_ENCRYPTION_KEY']
     tmpfs:
       - /pb_data
+    environment:
+      PB_ENCRYPTION_KEY: ${PB_ENCRYPTION_KEY:?run this stack through scripts/test-stack.sh}
+      # pb_hooks/cozy_notify.pb.js against the stand-ins below
+      SMTP_HOST: mailpit
+      SMTP_PORT: '1025'
+      SMTP_TLS: 'false'
+      MAIL_FROM_ADDRESS: cozynights@example.com
+      MAIL_FROM_NAME: CozyNights Test
+      TELEGRAM_BOT_TOKEN: '123456:TEST-token'
+      TELEGRAM_CHAT_ID: '-1001234567890'
+      TELEGRAM_API_BASE: http://mocks:8081
+      COZY_APP_URL: http://127.0.0.1:${TEST_APP_PORT:-3290}
+      COZY_ENV_LABEL: TEST
+      # one short pass per minute (the tests trigger runs themselves);
+      # TEST_NOTIFY_LOOP_SECONDS=50 runs it like a server does
+      COZY_NOTIFY_LOOP_SECONDS: ${TEST_NOTIFY_LOOP_SECONDS:-0}
+      # The whole suite sends far more guest e-mails per minute than the
+      # production cap (20); over the cap, mails wait and the tests miss them.
+      COZY_MAILS_PER_MINUTE: '1000'
     ports:
       - '127.0.0.1:${TEST_PB_PORT:-8290}:8090'
     volumes:
@@ -30,11 +54,36 @@ services:
       timeout: 5s
       retries: 30
 
+  mailpit:
+    image: axllent/mailpit:v1.27
+    environment:
+      # Everything else is refused with 550, so the tests can make a delivery fail.
+      MP_SMTP_ALLOWED_RECIPIENTS: '@(example\.com|example\.org|mauersegler\.art)$'
+    ports:
+      - '127.0.0.1:${TEST_MAILPIT_PORT:-8293}:8025'
+
+  mocks:
+    image: node:22-alpine
+    command: ['node', '/mocks/mock-services.mjs']
+    environment:
+      PORT: '8081'
+      MOCK_BOT_TOKEN: '123456:TEST-token'
+    volumes:
+      - ./tests/fixtures:/mocks:ro
+    ports:
+      - '127.0.0.1:${TEST_MOCK_PORT:-8292}:8081'
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:8081/_mock/health']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
   app:
     profiles: ['app']
     build:
-      context: .
-      dockerfile: Dockerfile
+      # The repository root, like staging: the image also contains the docs site.
+      context: ..
+      dockerfile: hamburn-cozynights/Dockerfile
     depends_on:
       pocketbase:
         condition: service_healthy

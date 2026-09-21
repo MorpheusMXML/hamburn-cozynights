@@ -22,7 +22,7 @@ jobs:
   verify:
     name: Verify
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: hamburn-cozynights
@@ -46,7 +46,33 @@ jobs:
       - name: Integration tests (real PocketBase)
         run: npm run test:integration
 
-      # Builds the same Dockerfile the server builds and drives the running
-      # app over HTTP: guest login, booking, admin protection.
-      - name: Smoke tests (app image + PocketBase)
-        run: npm run test:smoke
+      - name: Browsers for the layout test
+        run: npx playwright install --with-deps chromium webkit
+
+      # One app image, built from the same Dockerfile the server builds, for
+      # both suites: the smoke tests drive it over HTTP (guest login, booking,
+      # admin protection), the layout test opens every page with awkward names
+      # at every width from 320 to 1440 px (docs/develop/layout.md).
+      - name: Smoke and layout tests (app image + PocketBase)
+        run: bash scripts/test-stack.sh smoke layout
+
+  # The repository is public: a committed secret is published. gitleaks scans
+  # the whole history with the rules in .gitleaks.toml; the same rules run
+  # locally as the pre-commit hook in .githooks/. Pinned release + checksum
+  # instead of a marketplace action (docs/reference/security.md).
+  secrets:
+    name: Secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks 8.30.1
+        run: |
+          curl -sSfL -o gitleaks.tgz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tgz" | sha256sum -c -
+          tar -xzf gitleaks.tgz gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+      - name: Scan the whole history
+        run: gitleaks git --redact --no-banner --config .gitleaks.toml .

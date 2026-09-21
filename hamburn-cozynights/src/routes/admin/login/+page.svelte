@@ -8,15 +8,15 @@
 	const ERROR_MESSAGES: Record<string, { title: string; text: string }> = {
 		not_authorized: {
 			title: 'NO ACCESS 🛑',
-			text: 'This Google account cannot access the control center.'
+			text: 'This Google account has no access to the control center. Ask a superuser to approve or invite it, or sign in with another account.'
 		},
 		wrong_domain: {
 			title: 'WRONG ACCOUNT 🛑',
-			text: `Only verified @${data.adminDomain} Google accounts can sign in.`
+			text: `Only verified @${data.adminDomain} Google accounts can sign in. Try again and pick your @${data.adminDomain} account.`
 		},
 		not_workspace: {
 			title: 'WRONG ACCOUNT 🛑',
-			text: `Only @${data.adminDomain} Google Workspace accounts can sign in.`
+			text: `Only @${data.adminDomain} Google Workspace accounts can sign in. Try again and pick your @${data.adminDomain} account.`
 		},
 		cancelled: {
 			title: 'SIGN-IN CANCELLED',
@@ -30,6 +30,10 @@
 			title: 'BACKEND UNREACHABLE 📡',
 			text: 'The control center backend could not be reached. Try again shortly.'
 		},
+		reauth: {
+			title: 'WEEKLY CHECK 🔐',
+			text: 'For security, admins sign in with Google again every 7 days. One click and you are back.'
+		},
 		failed: {
 			title: 'SIGN-IN FAILED',
 			text: 'Google sign-in did not complete. Please try again.'
@@ -38,6 +42,10 @@
 
 	$: loginError = data.error ? (ERROR_MESSAGES[data.error] ?? ERROR_MESSAGES.failed) : null;
 </script>
+
+<svelte:head>
+	<title>Admin sign-in · CozyNights</title>
+</svelte:head>
 
 <div class="login-wrapper">
 	<div class="login-container" in:fly={{ y: 20, duration: 600 }}>
@@ -63,7 +71,7 @@
 				<button type="submit" class="btn-secondary">USE ANOTHER ACCOUNT</button>
 			</form>
 		{:else if form?.message || loginError || data.backendError}
-			<div class="error-banner" in:fade>
+			<div class="error-banner" role="alert" in:fade>
 				<span class="icon">🛑</span>
 				<div class="msg-content">
 					{#if form?.message}
@@ -86,7 +94,10 @@
 				<button type="submit" class="btn-ignite">SIGN IN WITH GOOGLE ⚡️</button>
 			</form>
 		{:else if !data.backendError}
-			<p class="hint">Google sign-in is not configured on this server yet.</p>
+			<p class="hint">
+				Google sign-in is not configured on this server yet, so nobody can sign in here. Ask the
+				person who runs the server to set it up.
+			</p>
 		{/if}
 
 		<p class="hint">
@@ -99,6 +110,7 @@
 <style>
 	.login-wrapper {
 		min-height: 80vh;
+		min-height: 80dvh;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -108,6 +120,7 @@
 	.login-container {
 		width: 100%;
 		max-width: 440px;
+		box-sizing: border-box;
 		background: #0f0f0f;
 		border: 1px solid #222;
 		border-radius: 16px;
@@ -155,6 +168,12 @@
 		align-items: center;
 		color: #f87171;
 	}
+	.msg-content {
+		min-width: 0;
+		font-size: 0.85rem;
+		line-height: 1.45;
+		overflow-wrap: anywhere;
+	}
 	.msg-content strong {
 		display: block;
 		font-size: 0.75rem;
@@ -162,8 +181,8 @@
 	}
 	.msg-content p {
 		margin: 0.25rem 0 0 0;
-		font-size: 0.8rem;
-		opacity: 0.8;
+		font-size: 0.85rem;
+		opacity: 0.9;
 	}
 
 	.pending-banner {
@@ -182,6 +201,7 @@
 		background: transparent;
 		color: #aaa;
 		border: 1px solid #333;
+		min-height: 44px;
 		padding: 0.75rem;
 		border-radius: 8px;
 		font-weight: 900;
@@ -219,12 +239,25 @@
 
 	.hint {
 		text-align: center;
-		font-size: 0.75rem;
-		color: #555;
+		font-size: 0.8rem;
+		color: #888;
 		margin-top: 1.5rem;
 		line-height: 1.5;
 	}
 	.hint strong {
-		color: #888;
+		color: #bbb;
+	}
+
+	@media (max-width: 640px) {
+		.login-wrapper {
+			padding: 1rem 0;
+		}
+		.login-container {
+			padding: 1.75rem 1.25rem;
+		}
+		.error-banner,
+		.pending-banner {
+			align-items: flex-start;
+		}
 	}
 </style>

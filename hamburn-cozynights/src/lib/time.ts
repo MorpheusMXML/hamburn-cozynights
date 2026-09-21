@@ -46,6 +46,19 @@ export function berlinLocalToIso(value: string): string {
 	const [year, month, day, hour, minute] = m.slice(1).map(Number);
 	const wallAsUtc = Date.UTC(year, month - 1, day, hour, minute);
 	if (Number.isNaN(wallAsUtc)) return '';
+	// Date.UTC rolls impossible dates over ("2026-02-31" becomes 3 March,
+	// "18:99" becomes 19:39), so a typo would silently book a different moment.
+	// Only a value that survives the round trip unchanged is a real date.
+	const back = new Date(wallAsUtc);
+	if (
+		back.getUTCFullYear() !== year ||
+		back.getUTCMonth() !== month - 1 ||
+		back.getUTCDate() !== day ||
+		back.getUTCHours() !== hour ||
+		back.getUTCMinutes() !== minute
+	) {
+		return '';
+	}
 
 	// Two passes settle the offset across DST transitions.
 	let instant = wallAsUtc - offsetAt(wallAsUtc);

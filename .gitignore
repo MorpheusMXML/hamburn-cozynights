@@ -2,3 +2,8 @@ hamburn-cozynights/pb_data/
 .env
 .env.local
 .env.*.local
+# SSH keys must never be committed (some checkouts keep a local folder)
+.ssh-keys/
+# macOS clutter and a root-level install (the app lives in hamburn-cozynights/, the docs in docs/)
+.DS_Store
+node_modules/

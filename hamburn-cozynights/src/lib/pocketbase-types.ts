@@ -17,7 +17,11 @@ export enum Collections {
 	Orders = 'orders',
 	Rooms = 'rooms',
 	Users = 'users',
-	AppSettings = 'app_settings'
+	AppSettings = 'app_settings',
+	GuestNotify = 'guest_notify',
+	AdminEvents = 'admin_events',
+	MessageTexts = 'message_texts',
+	SpecialRequests = 'special_requests'
 }
 
 // Alias types for improved usability
@@ -107,6 +111,7 @@ export type AdminsRecord = {
 	email: string;
 	emailVisibility?: boolean;
 	id: string;
+	last_sign_in?: IsoDateString;
 	name?: string;
 	password: string;
 	role: AdminsRoleOptions;
@@ -116,7 +121,6 @@ export type AdminsRecord = {
 };
 
 export type BedsRecord = {
-	bookedBy?: RecordIdString;
 	created: IsoAutoDateString;
 	enabled?: boolean;
 	id: string;
@@ -126,6 +130,13 @@ export type BedsRecord = {
 	room: RecordIdString;
 	updated: IsoAutoDateString;
 	is_locked?: boolean;
+	is_special?: boolean;
+	/** When the spot got its ticket; set and cleared by PocketBase (pb_hooks/cozy_booked.pb.js). */
+	booked_at?: IsoDateString;
+	/** When the crew checked the guest in at arrival; gone with the booking (pb_hooks/cozy_booked.pb.js). */
+	checked_in_at?: IsoDateString;
+	/** The admin who checked the guest in (e-mail). */
+	checked_in_by?: string;
 };
 
 export type HousesRecord = {
@@ -143,8 +154,11 @@ export type OrdersRecord = {
 	created: IsoAutoDateString;
 	customer_name: string;
 	burner_name?: string;
+	email?: string;
+	handed_over_at?: IsoDateString;
 	id: string;
 	order_number: string;
+	pass_code?: string;
 	order_hash?: string;
 	updated: IsoAutoDateString;
 };
@@ -178,7 +192,84 @@ export type AppSettingsRecord = {
 	id: string;
 	is_booking_active?: boolean;
 	booking_unlock_at?: IsoDateString;
+	booking_close_at?: IsoDateString;
+	booking_timer_paused?: boolean;
+	booking_closed?: boolean;
+	notify_mail?: boolean;
+	telegram_bot?: string;
+	special_requests_open?: boolean;
 	updated: IsoAutoDateString;
+};
+
+export type GuestNotifyRecord = {
+	attempts?: number;
+	created: IsoAutoDateString;
+	due?: IsoDateString;
+	id: string;
+	last_error?: string;
+	mail_label?: string;
+	mail_req?: string;
+	mail_sent?: IsoDateString;
+	mail_spot?: string;
+	mail_to?: string;
+	order: RecordIdString;
+	tg_chat?: string;
+	tg_label?: string;
+	tg_new?: boolean;
+	tg_req?: string;
+	tg_sent?: IsoDateString;
+	tg_spot?: string;
+	tg_token_exp?: IsoDateString;
+	tg_token_hash?: string;
+	updated: IsoAutoDateString;
+};
+
+export enum AdminEventsAlertStatusOptions {
+	pending = 'pending',
+	sent = 'sent',
+	failed = 'failed',
+	off = 'off'
+}
+export type AdminEventsRecord<Tdetails = unknown> = {
+	action: string;
+	actor?: string;
+	alert_attempts?: number;
+	alert_error?: string;
+	alert_status?: AdminEventsAlertStatusOptions;
+	created: IsoAutoDateString;
+	details?: null | Tdetails;
+	id: string;
+	subject?: string;
+	updated: IsoAutoDateString;
+};
+
+export enum SpecialRequestsStatusOptions {
+	pending = 'pending',
+	approved = 'approved',
+	declined = 'declined'
+}
+export type SpecialRequestsRecord = {
+	bed?: RecordIdString;
+	burner_name?: string;
+	consent_at: IsoDateString;
+	created: IsoAutoDateString;
+	decided_at?: IsoDateString;
+	decided_by?: string;
+	id: string;
+	needs?: string;
+	order: RecordIdString;
+	reason?: string;
+	status: SpecialRequestsStatusOptions;
+	updated: IsoAutoDateString;
+};
+
+export type MessageTextsRecord = {
+	created: IsoAutoDateString;
+	id: string;
+	key: string;
+	text: string;
+	updated: IsoAutoDateString;
+	updated_by?: string;
 };
 
 // Response types include system fields and match responses from the PocketBase API
@@ -198,6 +289,16 @@ export type RoomsResponse<Texpand = unknown> = Required<RoomsRecord> & BaseSyste
 export type UsersResponse<Texpand = unknown> = Required<UsersRecord> & AuthSystemFields<Texpand>;
 export type AppSettingsResponse<Texpand = unknown> = Required<AppSettingsRecord> &
 	BaseSystemFields<Texpand>;
+export type GuestNotifyResponse<Texpand = unknown> = Required<GuestNotifyRecord> &
+	BaseSystemFields<Texpand>;
+export type AdminEventsResponse<Tdetails = unknown, Texpand = unknown> = Required<
+	AdminEventsRecord<Tdetails>
+> &
+	BaseSystemFields<Texpand>;
+export type SpecialRequestsResponse<Texpand = unknown> = Required<SpecialRequestsRecord> &
+	BaseSystemFields<Texpand>;
+export type MessageTextsResponse<Texpand = unknown> = Required<MessageTextsRecord> &
+	BaseSystemFields<Texpand>;
 
 // Types containing all Records and Responses, useful for creating typing helper functions
 
@@ -214,6 +315,10 @@ export type CollectionRecords = {
 	rooms: RoomsRecord;
 	users: UsersRecord;
 	app_settings: AppSettingsRecord;
+	guest_notify: GuestNotifyRecord;
+	admin_events: AdminEventsRecord;
+	special_requests: SpecialRequestsRecord;
+	message_texts: MessageTextsRecord;
 };
 
 export type CollectionResponses = {
@@ -229,6 +334,10 @@ export type CollectionResponses = {
 	rooms: RoomsResponse;
 	users: UsersResponse;
 	app_settings: AppSettingsResponse;
+	guest_notify: GuestNotifyResponse;
+	admin_events: AdminEventsResponse;
+	special_requests: SpecialRequestsResponse;
+	message_texts: MessageTextsResponse;
 };
 
 // Utility types for create/update operations

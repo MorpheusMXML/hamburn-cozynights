@@ -106,7 +106,7 @@ describe('an approved admin', () => {
 		expect(toAdminSession(boss.client.authStore.record)?.isSuperuser).toBe(true);
 	});
 
-	it('manages houses, rooms, beds and the booking switch', async () => {
+	it('manages houses, rooms, beds and the booking window', async () => {
 		const admin = await createAdmin(su, 'admin');
 
 		const house = await admin.client.collection('houses').create({ name: `Admin House ${uid()}` });
@@ -118,13 +118,20 @@ describe('an approved admin', () => {
 			.create({ label: 'A', room: room.id, enabled: true });
 		await admin.client.collection('beds').update(bed.id, { is_locked: true });
 
+		// The timer, yes; switching the phase right now is for superusers only
+		// (tests/integration/booking-window.test.ts).
 		const before = await guest.collection('app_settings').getOne(APP_SETTINGS_ID);
 		await admin.client
 			.collection('app_settings')
-			.update(APP_SETTINGS_ID, { is_booking_active: !before.is_booking_active });
+			.update(APP_SETTINGS_ID, { booking_timer_paused: !before.booking_timer_paused });
 		await admin.client
 			.collection('app_settings')
-			.update(APP_SETTINGS_ID, { is_booking_active: before.is_booking_active });
+			.update(APP_SETTINGS_ID, { booking_timer_paused: !!before.booking_timer_paused });
+		await expectRefused(
+			admin.client
+				.collection('app_settings')
+				.update(APP_SETTINGS_ID, { is_booking_active: !before.is_booking_active })
+		);
 
 		await admin.client.collection('houses').delete(house.id);
 	});

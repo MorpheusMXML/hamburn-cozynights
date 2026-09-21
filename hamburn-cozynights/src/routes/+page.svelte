@@ -1,57 +1,197 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/stores';
+	import { onMount, tick } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
+	import { countdownKind } from '$lib/booking-phase';
+	import CountdownTimer from '$lib/components/CountdownTimer.svelte';
+	import EffigyTitle from '$lib/components/EffigyTitle.svelte';
+	import LegalLinks from '$lib/components/LegalLinks.svelte';
+	import MadeInHamburg from '$lib/components/MadeInHamburg.svelte';
+	import type { ActionData, PageData } from './$types';
 
-	export let form: { error?: string };
+	export let data: PageData;
+	export let form: ActionData;
 
-	let titleLetters: { char: string; color: string; delay: number; offset: number }[] = [];
-	const fullTitle = 'HAMBURN COZYNIGHTS';
 	const neonColors = ['#f472b6', '#2dd4bf', '#fb923c', '#a855f7', '#fff'];
 	let isHovering = false;
 
+	// The title's pause button stops the background video as well; visitors who
+	// prefer reduced motion don't get it playing in the first place.
+	let motionPaused = false;
+	let reducedMotion = false;
+	let video: HTMLVideoElement;
+	// The background video is decoration under a 40 % overlay: phones and
+	// small windows get the poster only (data volume, battery), and so does
+	// anyone who prefers reduced motion. The source is attached after mount,
+	// so the server never sends it to a browser that won't play it.
+	let videoSrc: string | undefined;
+
 	onMount(() => {
-		titleLetters = fullTitle.split('').map((char, i) => ({
-			char,
-			color: neonColors[Math.floor(Math.random() * neonColors.length)],
-			delay: Math.random() * 800,
-			offset: (Math.random() - 0.5) * 40
-		}));
+		reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		const wide = window.matchMedia('(min-width: 768px)').matches;
+		videoSrc = wide && !reducedMotion ? '/background.mp4' : undefined;
 	});
+
+	$: syncVideo(video, motionPaused || reducedMotion);
+
+	function syncVideo(element: HTMLVideoElement | undefined, stop: boolean) {
+		if (!element) return;
+		if (stop) element.pause();
+		else element.play().catch(() => {});
+	}
+
+	// Keep in sync with the server-side check in +page.server.ts.
+	const TICKET_CODE_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+	const SURROUNDING_BLANKS = /^[\s\u200B-\u200D\uFEFF]+|[\s\u200B-\u200D\uFEFF]+$/g;
+
+	let codeInput: HTMLInputElement;
+	let code = form?.code ?? '';
+	let clientError = '';
+	let isSubmitting = false;
+
+	$: errorMessage = clientError || (isSubmitting ? '' : (form?.error ?? ''));
+
+	// The big countdown between the title and the ticket-code field: until
+	// booking opens, and while it is live until it closes. It replaces the slim
+	// bar on this page (showCountdownBar). When it ends, the page data is
+	// reloaded and the server says which phase it is now.
+	$: countdown = countdownKind(data.booking.phase, data.booking.next);
+
+	// Guest pages send visitors here when the ticket-code cookie is missing or stale.
+	$: loginHint =
+		$page.url.searchParams.get('login') === 'expired'
+			? 'Your ticket code is not valid on this device (anymore). Please enter it again.'
+			: $page.url.searchParams.get('login') === 'required'
+				? 'Please enter your ticket code first. After that you can open the map and pick your spot.'
+				: $page.url.searchParams.get('login') === 'out'
+					? 'Your ticket code was removed from this device. Enter it again whenever you want to change your spot.'
+					: '';
+
+	function checkTicketCode(value: string): string {
+		if (!value) return 'Please enter your ticket code.';
+		if (!TICKET_CODE_PATTERN.test(value)) {
+			return 'Ticket codes only contain letters, digits, - and _. Check for spaces or typos.';
+		}
+		return '';
+	}
+
+	async function showClientError(message: string) {
+		clientError = message;
+		await tick();
+		codeInput?.focus();
+	}
 </script>
 
+<svelte:head>
+	<title>CozyNights – Hamburn</title>
+	<meta
+		name="description"
+		content="CozyNights: pick your sleeping spot at Hamburn with your ticket code."
+	/>
+</svelte:head>
+
 <section class="hero">
-	<video class="background-video" autoplay muted loop playsinline poster="/background.jpg">
-		<source src="/background.mp4" type="video/mp4" />
-	</video>
+	<video
+		bind:this={video}
+		class="background-video"
+		src={videoSrc}
+		autoplay
+		muted
+		loop
+		playsinline
+		preload="metadata"
+		poster="/background.jpg"
+		aria-hidden="true"
+		tabindex="-1"
+	></video>
 
 	<div class="scan-overlay"></div>
 
 	<div class="content-wrapper">
-		<div class="logo-area" in:fade={{ delay: 1500 }}>
-			<img src="/logo.png" alt="Logo" class="club-logo" />
+		<div class="logo-area" in:fade={{ delay: 600 }}>
+			<img src="/logo.png" alt="Mauersegler logo" class="club-logo" />
 		</div>
 
 		<div class="title-container">
-			<div class="laser-scanner"></div>
-			<h1 class="burning-laser-title">
-				{#each titleLetters as { char, color, delay, offset }, i}
-					<span class="letter" style="--color: {color}; --delay: {delay}ms; --offset: {offset}px">
-						{char === ' ' ? '\u00A0' : char}
-					</span>
-				{/each}
-			</h1>
+			<EffigyTitle bind:paused={motionPaused} />
 		</div>
 
-		<div class="login-module" in:fly={{ y: 30, delay: 2000, duration: 1000 }}>
-			<form method="POST" action="?/login" use:enhance class="input-group">
+		{#if countdown && data.booking.next}
+			<div class="booking-countdown" in:fly={{ y: 20, delay: 750, duration: 600 }}>
+				<h2 class="countdown-heading">
+					{countdown === 'closes' ? 'BOOKING CLOSES IN' : 'IGNITION IN'}
+				</h2>
+				<CountdownTimer
+					targetDate={data.booking.next.at}
+					kind={countdown}
+					on:elapsed={() => invalidateAll()}
+				/>
+			</div>
+		{/if}
+
+		<div class="login-module" in:fly={{ y: 30, delay: 900, duration: 600 }}>
+			{#if loginHint && !errorMessage}
+				<p class="login-hint" role="status">{loginHint}</p>
+			{/if}
+
+			<!-- novalidate: the browser's own validation bubbles follow the browser
+			     language; the app checks the field itself and answers in English. -->
+			<form
+				method="POST"
+				action="?/login"
+				novalidate
+				class="input-group"
+				class:has-error={!!errorMessage}
+				use:enhance={({ formData, cancel }) => {
+					const cleaned = code.replace(SURROUNDING_BLANKS, '');
+					const problem = checkTicketCode(cleaned);
+					if (problem) {
+						cancel();
+						showClientError(problem);
+						return;
+					}
+					code = cleaned;
+					formData.set('bookingCode', cleaned);
+					clientError = '';
+					isSubmitting = true;
+
+					return async ({ result, update }) => {
+						isSubmitting = false;
+						if (result.type === 'error') {
+							// Network hiccup or server crash: stay on the form instead of
+							// swapping the whole page for an error screen.
+							showClientError(
+								'We could not reach the server. Check your internet connection and try again.'
+							);
+							return;
+						}
+						await update({ reset: false });
+						if (result.type === 'failure') {
+							await tick();
+							codeInput?.focus();
+						}
+					};
+				}}
+			>
 				<input
 					type="text"
 					name="bookingCode"
-					placeholder="ACCESS CODE"
-					required
+					id="ticket-code"
+					bind:this={codeInput}
+					bind:value={code}
+					on:input={() => (clientError = '')}
+					placeholder="TICKET CODE"
+					aria-label="Ticket code"
+					aria-invalid={errorMessage ? 'true' : undefined}
+					aria-describedby={errorMessage ? 'ticket-code-error' : undefined}
 					autocomplete="off"
+					autocapitalize="characters"
+					autocorrect="off"
+					spellcheck="false"
+					enterkeyhint="go"
+					maxlength="64"
 				/>
 				<div class="button-container">
 					{#if isHovering}
@@ -72,33 +212,58 @@
 					<button
 						type="submit"
 						class:disco-mode={isHovering}
+						disabled={isSubmitting}
 						on:mouseenter={() => (isHovering = true)}
 						on:mouseleave={() => (isHovering = false)}
 					>
-						ENTER THE DUST 🌵
+						{isSubmitting ? 'CHECKING…' : 'ENTER THE DUST 🌵'}
 					</button>
 				</div>
 			</form>
 
-			{#if form?.error}
-				<p class="error-msg" in:fade>{form.error}</p>
+			{#if errorMessage}
+				<p class="error-msg" id="ticket-code-error" role="alert" in:fade={{ duration: 150 }}>
+					{errorMessage}
+				</p>
 			{/if}
+
+			{#if data.hasTicket}
+				<div class="continue-row">
+					<a class="continue-link" href="/map"
+						>Already signed in on this device? Continue to the map →</a
+					>
+					<form method="POST" action="?/signOut" class="sign-out-form" use:enhance>
+						<button type="submit" class="sign-out">Not your ticket? Sign out</button>
+					</form>
+				</div>
+			{/if}
+
+			<p class="privacy-note">
+				Signing in keeps your ticket code in a cookie on this device. No tracking.
+				<a href="/privacy">Privacy policy</a>
+			</p>
 		</div>
 	</div>
 
-	<button class="admin-btn" on:click={() => goto('/admin/login')}>
-		<span class="icon">🔒</span>
-	</button>
+	<footer class="hero-footer">
+		<a class="footer-link" href="/docs/guide/" target="_blank" rel="noopener">Help &amp; FAQ</a>
+		<LegalLinks />
+		<a class="footer-link crew" href="/admin/login" aria-label="Crew login">
+			<span aria-hidden="true">🔒</span> Crew
+		</a>
+	</footer>
+	<div class="hero-credit"><MadeInHamburg /></div>
 </section>
 
 <style>
 	.hero {
 		position: relative;
 		min-height: 100vh;
+		min-height: 100dvh;
 		width: 100%;
 		display: flex;
+		flex-direction: column;
 		align-items: center;
-		justify-content: center;
 		font-family: 'Inter', sans-serif;
 		overflow: hidden;
 		background: #000;
@@ -132,9 +297,11 @@
 	}
 
 	.content-wrapper {
+		flex: 1;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
+		justify-content: center;
 		text-align: center;
 		width: 100%;
 		max-width: 900px;
@@ -152,90 +319,34 @@
 		opacity: 0.8;
 	}
 
+	/* The effigy's flames and smoke rise above this box (the canvas reaches
+	   beyond it); the space below holds the pause button. */
 	.title-container {
 		position: relative;
-		margin-bottom: 5rem;
-		padding: 2rem;
-	}
-
-	.burning-laser-title {
-		font-size: 5rem;
-		font-weight: 950;
-		color: #fff;
-		font-family: 'JetBrains Mono', monospace;
-		letter-spacing: -4px;
-		margin: 0;
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: center;
-	}
-
-	.letter {
-		display: inline-block;
-		opacity: 0;
-		transform: translateY(var(--offset)) scale(1.5);
-		filter: blur(10px);
-		animation: letter-ignite 0.6s cubic-bezier(0.215, 0.61, 0.355, 1) forwards;
-		animation-delay: var(--delay);
-		color: var(--color);
-		text-shadow: 0 0 20px var(--color);
-	}
-
-	@keyframes letter-ignite {
-		0% {
-			opacity: 0;
-			transform: translateY(var(--offset)) scale(2);
-			filter: blur(20px);
-		}
-		70% {
-			opacity: 1;
-			transform: translateY(-5px) scale(0.9);
-			filter: blur(0);
-		}
-		100% {
-			opacity: 1;
-			transform: translateY(0) scale(1);
-			filter: blur(0);
-			color: #fff;
-			text-shadow:
-				0 0 10px rgba(255, 255, 255, 0.8),
-				0 0 30px var(--color);
-		}
-	}
-
-	.laser-scanner {
-		position: absolute;
-		top: 0;
-		left: 0;
 		width: 100%;
-		height: 100%;
-		border-top: 2px solid #2dd4bf;
-		border-bottom: 2px solid #f472b6;
-		background: rgba(45, 212, 191, 0.05);
-		opacity: 0;
-		animation: scan-pulse 2s ease-in-out forwards;
-		animation-delay: 1.2s;
-		z-index: -1;
-		transform: scaleX(0);
+		margin: clamp(0.5rem, 4vw, 2.5rem) 0 clamp(3.75rem, 9vh, 5.5rem);
 	}
 
-	@keyframes scan-pulse {
-		0% {
-			transform: scaleX(0);
-			opacity: 0;
-		}
-		20% {
-			transform: scaleX(1);
-			opacity: 1;
-		}
-		80% {
-			transform: scaleX(1);
-			opacity: 0.5;
-		}
-		100% {
-			transform: scaleX(1.1);
-			opacity: 0;
-		}
+	/* The big booking countdown: between the title and the ticket-code field,
+	   as wide as the field. It replaces the slim bar on this page. */
+	.booking-countdown {
+		--countdown-digits: clamp(1.75rem, 8vw, 2.75rem);
+		width: 100%;
+		max-width: 600px;
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		margin-bottom: clamp(1.25rem, 3vh, 2rem);
+	}
+
+	/* Same laser look as the heading over the map's countdown. */
+	.countdown-heading {
+		margin: 0;
+		font-size: 1rem;
+		font-weight: 900;
+		letter-spacing: 4px;
+		color: #f472b6;
+		text-shadow: 0 0 10px currentColor;
 	}
 
 	.login-module {
@@ -261,8 +372,14 @@
 		box-shadow: 0 0 50px rgba(45, 212, 191, 0.2);
 	}
 
+	.input-group.has-error {
+		border-color: #f87171;
+		box-shadow: 0 0 40px rgba(248, 113, 113, 0.25);
+	}
+
 	input {
 		flex: 1;
+		min-width: 0;
 		background: transparent;
 		padding: 1.2rem 2rem;
 		font-size: 1rem;
@@ -275,10 +392,12 @@
 	}
 
 	input::placeholder {
-		color: #222;
+		color: #8a8a8a;
+		opacity: 1;
 	}
 	input:focus {
 		outline: none;
+		box-shadow: none;
 	}
 
 	.button-container {
@@ -300,6 +419,18 @@
 		letter-spacing: 1px;
 		white-space: nowrap;
 		z-index: 5;
+	}
+
+	button:disabled {
+		opacity: 0.7;
+		cursor: progress;
+	}
+
+	button:focus-visible,
+	.footer-link:focus-visible,
+	.continue-link:focus-visible {
+		outline: 2px solid #fff;
+		outline-offset: 3px;
 	}
 
 	button.disco-mode {
@@ -361,42 +492,121 @@
 		}
 	}
 
-	.admin-btn {
-		position: absolute;
-		bottom: 30px;
-		right: 30px;
-		width: 45px;
-		height: 45px;
-		background: rgba(0, 0, 0, 0.6);
-		color: #333;
-		border: 1px solid #222;
-		border-radius: 50%;
-		cursor: pointer;
-		transition: all 0.2s;
+	/* In the normal flow below the content, so it can never sit on top of (or
+	   under) the form, whatever the screen height. */
+	.hero-footer {
+		position: relative;
+		z-index: 10;
+		width: 100%;
 		display: flex;
+		justify-content: space-between;
 		align-items: center;
-		justify-content: center;
+		gap: 1rem;
+		padding: 0 20px 8px;
 	}
 
-	.admin-btn:hover {
+	.hero-credit {
+		position: relative;
+		z-index: 10;
+		display: flex;
+		justify-content: center;
+		padding: 0 20px max(12px, env(safe-area-inset-bottom));
+	}
+
+	/* Phones: help and crew on one row, the legal links centered below. */
+	@media (max-width: 520px) {
+		.hero-footer {
+			flex-wrap: wrap;
+			row-gap: 0.25rem;
+		}
+		.hero-footer :global(.legal-links) {
+			order: 3;
+			width: 100%;
+			justify-content: center;
+		}
+	}
+
+	.footer-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		min-height: 44px;
+		padding: 0 0.9rem;
+		border-radius: 999px;
+		border: 1px solid #333;
+		background: rgba(0, 0, 0, 0.6);
+		color: #b5b5b5;
+		font-size: 0.8rem;
+		font-weight: 700;
+		letter-spacing: 0.5px;
+		text-decoration: none;
+	}
+
+	.footer-link:hover {
 		color: #fff;
-		border-color: #444;
+		border-color: #2dd4bf;
+	}
+
+	.login-hint,
+	.error-msg {
+		margin: 1rem 0 0;
+		padding: 0.75rem 1rem;
+		border-radius: 14px;
+		background: rgba(0, 0, 0, 0.8);
+		font-size: 0.95rem;
+		font-weight: 600;
+		line-height: 1.45;
+		overflow-wrap: anywhere;
+	}
+
+	.login-hint {
+		margin: 0 0 1rem;
+		border: 1px solid #2dd4bf;
+		color: #d1faf5;
 	}
 
 	.error-msg {
-		color: #f87171;
-		font-weight: 900;
-		margin-top: 2rem;
-		font-size: 0.8rem;
-		text-transform: uppercase;
-		letter-spacing: 2px;
+		border: 1px solid #f87171;
+		color: #fecaca;
 		text-shadow: 0 0 10px rgba(248, 113, 113, 0.3);
 	}
 
+	.continue-link {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		margin-top: 0.75rem;
+		color: #2dd4bf;
+		font-size: 0.9rem;
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	.continue-link:hover {
+		color: #fff;
+	}
+
+	.privacy-note {
+		margin: 0.9rem auto 0;
+		max-width: 30rem;
+		color: #8a8a8a;
+		font-size: 0.78rem;
+		line-height: 1.5;
+	}
+
+	.privacy-note a {
+		color: #b5b5b5;
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+
+	.privacy-note a:hover {
+		color: #fff;
+	}
+
 	@media (max-width: 600px) {
-		.burning-laser-title {
-			font-size: 2.8rem;
-			letter-spacing: -2px;
+		.club-logo {
+			width: 84px;
 		}
 		.input-group {
 			flex-direction: column;
@@ -415,5 +625,35 @@
 		.party-zone {
 			display: none;
 		}
+	}
+
+	.continue-row {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		align-items: center;
+		gap: 0.25rem 1rem;
+		margin: 0;
+	}
+
+	.sign-out-form {
+		display: inline;
+	}
+
+	.sign-out {
+		background: none;
+		border: 0;
+		padding: 0.4rem 0.2rem;
+		min-height: 44px;
+		color: #a3a3a3;
+		font: inherit;
+		font-size: 0.85rem;
+		text-decoration: underline;
+		text-underline-offset: 3px;
+		cursor: pointer;
+	}
+
+	.sign-out:hover {
+		color: #fff;
 	}
 </style>

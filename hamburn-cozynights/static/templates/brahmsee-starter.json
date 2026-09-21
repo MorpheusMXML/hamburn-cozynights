@@ -1,0 +1,112 @@
+{
+	"format": "cozynights-layout",
+	"version": "2.0",
+	"name": "Brahmsee starter layout (worked example: edit the houses, rooms and spots to match your camp)",
+	"exported_at": "2026-09-17T12:00:00.000Z",
+	"map": {
+		"image": "/lageplan-brahmsee-2026.jpg",
+		"width": 1000,
+		"height": 700
+	},
+	"houses": [
+		{
+			"name": "Haus am See",
+			"x": 425,
+			"y": 150,
+			"rooms": [
+				{
+					"name": "Lake Room",
+					"room_number": 1,
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false },
+						{ "label": "B2", "enabled": true, "is_locked": false },
+						{ "label": "B3", "enabled": true, "is_locked": false },
+						{ "label": "B4", "enabled": true, "is_locked": false }
+					]
+				},
+				{
+					"name": "Attic",
+					"room_number": 2,
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false },
+						{ "label": "B2", "enabled": true, "is_locked": false },
+						{ "label": "Sofa", "enabled": true, "is_locked": true }
+					]
+				}
+			]
+		},
+		{
+			"name": "Brahmsee-Villa",
+			"x": 590,
+			"y": 330,
+			"rooms": [
+				{
+					"name": "Ground Floor",
+					"room_number": 1,
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false },
+						{ "label": "B2", "enabled": true, "is_locked": false },
+						{ "label": "B3", "enabled": true, "is_locked": false },
+						{ "label": "B4", "enabled": true, "is_locked": false },
+						{ "label": "B5", "enabled": true, "is_locked": false },
+						{ "label": "B6", "enabled": true, "is_locked": false }
+					]
+				},
+				{
+					"name": "First Floor",
+					"room_number": 2,
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false },
+						{ "label": "B2", "enabled": true, "is_locked": false },
+						{ "label": "B3", "enabled": true, "is_locked": false },
+						{ "label": "B4", "enabled": false, "is_locked": false }
+					]
+				}
+			]
+		},
+		{
+			"name": "Wälderhaus",
+			"x": 445,
+			"y": 385,
+			"rooms": [
+				{
+					"name": "Bunk Room",
+					"room_number": 1,
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false },
+						{ "label": "B2", "enabled": true, "is_locked": false },
+						{ "label": "B3", "enabled": true, "is_locked": false },
+						{ "label": "B4", "enabled": true, "is_locked": false },
+						{ "label": "B5", "enabled": true, "is_locked": false },
+						{ "label": "B6", "enabled": true, "is_locked": false },
+						{ "label": "B7", "enabled": true, "is_locked": false },
+						{ "label": "B8", "enabled": true, "is_locked": false }
+					]
+				}
+			]
+		},
+		{
+			"name": "Waldhütten",
+			"x": 880,
+			"y": 375,
+			"rooms": [
+				{
+					"name": "Hut 1",
+					"room_number": 1,
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false },
+						{ "label": "B2", "enabled": true, "is_locked": false }
+					]
+				},
+				{
+					"name": "Hut 2",
+					"room_number": 2,
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false },
+						{ "label": "B2", "enabled": true, "is_locked": false }
+					]
+				}
+			]
+		}
+	]
+}

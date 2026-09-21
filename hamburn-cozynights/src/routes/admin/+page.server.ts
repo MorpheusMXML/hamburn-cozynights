@@ -1,4 +1,4 @@
-import { redirect, error, fail } from '@sveltejs/kit';
+import { redirect, error, fail, type ActionFailure } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type {
 	HousesResponse,
@@ -9,14 +9,186 @@ import type {
 import { APP_SETTINGS_ID } from '$lib/server/constants';
 import { getBookingSettings } from '$lib/server/settings';
 import { berlinLocalToIso } from '$lib/time';
+import { countSpots } from '$lib/occupancy';
+import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
+import { parseTemplate, TEMPLATE_LIMITS, type TemplateParseResult } from '$lib/template';
+import { defaultSelection } from '$lib/template-diff';
+import { applyTemplate, compareTemplate, TemplateImportError } from '$lib/server/template';
+import { logAdminEvent } from '$lib/server/admin-events';
+import { crewBookedBeds } from '$lib/server/special-requests';
 
-/** Clears the burner names of all orders (they only describe bookings). */
-async function clearBurnerNames(pb: TypedPocketBase) {
+/** Keys of the chosen changes; a real layout has far fewer. */
+const MAX_SELECTED_CHANGES = 20000;
+import {
+	checkWindowEdit,
+	effectivePhase,
+	isArmed,
+	lockedDuring,
+	saveTimesEdit,
+	switchPhase,
+	windowFromRecord,
+	windowToRecord,
+	type BookingPhase,
+	type BookingWindow,
+	type WindowEdit
+} from '$lib/booking-phase';
+
+const isBookingPhase = (value: string): value is BookingPhase =>
+	value === 'staging' || value === 'live' || value === 'closed';
+
+/** The stored booking window (defaults when the settings record is missing). */
+async function readWindow(pb: TypedPocketBase) {
+	const record = await pb
+		.collection('app_settings')
+		.getOne(APP_SETTINGS_ID, { requestKey: null })
+		.catch((err) => {
+			if (err?.status === 404) return null;
+			throw err;
+		});
+	return { exists: !!record, window: windowFromRecord(record) };
+}
+
+/**
+ * Written with the admin's own token: PocketBase then knows who it was (crew
+ * alert) and refuses a phase switch by a non-superuser (pb_hooks/cozy_phase.pb.js).
+ */
+async function writeWindow(pb: TypedPocketBase, exists: boolean, next: BookingWindow) {
+	const data = windowToRecord(next);
+	if (exists) await pb.collection('app_settings').update(APP_SETTINGS_ID, data);
+	else await pb.collection('app_settings').create({ id: APP_SETTINGS_ID, ...data });
+}
+
+function phaseFailure(action: string, err: unknown, unchanged: string) {
+	const status = (err as { status?: number })?.status;
+	const message = (err as { response?: { message?: unknown } })?.response?.message;
+	console.error(`[Action:${action}] FAILED:`, err);
+	if (status === 403) {
+		return fail(403, {
+			error: `${typeof message === 'string' && message ? message : 'Not allowed.'} ${unchanged}`
+		});
+	}
+	return fail(500, { error: `The server could not save it. ${unchanged}` });
+}
+
+/** Changes of the booking window by any admin, checked by the rules in $lib/booking-phase. */
+async function editWindow(
+	locals: App.Locals,
+	action: string,
+	makeEdit: (current: BookingWindow) => WindowEdit,
+	precondition: (current: BookingWindow) => string = () => ''
+) {
+	try {
+		const { exists, window } = await readWindow(locals.pb);
+		const refused = precondition(window);
+		if (refused) return fail(400, { error: refused });
+		const check = checkWindowEdit(window, makeEdit(window), {
+			isSuperuser: !!locals.admin?.isSuperuser
+		});
+		if (check.error) return fail(400, { error: check.error });
+		await writeWindow(locals.pb, exists, check.next);
+		console.log(`[Action:${action}] SUCCESS. Phase ${check.phaseBefore} → ${check.phaseAfter}`);
+		return { success: true, phase: check.phaseAfter, phaseBefore: check.phaseBefore };
+	} catch (err) {
+		return phaseFailure(action, err, 'The booking window was not changed.');
+	}
+}
+
+/**
+ * The uploaded template file, validated. Shared by the review (every admin,
+ * any phase: it changes nothing) and the import (superusers, Staging only).
+ */
+async function readTemplateUpload(
+	request: Request
+): Promise<
+	| { refused: ActionFailure<{ error: string; errors: string[] }> }
+	| { parsed: Extract<TemplateParseResult, { ok: true }>; form: FormData }
+> {
+	const refuse = (status: number, ...errors: string[]) => ({
+		refused: fail(status, { error: errors[0], errors })
+	});
+
+	const form = await request.formData().catch(() => null);
+	const file = form?.get('template');
+	// A form sent without a chosen file carries an empty, nameless one.
+	if (!form || !(file instanceof Blob) || (file.size === 0 && !(file as File).name)) {
+		return refuse(400, 'No template file arrived. Choose a .json template file first.');
+	}
+	if (file.size > TEMPLATE_LIMITS.fileBytes) {
+		return refuse(
+			400,
+			`The file is ${Math.ceil(file.size / 1024)} KB, templates are limited to ${TEMPLATE_LIMITS.fileBytes / 1024} KB. A layout file is usually far smaller, so this is probably the wrong file.`
+		);
+	}
+
+	const parsed = parseTemplate(await file.text());
+	if (!parsed.ok) return refuse(400, ...parsed.errors);
+	return { parsed, form };
+}
+
+/** The `selection` field of the import: a JSON list of change keys. */
+function readSelection(form: FormData): string[] | null {
+	try {
+		const value = JSON.parse(String(form.get('selection') ?? ''));
+		if (!Array.isArray(value) || value.length > MAX_SELECTED_CHANGES) return null;
+		return value.filter((key): key is string => typeof key === 'string' && key.length <= 1000);
+	} catch {
+		return null;
+	}
+}
+
+/** Releasing bookings stopped halfway: how far it got. */
+class ReleaseStoppedError extends Error {
+	constructor(
+		public released: number,
+		public total: number,
+		public reason: unknown
+	) {
+		super(`Releasing bookings stopped after ${released} of ${total} spots`);
+		this.name = 'ReleaseStoppedError';
+	}
+}
+
+/**
+ * Releases every guest booking ("clear all bookings", and what the switch back
+ * to Staging Mode offers). The orders themselves are the ticket roster and survive,
+ * otherwise every guest's code would stop working; the burner names of the
+ * released bookings are forgotten, and so are their check-ins (PocketBase
+ * drops a check-in with its booking). Spots the crew booked for approved
+ * special-needs requests stay: they were handed out on purpose, usually
+ * before booking opened.
+ * @throws {ReleaseStoppedError} when the database refuses halfway
+ */
+async function releaseGuestBookings(
+	adminPb: TypedPocketBase
+): Promise<{ released: number; kept: number }> {
+	const crewBooked = await crewBookedBeds(adminPb);
+	const booked = await adminPb.collection('beds').getFullList({
+		filter: 'occupied = true || order != ""'
+	});
+	const occupiedBeds = booked.filter((bed) => !(bed.order && crewBooked.get(bed.id) === bed.order));
+	const kept = booked.length - occupiedBeds.length;
+	const keep = new Set(booked.filter((bed) => !occupiedBeds.includes(bed)).map((bed) => bed.order));
+	let released = 0;
+	try {
+		for (const bed of occupiedBeds) {
+			await adminPb.collection('beds').update(bed.id, { occupied: false, order: null });
+			released++;
+		}
+		await clearBurnerNames(adminPb, keep);
+	} catch (err) {
+		throw new ReleaseStoppedError(released, occupiedBeds.length, err);
+	}
+	return { released, kept };
+}
+
+/** Clears the burner names of all orders (they only describe bookings), except `keep`. */
+async function clearBurnerNames(pb: TypedPocketBase, keep: Set<string> = new Set()) {
 	const named = await pb.collection('orders').getFullList({
 		filter: 'burner_name != ""',
 		fields: 'id'
 	});
 	for (const order of named) {
+		if (keep.has(order.id)) continue;
 		await pb.collection('orders').update(order.id, { burner_name: '' });
 	}
 }
@@ -25,137 +197,182 @@ type HouseStats = HousesResponse & {
 	totalBeds: number;
 	occupiedBeds: number;
 	freeBeds: number;
+	/** Booked spots whose guest the crew checked in at arrival. */
+	checkedInBeds: number;
 	occupancyRate: number;
 };
 
 export const actions: Actions = {
-	togglePhase: async ({ locals }) => {
-		console.log(`[Action:togglePhase] Admin: ${locals.admin?.email}`);
+	/** The superuser's override: Staging, Live or Closed, right now. */
+	setPhase: async ({ locals, request }) => {
+		console.log(`[Action:setPhase] Admin: ${locals.admin?.email}`);
 		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
+		if (!locals.admin.isSuperuser) {
+			return fail(403, {
+				error:
+					'Only superusers can switch the booking phase right now. Plan it with the booking window and arm the timer instead.'
+			});
+		}
+		const form = await request.formData().catch(() => null);
+		const to = String(form?.get('phase') ?? '');
+		if (!isBookingPhase(to)) return fail(400, { error: 'Unknown booking phase.' });
+		// Releasing the guest bookings (and with them their check-ins) is the
+		// superuser's explicit choice in the dialog, not a side effect: without
+		// it the bookings stay and "clear all bookings" can do it later.
+		const clearBookings = form?.get('clearBookings') === '1';
 
 		try {
-			const raw = await locals.pb
-				.collection('app_settings')
-				.getOne(APP_SETTINGS_ID)
-				.catch(() => null);
-			// Toggle relative to the *effective* state (raw flag OR an elapsed
-			// timer) so the button does what the admin sees, not just the flag.
-			const { isBookingActive: effectivelyActive } = await getBookingSettings(locals.pb);
-			const nextStatus = !effectivelyActive;
+			const { exists, window } = await readWindow(locals.pb);
+			const now = Date.now();
+			const phaseBefore = effectivePhase(window, now);
+			if (phaseBefore === to) return { success: true, phase: to, phaseBefore, pausedTimer: false };
 
-			const update: Record<string, unknown> = { is_booking_active: nextStatus };
-			if (!nextStatus && raw?.booking_unlock_at) {
-				// Going back to staging: an already-elapsed timer would just make
-				// the system effectively live again on the next request, so clear
-				// it. A timer still in the future is left alone.
-				const unlockTime = new Date(raw.booking_unlock_at).getTime();
-				if (!Number.isNaN(unlockTime) && Date.now() >= unlockTime) {
-					update.booking_unlock_at = '';
+			const next = switchPhase(window, to, now);
+			await writeWindow(locals.pb, exists, next);
+			console.log(`[Action:setPhase] SUCCESS: ${phaseBefore} → ${to}`);
+
+			// Editing the layout with guest bookings in it is what the dialog
+			// warns about; only a "yes, release them" gets here. Spots the crew
+			// booked for special-needs requests stay.
+			let cleared: { released: number; kept: number } | null = null;
+			if (to === 'staging' && clearBookings) {
+				try {
+					cleared = await releaseGuestBookings(locals.adminPb);
+					await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
+						...cleared,
+						reason: 'staging'
+					});
+					console.log(
+						`[Action:setPhase] ${cleared.released} bookings released, ${cleared.kept} special-needs spots kept.`
+					);
+				} catch (err) {
+					console.error('[Action:setPhase] Staging is on, but releasing the bookings failed:', err);
+					const released = err instanceof ReleaseStoppedError ? err.released : 0;
+					if (released > 0) {
+						await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
+							released,
+							kept: 0,
+							reason: 'staging',
+							stopped: err instanceof ReleaseStoppedError ? err.total : undefined
+						});
+					}
+					return fail(500, {
+						error: `Staging Mode is on, but the bookings could not all be released (${released} done). Use "Clear all bookings" for the rest.`
+					});
 				}
 			}
-
-			if (raw) {
-				console.log(`[Action:togglePhase] Effective: ${effectivelyActive}, Target: ${nextStatus}`);
-				await locals.pb.collection('app_settings').update(APP_SETTINGS_ID, update);
-			} else {
-				console.log('[Action:togglePhase] Creating initial settings.');
-				await locals.pb.collection('app_settings').create({
-					id: APP_SETTINGS_ID,
-					is_booking_active: true
-				});
-			}
-			console.log('[Action:togglePhase] SUCCESS.');
-			return { success: true, isBookingActive: nextStatus };
+			return {
+				success: true,
+				phase: to,
+				phaseBefore,
+				pausedTimer: next.paused && !window.paused,
+				released: cleared?.released,
+				kept: cleared?.kept
+			};
 		} catch (err) {
-			console.error('[Action:togglePhase] FAILED:', err);
-			return fail(500, { error: 'Toggle failed' });
+			return phaseFailure('setPhase', err, 'The booking phase was not changed.');
 		}
+	},
+	/** Opening and closing time of the booking window; keeps the timer armed or paused. */
+	saveWindow: async ({ locals, request }) => {
+		console.log(`[Action:saveWindow] Admin: ${locals.admin?.email}`);
+		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
+		const form = await request.formData().catch(() => null);
+		const opensLocal = String(form?.get('opensAt') ?? '').trim();
+		const closesLocal = String(form?.get('closesAt') ?? '').trim();
+		// The form's datetime-local values have no timezone; the UI presents them
+		// as event time (Europe/Berlin), independent of the server's timezone.
+		const opensAt = opensLocal ? berlinLocalToIso(opensLocal) : '';
+		const closesAt = closesLocal ? berlinLocalToIso(closesLocal) : '';
+		if (opensLocal && !opensAt) {
+			return fail(400, { error: 'The opening time is not a complete date and time.' });
+		}
+		if (closesLocal && !closesAt) {
+			return fail(400, { error: 'The closing time is not a complete date and time.' });
+		}
+		return editWindow(locals, 'saveWindow', (w) => saveTimesEdit(w, opensAt, closesAt));
+	},
+	armTimer: async ({ locals }) => {
+		console.log(`[Action:armTimer] Admin: ${locals.admin?.email}`);
+		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
+		return editWindow(
+			locals,
+			'armTimer',
+			(w) => ({ ...w, paused: false }),
+			(w) =>
+				isArmed({ ...w, paused: false })
+					? ''
+					: 'Plan the booking window first: it has no times yet.'
+		);
+	},
+	pauseTimer: async ({ locals }) => {
+		console.log(`[Action:pauseTimer] Admin: ${locals.admin?.email}`);
+		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
+		return editWindow(locals, 'pauseTimer', (w) => ({ ...w, paused: true }));
 	},
 	clearAllBookings: async ({ locals }) => {
 		if (!locals.admin?.isSuperuser) {
 			return fail(403, { error: 'Only superusers can clear all bookings.' });
 		}
+		// Only in Staging Mode: the switch back asks about the bookings itself,
+		// and a stale tab must never clear a live camp.
+		const { phase } = await getBookingSettings(locals.pb);
+		if (phase !== 'staging') {
+			return fail(403, {
+				error: `Bookings can only be cleared in Staging Mode, not ${lockedDuring(phase)}. Switch back to Staging first; that switch also offers to release them.`
+			});
+		}
 
 		console.log(`[Action:clearAllBookings] INITIATED by ${locals.admin.email}`);
-
 		try {
-			// 1. Release every occupied bed. The orders themselves are the ticket
-			//    roster (one order per ticket code) and must survive, otherwise every
-			//    guest's code would stop working.
-			const occupiedBeds = await locals.adminPb.collection('beds').getFullList({
-				filter: 'occupied = true || order != ""'
+			const { released, kept } = await releaseGuestBookings(locals.adminPb);
+			console.log(
+				`[Action:clearAllBookings] SUCCESS. ${released} spots released, ${kept} special-needs spots kept, ticket codes kept.`
+			);
+			await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
+				released,
+				kept
 			});
-
-			console.log(`[Action:clearAllBookings] Clearing ${occupiedBeds.length} spots.`);
-
-			for (const bed of occupiedBeds) {
-				await locals.adminPb.collection('beds').update(bed.id, {
-					occupied: false,
-					order: null
-				});
-			}
-
-			// 2. Forget the burner names chosen for those bookings.
-			await clearBurnerNames(locals.adminPb);
-
-			console.log('[Action:clearAllBookings] SUCCESS. All spots released, ticket codes kept.');
-			return { success: true };
+			return { success: true, released, kept };
 		} catch (err) {
 			console.error('[Action:clearAllBookings] FAILED:', err);
-			return fail(500, { error: 'Purge failed' });
-		}
-	},
-	setUnlockTimer: async ({ locals, request }) => {
-		console.log(`[Action:setUnlockTimer] Admin: ${locals.admin?.email}`);
-		if (!locals.admin) return fail(403);
-		const data = await request.formData();
-		const date = data.get('unlockAt') as string;
-
-		// The form's datetime-local value has no timezone; the UI presents it as
-		// event time (Europe/Berlin), independent of the server's own timezone.
-		const unlockAt = date ? berlinLocalToIso(date) : '';
-		if (date && !unlockAt) return fail(400, { error: 'Invalid date.' });
-
-		try {
-			await locals.pb.collection('app_settings').update(APP_SETTINGS_ID, {
-				booking_unlock_at: unlockAt
+			if (err instanceof ReleaseStoppedError && err.released > 0) {
+				await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
+					released: err.released,
+					kept: 0,
+					stopped: err.total
+				});
+				return fail(500, {
+					error: `Clearing stopped after ${err.released} of ${err.total} spots: the rest are still booked. Reload the page and try again.`
+				});
+			}
+			return fail(500, {
+				error: 'No booking was released: the server could not write to the database. Try again.'
 			});
-			console.log(`[Action:setUnlockTimer] SUCCESS. Target: ${date}`);
-		} catch (err) {
-			console.error('[Action:setUnlockTimer] FAILED:', err);
-			return fail(500);
-		}
-	},
-	cancelUnlockTimer: async ({ locals }) => {
-		console.log(`[Action:cancelUnlockTimer] Admin: ${locals.admin?.email}`);
-		if (!locals.admin) return fail(403);
-		try {
-			await locals.pb.collection('app_settings').update(APP_SETTINGS_ID, {
-				booking_unlock_at: ''
-			});
-			console.log('[Action:cancelUnlockTimer] SUCCESS.');
-		} catch (err) {
-			console.error('[Action:cancelUnlockTimer] FAILED:', err);
-			return fail(500);
 		}
 	},
 	updateHouseCoords: async ({ locals, request }) => {
 		const data = await request.formData();
 		const id = data.get('id') as string;
-		const x = parseFloat(data.get('x') as string);
-		const y = parseFloat(data.get('y') as string);
+		const x = parseMapCoordinate(data.get('x'), MAP_WIDTH);
+		const y = parseMapCoordinate(data.get('y'), MAP_HEIGHT);
 
 		console.log(
 			`[Action:updateHouseCoords] Admin: ${locals.admin?.email}, ID: ${id}, New: (${x}, ${y})`
 		);
 
 		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
+		if (!id || x === null || y === null) {
+			return fail(400, {
+				error: `Coordinates must be numbers on the map: X 0–${MAP_WIDTH}, Y 0–${MAP_HEIGHT}.`
+			});
+		}
 
 		try {
-			const { isBookingActive } = await getBookingSettings(locals.pb);
-			if (isBookingActive) {
-				console.warn(`[Action:updateHouseCoords] BLOCKED: LIVE mode — map layout is locked.`);
-				return fail(403, { error: 'Map layout is locked during Live Booking. 🔒' });
+			const { isLayoutLocked, phase } = await getBookingSettings(locals.pb);
+			if (isLayoutLocked) {
+				console.warn(`[Action:updateHouseCoords] BLOCKED: ${phase} — map layout is locked.`);
+				return fail(403, { error: `Map layout is locked ${lockedDuring(phase)}. 🔒` });
 			}
 
 			await locals.pb.collection('houses').update(id, { x, y });
@@ -174,12 +391,13 @@ export const actions: Actions = {
 
 		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
 
+		let progress: { released: number; rooms: number; total: number } | null = null;
 		try {
-			const { isBookingActive } = await getBookingSettings(locals.pb);
-			if (isBookingActive) {
-				console.warn(`[Action:deleteHouse] BLOCKED: LIVE mode — structure is locked.`);
+			const { isLayoutLocked, phase } = await getBookingSettings(locals.pb);
+			if (isLayoutLocked) {
+				console.warn(`[Action:deleteHouse] BLOCKED: ${phase} — structure is locked.`);
 				return fail(403, {
-					error: 'The playa says NO! 🛑 Houses cannot be vanished during Live Booking.'
+					error: `The playa says NO! 🛑 Houses cannot be vanished ${lockedDuring(phase)}.`
 				});
 			}
 
@@ -187,6 +405,20 @@ export const actions: Actions = {
 				filter: locals.pb.filter('room.house = {:id} && occupied = true', { id }),
 				expand: 'room'
 			});
+			// For the audit log / crew chat: every deleted house is recorded.
+			const houseName =
+				(
+					await locals.pb
+						.collection('houses')
+						.getOne(id)
+						.catch(() => null)
+				)?.name ?? id;
+
+			const rooms = await locals.pb.collection('rooms').getFullList({
+				filter: locals.pb.filter('house = {:id}', { id })
+			});
+			// What already happened when a step fails halfway (the message says so).
+			progress = { released: 0, rooms: 0, total: rooms.length };
 
 			if (occupiedBeds.length > 0) {
 				console.log(
@@ -194,12 +426,9 @@ export const actions: Actions = {
 				);
 				for (const bed of occupiedBeds) {
 					await locals.pb.collection('beds').update(bed.id, { occupied: false, order: null });
+					progress.released++;
 				}
 			}
-
-			const rooms = await locals.pb.collection('rooms').getFullList({
-				filter: locals.pb.filter('house = {:id}', { id })
-			});
 
 			console.log(`[Action:deleteHouse] Vanishing ${rooms.length} modules...`);
 			for (const room of rooms) {
@@ -210,14 +439,24 @@ export const actions: Actions = {
 					await locals.pb.collection('beds').delete(bed.id);
 				}
 				await locals.pb.collection('rooms').delete(room.id);
+				progress.rooms++;
 			}
 
 			await locals.pb.collection('houses').delete(id);
 			console.log(`[Action:deleteHouse] SUCCESS. House ${id} evaporated.`);
+			await logAdminEvent(locals.adminPb, locals.admin, 'house_deleted', houseName, {
+				released: occupiedBeds.length,
+				rooms: rooms.length
+			});
 			return { success: true };
 		} catch (err) {
 			console.error(`[Action:deleteHouse] FAILED for ${id}:`, err);
-			return fail(500, { error: 'Vanish failed.' });
+			if (progress && (progress.released > 0 || progress.rooms > 0)) {
+				return fail(500, {
+					error: `Vanish stopped halfway: ${progress.rooms} of ${progress.total} rooms are gone and ${progress.released} bookings were released, the house is still there. Reload the page and try again.`
+				});
+			}
+			return fail(500, { error: 'Vanish failed. Nothing was deleted.' });
 		}
 	},
 	renameHouse: async ({ locals, request }) => {
@@ -232,10 +471,10 @@ export const actions: Actions = {
 		if (!name) return fail(400, { error: 'Name is required' });
 
 		try {
-			const { isBookingActive } = await getBookingSettings(locals.pb);
-			if (isBookingActive) {
-				console.warn(`[Action:renameHouse] BLOCKED: LIVE mode — structure is locked.`);
-				return fail(403, { error: 'House names are locked during Live Booking. 🔒' });
+			const { isLayoutLocked, phase } = await getBookingSettings(locals.pb);
+			if (isLayoutLocked) {
+				console.warn(`[Action:renameHouse] BLOCKED: ${phase} — structure is locked.`);
+				return fail(403, { error: `House names are locked ${lockedDuring(phase)}. 🔒` });
 			}
 
 			await locals.pb.collection('houses').update(id, { name });
@@ -246,93 +485,101 @@ export const actions: Actions = {
 			return fail(500, { error: 'Update failed.' });
 		}
 	},
+	previewTemplate: async ({ locals, request }) => {
+		if (!locals.admin) return fail(403, { error: 'Unauthorized', errors: ['Unauthorized'] });
+		const upload = await readTemplateUpload(request);
+		if ('refused' in upload) return upload.refused;
+
+		const { template, summary, warnings } = upload.parsed;
+		try {
+			const [diff, { isLayoutLocked, phase }] = await Promise.all([
+				compareTemplate(locals.adminPb, template),
+				getBookingSettings(locals.pb)
+			]);
+			let lockedReason = '';
+			if (!locals.admin.isSuperuser) {
+				lockedReason = 'Only superusers can apply a template. You can compare files with the camp.';
+			} else if (isLayoutLocked) {
+				lockedReason = `The layout is locked ${lockedDuring(phase)}. Switch to Staging Mode to apply changes.`;
+			}
+			return {
+				review: {
+					name: template.name,
+					summary,
+					warnings: [...warnings, ...diff.warnings],
+					diff,
+					selection: [...defaultSelection(diff)],
+					lockedReason
+				}
+			};
+		} catch (err) {
+			console.error('[Preview Template] FAILED:', err);
+			const error = 'The current layout could not be read from the database. Try again.';
+			return fail(500, { error, errors: [error] });
+		}
+	},
 	importTemplate: async ({ locals, request }) => {
+		const refuse = (status: number, error: string) => fail(status, { error, errors: [error] });
 		if (!locals.admin?.isSuperuser) {
-			return fail(403, { error: 'Only superusers can import a template.' });
+			return refuse(403, 'Only superusers can import a template.');
+		}
+		const { isLayoutLocked, phase } = await getBookingSettings(locals.pb);
+		if (isLayoutLocked) {
+			console.warn(`[Import Template] BLOCKED: layout is locked (${phase}).`);
+			return refuse(
+				403,
+				`Templates cannot be imported ${lockedDuring(phase)} — the layout is locked. Switch to Staging Mode first. 🔒`
+			);
 		}
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
-		if (isBookingActive) {
-			console.warn('[Import Template] BLOCKED: cannot nuke the database during LIVE mode.');
-			return fail(403, {
-				error:
-					'Templates cannot be imported during Live Booking — this would erase live bookings. Switch to Staging first. 🔒'
-			});
+		// Validates the file again: the review is only a courtesy of the UI.
+		const upload = await readTemplateUpload(request);
+		if ('refused' in upload) return upload.refused;
+		const selected = readSelection(upload.form);
+		if (!selected) {
+			return refuse(400, 'The list of chosen changes did not arrive. Check the file again.');
 		}
 
-		const formData = await request.formData();
-		const file = formData.get('template') as File;
-
-		if (!file || file.size === 0) {
-			return fail(400, { error: 'No template file provided' });
-		}
+		const { template } = upload.parsed;
+		const pb = locals.adminPb;
+		console.log(
+			`[Import Template] ${locals.admin.email} applies ${selected.length} change(s) from "${template.name}".`
+		);
 
 		try {
-			const text = await file.text();
-			const template = JSON.parse(text);
-
-			if (!template.houses || !Array.isArray(template.houses)) {
-				return fail(400, { error: 'Invalid template structure: Missing houses array' });
-			}
-
-			console.log(`[Import Template] Starting Nuke Phase...`);
-
-			// 1. Fetch and delete the whole structure. Orders (the ticket roster)
-			//    stay: only the bookings attached to the deleted beds disappear.
-			const pb = locals.adminPb;
-			const houses = await pb.collection('houses').getFullList();
-			const rooms = await pb.collection('rooms').getFullList();
-			const beds = await pb.collection('beds').getFullList();
-
+			const outcome = await applyTemplate(pb, template, selected, {
+				skipBackup: upload.form.get('skipBackup') === '1'
+			});
 			console.log(
-				`[Import Template] ${locals.admin.email} deletes ${houses.length} houses, ${rooms.length} rooms, ${beds.length} beds.`
+				`[Import Template] DONE. Backup: ${outcome.backup ?? 'none'}, created ${JSON.stringify(outcome.created)}, updated ${JSON.stringify(outcome.updated)}, removed ${JSON.stringify(outcome.removed)}, released bookings: ${outcome.releasedBookings}, problems: ${outcome.problems.length}.`
 			);
-
-			// Delete in reverse order of dependency
-			for (const bed of beds) await pb.collection('beds').delete(bed.id);
-			for (const room of rooms) await pb.collection('rooms').delete(room.id);
-			for (const house of houses) await pb.collection('houses').delete(house.id);
-			await clearBurnerNames(pb);
-
-			console.log(`[Import Template] Nuke Complete. Rebuilding...`);
-
-			// 2. Rebuild from template
-			for (const h of template.houses) {
-				const houseRecord = await pb.collection('houses').create({
-					name: h.name,
-					x: h.x,
-					y: h.y
+			const touched =
+				Object.values(outcome.created).some(Boolean) ||
+				Object.values(outcome.updated).some(Boolean) ||
+				Object.values(outcome.removed).some(Boolean);
+			if (touched) {
+				await logAdminEvent(pb, locals.admin, 'template_imported', template.name, {
+					created: outcome.created,
+					updated: outcome.updated,
+					removed: outcome.removed,
+					releasedBookings: outcome.releasedBookings,
+					problems: outcome.problems.length,
+					backup: outcome.backup ?? 'skipped'
 				});
-
-				if (h.rooms && Array.isArray(h.rooms)) {
-					for (const r of h.rooms) {
-						const roomRecord = await pb.collection('rooms').create({
-							name: r.name,
-							room_number: r.room_number,
-							amount_beds: r.amount_beds,
-							house: houseRecord.id
-						});
-
-						if (r.beds && Array.isArray(r.beds)) {
-							for (const b of r.beds) {
-								await pb.collection('beds').create({
-									label: b.label,
-									enabled: b.enabled,
-									is_locked: b.is_locked,
-									room: roomRecord.id,
-									occupied: false
-								});
-							}
-						}
-					}
-				}
 			}
-
-			console.log(`[Import Template] Rebuild Complete. SUCCESS.`);
-			return { success: true };
-		} catch (err: any) {
+			return { applied: outcome };
+		} catch (err) {
+			if (err instanceof TemplateImportError) {
+				return fail(err.status, {
+					error: err.message,
+					errors: [err.message],
+					backupFailed: err.backupFailed
+				});
+			}
 			console.error('[Import Template] FAILED:', err);
-			return fail(500, { error: 'Import failed. Check the template file and the server log.' });
+			const error =
+				'The import stopped with an unexpected error. Check the layout on the map before you try again. The server log has the details.';
+			return fail(500, { error, errors: [error] });
 		}
 	}
 };
@@ -341,14 +588,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// Runs in parallel with the layout load, so it guards itself too.
 	if (!locals.admin) throw redirect(303, '/admin/login');
 
-	const [houses, allRooms, allBeds, settings, orders] = await Promise.all([
+	const [houses, allRooms, allBeds, settings] = await Promise.all([
 		locals.pb.collection('houses').getFullList<HousesResponse>({ sort: 'name' }),
 		locals.pb.collection('rooms').getFullList<RoomsResponse>(),
 		locals.pb
 			.collection('beds')
 			.getFullList<BedsResponse<{ room: RoomsResponse }>>({ expand: 'room' }),
-		getBookingSettings(locals.pb),
-		locals.adminPb.collection('orders').getFullList({ fields: 'created' })
+		getBookingSettings(locals.pb)
 	]);
 
 	// Sanity Checks logic 🛠️
@@ -377,26 +623,40 @@ export const load: PageServerLoad = async ({ locals }) => {
 		})
 		.filter((w) => w.noRooms || w.roomsWithNoBeds.length > 0);
 
+	// Spots the crew booked for approved special-needs requests: they survive a
+	// switch back to Staging and "clear all bookings", so the dialogs say so.
+	const crewBooked = await crewBookedBeds(locals.adminPb).catch((err) => {
+		console.error('[Admin] crew-booked spots could not be read:', (err as Error)?.message);
+		return new Map<string, string>();
+	});
+	const crewBookedSpots = allBeds.filter(
+		(bed) => !!bed.order && crewBooked.get(bed.id) === bed.order
+	).length;
+
 	const housesWithStats: HouseStats[] = houses.map((house: HousesResponse) => {
 		const bedsInHouse = allBeds.filter((b: BedsResponse<{ room: RoomsResponse }>) => {
 			return b.expand?.room?.house === house.id;
 		});
 
-		const totalBeds = bedsInHouse.length;
-		const occupiedBeds = bedsInHouse.filter((b: BedsResponse) => b.occupied === true).length;
-		const freeBeds = Math.max(0, totalBeds - occupiedBeds);
-		const occupancyRate = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
+		// Same counting as the house page: deactivated spots don't count, locked
+		// ones aren't free.
+		const spots = countSpots(bedsInHouse);
+		const occupancyRate = spots.total > 0 ? Math.round((spots.occupied / spots.total) * 100) : 0;
 
 		return {
 			...structuredClone(house),
-			totalBeds,
-			occupiedBeds,
-			freeBeds,
+			totalBeds: spots.total,
+			occupiedBeds: spots.occupied,
+			freeBeds: spots.free,
+			checkedInBeds: spots.checkedIn,
 			occupancyRate
 		};
 	});
 
-	// Real orders created per day, last 7 days (including today).
+	// Spots booked per day, last 7 days (including today): PocketBase stamps
+	// beds.booked_at whenever a spot gets a ticket (pb_hooks/cozy_booked.pb.js),
+	// so a ticket import is not a booking wave. A released spot drops out, a
+	// moved booking counts on the day of the move.
 	// Bucket by Berlin calendar day (the event's timezone), not UTC — a raw
 	// UTC slice would misfile any booking made in the CET/CEST evening into
 	// "tomorrow".
@@ -416,9 +676,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		days.push({ key: berlinDay.format(d), label: berlinWeekday.format(d) });
 	}
 	const countsByDay = new Map(days.map((d) => [d.key, 0]));
-	for (const order of orders) {
-		if (!order.created) continue;
-		const key = berlinDay.format(new Date(order.created));
+	for (const bed of allBeds) {
+		if (!bed.order || !bed.booked_at) continue;
+		const key = berlinDay.format(new Date(bed.booked_at));
 		if (countsByDay.has(key)) {
 			countsByDay.set(key, (countsByDay.get(key) || 0) + 1);
 		}
@@ -430,9 +690,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	return {
 		houses: housesWithStats,
+		crewBookedSpots,
 		sanityWarnings,
 		history,
+		phase: settings.phase,
 		isBookingActive: settings.isBookingActive,
-		bookingUnlockAt: settings.bookingUnlockAt
+		bookingUnlockAt: settings.bookingUnlockAt,
+		requestsOpen: settings.requestsOpen,
+		isLayoutLocked: settings.isLayoutLocked,
+		bookingWindow: settings.window
 	};
 };

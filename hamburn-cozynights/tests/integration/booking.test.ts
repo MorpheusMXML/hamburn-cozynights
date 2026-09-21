@@ -3,7 +3,11 @@
 // here the real filters, relations and the service account do the work.
 import { describe, it, expect, beforeAll } from 'vitest';
 import type PocketBase from 'pocketbase';
-import { BookingService, BedUnavailableError } from '../../src/lib/server/booking';
+import {
+	BookingService,
+	BedUnavailableError,
+	SpotChangedError
+} from '../../src/lib/server/booking';
 import { createLookupHash, decrypt } from '../../src/lib/server/crypto';
 import { anonymous, seedHouse, seedTicket, serviceAccount } from '../stack-helpers';
 
@@ -53,6 +57,33 @@ describe('one ticket = one bed', () => {
 		const stored = (await su.collection('orders').getOne(order.id)).burner_name;
 		expect(stored).not.toContain('Dusty Nomad');
 		expect(decrypt(stored)).toBe('Dusty Nomad');
+	});
+
+	it('stamps booked_at when a spot gets a ticket and clears it on release', async () => {
+		const { beds } = await seedHouse(su, 1);
+		const { order } = await seedTicket(su);
+		const before = Date.now();
+
+		await booking.bookBed(order as any, beds[0].id, 'Stamp');
+		const booked = await su.collection('beds').getOne(beds[0].id);
+		expect(booked.booked_at).toBeTruthy();
+		expect(Math.abs(new Date(booked.booked_at).getTime() - before)).toBeLessThan(60_000);
+
+		await booking.unbookOrder(order.id);
+		expect((await su.collection('beds').getOne(beds[0].id)).booked_at).toBe('');
+	});
+
+	it('frees the bed when its ticket is deleted (order unset, occupied cleared)', async () => {
+		const { beds } = await seedHouse(su, 1);
+		const { order } = await seedTicket(su);
+		await booking.bookBed(order as any, beds[0].id, 'Gone Soon');
+		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(true);
+
+		await su.collection('orders').delete(order.id);
+		const bed = await su.collection('beds').getOne(beds[0].id);
+		expect(bed.order).toBe('');
+		expect(bed.occupied).toBe(false);
+		expect(bed.booked_at).toBe('');
 	});
 
 	it('moves the booking when the same ticket picks another bed', async () => {
@@ -114,5 +145,22 @@ describe('one ticket = one bed', () => {
 		expect(bed.occupied).toBe(false);
 		expect(bed.order).toBe('');
 		expect(await booking.getBedForOrder(order.id)).toBeNull();
+	});
+
+	it('nukes only the spot the guest confirmed (☢ respin from a stale tab)', async () => {
+		const { beds } = await seedHouse(su, 2);
+		const { order } = await seedTicket(su);
+		await booking.bookBed(order as any, beds[1].id, 'Nuker');
+
+		// the warning showed beds[0], but the ticket holds beds[1] by now
+		await expect(booking.unbookOrder(order.id, { onlyBed: beds[0].id })).rejects.toBeInstanceOf(
+			SpotChangedError
+		);
+		expect((await su.collection('beds').getOne(beds[1].id)).order).toBe(order.id);
+
+		expect(await booking.unbookOrder(order.id, { onlyBed: beds[1].id })).toBe(1);
+		expect(await booking.getBedForOrder(order.id)).toBeNull();
+		// nothing left to nuke: no error, nothing released
+		expect(await booking.unbookOrder(order.id, { onlyBed: beds[1].id })).toBe(0);
 	});
 });

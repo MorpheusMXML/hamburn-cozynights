@@ -84,7 +84,7 @@ describe('Interactions & Registration', () => {
 		} as any)) as any;
 
 		expect(result.status).toBe(404);
-		expect(result.data.error).toContain('not found');
+		expect(result.data.error).toContain('could not find this ticket code');
 	});
 });
 
@@ -154,11 +154,13 @@ describe('Room Load & Booking Logic', () => {
 		expect(result.room.id).toBe('room1');
 		expect(result.beds.length).toBe(2);
 		expect(mockAdminPb.update).toHaveBeenCalled(); // Migration was called
+		// A taken spot is never "bookable": the flag would tell locked or
+		// special-needs spots apart from others, next to the burner name.
 		expect(result.beds[1]).toEqual({
 			id: 'bed2',
 			label: 'A2',
 			occupied: true,
-			bookable: true,
+			bookable: false,
 			burnerName: 'Dusty Nomad #123'
 		});
 	});
@@ -230,7 +232,7 @@ describe('Room Load & Booking Logic', () => {
 			request: makeRequest(),
 			locals: mockLocals
 		} as any)) as any;
-		expect(guest.status).toBe(400);
+		expect(guest.status).toBe(409);
 		expect(mockAdminPb.update).not.toHaveBeenCalled();
 
 		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true });
@@ -254,7 +256,7 @@ describe('Room Load & Booking Logic', () => {
 		const request = { formData: async () => formData } as any;
 
 		const result = (await roomActions.bookBed({ request, locals: mockLocals } as any)) as any;
-		expect(result.status).toBe(400);
+		expect(result.status).toBe(409);
 		expect(mockAdminPb.update).not.toHaveBeenCalled();
 	});
 
@@ -279,6 +281,7 @@ describe('Admin Management Actions', () => {
 		mockPb = {
 			collection: vi.fn().mockReturnThis(),
 			getOne: vi.fn(),
+			getFullList: vi.fn().mockResolvedValue([]),
 			create: vi.fn(),
 			delete: vi.fn(),
 			update: vi.fn(),
@@ -320,7 +323,7 @@ describe('Admin Management Actions', () => {
 		expect(mockPb.delete).not.toHaveBeenCalled();
 	});
 
-	it('should create a room and bed templates in staging mode', async () => {
+	it('should create a room with active spots in staging mode', async () => {
 		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: false }); // Staging mode
 		mockPb.create.mockResolvedValueOnce({ id: 'room1' }); // Room created
 
@@ -340,7 +343,10 @@ describe('Admin Management Actions', () => {
 			expect.objectContaining({ name: 'Villa Suite', house: 'house1' })
 		);
 		expect(mockPb.create).toHaveBeenCalledWith(
-			expect.objectContaining({ label: 'Spot 1', room: 'room1' })
+			expect.objectContaining({ label: 'Spot 1', room: 'room1', enabled: true })
+		);
+		expect(mockPb.create).toHaveBeenCalledWith(
+			expect.objectContaining({ label: 'Spot 2', room: 'room1', enabled: true })
 		);
 	});
 
@@ -366,7 +372,7 @@ describe('Admin Management Actions', () => {
 		await adminActions.createBed({ request, params: { id: 'room1' }, locals: mockLocals } as any);
 
 		expect(mockPb.create).toHaveBeenCalledWith(
-			expect.objectContaining({ label: 'New Bed', room: 'room1' })
+			expect.objectContaining({ label: 'New Bed', room: 'room1', enabled: true })
 		);
 	});
 

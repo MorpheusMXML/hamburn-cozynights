@@ -53,8 +53,7 @@ async function run() {
 				order_number: testCode,
 				order_hash: orderHash,
 				customer_name: 'Test Setup User',
-				burner_name: '000000000000:000000000000:000000000000', // Dummy encrypted format
-				booking_date: new Date().toISOString()
+				burner_name: '000000000000:000000000000:000000000000' // Dummy encrypted format
 			});
 			orderId = newOrder.id;
 			console.log('✅ Created test order XXXXX.');

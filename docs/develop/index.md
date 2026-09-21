@@ -46,6 +46,15 @@ Get CozyNights running on your machine: a local PocketBase in Docker plus the Sv
 
    Open [http://localhost:5173](http://localhost:5173). Before the dev server starts, a health check verifies that PocketBase is reachable, the app can sign in to it and the schema is complete, and it tells you what to fix if not.
 
+5. **Turn on the secret check** (once per clone, from the repository root)
+
+   ```bash
+   brew install gitleaks
+   git config core.hooksPath .githooks
+   ```
+
+   From now on every commit is scanned with [gitleaks](https://github.com/gitleaks/gitleaks) before it is written, with the rules in `.gitleaks.toml`: passwords on command lines, values of `PB_ADMIN_PASSWORD`, `SMTP_PASSWORD`, `TELEGRAM_BOT_TOKEN`, `ENCRYPTION_KEY` and the like, plus gitleaks' own rules for tokens and private keys. A hit refuses the commit and names the line; the same scan runs over the whole history in CI (`Secrets` job). Without gitleaks installed the hook refuses every commit, on purpose.
+
 </div>
 
 > [!TIP] Test data
@@ -67,6 +76,10 @@ The admin area needs Google sign-in, also locally:
 
 Without a Google client the login page says *Google sign-in is not configured on this server yet*. Everything guest-facing still works.
 
+::: tip Several instances on one machine
+Cookies belong to a host name, not to a port. Two CozyNights instances on `localhost:5173` and `localhost:5174` in the same browser share the admin cookie, and the one that doesn't know the session deletes it for both: you get signed out at random. Give each instance its own name under `.localhost`, which browsers send to your machine anyway, for example `http://tickets.localhost:5173` and `http://staging-copy.localhost:5174`.
+:::
+
 ## Everyday commands
 
 | Command | What it does |
@@ -85,7 +98,6 @@ Without a Google client the login page says *Google sign-in is not configured on
 | `npm run health` | Just the health check |
 | `npm run build` / `npm run preview` | Production build and a local preview of it |
 | `npm run typegen` | Regenerates `src/lib/pocketbase-types.ts` from your local schema |
-| `npm run docs:generate` | Generates a TypeDoc API reference into `docs/generated/` (local only, git-ignored) |
 
 ## Tests
 
@@ -112,10 +124,18 @@ npm run test:e2e
 :::
 
 - **`npm run verify`** runs the type check and the unit, integration and smoke tests — the same checks GitHub runs on every pull request. It needs Docker and nothing else, and it never touches your dev database.
-- **Vitest** (`tests/*.test.ts`) covers booking rules, the admin sign-in checks, encryption and hashing, and UI helpers. It runs without a database.
+- **Vitest** (`tests/*.test.ts`) covers booking rules, the admin sign-in checks, encryption and hashing, UI helpers, the [start page title](./effigy-title) and the legal page settings. It runs without a database.
 - **Integration tests** (`tests/integration/`) start a real, empty PocketBase in Docker, apply the migrations and hooks, and check the schema, API rules, admin roles and the booking service.
 - **Smoke tests** (`tests/smoke/`) build the same Docker image staging builds and drive it over HTTP. `npm run smoke:remote` runs their read-only part against a deployed site.
 - **Playwright** (`tests/e2e/`) walks through the real guest journey in Chromium against your local stack: sign in with a code, open the map, book and release a spot. Optional and local only.
+- **Start page title and legal pages** (`tests/e2e/landing.test.ts`, `tests/e2e/legal.test.ts`) need no PocketBase. Start the dev server without the health check, then run them in a second terminal:
+
+  ```bash
+  npx vite dev
+  npx playwright test tests/e2e/landing.test.ts tests/e2e/legal.test.ts
+  ```
+
+  They run in Chromium and in WebKit on an emulated iPhone (`npx playwright install webkit` once).
 
 The layers, the throwaway test stack and the release routine are described in [Testing & release checks](./testing).
 
@@ -129,9 +149,19 @@ Schema and API rules are code: `pb_migrations/*.js`, applied by PocketBase on st
 - After changing the schema, run `npm run typegen` so the TypeScript types match.
 - Hooks in `pb_hooks/` and the migrations use the JavaScript API of the pinned PocketBase version (see `docker-compose.yml`). Read the PocketBase changelog and back up the data before bumping it.
 
+## The map image
+
+Guests and admins see one picture of the camp, `static/lageplan-brahmsee-<year>.jpg`, drawn over the 1000 × 700 coordinate space in which house pins and [layout templates](../admin/templates) live (`src/lib/map-geometry.ts`). When the next burn gets a new map:
+
+1. **Export it as a JPEG** in A4 landscape proportions, 1754 to 2000 px wide (the 2026 map is 1754 × 1241 px, 0.4 MB). Keep the framing of the previous year, so the houses stay under their pins.
+2. **Save it under a new name,** `static/lageplan-brahmsee-<year>.jpg`, delete the previous year's file and point `MAP_IMAGE` in `src/lib/map-geometry.ts` to the new one. The new name matters: browsers may keep the old picture under the old address.
+3. **Put the same name into `map.image`** of `static/templates/brahmsee-starter.json` and of the example in [Layout templates](../admin/templates#file-format); `npm test` checks the starter template.
+4. **Check the pins** on staging in the Control Center's map view and drag any that no longer sit on their house. Templates exported before the swap carry the old name in `map.image`; importing them shows a warning to check the pins, nothing else changes.
+
 ## Conventions
 
-- **Never commit data.** The repository is public: `.env` files, `pb_data/` and database snapshots (encrypted or not) stay out of git. Share them through a private channel.
+- **One feature per branch, merged into `integration/staging` with a signed merge commit**, released to `main` by pull request. See [Branches, integration & releases](./integration).
+- **Never commit data or secrets.** The repository is public: `.env` files, `pb_data/` and database snapshots (encrypted or not) stay out of git, and no password, token or key goes into a script, a compose file or `package.json`; scripts read them from the environment. The gitleaks hook (setup step 5) and the `Secrets` CI job refuse the obvious cases. Share data through a private channel.
 - Format with Prettier and satisfy ESLint: `npm run lint` must pass.
 - Server-only code goes to `src/lib/server/`; it must never be imported by client components.
 - Every read of ticket data happens on the server, and page data is trimmed to what the page shows. See [Security & privacy](../reference/security).

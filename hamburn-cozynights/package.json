@@ -15,8 +15,9 @@
 		"test:report": "vitest run --reporter=html",
 		"test:integration": "bash scripts/test-stack.sh integration",
 		"test:smoke": "bash scripts/test-stack.sh smoke",
+		"test:layout": "bash scripts/test-stack.sh layout",
 		"smoke:remote": "vitest run --config vitest.stack.config.ts tests/smoke",
-		"verify": "npm run check && npm test && bash scripts/test-stack.sh integration smoke",
+		"verify": "npm run check && npm test && bash scripts/test-stack.sh integration smoke layout",
 		"test:e2e": "playwright test",
 		"test:e2e:ui": "playwright test --ui",
 		"test:e2e:report": "playwright show-report",
@@ -24,10 +25,7 @@
 		"test:setup": "npx tsx scripts/test_setup.ts",
 		"predev": "npm run health",
 		"lint": "prettier --check . && eslint .",
-		"typegen": "npx tsx scripts/secure_typegen.ts",
-		"docs:ts": "typedoc --out docs/generated/ts src/lib",
-		"docs:svelte": "node scripts/generate-svelte-docs.js",
-		"docs:generate": "npm run docs:ts && npm run docs:svelte"
+		"typegen": "npx tsx scripts/secure_typegen.ts"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.4.0",
@@ -37,7 +35,6 @@
 		"@sveltejs/kit": "^2.49.1",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
 		"@tailwindcss/forms": "^0.5.10",
-		"@tailwindcss/typography": "^0.5.19",
 		"@tailwindcss/vite": "^4.1.17",
 		"@types/node": "^22",
 		"@vitest/ui": "^4.1.4",
@@ -52,17 +49,21 @@
 		"prettier-plugin-tailwindcss": "^0.7.2",
 		"svelte": "^5.45.6",
 		"svelte-check": "^4.3.4",
-		"sveltedoc-parser": "^4.2.1",
 		"tailwindcss": "^4.1.17",
-		"typedoc": "^0.28.18",
 		"typescript": "^5.9.3",
 		"typescript-eslint": "^8.48.1",
 		"vite": "^7.2.6",
 		"vitest": "^4.1.4"
 	},
 	"dependencies": {
+		"@number-flow/svelte": "^0.4.2",
 		"chart.js": "^4.5.1",
 		"pocketbase": "^0.28.1",
-		"svelte-chartjs": "^4.0.1"
+		"qr": "^0.7.0"
+	},
+	"overrides": {
+		"@sveltejs/kit": {
+			"cookie": "^0.7.2"
+		}
 	}
 }

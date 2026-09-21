@@ -25,15 +25,23 @@ Ticket holders pick their own bed on the Hamburn camp map. The crew builds the c
 
 ## ✨ What it does
 
-|     |                                |                                                                                                        |
-| --- | ------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| 🗺️  | **Interactive camp map**       | Every house sits on the real site plan; guests see at a glance where beds are free.                    |
-| 🎫  | **One ticket, one bed**        | No accounts or passwords for guests. The ticket code is the key, and it holds exactly one spot.        |
-| 🎰  | **Destiny Roulette**           | A random free bed plus a random burner name, for the undecided.                                        |
-| 🛠️  | **Staging, then Live**         | The crew builds the layout in staging; going live freezes it and opens booking, by switch or by timer. |
-| 🔐  | **Google Workspace sign-in**   | Admins use their `@mauersegler.art` account. Newcomers request access, a superuser approves.          |
-| 💾  | **Layout templates**           | Export the whole camp as JSON and rebuild it for the next burn in one step.                            |
-| 🛡️  | **Privacy first**              | Server-side rendering only, encrypted burner names, hashed ticket lookups, strict database rules.      |
+|     |                              |                                                                                                        |
+| --- | ---------------------------- | ------------------------------------------------------------------------------------------------------ |
+| 🗺️  | **Interactive camp map**     | Every house sits on the real site plan; guests see at a glance where beds are free.                    |
+| 🎫  | **One ticket, one bed**      | No accounts or passwords for guests. The ticket code is the key, and it holds exactly one spot.        |
+| 🎰  | **Destiny Roulette**         | A random free bed and burner name for the undecided; booked guests can nuke their spot and respin.     |
+| 🎆  | **Booking fireworks**        | Neon rockets rise from your new spot and burst like the cursor does; a fire finale ends the show.      |
+| 🛠️  | **Staging, Live, Closed**    | The crew builds the layout in staging; a booking window opens and closes booking by timer, and closing freezes it. |
+| 🔐  | **Google Workspace sign-in** | Admins use their `@mauersegler.art` account. Newcomers request access, a superuser approves.           |
+| 💾  | **Layout templates**         | Export the camp as JSON; a file is compared with the camp and only the changes you pick are applied.   |
+| 📥  | **Ticket list with review**  | Load the ticket shop's list after a review; fix an address or hand a ticket over in a few clicks.      |
+| 🛡️  | **Privacy first**            | Server-side rendering only, encrypted burner names, hashed ticket lookups, strict database rules.      |
+| 🔥  | **Burning effigy title**     | Magic balls build rainbow timber letters, then fire eats them letter by letter. Light them yourself.   |
+| ⚖️  | **Legal pages**              | Legal notice, privacy policy and booking rules on every page; the operator's details stay out of git.  |
+| 📬  | **Booking confirmations**    | E-mail to the ticket holder, Telegram if they like, and a crew group that hears about admin changes.   |
+| 🎟️  | **Booking pass**             | A QR code and a short code per booking; the crew checks it with a phone camera, a PC or a USB scanner. |
+| ♿   | **Special-needs spots**      | Guests ask with their ticket code, even before booking opens; the crew books a fitting spot.           |
+| ✉️  | **Message texts**            | Every sentence guests get by e-mail, on Telegram or from the bot is editable in the admin area, with a live preview. |
 
 ## 🧭 How it works
 
@@ -64,13 +72,18 @@ The full walkthrough, including admin sign-in on your machine, is in [Local deve
 
 The documentation lives in [`docs/`](docs/) and is published at **[morpheusmxml.github.io/hamburn-cozynights](https://morpheusmxml.github.io/hamburn-cozynights/)**.
 
-| Guide                                                                                    | Admin                                                                                           | Under the hood                                                                                 | Develop                                                                                                |
-| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| [What is CozyNights?](https://morpheusmxml.github.io/hamburn-cozynights/guide/)          | [Control Center](https://morpheusmxml.github.io/hamburn-cozynights/admin/)                      | [Architecture](https://morpheusmxml.github.io/hamburn-cozynights/reference/architecture)       | [Local development](https://morpheusmxml.github.io/hamburn-cozynights/develop/)                        |
-| [Booking a bed](https://morpheusmxml.github.io/hamburn-cozynights/guide/booking)         | [Admin access & roles](https://morpheusmxml.github.io/hamburn-cozynights/admin/access)          | [Security & privacy](https://morpheusmxml.github.io/hamburn-cozynights/reference/security)     | [Environments & deployment](https://morpheusmxml.github.io/hamburn-cozynights/develop/deployment)      |
-| [Staging & Live Booking](https://morpheusmxml.github.io/hamburn-cozynights/guide/phases) | [Houses, rooms & spots](https://morpheusmxml.github.io/hamburn-cozynights/admin/camp-layout)    |                                                                                                | [Working on these docs](https://morpheusmxml.github.io/hamburn-cozynights/develop/docs)                |
-| [FAQ](https://morpheusmxml.github.io/hamburn-cozynights/guide/faq)                       | [Layout templates](https://morpheusmxml.github.io/hamburn-cozynights/admin/templates)           |                                                                                                |                                                                                                        |
-|                                                                                          | [Event checklist](https://morpheusmxml.github.io/hamburn-cozynights/admin/event-checklist)      |                                                                                                |                                                                                                        |
+| Guide                                                                                       | Admin                                                                                           | Under the hood                                                                             | Develop                                                                                           |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| [What is CozyNights?](https://morpheusmxml.github.io/hamburn-cozynights/guide/)             | [Control Center](https://morpheusmxml.github.io/hamburn-cozynights/admin/)                      | [Architecture](https://morpheusmxml.github.io/hamburn-cozynights/reference/architecture)   | [Local development](https://morpheusmxml.github.io/hamburn-cozynights/develop/)                   |
+| [Booking a bed](https://morpheusmxml.github.io/hamburn-cozynights/guide/booking)            | [Admin access & roles](https://morpheusmxml.github.io/hamburn-cozynights/admin/access)          | [Security & privacy](https://morpheusmxml.github.io/hamburn-cozynights/reference/security) | [Environments & deployment](https://morpheusmxml.github.io/hamburn-cozynights/develop/deployment) |
+| [Special-needs spot](https://morpheusmxml.github.io/hamburn-cozynights/guide/special-needs) | [Houses, rooms & spots](https://morpheusmxml.github.io/hamburn-cozynights/admin/camp-layout)    |                                                                                            | [Working on these docs](https://morpheusmxml.github.io/hamburn-cozynights/develop/docs)           |
+| [Staging, Live & Closed](https://morpheusmxml.github.io/hamburn-cozynights/guide/phases)    | [Layout templates](https://morpheusmxml.github.io/hamburn-cozynights/admin/templates)           | [Data model & templates](https://morpheusmxml.github.io/hamburn-cozynights/reference/data-model) | [Landing page title](https://morpheusmxml.github.io/hamburn-cozynights/develop/effigy-title)      |
+| [FAQ](https://morpheusmxml.github.io/hamburn-cozynights/guide/faq)                          | [Event checklist](https://morpheusmxml.github.io/hamburn-cozynights/admin/event-checklist)      |                                                                                            | [Testing & release checks](https://morpheusmxml.github.io/hamburn-cozynights/develop/testing)     |
+|                                                                                             | [Tickets & e-mail addresses](https://morpheusmxml.github.io/hamburn-cozynights/admin/tickets)   |                                                                                            | [Branches, integration & releases](https://morpheusmxml.github.io/hamburn-cozynights/develop/integration) |
+|                                                                                             | [Legal pages](https://morpheusmxml.github.io/hamburn-cozynights/admin/legal)                    |                                                                                            |                                                                                                   |
+|                                                                                             | [Notifications](https://morpheusmxml.github.io/hamburn-cozynights/admin/notifications)          |                                                                                            |                                                                                                   |
+|                                                                                             | [Booking passes](https://morpheusmxml.github.io/hamburn-cozynights/admin/passes)                |                                                                                            |                                                                                                   |
+|                                                                                             | [Special-needs requests](https://morpheusmxml.github.io/hamburn-cozynights/admin/special-needs) |                                                                                            |                                                                                                   |
 
 ## 🗂️ Repository
 

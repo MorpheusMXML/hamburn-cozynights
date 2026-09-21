@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fade } from 'svelte/transition';
 
 	type SpriteType = 'pixel' | 'glow' | 'unicorn' | 'wizard' | 'wine' | 'mermaid';
 
@@ -89,14 +88,16 @@
 		z-index: 0;
 		overflow: hidden;
 		background: #050505;
+		/* Nothing in here affects the page's layout, so the browser needn't check. */
+		contain: layout paint;
 	}
 
 	.background-grid {
 		position: absolute;
-		width: 200%;
-		height: 200%;
-		top: -50%;
-		left: -50%;
+		width: 150%;
+		height: 150%;
+		top: -25%;
+		left: -25%;
 		background-image:
 			linear-gradient(rgba(45, 212, 191, 0.03) 1px, transparent 1px),
 			linear-gradient(90deg, rgba(45, 212, 191, 0.03) 1px, transparent 1px);
@@ -116,13 +117,15 @@
 		animation: scan 8s ease-in-out infinite;
 	}
 
+	/* transform, not top/left: these run forever on every page, and a
+	   transform animates on the compositor without re-laying out the page. */
 	@keyframes scan {
 		0%,
 		100% {
-			top: 0;
+			transform: translateY(0);
 		}
 		50% {
-			top: 100%;
+			transform: translateY(100vh);
 		}
 	}
 
@@ -138,21 +141,30 @@
 	.creature {
 		position: absolute;
 		top: var(--y);
+		left: 0;
 		width: var(--size);
 		height: var(--size);
 		color: var(--color);
 		opacity: var(--opacity);
 		animation: float-horizontal var(--speed) linear infinite var(--delay);
-		filter: drop-shadow(0 0 8px var(--color));
+		will-change: transform;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 	}
 
+	/* A glow per sprite: text-shadow for the emoji (cheap), drop-shadow only
+	   for the two SVG kinds. A filter on every creature was a repaint per
+	   frame each. */
 	.emoji-sprite {
 		font-size: var(--size);
-		filter: saturate(1.5) brightness(1.2);
+		text-shadow: 0 0 8px var(--color);
 		animation: sway 3s ease-in-out infinite alternate;
+	}
+
+	.creature.pixel,
+	.creature.glow {
+		filter: drop-shadow(0 0 8px var(--color));
 	}
 
 	.glow-core {
@@ -166,12 +178,10 @@
 
 	@keyframes float-horizontal {
 		0% {
-			left: -15%;
-			transform: rotate(0deg);
+			transform: translateX(-15vw) rotate(0deg);
 		}
 		100% {
-			left: 115%;
-			transform: rotate(360deg);
+			transform: translateX(115vw) rotate(360deg);
 		}
 	}
 
@@ -192,6 +202,19 @@
 		to {
 			transform: scale(1.2);
 			opacity: 1;
+		}
+	}
+
+	/* The OS setting wins: still grid, no creatures, no scan line. */
+	@media (prefers-reduced-motion: reduce) {
+		.background-grid,
+		.laser-scan,
+		.emoji-sprite,
+		.glow-core {
+			animation: none;
+		}
+		.creature {
+			display: none;
 		}
 	}
 </style>

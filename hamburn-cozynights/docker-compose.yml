@@ -4,14 +4,43 @@ services:
     image: ghcr.io/muchobien/pocketbase:0.40.4
     container_name: pocketbase
     restart: unless-stopped
-    # Expliziter Befehl: Bindet an 0.0.0.0, damit Docker Ports weiterleiten kann
-    command: --http=0.0.0.0:8090
+    # Expliziter Befehl: Bindet an 0.0.0.0, damit Docker Ports weiterleiten kann.
+    # --encryptionEnv wie auf den Servern: steht PB_ENCRYPTION_KEY in der .env
+    # (genau 32 Zeichen), liegen die PocketBase-Settings verschlüsselt in
+    # pb_data; ohne Wert bleiben sie im Klartext. Einmal gesetzt, startet
+    # PocketBase ohne den Schlüssel nicht mehr (docs/develop/deployment.md).
+    command: ['--http=0.0.0.0:8090', '--encryptionEnv=PB_ENCRYPTION_KEY']
     environment:
+      PB_ENCRYPTION_KEY: ${PB_ENCRYPTION_KEY:-}
       # Optional lokal: Google-OAuth-Client für den Admin-Login (siehe .env.example).
       # Ohne Werte startet PocketBase normal, nur der Google-Login ist dann aus.
       PB_GOOGLE_CLIENT_ID: ${PB_GOOGLE_CLIENT_ID:-}
       PB_GOOGLE_CLIENT_SECRET: ${PB_GOOGLE_CLIENT_SECRET:-}
+      # Lokal darf das Dashboard Collections bearbeiten (Migrationen entwerfen);
+      # auf Servern sind die Schema-Editoren versteckt (pb_hooks/cozy_settings.pb.js).
+      PB_HIDE_CONTROLS: 'off'
+      # Notifications (pb_hooks/cozy_notify.pb.js, docs/admin/notifications.md):
+      # booking confirmations by e-mail, Telegram for guests and the crew.
+      # All optional; without SMTP_HOST / TELEGRAM_BOT_TOKEN nothing is sent.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_TLS: ${SMTP_TLS:-}
+      SMTP_AUTH: ${SMTP_AUTH:-}
+      SMTP_LOCAL_NAME: ${SMTP_LOCAL_NAME:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      TELEGRAM_THREAD_ID: ${TELEGRAM_THREAD_ID:-}
+      TELEGRAM_GUEST_UPDATES: ${TELEGRAM_GUEST_UPDATES:-}
+      # Older crew webhook (Telegram URL, Slack, Google Chat, Discord); used when
+      # TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID are not set.
       COZY_ADMIN_WEBHOOK_URL: ${COZY_ADMIN_WEBHOOK_URL:-}
+      COZY_APP_URL: ${COZY_APP_URL:-http://localhost:5173}
+      COZY_ENV_LABEL: ${COZY_ENV_LABEL:-LOCAL}
     ports:
       # Nur lokal erreichbar (Docker umgeht sonst ufw)
       - '127.0.0.1:8090:8090'

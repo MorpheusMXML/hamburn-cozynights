@@ -6,6 +6,32 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
 const HASH_ALGORITHM = 'sha256';
+const KEY_PATTERN = /^[0-9a-f]{64}$/i;
+const KEY_ERROR = 'ENCRYPTION_KEY must be a 64-character hex string (32 bytes).';
+
+/**
+ * The configured key, or an error. Every code path that touches guest data
+ * goes through here: there is no fallback key, so a container with a missing
+ * or mistyped key cannot silently write data that a correctly configured one
+ * can't read (or hash ticket codes that never match again).
+ * @throws Error if ENCRYPTION_KEY is missing or invalid.
+ */
+function requireKeyHex(): string {
+	const hex = env.ENCRYPTION_KEY || '';
+	if (!KEY_PATTERN.test(hex)) throw new Error(KEY_ERROR);
+	// 64 times the same character is a placeholder, never a generated key.
+	if (/^(.)\1{63}$/.test(hex)) {
+		throw new Error(
+			'ENCRYPTION_KEY is a placeholder (one repeated character): generate one with `openssl rand -hex 32`.'
+		);
+	}
+	return hex;
+}
+
+/** Checks the key once, e.g. at startup. @throws Error if it is unusable. */
+export function assertEncryptionKey(): void {
+	requireKeyHex();
+}
 
 /**
  * Encrypts a string using AES-256-GCM.
@@ -15,9 +41,7 @@ const HASH_ALGORITHM = 'sha256';
  * @throws Error if ENCRYPTION_KEY is missing or invalid.
  */
 export function encrypt(text: string): string {
-	const key = Buffer.from(env.ENCRYPTION_KEY || '', 'hex');
-	if (key.length !== 32)
-		throw new Error('ENCRYPTION_KEY must be a 64-character hex string (32 bytes).');
+	const key = Buffer.from(requireKeyHex(), 'hex');
 
 	const iv = crypto.randomBytes(IV_LENGTH);
 	const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
@@ -38,9 +62,7 @@ export function encrypt(text: string): string {
  * @throws Error if ENCRYPTION_KEY is invalid.
  */
 export function decrypt(encryptedText: string): string {
-	const key = Buffer.from(env.ENCRYPTION_KEY || '', 'hex');
-	if (key.length !== 32)
-		throw new Error('ENCRYPTION_KEY must be a 64-character hex string (32 bytes).');
+	const key = Buffer.from(requireKeyHex(), 'hex');
 
 	const [ivHex, tagHex, ciphertextHex] = encryptedText.split(':');
 	if (!ivHex || !tagHex || !ciphertextHex) {
@@ -64,8 +86,10 @@ export function decrypt(encryptedText: string): string {
  * Includes a salt derived from the ENCRYPTION_KEY for added security.
  * @param text The input string to hash (e.g., an order number).
  * @returns A deterministic hex hash.
+ * @throws Error if ENCRYPTION_KEY is missing or invalid.
  */
 export function createLookupHash(text: string): string {
-	const salt = env.ENCRYPTION_KEY || 'default_salt';
-	return crypto.createHmac(HASH_ALGORITHM, salt).update(text).digest('hex');
+	// The hex string itself is the HMAC key (not its bytes): existing hashes in
+	// the database were made this way, changing it would orphan every ticket.
+	return crypto.createHmac(HASH_ALGORITHM, requireKeyHex()).update(text).digest('hex');
 }

@@ -1,0 +1,12 @@
+[Unit]
+Description=Encrypted server backup with restic (local repository or Hetzner Storage Box)
+Documentation=https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/backup/README.md
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/server-backup
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h
