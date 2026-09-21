@@ -38,6 +38,10 @@ You opened a house, a room, the roulette or the special-needs page on a device w
 The code this browser remembered is no longer in the ticket list, for example because the ticket was replaced. Enter the code of your current ticket; if that doesn't work either, ask the crew.
 :::
 
+::: details "A new booking round has started, so this device was signed out."
+The crew released every booking and started a new round — before the real booking opens after a trial run, for example. Your ticket code still works: enter it on the start page again. Spots the crew booked for [special-needs requests](./special-needs) stay as they are.
+:::
+
 ::: details "You are not signed in anymore. Go to the start page and enter your ticket code again."
 Your browser has forgotten your ticket code, typically in a tab that was open for a while: it remembers the code for 30 days, unless you signed out. Enter your code on the start page again; your booking is still there. *Your ticket code was not found* instead means the ticket is no longer in the ticket list: ask the crew.
 :::
