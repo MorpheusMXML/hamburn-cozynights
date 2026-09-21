@@ -547,7 +547,7 @@ describe('superuser-only dashboard actions', () => {
 						? [{ order: 'order2', bed: 'bed2' }] // the crew booked bed2 for a special-needs request
 						: [{ id: 'bed1' }, { id: 'bed2', order: 'order2' }]
 			),
-			update: vi.fn(async () => ({})),
+			update: vi.fn<(id: string, data?: unknown) => Promise<object>>(async () => ({})),
 			delete: vi.fn(async () => ({})),
 			create: vi.fn(async () => ({ id: 'new' }))
 		};
@@ -585,7 +585,7 @@ describe('superuser-only dashboard actions', () => {
 			locals: { pb, adminPb: pb, admin: boss }
 		} as any);
 
-		expect(result).toEqual({ success: true, released: 1, kept: 1 });
+		expect(result).toEqual({ success: true, released: 1, kept: 1, namesLeft: 0 });
 		expect(service.update).toHaveBeenCalledWith('bed1', { occupied: false, order: null });
 		expect(service.update).toHaveBeenCalledWith('order1', { burner_name: '' });
 		expect(service.delete).not.toHaveBeenCalled();
@@ -633,6 +633,97 @@ describe('superuser-only dashboard actions', () => {
 		expect(service.update).toHaveBeenCalledWith('bed1', { occupied: false, order: null });
 		// the spot the crew booked for a special-needs request stays
 		expect(service.update).not.toHaveBeenCalledWith('bed2', expect.anything());
+	});
+
+	describe('"Don\'t notify the guests" on the way back to Staging', () => {
+		const quietForm = (quiet: boolean) => {
+			const data = new FormData();
+			data.set('phase', 'staging');
+			data.set('clearBookings', '1');
+			if (quiet) data.set('quietRelease', '1');
+			return data;
+		};
+		/** The admin connection plus pb.send, with every call in one list, in order. */
+		function withQuietRoute(send: (path: string, options: any) => Promise<unknown>) {
+			const { pb, service } = makeAdminPb('live');
+			const calls: string[] = [];
+			service.update.mockImplementation(async (id: string) => {
+				calls.push(`update ${id}`);
+				return {};
+			});
+			pb.send = vi.fn(async (path: string, options: any) => {
+				calls.push(`${path} ${options.body.seconds}`);
+				return send(path, options);
+			});
+			return { pb, service, calls };
+		}
+
+		it('mutes guest messages around the release, and ends that right after', async () => {
+			const { pb, service, calls } = withQuietRoute(async () => ({ quietUntil: '' }));
+			const result: any = await dashboardActions.setPhase({
+				locals: { pb, adminPb: pb, admin: boss },
+				request: { formData: async () => quietForm(true) }
+			} as any);
+
+			expect(result).toMatchObject({ success: true, released: 1, guestsNotified: false });
+			// muted before the phase is even written, unmuted after the last spot
+			expect(calls[0]).toBe('/api/cozy/notify/quiet 120');
+			expect(calls.indexOf('update appsettings0123')).toBeGreaterThan(0);
+			expect(calls.indexOf('update bed1')).toBeGreaterThan(0);
+			expect(calls.at(-1)).toBe('/api/cozy/notify/quiet 0');
+			// the crew still hears about it, and the log says the guests didn't
+			expect(service.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					action: 'bookings_cleared',
+					details: expect.objectContaining({ released: 1, guestsNotified: false })
+				})
+			);
+		});
+
+		it('leaves the guest messages alone when the box is not ticked', async () => {
+			const { pb, service } = withQuietRoute(async () => ({}));
+			const result: any = await dashboardActions.setPhase({
+				locals: { pb, adminPb: pb, admin: boss },
+				request: { formData: async () => quietForm(false) }
+			} as any);
+
+			expect(result).toMatchObject({ success: true, released: 1, guestsNotified: true });
+			expect(pb.send).not.toHaveBeenCalled();
+			expect(service.create).toHaveBeenCalledWith(
+				expect.objectContaining({ details: expect.objectContaining({ guestsNotified: true }) })
+			);
+		});
+
+		it('changes nothing at all when PocketBase cannot mute them', async () => {
+			const { pb, service } = withQuietRoute(async () => {
+				throw Object.assign(new Error('unreachable'), { status: 0 });
+			});
+			const result: any = await dashboardActions.setPhase({
+				locals: { pb, adminPb: pb, admin: boss },
+				request: { formData: async () => quietForm(true) }
+			} as any);
+
+			expect(result.status).toBe(503);
+			expect(result.data.error).toMatch(/could not be muted, so nothing was changed/);
+			// neither the phase nor a single booking
+			expect(service.update).not.toHaveBeenCalled();
+		});
+
+		it('ends the muting even when the release stops halfway', async () => {
+			const { pb, service, calls } = withQuietRoute(async () => ({}));
+			service.update.mockImplementation(async (id: string) => {
+				calls.push(`update ${id}`);
+				if (id === 'bed1') throw new Error('database gone');
+				return {};
+			});
+			const result: any = await dashboardActions.setPhase({
+				locals: { pb, adminPb: pb, admin: boss },
+				request: { formData: async () => quietForm(true) }
+			} as any);
+
+			expect(result.status).toBe(500);
+			expect(calls.at(-1)).toBe('/api/cozy/notify/quiet 0');
+		});
 	});
 
 	it('clears bookings only in Staging Mode (the switch back asks about them itself)', async () => {

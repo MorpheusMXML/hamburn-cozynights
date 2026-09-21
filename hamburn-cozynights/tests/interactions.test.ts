@@ -33,7 +33,13 @@ describe('Interactions & Registration', () => {
 			collection: vi.fn().mockReturnThis(),
 			getFirstListItem: vi.fn(),
 			getFullList: vi.fn(),
-			getOne: vi.fn(),
+			// The queued mockResolvedValueOnce values answer the bed reads; what
+			// is left over is BookingService re-reading the phase after the claim
+			// (src/lib/server/booking.ts, readPhase), and booking is open here.
+			getOne: vi.fn(async (id: string) => {
+				if (id === APP_SETTINGS_ID) return { is_booking_active: true };
+				throw Object.assign(new Error('not found'), { status: 404 });
+			}),
 			update: vi.fn(),
 			filter: vi.fn((q: any) => q)
 		};
@@ -103,7 +109,13 @@ describe('Room Load & Booking Logic', () => {
 			collection: vi.fn().mockReturnThis(),
 			getFirstListItem: vi.fn(),
 			getFullList: vi.fn(),
-			getOne: vi.fn(),
+			// The queued mockResolvedValueOnce values answer the bed reads; what
+			// is left over is BookingService re-reading the phase after the claim
+			// (src/lib/server/booking.ts, readPhase), and booking is open here.
+			getOne: vi.fn(async (id: string) => {
+				if (id === APP_SETTINGS_ID) return { is_booking_active: true };
+				throw Object.assign(new Error('not found'), { status: 404 });
+			}),
 			update: vi.fn(),
 			filter: vi.fn((q: any) => q),
 			// bookBed/unbookBed require a valid admin session before touching

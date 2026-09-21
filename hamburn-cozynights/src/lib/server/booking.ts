@@ -2,6 +2,13 @@ import type { ClientResponseError } from 'pocketbase';
 import type { TypedPocketBase, OrdersResponse, BedsResponse } from '$lib/pocketbase-types';
 import { createLookupHash, encrypt } from '$lib/server/crypto';
 import { CHECKED_IN_NOTE } from '$lib/check-in';
+import { APP_SETTINGS_ID } from '$lib/server/constants';
+import {
+	bookingRefusal,
+	effectivePhase,
+	windowFromRecord,
+	type BookingPhase
+} from '$lib/booking-phase';
 
 /**
  * Thrown when a bed can no longer be booked (already taken by someone else,
@@ -16,6 +23,11 @@ export class ReleaseFailedError extends Error {}
  * now (booked in a second tab): nothing was released.
  */
 export class SpotChangedError extends Error {}
+/**
+ * Booking stopped being open while the claim was waiting for its lock: the
+ * claim was undone, so the switch to Staging does not leave one booking behind.
+ */
+export class BookingClosedError extends Error {}
 /** The guest was checked in at the spot: releasing or moving it is for the crew only. */
 export class CheckedInError extends Error {
 	constructor() {
@@ -160,6 +172,28 @@ export class BookingService {
 	}
 
 	/**
+	 * The booking phase straight from app_settings, or null when the record
+	 * can't be read. Deliberately not getBookingSettings: that answers
+	 * "staging" for a failed read, and a database hiccup must never undo a
+	 * booking that is perfectly fine. Only a phase it actually read counts.
+	 */
+	private async readPhase(): Promise<BookingPhase | null> {
+		try {
+			const settings = await this.adminPb
+				.collection('app_settings')
+				// requestKey null: a parallel booking reads this too, never cancel it.
+				.getOne(APP_SETTINGS_ID, { requestKey: null });
+			return effectivePhase(windowFromRecord(settings));
+		} catch (err) {
+			console.error(
+				'[Booking] Could not re-read the booking phase after the claim, letting it stand:',
+				(err as Error)?.message
+			);
+			return null;
+		}
+	}
+
+	/**
 	 * Finds the bed currently booked for a specific order.
 	 * @param orderId The ID of the order to check.
 	 * @returns The bed record if one exists for this order, or null.
@@ -185,15 +219,19 @@ export class BookingService {
 	 *   (locked or special-needs spots).
 	 * @param options.allowCheckedIn The crew may move a guest who is checked in
 	 *   already; the check-in moves along to the new spot.
+	 * @param options.requireLivePhase A guest's own booking: booking has to
+	 *   still be open once the claim is through. The crew books in any phase.
 	 * @throws {BedUnavailableError} if the bed is taken, locked, or deactivated.
 	 * @throws {CheckedInError} if the ticket's current spot is checked in and
 	 *   `allowCheckedIn` isn't set.
+	 * @throws {BookingClosedError} if `requireLivePhase` is set and booking is
+	 *   no longer open; the claim is undone first.
 	 */
 	async bookBed(
 		order: OrdersResponse,
 		bedId: string,
 		guestName: string,
-		options: { allowLocked?: boolean; allowCheckedIn?: boolean } = {}
+		options: { allowLocked?: boolean; allowCheckedIn?: boolean; requireLivePhase?: boolean } = {}
 	): Promise<void> {
 		await withLock(`order:${order.id}`, () =>
 			withLock(`bed:${bedId}`, async () => {
@@ -231,6 +269,27 @@ export class BookingService {
 						? { checked_in_at: arrived.checked_in_at, checked_in_by: arrived.checked_in_by ?? '' }
 						: {})
 				});
+
+				// The route checked the phase before this request queued up behind
+				// the locks. Switching back to Staging writes app_settings first and
+				// releases the bookings right after (src/routes/admin/+page.server.ts),
+				// so a guest who was waiting here could otherwise slip a booking in
+				// behind the release and keep it in an empty camp.
+				if (options.requireLivePhase) {
+					const phase = await this.readPhase();
+					if (phase && phase !== 'live') {
+						await this.adminPb
+							.collection('beds')
+							.update(bedId, { occupied: false, order: null })
+							.catch((undoErr) =>
+								console.error(
+									`[Booking] Booking closed mid-claim and undoing spot ${bedId} of order ${order.id} failed too — it may still look booked:`,
+									(undoErr as Error)?.message
+								)
+							);
+						throw new BookingClosedError(bookingRefusal(phase));
+					}
+				}
 
 				await this.adminPb.collection('orders').update(order.id, {
 					burner_name: encrypt(guestName)

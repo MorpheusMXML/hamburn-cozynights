@@ -141,11 +141,48 @@ class ReleaseStoppedError extends Error {
 	constructor(
 		public released: number,
 		public total: number,
+		/** Crew-booked spots that were never meant to go; still worth logging. */
+		public kept: number,
 		public reason: unknown
 	) {
 		super(`Releasing bookings stopped after ${released} of ${total} spots`);
 		this.name = 'ReleaseStoppedError';
 	}
+	/** The names were never reached, so nothing is known about them. */
+	namesLeft: number | null = null;
+}
+
+/**
+ * How long guest messages stay muted around a quiet release. Released spots
+ * are accepted in silence while their own update runs (pb_hooks/lib/notify.js,
+ * markDue), so this only has to outlast the release loop; it is ended right
+ * after, and ends by itself if the app never gets there.
+ */
+const QUIET_RELEASE_SECONDS = 120;
+
+/**
+ * Mutes guest messages in PocketBase (POST /api/cozy/notify/quiet) for
+ * `seconds`, or ends that with 0. Crew alerts are not affected. Never throws.
+ * @returns whether PocketBase took it
+ */
+async function muteGuestMessages(adminPb: TypedPocketBase, seconds: number): Promise<boolean> {
+	try {
+		await adminPb.send('/api/cozy/notify/quiet', { method: 'POST', body: { seconds } });
+		return true;
+	} catch (err) {
+		console.error(
+			`[Bookings] Could not ${seconds > 0 ? 'mute' : 'unmute'} guest messages:`,
+			(err as Error)?.message
+		);
+		return false;
+	}
+}
+
+/** What a release left behind, as a sentence to append (empty when all is clean). */
+function namesNote(namesLeft: number | null): string {
+	if (namesLeft === null) return ' Whether burner names were left behind is unknown.';
+	if (namesLeft <= 0) return '';
+	return ` ${namesLeft} burner name${namesLeft === 1 ? '' : 's'} could not be cleared; those spots are free but still show a name.`;
 }
 
 /**
@@ -160,7 +197,7 @@ class ReleaseStoppedError extends Error {
  */
 async function releaseGuestBookings(
 	adminPb: TypedPocketBase
-): Promise<{ released: number; kept: number }> {
+): Promise<{ released: number; kept: number; namesLeft: number | null }> {
 	const crewBooked = await crewBookedBeds(adminPb);
 	const booked = await adminPb.collection('beds').getFullList({
 		filter: 'occupied = true || order != ""'
@@ -174,23 +211,45 @@ async function releaseGuestBookings(
 			await adminPb.collection('beds').update(bed.id, { occupied: false, order: null });
 			released++;
 		}
-		await clearBurnerNames(adminPb, keep);
 	} catch (err) {
-		throw new ReleaseStoppedError(released, occupiedBeds.length, err);
+		throw new ReleaseStoppedError(released, occupiedBeds.length, kept, err);
 	}
-	return { released, kept };
+	// The spots are free by now; the burner names only describe them. A name
+	// left behind is worth reporting, never a failed release.
+	return { released, kept, namesLeft: await clearBurnerNames(adminPb, keep) };
 }
 
-/** Clears the burner names of all orders (they only describe bookings), except `keep`. */
-async function clearBurnerNames(pb: TypedPocketBase, keep: Set<string> = new Set()) {
-	const named = await pb.collection('orders').getFullList({
-		filter: 'burner_name != ""',
-		fields: 'id'
-	});
+/**
+ * Clears the burner names of all orders (they only describe bookings), except
+ * `keep`. One order that refuses doesn't stop the others: leaving the whole
+ * rest named would be worse than the one name that stays.
+ * @returns how many names are still there, or null if they couldn't be read
+ */
+async function clearBurnerNames(
+	pb: TypedPocketBase,
+	keep: Set<string> = new Set()
+): Promise<number | null> {
+	let named;
+	try {
+		named = await pb.collection('orders').getFullList({
+			filter: 'burner_name != ""',
+			fields: 'id'
+		});
+	} catch (err) {
+		console.error('[Bookings] The burner names could not be read:', (err as Error)?.message);
+		return null;
+	}
+	let left = 0;
 	for (const order of named) {
 		if (keep.has(order.id)) continue;
-		await pb.collection('orders').update(order.id, { burner_name: '' });
+		try {
+			await pb.collection('orders').update(order.id, { burner_name: '' });
+		} catch (err) {
+			left++;
+			console.error(`[Bookings] Burner name of order ${order.id} stays:`, (err as Error)?.message);
+		}
 	}
+	return left;
 }
 
 type HouseStats = HousesResponse & {
@@ -220,6 +279,9 @@ export const actions: Actions = {
 		// superuser's explicit choice in the dialog, not a side effect: without
 		// it the bookings stay and "clear all bookings" can do it later.
 		const clearBookings = form?.get('clearBookings') === '1';
+		// "Don't notify the guests": the release happens without a message to
+		// anyone whose spot goes (the crew alert still goes out).
+		const quiet = to === 'staging' && clearBookings && form?.get('quietRelease') === '1';
 
 		try {
 			const { exists, window } = await readWindow(locals.pb);
@@ -227,48 +289,74 @@ export const actions: Actions = {
 			const phaseBefore = effectivePhase(window, now);
 			if (phaseBefore === to) return { success: true, phase: to, phaseBefore, pausedTimer: false };
 
-			const next = switchPhase(window, to, now);
-			await writeWindow(locals.pb, exists, next);
-			console.log(`[Action:setPhase] SUCCESS: ${phaseBefore} → ${to}`);
+			// Muted before anything changes: when PocketBase can't mute the guest
+			// messages, the switch doesn't happen either — a release the
+			// superuser asked to keep quiet must never go out loud.
+			if (quiet && !(await muteGuestMessages(locals.adminPb, QUIET_RELEASE_SECONDS))) {
+				return fail(503, {
+					error:
+						"The guest messages could not be muted, so nothing was changed. Try again, or untick “Don't notify the guests”."
+				});
+			}
+			try {
+				const next = switchPhase(window, to, now);
+				await writeWindow(locals.pb, exists, next);
+				console.log(`[Action:setPhase] SUCCESS: ${phaseBefore} → ${to}`);
 
-			// Editing the layout with guest bookings in it is what the dialog
-			// warns about; only a "yes, release them" gets here. Spots the crew
-			// booked for special-needs requests stay.
-			let cleared: { released: number; kept: number } | null = null;
-			if (to === 'staging' && clearBookings) {
-				try {
-					cleared = await releaseGuestBookings(locals.adminPb);
-					await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
-						...cleared,
-						reason: 'staging'
-					});
-					console.log(
-						`[Action:setPhase] ${cleared.released} bookings released, ${cleared.kept} special-needs spots kept.`
-					);
-				} catch (err) {
-					console.error('[Action:setPhase] Staging is on, but releasing the bookings failed:', err);
-					const released = err instanceof ReleaseStoppedError ? err.released : 0;
-					if (released > 0) {
+				// Editing the layout with guest bookings in it is what the dialog
+				// warns about; only a "yes, release them" gets here. Spots the crew
+				// booked for special-needs requests stay.
+				let cleared: { released: number; kept: number; namesLeft: number | null } | null = null;
+				if (to === 'staging' && clearBookings) {
+					try {
+						cleared = await releaseGuestBookings(locals.adminPb);
 						await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
-							released,
-							kept: 0,
-							reason: 'staging',
-							stopped: err instanceof ReleaseStoppedError ? err.total : undefined
+							...cleared,
+							guestsNotified: !quiet,
+							reason: 'staging'
+						});
+						console.log(
+							`[Action:setPhase] ${cleared.released} bookings released${quiet ? ' quietly' : ''}, ${cleared.kept} special-needs spots kept, ${cleared.namesLeft ?? '?'} burner names left.`
+						);
+					} catch (err) {
+						console.error(
+							'[Action:setPhase] Staging is on, but releasing the bookings failed:',
+							err
+						);
+						const stopped = err instanceof ReleaseStoppedError ? err : null;
+						const released = stopped?.released ?? 0;
+						// The crew-booked spots were never part of the release, so the
+						// count belongs in the log even when it stopped halfway.
+						if (released > 0) {
+							await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
+								released,
+								kept: stopped?.kept ?? 0,
+								namesLeft: stopped?.namesLeft ?? null,
+								guestsNotified: !quiet,
+								reason: 'staging',
+								stopped: stopped?.total
+							});
+						}
+						return fail(500, {
+							error: `Staging Mode is on, but the bookings could not all be released (${released} of ${stopped?.total ?? '?'} done).${namesNote(stopped?.namesLeft ?? null)} Use "Clear all bookings" for the rest.`
 						});
 					}
-					return fail(500, {
-						error: `Staging Mode is on, but the bookings could not all be released (${released} done). Use "Clear all bookings" for the rest.`
-					});
 				}
+				return {
+					success: true,
+					phase: to,
+					phaseBefore,
+					pausedTimer: next.paused && !window.paused,
+					released: cleared?.released,
+					kept: cleared?.kept,
+					namesLeft: cleared?.namesLeft,
+					guestsNotified: cleared ? !quiet : undefined
+				};
+			} finally {
+				// Right after the release, not at the end of the window: guest
+				// messages about anything else must not stay muted.
+				if (quiet) await muteGuestMessages(locals.adminPb, 0);
 			}
-			return {
-				success: true,
-				phase: to,
-				phaseBefore,
-				pausedTimer: next.paused && !window.paused,
-				released: cleared?.released,
-				kept: cleared?.kept
-			};
 		} catch (err) {
 			return phaseFailure('setPhase', err, 'The booking phase was not changed.');
 		}
@@ -325,25 +413,28 @@ export const actions: Actions = {
 
 		console.log(`[Action:clearAllBookings] INITIATED by ${locals.admin.email}`);
 		try {
-			const { released, kept } = await releaseGuestBookings(locals.adminPb);
+			const { released, kept, namesLeft } = await releaseGuestBookings(locals.adminPb);
 			console.log(
-				`[Action:clearAllBookings] SUCCESS. ${released} spots released, ${kept} special-needs spots kept, ticket codes kept.`
+				`[Action:clearAllBookings] SUCCESS. ${released} spots released, ${kept} special-needs spots kept, ${namesLeft ?? '?'} burner names left, ticket codes kept.`
 			);
 			await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
 				released,
-				kept
+				kept,
+				namesLeft
 			});
-			return { success: true, released, kept };
+			return { success: true, released, kept, namesLeft };
 		} catch (err) {
 			console.error('[Action:clearAllBookings] FAILED:', err);
 			if (err instanceof ReleaseStoppedError && err.released > 0) {
 				await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
 					released: err.released,
-					kept: 0,
+					kept: err.kept,
+					namesLeft: err.namesLeft,
 					stopped: err.total
 				});
+				const stillBooked = err.total - err.released;
 				return fail(500, {
-					error: `Clearing stopped after ${err.released} of ${err.total} spots: the rest are still booked. Reload the page and try again.`
+					error: `Clearing stopped after ${err.released} of ${err.total} spots; ${stillBooked} ${stillBooked === 1 ? 'is' : 'are'} still booked.${namesNote(err.namesLeft)} Reload the page and try again.`
 				});
 			}
 			return fail(500, {

@@ -6,7 +6,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import CountdownDigits from '$lib/components/CountdownDigits.svelte';
 	import { actionErrorMessage, submitAction } from '$lib/admin-actions';
-	import { alertDialog, chooseDialog, confirmDialog, toast } from '$lib/dialogs';
+	import { alertDialog, chooseWithOption, confirmDialog, toast } from '$lib/dialogs';
 	import { berlinLocalToIso, isoToBerlinLocal } from '$lib/time';
 	import {
 		PHASE_ICONS,
@@ -16,6 +16,7 @@
 		formatBerlin,
 		formatDuration,
 		nextTransition,
+		quietReleaseByDefault,
 		resyncDelay,
 		saveTimesEdit,
 		switchPhase,
@@ -53,6 +54,13 @@
 	});
 	onDestroy(() => clearInterval(ticker));
 	const motion = (duration: number) => (reduceMotion ? 0 : duration);
+
+	/** Burner names a release could not clear — the spots are free regardless. */
+	function namesNote(namesLeft: number | null | undefined): string {
+		if (namesLeft === null) return ' Whether burner names were left behind is unknown.';
+		if (!namesLeft || namesLeft <= 0) return '';
+		return ` ${namesLeft} burner name${namesLeft === 1 ? '' : 's'} could not be cleared; those spots are free but still show a name.`;
+	}
 
 	let expanded = false;
 	let editing = false;
@@ -330,16 +338,25 @@
 		// only does it when this dialog says so.
 		const asksAboutBookings = to === 'staging' && guestBooked > 0;
 		let clearBookings = false;
+		let quietRelease = false;
 		if (asksAboutBookings) {
-			const choice = await chooseDialog(notes.join(' '), {
+			// Ticked once booking is over: after the event, "your spot was
+			// released" only confuses people. Before that they need to hear it.
+			const { choice, checked } = await chooseWithOption(notes.join(' '), {
 				title: `${PHASE_ICONS[to]} Switch to ${PHASE_LABELS[to]} right now?`,
 				tone: 'danger',
 				confirmLabel: `Switch & release ${guestBooked} booking${guestBooked === 1 ? '' : 's'}`,
 				altLabel: 'Switch & keep the bookings',
-				cancelLabel: 'Cancel'
+				cancelLabel: 'Cancel',
+				checkbox: {
+					label: "Don't notify the guests",
+					checked: quietReleaseByDefault(bookingWindow, now),
+					hint: 'Only when releasing: nobody gets a “your spot was released” message. The crew alert goes out either way.'
+				}
 			});
 			if (choice === 'cancel') return;
 			clearBookings = choice === 'confirm';
+			quietRelease = clearBookings && checked;
 		} else {
 			const ok = await confirmDialog(notes.join(' '), {
 				title: `${PHASE_ICONS[to]} Switch to ${PHASE_LABELS[to]} right now?`,
@@ -353,17 +370,24 @@
 		const form = new FormData();
 		form.set('phase', to);
 		if (clearBookings) form.set('clearBookings', '1');
+		if (quietRelease) form.set('quietRelease', '1');
 		busy = true;
 		const result = await submitAction('?/setPhase', form);
 		busy = false;
 		if (result.type === 'success') {
 			const data = result.data as
-				{ phaseBefore?: BookingPhase; released?: number; kept?: number } | undefined;
+				| {
+						phaseBefore?: BookingPhase;
+						released?: number;
+						kept?: number;
+						namesLeft?: number | null;
+				  }
+				| undefined;
 			const releasedNote =
 				to !== 'staging'
 					? ''
 					: clearBookings
-						? ` ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}.`
+						? ` ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}${quietRelease ? ', guests not notified' : ''}.${namesNote(data?.namesLeft)}`
 						: guestBooked > 0
 							? ` The ${guestBooked} guest booking${guestBooked === 1 ? '' : 's'} stay${guestBooked === 1 ? 's' : ''}: clear them with 🧨 Clear all bookings when the camp should be empty.`
 							: '';
@@ -404,10 +428,12 @@
 		const result = await submitAction('?/clearAllBookings', new FormData());
 		busy = false;
 		if (result.type === 'success') {
-			const data = result.data as { released?: number; kept?: number } | undefined;
+			const data = result.data as
+				{ released?: number; kept?: number; namesLeft?: number | null } | undefined;
+			const left = namesNote(data?.namesLeft);
 			toast(
-				`✨ ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}.`,
-				'success'
+				`✨ ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}.${left}`,
+				left ? 'warning' : 'success'
 			);
 		} else {
 			await alertDialog(

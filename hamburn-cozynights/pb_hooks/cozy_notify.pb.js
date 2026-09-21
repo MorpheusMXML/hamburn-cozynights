@@ -19,7 +19,9 @@
 // 4. A cron job delivers: e-mail, Telegram messages, crew alerts, and reads
 //    the bot's incoming messages (guests linking their chat).
 // 5. POST /api/cozy/notify/flush (superusers only): one run right now, for
-//    the tests.
+//    the tests. POST /api/cozy/notify/quiet (superusers only): mutes guest
+//    messages for a moment, e.g. around the release when switching back to
+//    Staging (the crew alert goes out regardless).
 // 6. The message texts for /admin/messages (superusers only, the app's service
 //    account): GET /api/cozy/texts lists the catalogue with the defaults,
 //    POST /api/cozy/texts/preview renders sample messages with changed texts.
@@ -329,6 +331,21 @@ routerAdd(
 		// force=1: ignore the settle time and the per-ticket cooldown (tests)
 		const force = e.request.url.query().get('force') === '1';
 		return e.json(200, notify.flush(e.app, force));
+	},
+	$apis.requireSuperuserAuth()
+);
+
+// Body: { seconds } — mutes guest messages for that long (0 ends it early).
+// The Control Center opens it around the release when a superuser switches
+// back to Staging with "Don't notify the guests"; crew alerts are unaffected.
+routerAdd(
+	'POST',
+	'/api/cozy/notify/quiet',
+	(e) => {
+		const notify = require(`${__hooks}/lib/notify.js`);
+		const body = e.requestInfo().body || {};
+		const until = notify.setQuiet(e.app, body.seconds);
+		return e.json(200, { quietUntil: until ? new Date(until).toISOString() : '' });
 	},
 	$apis.requireSuperuserAuth()
 );

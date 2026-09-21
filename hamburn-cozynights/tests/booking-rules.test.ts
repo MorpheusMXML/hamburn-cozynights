@@ -1,6 +1,12 @@
 // tests/booking-rules.test.ts — one ticket = one booking, event-time helpers, rate limiting
 import { describe, it, expect, vi } from 'vitest';
-import { BookingService, BedUnavailableError, ReleaseFailedError } from '../src/lib/server/booking';
+import {
+	BookingService,
+	BedUnavailableError,
+	BookingClosedError,
+	ReleaseFailedError
+} from '../src/lib/server/booking';
+import { APP_SETTINGS_ID } from '../src/lib/server/constants';
 import { FailureRateLimiter } from '../src/lib/server/rate-limit';
 import { berlinLocalToIso, isoToBerlinLocal } from '../src/lib/time';
 
@@ -8,13 +14,24 @@ vi.mock('$env/dynamic/private', () => ({
 	env: { ENCRYPTION_KEY: '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff' }
 }));
 
-/** Minimal in-memory stand-in for the PocketBase beds/orders collections, with I/O latency. */
-function makeFakePb(beds: Record<string, any>[]) {
+/**
+ * Minimal in-memory stand-in for the PocketBase beds/orders collections, with
+ * I/O latency. `settings` is the app_settings record BookingService re-reads
+ * after a claim; null makes that read fail.
+ */
+function makeFakePb(
+	beds: Record<string, any>[],
+	settings: Record<string, any> | null = { is_booking_active: true }
+) {
 	const tick = () => new Promise((resolve) => setTimeout(resolve, Math.random() * 5));
 	const byId = new Map(beds.map((b) => [b.id, { ...b }]));
 	const service = (name: string) => ({
 		getOne: async (id: string) => {
 			await tick();
+			if (id === APP_SETTINGS_ID) {
+				if (!settings) throw { status: 500 };
+				return { ...settings };
+			}
 			const bed = byId.get(id);
 			if (!bed) throw { status: 404 };
 			return { ...bed };
@@ -38,6 +55,61 @@ function makeFakePb(beds: Record<string, any>[]) {
 	};
 	return { pb: pb as any, byId };
 }
+
+/**
+ * Switching back to Staging Mode writes app_settings first and releases the
+ * bookings right after (src/routes/admin/+page.server.ts). A guest request
+ * that was already waiting for the per-bed lock would otherwise claim its spot
+ * behind the release and keep it in a camp that is supposed to be empty.
+ */
+describe('BookingService: booking closes while a guest waits for the lock', () => {
+	const order = { id: 'order1' } as any;
+	const free = () => [{ id: 'bed1', occupied: false, order: '', enabled: true }];
+
+	it('undoes the claim and refuses when booking is no longer open', async () => {
+		for (const phase of [{}, { booking_closed: true }]) {
+			const { pb, byId } = makeFakePb(free(), { is_booking_active: false, ...phase });
+			const service = new BookingService(pb);
+
+			await expect(
+				service.bookBed(order, 'bed1', 'Alice', { requireLivePhase: true })
+			).rejects.toBeInstanceOf(BookingClosedError);
+
+			// Nothing is left behind for the release loop to miss.
+			expect(byId.get('bed1')).toMatchObject({ occupied: false, order: null });
+		}
+	});
+
+	it('says why, in the words the guest gets everywhere else', async () => {
+		const { pb } = makeFakePb(free(), { booking_closed: true });
+		await expect(
+			new BookingService(pb).bookBed(order, 'bed1', 'Alice', { requireLivePhase: true })
+		).rejects.toThrow('Booking has closed. Nothing was booked.');
+	});
+
+	it('books normally while booking is open', async () => {
+		const { pb, byId } = makeFakePb(free());
+		await new BookingService(pb).bookBed(order, 'bed1', 'Alice', { requireLivePhase: true });
+		expect(byId.get('bed1')).toMatchObject({ occupied: true, order: 'order1' });
+	});
+
+	it('lets the booking stand when the phase itself cannot be read', async () => {
+		// getBookingSettings answers "staging" for a failed read; undoing a
+		// perfectly good booking over a database hiccup would be worse than the
+		// rare stray one this guards against.
+		const { pb, byId } = makeFakePb(free(), null);
+		await new BookingService(pb).bookBed(order, 'bed1', 'Alice', { requireLivePhase: true });
+		expect(byId.get('bed1')).toMatchObject({ occupied: true, order: 'order1' });
+	});
+
+	it('leaves the crew alone: they book in any phase', async () => {
+		const { pb, byId } = makeFakePb(free(), { booking_closed: true });
+		// No requireLivePhase: assigning a spot for a special-needs request
+		// happens in Staging on purpose (src/lib/server/special-requests.ts).
+		await new BookingService(pb).bookBed(order, 'bed1', 'Crew Pick');
+		expect(byId.get('bed1')).toMatchObject({ occupied: true, order: 'order1' });
+	});
+});
 
 describe('BookingService: one ticket code = one booking', () => {
 	it('never leaves one order holding several beds under concurrent requests', async () => {

@@ -6,6 +6,7 @@ import { decrypt } from '$lib/server/crypto';
 import {
 	BookingService,
 	BedUnavailableError,
+	BookingClosedError,
 	CheckedInError,
 	ReleaseFailedError,
 	isBedBookable,
@@ -178,9 +179,11 @@ export const actions: Actions = {
 			}
 
 			// Availability (free, enabled, not locked unless admin) is checked
-			// authoritatively inside bookBed, under per-order and per-bed locks.
+			// authoritatively inside bookBed, under per-order and per-bed locks —
+			// and so is the phase, which can close while this waits for them.
 			await bookingService.bookBed(order, bedId, guestName, {
-				allowLocked: !!locals.admin
+				allowLocked: !!locals.admin,
+				requireLivePhase: true
 			});
 			return { success: true };
 		} catch (err: any) {
@@ -190,6 +193,7 @@ export const actions: Actions = {
 			if (err instanceof ReleaseFailedError || err instanceof CheckedInError) {
 				return fail(409, { error: err.message });
 			}
+			if (err instanceof BookingClosedError) return fail(403, { error: err.message });
 			if (err?.status === 404) {
 				return fail(404, {
 					error: "This spot doesn't exist anymore. Please pick another one.",

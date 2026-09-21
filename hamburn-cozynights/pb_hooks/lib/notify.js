@@ -49,6 +49,12 @@ const BOT_CACHE_SECONDS = 1800;
 const TG_POLL_PAUSE_SECONDS = 60;
 // The delivery lock: renewed on every pass and before every delivery.
 const LOCK_SECONDS = 30;
+// How long a record is held while it is being delivered. Has to be well over
+// LOCK_SECONDS: it is what stops a send that outlives the lock from being
+// delivered a second time by the run that takes over (deliverOne).
+const LEASE_SECONDS = 300;
+// Longest the crew can mute guest messages in one go (setQuiet).
+const QUIET_MAX_SECONDS = 600;
 // guest_notify.mail_label / tg_label
 const LABEL_MAX = 400;
 
@@ -672,13 +678,48 @@ function updateNotify(app, id, change) {
 	return saved;
 }
 
+// --- muted releases ------------------------------------------------------------
+//
+// Going back to Staging releases every guest booking. After the event that
+// would tell every guest "your spot was released", so the Control Center can
+// mute guest messages for the moment of that release (POST
+// /api/cozy/notify/quiet; docs/admin/event-checklist.md). Crew alerts are
+// admin_events and never pass through markDue: they go out either way.
+
+/** Are guest messages muted right now? */
+function isQuiet(app) {
+	return Date.now() < (app.store().get('cozy_notify_quiet') || 0);
+}
+
+/**
+ * Mutes guest messages for `seconds` (capped at QUIET_MAX_SECONDS; 0 or less
+ * ends it). Lives in the process's store, so it ends by itself even if the
+ * app never comes back to end it.
+ * @returns ms since the epoch when it ends (0: not muted)
+ */
+function setQuiet(app, seconds) {
+	const wanted = Math.min(Number(seconds) || 0, QUIET_MAX_SECONDS);
+	const until = wanted > 0 ? Date.now() + wanted * 1000 : 0;
+	app.store().set('cozy_notify_quiet', until);
+	return until;
+}
+
 /**
  * Marks a ticket for a delivery run. Called from the bed and order hooks,
  * inside the same transaction as the change itself.
+ *
+ * While guest messages are muted (setQuiet) nothing is queued. Instead the
+ * ticket's channels take its state as it is now as already told: a later
+ * booking is then news ("booked") instead of a change from a spot that was
+ * released in silence — and nothing about the muted change goes out later.
  */
 function markDue(app, orderId, options) {
 	if (!orderId) return;
 	const opts = options || {};
+	if (isQuiet(app)) {
+		acceptSilently(app, orderId);
+		return;
+	}
 	const due = pbDate(Date.now() + (opts.now ? 0 : SETTLE_SECONDS * 1000));
 	app.runInTransaction((tx) => {
 		let rec = findOne(tx, 'guest_notify', 'order = {:order}', { order: orderId });
@@ -695,6 +736,27 @@ function markDue(app, orderId, options) {
 			rec.set('order', orderId);
 		}
 		rec.set('due', due);
+		rec.set('attempts', 0);
+		tx.save(rec);
+	});
+}
+
+/** The muted counterpart of markDue: the current spot counts as told, nothing is queued. */
+function acceptSilently(app, orderId) {
+	app.runInTransaction((tx) => {
+		const rec = findOne(tx, 'guest_notify', 'order = {:order}', { order: orderId });
+		if (!rec) return; // never told anything, so nothing to bring up to date
+		const spot = currentSpot(tx, orderId);
+		const key = spot ? spot.bedId : '';
+		const label = spot ? spot.label : '';
+		// Both channels, whichever is in use: deliverOne only reads the one
+		// that belongs to a known address or a linked chat.
+		rec.set('mail_spot', key);
+		rec.set('mail_label', label);
+		rec.set('tg_spot', key);
+		rec.set('tg_label', label);
+		// A message that was waiting to settle is about the old state: dropped.
+		rec.set('due', '');
 		rec.set('attempts', 0);
 		tx.save(rec);
 	});
@@ -1266,6 +1328,13 @@ function previewMessages(cfg) {
 	return { mail: mail, telegram: telegram, bot: bot };
 }
 
+/**
+ * Hands one message to PocketBase's mail client. This blocks for as long as
+ * the SMTP server takes: PocketBase 0.40 has no timeout for it, in the
+ * settings or anywhere else the JSVM can reach (unlike telegramCall, which
+ * passes one to $http.send). A hanging send is therefore survived rather than
+ * cut short — deliverOne leases the record before it gets here.
+ */
 function sendMail(app, cfg, to, msg) {
 	const meta = app.settings().meta;
 	const headers = { 'Auto-Submitted': 'auto-generated' };
@@ -1322,10 +1391,14 @@ function kindOf(lastKey, key) {
  * it was read, sends, then writes back only what it decided (updateNotify):
  * if the ticket was marked again meanwhile, that newer mark stays and the next
  * pass handles the newer state.
+ *
+ * Before the first send the record is leased (`due` pushed LEASE_SECONDS out),
+ * so a send that takes longer than the loop's lock can't be delivered twice.
+ * `keepAlive` renews that lock and is checked right before the lease.
  */
-function deliverOne(app, cfg, rec, force) {
+function deliverOne(app, cfg, rec, force, keepAlive) {
 	const now = Date.now();
-	const loadedDue = rec.getString('due');
+	let loadedDue = rec.getString('due');
 	let order;
 	try {
 		order = app.findRecordById('orders', rec.getString('order'));
@@ -1344,6 +1417,25 @@ function deliverOne(app, cfg, rec, force) {
 			return 'cooldown';
 		}
 	}
+
+	// Take the record out of reach before anything goes out. Without this a
+	// send that hangs longer than LOCK_SECONDS lets the next cron run take the
+	// lock, find the same record still due, and send everything a second time —
+	// and the mail client has no timeout of its own (sendMail). The closing
+	// write below replaces the lease with the real result; a run that dies
+	// mid-send leaves it in place, so the record is retried in LEASE_SECONDS
+	// instead of right away.
+	if (keepAlive && !keepAlive()) return 'lock-lost';
+	const lease = pbDate(now + LEASE_SECONDS * 1000);
+	const leased = updateNotify(app, rec.id, (fresh) => {
+		if (fresh.getString('due') !== loadedDue) return false; // another run has it
+		fresh.set('due', lease);
+	});
+	if (!leased) return 'skipped';
+	// What the closing write checks against from here on — and deliverDue's
+	// error path, which compares with the record it handed in.
+	loadedDue = lease;
+	rec.set('due', lease);
 
 	const spot = currentSpot(app, order.id);
 	const key = spot ? spot.bedId : '';
@@ -1531,7 +1623,7 @@ function deliverDue(app, cfg, force, deadline, keepAlive) {
 		if (keepAlive && !keepAlive()) break;
 		let result;
 		try {
-			result = deliverOne(app, cfg, rec, force);
+			result = deliverOne(app, cfg, rec, force, keepAlive);
 		} catch (err) {
 			console.error(
 				'[cozy-notify] delivery for ' + rec.getString('order') + ' failed: ' + safeError(err)
@@ -1925,6 +2017,10 @@ module.exports = {
 	currentRequest: currentRequest,
 	requestKindOf: requestKindOf,
 	markDue: markDue,
+	isQuiet: isQuiet,
+	setQuiet: setQuiet,
+	deliverOne: deliverOne,
+	deliverDue: deliverDue,
 	guestMail: guestMail,
 	guestTelegram: guestTelegram,
 	loadTexts: loadTexts,

@@ -382,6 +382,59 @@ describe('booking updates on Telegram', () => {
 
 // --- crew alerts ---------------------------------------------------------------------
 
+// The switch back to Staging with "Don't notify the guests" (the Control
+// Center mutes guest messages around the release, POST /api/cozy/notify/quiet).
+describe('a release the crew keeps quiet', () => {
+	const quiet = (seconds: number) =>
+		su.send('/api/cozy/notify/quiet', { method: 'POST', body: { seconds } });
+
+	it('tells the guest nothing, and a later booking is news again', async () => {
+		const { beds } = await seedHouse(su, 2);
+		const guest = await ticketWithEmail();
+		await booking.bookBed(guest.order as any, beds[0].id, 'Quiet One');
+		await flush();
+		expect(await mailsTo(guest.email)).toHaveLength(1);
+
+		await quiet(60);
+		try {
+			await booking.unbookOrder(guest.order.id);
+		} finally {
+			await quiet(0);
+		}
+		await flush();
+		expect(await mailsTo(guest.email)).toHaveLength(1); // nothing about the release
+
+		// Booking opens again: the new spot is "booked", not a change from the old one.
+		await booking.bookBed(guest.order as any, beds[1].id, 'Quiet One');
+		await flush();
+		const mails = await mailsTo(guest.email);
+		expect(mails).toHaveLength(2);
+		expect(mails.map((m) => m.Subject.split(':')[0])).toEqual([
+			'[TEST] Your CozyNights spot',
+			'[TEST] Your CozyNights spot' // booked, not "spot changed"
+		]);
+		expect((await mailBody(mails[1].ID)).Text).not.toContain('Before:');
+	});
+
+	it('is over as soon as it is ended', async () => {
+		await quiet(60);
+		await quiet(0);
+		// Still muted, this booking would be taken as told and never confirmed.
+		const { beds } = await seedHouse(su, 1);
+		const guest = await ticketWithEmail();
+		await booking.bookBed(guest.order as any, beds[0].id, 'Loud Again');
+		await flush();
+		expect(await mailsTo(guest.email)).toHaveLength(1);
+	});
+
+	it("is only for the app's service account", async () => {
+		const boss = await createAdmin(su, 'superuser');
+		const body = { method: 'POST', body: { seconds: 60 } };
+		await expectRefused(boss.client.send('/api/cozy/notify/quiet', body));
+		await expectRefused(anonymous().send('/api/cozy/notify/quiet', body));
+	});
+});
+
 describe('crew alerts', () => {
 	it('report access requests, approvals and removals', async () => {
 		const pending = await createAdmin(su, 'pending');

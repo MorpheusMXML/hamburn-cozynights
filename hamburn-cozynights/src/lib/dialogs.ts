@@ -13,6 +13,15 @@ export type DialogTone = 'info' | 'success' | 'warning' | 'danger';
 /** What the person picked. `alt` is the second yes, e.g. "keep the bookings". */
 export type DialogChoice = 'confirm' | 'alt' | 'cancel';
 
+/** A switch inside the dialog, decided together with the button. */
+export interface DialogCheckbox {
+	label: string;
+	/** How it starts. */
+	checked: boolean;
+	/** A second line under the label, for what the choice means. */
+	hint?: string;
+}
+
 export interface DialogOptions {
 	title?: string;
 	tone?: DialogTone;
@@ -20,14 +29,23 @@ export interface DialogOptions {
 	cancelLabel?: string;
 	/** Shown as a third button: another way to go on, with other consequences. */
 	altLabel?: string;
+	/** One extra switch under the message, e.g. "Don't tell the guests". */
+	checkbox?: DialogCheckbox;
 }
 
-export interface DialogRequest extends Required<Omit<DialogOptions, 'title'>> {
+/** The button that was pressed, and how the checkbox stood at that moment. */
+export interface DialogOutcome {
+	choice: DialogChoice;
+	checked: boolean;
+}
+
+export interface DialogRequest extends Required<Omit<DialogOptions, 'title' | 'checkbox'>> {
 	id: number;
 	kind: 'alert' | 'confirm';
 	title: string;
 	message: string;
-	resolve: (choice: DialogChoice) => void;
+	checkbox: DialogCheckbox | null;
+	resolve: (outcome: DialogOutcome) => void;
 }
 
 export interface Toast {
@@ -43,7 +61,7 @@ export const toasts = writable<Toast[]>([]);
 let nextId = 1;
 
 function open(kind: DialogRequest['kind'], message: string, options: DialogOptions) {
-	return new Promise<DialogChoice>((resolve) => {
+	return new Promise<DialogOutcome>((resolve) => {
 		const request: DialogRequest = {
 			id: nextId++,
 			kind,
@@ -53,16 +71,20 @@ function open(kind: DialogRequest['kind'], message: string, options: DialogOptio
 			confirmLabel: options.confirmLabel ?? (kind === 'confirm' ? 'Confirm' : 'OK'),
 			cancelLabel: options.cancelLabel ?? 'Cancel',
 			altLabel: options.altLabel ?? '',
+			checkbox: options.checkbox ?? null,
 			resolve
 		};
 		dialogQueue.update((queue) => [...queue, request]);
 	});
 }
 
-/** Closes a dialog and settles its promise. Called by DialogHost. */
-export function settleDialog(id: number, choice: DialogChoice) {
+/**
+ * Closes a dialog and settles its promise. Called by DialogHost. `checked` is
+ * the state of the dialog's checkbox, if it has one.
+ */
+export function settleDialog(id: number, choice: DialogChoice, checked = false) {
 	dialogQueue.update((queue) => {
-		queue.find((request) => request.id === id)?.resolve(choice);
+		queue.find((request) => request.id === id)?.resolve({ choice, checked });
 		return queue.filter((request) => request.id !== id);
 	});
 }
@@ -72,17 +94,28 @@ export async function confirmDialog(
 	message: string,
 	options: DialogOptions = {}
 ): Promise<boolean> {
-	return (await open('confirm', message, { ...options, altLabel: '' })) === 'confirm';
+	return (await open('confirm', message, { ...options, altLabel: '' })).choice === 'confirm';
 }
 
 /**
  * A confirm with two ways to go on ("release the bookings" / "keep them") and
  * Cancel. Escape and the backdrop mean cancel, like everywhere else.
  */
-export function chooseDialog(
+export async function chooseDialog(
 	message: string,
 	options: DialogOptions & { altLabel: string }
 ): Promise<DialogChoice> {
+	return (await open('confirm', message, options)).choice;
+}
+
+/**
+ * Like {@link chooseDialog}, but the dialog also carries a switch and the
+ * caller gets both: which button, and how the switch stood when it was pressed.
+ */
+export function chooseWithOption(
+	message: string,
+	options: DialogOptions & { altLabel: string; checkbox: DialogCheckbox }
+): Promise<DialogOutcome> {
 	return open('confirm', message, options);
 }
 
