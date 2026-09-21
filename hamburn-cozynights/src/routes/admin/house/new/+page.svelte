@@ -4,9 +4,13 @@
 	import { goto } from '$app/navigation';
 	import { toast } from '$lib/dialogs';
 	import { revealInvalid } from '$lib/field-alert';
+	import { layoutLock, lockAttrs } from '$lib/layout-lock';
+	import LayoutLockNotice from '$lib/components/admin/LayoutLockNotice.svelte';
 
 	export let data: PageData;
-	$: ({ x, y, isLayoutLocked, phase } = data);
+	$: ({ x, y, isLayoutLocked, phase, isSuperuser, booking } = data);
+	// Live Booking and Closed: no new houses; the form stays and says why.
+	$: addLock = isLayoutLocked ? layoutLock(phase, isSuperuser)('add houses') : null;
 
 	type Failure = { error?: string; field?: string };
 	// Without JavaScript the failed action's result arrives here.
@@ -33,6 +37,11 @@
 	// browser language, these messages are always English. The server checks
 	// the same rules again.
 	const handleSubmit: SubmitFunction = ({ formElement, cancel }) => {
+		if (addLock) {
+			// LockHintHost stops the clicks; this is the net for anything else.
+			cancel();
+			return;
+		}
 		showFailure(null);
 		if (!name.trim()) nameError = 'Enter a name for the house.';
 		// Same limit as the server (TEMPLATE_LIMITS.bedsPerRoom = 50); the old
@@ -82,12 +91,15 @@
 	<p class="coords-display">Location: 📍 X: {x} / Y: {y}</p>
 	<p class="hint">You can drag the pin to another place on the Control Center map afterwards.</p>
 
-	{#if isLayoutLocked}
-		<div class="lockdown-notice" role="status">
-			🔒 {phase === 'closed' ? 'Booking is closed' : 'Live Booking is active'}, so houses cannot be
-			added. A superuser can switch back to Staging Mode in the <a href="/admin">Control Center</a>.
-		</div>
-	{/if}
+	<div class="lock-slot">
+		<LayoutLockNotice
+			locked={isLayoutLocked}
+			{phase}
+			{isSuperuser}
+			next={booking?.next}
+			blocks="Houses can't be added."
+		/>
+	</div>
 
 	<form method="POST" action="?/create" class="edit-form" novalidate use:enhance={handleSubmit}>
 		<input type="hidden" name="x" value={x} />
@@ -106,7 +118,8 @@
 				aria-invalid={!!nameError}
 				aria-describedby={nameError ? 'name-error' : undefined}
 				on:input={() => (nameError = '')}
-				disabled={isLayoutLocked}
+				readonly={!!addLock}
+				{...lockAttrs(addLock)}
 			/>
 			{#if nameError}
 				<p class="field-error" id="name-error" role="alert">{nameError}</p>
@@ -126,7 +139,8 @@
 				aria-invalid={!!bedCountError}
 				aria-describedby={bedCountError ? 'bedcount-error' : 'bedcount-hint'}
 				on:input={() => (bedCountError = '')}
-				disabled={isLayoutLocked}
+				readonly={!!addLock}
+				{...lockAttrs(addLock)}
 			/>
 			<p class="hint" id="bedcount-hint">
 				Creates a first room "Main Module" with this many active spots. Enter 0 to add rooms later.
@@ -142,7 +156,7 @@
 
 		<div class="actions">
 			<a href="/admin" class="btn-cancel">Cancel</a>
-			<button type="submit" class="btn-save" disabled={isLayoutLocked || submitting}>
+			<button type="submit" class="btn-save" disabled={submitting} {...lockAttrs(addLock)}>
 				{submitting ? 'Saving…' : 'Save House'}
 			</button>
 		</div>
@@ -197,19 +211,11 @@
 		font-size: 0.8rem;
 		line-height: 1.4;
 	}
-	.lockdown-notice {
-		background: rgba(251, 146, 60, 0.08);
-		border: 1px solid rgba(251, 146, 60, 0.3);
-		color: #fb923c;
-		padding: 1rem;
-		border-radius: 12px;
-		font-weight: 700;
-		font-size: 0.85rem;
-		line-height: 1.5;
+	.lock-slot {
 		margin-top: 1.5rem;
 	}
-	.lockdown-notice a {
-		color: #fdba74;
+	.lock-slot :global(.lock-notice) {
+		margin-bottom: 0;
 	}
 	.edit-form {
 		display: flex;
@@ -239,10 +245,6 @@
 	input:focus {
 		outline: none;
 		border-color: #2dd4bf;
-	}
-	input:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
 	}
 	.field-error {
 		font-size: 0.85rem;

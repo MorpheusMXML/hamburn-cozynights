@@ -12,12 +12,19 @@
 	import { createEventDispatcher } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import { revealInvalid } from '$lib/field-alert';
+	import { lockAttrs, type LockFor } from '$lib/layout-lock';
+	import LockGlyph from './LockGlyph.svelte';
 
 	export let x: number;
 	export let y: number;
 	export let name = '';
 	export let houseId: string | undefined = undefined;
 	export let flat = false;
+	/**
+	 * Hints of the locked layout (Live Booking, Closed), or null while it can
+	 * be changed. Locked, everything here is read-only and says why.
+	 */
+	export let lock: LockFor | null = null;
 
 	const dispatch = createEventDispatcher<{
 		save: HouseSave;
@@ -30,6 +37,8 @@
 	let container: HTMLElement;
 
 	$: isEditing = !!houseId;
+	$: nameLock = lock?.(isEditing ? 'rename houses' : 'add houses');
+	$: moveLock = lock?.('move houses');
 
 	// Typed coordinates: follow the pin (drag, arrow keys, another house) until
 	// the admin edits them, then "MOVE PIN" sends them to the parent.
@@ -47,6 +56,7 @@
 	$: positionChanged = xInput !== String(x) || yInput !== String(y);
 
 	function handleMove() {
+		if (lock) return;
 		const nextX = parseMapCoordinate(xInput, MAP_WIDTH);
 		const nextY = parseMapCoordinate(yInput, MAP_HEIGHT);
 		if (nextX === null || nextY === null) {
@@ -59,6 +69,7 @@
 	}
 
 	function handleSave() {
+		if (lock) return;
 		if (!name || name.trim() === '') {
 			showValidationError = true;
 			revealInvalid(container);
@@ -69,11 +80,25 @@
 	}
 </script>
 
-<div class="editor-card-container" class:edit-mode={isEditing} class:flat bind:this={container}>
+<div
+	class="editor-card-container"
+	class:edit-mode={isEditing}
+	class:flat
+	class:locked={!!lock}
+	bind:this={container}
+>
 	<div class="editor-card">
 		<header class="editor-header">
-			<div class="mode-badge">{isEditing ? 'RECONFIGURING' : 'IGNITING NEW'} ⚡️</div>
-			<h4>{isEditing ? 'UPDATE COORDINATES' : 'GENERATE SANCTUARY'} 🏠</h4>
+			{#if nameLock}
+				<div class="mode-badge locked-badge" in:fade>
+					<LockGlyph size={10} /><span>VIEW ONLY</span>
+				</div>
+			{:else}
+				<div class="mode-badge" in:fade>{isEditing ? 'RECONFIGURING' : 'IGNITING NEW'} ⚡️</div>
+			{/if}
+			<h4>
+				{nameLock ? 'HOUSE DETAILS' : isEditing ? 'UPDATE COORDINATES' : 'GENERATE SANCTUARY'} 🏠
+			</h4>
 			{#if isEditing}
 				<span class="house-name-tag">{name}</span>
 			{/if}
@@ -88,6 +113,8 @@
 				aria-invalid={showValidationError}
 				aria-describedby={showValidationError ? 'house-name-error' : undefined}
 				on:input={() => (showValidationError = false)}
+				readonly={!!nameLock}
+				{...lockAttrs(nameLock)}
 			/>
 			{#if showValidationError}
 				<p class="field-error" id="house-name-error" role="alert">Enter a name for the house.</p>
@@ -98,7 +125,14 @@
 			<div class="input-group" in:fade>
 				<label for="bed-count">INITIAL CAPACITY (BEDS) 🛌</label>
 				<div class="number-input-wrapper">
-					<input id="bed-count" type="number" bind:value={bedCount} min="1" />
+					<input
+						id="bed-count"
+						type="number"
+						bind:value={bedCount}
+						min="1"
+						readonly={!!nameLock}
+						{...lockAttrs(nameLock)}
+					/>
 					<div class="laser-accent"></div>
 				</div>
 				<p class="hint">Base occupancy for the first module.</p>
@@ -118,6 +152,8 @@
 							aria-invalid={!!positionError}
 							aria-describedby={positionError ? 'house-position-error' : undefined}
 							on:keydown={(e) => e.key === 'Enter' && handleMove()}
+							readonly={!!moveLock}
+							{...lockAttrs(moveLock)}
 						/>
 					</label>
 					<label class="coord-field" for="house-y">
@@ -131,14 +167,26 @@
 							aria-invalid={!!positionError}
 							aria-describedby={positionError ? 'house-position-error' : undefined}
 							on:keydown={(e) => e.key === 'Enter' && handleMove()}
+							readonly={!!moveLock}
+							{...lockAttrs(moveLock)}
 						/>
 					</label>
-					<button type="button" class="btn-move" disabled={!positionChanged} on:click={handleMove}>
+					<button
+						type="button"
+						class="btn-move"
+						disabled={!moveLock && !positionChanged}
+						on:click={handleMove}
+						{...lockAttrs(moveLock)}
+					>
 						MOVE PIN
 					</button>
 				</div>
 				{#if positionError}
 					<p class="field-error" id="house-position-error" role="alert">{positionError}</p>
+				{:else if moveLock}
+					<p class="hint locked-hint">
+						{moveLock.title}: name and position stay as they are.
+					</p>
 				{:else}
 					<p class="hint">
 						Drag the pin on the map, use the arrow keys, or type a position (X 0–{MAP_WIDTH}, Y 0–{MAP_HEIGHT}).
@@ -149,8 +197,10 @@
 		{/if}
 
 		<div class="actions">
-			<button class="btn-cancel" on:click={() => dispatch('cancel')}>ABORT 🏜️</button>
-			<button class="btn-save" on:click={handleSave}>
+			<button class="btn-cancel" on:click={() => dispatch('cancel')}>
+				{nameLock ? 'CLOSE' : 'ABORT 🏜️'}
+			</button>
+			<button class="btn-save" on:click={handleSave} {...lockAttrs(nameLock)}>
 				{isEditing ? 'SYNC MODULE' : 'IGNITE HOUSE'} ✨
 			</button>
 		</div>
@@ -181,6 +231,11 @@
 	.flat::before {
 		display: none;
 	}
+	/* The padlock badges of locked buttons stick out a little; nothing else
+	   in the flat (sidebar) version needs the clipping. */
+	.editor-card-container.flat {
+		overflow: visible;
+	}
 
 	.mode-badge {
 		font-size: 0.6rem;
@@ -196,6 +251,18 @@
 	.edit-mode .mode-badge {
 		color: #f472b6;
 		border: 1px solid #f472b6;
+	}
+	.mode-badge.locked-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		color: #fb923c;
+		border: 1px solid rgba(251, 146, 60, 0.6);
+		background: rgba(251, 146, 60, 0.08);
+		--lock-glyph-hole: #1a120b;
+	}
+	.locked::before {
+		border-color: #444;
 	}
 
 	/* Decorative Laser Corner */
@@ -238,6 +305,9 @@
 		display: block;
 		text-transform: uppercase;
 		letter-spacing: -0.5px;
+		/* One long compound name ("KUSCHELZELTPLATZVERWALTUNGSGEBÄUDE") is
+		   wider than the sidebar on a phone. */
+		overflow-wrap: anywhere;
 	}
 
 	.input-group {
@@ -277,6 +347,11 @@
 		font-size: 0.65rem;
 		color: #444;
 		font-style: italic;
+	}
+	.locked-hint {
+		color: #9a6a45;
+		font-style: normal;
+		font-weight: 700;
 	}
 	.group-label {
 		font-size: 0.7rem;

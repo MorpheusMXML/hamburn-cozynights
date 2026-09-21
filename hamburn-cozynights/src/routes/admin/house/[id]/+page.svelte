@@ -1,14 +1,20 @@
 <script lang="ts">
 	import type { PageData, SubmitFunction } from './$types';
 	import AddRoomForm from '$lib/components/admin/AddRoomForm.svelte';
-	import { fade, fly } from 'svelte/transition';
+	import LayoutLockNotice from '$lib/components/admin/LayoutLockNotice.svelte';
+	import LockGlyph from '$lib/components/LockGlyph.svelte';
+	import { layoutLock, lockAttrs } from '$lib/layout-lock';
+	import { fade, fly, scale } from 'svelte/transition';
 	import { enhance } from '$app/forms';
 	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
 
 	export let data: PageData;
 	export let form: { message?: string } | null = null;
 	// Only admins reach this page (hooks + layout)
-	$: ({ house, rooms, isLayoutLocked, phase } = data);
+	$: ({ house, rooms, isLayoutLocked, phase, isSuperuser, booking } = data);
+	// Live Booking and Closed: adding and deleting rooms is locked, the buttons
+	// stay and explain themselves ($lib/layout-lock.ts).
+	$: lock = isLayoutLocked ? layoutLock(phase, isSuperuser) : null;
 
 	type RoomCard = PageData['rooms'][number];
 
@@ -80,21 +86,27 @@
 		<div class="error-banner form-error" role="alert">{form.message}</div>
 	{/if}
 
-	{#if isLayoutLocked}
-		<div class="lockdown-notice" role="status">
-			🔒 {phase === 'closed' ? 'Booking is closed' : 'Live Booking is active'}, so rooms cannot be
-			added or deleted. A superuser can switch back to Staging Mode in the
-			<a href="/admin">Control Center</a>.
-		</div>
-	{/if}
+	<LayoutLockNotice
+		locked={isLayoutLocked}
+		{phase}
+		{isSuperuser}
+		next={booking?.next}
+		blocks="Rooms can't be added or deleted."
+		still="Spots can still be locked 🔒 and marked ♿ on the room pages."
+	/>
 
-	<section class="form-section" in:fade={{ delay: 200 }} class:disabled={isLayoutLocked}>
+	<section class="form-section" in:fade={{ delay: 200 }} class:locked={isLayoutLocked}>
 		<header class="section-header">
 			<span class="laser-dot turquoise"></span>
 			<h3>ADD ROOM ➕</h3>
+			{#if isLayoutLocked}
+				<span class="lock-chip" transition:scale={{ start: 0.6, duration: 250 }}>
+					<LockGlyph size={11} /> STAGING ONLY
+				</span>
+			{/if}
 		</header>
 		<div class="form-wrapper">
-			<AddRoomForm disabled={isLayoutLocked} />
+			<AddRoomForm lock={lock?.('add rooms') ?? null} />
 		</div>
 	</section>
 
@@ -145,12 +157,7 @@
 					<a href="/admin/room/{room.id}" class="btn-manage">MANAGE SPOTS 🛌</a>
 					<form action="?/deleteRoom" method="POST" use:enhance={deleteRoom(room)}>
 						<input type="hidden" name="id" value={room.id} />
-						<button
-							type="submit"
-							class="btn-vanish"
-							class:disabled={isLayoutLocked}
-							disabled={isLayoutLocked}
-						>
+						<button type="submit" class="btn-vanish" {...lockAttrs(lock?.('delete rooms'))}>
 							VANISH ROOM 🌪️
 						</button>
 					</form>
@@ -288,24 +295,25 @@
 		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 		position: relative;
 	}
-	.form-section.disabled {
-		opacity: 0.4;
-		filter: grayscale(1);
-		pointer-events: none;
+	.form-section.locked .laser-dot.turquoise {
+		background: #555;
+		box-shadow: none;
 	}
-	.lockdown-notice {
+	.lock-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin-left: auto;
+		padding: 3px 8px;
+		border-radius: 6px;
+		border: 1px solid rgba(251, 146, 60, 0.5);
 		background: rgba(251, 146, 60, 0.08);
-		border: 1px solid rgba(251, 146, 60, 0.3);
 		color: #fb923c;
-		padding: 1rem 1.5rem;
-		border-radius: 12px;
-		font-weight: 700;
-		font-size: 0.85rem;
-		line-height: 1.5;
-		margin-bottom: 2rem;
-	}
-	.lockdown-notice a {
-		color: #fdba74;
+		font-size: 0.6rem;
+		font-weight: 900;
+		letter-spacing: 1px;
+		white-space: nowrap;
+		--lock-glyph-hole: #1a120b;
 	}
 	.form-section h3 {
 		margin: 0;
@@ -479,14 +487,10 @@
 		border-color: #2dd4bf;
 		background: rgba(45, 212, 191, 0.08);
 	}
-	.btn-vanish:hover:not(.disabled) {
+	.btn-vanish:hover:not([data-locked]) {
 		color: #f87171;
 		border-color: #f87171;
 		background: rgba(248, 113, 113, 0.05);
-	}
-	.btn-vanish.disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
 	}
 
 	@media (max-width: 640px) {

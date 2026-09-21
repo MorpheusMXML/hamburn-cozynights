@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { page } from '$app/state';
+	import LockHintHost from '$lib/components/admin/LockHintHost.svelte';
 
 	// Get data from server (admin session; null on the login page)
 	export let data;
@@ -89,6 +90,9 @@
 		<slot />
 	</main>
 </div>
+
+<!-- Explains a greyed-out control of the locked camp layout when it is tried. -->
+<LockHintHost />
 
 <style>
 	:global(body) {

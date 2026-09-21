@@ -3,7 +3,8 @@
 	import type { ActionResult } from '@sveltejs/kit';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { enhance } from '$app/forms';
-	import Map from '$lib/components/Map.svelte';
+	import Map, { type LayoutLockedDetail } from '$lib/components/Map.svelte';
+	import LockGlyph from '$lib/components/LockGlyph.svelte';
 	import HouseEditor, { type HouseSave } from '$lib/components/HouseEditor.svelte';
 	import IntelDashboard from '$lib/components/admin/IntelDashboard.svelte';
 	import SanityChecks from '$lib/components/admin/SanityChecks.svelte';
@@ -18,7 +19,8 @@
 	import { relativeTime } from '$lib/time';
 	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
 	import { actionErrorMessage, submitAction } from '$lib/admin-actions';
-	import { lockedDuring } from '$lib/booking-phase';
+	import { formatBerlin } from '$lib/booking-phase';
+	import { layoutLock, lockAttrs, showLockHint } from '$lib/layout-lock';
 
 	export let data: PageData;
 
@@ -26,6 +28,11 @@
 	// the destructive tools (clear all bookings, template import).
 	$: ({ crewBookedSpots, sanityWarnings, isSuperuser, phase, isLayoutLocked, bookingWindow } =
 		data);
+	// Locked (Live Booking, Closed): the structural controls stay in place,
+	// greyed out, and explain themselves when tried ($lib/layout-lock.ts).
+	$: lock = isLayoutLocked ? layoutLock(phase, isSuperuser) : null;
+	// An armed opening locks the layout at that moment: the editor says when.
+	$: locksAt = !isLayoutLocked && data.booking?.next?.to === 'live' ? data.booking.next.at : '';
 
 	// Live booking picture. The page load brings the first set of numbers, the
 	// poll keeps them current (see $lib/live-stats-poll.ts: hidden tabs cost
@@ -118,23 +125,22 @@
 	$: activeHouse =
 		houses.find((h) => h.id === selectedHouseId) || (editingHouse?.id ? null : editingHouse);
 
-	let lastLockedToast = 0;
-
-	function handleLayoutLocked() {
-		// One hint per gesture is enough.
-		if (Date.now() - lastLockedToast < 2500) return;
-		lastLockedToast = Date.now();
-		toast(
-			`🔒 The layout is locked ${lockedDuring(phase)}. Only a superuser can switch back to Staging Mode to add or move houses.`,
-			'warning'
-		);
+	/** The map refused a drag, an arrow key or a click: say why, right there. */
+	function handleLayoutLocked(event: CustomEvent<LayoutLockedDetail>) {
+		const { change, anchor } = event.detail;
+		const hint = lock?.(change === 'move' ? 'move houses' : 'add houses');
+		if (hint) showLockHint(anchor, hint);
 	}
 
-	/** Explains why a structural action is refused while booking is live or closed. */
-	function explainLocked(action: string) {
-		return alertDialog(
-			`The camp layout is locked ${lockedDuring(phase)}: it holds the guests' bookings. A superuser can switch back to Staging Mode in the 🎟 BOOKING WINDOW panel to ${action}.`,
-			{ title: `🔒 Locked ${lockedDuring(phase)}`, tone: 'warning' }
+	/**
+	 * A structural action while the layout is locked. Its buttons never get
+	 * here (LockHintHost answers them); this is the net for everything else.
+	 */
+	function explainLocked(change: string) {
+		const focused = document.activeElement;
+		showLockHint(
+			focused instanceof HTMLElement && focused !== document.body ? focused : null,
+			layoutLock(phase, isSuperuser)(change)
 		);
 	}
 
@@ -158,7 +164,7 @@
 
 	async function handleHouseMoved(event: CustomEvent) {
 		if (isLayoutLocked) {
-			handleLayoutLocked();
+			explainLocked('move houses');
 			invalidateAll();
 			return;
 		}
@@ -432,7 +438,13 @@
 	</section>
 
 	{#if showTemplates}
-		<TemplateManager {isSuperuser} on:close={() => (showTemplates = false)} />
+		<TemplateManager
+			{isSuperuser}
+			lockedNote={lock
+				? `${lock('apply templates').title}: comparing works now, applying needs Staging Mode.`
+				: ''}
+			on:close={() => (showTemplates = false)}
+		/>
 	{/if}
 
 	{#if showGuide}
@@ -471,13 +483,15 @@
 						<h3>PLAYA PROTOCOLS</h3>
 					</div>
 					<div class="intel-grid">
-						<div class="intel-card turquoise">
+						<div class="intel-card turquoise" class:locked={isLayoutLocked}>
 							<span class="icon">📍</span>
 							<p>Click map to ignite house. (STAGING ONLY)</p>
+							{#if isLayoutLocked}<LockGlyph size={13} />{/if}
 						</div>
-						<div class="intel-card pink">
+						<div class="intel-card pink" class:locked={isLayoutLocked}>
 							<span class="icon">🖱️</span>
 							<p>Drag to reposition. (STAGING ONLY)</p>
+							{#if isLayoutLocked}<LockGlyph size={13} />{/if}
 						</div>
 						<div class="intel-card orange">
 							<span class="icon">⚙️</span>
@@ -499,16 +513,20 @@
 		{#if showMap}
 			<div class="map-view" in:fade={{ duration: 300 }}>
 				<div class="map-status-bar state-ring" data-state={phase}>
-					{#if isLayoutLocked}
-						<span class="status-msg"
-							>🔒 LOCKED: {phase === 'closed' ? 'Booking is closed' : 'Live Booking is active'}.
-							Only a superuser can switch back to 🛠 STAGING MODE to add, move or delete houses.</span
-						>
-					{:else}
-						<span class="status-msg"
-							>🛠 EDITOR ACTIVE: Drag houses to reposition. Click house or space to manage.</span
-						>
-					{/if}
+					<LockGlyph locked={isLayoutLocked} size={15} />
+					{#key isLayoutLocked}
+						<span class="status-msg" in:fade={{ duration: 260 }}>
+							{#if isLayoutLocked}
+								LOCKED: {phase === 'closed' ? 'Booking is closed' : 'Live Booking is active'}.
+								{isSuperuser
+									? 'Switch back to 🛠 STAGING MODE in 🎟 BOOKING WINDOW to add, move or delete houses.'
+									: 'Only a superuser can switch back to 🛠 STAGING MODE to add, move or delete houses.'}
+							{:else}
+								🛠 EDITOR ACTIVE: Drag houses to reposition. Click house or space to manage.
+								{#if locksAt}The layout locks {formatBerlin(locksAt)}, when Live Booking starts.{/if}
+							{/if}
+						</span>
+					{/key}
 				</div>
 				<div class="map-layout-split">
 					<div class="map-frame">
@@ -546,6 +564,7 @@
 									name={activeHouse.name}
 									houseId={selectedHouseId || undefined}
 									flat={true}
+									{lock}
 									on:save={handleSaveHouse}
 									on:move={handleMoveFromEditor}
 									on:cancel={() => {
@@ -563,7 +582,7 @@
 										<button
 											class="btn-vanish-big"
 											on:click={handleDeleteActiveHouse}
-											class:disabled={isLayoutLocked}
+											{...lockAttrs(lock?.('delete houses'))}
 										>
 											VANISH FROM PLAYA 🌪️
 										</button>
@@ -621,12 +640,12 @@
 							<button
 								class="btn-action-small"
 								on:click={() => handleRenameHouse(house)}
-								class:disabled={isLayoutLocked}>RENAME ✏️</button
+								{...lockAttrs(lock?.('rename houses'))}>RENAME ✏️</button
 							>
 							<button
 								class="btn-action-small vanish"
 								on:click={() => handleDeleteHouse(house)}
-								class:disabled={isLayoutLocked}>VANISH 🌪️</button
+								{...lockAttrs(lock?.('delete houses'))}>VANISH 🌪️</button
 							>
 						</div>
 					</div>
@@ -635,11 +654,17 @@
 				<button
 					class="add-house-card"
 					on:click={handleIgniteFromList}
-					class:disabled={isLayoutLocked}
+					{...lockAttrs(lock?.('add houses'))}
 				>
-					<span class="plus">+</span>
-					<span>Ignite New House</span>
-					<small>Starts in the middle of the map</small>
+					{#if lock}
+						<span class="plus lock"><LockGlyph size={34} /></span>
+						<span>Ignite New House</span>
+						<small>Staging Mode only</small>
+					{:else}
+						<span class="plus">+</span>
+						<span>Ignite New House</span>
+						<small>Starts in the middle of the map</small>
+					{/if}
 				</button>
 			</div>
 		{/if}
@@ -855,6 +880,19 @@
 		line-height: 1.2;
 		font-weight: bold;
 	}
+	/* The staging-only protocols while the layout is locked. */
+	.intel-card.locked {
+		border-style: dashed;
+		color: #666;
+	}
+	.intel-card.locked p,
+	.intel-card.locked .icon {
+		opacity: 0.45;
+	}
+	.intel-card.locked :global(.lock-glyph) {
+		margin-left: auto;
+		--lock-glyph-hole: #111;
+	}
 	.icon {
 		font-size: 1rem;
 	}
@@ -979,6 +1017,9 @@
 		gap: 1rem;
 	}
 	.map-status-bar {
+		display: flex;
+		align-items: center;
+		gap: 0.65rem;
 		padding: 0.75rem 1.5rem;
 		background: var(--state-soft);
 		border: 1px solid transparent;
@@ -1140,27 +1181,10 @@
 		transition: all 0.2s;
 		letter-spacing: 1px;
 	}
-	.btn-vanish-big:hover {
+	.btn-vanish-big:hover:not([data-locked]) {
 		background: #ef4444;
 		color: #fff;
 		box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
-	}
-
-	.btn-vanish-big.disabled,
-	.btn-action-small.disabled,
-	.add-house-card.disabled {
-		opacity: 0.3;
-		cursor: not-allowed !important;
-		filter: grayscale(1);
-		pointer-events: auto !important;
-	}
-	.btn-vanish-big.disabled:hover,
-	.btn-action-small.disabled:hover,
-	.add-house-card.disabled:hover {
-		background: rgba(255, 255, 255, 0.05) !important;
-		box-shadow: none !important;
-		transform: none !important;
-		border-color: #333 !important;
 	}
 
 	.grid-view {
@@ -1195,12 +1219,12 @@
 		cursor: pointer;
 		transition: all 0.2s;
 	}
-	.btn-action-small:hover:not(.disabled) {
+	.btn-action-small:hover:not([data-locked]) {
 		background: #222;
 		border-color: #2dd4bf;
 		color: #fff;
 	}
-	.btn-action-small.vanish:hover:not(.disabled) {
+	.btn-action-small.vanish:hover:not([data-locked]) {
 		border-color: #ef4444;
 		color: #f87171;
 	}
@@ -1305,19 +1329,25 @@
 		min-height: 200px;
 		font-family: inherit;
 	}
-	.add-house-card:hover:not(.disabled) {
+	.add-house-card:hover:not([data-locked]) {
 		border-color: #2dd4bf;
 		color: #2dd4bf;
 		background: rgba(45, 212, 191, 0.05);
 	}
-	.add-house-card.disabled:hover {
-		border-color: #222;
-		color: #444;
-		background: transparent;
-	}
 	.add-house-card .plus {
 		font-size: 3rem;
 		font-weight: 100;
+	}
+	/* Already a quiet card: locked, it only loses its colour, not its words. */
+	.add-house-card[data-locked] {
+		opacity: 0.85;
+		color: #5a5a5a;
+	}
+	.add-house-card .plus.lock {
+		display: flex;
+		height: 4.5rem;
+		align-items: center;
+		--lock-glyph-hole: #050505;
 	}
 	.add-house-card span {
 		font-weight: 900;

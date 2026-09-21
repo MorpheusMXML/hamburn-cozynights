@@ -4,8 +4,10 @@
 	import { toast } from '$lib/dialogs';
 	import { revealInvalid } from '$lib/field-alert';
 	import { TEMPLATE_LIMITS } from '$lib/template';
+	import { lockAttrs, type LockHint } from '$lib/layout-lock';
 
-	export let disabled = false;
+	/** The layout is locked: the field is read-only and says why when tried. */
+	export let lock: LockHint | null = null;
 
 	let error = '';
 	let submitting = false;
@@ -14,6 +16,11 @@
 	// browser language, these messages are always English. The server checks
 	// the same rules again.
 	const handleSubmit: SubmitFunction = ({ formData, formElement, cancel }) => {
+		if (lock) {
+			// LockHintHost stops the clicks; this is the net for anything else.
+			cancel();
+			return;
+		}
 		const label = String(formData.get('label') ?? '').trim();
 		error = '';
 		if (!label) {
@@ -59,13 +66,15 @@
 			aria-invalid={!!error}
 			aria-describedby={error ? 'add-bed-error' : undefined}
 			on:input={() => (error = '')}
-			{disabled}
+			readonly={!!lock}
+			{...lockAttrs(lock)}
 		/>
 		<button
 			type="submit"
 			class="btn-add"
-			disabled={disabled || submitting}
-			class:disabled={disabled || submitting}
+			disabled={submitting}
+			class:disabled={submitting}
+			{...lockAttrs(lock)}
 		>
 			IGNITE ⚡️
 		</button>
@@ -103,10 +112,6 @@
 		outline: none;
 		border-color: #fb923c;
 		box-shadow: 0 0 10px rgba(251, 146, 60, 0.2);
-	}
-	input:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
 	}
 
 	.field-error {

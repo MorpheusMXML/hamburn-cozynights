@@ -26,6 +26,8 @@ Staging Mode. Unchanged spots keep their bookings.
 	import LayoutReview from './LayoutReview.svelte';
 
 	export let isSuperuser = false;
+	/** Why applying has to wait (the layout is locked), '' while it can be applied. */
+	export let lockedNote = '';
 
 	const EXAMPLE_URL = '/templates/brahmsee-starter.json';
 
@@ -365,7 +367,8 @@ Staging Mode. Unchanged spots keep their bookings.
 				<p>
 					Drop a layout file: you see what differs from your camp and pick what to take over.
 					Nothing changes before you apply, and unchanged spots keep their bookings.
-					{#if !isSuperuser}<strong>Applying is for superusers.</strong>{/if}
+					{#if !isSuperuser}<strong>Applying is for superusers.</strong>
+					{:else if lockedNote}<strong class="lock-note">🔒 {lockedNote}</strong>{/if}
 				</p>
 
 				<DropZone
@@ -791,6 +794,9 @@ Staging Mode. Unchanged spots keep their bookings.
 		font-size: 1.2rem;
 		letter-spacing: -0.3px;
 		overflow-wrap: anywhere;
+	}
+	.lock-note {
+		color: #fb923c;
 	}
 	.locked {
 		margin: 0;
