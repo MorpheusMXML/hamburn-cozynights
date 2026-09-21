@@ -26,7 +26,7 @@ const spot = (label: string, extra: Partial<TemplateBed> = {}): TemplateBed => (
 function template(houses: TemplateHouse[]): LayoutTemplate {
 	return {
 		format: 'cozynights-layout',
-		version: '2.0',
+		version: '2.1',
 		name: 'Test',
 		exported_at: '',
 		map: { image: '/map.png', width: 1000, height: 700 },
@@ -331,7 +331,15 @@ describe('planChanges', () => {
 		selection.delete('h:neon%20cave/r:3/s:a2');
 
 		const plan = planChanges(diff, selection);
-		expect(plan.createHouses).toEqual([{ key: 'h:tent', name: 'Tent', x: 800, y: 600 }]);
+		expect(plan.createHouses).toEqual([
+			{
+				key: 'h:tent',
+				name: 'Tent',
+				x: 800,
+				y: 600,
+				details: { kind: '', features: [], description: '' }
+			}
+		]);
 		expect(plan.createRooms).toEqual([
 			expect.objectContaining({
 				key: 'h:neon%20cave/r:3',
@@ -345,10 +353,29 @@ describe('planChanges', () => {
 			expect.objectContaining({ roomKey: 'h:neon%20cave/r:3', roomId: null, bed: spot('A1') })
 		]);
 		expect(plan.updateHouses).toEqual([
-			{ key: 'h:neon%20cave', id: 'house0', name: 'Neon Cave', x: 111, y: 200 }
+			{
+				key: 'h:neon%20cave',
+				id: 'house0',
+				name: 'Neon Cave',
+				x: 111,
+				y: 200,
+				details: { kind: '', features: [], description: '' }
+			}
 		]);
+		// The file decides: everything it says about the spot is written, not only
+		// what differs (a change line carries labels, not stored values).
 		expect(plan.updateSpots).toEqual([
-			expect.objectContaining({ id: 'house0room0bed1', fields: { is_locked: true } })
+			expect.objectContaining({
+				id: 'house0room0bed1',
+				fields: {
+					label: 'B2',
+					enabled: true,
+					is_locked: true,
+					is_special: false,
+					bed_type: '',
+					features: []
+				}
+			})
 		]);
 		expect(plan.removeSpots.map((s) => [s.id, s.booked])).toEqual([
 			['house1room0bed0', false],

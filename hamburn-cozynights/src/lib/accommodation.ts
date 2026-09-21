@@ -14,7 +14,7 @@
  * Nothing is ever guessed: a field nobody filled in stays empty and counts as
  * "not specified", never as "no".
  */
-import { type SpecialNeed } from './special-needs';
+import { cleanRequestText, type SpecialNeed } from './special-needs';
 
 export type HouseKind = 'house' | 'hut_group' | 'tent_area' | 'other';
 export type RoomKind = 'room' | 'hut' | 'tent' | 'other';
@@ -238,6 +238,16 @@ export function readFeatures(raw: unknown, level: FeatureLevel): Feature[] {
 	const values = Array.isArray(raw) ? raw : typeof raw === 'string' && raw ? [raw] : [];
 	const chosen = new Set(values.filter((value): value is Feature => isFeature(value, level)));
 	return FEATURES.filter((feature) => chosen.has(feature.value)).map((feature) => feature.value);
+}
+
+/**
+ * A house's or room's description as it is stored: normal line breaks, no
+ * control or invisible formatting characters, at most one empty line in a row
+ * (the same cleaning a guest's own text gets). The length is checked where it
+ * is read, so nothing is cut off silently.
+ */
+export function cleanDescription(raw: unknown): string {
+	return cleanRequestText(raw);
 }
 
 export interface SpotFacts {

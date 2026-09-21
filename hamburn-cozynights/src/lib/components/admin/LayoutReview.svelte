@@ -95,7 +95,11 @@ takes its rooms and spots along).
 		is_special: 'special needs',
 		position: 'position',
 		name: 'name',
-		label: 'label'
+		label: 'label',
+		kind: 'kind',
+		bed_type: 'bed',
+		features: 'features',
+		description: 'description'
 	};
 
 	const describe = (change: FieldChange) =>

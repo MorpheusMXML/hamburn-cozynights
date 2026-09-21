@@ -42,9 +42,13 @@ export class TemplateImportError extends Error {
 
 export async function exportTemplate(pb: TypedPocketBase): Promise<LayoutTemplate> {
 	const [houses, rooms, beds] = await Promise.all([
-		pb.collection('houses').getFullList({ fields: 'id,name,x,y' }),
-		pb.collection('rooms').getFullList({ fields: 'id,house,name,room_number' }),
-		pb.collection('beds').getFullList({ fields: 'room,label,enabled,is_locked,is_special' })
+		pb.collection('houses').getFullList({ fields: 'id,name,x,y,kind,features,description' }),
+		pb.collection('rooms').getFullList({
+			fields: 'id,house,name,room_number,kind,features,description'
+		}),
+		pb.collection('beds').getFullList({
+			fields: 'room,label,enabled,is_locked,is_special,bed_type,features'
+		})
 	]);
 	return buildTemplate({ houses, rooms, beds });
 }
@@ -56,10 +60,14 @@ export async function exportTemplate(pb: TypedPocketBase): Promise<LayoutTemplat
 export async function loadCamp(pb: TypedPocketBase): Promise<CampRecords> {
 	// requestKey null: parallel requests of one client must not cancel each other.
 	const [houses, rooms, beds] = await Promise.all([
-		pb.collection('houses').getFullList({ fields: 'id,created,name,x,y', requestKey: null }),
-		pb
-			.collection('rooms')
-			.getFullList({ fields: 'id,created,house,name,room_number', requestKey: null }),
+		pb.collection('houses').getFullList({
+			fields: 'id,created,name,x,y,kind,features,description',
+			requestKey: null
+		}),
+		pb.collection('rooms').getFullList({
+			fields: 'id,created,house,name,room_number,kind,features,description',
+			requestKey: null
+		}),
 		pb.collection('beds').getFullList({ requestKey: null })
 	]);
 	return { houses, rooms, beds } as CampRecords;
@@ -142,7 +150,7 @@ async function createAll(pb: TypedPocketBase, plan: LayoutPlan): Promise<LevelCo
 			where = `house "${house.name}"`;
 			const record = await pb
 				.collection('houses')
-				.create({ name: house.name, x: house.x, y: house.y });
+				.create({ name: house.name, x: house.x, y: house.y, ...house.details });
 			houseIds.set(house.key, record.id);
 			created.houses.push(record.id);
 		}
@@ -153,6 +161,7 @@ async function createAll(pb: TypedPocketBase, plan: LayoutPlan): Promise<LevelCo
 			const record = await pb.collection('rooms').create({
 				name: room.name,
 				room_number: room.room_number,
+				...room.details,
 				amount_beds: room.spots,
 				house
 			});
@@ -267,13 +276,18 @@ export async function applyTemplate(
 
 		for (const house of plan.updateHouses) {
 			const done = await attempt(`Updating house "${house.name}"`, () =>
-				pb.collection('houses').update(house.id, { name: house.name, x: house.x, y: house.y })
+				pb.collection('houses').update(house.id, {
+					name: house.name,
+					x: house.x,
+					y: house.y,
+					...house.details
+				})
 			);
 			if (done) outcome.updated.houses++;
 		}
 		for (const room of plan.updateRooms) {
 			const done = await attempt(`Renaming room "${room.name}"`, () =>
-				pb.collection('rooms').update(room.id, { name: room.name })
+				pb.collection('rooms').update(room.id, { name: room.name, ...room.details })
 			);
 			if (done) outcome.updated.rooms++;
 		}
