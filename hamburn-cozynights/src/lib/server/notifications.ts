@@ -116,3 +116,47 @@ export async function disconnectTelegram(adminPb: TypedPocketBase, orderId: stri
 		tg_token_exp: ''
 	});
 }
+
+/**
+ * How long the ☢ nuke on the roulette holds a ticket's pending message back
+ * (docs/admin/notifications.md, "One message per change").
+ */
+export const RESPIN_HOLD_MINUTES = 10;
+
+/**
+ * Postpones the message PocketBase has queued for this ticket.
+ *
+ * Guest messages are state based: every change marks the ticket as due, and a
+ * delivery run sends one message about the difference once the ticket has been
+ * quiet for about ten seconds (pb_hooks/lib/notify.js). The ☢ nuke releases
+ * the spot before the guest rolls a new one, and rolling takes longer than
+ * that settle time — so without this the guest gets "released" and then
+ * "booked" for one respin. Pushing the mark out keeps the release quiet until
+ * the new booking marks the ticket again (one "changed" message), or until the
+ * hold runs out and the release is the news after all.
+ *
+ * Never throws: a notification problem must not break a release. At worst the
+ * guest gets the two messages they got before.
+ * @returns whether a queued message was held back
+ */
+export async function holdGuestMessage(
+	adminPb: TypedPocketBase,
+	orderId: string,
+	minutes: number = RESPIN_HOLD_MINUTES
+): Promise<boolean> {
+	try {
+		const record = await findGuestNotify(adminPb, orderId);
+		// Nobody to tell (no address, no linked chat), or nothing queued.
+		if (!record?.due) return false;
+		await adminPb.collection('guest_notify').update(record.id, {
+			due: new Date(Date.now() + minutes * 60 * 1000).toISOString()
+		});
+		return true;
+	} catch (err) {
+		console.error(
+			`[Notify] Could not hold the release message of order ${orderId}:`,
+			(err as Error)?.message
+		);
+		return false;
+	}
+}

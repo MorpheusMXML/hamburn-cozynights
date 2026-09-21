@@ -2016,6 +2016,7 @@ module.exports = {
 	currentSpot: currentSpot,
 	currentRequest: currentRequest,
 	requestKindOf: requestKindOf,
+	kindOf: kindOf,
 	markDue: markDue,
 	isQuiet: isQuiet,
 	setQuiet: setQuiet,

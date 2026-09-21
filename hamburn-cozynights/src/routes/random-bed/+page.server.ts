@@ -10,6 +10,7 @@ import {
 	SpotChangedError
 } from '$lib/server/booking';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
+import { holdGuestMessage } from '$lib/server/notifications';
 import type { BedsResponse, RoomsResponse, HousesResponse } from '$lib/pocketbase-types';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
@@ -206,6 +207,10 @@ export const actions: Actions = {
 			}
 
 			const released = await bookingService.unbookOrder(order.id, { onlyBed: confirmedBedId });
+			// The respin follows in a moment, so the release itself is no news:
+			// hold the guest's message back until the new spot is booked, and
+			// they hear about the move once (docs/admin/notifications.md).
+			if (released > 0) await holdGuestMessage(locals.adminPb, order.id);
 			return { success: true, released: released > 0 };
 		} catch (err: any) {
 			if (err instanceof CheckedInError) return fail(409, { error: err.message });

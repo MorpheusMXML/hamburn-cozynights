@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import path from 'path';
 import type PocketBase from 'pocketbase';
 import { BookingService } from '../../src/lib/server/booking';
+import { holdGuestMessage, RESPIN_HOLD_MINUTES } from '../../src/lib/server/notifications';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
 import { maskedTicketLabel } from '../../src/lib/tickets';
 import {
@@ -88,6 +89,11 @@ async function notifyRecord(orderId: string) {
 		.collection('guest_notify')
 		.getFirstListItem(su.filter('order = {:orderId}', { orderId }))
 		.catch(() => null);
+}
+
+/** How long until the next delivery run, from a `due` in PocketBase's date format. */
+function dueIn(due: unknown): number {
+	return Date.parse(String(due).replace(' ', 'T')) - Date.now();
 }
 
 /** What the "Get updates on Telegram" button does (src/lib/server/notifications.ts). */
@@ -174,6 +180,39 @@ describe('booking confirmations by e-mail', () => {
 		await booking.bookBed(guest.order as any, beds[1].id, 'Mover');
 		await flush();
 
+		const mails = await mailsTo(guest.email);
+		expect(mails.map((m) => m.Subject.split(':')[0])).toEqual([
+			'[TEST] Your CozyNights spot',
+			'[TEST] Your CozyNights spot changed'
+		]);
+		expect((await mailBody(mails[1].ID)).Text).toContain(`Before: ${beds[0].label}`);
+	});
+
+	it('hold the release of a ☢ respin back, so the guest gets one "changed" e-mail', async () => {
+		const { beds } = await seedHouse(su, 2);
+		const guest = await ticketWithEmail();
+
+		await booking.bookBed(guest.order as any, beds[0].id, 'Respinner');
+		await flush();
+		expect(await mailsTo(guest.email)).toHaveLength(1);
+
+		// What ?/releaseBed on the roulette does: the spot goes right away, the
+		// message waits for the new one (src/routes/random-bed/+page.server.ts).
+		expect(await booking.unbookOrder(guest.order.id, { onlyBed: beds[0].id })).toBe(1);
+		expect(await holdGuestMessage(su as any, guest.order.id)).toBe(true);
+		const held = await notifyRecord(guest.order.id);
+		expect(dueIn(held?.due)).toBeGreaterThan((RESPIN_HOLD_MINUTES - 1) * 60_000);
+
+		// A run that plays by the rules (no force) leaves the held ticket alone.
+		await su.send('/api/cozy/notify/flush', { method: 'POST' });
+		expect(await mailsTo(guest.email)).toHaveLength(1);
+
+		// The respin books a new spot, which marks the ticket again: the hold ends
+		// with the normal settle time, and the guest hears about the move once.
+		await booking.bookBed(guest.order as any, beds[1].id, 'Respinner');
+		expect(dueIn((await notifyRecord(guest.order.id))?.due)).toBeLessThan(60_000);
+
+		await flush();
 		const mails = await mailsTo(guest.email);
 		expect(mails.map((m) => m.Subject.split(':')[0])).toEqual([
 			'[TEST] Your CozyNights spot',

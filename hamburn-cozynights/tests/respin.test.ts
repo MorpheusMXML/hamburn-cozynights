@@ -1,7 +1,9 @@
 // tests/respin.test.ts — ☢ Nuke & Respin on the roulette page: the nuke
-// (releaseBed) deletes exactly the spot the warning showed, right away, and
-// the roulette then rolls from a pool that includes it. Against real
+// (releaseBed) deletes exactly the spot the warning showed, right away, the
+// roulette then rolls from a pool that includes it, and the guest hears about
+// the move once instead of "released" plus "booked". Against real
 // PocketBase: tests/integration/booking.test.ts and tests/smoke/app.test.ts.
+// The messages themselves: tests/notify-messages.test.ts.
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('$env/dynamic/private', () => ({
@@ -17,12 +19,17 @@ import { createLookupHash } from '../src/lib/server/crypto';
 import { APP_SETTINGS_ID } from '../src/lib/server/constants';
 import { BookingService, SpotChangedError } from '../src/lib/server/booking';
 import { actions, load } from '../src/routes/random-bed/+page.server';
+import { actions as roomActions } from '../src/routes/room/[id]/+page.server';
+import { RESPIN_HOLD_MINUTES } from '../src/lib/server/notifications';
 
 function form(fields: Record<string, string>): FormData {
 	const data = new FormData();
 	for (const [key, value] of Object.entries(fields)) data.append(key, value);
 	return data;
 }
+
+/** The settle time PocketBase waits before it sends (notify.js SETTLE_SECONDS). */
+const SETTLE_MS = 10_000;
 
 /** A room with three spots; the ticket holds B1. */
 function camp(settings: Record<string, unknown> = {}) {
@@ -50,9 +57,19 @@ function camp(settings: Record<string, unknown> = {}) {
 		burner_name: ''
 	});
 	Object.assign(b1, { occupied: true, order: order.id });
+	// What PocketBase's bed hook leaves behind on every change: the ticket is
+	// marked for a delivery run about ten seconds later (pb_hooks/lib/notify.js).
+	const notify = pb.seed('guest_notify', {
+		order: order.id,
+		due: new Date(Date.now() + SETTLE_MS).toISOString(),
+		mail_to: 'ada@example.com',
+		mail_spot: b1.id,
+		mail_label: 'B1 · Dorm · Firework Villa'
+	});
 	const locals = { pb, adminPb: pb, orderNumber: code, admin: null };
 	const bed = (id: string) => pb.rows('beds').find((row) => row.id === id)!;
-	return { pb, b1, b2, b3, order, locals, bed };
+	const dueIn = () => Date.parse(pb.rows('guest_notify')[0].due) - Date.now();
+	return { pb, b1, b2, b3, order, locals, bed, notify, dueIn };
 }
 
 function nuke(c: ReturnType<typeof camp>, fields: Record<string, string>) {
@@ -141,5 +158,74 @@ describe('☢ Nuke & Respin', () => {
 		expect(result.status).toBe(409);
 		expect(c.bed(c.b2.id).occupied).toBe(false);
 		expect(c.bed(c.b1.id).order).toBe(c.order.id);
+	});
+});
+
+// PocketBase decides from the ticket's state what to send: the spot each
+// channel last confirmed against the spot the ticket holds now. So the whole
+// respin needs one thing — the release must not be delivered while the guest
+// is still rolling. The nuke pushes the ticket's delivery run out; the new
+// booking marks it again and the guest gets one "changed" message. Nobody
+// rolls: the hold runs out and the release is the news after all.
+describe('☢ respin: one message for the guest, not two', () => {
+	const held = RESPIN_HOLD_MINUTES * 60_000;
+
+	it('holds the release back, keeping the old spot as what the guest knows', async () => {
+		const c = camp();
+
+		expect(await nuke(c, { bedId: c.b1.id })).toEqual({ success: true, released: true });
+		expect(c.dueIn()).toBeGreaterThan(held - 5_000);
+		expect(c.dueIn()).toBeLessThanOrEqual(held);
+		// Untouched, so the next message is "changed" with B1 as the old spot.
+		expect(c.pb.rows('guest_notify')[0]).toMatchObject({
+			mail_spot: c.b1.id,
+			mail_label: 'B1 · Dorm · Firework Villa'
+		});
+	});
+
+	it('leaves the mark alone when there was nothing to release', async () => {
+		const c = camp();
+		Object.assign(c.b1, { occupied: false, order: '' });
+
+		expect(await nuke(c, { bedId: c.b1.id })).toEqual({ success: true, released: false });
+		expect(c.dueIn()).toBeLessThanOrEqual(SETTLE_MS);
+	});
+
+	it('nukes a spot of a ticket nobody can be notified about', async () => {
+		const c = camp();
+		c.pb.tables.guest_notify = [];
+
+		expect(await nuke(c, { bedId: c.b1.id })).toEqual({ success: true, released: true });
+		expect(c.bed(c.b1.id)).toMatchObject({ occupied: false, order: null });
+	});
+
+	it('releases the spot even when the message cannot be held back', async () => {
+		const c = camp();
+		const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const collection = c.pb.collection.bind(c.pb);
+		vi.spyOn(c.pb, 'collection').mockImplementation((name: string) => {
+			const service = collection(name);
+			if (name !== 'guest_notify') return service;
+			return {
+				...service,
+				update: async () => {
+					throw new Error('database is busy');
+				}
+			};
+		});
+
+		expect(await nuke(c, { bedId: c.b1.id })).toEqual({ success: true, released: true });
+		expect(c.bed(c.b1.id)).toMatchObject({ occupied: false, order: null });
+		expect(errors).toHaveBeenCalled();
+		vi.restoreAllMocks();
+	});
+
+	it('does not hold back a plain release on the room page', async () => {
+		const c = camp();
+
+		const result: any = await roomActions.unbookBed({ locals: c.locals } as any);
+		expect(result).toEqual({ success: true, released: true });
+		expect(c.bed(c.b1.id)).toMatchObject({ occupied: false, order: null });
+		expect(c.dueIn()).toBeLessThanOrEqual(SETTLE_MS);
 	});
 });
