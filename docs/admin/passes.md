@@ -81,7 +81,7 @@ Checked in the wrong pass? The newest result on **Check-in** has <kbd>↩️ Und
 ### Where the crew sees check-ins
 
 - **Room page:** a checked-in spot shows **CHECKED IN ✅** with the time (hover for the admin), and the room counts them.
-- **House page and Control Center:** *Checked in* per room and per house, and **SPOTS CHECKED IN** in *Show Intel*.
+- **House page and Control Center:** *Checked in* per room and per house. In *Show Intel*: the **CHECKED IN** tile with how many booked guests are still to come, the check-ins per hour in the chart, and *checked in / booked* for every house.
 - **Tickets:** a checked-in ticket shows **✅ Checked in** with the time.
 
 ## Who can check guests in

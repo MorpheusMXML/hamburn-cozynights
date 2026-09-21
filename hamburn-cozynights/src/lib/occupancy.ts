@@ -9,6 +9,11 @@ export interface SpotCounts {
 	free: number;
 	/** Active spots whose guest the crew checked in at arrival (part of `occupied`). */
 	checkedIn: number;
+	/**
+	 * Active spots with a guest's ticket on them. `checkedIn` is part of it; the
+	 * rest of `occupied` was marked as taken by the crew, without a ticket.
+	 */
+	booked: number;
 	/** Free-standing spots the crew holds back (locked, not taken). */
 	locked: number;
 	/** ♿ spots kept for special-needs requests (not taken, not locked). */
@@ -39,6 +44,7 @@ export function countSpots(
 		occupied: active.filter((bed) => bed.occupied).length,
 		free: untaken.filter((bed) => !bed.is_locked && !bed.is_special).length,
 		checkedIn: active.filter((bed) => !!bed.order && !!bed.checked_in_at).length,
+		booked: active.filter((bed) => !!bed.order).length,
 		locked: locked.length,
 		special: untaken.filter((bed) => !bed.is_locked && bed.is_special).length,
 		deactivated: beds.length - active.length

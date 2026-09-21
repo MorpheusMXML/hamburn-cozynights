@@ -47,12 +47,12 @@ timeline
 
 - [ ] **Watch the switch.** At the opening time the panel turns 🎪 LIVE BOOKING by itself, and guests see the countdown to the closing time at the top of every page. The crew group gets *Booking is LIVE now*.
 - [ ] **Need more time?** Move the closing time in the panel (at least one day from now for admins; a superuser can do anything).
-- [ ] **Keep an eye on the Intel panel.** The LOAD chart and the house counters show how fast the camp fills up.
+- [ ] **Keep an eye on the Intel panel.** In *Show Intel*, the chart on <kbd>24 h</kbd> shows how fast bookings come in, *Needs attention* lists requests waiting for a decision and messages that failed, and the house table sorted by *Most free spots* shows where room is left. See [Intel panel](./index#intel-panel-the-live-picture).
 - [ ] **Be reachable.** Typical guest questions are answered in the [FAQ](../guide/faq).
 
 ## During the event
 
-- [ ] **Check guests in at arrival** with their booking pass: 🎫 **Check-in** in the admin header (type the code, scan with the camera or a USB scanner: a known pass is checked in right away), or the phone camera on the guest's QR code and <kbd>✅ Check in</kbd>. A checked-in guest can't release their spot anymore; a mistake is undone with <kbd>↩️ Undo check-in</kbd>. *Show Intel* counts the spots checked in. See [Booking passes & check-in](./passes).
+- [ ] **Check guests in at arrival** with their booking pass: 🎫 **Check-in** in the admin header (type the code, scan with the camera or a USB scanner: a known pass is checked in right away), or the phone camera on the guest's QR code and <kbd>✅ Check in</kbd>. A checked-in guest can't release their spot anymore; a mistake is undone with <kbd>↩️ Undo check-in</kbd>. *Show Intel* counts them per hour, and its house table sorted by *Most still to check in* shows where guests are still missing. See [Booking passes & check-in](./passes).
 
 - [ ] **Broken bed?** Lock it 🔒 on its room page. That works in every phase.
 - [ ] **Resist restructuring.** Houses, rooms and spots only change in 🛠 Staging, and a superuser's switch back to Staging **offers to release every guest booking** (the dialog says how many there are and how many guests are checked in; released spots lose their burner names and check-ins, it can't be undone, and those guests book again once booking is Live). Keeping them is the other button — then clear them later with 🧨 *Clear all bookings*. During the event only lock 🔒 spots, mark ♿ spots or book a spot for a special-needs request: those work in every phase. If restructuring is unavoidable, export a template first and expect to re-seat every guest by hand; they get a *spot released* e-mail — the dialog's *Don't notify the guests* box starts unticked while booking is still running, because those guests have to book again. See [After the burn](#after-the-burn).

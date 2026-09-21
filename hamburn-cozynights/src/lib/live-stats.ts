@@ -6,14 +6,61 @@
  */
 import type { HouseState, SpotCounts } from '$lib/occupancy';
 
-/** One house, only the numbers the control center repaints live. */
-export interface HouseLiveStats {
+/**
+ * One house: its spot numbers, and when its spots were booked and checked in.
+ * The Intel panel filters and buckets these in the browser, so switching a
+ * house or a time range costs no request.
+ */
+export interface HouseLiveStats extends SpotCounts {
 	id: string;
-	total: number;
-	occupied: number;
-	free: number;
-	checkedIn: number;
+	name: string;
 	state: HouseState;
+	/** When each current booking landed, in minutes since the epoch (UTC), oldest first. */
+	bookedAt: number[];
+	/** When each checked-in guest was checked in, minutes since the epoch (UTC), oldest first. */
+	checkedInAt: number[];
+}
+
+/** A count PocketBase could not answer (a collection missing on an old database) is null. */
+export type Count = number | null;
+
+/**
+ * Camp-wide operations numbers that belong to no house: the ticket roster,
+ * guest messages, special-needs requests, the crew. Counts only — no names, no
+ * addresses, no request texts ever leave the server for this panel.
+ */
+export interface OpsStats {
+	tickets: {
+		total: Count;
+		/** Tickets with an e-mail address (booking e-mails can reach them). */
+		withEmail: Count;
+		/** Tickets whose guest linked a Telegram chat for updates. */
+		telegram: Count;
+		/** Tickets that got at least one e-mail about their spot. */
+		mailed: Count;
+	};
+	requests: { pending: Count; approved: Count; declined: Count };
+	messages: {
+		/** PocketBase has a mail server (app_settings.notify_mail). */
+		mailOn: boolean;
+		/** A Telegram bot is set up for guests (app_settings.telegram_bot). */
+		telegramOn: boolean;
+		/** Guest messages waiting to go out (pb_hooks/lib/notify.js, guest_notify.due). */
+		queued: Count;
+		/** Of those, messages that failed at least once and wait for their next try. */
+		retrying: Count;
+		/** Messages given up after the last retry (about two days); the crew got an alert. */
+		failed: Count;
+	};
+	crew: {
+		/** Approved admin accounts (admins and superusers). */
+		admins: Count;
+		/** Sign-ins waiting for a superuser's approval (role `pending`). */
+		accessRequests: Count;
+		alertsQueued: Count;
+		/** Crew-chat alerts given up after their last retry. */
+		alertsFailed: Count;
+	};
 }
 
 export interface LiveStats {
@@ -23,10 +70,14 @@ export interface LiveStats {
 	/** How many houses are in each state. */
 	houseStates: Record<HouseState, number>;
 	houses: HouseLiveStats[];
-	/** Spots booked per Berlin day, oldest first — seven entries. */
-	trend: { labels: string[]; values: number[] };
+	/** Different tickets that have a spot right now (one ticket, one spot). */
+	ticketsWithSpot: number;
 	/** The most recent booking, or null while nothing is booked. */
 	lastBookingAt: string | null;
+	/** The most recent check-in, or null before the first arrival. */
+	lastCheckInAt: string | null;
+	/** Null when none of it could be read (the spot numbers still show). */
+	ops: OpsStats | null;
 }
 
 /** Where the numbers on screen come from right now. */

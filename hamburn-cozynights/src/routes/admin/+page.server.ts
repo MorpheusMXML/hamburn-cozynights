@@ -10,7 +10,7 @@ import { APP_SETTINGS_ID } from '$lib/server/constants';
 import { bumpGuestRound } from '$lib/server/guest-session';
 import { getBookingSettings } from '$lib/server/settings';
 import { berlinLocalToIso } from '$lib/time';
-import { deriveLiveStats } from '$lib/server/stats';
+import { deriveLiveStats, opsSnapshot } from '$lib/server/stats';
 import type { LiveStats } from '$lib/live-stats';
 import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
 import { parseTemplate, TEMPLATE_LIMITS, type TemplateParseResult } from '$lib/template';
@@ -690,6 +690,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// Runs in parallel with the layout load, so it guards itself too.
 	if (!locals.admin) throw redirect(303, '/admin/login');
 
+	// The camp-wide counts (tickets, messages, requests, crew) for the Intel
+	// panel come from the cache the live endpoint shares; asked in parallel.
+	const opsRead = opsSnapshot(locals.adminPb).catch((err) => {
+		console.error('[Admin] Operations counts could not be read:', (err as Error)?.message);
+		return null;
+	});
+
 	const [houses, allRooms, allBeds, settings] = await Promise.all([
 		locals.pb.collection('houses').getFullList<HousesResponse>({ sort: 'name' }),
 		locals.pb.collection('rooms').getFullList<RoomsResponse>(),
@@ -737,9 +744,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 	).length;
 
 	// The same derivation the live endpoint (/admin/api/stats) runs, so the
-	// first paint and every poll afterwards count spots identically.
+	// first paint and every poll afterwards count spots identically. The spots
+	// come from the reads above, fresh after every action.
 	const live = deriveLiveStats(houses, allRooms, allBeds);
 	const liveByHouse = new Map(live.houses.map((house) => [house.id, house]));
+	const ops = await opsRead;
 
 	const housesWithStats: HouseStats[] = houses.map((house: HousesResponse) => {
 		const spots = liveByHouse.get(house.id);
@@ -754,7 +763,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		};
 	});
 
-	const stats: LiveStats = { changedAt: new Date().toISOString(), ...live };
+	const stats: LiveStats = { changedAt: new Date().toISOString(), ...live, ops };
 
 	return {
 		houses: housesWithStats,

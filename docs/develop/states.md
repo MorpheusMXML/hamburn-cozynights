@@ -176,24 +176,45 @@ The browser never talks to PocketBase (see `$lib/server/pocketbase.ts`), so
 there is no socket to subscribe to. The control center polls instead.
 
 ```
-+page.server.ts ─┐                          ┌─ deriveLiveStats()  (pure)
-                 ├─ $lib/server/stats.ts ───┤
-/admin/api/stats ┘                          └─ liveStatsSnapshot() (cached)
++page.server.ts ─┐                          ┌─ deriveLiveStats()   (pure: houses, rooms, beds)
+                 ├─ $lib/server/stats.ts ───┼─ readOpsStats()     (counts: tickets, messages, requests, crew)
+/admin/api/stats ┘                          └─ liveStatsSnapshot() (cached, one ETag over both)
+                                                        │
+                                   $lib/intel.ts ◄──────┘ filters, time buckets, house table, attention list
+                                   (in the browser)
 ```
 
-- **`deriveLiveStats(houses, rooms, beds)`** is pure and does the counting. The
-  page load and the endpoint both call it, so the first paint and every poll
-  afterwards agree.
-- **`liveStatsSnapshot(pb)`** caches for `SNAPSHOT_TTL_MS` (3 s) and
-  single-flights concurrent callers: ten open dashboards are one PocketBase
-  read. `changedAt` and the ETag only move when a number actually changes.
-- **`GET /admin/api/stats`** is admin-only (`hooks.server.ts` already refuses
-  everything under `/admin/api/` without a session) and answers `304` while the
-  ETag matches. `cache-control: no-store, private`.
+- **`deriveLiveStats(houses, rooms, beds)`** is pure and does the spot
+  counting. The page load and the endpoint both call it, so the first paint and
+  every poll afterwards agree. Per house it also hands out `bookedAt` and
+  `checkedInAt`: the minute (since the epoch, UTC) of every current booking and
+  check-in, so the browser can bucket them by any range without asking again.
+- **`readOpsStats(pb)`** counts what belongs to no house — tickets (with an
+  address, with Telegram), guest messages queued / retrying / given up
+  (`guest_notify.due` and `attempts`, the states `pb_hooks/lib/notify.js`
+  leaves behind), special-needs requests by status, admins and access requests,
+  crew alerts by `alert_status`. One small `getList(1, 1)` per count; each may
+  fail on its own and then reads as `null` (shown as —), it never throws.
+  **`opsSnapshot(pb)`** caches that for `OPS_TTL_MS` (10 s).
+- **`liveStatsSnapshot(pb)`** caches the whole answer for `SNAPSHOT_TTL_MS`
+  (3 s) and single-flights concurrent callers: ten open dashboards are one
+  PocketBase read. `changedAt` and the ETag only move when a number actually
+  changes.
+- **`GET /admin/api/stats`** is for approved admins only (`hooks.server.ts`
+  already refuses everything under `/admin/api/` without an admin session, a
+  pending access request included; the endpoint checks again) and answers `304`
+  while the ETag matches. `cache-control: no-store, private`. Only counts,
+  house names and minutes travel — no guest names, addresses or ticket codes.
 - **`createLivePoll()`** (`$lib/live-stats-poll.ts`) asks every
   `POLL_INTERVAL_MS` (5 s), skips hidden tabs entirely and catches up on
   `visibilitychange`, doubles the gap after an error up to a minute, and stops
   for good on `403` (the weekly re-sign-in) instead of hammering.
+- **`$lib/intel.ts`** is everything the panel does with the answer, pure and
+  unit-tested: `scopedSpots` (whole camp or one house), `activityBuckets`
+  (24 hours, 7 days or all, by Europe/Berlin hour and calendar day — DST-safe,
+  a 23- or 25-hour day never loses or doubles a bar), `houseRows` (search,
+  state, sort), `attentionItems` (what waits for the crew, depending on the
+  phase). A filter change costs no request.
 
 The page merges the answer into the numbers only. Which houses exist, and
 where their pins stand, still comes from the page load — if that changed, the
@@ -201,21 +222,37 @@ panel offers a reload instead of drifting.
 
 ### Adding a number to the panel
 
-1. Count it in `deriveLiveStats` (or in `countSpots`, if it is a spot state).
-2. Add it to the `LiveStats` interface in `$lib/live-stats.ts` — server and
-   browser share that file, so the wire format stays honest.
-3. Show it in `IntelDashboard.svelte`, with `data-state` for its colour.
-4. Cover it in `tests/live-stats.test.ts`.
+1. Count it: a spot state in `countSpots`, anything per house in
+   `houseStats`, anything camp-wide in `readOpsStats` (a count that may fail
+   is a `Count`, `number | null`).
+2. Add it to the interfaces in `$lib/live-stats.ts` — server and browser share
+   that file, so the wire format stays honest.
+3. Show it in `IntelDashboard.svelte` or one of its parts in
+   `$lib/components/admin/intel/`, with `data-state` for its colour. If it is
+   something to act on, give it a line in `attentionItems`.
+4. Cover it in `tests/live-stats.test.ts` (counting, caching, the endpoint)
+   and `tests/intel.test.ts` (what the browser makes of it).
 
 Nothing needs to change in nginx, the compose files or the deploy script: it is
 one more field in an answer that already travels.
 
 ### Charts without a chart library
 
-`IntelDashboard.svelte` draws the occupancy ring as an inline `<svg>` circle
-with `stroke-dasharray`, and the seven day bars as divs scaled with
-`transform: scaleY()`. Both animate on the compositor. Chart.js used to cost
-49 KB brotli on `/admin` — about a third of the page — and is gone.
+`IntelDonut.svelte` draws the occupancy ring as an inline `<svg>` circle with
+`stroke-dasharray`, with 2 px of the panel's colour between the slices instead
+of a border. `IntelActivity.svelte` draws the bars as divs scaled with
+`transform: scaleY()`; the plot is one `role="slider"` tab stop, so the arrow
+keys walk the bars and a screen reader reads each one, and a table view lists
+every bar. Everything animates on the compositor. Chart.js used to cost 49 KB
+brotli on `/admin` — about a third of the page — and is gone.
+
+> [!WARNING] Class names that are Tailwind utilities
+> `layout.css` imports Tailwind, which scans every source file and emits each
+> utility it finds globally — scoped Svelte styles don't protect against that.
+> The ring used to be `<svg class="ring">` and got Tailwind's `ring` utility: a
+> 1 px box-shadow in `currentColor`, a white square frame round the chart. Give
+> own elements prefixed names (`intel-donut`, `donut-slice`), never `ring`,
+> `shadow`, `border`, `outline`, `grid`, `table`, `container`, `hidden` & co.
 
 Numbers roll with `@number-flow/svelte`, the same component the booking
 countdown uses. NumberFlow does not hydrate cleanly, so components render plain

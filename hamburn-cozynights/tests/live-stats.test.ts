@@ -2,31 +2,58 @@
 // snapshot cache behind /admin/api/stats, and the rules the poller follows.
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-	bookingTrend,
 	deriveLiveStats,
 	lastBooking,
+	lastCheckIn,
 	liveStatsSnapshot,
+	opsSnapshot,
+	readOpsStats,
 	resetStatsCache,
+	spotActivity,
+	toMinute,
+	OPS_TTL_MS,
 	SNAPSHOT_TTL_MS
 } from '../src/lib/server/stats';
 import { nextDelayMs, statusFor, POLL_INTERVAL_MS } from '../src/lib/live-stats';
 import { GET as statsEndpoint } from '../src/routes/admin/api/stats/+server';
 import { relativeTime } from '../src/lib/time';
 
-const houses = [{ id: 'h1' }, { id: 'h2' }, { id: 'h3' }];
+const houses = [
+	{ id: 'h1', name: 'Neon Cave' },
+	{ id: 'h2', name: 'Disco Barn' },
+	{ id: 'h3', name: 'Empty Dome' }
+];
 const rooms = [
 	{ id: 'r1', house: 'h1' },
 	{ id: 'r2', house: 'h2' }
 ];
-/** h1: one taken, one free, one locked, one ♿, one switched off. h2: full. h3: no rooms. */
+/** h1: one booked, one free, one locked, one ♿, one switched off. h2: full. h3: no rooms. */
 const beds = [
-	{ id: 'b1', room: 'r1', enabled: true, occupied: true, is_locked: false, order: 'o1' },
+	{
+		id: 'b1',
+		room: 'r1',
+		enabled: true,
+		occupied: true,
+		is_locked: false,
+		order: 'o1',
+		booked_at: '2026-09-21 08:00:30.000Z',
+		checked_in_at: '2026-09-21 09:15:00.000Z'
+	},
 	{ id: 'b2', room: 'r1', enabled: true, occupied: false, is_locked: false },
 	{ id: 'b3', room: 'r1', enabled: true, occupied: false, is_locked: true },
 	{ id: 'b4', room: 'r1', enabled: true, occupied: false, is_locked: false, is_special: true },
 	{ id: 'b5', room: 'r1', enabled: false, occupied: false, is_locked: false },
-	{ id: 'b6', room: 'r2', enabled: true, occupied: true, is_locked: false, order: 'o2' }
+	{
+		id: 'b6',
+		room: 'r2',
+		enabled: true,
+		occupied: true,
+		is_locked: false,
+		order: 'o2',
+		booked_at: '2026-09-20 18:00:00.000Z'
+	}
 ];
+const minute = (iso: string) => Math.floor(Date.parse(iso) / 60000);
 
 describe('deriveLiveStats', () => {
 	it('counts every spot state and puts each house in one state', () => {
@@ -35,6 +62,8 @@ describe('deriveLiveStats', () => {
 			total: 5,
 			occupied: 2,
 			free: 1,
+			booked: 2,
+			checkedIn: 1,
 			locked: 1,
 			special: 1,
 			deactivated: 1
@@ -45,104 +74,268 @@ describe('deriveLiveStats', () => {
 		expect(stats.houseStates).toEqual({ unconfigured: 1, open: 0, filling: 1, full: 1 });
 	});
 
-	it('keeps the per-house numbers the cards show', () => {
+	it('keeps the per-house numbers, names and stamps the panel filters by', () => {
 		const stats = deriveLiveStats(houses, rooms, beds);
 		expect(stats.houses).toEqual([
-			{ id: 'h1', total: 4, occupied: 1, free: 1, checkedIn: 0, state: 'filling' },
-			{ id: 'h2', total: 1, occupied: 1, free: 0, checkedIn: 0, state: 'full' },
-			{ id: 'h3', total: 0, occupied: 0, free: 0, checkedIn: 0, state: 'unconfigured' }
+			{
+				id: 'h1',
+				name: 'Neon Cave',
+				total: 4,
+				occupied: 1,
+				free: 1,
+				checkedIn: 1,
+				booked: 1,
+				locked: 1,
+				special: 1,
+				deactivated: 1,
+				state: 'filling',
+				bookedAt: [minute('2026-09-21T08:00:30Z')],
+				checkedInAt: [minute('2026-09-21T09:15:00Z')]
+			},
+			{
+				id: 'h2',
+				name: 'Disco Barn',
+				total: 1,
+				occupied: 1,
+				free: 0,
+				checkedIn: 0,
+				booked: 1,
+				locked: 0,
+				special: 0,
+				deactivated: 0,
+				state: 'full',
+				bookedAt: [minute('2026-09-20T18:00:00Z')],
+				checkedInAt: []
+			},
+			{
+				id: 'h3',
+				name: 'Empty Dome',
+				total: 0,
+				occupied: 0,
+				free: 0,
+				checkedIn: 0,
+				booked: 0,
+				locked: 0,
+				special: 0,
+				deactivated: 0,
+				state: 'unconfigured',
+				bookedAt: [],
+				checkedInAt: []
+			}
 		]);
 	});
 
+	it('counts each ticket with a spot once and knows the latest booking and check-in', () => {
+		const stats = deriveLiveStats(houses, rooms, beds);
+		expect(stats.ticketsWithSpot).toBe(2);
+		expect(stats.lastBookingAt).toBe('2026-09-21 08:00:30.000Z');
+		expect(stats.lastCheckInAt).toBe('2026-09-21 09:15:00.000Z');
+	});
+
 	it('ignores spots whose room belongs to no house', () => {
-		const orphan = [...beds, { id: 'b9', room: 'gone', enabled: true, occupied: true, is_locked: false }];
+		const orphan = [
+			...beds,
+			{ id: 'b9', room: 'gone', enabled: true, occupied: true, is_locked: false }
+		];
 		const stats = deriveLiveStats(houses, rooms, orphan);
 		expect(stats.houses.reduce((sum, house) => sum + house.total, 0)).toBe(5);
 		// The camp total still sees it: a spot in a lost room is a sanity warning,
 		// not a reason for the ring to disagree with the database.
 		expect(stats.spots.total).toBe(6);
 	});
+
+	it('sends no guest data: names, tickets and addresses stay on the server', () => {
+		const stats = deriveLiveStats(houses, rooms, beds);
+		const wire = JSON.stringify(stats);
+		expect(wire).not.toContain('o1');
+		expect(wire).not.toContain('b1');
+		expect(wire).not.toContain('@');
+	});
 });
 
-describe('bookingTrend', () => {
-	const now = new Date('2026-09-21T10:00:00Z');
-	const stamp = (iso: string) => ({
-		id: iso,
+describe('spotActivity', () => {
+	it('keeps the minute of every booking and check-in, oldest first', () => {
+		const activity = spotActivity([
+			{ ...beds[0], booked_at: '2026-09-21 10:00:00.000Z' },
+			{ ...beds[5], booked_at: '2026-09-21 07:00:00.000Z' }
+		]);
+		expect(activity.bookedAt).toEqual([
+			minute('2026-09-21T07:00:00Z'),
+			minute('2026-09-21T10:00:00Z')
+		]);
+		expect(activity.checkedInAt).toEqual([minute('2026-09-21T09:15:00Z')]);
+	});
+
+	it('leaves out released spots, switched-off spots and broken stamps', () => {
+		const activity = spotActivity([
+			{ ...beds[0], order: '' },
+			{ ...beds[0], enabled: false },
+			{ ...beds[5], booked_at: 'not a date' }
+		]);
+		expect(activity).toEqual({ bookedAt: [], checkedInAt: [] });
+	});
+
+	it('reads PocketBase dates with a space and ISO dates alike', () => {
+		expect(toMinute('2026-09-21 09:00:59.999Z')).toBe(minute('2026-09-21T09:00:00Z'));
+		expect(toMinute('2026-09-21T09:00:00Z')).toBe(minute('2026-09-21T09:00:00Z'));
+		expect(toMinute('')).toBeNull();
+		expect(toMinute(undefined)).toBeNull();
+	});
+});
+
+describe('lastBooking and lastCheckIn', () => {
+	const spot = (id: string, order: string, booked_at: string, checked_in_at = '') => ({
+		id,
 		room: 'r1',
 		enabled: true,
-		occupied: true,
+		occupied: !!order,
 		is_locked: false,
-		order: 'o',
-		booked_at: iso
+		order,
+		booked_at,
+		checked_in_at
 	});
 
-	it('has one bucket per day, oldest first, today last', () => {
-		const trend = bookingTrend([], now);
-		expect(trend.values).toEqual([0, 0, 0, 0, 0, 0, 0]);
-		expect(trend.labels).toHaveLength(7);
-		expect(trend.labels[6]).toBe('Mon'); // 21 Sep 2026 is a Monday in Berlin
+	it('are the newest stamps that still carry a ticket', () => {
+		const list = [
+			spot('a', 'o', '2026-09-19 10:00:00.000Z', '2026-09-20 10:00:00.000Z'),
+			spot('b', 'o', '2026-09-21 09:00:00.000Z'),
+			spot('c', '', '2026-09-22 09:00:00.000Z', '2026-09-22 10:00:00.000Z')
+		];
+		expect(lastBooking(list)).toBe('2026-09-21 09:00:00.000Z');
+		expect(lastCheckIn(list)).toBe('2026-09-20 10:00:00.000Z');
 	});
 
-	it('buckets by Berlin day, not by UTC day', () => {
-		// 22:30 UTC on the 20th is 00:30 Berlin on the 21st: today, not yesterday.
-		const trend = bookingTrend([stamp('2026-09-20T22:30:00Z')], now);
-		expect(trend.values[6]).toBe(1);
-		expect(trend.values[5]).toBe(0);
-	});
-
-	it('does not count a stamp without a ticket, or one older than a week', () => {
-		const released = { ...stamp('2026-09-21T08:00:00Z'), order: '' };
-		const ancient = stamp('2026-08-01T08:00:00Z');
-		expect(bookingTrend([released, ancient], now).values).toEqual([0, 0, 0, 0, 0, 0, 0]);
+	it('are null while nothing is booked or checked in', () => {
+		expect(lastBooking([])).toBeNull();
+		expect(lastCheckIn([spot('a', 'o', '2026-09-19 10:00:00.000Z')])).toBeNull();
 	});
 });
 
-describe('lastBooking', () => {
-	it('is the newest stamp that still carries a ticket', () => {
-		expect(
-			lastBooking([
-				{
-					id: 'a',
-					room: 'r1',
-					enabled: true,
-					occupied: true,
-					is_locked: false,
-					order: 'o',
-					booked_at: '2026-09-19 10:00:00.000Z'
+/**
+ * PocketBase stand-in for the camp-wide counts: `getList` answers the number
+ * of records the filter selects, from plain arrays.
+ */
+function opsPb(options: { broken?: string[]; reads?: { ops: number } } = {}) {
+	const data: Record<string, Record<string, unknown>[]> = {
+		orders: [
+			{ id: 'o1', email: 'a@example.org' },
+			{ id: 'o2', email: '' },
+			{ id: 'o3', email: 'c@example.org' }
+		],
+		guest_notify: [
+			{ id: 'n1', due: '', attempts: 0, tg_chat: '42', mail_sent: '2026-09-20 10:00:00.000Z' },
+			{ id: 'n2', due: '2026-09-21 10:00:00.000Z', attempts: 0, tg_chat: '', mail_sent: '' },
+			{ id: 'n3', due: '2026-09-21 10:05:00.000Z', attempts: 2, tg_chat: '', mail_sent: '' },
+			{ id: 'n4', due: '', attempts: 8, tg_chat: '', mail_sent: '' }
+		],
+		special_requests: [
+			{ id: 's1', status: 'pending' },
+			{ id: 's2', status: 'pending' },
+			{ id: 's3', status: 'approved' }
+		],
+		admins: [
+			{ id: 'a1', role: 'superuser' },
+			{ id: 'a2', role: 'admin' },
+			{ id: 'a3', role: 'admin' },
+			{ id: 'a4', role: 'pending' }
+		],
+		admin_events: [
+			{ id: 'e1', alert_status: 'sent' },
+			{ id: 'e2', alert_status: 'failed' },
+			{ id: 'e3', alert_status: 'pending' }
+		]
+	};
+	// The filters readOpsStats sends, and which records each one selects.
+	const FILTERS: Record<string, (record: Record<string, unknown>) => boolean> = {
+		"email != ''": (r) => r.email !== '',
+		"tg_chat != ''": (r) => r.tg_chat !== '',
+		"mail_sent != ''": (r) => r.mail_sent !== '',
+		"due != ''": (r) => r.due !== '',
+		"due != '' && attempts > 0": (r) => r.due !== '' && Number(r.attempts) > 0,
+		"due = '' && attempts > 0": (r) => r.due === '' && Number(r.attempts) > 0,
+		"alert_status = 'pending'": (r) => r.alert_status === 'pending',
+		"alert_status = 'failed'": (r) => r.alert_status === 'failed'
+	};
+	return {
+		collection: (name: string) => {
+			const fail = () => {
+				throw Object.assign(new Error(`missing collection ${name}`), { status: 404 });
+			};
+			return {
+				getList: async (_page: number, _perPage: number, query: { filter?: string } = {}) => {
+					if (options.broken?.includes(name)) fail();
+					if (options.reads && name === 'orders' && !query.filter) options.reads.ops++;
+					const records = data[name] ?? [];
+					const match = query.filter ? FILTERS[query.filter] : () => true;
+					if (!match) throw new Error(`unexpected filter ${query.filter}`);
+					return { totalItems: records.filter(match).length, items: [] };
 				},
-				{
-					id: 'b',
-					room: 'r1',
-					enabled: true,
-					occupied: true,
-					is_locked: false,
-					order: 'o',
-					booked_at: '2026-09-21 09:00:00.000Z'
+				getFullList: async () => {
+					if (options.broken?.includes(name)) fail();
+					if (name === 'houses') return houses;
+					if (name === 'rooms') return rooms;
+					if (name === 'beds') return beds;
+					return data[name] ?? [];
 				},
-				{
-					id: 'c',
-					room: 'r1',
-					enabled: true,
-					occupied: false,
-					is_locked: false,
-					order: '',
-					booked_at: '2026-09-22 09:00:00.000Z'
+				getOne: async () => {
+					if (options.broken?.includes(name)) fail();
+					if (name !== 'app_settings') fail();
+					return { notify_mail: true, telegram_bot: '' };
 				}
-			])
-		).toBe('2026-09-21 09:00:00.000Z');
+			};
+		}
+	} as never;
+}
+
+describe('the camp-wide counts', () => {
+	beforeEach(() => resetStatsCache());
+
+	it('counts tickets, messages, requests and the crew', async () => {
+		const ops = await readOpsStats(opsPb());
+		expect(ops).toEqual({
+			tickets: { total: 3, withEmail: 2, telegram: 1, mailed: 1 },
+			requests: { pending: 2, approved: 1, declined: 0 },
+			messages: { mailOn: true, telegramOn: false, queued: 2, retrying: 1, failed: 1 },
+			crew: { admins: 3, accessRequests: 1, alertsQueued: 1, alertsFailed: 1 }
+		});
 	});
 
-	it('is null while nothing is booked', () => {
-		expect(lastBooking([])).toBeNull();
+	it('shows what it could read when one collection is missing', async () => {
+		const ops = await readOpsStats(opsPb({ broken: ['guest_notify', 'admins'] }));
+		expect(ops.tickets.total).toBe(3);
+		expect(ops.tickets.telegram).toBeNull();
+		expect(ops.messages).toMatchObject({ queued: null, retrying: null, failed: null });
+		expect(ops.crew).toMatchObject({ admins: null, accessRequests: null, alertsFailed: 1 });
+	});
+
+	it('never throws, even when nothing can be read', async () => {
+		const broken = ['orders', 'guest_notify', 'special_requests', 'admins', 'admin_events'];
+		const ops = await readOpsStats(opsPb({ broken: [...broken, 'app_settings'] }));
+		expect(ops.tickets.total).toBeNull();
+		expect(ops.messages.mailOn).toBe(false);
+	});
+
+	it('asks PocketBase at most once per OPS_TTL_MS', async () => {
+		const reads = { ops: 0 };
+		const pb = opsPb({ reads });
+		await Promise.all([opsSnapshot(pb, 1000), opsSnapshot(pb, 1000)]);
+		await opsSnapshot(pb, 1000 + OPS_TTL_MS - 1);
+		expect(reads.ops).toBe(1);
+		await opsSnapshot(pb, 1000 + OPS_TTL_MS);
+		expect(reads.ops).toBe(2);
 	});
 });
 
 describe('the shared snapshot', () => {
 	function pb(counter: { reads: number }, extraBed = false) {
+		const ops = opsPb() as unknown as { collection: (name: string) => object };
 		return {
-			collection: (name: string) => ({
-				getFullList: async () => {
-					if (name === 'beds') {
+			collection: (name: string) => {
+				const base = ops.collection(name);
+				if (name !== 'beds') return base;
+				return {
+					...base,
+					getFullList: async () => {
 						counter.reads++;
 						return extraBed
 							? [
@@ -151,9 +344,8 @@ describe('the shared snapshot', () => {
 								]
 							: beds;
 					}
-					return name === 'houses' ? houses : rooms;
-				}
-			})
+				};
+			}
 		} as never;
 	}
 
@@ -192,6 +384,12 @@ describe('the shared snapshot', () => {
 		expect(after.etag).not.toBe(before.etag);
 		expect(after.stats.changedAt).not.toBe(before.stats.changedAt);
 		expect(after.stats.spots.free).toBe(before.stats.spots.free + 1);
+	});
+
+	it('carries the camp-wide counts next to the spots', async () => {
+		const { stats } = await liveStatsSnapshot(pb({ reads: 0 }), 1000);
+		expect(stats.ops?.tickets.total).toBe(3);
+		expect(stats.ops?.requests.pending).toBe(2);
 	});
 });
 
@@ -246,11 +444,7 @@ describe('GET /admin/api/stats', () => {
 		role: 'admin',
 		isSuperuser: false
 	};
-	const adminPb = {
-		collection: (name: string) => ({
-			getFullList: async () => (name === 'houses' ? houses : name === 'rooms' ? rooms : beds)
-		})
-	};
+	const adminPb = opsPb();
 	const call = (locals: Record<string, unknown>, headers: Record<string, string> = {}) =>
 		statsEndpoint({
 			locals,
@@ -264,12 +458,23 @@ describe('GET /admin/api/stats', () => {
 		await expect(call({ adminPb })).rejects.toMatchObject({ status: 403 });
 	});
 
+	it('refuses a signed-in account that is still waiting for approval', async () => {
+		// hooks.server.ts sets only pendingAdmin for such an account, never admin.
+		const pendingAdmin = { email: 'new@mauersegler.art', name: '' };
+		await expect(call({ adminPb, admin: null, pendingAdmin })).rejects.toMatchObject({
+			status: 403
+		});
+	});
+
 	it('answers an admin with the numbers and an ETag', async () => {
 		const response = await call({ admin, adminPb });
 		expect(response.status).toBe(200);
 		const etag = response.headers.get('etag');
 		expect(etag).toMatch(/^"[\w-]+"$/);
-		await expect(response.json()).resolves.toMatchObject({ spots: { total: 5, occupied: 2 } });
+		await expect(response.json()).resolves.toMatchObject({
+			spots: { total: 5, occupied: 2 },
+			ops: { tickets: { total: 3 } }
+		});
 	});
 
 	it('answers 304 without a body while nothing changed', async () => {
@@ -284,6 +489,12 @@ describe('GET /admin/api/stats', () => {
 		const broken = {
 			collection: () => ({
 				getFullList: async () => {
+					throw new Error('connection refused');
+				},
+				getList: async () => {
+					throw new Error('connection refused');
+				},
+				getOne: async () => {
 					throw new Error('connection refused');
 				}
 			})
