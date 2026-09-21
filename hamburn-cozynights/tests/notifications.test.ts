@@ -478,6 +478,42 @@ describe('a release the crew keeps quiet (pb_hooks/lib/notify.js, setQuiet)', ()
 		expect(app.findRecordsByFilter('guest_notify', "order = 'order2'", '', 0, 0)).toHaveLength(0);
 	});
 
+	it('does not count a ticket that was passed on as told', () => {
+		// deliverOne remembers a hand-over per address (mail_to / mail_handover)
+		// and has a branch that records both WITHOUT sending. The quiet path must
+		// not do that, or the new holder would never get their own text.
+		const app = fakeHookApp({
+			orders: [
+				{
+					id: 'order1',
+					email: 'new-holder@example.com',
+					handed_over_at: '2026-09-20 10:00:00.000Z'
+				}
+			],
+			beds: [{ id: 'bed1', order: '', label: 'B1', room: 'room1' }],
+			guest_notify: [
+				{
+					id: 'n1',
+					order: 'order1',
+					due: new Date().toISOString().replace('T', ' '),
+					mail_to: 'old-holder@example.com',
+					mail_spot: 'bed1',
+					mail_handover: ''
+				}
+			]
+		});
+
+		notify.setQuiet(app, 60);
+		notify.markDue(app, 'order1');
+
+		const rec = app.findRecordById('guest_notify', 'n1');
+		expect(rec.getString('due')).toBe('');
+		expect(rec.getString('mail_spot')).toBe('');
+		// Untouched: the new address has still been told nothing at all.
+		expect(rec.getString('mail_to')).toBe('old-holder@example.com');
+		expect(rec.getString('mail_handover')).toBe('');
+	});
+
 	it('lasts ten minutes at most, whatever is asked for', () => {
 		const app = fakeHookApp({});
 		const until = notify.setQuiet(app, 86_400);
