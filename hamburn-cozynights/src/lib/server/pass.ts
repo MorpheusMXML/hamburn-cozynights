@@ -1,4 +1,5 @@
 import encodeQR from 'qr';
+import { error } from '@sveltejs/kit';
 import { FailureRateLimiter } from '$lib/server/rate-limit';
 import type { ClientResponseError } from 'pocketbase';
 import type {
@@ -8,8 +9,9 @@ import type {
 	RoomsResponse,
 	TypedPocketBase
 } from '$lib/pocketbase-types';
-import { formatPassCode, type PassSummary } from '$lib/pass';
+import { formatPassCode, normalizePassInput, type PassSummary } from '$lib/pass';
 import { decrypt } from '$lib/server/crypto';
+import { encodeMonochromePng } from '$lib/server/png';
 
 /**
  * Booking passes (docs/admin/passes.md). A pass shows that a ticket holds a
@@ -166,8 +168,51 @@ export function passQrGif(url: string): Uint8Array<ArrayBuffer> {
 	return encodeQR(url, 'gif', { ecc: 'medium', border: 4, scale: 8 });
 }
 
+/** A PNG of the QR code, for the Telegram bot: Telegram takes PNG photos, not GIF. */
+export function passQrPng(url: string): Buffer {
+	return encodeMonochromePng(encodeQR(url, 'raw', { ecc: 'medium', border: 4, scale: 10 }));
+}
+
 /**
  * Unknown pass codes per client, shared by the pass page and its QR image:
  * codes can't be guessed (31^12), but nobody needs to try thousands either.
  */
 export const unknownPassCodes = new FailureRateLimiter(30, 10 * 60 * 1000);
+
+/**
+ * The pass behind a request for one of its files (QR images, wallet passes),
+ * with the pass page's limit on unknown codes: these files must not become the
+ * cheap way to probe for codes. Throws 404 / 429 like the pass page.
+ */
+export async function requirePass(event: {
+	params: { code?: string };
+	locals: App.Locals;
+	getClientAddress: () => string;
+}): Promise<PassLookup> {
+	const code = normalizePassInput(event.params.code);
+	if (!code) throw error(404, 'Unknown pass.');
+
+	let client = 'unknown';
+	try {
+		client = event.getClientAddress();
+	} catch {
+		/* no address header (e.g. a direct local request) */
+	}
+	if (!event.locals.admin && unknownPassCodes.isBlocked(client)) {
+		throw error(429, 'Too many unknown passes from your connection. Please wait a few minutes.');
+	}
+
+	const pass = await findPass(event.locals.adminPb, code).catch(() => null);
+	if (!pass) {
+		unknownPassCodes.recordFailure(client);
+		throw error(404, 'Unknown pass.');
+	}
+	return pass;
+}
+
+/** Headers for every file of a pass: its code is in the URL. */
+export const PASS_FILE_HEADERS: Record<string, string> = {
+	'cache-control': 'private, no-store',
+	'referrer-policy': 'no-referrer',
+	'x-robots-tag': 'noindex, nofollow'
+};
