@@ -22,6 +22,7 @@ import {
 	type GuestNotifyStatus
 } from '$lib/server/notifications';
 import { passSummary } from '$lib/server/pass';
+import { walletPlatforms } from '$lib/server/wallet/config';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
 import type { PassSummary } from '$lib/pass';
 
@@ -36,7 +37,7 @@ function cleanBurnerName(raw: FormDataEntryValue | null): string {
 }
 
 export const load: PageServerLoad = async ({ params, locals, cookies }) => {
-	if (!locals.orderNumber) throw redirect(303, signInUrl(locals));
+	if (!locals.orderNumber) throw redirect(303, signInUrl(locals, `/room/${params.id}`));
 
 	// Always use the adminPb instance for backend operations
 	const bookingService = new BookingService(locals.adminPb);
@@ -115,6 +116,8 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 		return {
 			notify,
 			pass,
+			// the wallet buttons under the pass (none until a wallet is set up)
+			wallet: walletPlatforms(),
 			spotFixed,
 			// The crew checked the guest in at arrival: only the crew changes the spot now.
 			checkedIn: !!userBed?.checked_in_at,

@@ -18,6 +18,7 @@ No Trace to give it up and spin again.
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
+	import PassActions from '$lib/components/PassActions.svelte';
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import SuccessFireworks from '$lib/components/SuccessFireworks.svelte';
 	import LeaveNoTrace from '$lib/components/roulette/LeaveNoTrace.svelte';
@@ -118,7 +119,9 @@ No Trace to give it up and spin again.
 	let readout = $derived.by(() => {
 		if (mode === 'mine') return fate ? 'Destiny fulfilled' : 'Your spot';
 		if (mode === 'resting') {
-			return data.guestPhase === 'closed' ? 'Resting until the next burn' : 'Opens with Live Booking';
+			return data.guestPhase === 'closed'
+				? 'Resting until the next burn'
+				: 'Opens with Live Booking';
 		}
 		if (mode === 'soldout') return 'Every spot is taken';
 		if (isBooking) return 'Booking…';
@@ -589,6 +592,12 @@ No Trace to give it up and spin again.
 					<div class="printed">
 						<PassTicket pass={data.pass} />
 					</div>
+					<PassActions
+						code={data.pass.code}
+						wallet={data.wallet}
+						telegram={data.telegram}
+						compact
+					/>
 				{:else if passPrint === 'printing'}
 					<p class="printing">Printing your booking pass…</p>
 				{/if}

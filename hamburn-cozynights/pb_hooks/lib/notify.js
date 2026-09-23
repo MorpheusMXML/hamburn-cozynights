@@ -12,6 +12,12 @@
 // - Crew: one Telegram chat (TELEGRAM_CHAT_ID) for admin_events. The older
 //   COZY_ADMIN_WEBHOOK_URL (Telegram/Slack/Google Chat/Discord) still works.
 //
+// Messages that show the spot carry the booking pass: its link and code, and
+// on Telegram its QR code as a picture with buttons for the pass and the
+// wallet passes (docs/admin/passes.md). The wallet passes themselves are the
+// app's job (src/lib/server/wallet); it tells PocketBase which ones are set up
+// in app_settings.wallet_platforms.
+//
 // Guest messages are state based: a change of a ticket's spot only marks the
 // ticket as due (markDue). A delivery run later compares the ticket's current
 // spot with what each channel last confirmed and sends one message about the
@@ -57,6 +63,17 @@ const LEASE_SECONDS = 300;
 const QUIET_MAX_SECONDS = 600;
 // guest_notify.mail_label / tg_label
 const LABEL_MAX = 400;
+// Telegram caps a photo's caption; a longer message goes out as text.
+const TG_CAPTION_MAX = 1024;
+// /pass in the same chat answers at most this often.
+const TG_PASS_COOLDOWN_SECONDS = 10;
+// The guest commands in the bot's menu (private chats only; the crew group
+// takes no commands). Fixed here: they are the bot's interface, not texts.
+const TG_COMMANDS = [
+	{ command: 'pass', description: 'Show my booking pass' },
+	{ command: 'stop', description: 'Stop the updates' },
+	{ command: 'help', description: 'How this bot works' }
+];
 
 function env(name) {
 	return String($os.getenv(name) || '').trim();
@@ -85,11 +102,30 @@ function config(app) {
 			guests: !!token && isOn(env('TELEGRAM_GUEST_UPDATES'), true)
 		},
 		legacyWebhook: env('COZY_ADMIN_WEBHOOK_URL'),
+		// the wallet passes the app offers: [] | ['apple'] | ['google'] | both
+		wallet: walletPlatforms(app),
 		loopSeconds: loop >= 0 && loop <= 50 ? loop : 50,
 		mailsPerMinute: perMinute > 0 ? perMinute : 20,
 		// the texts admins changed (key → text); the defaults are in texts.js
 		texts: loadTexts(app)
 	};
+}
+
+/**
+ * The wallet passes guests can add (Apple Wallet, Google Wallet). The app sets
+ * app_settings.wallet_platforms when it starts, from its own configuration:
+ * the certificates and keys never reach PocketBase.
+ */
+function walletPlatforms(app) {
+	try {
+		const settings = app.findRecordById('app_settings', APP_SETTINGS_ID);
+		return String(settings.getString('wallet_platforms') || '')
+			.split(',')
+			.map((p) => p.trim())
+			.filter((p) => p === 'apple' || p === 'google');
+	} catch (_) {
+		return []; // no settings yet, or a database from before the field
+	}
 }
 
 function crewConfigured(cfg) {
@@ -868,12 +904,17 @@ function spotLines(spot) {
  * status: its current status, fixed: the ticket's spot is the one the crew
  * booked for the request, so only the crew changes it }. Every combination
  * tells both: a message is sent once per state, news left out is lost.
+ * offers (optional): { telegram: the guest can still connect Telegram,
+ * wallet: wallet passes are set up } — lines under a message that shows the
+ * spot.
  */
-function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
+function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) {
 	const req = request || { kind: '', status: '', fixed: false };
+	const offer = offers || { telegram: false, wallet: false };
 	const mapUrl = cfg.appUrl + '/map';
 	const requestUrl = cfg.appUrl + '/special-needs';
 	const roomUrl = spot ? cfg.appUrl + '/room/' + spot.roomId : mapUrl;
+	const telegramUrl = cfg.appUrl + '/telegram';
 	const vars = {
 		name: name || '',
 		spot: spot ? spot.label : '',
@@ -882,7 +923,8 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
 		mapUrl: mapUrl,
 		requestUrl: requestUrl,
 		passCode: pass ? pass.code : '',
-		passUrl: pass ? pass.url : ''
+		passUrl: pass ? pass.url : '',
+		telegramUrl: telegramUrl
 	};
 	const T = (key) => t(cfg, key, vars);
 	const hello = name ? T('mail.greeting') : T('mail.greeting_anonymous');
@@ -891,6 +933,8 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
 	const showSpot = !!spot && ((!!kind && kind !== 'released') || crewBooked);
 	const passUrl = pass && showSpot ? pass.url : '';
 	const passLine = passUrl ? T('mail.pass') : '';
+	const walletLine = passUrl && offer.wallet ? T('mail.wallet') : '';
+	const telegramLine = showSpot && offer.telegram ? T('mail.telegram') : '';
 	const fixedLine = T('mail.fixed');
 	// News about a request that arrives while a spot message is still due rides
 	// along with it: one message per settled state, so a line left out is lost.
@@ -910,6 +954,7 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
 		intro = T('mail.crew_booked.intro');
 		if (kind === 'changed' && previousLabel) after.push(T('mail.changed.before'));
 		if (passLine) after.push(passLine);
+		if (walletLine) after.push(walletLine);
 		after.push(fixedLine);
 	} else if (!kind) {
 		if (req.kind === 'received') {
@@ -953,6 +998,7 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
 		intro = T('mail.handed_over.intro');
 		if (alsoRequest) after.push(alsoRequest);
 		if (passUrl) after.push(T('mail.handed_over.pass'));
+		if (walletLine) after.push(walletLine);
 		after.push(req.fixed ? fixedLine : T('mail.booked.change'));
 	} else {
 		subject = kind === 'changed' ? T('mail.changed.subject') : T('mail.booked.subject');
@@ -963,8 +1009,10 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
 			after.push(req.fixed ? T('mail.changed.by_crew') : T('mail.changed.maybe_crew'));
 		}
 		if (passLine) after.push(passLine);
+		if (walletLine) after.push(walletLine);
 		after.push(req.fixed ? fixedLine : T('mail.booked.change'));
 	}
+	if (telegramLine) after.push(telegramLine);
 	const rows = showSpot ? spotLines(spot) : [];
 	const signature = T('mail.signature');
 	const footer = T('mail.footer');
@@ -978,7 +1026,9 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request) {
 
 	const link = (url) => '<a href="' + esc(url) + '" style="color:#7a3cff">' + esc(url) + '</a>';
 	// Each line holds at most one link; link its first URL once.
-	const urls = [passUrl, roomUrl, mapUrl, requestUrl].filter((u) => !!u);
+	const urls = [passUrl, roomUrl, mapUrl, requestUrl, telegramLine ? telegramUrl : ''].filter(
+		(u) => !!u
+	);
 	const linkify = (line) => {
 		let at = -1;
 		let url = '';
@@ -1127,6 +1177,58 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 }
 
 /**
+ * What a Telegram message that shows the spot carries besides its text: the
+ * pass's QR code as a picture (Telegram's servers fetch the PNG from the app,
+ * like a phone opens the pass link that is in the text anyway) and buttons
+ * for the pass and the wallet passes that are set up. null without a pass.
+ */
+function passAttachments(cfg, pass) {
+	if (!pass || !pass.url) return null;
+	const wallet = cfg.wallet || [];
+	const rows = [[{ text: '🎫 Show booking pass', url: pass.url }]];
+	const walletRow = [];
+	if (wallet.indexOf('apple') >= 0) {
+		walletRow.push({ text: 'Add to Apple Wallet', url: pass.url + '/wallet/apple' });
+	}
+	if (wallet.indexOf('google') >= 0) {
+		walletRow.push({ text: 'Add to Google Wallet', url: pass.url + '/wallet/google' });
+	}
+	if (walletRow.length > 0) rows.push(walletRow);
+	return { photo: pass.url + '/qr.png', markup: { inline_keyboard: rows } };
+}
+
+/**
+ * Sends a guest message: with the QR code and buttons when `extras` has them,
+ * else as text. The picture and the buttons are extras: when Telegram refuses
+ * them (it can't fetch the picture, a button's link isn't public), the message
+ * goes out as plain text instead of being lost. Returns telegramCall's result
+ * of the last try, so the caller can tell a gone chat from a failure.
+ */
+function sendGuestTelegram(cfg, chatId, text, extras) {
+	const plain = { chat_id: chatId, text: text, disable_web_page_preview: true };
+	const refusedExtras = (r) => !r.ok && r.status === 400 && !telegramChatGone(r);
+	if (extras) {
+		if (text.length <= TG_CAPTION_MAX) {
+			const photo = telegramCall(
+				cfg,
+				'sendPhoto',
+				{ chat_id: chatId, photo: extras.photo, caption: text, reply_markup: extras.markup },
+				15
+			);
+			if (!refusedExtras(photo)) return photo;
+		}
+		const withButtons = telegramCall(
+			cfg,
+			'sendMessage',
+			Object.assign({}, plain, { reply_markup: extras.markup }),
+			10
+		);
+		if (!refusedExtras(withButtons)) return withButtons;
+	}
+	return telegramCall(cfg, 'sendMessage', plain, 10);
+}
+
+/**
  * Sample messages for the admin page (/admin/messages), rendered with cfg.texts
  * like the real ones: every text is in at least one of them (tests/notify-
  * messages.test.ts checks). The sample guest is Ada with a booking pass.
@@ -1270,6 +1372,12 @@ function previewMessages(cfg) {
 		}
 	];
 	const name = (c) => (c.name === undefined ? 'Ada' : c.name);
+	// Ada hasn't connected Telegram yet: the offer lines show where this
+	// server would send them.
+	const offers = {
+		telegram: !!(cfg.telegram && cfg.telegram.guests),
+		wallet: !!(cfg.wallet && cfg.wallet.length > 0)
+	};
 	const mail = cases.map((c) => {
 		const m = guestMail(
 			cfg,
@@ -1278,7 +1386,8 @@ function previewMessages(cfg) {
 			c.before || '',
 			name(c),
 			pass,
-			c.req
+			c.req,
+			offers
 		);
 		return { id: c.id, title: c.title, subject: m.subject, text: m.text, html: m.html };
 	});
@@ -1317,13 +1426,26 @@ function previewMessages(cfg) {
 		{
 			id: 'link_expired',
 			title: 'The connect link has expired',
-			text: prefixed(cfg, t(cfg, 'bot.link_expired'))
+			text: prefixed(cfg, t(cfg, 'bot.link_expired', { appUrl: cfg.appUrl || 'the booking page' }))
 		},
 		{ id: 'stopped', title: '/stop', text: prefixed(cfg, t(cfg, 'bot.stopped')) },
 		{
 			id: 'not_connected',
-			title: '/stop in a chat that is not connected',
+			title: '/stop or /pass in a chat that is not connected',
 			text: prefixed(cfg, t(cfg, 'bot.not_connected'))
+		},
+		{
+			id: 'pass',
+			title: '/pass (the QR code comes along as a picture)',
+			text: prefixed(
+				cfg,
+				t(cfg, 'bot.pass', { spot: spot.label, passCode: pass.code, passUrl: pass.url })
+			)
+		},
+		{
+			id: 'pass_no_spot',
+			title: '/pass while the ticket holds no spot',
+			text: prefixed(cfg, t(cfg, 'bot.pass_no_spot', { mapUrl: cfg.appUrl + '/map' }))
 		}
 	];
 	return { mail: mail, telegram: telegram, bot: bot };
@@ -1489,7 +1611,12 @@ function deliverOne(app, cfg, rec, force, keepAlive) {
 							known ? rec.getString('mail_label') : '',
 							greetingName(order),
 							pass,
-							{ kind: reqKind, status: reqStatus, fixed: fixed }
+							{ kind: reqKind, status: reqStatus, fixed: fixed },
+							{
+								// only a guest who hasn't connected a chat yet is offered one
+								telegram: cfg.telegram.guests && !rec.getString('tg_chat'),
+								wallet: (cfg.wallet || []).length > 0
+							}
 						)
 					);
 					mailDone = {
@@ -1526,19 +1653,24 @@ function deliverOne(app, cfg, rec, force, keepAlive) {
 		// "connected" tells the request's status itself
 		const reqKind = isNew ? '' : requestKindOf(rec.getString('tg_req'), request);
 		if (kind || reqKind) {
-			const r = telegramCall(
+			// The QR code rides along with every message that shows the spot
+			// (connected, booked, changed, booked by the crew for a request): what
+			// the guest shows at arrival is then right there in the chat.
+			const showsSpot =
+				!!spot &&
+				(kind === 'connected' ||
+					kind === 'booked' ||
+					kind === 'changed' ||
+					(reqKind === 'approved' && fixed));
+			const r = sendGuestTelegram(
 				cfg,
-				'sendMessage',
-				{
-					chat_id: chat,
-					text: guestTelegram(cfg, kind, spot, rec.getString('tg_label'), pass, {
-						kind: reqKind,
-						status: reqStatus,
-						fixed: fixed
-					}),
-					disable_web_page_preview: true
-				},
-				10
+				chat,
+				guestTelegram(cfg, kind, spot, rec.getString('tg_label'), pass, {
+					kind: reqKind,
+					status: reqStatus,
+					fixed: fixed
+				}),
+				showsSpot ? passAttachments(cfg, pass) : null
 			);
 			if (r.ok) {
 				tgDone = 'sent';
@@ -1690,10 +1822,19 @@ function handleUpdate(app, cfg, update) {
 				fresh.set('due', pbDate(Date.now()));
 			});
 		if (!linked) {
-			reply(cfg, chatId, prefixed(cfg, t(cfg, 'bot.link_expired')));
+			reply(
+				cfg,
+				chatId,
+				prefixed(cfg, t(cfg, 'bot.link_expired', { appUrl: cfg.appUrl || 'the booking page' }))
+			);
 			return;
 		}
 		return; // the delivery run right after this sends "connected" with the spot
+	}
+
+	if (/^\/pass(?:@\w+)?$/.test(text)) {
+		replyWithPass(app, cfg, chatId);
+		return;
 	}
 
 	if (/^\/stop(?:@\w+)?$/.test(text)) {
@@ -1719,6 +1860,64 @@ function handleUpdate(app, cfg, update) {
 	}
 
 	reply(cfg, chatId, helpText(cfg));
+}
+
+/**
+ * /pass: the booking pass of every ticket this chat follows (one person may
+ * have connected two tickets), with the QR code and the buttons, as the
+ * booking message had them — for the guest who deleted that message, or
+ * wants it at the top of the chat at arrival. What the pass page shows to
+ * anyone with its link, nothing more: the request status stays out.
+ */
+function replyWithPass(app, cfg, chatId) {
+	const store = app.store();
+	const key = 'cozy_tg_pass_' + chatId;
+	if (Date.now() - (store.get(key) || 0) < TG_PASS_COOLDOWN_SECONDS * 1000) return;
+	store.set(key, Date.now());
+
+	const linked = app.findRecordsByFilter('guest_notify', 'tg_chat = {:chat}', '', 10, 0, {
+		chat: chatId
+	});
+	if (linked.length === 0) {
+		reply(cfg, chatId, prefixed(cfg, t(cfg, 'bot.not_connected')));
+		return;
+	}
+	for (const rec of linked) {
+		let order;
+		try {
+			order = app.findRecordById('orders', rec.getString('order'));
+		} catch (_) {
+			continue; // the ticket is gone; its record goes with the next delivery run
+		}
+		const spot = currentSpot(app, order.id);
+		const pass = spot ? bookingPass(app, cfg, order) : null;
+		if (!spot || !pass) {
+			reply(cfg, chatId, prefixed(cfg, t(cfg, 'bot.pass_no_spot', { mapUrl: cfg.appUrl + '/map' })));
+			continue;
+		}
+		const text = prefixed(
+			cfg,
+			t(cfg, 'bot.pass', { spot: spot.label, passCode: pass.code, passUrl: pass.url })
+		);
+		const r = sendGuestTelegram(cfg, chatId, text, passAttachments(cfg, pass));
+		if (!r.ok) console.warn('[cozy-notify] Telegram /pass failed: ' + r.status + ' ' + r.description);
+	}
+}
+
+/**
+ * The guest commands in the bot's menu, for private chats only. Once per
+ * process: PocketBase starts, the first delivery run sets them.
+ */
+function registerCommands(app, cfg) {
+	if (!cfg.telegram.guests || app.store().get('cozy_tg_commands')) return;
+	const r = telegramCall(
+		cfg,
+		'setMyCommands',
+		{ commands: TG_COMMANDS, scope: { type: 'all_private_chats' } },
+		10
+	);
+	if (r.ok) app.store().set('cozy_tg_commands', true);
+	else warnOnce(app, 'commands', '[cozy-notify] Telegram setMyCommands failed: ' + r.status + ' ' + r.description);
 }
 
 /**
@@ -1782,6 +1981,7 @@ function refreshCapabilities(app, cfg, offline) {
 	let bot = null; // null: keep the stored name
 	if (!cfg.telegram.guests) bot = '';
 	else if (!offline) bot = botUsername(app, cfg);
+	if (!offline && bot) registerCommands(app, cfg);
 
 	let published = null;
 	app.runInTransaction((tx) => {
@@ -2025,6 +2225,10 @@ module.exports = {
 	deliverDue: deliverDue,
 	guestMail: guestMail,
 	guestTelegram: guestTelegram,
+	passAttachments: passAttachments,
+	sendGuestTelegram: sendGuestTelegram,
+	handleUpdate: handleUpdate,
+	walletPlatforms: walletPlatforms,
 	loadTexts: loadTexts,
 	t: t,
 	textCatalogue: textCatalogue,

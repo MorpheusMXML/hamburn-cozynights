@@ -69,7 +69,9 @@
 			: loginReason === 'round'
 				? 'A new booking round has started, so this device was signed out. Please enter your ticket code again — it still works.'
 				: loginReason === 'required'
-					? 'Please enter your ticket code first. After that you can open the map and pick your spot.'
+					? data.next
+						? 'Please enter your ticket code first. Then we take you right back.'
+						: 'Please enter your ticket code first. After that you can open the map and pick your spot.'
 					: loginReason === 'out'
 						? 'Your ticket code was removed from this device. Enter it again whenever you want to change your spot.'
 						: '';
@@ -183,6 +185,10 @@
 					};
 				}}
 			>
+				{#if data.next}
+					<!-- where the guest came from (a link in a confirmation), checked on the server -->
+					<input type="hidden" name="next" value={data.next} />
+				{/if}
 				<input
 					type="text"
 					name="bookingCode"
@@ -236,8 +242,8 @@
 
 			{#if data.hasTicket}
 				<div class="continue-row">
-					<a class="continue-link" href="/map"
-						>Already signed in on this device? Continue to the map →</a
+					<a class="continue-link" href={data.next ?? '/map'}
+						>Already signed in on this device? {data.next ? 'Continue' : 'Continue to the map'} →</a
 					>
 					<form method="POST" action="?/signOut" class="sign-out-form" use:enhance>
 						<button type="submit" class="sign-out">Not your ticket? Sign out</button>
