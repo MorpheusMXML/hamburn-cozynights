@@ -180,6 +180,10 @@ const PAGES: PageCase[] = [
 	},
 	{ name: 'special needs: request sent', path: () => '/special-needs', as: 'guestWithRequest' },
 	{ name: 'special needs: new request', path: () => '/special-needs', as: 'guestWithoutSpot' },
+	// The wallet buttons and the Telegram offer under a guest's pass
+	// (docs/admin/passes.md). Both wallets are set up in the test stack.
+	{ name: 'updates on Telegram', path: () => '/telegram', as: 'guestWithSpot' },
+	{ name: 'updates on Telegram without a spot', path: () => '/telegram', as: 'guestWithoutSpot' },
 	{
 		name: 'special needs: refused request',
 		path: () => '/special-needs',

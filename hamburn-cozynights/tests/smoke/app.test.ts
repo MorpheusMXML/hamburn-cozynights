@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type PocketBase from 'pocketbase';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
+import { readZip } from '../../src/lib/server/wallet/zip';
 import { adminCookie, createAdmin, seedHouse, seedTicket, serviceAccount } from '../stack-helpers';
 
 const BASE = (process.env.SMOKE_BASE_URL || '').replace(/\/$/, '');
@@ -59,14 +60,15 @@ describe('any deployment (read-only)', () => {
 		expect(res.headers.get('set-cookie') || '').not.toContain('bookingCode=');
 	});
 
-	it('sends guest pages without a ticket back to the login', async () => {
+	it('sends guest pages without a ticket back to the login, and back again after it', async () => {
 		const res = await get('/room/doesnotexist000');
 		expect(res.status).toBe(303);
-		expect(res.headers.get('location')).toBe('/?login=required');
+		// `next`: signing in comes back to the page the visitor wanted
+		expect(res.headers.get('location')).toBe('/?login=required&next=%2Froom%2Fdoesnotexist000');
 
 		const request = await get('/special-needs');
 		expect(request.status).toBe(303);
-		expect(request.headers.get('location')).toBe('/?login=required');
+		expect(request.headers.get('location')).toBe('/?login=required&next=%2Fspecial-needs');
 	});
 
 	it('shows the admin login page, with the backend reachable', async () => {
@@ -286,6 +288,35 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		expect(guestView).not.toContain(ticket.code);
 		const gif = await get(`/pass/${shown}/qr.gif`);
 		expect(gif.headers.get('content-type')).toBe('image/gif');
+		const png = await get(`/pass/${shown}/qr.png`);
+		expect(png.headers.get('content-type')).toBe('image/png');
+		expect(
+			Buffer.from(await png.arrayBuffer())
+				.subarray(1, 4)
+				.toString()
+		).toBe('PNG');
+
+		// the wallets (throwaway credentials in the test stack): a signed pass
+		// file for Apple, a save link for Google
+		const pkpass = await get(`/pass/${shown}/wallet/apple`);
+		expect(pkpass.status).toBe(200);
+		expect(pkpass.headers.get('content-type')).toBe('application/vnd.apple.pkpass');
+		const files = readZip(Buffer.from(await pkpass.arrayBuffer()));
+		expect([...files.keys()]).toContain('signature');
+		expect(JSON.parse(files.get('pass.json')!.toString('utf8'))).toMatchObject({
+			serialNumber: code,
+			passTypeIdentifier: 'pass.test.cozynights'
+		});
+		const save = await get(`/pass/${shown}/wallet/google`);
+		expect(save.status).toBe(303);
+		expect(save.headers.get('location')).toContain('https://pay.google.com/gp/v/save/');
+		expect(guestView).toContain('Add to Apple Wallet');
+
+		// the Telegram page needs the ticket code, and comes back afterwards
+		const telegram = await get('/telegram');
+		expect(telegram.status).toBe(303);
+		expect(telegram.headers.get('location')).toBe('/?login=required&next=%2Ftelegram');
+		expect(await (await get('/telegram', cookie)).text()).toContain('Updates on Telegram');
 
 		// the crew: the same link shows the booking and a Check in button
 		const admin = await createAdmin(su, 'admin');
@@ -603,7 +634,7 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		// told why, and both cookies are deleted
 		const signedOut = await get(`/room/${room.id}`, cookie);
 		expect(signedOut.status).toBe(303);
-		expect(signedOut.headers.get('location')).toBe('/?login=round');
+		expect(signedOut.headers.get('location')).toMatch(/^\/\?login=round(&next=|$)/);
 		const cleared = signedOut.headers.getSetCookie();
 		expect(cleared.some((c) => c.startsWith('bookingCode=;'))).toBe(true);
 		expect(cleared.some((c) => c.startsWith('bookingRound=;'))).toBe(true);

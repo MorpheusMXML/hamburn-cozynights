@@ -261,7 +261,13 @@ describe('message texts from the catalogue (pb_hooks/lib/texts.js)', () => {
 				marker(entry.key) + entry.placeholders.map((name) => ` {${name}}`).join('')
 			])
 		);
-		const preview = notify.previewMessages({ ...cfg, texts: all });
+		// The preview offers what this server can do; here: both.
+		const preview = notify.previewMessages({
+			...cfg,
+			telegram: { guests: true },
+			wallet: ['apple', 'google'],
+			texts: all
+		});
 		const rendered = [
 			...preview.mail.map((m: { subject: string; text: string }) => `${m.subject}\n${m.text}`),
 			...preview.telegram.map((m: { text: string }) => m.text),
@@ -275,7 +281,9 @@ describe('message texts from the catalogue (pb_hooks/lib/texts.js)', () => {
 			'help',
 			'link_expired',
 			'stopped',
-			'not_connected'
+			'not_connected',
+			'pass',
+			'pass_no_spot'
 		]);
 	});
 

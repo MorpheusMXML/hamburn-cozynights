@@ -11,7 +11,9 @@ const RELATIONS: Record<string, Record<string, string>> = {
 	beds: { room: 'rooms', order: 'orders' },
 	rooms: { house: 'houses' },
 	special_requests: { order: 'orders' },
-	guest_notify: { order: 'orders' }
+	guest_notify: { order: 'orders' },
+	wallet_passes: { order: 'orders' },
+	wallet_devices: { pass: 'wallet_passes' }
 };
 
 const UNIQUE: Record<string, string[]> = {
