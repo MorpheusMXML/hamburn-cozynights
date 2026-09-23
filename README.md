@@ -40,6 +40,7 @@ Ticket holders pick their own bed on the Hamburn camp map. The crew builds the c
 | ⚖️  | **Legal pages**              | Legal notice, privacy policy and booking rules on every page; the operator's details stay out of git.  |
 | 📬  | **Booking confirmations**    | E-mail to the ticket holder, Telegram if they like, and a crew group that hears about admin changes.   |
 | 🎟️  | **Booking pass**             | A QR code and a short code per booking; the crew checks it with a phone camera, a PC or a USB scanner. |
+| 👛  | **In the wallet**            | The pass goes into Apple Wallet or Google Wallet and follows the booking: move a guest and their pass updates itself. |
 | ♿   | **Special-needs spots**      | Guests ask with their ticket code, even before booking opens; the crew books a fitting spot.           |
 | ✉️  | **Message texts**            | Every sentence guests get by e-mail, on Telegram or from the bot is editable in the admin area, with a live preview. |
 

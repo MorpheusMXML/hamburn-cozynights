@@ -44,7 +44,7 @@ features:
     linkText: Confirmations
   - icon: 🎟️
     title: Booking pass
-    details: Every booking comes with a QR code and a short code. The crew checks it at arrival with a phone camera.
+    details: Every booking comes with a QR code and a short code — on the page, in Apple Wallet or Google Wallet, or in the Telegram chat. The crew checks it at arrival with a phone camera.
     link: /guide/booking#your-booking-pass
     linkText: The pass
   - icon: ♿

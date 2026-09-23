@@ -163,6 +163,21 @@ Booking confirmations and crew alerts are sent by PocketBase (`pb_hooks/cozy_not
 - **The mail password is stored twice.** PocketBase keeps its own copy of the SMTP settings in its database, so it is also in every database backup. Use credentials that can only send mail — an SMTP user of a sending service, one per environment — never the password of a mailbox.
 - **Check after setting it up**, on the server: `./scripts/cozy-admin.sh notify status` and `./scripts/cozy-admin.sh notify test --email <you>`.
 
+## Wallet passes per environment
+
+The booking pass can go into Apple Wallet and Google Wallet ([Wallet passes](../admin/passes#wallet-passes-apple-wallet-google-wallet)). Unlike the messages, this lives in the **app** container: the certificate and the service-account key never reach PocketBase, which only learns from the app which wallets exist (`app_settings.wallet_platforms`). All values are optional; the buttons appear when a wallet is complete.
+
+| Setting | For |
+| --- | --- |
+| `WALLET_APPLE_PASS_TYPE_ID`, `WALLET_APPLE_TEAM_ID`, `WALLET_APPLE_CERT`, `WALLET_APPLE_KEY`, `WALLET_APPLE_WWDR` | Apple Wallet: the pass type, and the certificate chain the pass file is signed with (base64 of the PEM, one line each). |
+| `WALLET_GOOGLE_ISSUER_ID`, `WALLET_GOOGLE_SERVICE_ACCOUNT` | Google Wallet: the issuer and the service account that writes its passes (base64 of the JSON key). |
+| `WALLET_EVENT_NAME`, `WALLET_EVENT_START`, `WALLET_EVENT_END`, `WALLET_VENUE_NAME`, `WALLET_VENUE_ADDRESS`, `WALLET_VENUE_LATITUDE`, `WALLET_VENUE_LONGITUDE`, `WALLET_ORGANIZATION` | What the pass says about the event. Times need a UTC offset (`2026-10-01T14:00:00+02:00`), or they are ignored. |
+
+- **One pass type and one issuer per event, the environment decides the rest.** Ids carry the environment's host, so staging and production never overwrite each other's passes even with the same accounts.
+- **Updates need HTTPS.** A pass made on a plain-HTTP origin carries no update service, so it never refreshes itself — fine for a test stack, not for a server.
+- **The log says what is on.** At startup the app prints which wallet is on, and for one that stays off, which value is missing or wrong.
+- **What a deploy must not break:** the pass type id and the issuer id. Change them and every pass already in a guest's wallet stops being updated.
+
 ## Adding an environment
 
 Production, for example:

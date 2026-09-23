@@ -11,6 +11,7 @@ flowchart TB
   google["🔑 Google<br/>Workspace sign-in"]
   mail["📧 Mail service<br/>SMTP"]
   telegram["✈️ Telegram<br/>Bot API"]
+  wallets["👛 Apple push service<br/>Google Wallet API"]
 
   subgraph server["🖥️ Server"]
     nginx["nginx<br/>HTTPS · reverse proxy"]
@@ -28,12 +29,14 @@ flowchart TB
   pb -. "verifies the sign-in" .-> google
   pb -. "booking e-mails" .-> mail
   pb -. "messages, polls for replies" .-> telegram
+  app -. "wallet passes: updates" .-> wallets
 ```
 
 - **Browsers only ever talk to the app.** Pages are rendered on the server, and every button submits a form to a server action. There is no public database API.
 - **PocketBase is internal.** It is reachable from the app over the Docker network, and its dashboard only from the server itself.
 - **nginx** terminates TLS and forwards the site's domain to the app, which listens on the server's loopback interface only.
 - **PocketBase sends every message.** Booking e-mails go out through an SMTP service, Telegram messages through the Bot API. The bot fetches its incoming messages itself (long polling), so nothing on the server waits for calls from Telegram. See [Notifications](../admin/notifications).
+- **The app keeps the wallet passes.** Apple Wallet passes are built and signed in the app (the certificates live in its environment, never in PocketBase), and a small loop every half minute compares each pass that was handed out with the booking as it is now: what differs is pushed to Apple's devices or written to Google. See [Wallet passes](../admin/passes#wallet-passes-apple-wallet-google-wallet).
 
 ## Tech stack
 
@@ -157,7 +160,9 @@ erDiagram
 | `/legal-notice` | everyone | Legal notice (Impressum), details from the server's `.env`; `/impressum` redirects here |
 | `/privacy` | everyone | Privacy policy; `/datenschutz` redirects here |
 | `/booking-rules` | everyone | Booking rules, linked from every booking dialog |
-| `/pass/:code` | whoever has the link | Booking pass with QR code (`/pass/:code/qr.gif` as an image); signed-in admins also see the booking, the check-in and a Check in button |
+| `/pass/:code` | whoever has the link | Booking pass with QR code (`/pass/:code/qr.gif` and `…/qr.png` as images, `…/wallet/apple` as an Apple Wallet pass, `…/wallet/google` as a save link for Google Wallet); signed-in admins also see the booking, the check-in and a Check in button |
+| `/telegram` | guests with a code | Updates on Telegram: connect the chat, see that it is on, turn it off. Confirmation e-mails and the wallet passes link here |
+| `/wallet/apple/v1/*` | Apple devices | Apple's pass web service: a device registers or unregisters for a pass, asks which passes changed, fetches the current one, and reports problems. Each request about one pass carries that pass's token |
 | `/docs/*` | everyone | The guest guide and FAQ |
 | `/admin/login` | everyone | Google sign-in and the *access requested* page |
 | `/auth/callback/google` | – | Where Google sends admins back to |
@@ -215,7 +220,8 @@ hamburn-cozynights/                 repository root
     │   └── lib/
     │       ├── components/         map, markers, slot machines, Leave No Trace spell, effigy title, admin widgets
     │       ├── fx/                 cursor trail, booking fireworks, burning effigy title, glitter sweep, roulette sounds
-    │       └── server/             booking, inventory, settings, admin auth, crypto
+    │       └── server/             booking, inventory, settings, admin auth, crypto,
+    │                               wallet/ (Apple and Google Wallet passes and their sync)
     ├── pb_migrations/              database schema and API rules
     ├── pb_hooks/                   PocketBase hooks: admin sign-in guard, admin tool,
     │                               notifications, booking passes, backups

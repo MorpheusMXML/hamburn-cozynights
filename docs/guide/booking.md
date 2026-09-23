@@ -134,9 +134,13 @@ Once you hold a spot, your room page shows <kbd>🎫 Show booking pass</kbd>, ev
 
 <kbd>Save QR code</kbd> stores the QR code as a picture (on a phone it goes to your photos), <kbd>Camp map</kbd> takes you back to the map. Before the check-in the pass stays valid when you move to another spot; the crew always sees the spot your ticket holds right now. Release your spot, and the same link says that your ticket holds no spot at the moment. The pass code is not your ticket code: it can only show your booking, never change it.
 
-::: tip Updates on Telegram
-Prefer Telegram? On your room page press <kbd>Get updates on Telegram</kbd>, then <kbd>START</kbd> in Telegram. The CozyNights bot confirms your spot right away and tells you about every change. The button's link works once and for 30 minutes; reload the room page afterwards, and it says *Updates on Telegram are on.* <kbd>Turn off</kbd> on the room page, or `/stop` in the chat, ends it.
-:::
+### In your wallet
+
+If the crew has set it up, the pass page, your room page and the roulette card also offer <kbd>Add to Apple Wallet</kbd> or <kbd>Add to Google Wallet</kbd> — your phone shows the one it has. The wallet pass carries the same QR code, and it **keeps itself up to date**: if the crew has to move you, the pass in your wallet follows by itself and tells you. It expires the day after the event, and you can delete it any time. If your ticket is passed on to someone else, the old pass says *No longer valid* and the new holder gets their own.
+
+### Updates on Telegram
+
+Prefer Telegram? Press <kbd>Get updates on Telegram</kbd> — on your room page, on the roulette card, on your booking pass, or on the page **Updates on Telegram** that your confirmation e-mail links to — and then <kbd>START</kbd> in Telegram. The CozyNights bot answers with your spot and your pass, QR code included, and tells you about every change from then on. Send <code>/pass</code> in the chat whenever you want the pass again; <code>/stop</code>, or <kbd>Turn off</kbd> on the page, ends it. The button's link works once and for 30 minutes, and it always asks for your ticket code first, so nobody else can subscribe to your booking.
 
 ## On your phone
 

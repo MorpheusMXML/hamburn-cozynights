@@ -103,7 +103,15 @@ The crew checked your booking pass when you arrived, so the spot is yours for th
 :::
 
 ::: details How do I stop the Telegram messages?
-Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page, or send `/stop` to the bot.
+Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page or on the page **Updates on Telegram**, or send `/stop` to the bot.
+:::
+
+::: details Can I keep my pass in Apple Wallet or Google Wallet?
+If the crew has set it up, yes: <kbd>Add to Apple Wallet</kbd> or <kbd>Add to Google Wallet</kbd> sits under your pass, on your room page and on the roulette card — your phone shows the one it has. The wallet pass updates itself when your spot changes, and expires after the event. No buttons? Then this camp doesn't offer it; the pass page and a screenshot work just as well.
+:::
+
+::: details Can I get my pass in the Telegram chat?
+Yes: send `/pass` to the bot and it sends your pass with its QR code as a picture. That works as soon as you have connected Telegram.
 :::
 
 ::: details I need a special spot (lower bunk, step-free, quiet, a socket for a medical device)
