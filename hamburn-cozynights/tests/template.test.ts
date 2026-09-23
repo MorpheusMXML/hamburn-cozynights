@@ -233,10 +233,7 @@ describe('parseTemplate: the details of a place', () => {
 		expect(house.features).toEqual(['ground_floor']);
 		expect(house.description).toBe('Wash house 50 m away.');
 		expect(house.rooms[0]).toMatchObject({ kind: 'hut', features: ['power'] });
-		expect(house.rooms[0].beds.map((spot) => spot.bed_type)).toEqual([
-			'bunk_lower',
-			'bunk_upper'
-		]);
+		expect(house.rooms[0].beds.map((spot) => spot.bed_type)).toEqual(['bunk_lower', 'bunk_upper']);
 		expect(house.rooms[0].beds[0].features).toEqual(['power']);
 	});
 
@@ -699,5 +696,87 @@ describe('buildTemplate', () => {
 		const result = parseTemplate(text);
 		expect(result.ok).toBe(true);
 		if (result.ok) expect(result.summary).toMatchObject({ houses: 2, rooms: 2, beds: 3 });
+	});
+});
+
+describe('parseTemplate: bunk beds', () => {
+	const stacked = (beds: unknown) => v2([house('Haus 1', 100, 200, [room('Main', 1, beds)])]);
+	const spots = (data: unknown) => accepted(data).template.houses[0].rooms[0].beds;
+
+	it('keeps a pairing written on both spots and fills in the levels', () => {
+		const beds = spots(
+			stacked([bed('B1', { bunk_partner: 'B2' }), bed('B2', { bunk_partner: 'B1' }), bed('B3')])
+		);
+		expect(beds[0]).toMatchObject({ label: 'B1', bunk_partner: 'B2', bed_type: 'bunk_lower' });
+		expect(beds[1]).toMatchObject({ label: 'B2', bunk_partner: 'B1', bed_type: 'bunk_upper' });
+		expect(beds[2]).not.toHaveProperty('bunk_partner');
+		expect(beds[2]).not.toHaveProperty('bed_type');
+	});
+
+	it('completes a pairing written on one spot only, and the missing level', () => {
+		const beds = spots(
+			stacked([bed('B1'), bed('B2', { bunk_partner: 'b1', bed_type: 'bunk_upper' })])
+		);
+		expect(beds[0]).toMatchObject({ bunk_partner: 'B2', bed_type: 'bunk_lower' });
+		expect(beds[1]).toMatchObject({ bunk_partner: 'B1', bed_type: 'bunk_upper' });
+	});
+
+	it('round-trips a stacked room through the export text', () => {
+		const { template } = accepted(
+			stacked([bed('B1', { bunk_partner: 'B2', bed_type: 'bunk_lower' }), bed('B2')])
+		);
+		const again = parseTemplate(stringifyTemplate(template));
+		expect(again.ok).toBe(true);
+		if (again.ok) expect(again.template).toEqual(template);
+	});
+
+	it('refuses a partner that is missing, the spot itself, or claimed twice', () => {
+		expect(errorsOf(stacked([bed('B1', { bunk_partner: 'B9' })]))[0]).toMatch(
+			/"B1": bunk_partner "B9" is not a spot of this room/
+		);
+		expect(errorsOf(stacked([bed('B1', { bunk_partner: 'B1' })]))[0]).toMatch(/own bunk_partner/);
+		expect(
+			errorsOf(
+				stacked([bed('B1', { bunk_partner: 'B3' }), bed('B2', { bunk_partner: 'B3' }), bed('B3')])
+			)[0]
+		).toMatch(/"B2": names "B3" as its bunk_partner, but "B3" names "B1"/);
+		expect(
+			errorsOf(
+				stacked([bed('B1', { bunk_partner: 'B2' }), bed('B2', { bunk_partner: 'B3' }), bed('B3')])
+			)[0]
+		).toMatch(/"B1": names "B2" as its bunk_partner, but "B2" names "B3"/);
+	});
+
+	it('refuses levels that contradict the pairing', () => {
+		expect(
+			errorsOf(stacked([bed('B1', { bunk_partner: 'B2', bed_type: 'single' }), bed('B2')]))[0]
+		).toMatch(/"B1": is stacked with "B2", so its bed_type must be "bunk_lower" or "bunk_upper"/);
+		expect(
+			errorsOf(
+				stacked([
+					bed('B1', { bunk_partner: 'B2', bed_type: 'bunk_upper' }),
+					bed('B2', { bed_type: 'bunk_upper' })
+				])
+			)[0]
+		).toMatch(/both the upper bunk/);
+	});
+
+	it('exports the partner by label, only when both spots agree', () => {
+		const template = buildTemplate({
+			houses: [{ id: 'h', name: 'H', x: 1, y: 2 }],
+			rooms: [{ id: 'r', house: 'h', name: 'Main', room_number: 1 }],
+			beds: [
+				{ id: 'a', room: 'r', label: 'B1', bed_type: 'bunk_lower', bunk_partner: 'b' },
+				{ id: 'b', room: 'r', label: 'B2', bed_type: 'bunk_upper', bunk_partner: 'a' },
+				// c points at d, d does not point back: not a bunk bed.
+				{ id: 'c', room: 'r', label: 'B3', bunk_partner: 'd' },
+				{ id: 'd', room: 'r', label: 'B4' }
+			]
+		});
+		const beds = template.houses[0].rooms[0].beds;
+		expect(beds[0]).toMatchObject({ label: 'B1', bunk_partner: 'B2' });
+		expect(beds[1]).toMatchObject({ label: 'B2', bunk_partner: 'B1' });
+		expect(beds[2]).not.toHaveProperty('bunk_partner');
+		expect(beds[3]).not.toHaveProperty('bunk_partner');
 	});
 });

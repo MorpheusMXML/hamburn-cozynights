@@ -47,7 +47,7 @@ export async function exportTemplate(pb: TypedPocketBase): Promise<LayoutTemplat
 			fields: 'id,house,name,room_number,kind,features,description'
 		}),
 		pb.collection('beds').getFullList({
-			fields: 'room,label,enabled,is_locked,is_special,bed_type,features'
+			fields: 'id,room,label,enabled,is_locked,is_special,bed_type,features,bunk_partner'
 		})
 	]);
 	return buildTemplate({ houses, rooms, beds });
@@ -172,8 +172,11 @@ async function createAll(pb: TypedPocketBase, plan: LayoutPlan): Promise<LevelCo
 			where = `spot "${spot.bed.label}" in "${spot.roomName}" of "${spot.houseName}"`;
 			const room = spot.roomId ?? roomIds.get(spot.roomKey);
 			if (!room) throw new Error('its room is missing');
-			// Every field the template knows about the spot, whatever they are.
-			const record = await pb.collection('beds').create({ ...spot.bed, occupied: false, room });
+			// Every field the template knows about the spot, whatever they are —
+			// except the bunk partner, a label that syncBunks turns into the
+			// spot's id once every spot of the room exists.
+			const { bunk_partner: _partner, ...fields } = spot.bed;
+			const record = await pb.collection('beds').create({ ...fields, occupied: false, room });
 			created.beds.push(record.id);
 		}
 	} catch (err) {
@@ -191,6 +194,53 @@ async function createAll(pb: TypedPocketBase, plan: LayoutPlan): Promise<LevelCo
 		);
 	}
 	return { houses: created.houses.length, rooms: created.rooms.length, spots: created.beds.length };
+}
+
+/**
+ * Writes the bunk pairings of the file for the chosen spots: the camp is read
+ * again, compared again, and every chosen spot whose partner differs gets
+ * the id of the spot the file names (or none). Returns the number of writes.
+ */
+async function syncBunks(
+	pb: TypedPocketBase,
+	template: LayoutTemplate,
+	chosen: Set<string>,
+	report: (what: string, err: unknown) => void
+): Promise<number> {
+	const camp = await loadCamp(pb);
+	const diff = diffLayout(camp, template);
+	const bedsOfRoom = new Map<string, CampRecords['beds']>();
+	for (const bed of camp.beds) {
+		const list = bedsOfRoom.get(bed.room) ?? [];
+		list.push(bed);
+		bedsOfRoom.set(bed.room, list);
+	}
+	let writes = 0;
+	for (const house of diff.houses) {
+		for (const room of house.rooms) {
+			if (!room.id) continue;
+			const roomBeds = bedsOfRoom.get(room.id) ?? [];
+			for (const spot of room.spots) {
+				if (!spot.id || !spot.after || !chosen.has(spot.key)) continue;
+				if (!spot.changes.some((change) => change.field === 'bunk_partner')) continue;
+				const wanted = (spot.after.bunk_partner ?? '').toLowerCase();
+				const partner = wanted
+					? roomBeds.find((bed) => String(bed.label ?? '').toLowerCase() === wanted)
+					: undefined;
+				if (wanted && !partner) continue;
+				const id = spot.id;
+				try {
+					await pb.collection('beds').update(id, { bunk_partner: partner?.id ?? '' });
+					writes++;
+				} catch (err) {
+					if (isNotFound(err)) continue;
+					console.error(`[Template import] Bunk partner of spot ${spot.label} failed:`, err);
+					report(`Stacking spot ${spot.label}`, err);
+				}
+			}
+		}
+	}
+	return writes;
 }
 
 let importRunning = false;
@@ -321,6 +371,21 @@ export async function applyTemplate(
 				pb.collection('houses').delete(house.id)
 			);
 			if (done) outcome.removed.houses++;
+		}
+
+		// Bunk beds last: a partner is named by label and both spots of a pair
+		// must exist first. Only spots the admin chose are paired; PocketBase
+		// completes the other side of each pair (pb_hooks/cozy_bunks.pb.js).
+		const chosen = normalizeSelection(diff, wanted);
+		try {
+			outcome.updated.spots += await syncBunks(pb, template, chosen, (what, err) =>
+				outcome.problems.push(`${what}: ${describeError(err)}`)
+			);
+		} catch (err) {
+			console.error('[Template import] Bunk beds could not be read back:', err);
+			outcome.problems.push(
+				`Bunk beds: the layout could not be read back (${describeError(err)}), so the pairings of the file were not applied. Import the file again.`
+			);
 		}
 
 		// The names chosen for released bookings go with them; the tickets stay.

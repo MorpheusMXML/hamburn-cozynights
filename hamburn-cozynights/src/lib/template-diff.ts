@@ -128,15 +128,21 @@ const nameKey = (name: string) => encodeURIComponent(name.trim().toLowerCase());
 
 /**
  * A camp bed as a template spot. The export (buildTemplate) owns the mapping of
- * the fields, so a new spot flag needs no change here.
+ * the fields, so a new spot flag needs no change here. The other beds of the
+ * room are needed for the bunk partner's label.
  */
-function templateBed(bed: CampRecords['beds'][number]): TemplateBed {
+function templateBed(
+	bed: CampRecords['beds'][number],
+	roomBeds: readonly CampRecords['beds'][number][] = [bed]
+): TemplateBed {
 	const records = {
 		houses: [{ id: 'h', name: 'h' }],
 		rooms: [{ id: 'r', house: 'h', name: 'r' }],
-		beds: [{ ...bed, room: 'r' }]
+		beds: roomBeds.map((other) => ({ ...other, room: 'r' }))
 	} as Parameters<typeof buildTemplate>[0];
-	return buildTemplate(records).houses[0].rooms[0].beds[0];
+	const spots = buildTemplate(records).houses[0].rooms[0].beds;
+	const label = String(bed.label ?? '');
+	return spots.find((spot) => spot.label === label) ?? spots[0];
 }
 
 /** The same for a camp house's and room's details, so junk in the camp is read like a file. */
@@ -246,6 +252,13 @@ function spotChanges(before: TemplateBed, after: TemplateBed): FieldChange[] {
 	if (fromFeatures !== toFeatures) {
 		changes.push({ field: 'features', from: fromFeatures, to: toFeatures });
 	}
+	// The partner is a label; the import resolves it to the spot after every
+	// spot of the room exists (src/lib/server/template.ts, syncBunks).
+	const fromPartner = before.bunk_partner ?? '';
+	const toPartner = after.bunk_partner ?? '';
+	if (fromPartner.toLowerCase() !== toPartner.toLowerCase()) {
+		changes.push({ field: 'bunk_partner', from: fromPartner || null, to: toPartner || null });
+	}
 	return changes;
 }
 
@@ -320,7 +333,7 @@ export function diffLayout(camp: CampRecords, template: LayoutTemplate): LayoutD
 		return diff;
 	};
 	const removedSpot = (key: string, bed: CampBed): SpotDiff => {
-		const before = templateBed(bed);
+		const before = templateBed(bed, bedsOf.get(bed.room) ?? [bed]);
 		return {
 			key,
 			own: 'removed',
@@ -464,7 +477,7 @@ export function diffLayout(camp: CampRecords, template: LayoutTemplate): LayoutD
 					continue;
 				}
 				matchedBeds.add(campBed.id);
-				const before = templateBed(campBed);
+				const before = templateBed(campBed, bedsOf.get(campRoom.id) ?? [campBed]);
 				const changes = spotChanges(before, fileBed);
 				spots.push({
 					key: spotKey,

@@ -139,6 +139,8 @@ export type BedsRecord = {
 	checked_in_by?: string;
 	/** What kind of bed this spot is (src/lib/accommodation.ts); empty = not specified. */
 	bed_type?: string;
+	/** The other spot of a bunk bed, set on both spots (src/lib/bunks.ts); empty = stands alone. */
+	bunk_partner?: RecordIdString;
 	/**
 	 * What is true for this spot itself; it inherits its room's and house's
 	 * features. PocketBase returns a single value rather than a list while the

@@ -61,6 +61,11 @@ export interface TemplateBed {
 	bed_type?: BedType;
 	/** What is true for this spot itself; left out when empty. */
 	features?: Feature[];
+	/**
+	 * The label of the other spot of a bunk bed, in the same room; written on
+	 * both spots (src/lib/bunks.ts). Left out for a spot that stands alone.
+	 */
+	bunk_partner?: string;
 }
 
 export interface TemplateRoom {
@@ -151,6 +156,8 @@ export interface LayoutRecords {
 		description?: string;
 	}[];
 	beds: {
+		/** Needed to name a spot as another spot's bunk partner. */
+		id?: string;
 		room: string;
 		label?: string;
 		enabled?: boolean;
@@ -159,6 +166,8 @@ export interface LayoutRecords {
 		bed_type?: string;
 		/** A list, or the single value PocketBase returns for a one-value select. */
 		features?: string[] | string;
+		/** The record id of the other spot of a bunk bed. */
+		bunk_partner?: string;
 	}[];
 }
 
@@ -183,6 +192,21 @@ function details<K extends string>(
 	};
 }
 
+/**
+ * The label of a spot's bunk partner, when the two spots of the room point at
+ * each other and the partner has a label; '' otherwise (a half-written pairing
+ * is not exported, the app shows it as two single spots too).
+ */
+function bunkPartnerLabel(
+	bed: LayoutRecords['beds'][number],
+	roomBeds: readonly LayoutRecords['beds'][number][]
+): string {
+	if (!bed.id || !bed.bunk_partner) return '';
+	const partner = roomBeds.find((other) => other.id === bed.bunk_partner);
+	if (!partner || partner.bunk_partner !== bed.id) return '';
+	return partner.label ?? '';
+}
+
 /** Builds a version 2.0 template from flat record lists, in a stable order. */
 export function buildTemplate(records: LayoutRecords, exportedAt = new Date()): LayoutTemplate {
 	const roomsByHouse = groupBy(records.rooms, (room) => room.house);
@@ -204,15 +228,17 @@ export function buildTemplate(records: LayoutRecords, exportedAt = new Date()): 
 					room_number: room.room_number ?? 0,
 					...details('room', room, isRoomKind),
 					beds: (bedsByRoom.get(room.id) ?? [])
-						.map((bed): TemplateBed => {
+						.map((bed, _index, roomBeds): TemplateBed => {
 							const features = readFeatures(bed.features, 'spot');
+							const partner = bunkPartnerLabel(bed, roomBeds);
 							return {
 								label: bed.label ?? '',
 								enabled: bed.enabled !== false,
 								is_locked: bed.is_locked === true,
 								...(bed.is_special === true ? { is_special: true } : {}),
 								...(isBedType(bed.bed_type) ? { bed_type: bed.bed_type } : {}),
-								...(features.length > 0 ? { features } : {})
+								...(features.length > 0 ? { features } : {}),
+								...(partner ? { bunk_partner: partner } : {})
 							};
 						})
 						.sort((a, b) => compareNatural(a.label, b.label))
@@ -723,6 +749,16 @@ function readBeds(room: Json, where: string, errors: string[], warnings: string[
 		if (type) bed.bed_type = type;
 		const bedFeatures = readDetailFeatures(entry.features, bedWhere, 'spot', errors);
 		if (bedFeatures) bed.features = bedFeatures;
+		if (!isMissing(entry.bunk_partner)) {
+			const partner = readText(
+				entry.bunk_partner,
+				bedWhere,
+				'bunk_partner',
+				TEMPLATE_LIMITS.bedLabelLength,
+				errors
+			);
+			if (partner) bed.bunk_partner = partner;
+		}
 		const key = bed.label.toLowerCase();
 		if (key && firstUse.has(key)) {
 			errors.push(
@@ -733,7 +769,96 @@ function readBeds(room: Json, where: string, errors: string[], warnings: string[
 		}
 		beds.push(bed);
 	});
+	checkBunks(beds, where, errors);
 	return beds;
+}
+
+/**
+ * Bunk beds in a file: a partner must be another spot of the same room, may
+ * be named by one spot only, and the two spots must agree. A pairing written
+ * on one spot only is completed; the levels are filled in from the bed types
+ * (the first spot of the file is the lower bunk when neither says).
+ */
+function checkBunks(beds: TemplateBed[], where: string, errors: string[]) {
+	const byLabel = new Map(beds.map((bed) => [bed.label.toLowerCase(), bed]));
+	const takenBy = new Map<TemplateBed, TemplateBed>();
+	const name = (bed: TemplateBed) => `"${bed.label}"`;
+	const problem = (bed: TemplateBed, text: string) =>
+		errors.push(`${where} > ${name(bed)}: ${text}`);
+
+	for (const bed of beds) {
+		if (!bed.bunk_partner) continue;
+		const partner = byLabel.get(bed.bunk_partner.toLowerCase());
+		if (!partner) {
+			problem(bed, `bunk_partner "${bed.bunk_partner}" is not a spot of this room.`);
+			delete bed.bunk_partner;
+			continue;
+		}
+		if (partner === bed) {
+			problem(bed, 'a spot cannot be its own bunk_partner.');
+			delete bed.bunk_partner;
+			continue;
+		}
+		if (partner.bunk_partner && byLabel.get(partner.bunk_partner.toLowerCase()) !== bed) {
+			problem(
+				bed,
+				`names ${name(partner)} as its bunk_partner, but ${name(partner)} names "${partner.bunk_partner}". A spot has one bunk partner.`
+			);
+			delete bed.bunk_partner;
+			continue;
+		}
+		const claimant = takenBy.get(partner);
+		if (claimant && claimant !== bed) {
+			problem(
+				bed,
+				`names ${name(partner)} as its bunk_partner, but so does ${name(claimant)}. A spot has one bunk partner.`
+			);
+			delete bed.bunk_partner;
+			continue;
+		}
+		takenBy.set(partner, bed);
+		// The other spot may leave the field out: the pairing is completed here.
+		bed.bunk_partner = partner.label;
+		partner.bunk_partner = bed.label;
+	}
+
+	// Levels: a stacked spot is a lower or an upper bunk, nothing else.
+	const done = new Set<TemplateBed>();
+	for (const bed of beds) {
+		if (!bed.bunk_partner || done.has(bed)) continue;
+		const partner = byLabel.get(bed.bunk_partner.toLowerCase());
+		if (!partner) continue;
+		done.add(bed);
+		done.add(partner);
+		const levels = [bed, partner].map((spot) =>
+			spot.bed_type === 'bunk_lower' ? 'lower' : spot.bed_type === 'bunk_upper' ? 'upper' : ''
+		);
+		const odd = [bed, partner].find(
+			(spot) => spot.bed_type && spot.bed_type !== 'bunk_lower' && spot.bed_type !== 'bunk_upper'
+		);
+		if (odd) {
+			problem(
+				odd,
+				`is stacked with ${name(odd === bed ? partner : bed)}, so its bed_type must be "bunk_lower" or "bunk_upper" (got "${odd.bed_type}").`
+			);
+			continue;
+		}
+		if (levels[0] && levels[0] === levels[1]) {
+			problem(
+				bed,
+				`and ${name(partner)} are both the ${levels[0]} bunk. One of them is the other level.`
+			);
+			continue;
+		}
+		if (!levels[0] && !levels[1]) {
+			bed.bed_type = 'bunk_lower';
+			partner.bed_type = 'bunk_upper';
+		} else if (!levels[0]) {
+			bed.bed_type = levels[1] === 'lower' ? 'bunk_upper' : 'bunk_lower';
+		} else if (!levels[1]) {
+			partner.bed_type = levels[0] === 'lower' ? 'bunk_upper' : 'bunk_lower';
+		}
+	}
 }
 
 function warnAboutCloseHouses(houses: TemplateHouse[], warnings: string[]) {

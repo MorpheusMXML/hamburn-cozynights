@@ -76,6 +76,10 @@ describe('the details of a place (pb_migrations/1759900000_accommodation.js)', (
 		expect(await fieldsOf('beds')).toEqual(expect.arrayContaining(['bed_type', 'features']));
 	});
 
+	it('has the bunk partner of a spot (pb_migrations/1759970000_bunk_beds.js)', async () => {
+		expect(await fieldsOf('beds')).toEqual(expect.arrayContaining(['bunk_partner']));
+	});
+
 	it('stores what the catalogue allows on the level it belongs to', async () => {
 		const { house, room, beds } = await seedHouse(su, 1);
 		const saved = await su.collection('houses').update(house.id, {
@@ -119,6 +123,44 @@ describe('the details of a place (pb_migrations/1759900000_accommodation.js)', (
 		const bed = await su.collection('beds').getOne(beds[0].id);
 		expect(bed.bed_type).toBe('');
 		expect(readFeatures(bed.features, 'spot')).toEqual([]);
+	});
+});
+
+describe('bunk beds (pb_hooks/cozy_bunks.pb.js)', () => {
+	it('keeps the two spots of a bunk bed pointing at each other, whoever wrote one of them', async () => {
+		const { beds } = await seedHouse(su, 3);
+		const [lower, upper, third] = beds;
+		// One side written: PocketBase completes the other.
+		await su
+			.collection('beds')
+			.update(lower.id, { bunk_partner: upper.id, bed_type: 'bunk_lower' });
+		expect((await su.collection('beds').getOne(upper.id)).bunk_partner).toBe(lower.id);
+
+		// The lower spot picks another partner: the old one stands alone again.
+		await su.collection('beds').update(lower.id, { bunk_partner: third.id });
+		expect((await su.collection('beds').getOne(third.id)).bunk_partner).toBe(lower.id);
+		expect((await su.collection('beds').getOne(upper.id)).bunk_partner).toBe('');
+
+		// Unstacked: the partner lets go as well.
+		await su.collection('beds').update(lower.id, { bunk_partner: '' });
+		expect((await su.collection('beds').getOne(third.id)).bunk_partner).toBe('');
+	});
+
+	it('leaves the partner standing alone when a spot is deleted', async () => {
+		const { beds } = await seedHouse(su, 2);
+		await su.collection('beds').update(beds[0].id, { bunk_partner: beds[1].id });
+		await su.collection('beds').delete(beds[0].id);
+		const left = await su.collection('beds').getOne(beds[1].id);
+		expect(left.bunk_partner).toBe('');
+	});
+
+	it('refuses a partner that is the spot itself or in another room', async () => {
+		const { beds } = await seedHouse(su, 1);
+		const other = await seedHouse(su, 1);
+		await expectRefused(su.collection('beds').update(beds[0].id, { bunk_partner: beds[0].id }));
+		await expectRefused(
+			su.collection('beds').update(beds[0].id, { bunk_partner: other.beds[0].id })
+		);
 	});
 });
 
