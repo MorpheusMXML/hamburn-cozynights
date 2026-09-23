@@ -153,7 +153,11 @@ describe('any deployment (read-only)', () => {
 	it('reports readiness only with a working service account', async () => {
 		const res = await get('/api/health');
 		expect(res.status, 'app → PocketBase → service account').toBe(200);
-		expect(await res.json()).toEqual({ status: 'ok' });
+		const body = await res.json();
+		expect(body).toMatchObject({ status: 'ok' });
+		// The running version, as the badge and the release tag show it.
+		expect(body.version, 'version from package.json').toMatch(/^\d+\.\d+\.\d+/);
+		expect(typeof body.commit).toBe('string');
 		expect(res.headers.get('cache-control')).toContain('no-store');
 	});
 

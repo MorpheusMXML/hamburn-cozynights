@@ -60,7 +60,7 @@ compose() { docker compose -f "$APP_DIR/hamburn-cozynights/$COMPOSE_FILE" "$@"; 
 
 build_and_start() {
 	git -C "$APP_DIR" checkout --quiet --detach "$1"
-	compose build app
+	GIT_SHA="$1" compose build app
 	compose up -d --remove-orphans
 }
 
@@ -75,7 +75,9 @@ healthy() {
 # Build first: the running containers keep serving until `up -d`.
 git checkout --quiet --detach "$sha"
 log "building app image"
-if ! compose build app; then
+# GIT_SHA reaches the image as a build argument: the version badge and
+# /api/health then name the deployed commit.
+if ! GIT_SHA="$sha" compose build app; then
 	git checkout --quiet --detach "$prev"
 	log "build failed — nothing changed, still serving $prev"
 	exit 6

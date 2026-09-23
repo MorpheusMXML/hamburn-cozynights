@@ -16,6 +16,7 @@ browser.
 	import { createEffigyBurn, type EffigyController } from '$lib/fx/effigy/effigyBurn';
 	import type { Phase } from '$lib/fx/effigy/simulation';
 	import { DEFAULT_LINES, effigyAspect } from '$lib/fx/effigy/structure';
+	import VersionBadge from './VersionBadge.svelte';
 
 	/** Pauses the animation (bindable). */
 	export let paused = false;
@@ -80,6 +81,8 @@ browser.
 </script>
 
 <div class="effigy" class:live bind:this={box} data-phase={phase} style="aspect-ratio: {aspect}">
+	<!-- The version counter, top right, next to the first line of the title. -->
+	<div class="effigy-version"><VersionBadge size="title" /></div>
 	<h1 class="effigy-heading"><span>Hamburn</span> <span>CozyNights</span></h1>
 	<canvas bind:this={canvas} class="effigy-canvas" aria-hidden="true"></canvas>
 	{#if animated}
@@ -114,6 +117,16 @@ browser.
 		width: min(100%, 820px);
 		margin: 0 auto;
 		container-type: inline-size;
+	}
+
+	/* Above the effigy's top-right corner, in the margin the page keeps above
+	   the title, so it never covers a burning letter. */
+	.effigy-version {
+		position: absolute;
+		right: 0;
+		bottom: 100%;
+		margin-bottom: 0.35rem;
+		z-index: 2;
 	}
 
 	/* Without JavaScript (or until the canvas is ready) the heading is the title. */

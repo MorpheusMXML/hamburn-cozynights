@@ -66,4 +66,4 @@ Conflicts worth knowing about (all resolved in the merge commits):
 
 ### Release to main
 
-After the key-user test: one pull request `integration/staging` → `main` ("Release 2026-10"), merged with a **merge commit** (a squash or rebase would drop the signatures and the merge history). Then update PR #34 (security hardening) and PR #35 (dev tooling) onto the new `main`, close PR #38 (its fixes are in), and delete the merged feature branches.
+After the key-user test: one pull request `integration/staging` → `main` ("Release 2026-10"), merged with a **merge commit** (a squash or rebase would drop the signatures and the merge history). Every deployed state already carries a version tag (`v0.<deploy>.<fix>`, see [Versions and releases](./deployment#versions-and-releases)); once the PR is merged, the pre-releases of those tags become releases on their own. Then update PR #34 (security hardening) and PR #35 (dev tooling) onto the new `main`, close PR #38 (its fixes are in), and delete the merged feature branches.

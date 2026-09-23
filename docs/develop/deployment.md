@@ -95,6 +95,25 @@ docker compose -f docker-compose.staging.yml logs pocketbase | grep -iE 'failed 
 
 The `smoke` job has already confirmed that pages are served and the app reaches its database. Then sign in to `/admin` once and open the camp map with a test ticket code.
 
+## Versions and releases
+
+Every deploy carries a version in the shape **`0.<deploy number>.<fix>`**: Deploy Nr. 18 is `v0.18.0`, a fix on top of it `v0.18.1`. The version is visible wherever someone might report a bug:
+
+- as a small badge next to the title on the start page, in the footer of every other page and in the admin menu — hover it for the build (commit and day), click it for the release notes on GitHub;
+- in `GET /api/health`, as `version` and `commit`, so the runbook can check what the server runs.
+
+The version lives in `package.json` and is baked into the build together with the commit (`build-info.ts`; the deploy script passes the commit as the Docker build argument `GIT_SHA`). Stamp it on the state that is about to be deployed, **before** the deploy run:
+
+```bash
+# from hamburn-cozynights/, on integration/staging with a clean tree
+scripts/release.sh 0.18.1 "Deploy Nr. 18: admins see who booked each spot"
+git push origin integration/staging v0.18.1
+```
+
+The script bumps `package.json` and `package-lock.json`, makes a signed commit and a signed tag `v0.18.1`, and pushes nothing; the push is yours. Pushing the tag runs [`.github/workflows/release.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/release.yml), which creates the **GitHub release** with the generated notes since the previous tag. A tag whose commit is not on `main` yet is a **pre-release** — that is every staging deploy. When the release PR lands on `main`, the same workflow turns those pre-releases into releases. The workflow refuses a tag that does not match `package.json`, so the badge, the health check and the release page can never disagree.
+
+Deploy scripts written for a single deploy (`deploy18-….sh` and the like) call `scripts/release.sh` as their last step before the push, with the deploy number as the minor version.
+
 ## Backups and where data lives
 
 | What | Source of truth |

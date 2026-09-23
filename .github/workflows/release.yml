@@ -1,0 +1,94 @@
+name: Release
+
+# A GitHub release for every version tag (docs/develop/deployment.md,
+# "Versions and releases"). The tag is made locally by
+# hamburn-cozynights/scripts/release.sh, signed, on the commit that is about
+# to be deployed; pushing it runs this.
+#
+# - A tag whose commit is not on `main` yet becomes a PRE-release: that is
+#   every staging deploy. When the release PR lands on `main`, the second job
+#   turns the pre-releases that are now part of `main` into releases.
+# - The release notes are GitHub's generated notes since the previous tag.
+# - The tag must equal the version in package.json, so the badge in the app,
+#   /api/health and the release page can never disagree.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release ${{ github.ref_name }}
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: The tag must match package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./hamburn-cozynights/package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag is v$tag but hamburn-cozynights/package.json says $pkg — stamp the version with scripts/release.sh"
+            exit 1
+          fi
+
+      - name: Pre-release unless the commit is on main
+        id: kind
+        run: |
+          git fetch --quiet origin main
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: The previous tag, for the notes
+        id: prev
+        run: |
+          prev="$(git describe --tags --abbrev=0 --match 'v[0-9]*' "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
+          echo "tag=$prev" >> "$GITHUB_OUTPUT"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ steps.kind.outputs.prerelease }}
+          PREV: ${{ steps.prev.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG exists already"
+            exit 0
+          fi
+          args=(--title "$TAG" --generate-notes --verify-tag)
+          [ "$PRERELEASE" = "true" ] && args+=(--prerelease)
+          [ -n "$PREV" ] && args+=(--notes-start-tag "$PREV")
+          gh release create "$TAG" "${args[@]}"
+
+  promote:
+    name: Releases on main are no longer pre-releases
+    if: github.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Turn the pre-release flag off for every tag that is now on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for tag in $(git tag --merged HEAD --list 'v[0-9]*'); do
+            if gh release view "$tag" --json isPrerelease --jq .isPrerelease 2>/dev/null | grep -qx true; then
+              gh release edit "$tag" --prerelease=false
+              echo "$tag: release"
+            fi
+          done

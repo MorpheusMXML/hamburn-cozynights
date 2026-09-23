@@ -4,6 +4,12 @@ import type { AdminSession, PendingAdmin } from '$lib/server/admin-auth';
 import type { GuestSignOut } from '$lib/server/guest-session';
 
 declare global {
+	// Baked in at build time from package.json and the commit (build-info.ts);
+	// read through $lib/version, never directly.
+	const __APP_VERSION__: string;
+	const __APP_COMMIT__: string;
+	const __APP_BUILT_AT__: string;
+
 	namespace App {
 		// interface Error {}
 

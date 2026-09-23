@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { ADMIN_NAV, badgeFor, isActive, type NavCounts } from '$lib/admin-nav';
 	import type { BookingPhase } from '$lib/booking-phase';
+	import VersionBadge from '../VersionBadge.svelte';
 
 	/**
 	 * The admin menu ($lib/admin-nav.ts). One <nav>, two shapes:
@@ -94,6 +95,7 @@
 		<span class="logo-text">Hamburn</span>
 		<span class="logo-badge">Admin</span>
 	</a>
+	<span class="topbar-version"><VersionBadge size="nav" /></span>
 	{#if isSuperuser}<span class="role-dot" title="Signed in as superuser">⚡️</span>{/if}
 	<form action="/admin/logout" method="POST" class="topbar-logout">
 		<button type="submit" class="logout-btn" title="Sign out {email}">Eject 🚀</button>
@@ -119,6 +121,7 @@
 			<span class="logo-text">{collapsed && wide ? 'HB' : 'Hamburn'}</span>
 			{#if !(collapsed && wide)}<span class="logo-badge">Admin</span>{/if}
 		</a>
+		{#if !(collapsed && wide)}<VersionBadge size="nav" />{/if}
 		{#if !(collapsed && wide)}
 			<span class="badge-role" class:super={isSuperuser}>{roleLabel}</span>
 		{/if}
@@ -272,7 +275,8 @@
 			gap: 0.5rem;
 			padding: 0.5rem 0.75rem;
 		}
-		.admin-topbar .logo-badge {
+		.admin-topbar .logo-badge,
+		.admin-topbar .topbar-version {
 			display: none;
 		}
 		.admin-topbar .logo-text {

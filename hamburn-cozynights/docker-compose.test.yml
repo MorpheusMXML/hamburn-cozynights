@@ -84,6 +84,9 @@ services:
       # The repository root, like staging: the image also contains the docs site.
       context: ..
       dockerfile: hamburn-cozynights/Dockerfile
+      args:
+        # Optional here; the version badge shows the commit when given.
+        GIT_SHA: ${GIT_SHA:-}
     depends_on:
       pocketbase:
         condition: service_healthy
