@@ -332,7 +332,11 @@ describe("the roulette's own pass and name", () => {
 	it('shows a guest with a spot that spot as the booking pass, in every phase', async () => {
 		for (const phase of ['live', 'closed']) {
 			const c = campWithGuest({ phase });
-			const page: any = await rouletteLoad({ locals: guestLocals(c.pb), cookies } as any);
+			const page: any = await rouletteLoad({
+				url: new URL('http://localhost/random-bed'),
+				locals: guestLocals(c.pb),
+				cookies
+			} as any);
 			expect(page.pass).toEqual(TICKET);
 			expect(page.userBed).toEqual({
 				id: c.bed.id,
@@ -348,10 +352,15 @@ describe("the roulette's own pass and name", () => {
 
 	it("gives the name plate the ticket's burner name, and the reels flat free spots", async () => {
 		const c = campWithGuest({ phase: 'live' });
-		const mine: any = await rouletteLoad({ locals: guestLocals(c.pb), cookies } as any);
+		const mine: any = await rouletteLoad({
+			url: new URL('http://localhost/random-bed'),
+			locals: guestLocals(c.pb),
+			cookies
+		} as any);
 		expect(mine.burnerName).toBe('Disco Druid');
 
 		const fresh: any = await rouletteLoad({
+			url: new URL('http://localhost/random-bed'),
 			locals: guestLocals(c.pb, 'HB-2002'),
 			cookies
 		} as any);
@@ -377,7 +386,11 @@ describe("the roulette's own pass and name", () => {
 			})
 		});
 		const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const page: any = await rouletteLoad({ locals: guestLocals(c.pb), cookies } as any);
+		const page: any = await rouletteLoad({
+			url: new URL('http://localhost/random-bed'),
+			locals: guestLocals(c.pb),
+			cookies
+		} as any);
 		quiet.mockRestore();
 		expect(page.userBed.id).toBe(c.bed.id);
 		expect(page.pass).toBeNull();
