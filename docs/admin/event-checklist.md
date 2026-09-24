@@ -48,7 +48,7 @@ timeline
 
 - [ ] **Watch the switch.** At the opening time the panel turns 🎪 LIVE BOOKING by itself, and guests see the countdown to the closing time at the top of every page. The crew group gets *Booking is LIVE now*.
 - [ ] **Need more time?** Move the closing time in the panel (at least one day from now for admins; a superuser can do anything).
-- [ ] **Keep an eye on the Intel panel.** On the Control Center, the Intel panel's chart on <kbd>24 h</kbd> shows how fast bookings come in, *Needs attention* lists requests waiting for a decision and messages that failed, and the house table sorted by *Most free spots* shows where room is left. See [Intel panel](./index#intel-panel-the-live-picture).
+- [ ] **Keep an eye on the Intel panel.** On the Control Center, the Intel panel's chart on <kbd>24 h</kbd> shows how fast bookings come in, *Needs attention* lists requests waiting for a decision and messages that failed, and the house table sorted by *Most free spots* shows where room is left. See [Intel panel](./index#intel-panel-the-live-picture). *… tickets have no spot yet* opens the [guest list](./guests) narrowed to them — who still has to book.
 - [ ] **Be reachable.** Typical guest questions are answered in the [FAQ](../guide/faq).
 
 ## During the event

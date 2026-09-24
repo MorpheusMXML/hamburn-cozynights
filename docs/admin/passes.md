@@ -86,6 +86,7 @@ Checked in the wrong pass? The newest result on **Check-in** has <kbd>↩️ Und
 - **Room page:** a checked-in spot shows **✅ Checked in** with the time and the admin, next to the guest's name, and the room counts them.
 - **House page and Control Center:** *Checked in* per room and per house, and on the house page the guests room by room (**🛏️ Who is here**). On the Control Center: the *latest check-ins* after booking closed, and in the Intel panel the **CHECKED IN** tile with how many booked guests are still to come, the check-ins per hour in the chart, and *checked in / booked* for every house.
 - **Tickets:** a checked-in ticket shows **✅ Checked in** with the time.
+- **Guests** (<kbd>👥 Guests</kbd> in the menu): every ticket with its check-in next to its spot, messages and wallet passes; the *checked in* tile narrows the list to them. See [Guests](./guests).
 
 ## Who can check guests in
 

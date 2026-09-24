@@ -158,7 +158,7 @@
 			<p class="panel-note">The bookings could not be read. Reload the page to try again.</p>
 		{:else}
 			<div class="booking-counts">
-				<a class="count" data-state="live" href="/admin/bookings?show=all">
+				<a class="count" data-state="full" href="/admin/bookings?show=all">
 					<span class="count-value">{counts.booked}</span>
 					<span class="count-label">booked</span>
 				</a>

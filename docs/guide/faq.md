@@ -59,7 +59,7 @@ Open the room link in your confirmation e-mail or Telegram message. During Live 
 :::
 
 ::: details "Something went wrong while booking…", "The booking system has a technical problem…", "This spot doesn't exist anymore…"
-First look at the room page: if the spot shows as **Your Spot**, all is fine. *Something went wrong* means the booking may or may not have gone through, so check before booking again. *Technical problem. Nothing was booked* is one for the crew. *This spot doesn't exist anymore* means the crew changed the layout meanwhile: pick another spot.
+First look at the room page: if the spot shows as **Yours**, all is fine. *Something went wrong* means the booking may or may not have gone through, so check before booking again. *Technical problem. Nothing was booked* is one for the crew. *This spot doesn't exist anymore* means the crew changed the layout meanwhile: pick another spot.
 :::
 
 ::: details Destiny Roulette says "Someone was faster", "The spin was incomplete" or "You already have a spot"
@@ -70,8 +70,8 @@ Spin again: another guest took that spot in the meantime, or the spin didn't fin
 The crew changed the camp layout while you had the page open, or the map data didn't arrive. Go back to the map and pick again; if the map itself won't load, try again in a minute.
 :::
 
-::: details I can't click a free spot, it says "Release your other spot first"
-Your ticket already holds a spot somewhere else. One ticket code = one spot. Release the old spot first, then book the new one. See [Changing your mind](./booking#changing-your-mind). In a tab that was open for a while you may instead read *Your ticket already holds spot B1. Release it first, then pick this one.*: same reason.
+::: details I can't click a green spot, it says "Release your other spot first"
+Your ticket already holds a spot somewhere else. One ticket code = one spot: the spot is free (green), but not for you until you release the old one. Release it first, then book the new one. See [Changing your mind](./booking#changing-your-mind). In a tab that was open for a while you may instead read *Your ticket already holds spot B1. Release it first, then pick this one.*: same reason.
 :::
 
 ::: details Someone grabbed the bed I wanted at the same moment
@@ -87,7 +87,7 @@ Only with their ticket code. On a shared device, entering another code switches 
 :::
 
 ::: details My spot shows no burner name (the ticket was handed to me)
-Open the room of your spot (the room link in your confirmation, or its house on the map), tap **Your Spot**, type a name and press <kbd>Save Spot</kbd>; leave the field empty and the slot machine rolls one. That works before booking opens too. Only once booking has closed is the name final, like the spot itself.
+Open the room of your spot (the room link in your confirmation, or its house on the map), tap **Yours**, type a name and press <kbd>Save Spot</kbd>; leave the field empty and the slot machine rolls one. That works before booking opens too. Only once booking has closed is the name final, like the spot itself.
 :::
 
 ::: details I didn't get a confirmation e-mail
@@ -126,8 +126,12 @@ Ask the crew for a special-needs spot, even before booking opens: sign in with y
 The form needs at least one ticked need (or *Something else*), a few words of text (5 to 500 characters) and the ticked consent box. *You sent your request 10 times within an hour* is a limit: it works again within the hour. *Special-needs requests are closed right now, so nothing was sent* means the crew stopped taking requests meanwhile: contact the crew. *The crew has already decided on your request* means it can't be changed anymore; the page shows the decision. If something changed, contact the crew. You can still withdraw the request.
 :::
 
-::: details A spot says "Not available · Reserved by the crew"
+::: details A spot says "Reserved by the crew" in violet
 The crew holds it back: the bed is broken, kept free on purpose, not in use, or kept for guests with special needs. Pick another spot.
+:::
+
+::: details What do the colours on the spot cards mean?
+One colour, one meaning, on every page: **green** free, **red** taken by another guest, **turquoise** yours, **violet** reserved by the crew, **grey** not bookable right now (booking hasn't opened, or has closed). Pink is only ever ♿ special needs. In a bunk bed each mattress carries its own colour, and each is its own button.
 :::
 
 ::: details The burning title is too much for me

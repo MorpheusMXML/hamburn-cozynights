@@ -8,9 +8,18 @@ name: Docs
 #   fail the check.
 # - Pushes to main: build the public audience and deploy it to GitHub Pages
 #   (repository Settings → Pages → Source: GitHub Actions).
+# - Version tags (v0.18.1, made by scripts/release.sh on the state that is
+#   deployed): the same build and deploy from that tag, so the public guide on
+#   Pages is as current as the version on staging, before the release PR
+#   lands on main. The paths filter is not evaluated for tags, so every tag
+#   builds. The github-pages environment has to allow deployments from tags
+#   (Settings → Environments → github-pages → Deployment branches and tags:
+#   add the tag pattern v*), or the deploy job is refused by the environment.
 on:
   push:
     branches: [main]
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
     paths:
       - 'docs/**'
       - '.github/workflows/docs.yml'
@@ -23,8 +32,11 @@ on:
 permissions:
   contents: read
 
+# Pull requests cancel their own older runs; every deploying run (main, a tag,
+# a manual run) queues behind the previous one, so two Pages deployments never
+# race each other.
 concurrency:
-  group: docs-${{ github.ref }}
+  group: docs-${{ github.event_name == 'pull_request' && github.ref || 'pages' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -65,14 +77,14 @@ jobs:
             fi
           done
       - name: Upload Pages artifact
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: docs/.vitepress/dist/public
 
   deploy:
     name: Deploy to GitHub Pages
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')
     needs: build
     runs-on: ubuntu-latest
     permissions:

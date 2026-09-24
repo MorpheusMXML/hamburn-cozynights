@@ -35,7 +35,7 @@ flowchart TB
 | **Camp map** | The site plan of the venue. Every house is a pin on it. |
 | **House** | A building or sleeping area on the map, such as a lodge, a barn or a big tent. |
 | **Room** | A room inside a house, with a name and a room number. |
-| **Spot** | A single bed in a room ("B1", "Top Bunk"). A spot is free, taken, locked or inactive. |
+| **Spot** | A single bed in a room ("B1", "Top Bunk"), or one level of a bunk bed. Its card says what it is, in one colour everywhere: **green** free, **red** taken, **turquoise** yours, **violet** reserved by the crew, **grey** not bookable right now. |
 | **Ticket code** | The code on a guest's ticket. It is the guest's key to CozyNights, and it can hold **one** spot at a time. |
 | **Burner name** | The optional playa name shown on a booked spot. Other guests see this name, never the name on the ticket. |
 | **Phase** | *Staging* (the crew is building, guests can only look), *Live Booking* (guests book, the layout is frozen) or *Closed* (the booking window is over, spots are final). |

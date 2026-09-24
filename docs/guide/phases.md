@@ -97,7 +97,7 @@ A window planned for later (its opening time still ahead) stays armed when a sup
 
 ## During Live Booking
 
-Almost everything structural is locked. The exceptions: **locking and unlocking single spots**, so the crew can take a broken bed out of service mid-event (guests then see it as *Not available · Reserved by the crew*), everything around [special-needs spots](./special-needs): marking spots ♿ and booking a spot for a request, and what only *describes* a place: the details of houses, rooms and spots and stacking spots into bunk beds.
+Almost everything structural is locked. The exceptions: **locking and unlocking single spots**, so the crew can take a broken bed out of service mid-event (guests then see it as *Reserved by the crew*, in violet), everything around [special-needs spots](./special-needs): marking spots ♿ and booking a spot for a request, and what only *describes* a place: the details of houses, rooms and spots and stacking spots into bunk beds.
 
 ## After booking closed
 

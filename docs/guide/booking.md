@@ -47,9 +47,9 @@ flowchart LR
 
 4. **Grab a free spot**
 
-   Inside the room every spot shows its state (see the table below). Click an **Available** spot.
+   Inside the room every spot card says what it is, in bold and in one colour with a dot in front: **green** it's free, **red** somebody has it, **turquoise** it's yours, **violet** the crew keeps it, **grey** it can't be booked right now (see the table below). Click an **Available** spot.
 
-   A **bunk bed** shows as one stacked card: the upper bunk on top, a small ladder, the lower bunk below. Each half is a spot of its own, with its own state, and is booked on its own. A chip next to the label says **Upper bunk** or **Lower bunk**, and the line under it where the other level is (*above B1*, *below B2*); the booking dialog repeats it: *Spot B2 — the upper bunk above B1.*
+   A **bunk bed** is drawn as neon pixel art: the frame posts, the bed ends and the ladder as glowing pixel lines, the two mattresses as edgy boxes — the upper bunk on top, the lower one below. Each mattress is a spot of its own, with its own state, and *is* its booking button: tap the mattress. A chip next to the label says **▲ Upper** or **▼ Lower**, and the line under it where the other level is (*above B1*, *below B2*); the booking dialog repeats it: *Spot B2 — the upper bunk above B1.*
 
    ![Room page with free, occupied and reserved spots](../assets/screenshots/guest-room-available.webp)
 
@@ -61,19 +61,22 @@ flowchart LR
 
 </div>
 
-That's it: fireworks go up from your new spot 🎆, and the spot now shows **Your Spot** with your burner name. Above the spots, a **Welcome Home!** box holds your [booking pass](#your-booking-pass), the address your [confirmations](#confirmations) go to and the Telegram option.
+That's it: fireworks go up from your new spot 🎆, and the spot now shows **Yours** in turquoise, with your burner name. Above the spots, a **Welcome Home!** box holds your [booking pass](#your-booking-pass), the address your [confirmations](#confirmations) go to and the Telegram option.
 
 ## What the spots mean
 
 | Spot card | Meaning |
 | --- | --- |
-| **Available** · *Grab it now!* | Free. Click it to book. |
-| **Your Spot** · *your burner name* | That's you. Click it to rename it (any time until booking closes) or to release it (during Live Booking). |
-| **Occupied** · *a burner name* | Taken by another guest. *Mystery Burner* means the spot has no name: the crew holds it, or its ticket changed hands. |
-| **Not available** · *Reserved by the crew* | Held back by the crew, for example a broken bed, a spot that isn't in use or one kept for [guests with special needs](./special-needs). |
-| **Unavailable** · *Release your other spot first* | You already have a spot somewhere else. One ticket code = one spot. |
-| **Not open yet** · *Booking opens soon* | Booking hasn't opened yet. |
-| **Booking closed** · *Spots are final* | The booking window is over. |
+| 🟢 **Available** · *Grab it now!* | Free. Click it to book. |
+| 🟢 **Available** · *Release your other spot first* | Free, but you already have a spot somewhere else, so it can't be clicked. One ticket code = one spot. |
+| 🩵 **Yours** · *your burner name* | That's you. Click it to rename it (any time until booking closes) or to release it (during Live Booking); the line under the name says which of the two it is right now. |
+| 🔴 **Occupied** · *a burner name* | Taken by another guest. *Mystery Burner* means the spot has no name: the crew holds it, or its ticket changed hands. |
+| 🟣 **Reserved by the crew** · *Not available* | Held back by the crew, for example a broken bed, a spot that isn't in use or one kept for [guests with special needs](./special-needs). |
+| ⚪️ **Not open yet** · *Booking opens soon* | Booking hasn't opened yet. |
+| ⚪️ **Booking closed** · *Spots are final* | The booking window is over. |
+
+> [!NOTE] One colour, one meaning
+> Green, red, turquoise, violet and grey mean the same on every spot card in CozyNights, and the crew sees the same colours on their side. Pink is kept for ♿ special needs alone: the ♿ link on the map, nothing else.
 
 ![A booked room: the Welcome Home box with the booking pass, the e-mail address and Telegram; your spot, other guests' burner names and spots reserved by the crew](../assets/screenshots/guest-room.webp)
 
@@ -136,7 +139,7 @@ The machine then shows your spot on its reels, with your booking pass below it, 
 ## Changing your mind
 
 ::: tip Rename
-Open your room, click **Your Spot**, change the burner name and press <kbd>Save Spot</kbd>. This works in every phase except Closed: before booking opens too, for example when a ticket was handed to you and its spot shows no name yet.
+Open your room, click **Yours**, change the burner name and press <kbd>Save Spot</kbd>. This works in every phase except Closed: before booking opens too, for example when a ticket was handed to you and its spot shows no name yet.
 :::
 
 ::: tip Move to another bed

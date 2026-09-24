@@ -116,6 +116,8 @@ git push origin integration/staging v0.18.1
 
 The script bumps `package.json` and `package-lock.json`, makes a signed commit and a signed tag `v0.18.1`, and pushes nothing; the push is yours. Pushing the tag runs [`.github/workflows/release.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/release.yml), which creates the **GitHub release** with the generated notes since the previous tag. A tag whose commit is not on `main` yet is a **pre-release** — that is every staging deploy. When the release PR lands on `main`, the same workflow turns those pre-releases into releases. The workflow refuses a tag that does not match `package.json`, so the badge, the health check and the release page can never disagree.
 
+The same push also runs [`.github/workflows/docs.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/docs.yml): the **public guide on GitHub Pages** is rebuilt from that tag, so it matches the version that was just deployed instead of waiting for the release PR. The app itself carries both guides in its image, built from the same commit — the admin guide behind the login at `/admin/docs/`, the public one at `/docs/`. See [Publishing](./docs#publishing).
+
 A one-off deploy script kept outside the repository does the same: it calls `scripts/release.sh` with the deploy number as the minor version as its last step before the push.
 
 ## Backups and where data lives
@@ -218,4 +220,4 @@ Production, for example:
 
 ## Documentation site
 
-These docs are built and published by their own workflow. See [Working on these docs](./docs).
+These docs are built and published by their own workflow: the public guide to GitHub Pages with every version tag and every push to `main`, both guides into the app's image with every deploy. See [Working on these docs](./docs).

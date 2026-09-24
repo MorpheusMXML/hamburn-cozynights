@@ -119,6 +119,7 @@ flowchart LR
 | 📋 **Organizing** the next burn | [Event checklist](./admin/event-checklist) from first layout to after the event. |
 | ♿ **Deciding special-needs requests** | [Special-needs requests](./admin/special-needs): mark spots, decide, book. |
 | 🎟️ **At the entrance**, checking guests in | [Booking passes & check-in](./admin/passes): phone camera, check-in page or USB scanner. |
+| 👥 **Looking for a guest** | [Guests](./admin/guests): every ticket with its spot, check-in, request state, messages and wallet passes. |
 | 💻 **A developer** | [Local development](./develop/) and [Architecture](./reference/architecture). |
 
 <!-- /audience -->
