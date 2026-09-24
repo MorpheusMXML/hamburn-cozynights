@@ -122,6 +122,9 @@
 			<a class="intel-bookings-link" href="/admin/bookings{house ? `?house=${house.id}` : ''}"
 				>Who booked →</a
 			>
+			<a class="intel-guests-link" href="/admin/guests{house ? `?house=${house.id}` : ''}"
+				>Guests →</a
+			>
 		</header>
 
 		<div class="intel-filters">
@@ -236,15 +239,19 @@
 		letter-spacing: 2px;
 		color: #d4d4d4;
 	}
-	.intel-bookings-link {
-		margin-left: auto;
+	.intel-bookings-link,
+	.intel-guests-link {
 		font-size: 0.7rem;
 		font-weight: 800;
 		color: #2dd4bf;
 		text-decoration: none;
 		white-space: nowrap;
 	}
-	.intel-bookings-link:hover {
+	.intel-bookings-link {
+		margin-left: auto;
+	}
+	.intel-bookings-link:hover,
+	.intel-guests-link:hover {
 		text-decoration: underline;
 	}
 	.intel-dashboard :global(.intel-scope) {

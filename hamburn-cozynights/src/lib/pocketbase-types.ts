@@ -238,6 +238,8 @@ export type GuestNotifyRecord = {
 	mail_sent?: IsoDateString;
 	mail_spot?: string;
 	mail_to?: string;
+	/** The hand-over the address was told about (pb_migrations/1759800000_handed_over.js). */
+	mail_handover?: string;
 	order: RecordIdString;
 	tg_chat?: string;
 	tg_label?: string;

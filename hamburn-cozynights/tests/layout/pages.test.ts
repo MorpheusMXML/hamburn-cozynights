@@ -251,6 +251,24 @@ const PAGES: PageCase[] = [
 			await page.evaluate(() => window.scrollTo(0, 0));
 		}
 	},
+	// Every ticket with everything attached; a ticket without a spot is grey
+	// while booking runs and red once it closed.
+	{
+		name: 'admin guests',
+		path: () => '/admin/guests',
+		as: 'admin',
+		phases: ['staging', 'live', 'closed']
+	},
+	{
+		// A count tile pressed: the list narrowed to the tickets without a spot.
+		name: 'admin guests: filtered',
+		path: () => '/admin/guests',
+		as: 'admin',
+		open: async (page) => {
+			await page.getByRole('button', { name: /without a spot/ }).click();
+			await page.locator('.count[aria-pressed="true"]', { hasText: 'without a spot' }).waitFor();
+		}
+	},
 	// Who booked which spot: Staging (crew holds), Live (newest first), Closed
 	// (still to arrive first; with Check in buttons).
 	{
