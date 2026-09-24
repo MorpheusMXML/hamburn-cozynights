@@ -16,11 +16,13 @@ flowchart LR
 | Branch | What it is | Who writes it | How |
 | --- | --- | --- | --- |
 | `feature/<topic>`, `claude/<topic>-<id>` | One feature or fix, built and verified on its own | The session that builds it | Normal commits; rebase only before the first push |
-| `integration/staging` | Everything that is meant to be tested together on staging | Whoever integrates, one session at a time | `git merge --no-ff -S <branch>` — **merge commits, never rebase, never force-push** |
+| `integration/staging` | Everything that is meant to be tested together on staging | Whoever integrates, one session at a time | Build the state on a `deploy/<n>-<name>` branch, then a pull request — **merge commits, never rebase, never force-push**; a direct push is refused |
+| `deploy/<n>-<topic>` | One deploy, ready to land: the features of that deploy plus the release commit and its tag | The session that prepares the deploy | Signed commits, then a pull request against `integration/staging` |
 | `main` | Released state; the docs site and the production deploy come from here | Pull requests only | Release PR from `integration/staging`, merged with a merge commit |
 
 Rules that follow from it:
 
+- **`integration/staging` takes pull requests only** (since 2026-09-24, same as `main`). Zero approvals are required and code-owner review is off, so you merge your own deploy PR — but the branch cannot be pushed to directly, and the deploy run must be dispatched **after** the merge, on the merge commit.
 - **Staging runs `integration/staging` and nothing else.** Deploying a feature branch alone drops every other feature from the server (it happened on 2026-09-18: notifications and booking passes vanished for an evening). New commits on a feature branch are merged into `integration/staging` and that branch is deployed.
 - **Every commit on `integration/staging` and `main` is GPG-signed.** The `main` ruleset refuses unsigned commits, so unsigned local checkpoints are re-signed before they are merged: `git rebase --force-rebase --gpg-sign <base>` on the feature branch, then the merge.
 - **Verify before you push** an integration state: `npm run check`, `npm test`, and `npm run verify` (integration + smoke on a throwaway Docker stack, see [Testing & release checks](./testing)), plus `npm run build:app` in `docs/`. On the server, the `verify` job runs the same checks again before anyone can approve the deploy.
