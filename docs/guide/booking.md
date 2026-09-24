@@ -55,7 +55,7 @@ flowchart LR
 
 5. **Pick a burner name and book**
 
-   Type the name other guests should see on your bed (up to 80 characters) and press <kbd>Save Spot</kbd>. Or leave the field empty and press <kbd>Save Spot</kbd> anyway: a slot machine rolls a burner name for you (something like *Cosmic Coyote #562*). <kbd>New Name 🎲</kbd> rolls again, <kbd>Accept Fate & Book 🌵</kbd> books the spot.
+   Type the name other guests should see on your bed (up to 80 characters), or press <kbd>Roll a name 🎲</kbd> and let the slot machine pick one (something like *Dusty Unicorn, Keeper of the Moop #562*). A rolled name lands in the field, where you can still change it; <kbd>New Name 🎲</kbd> rolls again. Leave the field empty and press <kbd>Save Spot</kbd> and the machine rolls one for you first. <kbd>Save Spot</kbd> books the spot. The same dialog opens when you tap your own spot later to change the name.
 
    ![Booking dialog with the burner name field](../assets/screenshots/guest-booking-modal.webp)
 

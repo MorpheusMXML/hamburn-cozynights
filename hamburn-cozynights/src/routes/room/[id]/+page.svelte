@@ -14,6 +14,7 @@
 	import { fade } from 'svelte/transition';
 	import type { PageData, ActionData } from './$types';
 	import SlotMachine from '$lib/components/SlotMachine.svelte';
+	import { BURNER_NAME_MAX } from '$lib/burner-names';
 	import SuccessFireworks from '$lib/components/SuccessFireworks.svelte';
 	import type { Point } from '$lib/fx/fireworks';
 	import { confirmDialog, dialogQueue, toast } from '$lib/dialogs';
@@ -27,9 +28,10 @@
 	let selectedBedId: string | null = null;
 	let currentNameInput = '';
 	let slotMachineRef: SlotMachine;
-	let isAutoSpinning = false;
-	let showSlotManually = false;
-	let nameGenerated = false;
+	/** The slot machine is on the table (it stays until the dialog closes). */
+	let showSlot = false;
+	/** A roll is running: the field keeps what it has until the machine stops. */
+	let rolling = false;
 
 	// Fireworks for a fresh booking: they rise from the booked card, and their
 	// finale lights the "Welcome Home" banner up for a moment.
@@ -151,9 +153,8 @@
 		currentNameInput = existingName || '';
 		modalError = '';
 		showModal = true;
-		showSlotManually = false;
-		isAutoSpinning = false;
-		nameGenerated = false;
+		showSlot = false;
+		rolling = false;
 		await tick();
 		modalEl?.focus();
 	}
@@ -161,9 +162,8 @@
 	function closeModal() {
 		showModal = false;
 		selectedBedId = null;
-		showSlotManually = false;
-		isAutoSpinning = false;
-		nameGenerated = false;
+		showSlot = false;
+		rolling = false;
 	}
 
 	function handleWindowKeydown(event: KeyboardEvent) {
@@ -171,33 +171,25 @@
 		if (event.key === 'Escape' && showModal && $dialogQueue.length === 0) closeModal();
 	}
 
+	/** The machine stopped: the name lands in the field, where it can still be changed. */
 	function handleSlotSelect(event: CustomEvent<string>) {
 		currentNameInput = event.detail;
-		if (isAutoSpinning) {
-			nameGenerated = true;
-		}
+		rolling = false;
 	}
 
-	function respinName() {
-		nameGenerated = false;
-		currentNameInput = '';
-		if (slotMachineRef) slotMachineRef.spin();
-	}
-
-	function cancelSlotSelection() {
-		showSlotManually = false;
-		isAutoSpinning = false;
-		nameGenerated = false;
-		currentNameInput = '';
-	}
-
-	/** No burner name given: the slot machine rolls one before anything is booked. */
+	/**
+	 * Rolls a burner name into the field: on 🎲, or when the form is sent with
+	 * an empty field. The field stays where it is, so the guest can keep the
+	 * roll, edit it or roll again — nothing typed is ever thrown away by the
+	 * machine, only replaced by a roll the guest asked for.
+	 */
 	async function rollBurnerName() {
-		showSlotManually = true;
-		isAutoSpinning = true;
-		nameGenerated = false;
+		if (rolling) return;
+		showSlot = true;
+		rolling = true;
 		await tick();
 		if (slotMachineRef) slotMachineRef.spin();
+		else rolling = false;
 	}
 
 	function confirmRelease() {
@@ -595,7 +587,7 @@
 				</div>
 			{/if}
 
-			{#if showSlotManually}
+			{#if showSlot}
 				<SlotMachine bind:this={slotMachineRef} showButton={false} on:select={handleSlotSelect} />
 			{/if}
 
@@ -615,6 +607,9 @@
 							cancel();
 							return;
 						}
+					} else if (rolling) {
+						cancel();
+						return;
 					} else if (!currentNameInput.trim()) {
 						cancel();
 						rollBurnerName();
@@ -655,7 +650,9 @@
 			>
 				<input type="hidden" name="bedId" value={selectedBedId} />
 
-				<div class="form-group" class:hidden={showSlotManually}>
+				<!-- The field is always there: a rolled name lands in it and can be
+				     edited or rolled again; the machine never hides the field. -->
+				<div class="form-group">
 					<label for="guestName">Burner Name</label>
 					<input
 						type="text"
@@ -663,54 +660,41 @@
 						id="guestName"
 						bind:value={currentNameInput}
 						placeholder="Your burner name"
-						maxlength="80"
+						maxlength={BURNER_NAME_MAX}
 						autocomplete="off"
 						autocapitalize="words"
 						enterkeyhint="done"
 						aria-describedby="guestName-hint"
+						disabled={rolling}
 					/>
+					<button
+						type="button"
+						class="btn-roll"
+						on:click={rollBurnerName}
+						disabled={rolling || isSaving}
+						aria-live="polite"
+					>
+						{rolling ? 'Rolling…' : currentNameInput.trim() ? 'New Name 🎲' : 'Roll a name 🎲'}
+					</button>
 					<small id="guestName-hint" class="field-hint"
-						>Other ticket holders see this name next to your spot. Leave it empty and the slot
-						machine rolls one for you 🎰</small
+						>Other ticket holders see this name next to your spot. Type your own or roll one — a
+						rolled name can still be changed. Empty field? Save rolls one for you 🎰</small
 					>
 				</div>
 
-				{#if showSlotManually}
-					<div class="slot-actions" in:fade>
-						{#if nameGenerated}
-							<div class="respin-row">
-								<button type="button" class="btn-respin" on:click={respinName} disabled={isSaving}
-									>New Name 🎲</button
-								>
-								<button
-									type="button"
-									class="btn-cancel"
-									on:click={cancelSlotSelection}
-									disabled={isSaving}>Cancel</button
-								>
-							</div>
-							<button type="submit" class="btn-confirm-fate" disabled={isSaving}>
-								{isSaving ? 'Booking…' : 'Accept Fate & Book 🌵'}
-							</button>
-						{:else}
-							<p class="auto-spin-hint">Rolling for your burner identity...</p>
-						{/if}
-					</div>
-				{:else}
-					<!-- "Save" comes first in the DOM: Enter in the name field triggers the
-					     form's first submit button, and that must not be "Release". -->
-					<div class="actions">
-						<button type="submit" class="btn-confirm" disabled={isSaving}>
-							{isSaving ? 'Saving…' : 'Save Spot'}
-						</button>
-						<button type="button" class="btn-cancel" on:click={closeModal}>Cancel</button>
-						{#if selectedBedId === data.userBedId && data.isBookingActive && !data.spotFixed && !data.checkedIn}
-							<button type="submit" formaction="?/unbookBed" class="btn-unbook" disabled={isSaving}
-								>Release</button
-							>
-						{/if}
-					</div>
-				{/if}
+				<!-- "Save" comes first in the DOM: Enter in the name field triggers the
+				     form's first submit button, and that must not be "Release". -->
+				<div class="actions">
+					<button type="submit" class="btn-confirm" disabled={isSaving || rolling}>
+						{isSaving ? 'Saving…' : rolling ? 'Rolling…' : 'Save Spot'}
+					</button>
+					<button type="button" class="btn-cancel" on:click={closeModal}>Cancel</button>
+					{#if selectedBedId === data.userBedId && data.isBookingActive && !data.spotFixed && !data.checkedIn}
+						<button type="submit" formaction="?/unbookBed" class="btn-unbook" disabled={isSaving}
+							>Release</button
+						>
+					{/if}
+				</div>
 				<BookingRulesNote />
 			</form>
 		</div>
@@ -1192,9 +1176,6 @@
 		gap: 0.5rem;
 		margin-bottom: 1.5rem;
 	}
-	.form-group.hidden {
-		display: none;
-	}
 	.form-group label {
 		font-size: 0.75rem;
 		font-weight: 900;
@@ -1246,7 +1227,7 @@
 		font-size: 0.9rem;
 	}
 	.actions button:disabled,
-	.slot-actions button:disabled {
+	.btn-roll:disabled {
 		opacity: 0.6;
 		cursor: progress;
 	}
@@ -1289,21 +1270,16 @@
 		color: #000;
 	}
 
-	.slot-actions {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-		margin-top: 1.5rem;
-	}
-	.respin-row {
-		display: flex;
-		gap: 0.75rem;
-	}
-	.respin-row button {
-		flex: 1;
-		min-height: 48px;
-		padding: 12px 8px;
+	/* The dice under the name field: a quiet secondary button, full width, so
+	   a thumb finds it. The machine above shows the roll; the field keeps it. */
+	.btn-roll {
+		align-self: flex-start;
+		min-height: 44px;
+		padding: 10px 16px;
+		background: #0a0a0a;
+		border: 2px solid #444;
 		border-radius: 12px;
+		color: #b5b5b5;
 		font-weight: 900;
 		text-transform: uppercase;
 		font-size: 0.8rem;
@@ -1311,44 +1287,12 @@
 		cursor: pointer;
 		transition: all 0.2s;
 	}
-	.btn-respin {
-		background: #0a0a0a;
-		border: 2px solid #444;
-		color: #b5b5b5;
-	}
-	.btn-respin:hover {
-		border-color: #888;
+	.btn-roll:hover:not(:disabled) {
+		border-color: #f472b6;
 		color: #fff;
 	}
-
-	.btn-confirm-fate {
-		background: linear-gradient(135deg, #2dd4bf, #0ea5e9);
-		border: none;
-		color: #000;
-		padding: clamp(1rem, 4vw, 1.5rem);
-		border-radius: 16px;
-		font-weight: 900;
-		text-transform: uppercase;
-		font-size: clamp(0.95rem, 4vw, 1.1rem);
-		letter-spacing: clamp(1px, 0.4vw, 2px);
-		cursor: pointer;
-		transition: all 0.3s;
-		box-shadow: 0 15px 30px rgba(45, 212, 191, 0.2);
-	}
-	.btn-confirm-fate:hover {
-		transform: scale(1.02);
-		box-shadow: 0 20px 40px rgba(45, 212, 191, 0.4);
-	}
-
-	.auto-spin-hint {
-		color: #f472b6 !important;
-		font-weight: 900;
-		text-align: center;
-		margin-top: 1rem;
-		font-size: 0.8rem;
-		letter-spacing: 2px;
-		text-transform: uppercase;
-		animation: pulse 1s infinite;
+	.form-group input:disabled {
+		opacity: 0.7;
 	}
 
 	/* Phones: three buttons don't fit in one row. Save on top, Release last. */
