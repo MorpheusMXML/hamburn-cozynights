@@ -912,6 +912,7 @@
 	}
 
 	.bed-detail {
+		grid-area: detail;
 		font-size: 0.75rem;
 		color: #9fb3c8;
 		text-align: center;
@@ -929,8 +930,12 @@
 		   squeezed the label down to a letter per line ("U / pp / er / 1"). */
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr);
+		/* The detail line ("above B1 · 🔌") has a row of its own: placed by
+		   auto-flow it would land in the icon column and widen it until the
+		   label had no room left. */
 		grid-template-areas:
 			'icon label'
+			'icon detail'
 			'icon status';
 		align-items: center;
 		align-content: center;

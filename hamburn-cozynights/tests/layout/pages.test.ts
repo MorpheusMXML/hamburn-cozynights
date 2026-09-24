@@ -38,8 +38,12 @@ const IGNORE = ['[data-layout-ignore]'];
 /** The camp map lies under the floating header and buttons on purpose. */
 const CANVAS = ['.map-wrapper'];
 
-/** Floating layers that cover the page on purpose, like a dialog (the lock hint). */
-const OVERLAYS = ['[data-layout-overlay]'];
+/**
+ * Floating layers that cover the page on purpose, like a dialog (the lock
+ * hint) or the admin's sticky top bar, which sits over whatever scrolled
+ * under it once a form field further down was brought into view.
+ */
+const OVERLAYS = ['[data-layout-overlay]', '.admin-topbar'];
 
 const MARK = 'data-layout-problem';
 
@@ -362,7 +366,8 @@ const PAGES: PageCase[] = [
 		phases: ['staging'],
 		open: async (page) => {
 			await page.locator('#room-number').fill('x');
-			await page.getByRole('button', { name: /IGNITE ROOM/ }).click();
+			// A hut group's form says HUT (src/lib/accommodation.ts, roomWord).
+			await page.getByRole('button', { name: /IGNITE (ROOM|HUT|TENT|PLACE)/ }).click();
 			await page.locator('#room-number-error').waitFor();
 		}
 	},

@@ -298,9 +298,10 @@
 				{level} bunk{#if level === 'upper'}&nbsp;<span aria-hidden="true">🪜</span>{/if}
 			</span>
 		{/if}
-		{#if bedTypeEntry(bed.bed_type) || readFeatures(bed.features, 'spot').length > 0}
+		<!-- The level chip already says "upper bunk": no need to repeat it here. -->
+		{#if (!level && bedTypeEntry(bed.bed_type)) || readFeatures(bed.features, 'spot').length > 0}
 			<span class="bed-detail">
-				{bedTypeEntry(bed.bed_type)?.label ?? ''}
+				{level ? '' : (bedTypeEntry(bed.bed_type)?.label ?? '')}
 				{#each readFeatures(bed.features, 'spot') as feature}
 					<span title={featureEntry(feature)?.label}>{featureEntry(feature)?.icon}</span>
 				{/each}
@@ -1216,7 +1217,10 @@
 		background: rgba(45, 212, 191, 0.05);
 	}
 	.rung-label {
-		flex: 1;
+		/* Its own width, pushed left of the buttons; when the strip is too
+		   narrow the buttons wrap under it instead of squeezing it to nothing. */
+		flex: 0 1 auto;
+		margin-right: auto;
 		min-width: 0;
 		color: #2dd4bf;
 		font-size: 0.6rem;

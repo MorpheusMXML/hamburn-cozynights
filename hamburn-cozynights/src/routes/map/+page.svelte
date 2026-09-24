@@ -262,6 +262,9 @@
 		overflow: hidden;
 		position: relative;
 		font-family: 'Inter', system-ui, sans-serif;
+		/* The wish bar (when shown) takes its row, the map the rest. */
+		display: flex;
+		flex-direction: column;
 	}
 
 	.header-overlay {
@@ -511,6 +514,9 @@
 	.map-container {
 		width: 100%;
 		height: 100%;
+		/* As a flex child: the rest of the page under the wish bar. */
+		flex: 1 1 auto;
+		min-height: 0;
 		transition: filter 0.5s ease;
 	}
 
@@ -564,6 +570,12 @@
 		gap: 0.4rem;
 		padding: 0.5rem clamp(0.5rem, 2vw, 1rem);
 		min-width: 0;
+		flex: none;
+		/* Below the header overlay (absolute, ~44 px tall from 20 px down):
+		   it must never sit under the logo box. */
+		margin-top: 72px;
+		position: relative;
+		z-index: 101;
 	}
 	.wish-title {
 		font-size: 0.72rem;
