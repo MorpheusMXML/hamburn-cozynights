@@ -231,6 +231,30 @@ describe('passSummary', () => {
 		expect(await passSummary(c.pb as any, c.order as any, c.bed as any)).toEqual(TICKET);
 	});
 
+	it('says which level of a bunk bed the spot is and where the other one is', async () => {
+		const c = campWithGuest();
+		const top = c.pb.seed('beds', {
+			label: 'B2',
+			room: c.bed.room,
+			enabled: true,
+			bed_type: 'bunk_upper',
+			bunk_partner: c.bed.id
+		});
+		Object.assign(c.bed, { bed_type: 'bunk_lower', bunk_partner: top.id });
+		expect((await passSummary(c.pb as any, c.order as any, c.bed as any)).bed).toBe(
+			'Lower bunk · below B2'
+		);
+		expect((await passSummary(c.pb as any, c.order as any, top as any)).bed).toBe(
+			'Upper bunk · above B1'
+		);
+		// The partner is gone (a half-written pairing): the level alone.
+		Object.assign(c.bed, { bunk_partner: 'nosuchspot' });
+		expect((await passSummary(c.pb as any, c.order as any, c.bed as any)).bed).toBe('Lower bunk');
+		// A single bed says only what it is.
+		Object.assign(c.bed, { bed_type: 'single', bunk_partner: '' });
+		expect((await passSummary(c.pb as any, c.order as any, c.bed as any)).bed).toBe('Single bed');
+	});
+
 	it('makes the pass code on first use', async () => {
 		const c = campWithGuest({ passCode: '' });
 		const send = vi.fn(async () => ({ code: 'NEWCODE23456' }));
@@ -246,12 +270,14 @@ describe("the guest's own pass on other pages", () => {
 	it('house and room pages give guests with a spot their ticket', async () => {
 		const c = campWithGuest();
 		const house: any = await houseLoad({
+			url: new URL('http://test.local/'),
 			params: { id: c.huts.id },
 			locals: guestLocals(c.pb),
 			cookies
 		} as any);
 		expect(house.pass).toEqual(TICKET);
 		const room: any = await roomLoad({
+			url: new URL('http://test.local/'),
 			params: { id: c.hut.id },
 			locals: guestLocals(c.pb),
 			cookies
@@ -259,6 +285,7 @@ describe("the guest's own pass on other pages", () => {
 		expect(room.pass).toEqual(TICKET);
 
 		const noSpot: any = await houseLoad({
+			url: new URL('http://test.local/'),
 			params: { id: c.huts.id },
 			locals: guestLocals(c.pb, 'HB-2002'),
 			cookies
@@ -275,6 +302,7 @@ describe("the guest's own pass on other pages", () => {
 		});
 		const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const house: any = await houseLoad({
+			url: new URL('http://test.local/'),
 			params: { id: c.huts.id },
 			locals: guestLocals(c.pb),
 			cookies
@@ -286,23 +314,37 @@ describe("the guest's own pass on other pages", () => {
 
 	it('the map shows it on the Closed panel, and knows tickets without a spot', async () => {
 		const closed = campWithGuest();
-		expect(await mapLoad({ locals: guestLocals(closed.pb) } as any)).toMatchObject({
+		expect(
+			await mapLoad({ url: new URL('http://test.local/'), locals: guestLocals(closed.pb) } as any)
+		).toMatchObject({
 			phase: 'closed',
 			pass: TICKET,
 			noSpot: false
 		});
-		expect(await mapLoad({ locals: guestLocals(closed.pb, 'HB-2002') } as any)).toMatchObject({
+		expect(
+			await mapLoad({
+				url: new URL('http://test.local/'),
+				locals: guestLocals(closed.pb, 'HB-2002')
+			} as any)
+		).toMatchObject({
 			pass: null,
 			noSpot: true
 		});
 		// the map is public: nobody signed in, nothing to show
-		expect(await mapLoad({ locals: guestLocals(closed.pb, '') } as any)).toMatchObject({
+		expect(
+			await mapLoad({
+				url: new URL('http://test.local/'),
+				locals: guestLocals(closed.pb, '')
+			} as any)
+		).toMatchObject({
 			pass: null,
 			noSpot: false
 		});
 
 		const live = campWithGuest({ phase: 'live' });
-		expect(await mapLoad({ locals: guestLocals(live.pb) } as any)).toMatchObject({
+		expect(
+			await mapLoad({ url: new URL('http://test.local/'), locals: guestLocals(live.pb) } as any)
+		).toMatchObject({
 			phase: 'live',
 			pass: null,
 			noSpot: false
@@ -314,7 +356,11 @@ describe("the roulette's own pass and name", () => {
 	it('shows a guest with a spot that spot as the booking pass, in every phase', async () => {
 		for (const phase of ['live', 'closed']) {
 			const c = campWithGuest({ phase });
-			const page: any = await rouletteLoad({ locals: guestLocals(c.pb), cookies } as any);
+			const page: any = await rouletteLoad({
+				url: new URL('http://localhost/random-bed'),
+				locals: guestLocals(c.pb),
+				cookies
+			} as any);
 			expect(page.pass).toEqual(TICKET);
 			expect(page.userBed).toEqual({
 				id: c.bed.id,
@@ -330,10 +376,15 @@ describe("the roulette's own pass and name", () => {
 
 	it("gives the name plate the ticket's burner name, and the reels flat free spots", async () => {
 		const c = campWithGuest({ phase: 'live' });
-		const mine: any = await rouletteLoad({ locals: guestLocals(c.pb), cookies } as any);
+		const mine: any = await rouletteLoad({
+			url: new URL('http://localhost/random-bed'),
+			locals: guestLocals(c.pb),
+			cookies
+		} as any);
 		expect(mine.burnerName).toBe('Disco Druid');
 
 		const fresh: any = await rouletteLoad({
+			url: new URL('http://localhost/random-bed'),
 			locals: guestLocals(c.pb, 'HB-2002'),
 			cookies
 		} as any);
@@ -359,7 +410,11 @@ describe("the roulette's own pass and name", () => {
 			})
 		});
 		const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const page: any = await rouletteLoad({ locals: guestLocals(c.pb), cookies } as any);
+		const page: any = await rouletteLoad({
+			url: new URL('http://localhost/random-bed'),
+			locals: guestLocals(c.pb),
+			cookies
+		} as any);
 		quiet.mockRestore();
 		expect(page.userBed.id).toBe(c.bed.id);
 		expect(page.pass).toBeNull();

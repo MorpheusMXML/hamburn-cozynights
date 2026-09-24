@@ -15,6 +15,7 @@ No Trace to give it up and spin again.
 	import { deserialize, enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import type { SubmitFunction } from '@sveltejs/kit';
+	import { SPOT_FILTERS, type SpotFilter } from '$lib/accommodation';
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
@@ -76,6 +77,14 @@ No Trace to give it up and spin again.
 	// spin (the page says so until a new spot is booked).
 	let sweepSpot = $state<RouletteSpot | null>(null);
 	let sweptSpot = $state<{ id: string; label: string } | null>(null);
+
+	// Wishes the reels respect. They live in the URL, like on the map.
+	let wishes = $derived(data.wishes as SpotFilter[]);
+	/** Where a wish chip leads: the current wishes with this one turned on or off. */
+	function wishLink(filter: SpotFilter, on: boolean): string {
+		const next = on ? wishes.filter((wish) => wish !== filter) : [...wishes, filter];
+		return next.length > 0 ? `/random-bed?w=${next.join(',')}` : '/random-bed';
+	}
 	let freshSpots: Promise<void> = Promise.resolve();
 
 	let soundOn = $state(false);
@@ -118,9 +127,15 @@ No Trace to give it up and spin again.
 	let readout = $derived.by(() => {
 		if (mode === 'mine') return fate ? 'Destiny fulfilled' : 'Your spot';
 		if (mode === 'resting') {
-			return data.guestPhase === 'closed' ? 'Resting until the next burn' : 'Opens with Live Booking';
+			return data.guestPhase === 'closed'
+				? 'Resting until the next burn'
+				: 'Opens with Live Booking';
 		}
-		if (mode === 'soldout') return 'Every spot is taken';
+		if (mode === 'soldout') {
+			return wishes.length > 0 && data.freeTotal > 0
+				? 'No spot fits your wishes'
+				: 'Every spot is taken';
+		}
 		if (isBooking) return 'Booking…';
 		if (stage === 'spinning') return 'Spinning…';
 		if (stage === 'landed') return '✨ Jackpot ✨';
@@ -456,6 +471,32 @@ No Trace to give it up and spin again.
 			</p>
 		{/if}
 
+		{#if (mode === 'play' || mode === 'soldout') && !fate}
+			<nav class="wish-bar" aria-label="What should the reels respect?">
+				<span class="wish-title">The reels respect…</span>
+				{#each SPOT_FILTERS as filter}
+					{@const on = wishes.includes(filter.value)}
+					<a
+						class="wish"
+						class:on
+						href={wishLink(filter.value, on)}
+						data-sveltekit-noscroll
+						aria-current={on ? 'true' : undefined}
+						title={filter.hint ?? ''}
+					>
+						<span aria-hidden="true">{filter.icon}</span>
+						{filter.label}
+					</a>
+				{/each}
+				<span class="wish-result" role="status">
+					{freeBeds.length}
+					{freeBeds.length === 1 ? 'spot' : 'spots'} in the drum{wishes.length > 0
+						? ` of ${data.freeTotal} free`
+						: ''}
+				</span>
+			</nav>
+		{/if}
+
 		<div class="tray">
 			{#if mode === 'mine' && userBed}
 				<p class="tray-title">You already have a home for the night</p>
@@ -489,10 +530,21 @@ No Trace to give it up and spin again.
 						: 'Booking is not open yet. Come back when Live Booking starts.'}
 				</p>
 			{:else if mode === 'soldout'}
-				<p class="tray-text">
-					Every spot is taken right now. Check back later: a spot gets free again when someone
-					releases theirs.
-				</p>
+				{#if wishes.length > 0 && data.freeTotal > 0}
+					<p class="tray-text">
+						No free spot fits your wishes. {data.freeTotal}
+						{data.freeTotal === 1 ? 'spot is' : 'spots are'} free without them — the crew may not have
+						filled in every detail.
+					</p>
+					<div class="tray-actions">
+						<a class="btn-goto" href="/random-bed">Spin without wishes</a>
+					</div>
+				{:else}
+					<p class="tray-text">
+						Every spot is taken right now. Check back later: a spot gets free again when someone
+						releases theirs.
+					</p>
+				{/if}
 			{:else}
 				<!-- "Book it" is a real submit button (no requestSubmit(), which older
 				     iOS Safari lacks); `book` decides whether it books or first rolls a name. -->
@@ -939,6 +991,50 @@ No Trace to give it up and spin again.
 		border-left-width: 4px;
 		background: rgba(139, 92, 246, 0.12);
 		color: #ede9fe;
+	}
+
+	.wish-bar {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4rem;
+		margin: 0 auto 1rem;
+		max-width: 44rem;
+		min-width: 0;
+	}
+	.wish-title {
+		font-size: 0.72rem;
+		font-weight: 900;
+		letter-spacing: 0.08em;
+		color: #8a8f98;
+		text-transform: uppercase;
+	}
+	.wish {
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		border-radius: 999px;
+		padding: 0.2rem 0.65rem;
+		font-size: 0.78rem;
+		color: #dbe3ea;
+		text-decoration: none;
+		background: rgba(255, 255, 255, 0.04);
+		overflow-wrap: anywhere;
+	}
+	.wish:hover,
+	.wish:focus-visible {
+		border-color: rgba(255, 45, 149, 0.7);
+		color: #fff;
+	}
+	.wish.on {
+		background: rgba(255, 45, 149, 0.2);
+		border-color: rgba(255, 45, 149, 0.8);
+		color: #ffd2e6;
+		font-weight: 700;
+	}
+	.wish-result {
+		font-size: 0.78rem;
+		color: #9fb3c8;
+		overflow-wrap: anywhere;
 	}
 
 	.tray {

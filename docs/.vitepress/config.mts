@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { defineConfigWithTheme, type DefaultTheme, type HeadConfig } from 'vitepress';
-import { audienceBlocksPlugin, audienceSite, readAudience } from './audience';
+import { audienceBlocksPlugin, audienceSite, readAudience } from './audience.ts';
 
 const repo = 'https://github.com/MorpheusMXML/hamburn-cozynights';
 const pagesBase = '/hamburn-cozynights/';

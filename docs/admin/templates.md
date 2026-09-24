@@ -2,7 +2,7 @@
 
 A template is the camp layout in one JSON file: every house with its position on the map, every room and every spot. Use it as a backup before big changes, to move a layout between installations, or to set up the camp for the next burn.
 
-Open the **Burn Template Manager** with <kbd>TEMPLATES 💾</kbd> in the Control Center header.
+Open the **Burn Template Manager** with <kbd>💾 Templates</kbd> in the admin menu (group *Camp*), or <kbd>TEMPLATES 💾</kbd> on [Map & houses](./#map-houses-the-camp-editor). It is a page of its own, `/admin/templates`.
 
 ![The review of a layout file: new, changed and missing houses](../assets/screenshots/admin-templates.webp)
 
@@ -32,7 +32,7 @@ Drop a layout file on <kbd>Compare & Import</kbd>, or tap the field to choose on
 | Room | it has the same **room number** in that house |
 | Spot | it has the same **label** in that room (upper and lower case don't matter) |
 
-So a house that was renamed shows up twice: as a new house and as a house that is not in the file. Positions, room names and the spot switches (active, locked, special needs ♿) are compared.
+So a house that was renamed shows up twice: as a new house and as a house that is not in the file. Positions, room names, the spot switches (active, locked, special needs ♿), the **details** of a place (kind, features, description, bed type) and the bunk partner of a spot are compared.
 
 ### The review
 
@@ -41,7 +41,7 @@ The review names the file and counts what is in it (houses, rooms, spots and spe
 | Badge | Meaning | Ticked at the start |
 | --- | --- | --- |
 | **NEW** | In the file, not in the camp | ✓ |
-| **CHANGED** | Moved, renamed, or a spot switch differs (the line says what: `position: 425 / 150 → 455 / 150`, `special needs: off → on`) | ✓ |
+| **CHANGED** | Moved, renamed, or a switch or detail differs (the line says what: `position: 425 / 150 → 455 / 150`, `special needs: off → on`, `bed: Upper bunk → Lower bunk`, `bunk partner: — → B2`, `features: Heated → Heated · Quiet zone`, `description: — → Showers in the wash…`) | ✓ |
 | **NOT IN FILE** | In the camp, not in the file. ⚠️ marks spots that are booked. | ✗ |
 
 Tick or untick anything. A house's checkbox covers everything inside it; a half-filled box means only part of it is chosen. Two rules keep the choice consistent:
@@ -67,31 +67,37 @@ flowchart LR
 - **A backup comes first.** Its name is shown afterwards (`pre-import-….zip`); a superuser can restore it in the PocketBase dashboard under Settings → Backups. The ten newest of these backups are kept, older ones are removed. If the backup fails, nothing happens and you may choose to apply without one.
 - **One import at a time.** While another import runs, applying is refused with *Another import is running right now. Wait until it has finished, then check the layout before you import again.*
 - **New parts are created all or nothing:** if the database refuses one, everything created so far is removed again and the camp is unchanged. Changes and removals that fail afterwards are listed; the rest stays applied.
+- **Bunk beds come last.** A partner is named by its label, so the pairings are written once both spots of a pair exist. Only spots you chose are paired; PocketBase completes the other side of each pair.
 - **Afterwards the file is compared again,** so you see what is left, for example the houses you chose to keep.
 
 The crew group gets a *🗺️ Layout template applied* message with what changed (see [Notifications](./notifications#crew-group)).
 
 ## File format
 
-```json [cozynights-layout-2026-09-17.json]
+```json [cozynights-layout-2026-09-21.json]
 {
 	"format": "cozynights-layout",
-	"version": "2.0",
+	"version": "2.1",
 	"name": "CozyNights camp layout",
-	"exported_at": "2026-09-17T15:04:05.000Z",
+	"exported_at": "2026-09-21T15:04:05.000Z",
 	"map": { "image": "/lageplan-brahmsee-2026-v2.jpg", "width": 1000, "height": 700 },
 	"houses": [
 		{
 			"name": "Neon Cave",
 			"x": 412,
 			"y": 268,
+			"kind": "house",
+			"features": ["toilets_inside", "heated"],
+			"description": "Stone house by the lake.",
 			"rooms": [
 				{
 					"name": "Bunk Room",
 					"room_number": 1,
+					"kind": "room",
+					"features": ["ground_floor", "power"],
 					"beds": [
-						{ "label": "B1", "enabled": true, "is_locked": false },
-						{ "label": "B2", "enabled": true, "is_locked": true },
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
+						{ "label": "B2", "enabled": true, "is_locked": true, "bed_type": "bunk_upper", "bunk_partner": "B1" },
 						{ "label": "B3", "enabled": false, "is_locked": false }
 					]
 				}
@@ -105,10 +111,13 @@ The crew group gets a *🗺️ Layout template applied* message with what change
 | --- | --- |
 | `houses[]` | **Required**, at least one house. |
 | `name`, `x`, `y` | House name (unique) and pin position. The map is 1000 × 700 units, `0/0` is the top-left corner. |
+| `kind` | What the place is. House: `house`, `hut_group`, `tent_area`, `other`. Room: `room`, `hut`, `tent`, `other`. Optional. |
+| `features` | What is true there, as a list. House: `wheelchair`, `ground_floor`, `toilets_inside`, `heated`, `unheated`, `quiet`. Room: `wheelchair`, `ground_floor`, `own_bathroom`, `heated`, `unheated`, `quiet`, `power`. Spot: `power`. `heated` and `unheated` can't both be set. Optional. |
+| `description` | Up to 500 characters, shown to guests. Optional. |
 | `rooms[]` | `name` and `room_number` (unique in the house; missing numbers are filled in). |
-| `beds[]` | Spots: `label` (unique in the room), `enabled` (active, default `true`), `is_locked` (default `false`), and `"is_special": true` for a [special-needs spot](./special-needs) (left out otherwise). |
+| `beds[]` | Spots: `label` (unique in the room), `enabled` (active, default `true`), `is_locked` (default `false`), `"is_special": true` for a [special-needs spot](./special-needs), `bed_type` (`single`, `bunk_lower`, `bunk_upper`, `double`, `sofa`, `mattress`, `camp_bed`), `features` and `bunk_partner`: the label of the other spot of a [bunk bed](./camp-layout#bunk-beds), in the same room, on both spots. A pairing written on one spot only is completed, and missing levels are filled in (the first spot of the file is the lower bunk); two spots that name different partners, or a stacked spot with another bed type, are refused. Everything but the label is optional. |
 
-Files of version `1.0` (older exports, spots only as `amount_beds`) are still read. `name`, `exported_at` and `map` describe the file: `map.image` is the map picture the layout was made for, and a file made for another year's picture imports with a warning to check the pins.
+A detail nobody filled in is **left out** of the file, so a layout without details exports exactly as it did before. Files of version `2.0` and `1.0` (older exports, spots only as `amount_beds`) are still read; their places simply carry no details. `name`, `exported_at` and `map` describe the file: `map.image` is the map picture the layout was made for, and a file made for another year's picture imports with a warning to check the pins.
 
 ::: tip Hand-editing templates
 Templates are plain JSON, so a layout can be prepared in a text editor: copy a house block, change name and coordinates, drop the file on Compare & Import. The whole file is checked first. If anything is wrong, the manager lists every problem with its place in the file (`houses[2] "Neon Cave" > rooms[0]: room_number …`) and nothing changes.

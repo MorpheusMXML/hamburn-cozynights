@@ -161,16 +161,21 @@ erDiagram
 | `/docs/*` | everyone | The guest guide and FAQ |
 | `/admin/login` | everyone | Google sign-in and the *access requested* page |
 | `/auth/callback/google` | – | Where Google sends admins back to |
-| `/admin` | admins | Control Center |
-| `/admin/house/:id` | admins | Rooms of a house |
-| `/admin/room/:id` | admins | Spots of a room |
+| `/admin` | admins | Control Center: booking window, attention, latest bookings, Intel; the camp editor's and templates' form actions stay here (`/admin?/…`) |
+| `/admin/camp` | admins | Map & houses: the map editor and the list of houses (`?view=list`), with each house's bookings |
+| `/admin/templates` | admins | Burn Template Manager: export, compare, apply a layout file |
+| `/admin/bookings` | admins | Who booked which spot (masked like at the check-in desk), filters, check-in and undo without the pass |
+| `/admin/house/:id` | admins | Rooms of a house, and who is booked in it |
+| `/admin/room/:id` | admins | Spots of a room, with the booking on each |
 | `/admin/check` | admins | Check guests in with their booking pass (typed code, USB scanner or camera), undo a check-in |
 | `/admin/requests` | admins | Special-needs requests: read, approve or decline, book a spot (also while booking is closed), open or close requests |
 | `/admin/messages` | admins | Message texts: every sentence guests get by e-mail, on Telegram and from the bot, with a preview of whole messages |
 | `/admin/tickets` | admins | Find tickets, change their e-mail address, hand them over; superusers load the ticket list |
 | `/admin/docs/*` | admins | The full documentation, admin pages included |
 | `/admin/api/export-template` | admins | Layout template download |
-| `/api/health` | everyone | Readiness check for the deploy script and the smoke tests: 200 only while the app's service account is signed in to the database |
+| `/admin/api/stats` | admins | The live numbers (counts only), polled by the Control Center, the camp editor and the bookings list |
+| `/admin/api/bookings` | admins | The booked spots with their guests, masked (`?house=` / `?room=`); fetched again only when the live numbers changed |
+| `/api/health` | everyone | Readiness check for the deploy script and the smoke tests: 200 only while the app's service account is signed in to the database; the answer names the running `version` and `commit` |
 
 A single server hook (`src/hooks.server.ts`) runs before every request. It restores the guest's ticket session and the admin session, re-checks the admin's role, and refuses admin form actions and API calls without an approved session, so no single action can forget the check.
 
@@ -207,7 +212,7 @@ sequenceDiagram
 ```text
 hamburn-cozynights/                 repository root
 ├── docs/                           this documentation site (VitePress)
-├── .github/workflows/              staging deploy, docs deploy
+├── .github/workflows/              staging deploy, docs deploy, release (a GitHub release per `v*` tag)
 └── hamburn-cozynights/             the app
     ├── src/
     │   ├── hooks.server.ts         sessions and the admin gate for every request
@@ -219,7 +224,7 @@ hamburn-cozynights/                 repository root
     ├── pb_migrations/              database schema and API rules
     ├── pb_hooks/                   PocketBase hooks: admin sign-in guard, admin tool,
     │                               notifications, booking passes, backups
-    ├── scripts/                    admin tool, health check, test setup, backups
+    ├── scripts/                    admin tool, health check, test setup, backups, release stamp
     ├── deploy/                     deploy script, nginx vhost, server runbook
     ├── tests/                      Vitest and Playwright tests
     ├── static/                     logo, site plan, background video

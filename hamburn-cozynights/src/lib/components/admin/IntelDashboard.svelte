@@ -24,6 +24,8 @@
 	/** The live picture: first from the page load, then from the poll. */
 	export let stats: LiveStats;
 	export let phase: BookingPhase;
+	/** The Control Center shows "Needs attention" further up, on its own. */
+	export let showAttention = true;
 
 	// NumberFlow's server-rendered markup doesn't hydrate cleanly (same as
 	// CountdownDigits): plain digits until mounted, rolling ones afterwards.
@@ -111,12 +113,15 @@
 </script>
 
 <div class="intel-dashboard">
-	<IntelAttention items={attention} />
+	{#if showAttention}<IntelAttention items={attention} />{/if}
 
 	<section class="intel-block" aria-labelledby="intel-spots-title">
 		<header class="intel-block-head">
 			<h4 id="intel-spots-title">SPOTS & BOOKINGS</h4>
 			<span class="intel-scope">{house ? house.name : 'Whole camp'}</span>
+			<a class="intel-bookings-link" href="/admin/bookings{house ? `?house=${house.id}` : ''}"
+				>Who booked →</a
+			>
 		</header>
 
 		<div class="intel-filters">
@@ -230,6 +235,17 @@
 		font-weight: 900;
 		letter-spacing: 2px;
 		color: #d4d4d4;
+	}
+	.intel-bookings-link {
+		margin-left: auto;
+		font-size: 0.7rem;
+		font-weight: 800;
+		color: #2dd4bf;
+		text-decoration: none;
+		white-space: nowrap;
+	}
+	.intel-bookings-link:hover {
+		text-decoration: underline;
 	}
 	.intel-dashboard :global(.intel-scope) {
 		min-width: 0;

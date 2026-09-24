@@ -8,6 +8,7 @@ their own overlay (map) or place the two parts themselves (landing page).
 <script lang="ts">
 	import LegalLinks from './LegalLinks.svelte';
 	import MadeInHamburg from './MadeInHamburg.svelte';
+	import VersionBadge from './VersionBadge.svelte';
 
 	let { compact = false }: { compact?: boolean } = $props();
 </script>
@@ -15,6 +16,8 @@ their own overlay (map) or place the two parts themselves (landing page).
 <footer class="site-footer" class:compact>
 	<LegalLinks />
 	<MadeInHamburg />
+	<!-- The version, so a bug report can name the build it saw. -->
+	<VersionBadge size="footer" />
 </footer>
 
 <style>

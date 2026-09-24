@@ -22,6 +22,10 @@ After many wrong codes from the same network, CozyNights pauses sign-in attempts
 CozyNights couldn't reach its database for a moment. Your code is fine. Try again shortly.
 :::
 
+::: details A spot says nothing about its bed, or my wish finds no spot
+CozyNights only shows what the crew filled in: an empty spot card means *nobody said*, not *no bed*. The wishes above the map (**Looking for…**) are strict for the same reason — they only keep spots the crew actually described, so nothing is promised that isn't written down. Ask the crew if a detail matters to you, and use the [special-needs request](./special-needs) if you need a particular kind of spot.
+:::
+
 ::: details The map is blurry and houses don't open ("Booking is not open yet…")
 Booking hasn't opened yet. Once the crew has armed the timer, a countdown shows when it starts, and the map unlocks by itself when it ends. Without a countdown the map says *Booking is not open yet. The crew is still setting up the houses. Check back soon.* <kbd>📡 RELOAD SENSORS</kbd> refreshes the page state.
 :::
@@ -120,6 +124,10 @@ The crew holds it back: the bed is broken, kept free on purpose, not in use, or 
 
 ::: details The burning title is too much for me
 Press the pause button ⏸ next to the title; your browser remembers it. If your device is set to reduce motion (for example on iPhone: Settings → Accessibility → Motion → Reduce Motion), the title doesn't move at all, and there are no fireworks after booking either. And if you like it: move the cursor over the standing letters or tap them to set them on fire yourself.
+:::
+
+::: details What is the small `v0.18.1` next to the title?
+The version of CozyNights you are looking at. It is also at the bottom of every page; hover it to see the build, click it for what changed. If you report a problem, say which version you saw.
 :::
 
 ::: details Who runs CozyNights, and what happens with my data?

@@ -81,7 +81,10 @@ describe('lockAttrs', () => {
 });
 
 describe('isEditingKey', () => {
-	const key = (k: string, mods: Partial<Record<'ctrlKey' | 'metaKey' | 'altKey', boolean>> = {}) => ({
+	const key = (
+		k: string,
+		mods: Partial<Record<'ctrlKey' | 'metaKey' | 'altKey', boolean>> = {}
+	) => ({
 		key: k,
 		ctrlKey: false,
 		metaKey: false,
@@ -154,7 +157,11 @@ describe('placeLockHint', () => {
 
 	it('picks the side with more room when neither fits', () => {
 		const tall = { width: 300, height: 500 };
-		const nearBottom = placeLockHint({ left: 600, top: 700, width: 80, height: 40 }, tall, viewport);
+		const nearBottom = placeLockHint(
+			{ left: 600, top: 700, width: 80, height: 40 },
+			tall,
+			viewport
+		);
 		expect(nearBottom.side).toBe('above');
 		const nearTop = placeLockHint({ left: 600, top: 150, width: 80, height: 40 }, tall, viewport);
 		expect(nearTop.side).toBe('below');

@@ -10,6 +10,7 @@ import {
 	TicketError,
 	changeTicket,
 	importRoster,
+	openTicket,
 	previewRoster,
 	readRosterRows,
 	searchTickets
@@ -49,6 +50,17 @@ export const actions: Actions = {
 			return { search: await searchTickets(locals.adminPb, form.get('q')) };
 		} catch (err) {
 			return refuse(err, 'Search');
+		}
+	},
+
+	/** "Open ticket" on a booked spot elsewhere in the admin area: the id travels in the body. */
+	open: async ({ locals, request }) => {
+		if (!locals.admin) return fail(403, { error: 'Only admins can look up tickets.' });
+		const form = await request.formData();
+		try {
+			return { search: await openTicket(locals.adminPb, form.get('ticket')) };
+		} catch (err) {
+			return refuse(err, 'Open');
 		}
 	},
 

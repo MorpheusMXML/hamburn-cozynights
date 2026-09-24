@@ -38,8 +38,12 @@ const IGNORE = ['[data-layout-ignore]'];
 /** The camp map lies under the floating header and buttons on purpose. */
 const CANVAS = ['.map-wrapper'];
 
-/** Floating layers that cover the page on purpose, like a dialog (the lock hint). */
-const OVERLAYS = ['[data-layout-overlay]'];
+/**
+ * Floating layers that cover the page on purpose, like a dialog (the lock
+ * hint) or the admin's sticky top bar, which sits over whatever scrolled
+ * under it once a form field further down was brought into view.
+ */
+const OVERLAYS = ['[data-layout-overlay]', '.admin-topbar'];
 
 const MARK = 'data-layout-problem';
 
@@ -189,20 +193,11 @@ const PAGES: PageCase[] = [
 			await page.locator('#consent-error').waitFor();
 		}
 	},
+	// The Control Center: booking window, attention, latest bookings, Intel
+	// (always open since the camp editor moved to /admin/camp). Each phase lists
+	// other things under "Needs attention" and in the bookings card.
 	{ name: 'admin dashboard', path: () => '/admin', as: 'admin', phases: ALL_PHASES },
 	{ name: 'admin dashboard (superuser)', path: () => '/admin', as: 'superuser' },
-	{
-		// The panel starts closed, so the dashboard case above never measured it.
-		// Each phase lists other things under "Needs attention".
-		name: 'admin dashboard: intel panel',
-		path: () => '/admin',
-		as: 'admin',
-		phases: ['staging', 'live', 'closed'],
-		open: async (page) => {
-			await page.getByRole('button', { name: /SHOW INTEL/ }).click();
-			await page.locator('.intel-dashboard .tiles').waitFor();
-		}
-	},
 	{
 		// Narrowed to the house with the longest name, by the hour, sorted by
 		// free spots, with the chart's numbers open as a table.
@@ -211,7 +206,6 @@ const PAGES: PageCase[] = [
 		as: 'admin',
 		phases: ['live'],
 		open: async (page) => {
-			await page.getByRole('button', { name: /SHOW INTEL/ }).click();
 			const panel = page.locator('.intel-dashboard');
 			await panel.locator('.houses-pick', { hasText: TEXTS.houseLong.slice(0, 40) }).click();
 			await panel.locator('.intel-reset').waitFor();
@@ -222,6 +216,80 @@ const PAGES: PageCase[] = [
 			// The clicks scrolled the page; the other cases measure from the top
 			// (scrolled, the sticky admin header lies over the booking panel).
 			await page.evaluate(() => window.scrollTo(0, 0));
+		}
+	},
+	// The camp editor: the map (staging: editable, live: locked) and the list.
+	{ name: 'admin camp', path: () => '/admin/camp', as: 'admin', phases: ['staging', 'live'] },
+	{ name: 'admin camp: list view', path: () => '/admin/camp?view=list', as: 'admin' },
+	{
+		// The house with the stress bookings: who is here, next to (below) the map.
+		name: 'admin camp: house sidebar with bookings',
+		path: () => '/admin/camp',
+		as: 'admin',
+		phases: ['live', 'closed'],
+		open: async (page) => {
+			await page
+				.locator(`g.house-group[aria-label^="House ${TEXTS.houseLong.slice(0, 40)}"]`)
+				.focus();
+			await page.keyboard.press('Enter');
+			const sidebar = page.locator('.details-sidebar');
+			await sidebar.locator('.house-bookings .booking-guest').first().waitFor();
+			// The sidebar flies in (Svelte transitions ignore reduced motion):
+			// measure it where it lands, not on its way.
+			await sidebar.evaluate((el) =>
+				Promise.all(
+					el
+						.getAnimations({ subtree: true })
+						.filter((a) => a.effect?.getTiming().iterations !== Infinity)
+						.map((a) => a.finished)
+				)
+			);
+			await page.evaluate(() => window.scrollTo(0, 0));
+		}
+	},
+	// Who booked which spot: Staging (crew holds), Live (newest first), Closed
+	// (still to arrive first; with Check in buttons).
+	{
+		name: 'admin bookings',
+		path: () => '/admin/bookings',
+		as: 'admin',
+		phases: ['staging', 'live', 'closed']
+	},
+	{
+		name: 'admin bookings: one house, every booking',
+		path: (c) => `/admin/bookings?house=${c.houseId}&show=all&sort=guest`,
+		as: 'superuser'
+	},
+	{
+		// The confirmation before a check-in without the pass (nothing is saved).
+		name: 'admin bookings: check-in dialog',
+		path: () => '/admin/bookings?show=arriving',
+		as: 'admin',
+		phases: ['closed'],
+		open: async (page) => {
+			await page.locator('.booking-row .btn-step').first().click();
+			await page.getByRole('alertdialog').waitFor();
+		}
+	},
+	{
+		// The menu as a drawer (phones, tablets); from 1100 px it is the sidebar.
+		name: 'admin menu: drawer',
+		path: () => '/admin/tickets',
+		as: 'superuser',
+		open: async (page) => {
+			await page.setViewportSize({ width: 390, height: 900 });
+			await page.getByRole('button', { name: 'Open the menu' }).click();
+			await page.locator('#admin-menu.open').waitFor();
+		}
+	},
+	{
+		// The sidebar shrunk to its icons (below 1100 px it is the drawer again).
+		name: 'admin menu: icons only',
+		path: () => '/admin/bookings',
+		as: 'admin',
+		open: async (page) => {
+			await page.getByRole('button', { name: /Shrink menu/ }).click();
+			await page.locator('.admin-sidebar.collapsed').waitFor();
 		}
 	},
 	{
@@ -255,8 +323,8 @@ const PAGES: PageCase[] = [
 	{
 		// The house editor next to the map (below it on a phone), read-only
 		// while the layout is locked; the house with the long compound name.
-		name: 'admin dashboard: locked house editor',
-		path: () => '/admin',
+		name: 'admin camp: locked house editor',
+		path: () => '/admin/camp',
 		as: 'admin',
 		phases: ['live'],
 		open: async (page) => {
@@ -298,7 +366,8 @@ const PAGES: PageCase[] = [
 		phases: ['staging'],
 		open: async (page) => {
 			await page.locator('#room-number').fill('x');
-			await page.getByRole('button', { name: /IGNITE ROOM/ }).click();
+			// A hut group's form says HUT (src/lib/accommodation.ts, roomWord).
+			await page.getByRole('button', { name: /IGNITE (ROOM|HUT|TENT|PLACE)/ }).click();
 			await page.locator('#room-number-error').waitFor();
 		}
 	},
@@ -328,11 +397,10 @@ const PAGES: PageCase[] = [
 	},
 	{
 		name: 'admin layout templates: review',
-		path: () => '/admin',
+		path: () => '/admin/templates',
 		as: 'superuser',
 		phases: ['staging'],
 		open: async (page) => {
-			await page.getByRole('button', { name: /TEMPLATES/ }).click();
 			await page.locator('.import-card input[type="file"]').setInputFiles({
 				name: 'kuschelzeltplatz-layout-2026.json',
 				mimeType: 'application/json',
@@ -340,6 +408,9 @@ const PAGES: PageCase[] = [
 			});
 			await page.getByRole('button', { name: /Expand all/ }).click();
 			await page.getByRole('list', { name: 'Houses, rooms and spots' }).waitFor();
+			// The review scrolled into view; the other cases measure from the top
+			// (scrolled, the sticky admin bar lies over the page on purpose).
+			await page.evaluate(() => window.scrollTo(0, 0));
 		}
 	},
 	{ name: 'admin special-needs requests', path: () => '/admin/requests', as: 'admin' },

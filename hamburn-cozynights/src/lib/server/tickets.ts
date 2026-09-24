@@ -195,6 +195,33 @@ export async function searchTickets(adminPb: TypedPocketBase, raw: unknown): Pro
 	};
 }
 
+/**
+ * One ticket by its record id: "Open ticket" on a booked spot (the room and
+ * house pages, the map sidebar, the bookings list). The admin didn't type the
+ * code, so it stays masked, like a ticket found by its address.
+ */
+export async function openTicket(adminPb: TypedPocketBase, raw: unknown): Promise<TicketSearch> {
+	const id = typeof raw === 'string' ? raw.trim() : '';
+	if (!/^[a-z0-9]{1,30}$/.test(id)) throw new TicketError('No ticket was chosen. Search again.');
+	let order: OrdersResponse;
+	try {
+		order = await adminPb.collection('orders').getOne<OrdersResponse>(id, {
+			fields: 'id,order_number,order_hash,customer_name,email,burner_name,pass_code',
+			requestKey: null
+		});
+	} catch (err) {
+		if (isNotFound(err)) {
+			throw new TicketError('This ticket no longer exists. Search for it by its code.', 404);
+		}
+		throw err;
+	}
+	const ticket = await describeTicket(adminPb, order, true);
+	const where = ticket.spot
+		? [ticket.spot.spot, ticket.spot.room, ticket.spot.house].filter(Boolean).join(' · ')
+		: '';
+	return { by: 'booking', query: where, tickets: [ticket], more: false };
+}
+
 export interface TicketChangeInput {
 	email: unknown;
 	name: unknown;

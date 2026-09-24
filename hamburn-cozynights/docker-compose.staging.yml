@@ -93,6 +93,10 @@ services:
       # documentation site from ../docs (served at /docs and /admin/docs).
       context: ..
       dockerfile: hamburn-cozynights/Dockerfile
+      args:
+        # The deployed commit, for the version badge and /api/health
+        # (deploy/deploy-staging.sh exports it before the build).
+        GIT_SHA: ${GIT_SHA:-}
     container_name: cozynights-staging-app
     restart: unless-stopped
     depends_on:

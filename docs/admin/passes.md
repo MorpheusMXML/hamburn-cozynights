@@ -49,7 +49,7 @@ Choose whatever is at hand; all four check the guest in the same way.
 
 | How | What you do |
 | --- | --- |
-| **🎫 Check-in** (admin header) | Type the code (upper or lower case, dashes don't matter) and press <kbd>Enter</kbd>, or <kbd>Check in</kbd>. A pass whose ticket holds a spot **is checked in right away**. The field is ready for the next code right away; the last six results stay listed below, newest on top, each with the time it was checked (Europe/Berlin). |
+| **🎫 Check-in desk** (admin menu) | Type the code (upper or lower case, dashes don't matter) and press <kbd>Enter</kbd>, or <kbd>Check in</kbd>. A pass whose ticket holds a spot **is checked in right away**. The field is ready for the next code right away; the last six results stay listed below, newest on top, each with the time it was checked (Europe/Berlin). |
 | **Camera on the check-in page** | <kbd>📷 Scan with camera</kbd> reads the QR code with the phone's or laptop's camera, in any current browser over HTTPS. Same as typing the code: a recognised code is checked in right away, without pressing anything. It tries the rear camera first and falls back to the front one, and the camera closes after a code: press <kbd>📷 Scan with camera</kbd> again for the next guest. <kbd>Close camera</kbd> stops it. The first time, the browser asks whether this site may use the camera. |
 | **USB barcode scanner** | Plug it in, click into the field on **Check-in**, scan. Scanners type the link and press <kbd>Enter</kbd>, like a keyboard. |
 | **Phone camera** | Open the camera app, point it at the QR code, tap the link. If you are signed in to the admin area in that browser, the pass opens with the booking on top and a big <kbd>✅ Check in</kbd> button. Opening the pass alone changes nothing. |
@@ -80,8 +80,9 @@ Checked in the wrong pass? The newest result on **Check-in** has <kbd>↩️ Und
 
 ### Where the crew sees check-ins
 
-- **Room page:** a checked-in spot shows **CHECKED IN ✅** with the time (hover for the admin), and the room counts them.
-- **House page and Control Center:** *Checked in* per room and per house. In *Show Intel*: the **CHECKED IN** tile with how many booked guests are still to come, the check-ins per hour in the chart, and *checked in / booked* for every house.
+- **Bookings list** (<kbd>🛏️ Bookings</kbd> in the menu): every booked guest with the check-in (when, by whom); after booking closed it opens on *still to arrive*. A guest without their pass can be [checked in from there](./bookings#checking-a-guest-in-from-the-list), with the same rules as here.
+- **Room page:** a checked-in spot shows **✅ Checked in** with the time and the admin, next to the guest's name, and the room counts them.
+- **House page and Control Center:** *Checked in* per room and per house, and on the house page the guests room by room (**🛏️ Who is here**). On the Control Center: the *latest check-ins* after booking closed, and in the Intel panel the **CHECKED IN** tile with how many booked guests are still to come, the check-ins per hour in the chart, and *checked in / booked* for every house.
 - **Tickets:** a checked-in ticket shows **✅ Checked in** with the time.
 
 ## Who can check guests in

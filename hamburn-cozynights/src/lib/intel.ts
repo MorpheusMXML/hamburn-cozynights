@@ -413,8 +413,8 @@ export function attentionItems(stats: LiveStats, phase: BookingPhase): Attention
 			tone: 'info',
 			icon: '🚪',
 			text: `${plural(waiting, 'booked guest is', 'booked guests are')} not checked in yet.`,
-			href: '/admin/check',
-			linkLabel: 'Check-in'
+			href: '/admin/bookings?show=arriving',
+			linkLabel: 'Who'
 		});
 	}
 	return items;

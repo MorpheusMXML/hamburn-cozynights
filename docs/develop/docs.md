@@ -65,9 +65,9 @@ On the home page, hero buttons and feature cards that link into a hidden section
 docs/
 ├── index.md                  home page (hero, features)
 ├── guide/                    for everyone: overview, booking, phases, FAQ
-├── admin/                    admins only: Control Center, access, layout, templates, checklist
+├── admin/                    admins only: Control Center, bookings, access, tickets, notifications, passes, special needs, layout, templates, checklist, legal
 ├── reference/                admins only: architecture, data model, security
-├── develop/                  admins only: local setup, testing, deployment, this page
+├── develop/                  admins only: local setup, testing, layout, states, effigy title, integration, deployment, this page
 ├── assets/screenshots/       app screenshots (WebP)
 ├── public/                   logo, favicons, social preview image
 └── .vitepress/
@@ -125,4 +125,4 @@ Every page links the app's legal notice, privacy policy and booking rules: the h
 
 ## What doesn't belong here
 
-The sources are public, whatever the audience of a page. Keep out credentials, server addresses beyond the public domains, internal procedures for handling secrets, and anything about real guests. Operator-only details go into the runbook next to the deploy script.
+The sources are public, whatever the audience of a page. Keep out credentials, server addresses beyond the public domains, internal procedures for handling secrets, and anything about real guests. Operator-only details go into [the runbook next to the deploy script](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md).

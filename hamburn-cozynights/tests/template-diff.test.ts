@@ -26,7 +26,7 @@ const spot = (label: string, extra: Partial<TemplateBed> = {}): TemplateBed => (
 function template(houses: TemplateHouse[]): LayoutTemplate {
 	return {
 		format: 'cozynights-layout',
-		version: '2.0',
+		version: '2.1',
 		name: 'Test',
 		exported_at: '',
 		map: { image: '/map.png', width: 1000, height: 700 },
@@ -43,14 +43,25 @@ function camp(
 	const records: CampRecords = { houses: [], rooms: [], beds: [] };
 	houses.forEach((house, h) => {
 		const houseId = `house${h}`;
-		records.houses.push({ id: houseId, name: house.name, x: house.x, y: house.y });
+		records.houses.push({
+			id: houseId,
+			name: house.name,
+			x: house.x,
+			y: house.y,
+			kind: house.kind,
+			features: house.features,
+			description: house.description
+		});
 		house.rooms.forEach((room, r) => {
 			const roomId = `${houseId}room${r}`;
 			records.rooms.push({
 				id: roomId,
 				house: houseId,
 				name: room.name,
-				room_number: room.room_number
+				room_number: room.room_number,
+				kind: room.kind,
+				features: room.features,
+				description: room.description
 			});
 			room.beds.forEach((bed, b) => {
 				const id = `${roomId}bed${b}`;
@@ -331,7 +342,15 @@ describe('planChanges', () => {
 		selection.delete('h:neon%20cave/r:3/s:a2');
 
 		const plan = planChanges(diff, selection);
-		expect(plan.createHouses).toEqual([{ key: 'h:tent', name: 'Tent', x: 800, y: 600 }]);
+		expect(plan.createHouses).toEqual([
+			{
+				key: 'h:tent',
+				name: 'Tent',
+				x: 800,
+				y: 600,
+				details: { kind: '', features: [], description: '' }
+			}
+		]);
 		expect(plan.createRooms).toEqual([
 			expect.objectContaining({
 				key: 'h:neon%20cave/r:3',
@@ -345,10 +364,29 @@ describe('planChanges', () => {
 			expect.objectContaining({ roomKey: 'h:neon%20cave/r:3', roomId: null, bed: spot('A1') })
 		]);
 		expect(plan.updateHouses).toEqual([
-			{ key: 'h:neon%20cave', id: 'house0', name: 'Neon Cave', x: 111, y: 200 }
+			{
+				key: 'h:neon%20cave',
+				id: 'house0',
+				name: 'Neon Cave',
+				x: 111,
+				y: 200,
+				details: { kind: '', features: [], description: '' }
+			}
 		]);
+		// The file decides: everything it says about the spot is written, not only
+		// what differs (a change line carries labels, not stored values).
 		expect(plan.updateSpots).toEqual([
-			expect.objectContaining({ id: 'house0room0bed1', fields: { is_locked: true } })
+			expect.objectContaining({
+				id: 'house0room0bed1',
+				fields: {
+					label: 'B2',
+					enabled: true,
+					is_locked: true,
+					is_special: false,
+					bed_type: '',
+					features: []
+				}
+			})
 		]);
 		expect(plan.removeSpots.map((s) => [s.id, s.booked])).toEqual([
 			['house1room0bed0', false],
@@ -368,5 +406,148 @@ describe('planChanges', () => {
 		const diff = diffLayout(camp([neonCave()]), template([villa()]));
 		expect(planSize(planChanges(diff, new Set()))).toBe(0);
 		expect(describePlan(planChanges(diff, new Set()))).toEqual([]);
+	});
+});
+
+describe('the details of a place', () => {
+	const described = (): TemplateHouse => ({
+		name: 'Waldhuetten',
+		x: 100,
+		y: 200,
+		kind: 'hut_group',
+		features: ['ground_floor'],
+		description: 'Wash house 50 m away.',
+		rooms: [
+			{
+				name: 'Hut 1',
+				room_number: 1,
+				kind: 'hut',
+				features: ['power'],
+				beds: [spot('B1', { bed_type: 'bunk_lower' }), spot('B2', { bed_type: 'bunk_upper' })]
+			}
+		]
+	});
+
+	it('finds nothing to do when the file matches the camp', () => {
+		const diff = diffLayout(camp([described()]), template([described()]));
+		expect(changeKeys(diff)).toEqual([]);
+	});
+
+	it('names what changed, with the words people read', () => {
+		const file = described();
+		file.kind = 'house';
+		file.features = ['heated'];
+		file.description = 'Now with heating.';
+		file.rooms[0].features = [];
+		file.rooms[0].beds[1] = spot('B2', { bed_type: 'bunk_lower' });
+
+		const diff = diffLayout(camp([described()]), template([file]));
+		const house = diff.houses[0];
+		expect(house.changes).toEqual([
+			{ field: 'kind', from: 'Hut group', to: 'House' },
+			{ field: 'features', from: 'Ground floor', to: 'Heated' },
+			{ field: 'description', from: 'Wash house 50 m away.', to: 'Now with heating.' }
+		]);
+		expect(house.rooms[0].changes).toEqual([{ field: 'features', from: 'Power socket', to: null }]);
+		expect(house.rooms[0].spots[1].changes).toEqual([
+			{ field: 'bed_type', from: 'Upper bunk', to: 'Lower bunk' }
+		]);
+	});
+
+	it('writes the details of the file, and clears what it leaves out', () => {
+		const file = described();
+		delete file.description;
+		file.rooms[0].beds[0] = spot('B1');
+
+		const diff = diffLayout(camp([described()]), template([file]));
+		const plan = planChanges(diff, defaultSelection(diff));
+		expect(plan.updateHouses[0].details).toEqual({
+			kind: 'hut_group',
+			features: ['ground_floor'],
+			description: ''
+		});
+		expect(plan.updateSpots[0].fields).toMatchObject({ bed_type: '', features: [] });
+	});
+
+	it('creates a new house with its details', () => {
+		const diff = diffLayout(camp([]), template([described()]));
+		const plan = planChanges(diff, defaultSelection(diff));
+		expect(plan.createHouses[0].details).toEqual({
+			kind: 'hut_group',
+			features: ['ground_floor'],
+			description: 'Wash house 50 m away.'
+		});
+		expect(plan.createRooms[0].details).toEqual({
+			kind: 'hut',
+			features: ['power'],
+			description: ''
+		});
+		expect(plan.createSpots[0].bed).toMatchObject({ bed_type: 'bunk_lower' });
+	});
+});
+
+describe('bunk beds', () => {
+	const bunkRoom = (): TemplateHouse => ({
+		name: 'Bunkhouse',
+		x: 100,
+		y: 200,
+		rooms: [
+			{
+				name: 'Dorm',
+				room_number: 1,
+				beds: [
+					spot('B1', { bed_type: 'bunk_lower', bunk_partner: 'B2' }),
+					spot('B2', { bed_type: 'bunk_upper', bunk_partner: 'B1' }),
+					spot('B3')
+				]
+			}
+		]
+	});
+
+	/** The camp with real partner ids in place of the file's labels. */
+	function bunkCamp(): CampRecords {
+		const records = camp([bunkRoom()]);
+		const byLabel = new Map(records.beds.map((bed) => [bed.label, bed.id]));
+		for (const bed of records.beds) {
+			const label = bed.bunk_partner as string | undefined;
+			bed.bunk_partner = label ? byLabel.get(label) : '';
+		}
+		return records;
+	}
+
+	it('finds nothing to do when the file matches the camp', () => {
+		expect(changeKeys(diffLayout(bunkCamp(), template([bunkRoom()])))).toEqual([]);
+	});
+
+	it('names a changed partner by label and leaves it out of the spot write', () => {
+		const file = bunkRoom();
+		file.rooms[0].beds = [
+			spot('B1', { bed_type: 'bunk_lower', bunk_partner: 'B3' }),
+			spot('B2'),
+			spot('B3', { bed_type: 'bunk_upper', bunk_partner: 'B1' })
+		];
+		const diff = diffLayout(bunkCamp(), template([file]));
+		const spots = diff.houses[0].rooms[0].spots;
+		expect(spots.map((s) => s.label)).toEqual(['B1', 'B2', 'B3']);
+		expect(spots[0].changes).toEqual([{ field: 'bunk_partner', from: 'B2', to: 'B3' }]);
+		expect(spots[1].changes).toEqual([
+			{ field: 'bed_type', from: 'Upper bunk', to: null },
+			{ field: 'bunk_partner', from: 'B1', to: null }
+		]);
+		expect(spots[2].changes).toEqual([
+			{ field: 'bed_type', from: null, to: 'Upper bunk' },
+			{ field: 'bunk_partner', from: null, to: 'B1' }
+		]);
+		const plan = planChanges(diff, defaultSelection(diff));
+		for (const update of plan.updateSpots) expect(update.fields).not.toHaveProperty('bunk_partner');
+	});
+
+	it('shows a half-written pairing in the camp as no bunk bed', () => {
+		const records = bunkCamp();
+		records.beds[1].bunk_partner = '';
+		const diff = diffLayout(records, template([bunkRoom()]));
+		expect(diff.houses[0].rooms[0].spots[0].changes).toEqual([
+			{ field: 'bunk_partner', from: null, to: 'B2' }
+		]);
 	});
 });

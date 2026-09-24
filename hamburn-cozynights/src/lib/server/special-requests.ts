@@ -26,6 +26,7 @@ import { APP_SETTINGS_ID } from '$lib/server/constants';
 import { holderName } from '$lib/tickets';
 import { decrypt, encrypt } from '$lib/server/crypto';
 import { compareNatural } from '$lib/template';
+import { effectiveFeatures } from '$lib/accommodation';
 import {
 	isSpecialNeed,
 	type AdminRequestView,
@@ -86,7 +87,8 @@ export function toSpot(bed: BedWithRoom): SpotInfo {
 	const roomName = room
 		? `${room.name || 'Room'}${room.room_number ? ` #${room.room_number}` : ''}`
 		: '';
-	const house = room?.expand?.house?.name ?? '';
+	const building = room?.expand?.house;
+	const house = building?.name ?? '';
 	return {
 		bedId: bed.id,
 		roomId: bed.room,
@@ -95,7 +97,14 @@ export function toSpot(bed: BedWithRoom): SpotInfo {
 		room: roomName,
 		house,
 		special: !!bed.is_special,
-		locked: !!bed.is_locked
+		locked: !!bed.is_locked,
+		bedType: bed.bed_type ?? '',
+		// What the room and the house say counts for the spot too.
+		features: effectiveFeatures({
+			house: building?.features,
+			room: room?.features,
+			spot: bed.features
+		})
 	};
 }
 

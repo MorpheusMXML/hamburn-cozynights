@@ -87,7 +87,11 @@ describe('✨ Leave No Trace & Respin', () => {
 		expect(c.bed(c.b1.id)).toMatchObject({ occupied: false, order: null });
 
 		// the page reloads: no spot any more, and the old one is up for grabs again
-		const page: any = await load({ locals: c.locals, cookies: { delete: vi.fn() } } as any);
+		const page: any = await load({
+			url: new URL('http://test.local/'),
+			locals: c.locals,
+			cookies: { delete: vi.fn() }
+		} as any);
 		expect(page.userBed).toBeNull();
 		expect(page.freeBeds.map((b: { label: string }) => b.label)).toEqual(['B1', 'B2', 'B3']);
 

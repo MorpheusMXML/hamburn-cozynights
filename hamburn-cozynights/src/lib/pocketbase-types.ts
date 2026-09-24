@@ -137,6 +137,16 @@ export type BedsRecord = {
 	checked_in_at?: IsoDateString;
 	/** The admin who checked the guest in (e-mail). */
 	checked_in_by?: string;
+	/** What kind of bed this spot is (src/lib/accommodation.ts); empty = not specified. */
+	bed_type?: string;
+	/** The other spot of a bunk bed, set on both spots (src/lib/bunks.ts); empty = stands alone. */
+	bunk_partner?: RecordIdString;
+	/**
+	 * What is true for this spot itself; it inherits its room's and house's
+	 * features. PocketBase returns a single value rather than a list while the
+	 * catalogue allows only one spot feature — read it with `readFeatures`.
+	 */
+	features?: string[] | string;
 };
 
 export type HousesRecord = {
@@ -147,6 +157,12 @@ export type HousesRecord = {
 	updated: IsoAutoDateString;
 	x?: number;
 	y?: number;
+	/** House, hut group, tent area or something else (src/lib/accommodation.ts). */
+	kind?: string;
+	/** What is true for the whole building or cluster; its rooms and spots inherit it. */
+	features?: string[];
+	/** Free text for what only this venue knows, shown to guests. */
+	description?: string;
 };
 
 export type OrdersRecord = {
@@ -172,6 +188,12 @@ export type RoomsRecord = {
 	occupied?: boolean;
 	room_number: number;
 	updated: IsoAutoDateString;
+	/** Room, hut, tent or something else (src/lib/accommodation.ts). */
+	kind?: string;
+	/** What is true for this room; its spots inherit it, on top of the house's features. */
+	features?: string[];
+	/** Free text for what only this venue knows, shown to guests. */
+	description?: string;
 };
 
 export type UsersRecord = {

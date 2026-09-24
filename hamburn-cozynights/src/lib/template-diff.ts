@@ -14,11 +14,24 @@
  * its rooms and spots with it (normalizeSelection).
  */
 import { buildTemplate, compareNatural, type LayoutTemplate, type TemplateBed } from './template';
+import {
+	bedTypeLabel,
+	featureLabel,
+	houseKindEntry,
+	roomKindEntry,
+	type Feature
+} from './accommodation';
+
+/** How long a description may be in a "changed" line before it is cut off. */
+const DESCRIPTION_PREVIEW = 60;
 
 /** What happens to an item itself; null = nothing (its rooms or spots may still change). */
 export type ChangeKind = 'new' | 'changed' | 'removed';
 
 export type FieldValue = string | number | boolean | null;
+
+/** What a record is written with; features are a list, everything else a plain value. */
+export type WriteValue = FieldValue | string[];
 
 export interface FieldChange {
 	field: string;
@@ -44,13 +57,20 @@ export interface SpotDiff extends DiffNode {
 	after: TemplateBed | null;
 }
 
-export interface RoomDiff extends DiffNode {
+/** The details of a house or room as the file has them (as the camp has them when it is removed). */
+export interface DetailFields {
+	kind?: string;
+	features?: Feature[];
+	description?: string;
+}
+
+export interface RoomDiff extends DiffNode, DetailFields {
 	name: string;
 	number: number;
 	spots: SpotDiff[];
 }
 
-export interface HouseDiff extends DiffNode {
+export interface HouseDiff extends DiffNode, DetailFields {
 	name: string;
 	/** Position in the file, or in the camp for a house that is not in the file. */
 	x: number;
@@ -74,8 +94,26 @@ export interface LayoutDiff {
 
 /** The camp's records, as PocketBase returns them (`created` decides between duplicates). */
 export interface CampRecords {
-	houses: { id: string; created?: string; name: string; x?: number; y?: number }[];
-	rooms: { id: string; created?: string; house: string; name: string; room_number?: number }[];
+	houses: {
+		id: string;
+		created?: string;
+		name: string;
+		x?: number;
+		y?: number;
+		kind?: string;
+		features?: string[];
+		description?: string;
+	}[];
+	rooms: {
+		id: string;
+		created?: string;
+		house: string;
+		name: string;
+		room_number?: number;
+		kind?: string;
+		features?: string[];
+		description?: string;
+	}[];
 	beds: ({
 		id: string;
 		created?: string;
@@ -90,32 +128,136 @@ const nameKey = (name: string) => encodeURIComponent(name.trim().toLowerCase());
 
 /**
  * A camp bed as a template spot. The export (buildTemplate) owns the mapping of
- * the fields, so a new spot flag needs no change here.
+ * the fields, so a new spot flag needs no change here. The other beds of the
+ * room are needed for the bunk partner's label.
  */
-function templateBed(bed: CampRecords['beds'][number]): TemplateBed {
+function templateBed(
+	bed: CampRecords['beds'][number],
+	roomBeds: readonly CampRecords['beds'][number][] = [bed]
+): TemplateBed {
 	const records = {
 		houses: [{ id: 'h', name: 'h' }],
 		rooms: [{ id: 'r', house: 'h', name: 'r' }],
-		beds: [{ ...bed, room: 'r' }]
+		beds: roomBeds.map((other) => ({ ...other, room: 'r' }))
 	} as Parameters<typeof buildTemplate>[0];
-	return buildTemplate(records).houses[0].rooms[0].beds[0];
+	const spots = buildTemplate(records).houses[0].rooms[0].beds;
+	const label = String(bed.label ?? '');
+	return spots.find((spot) => spot.label === label) ?? spots[0];
+}
+
+/** The same for a camp house's and room's details, so junk in the camp is read like a file. */
+function templateHouse(house: CampRecords['houses'][number]) {
+	return buildTemplate({ houses: [house], rooms: [], beds: [] }).houses[0];
+}
+
+function templateRoom(room: CampRecords['rooms'][number]) {
+	const records = {
+		houses: [{ id: 'h', name: 'h' }],
+		rooms: [{ ...room, house: 'h' }],
+		beds: []
+	} as Parameters<typeof buildTemplate>[0];
+	return buildTemplate(records).houses[0].rooms[0];
 }
 
 const isBooked = (bed: { occupied?: boolean; order?: string }) => !!bed.occupied || !!bed.order;
+
+/** "Heated · Quiet zone", or null when there is nothing to show. */
+const featureList = (features: readonly Feature[] | undefined): FieldValue =>
+	features && features.length > 0 ? features.map(featureLabel).join(' · ') : null;
+
+const shorten = (text: string | undefined): FieldValue =>
+	!text
+		? null
+		: text.length > DESCRIPTION_PREVIEW
+			? `${text.slice(0, DESCRIPTION_PREVIEW - 1)}…`
+			: text;
+
+/**
+ * A detail as the review shows it: the labels people read, not the stored
+ * values, and one line per detail even for a list of features.
+ */
+function detailChanges(
+	before: { kind?: string; features?: Feature[]; description?: string },
+	after: { kind?: string; features?: Feature[]; description?: string },
+	kindLabel: (value: unknown) => FieldValue
+): FieldChange[] {
+	const changes: FieldChange[] = [];
+	if ((before.kind ?? '') !== (after.kind ?? '')) {
+		changes.push({ field: 'kind', from: kindLabel(before.kind), to: kindLabel(after.kind) });
+	}
+	const fromFeatures = featureList(before.features);
+	const toFeatures = featureList(after.features);
+	if (fromFeatures !== toFeatures) {
+		changes.push({ field: 'features', from: fromFeatures, to: toFeatures });
+	}
+	// The whole text would flood the review, so the line only says it changed.
+	if ((before.description ?? '') !== (after.description ?? '')) {
+		changes.push({
+			field: 'description',
+			from: shorten(before.description),
+			to: shorten(after.description)
+		});
+	}
+	return changes;
+}
+
+/** The details of a file (or camp) item, without the empty ones. */
+const detailsOf = (item: DetailFields): DetailFields => ({
+	...(item.kind ? { kind: item.kind } : {}),
+	...(item.features && item.features.length > 0 ? { features: item.features } : {}),
+	...(item.description ? { description: item.description } : {})
+});
+
+/** The file decides: a detail it doesn't have is cleared in the camp. */
+const detailWrite = (item: DetailFields): DetailWrite => ({
+	kind: item.kind ?? '',
+	features: item.features ?? [],
+	description: item.description ?? ''
+});
+
+/** Everything a spot of the file says, ready for the database. */
+const spotWrite = (bed: TemplateBed): Record<string, WriteValue> => ({
+	label: bed.label,
+	enabled: bed.enabled,
+	is_locked: bed.is_locked,
+	is_special: bed.is_special === true,
+	bed_type: bed.bed_type ?? '',
+	features: bed.features ?? []
+});
+
+const houseKindLabel = (value: unknown): FieldValue => houseKindEntry(value)?.label ?? null;
+const roomKindLabel = (value: unknown): FieldValue => roomKindEntry(value)?.label ?? null;
 
 function spotChanges(before: TemplateBed, after: TemplateBed): FieldChange[] {
 	const changes: FieldChange[] = [];
 	if (before.label !== after.label) {
 		changes.push({ field: 'label', from: before.label, to: after.label });
 	}
-	const a = before as unknown as Record<string, unknown>;
-	const b = after as unknown as Record<string, unknown>;
-	const fields = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((f) => f !== 'label');
-	for (const field of fields.sort()) {
+	const flags = ['enabled', 'is_locked', 'is_special'] as const;
+	for (const field of flags) {
 		// A flag one side doesn't know counts as off.
-		const from = (a[field] ?? (typeof b[field] === 'boolean' ? false : null)) as FieldValue;
-		const to = (b[field] ?? (typeof a[field] === 'boolean' ? false : null)) as FieldValue;
+		const from = before[field] ?? false;
+		const to = after[field] ?? false;
 		if (from !== to) changes.push({ field, from, to });
+	}
+	if ((before.bed_type ?? '') !== (after.bed_type ?? '')) {
+		changes.push({
+			field: 'bed_type',
+			from: bedTypeLabel(before.bed_type) || null,
+			to: bedTypeLabel(after.bed_type) || null
+		});
+	}
+	const fromFeatures = featureList(before.features);
+	const toFeatures = featureList(after.features);
+	if (fromFeatures !== toFeatures) {
+		changes.push({ field: 'features', from: fromFeatures, to: toFeatures });
+	}
+	// The partner is a label; the import resolves it to the spot after every
+	// spot of the room exists (src/lib/server/template.ts, syncBunks).
+	const fromPartner = before.bunk_partner ?? '';
+	const toPartner = after.bunk_partner ?? '';
+	if (fromPartner.toLowerCase() !== toPartner.toLowerCase()) {
+		changes.push({ field: 'bunk_partner', from: fromPartner || null, to: toPartner || null });
 	}
 	return changes;
 }
@@ -185,12 +327,13 @@ export function diffLayout(camp: CampRecords, template: LayoutTemplate): LayoutD
 			id: null,
 			name: room.name,
 			number: room.room_number,
+			...detailsOf(room),
 			spots: room.beds.map((bed) => newSpot(key, bed))
 		};
 		return diff;
 	};
 	const removedSpot = (key: string, bed: CampBed): SpotDiff => {
-		const before = templateBed(bed);
+		const before = templateBed(bed, bedsOf.get(bed.room) ?? [bed]);
 		return {
 			key,
 			own: 'removed',
@@ -214,6 +357,7 @@ export function diffLayout(camp: CampRecords, template: LayoutTemplate): LayoutD
 			id: room.id,
 			name: room.name,
 			number: room.room_number ?? 0,
+			...detailsOf(templateRoom(room)),
 			spots: sortSpots(spots)
 		};
 	};
@@ -230,6 +374,7 @@ export function diffLayout(camp: CampRecords, template: LayoutTemplate): LayoutD
 			name: house.name,
 			x: Math.round(house.x ?? 0),
 			y: Math.round(house.y ?? 0),
+			...detailsOf(templateHouse(house)),
 			rooms: sortRooms(rooms)
 		};
 	};
@@ -261,6 +406,7 @@ export function diffLayout(camp: CampRecords, template: LayoutTemplate): LayoutD
 				name: fileHouse.name,
 				x: fileHouse.x,
 				y: fileHouse.y,
+				...detailsOf(fileHouse),
 				rooms: fileHouse.rooms.map((room) => newRoom(key, room))
 			});
 			continue;
@@ -280,6 +426,7 @@ export function diffLayout(camp: CampRecords, template: LayoutTemplate): LayoutD
 				to: `${fileHouse.x} / ${fileHouse.y}`
 			});
 		}
+		changes.push(...detailChanges(templateHouse(campHouse), fileHouse, houseKindLabel));
 
 		const rooms: RoomDiff[] = [];
 		const campRooms = new Map<string, CampRoom>();
@@ -330,7 +477,7 @@ export function diffLayout(camp: CampRecords, template: LayoutTemplate): LayoutD
 					continue;
 				}
 				matchedBeds.add(campBed.id);
-				const before = templateBed(campBed);
+				const before = templateBed(campBed, bedsOf.get(campRoom.id) ?? [campBed]);
 				const changes = spotChanges(before, fileBed);
 				spots.push({
 					key: spotKey,
@@ -351,6 +498,7 @@ export function diffLayout(camp: CampRecords, template: LayoutTemplate): LayoutD
 				campRoom.name !== fileRoom.name
 					? [{ field: 'name', from: campRoom.name, to: fileRoom.name }]
 					: [];
+			roomChanges.push(...detailChanges(templateRoom(campRoom), fileRoom, roomKindLabel));
 			rooms.push({
 				key: roomKey,
 				own: roomChanges.length > 0 ? 'changed' : null,
@@ -359,6 +507,7 @@ export function diffLayout(camp: CampRecords, template: LayoutTemplate): LayoutD
 				id: campRoom.id,
 				name: fileRoom.name,
 				number: fileRoom.room_number,
+				...detailsOf(fileRoom),
 				spots: sortSpots(spots)
 			});
 		}
@@ -375,6 +524,7 @@ export function diffLayout(camp: CampRecords, template: LayoutTemplate): LayoutD
 			name: fileHouse.name,
 			x: fileHouse.x,
 			y: fileHouse.y,
+			...detailsOf(fileHouse),
 			rooms: sortRooms(rooms)
 		});
 	}
@@ -523,8 +673,15 @@ export function toggleSelection(
 
 // --- what the database has to do -----------------------------------------------
 
+/** What the import writes for a house or room besides its name and place. */
+export interface DetailWrite {
+	kind: string;
+	features: string[];
+	description: string;
+}
+
 export interface LayoutPlan {
-	createHouses: { key: string; name: string; x: number; y: number }[];
+	createHouses: { key: string; name: string; x: number; y: number; details: DetailWrite }[];
 	createRooms: {
 		key: string;
 		houseKey: string;
@@ -533,6 +690,7 @@ export interface LayoutPlan {
 		houseName: string;
 		name: string;
 		room_number: number;
+		details: DetailWrite;
 		/** Spots that are created with it (rooms.amount_beds). */
 		spots: number;
 	}[];
@@ -545,9 +703,16 @@ export interface LayoutPlan {
 		houseName: string;
 		bed: TemplateBed;
 	}[];
-	updateHouses: { key: string; id: string; name: string; x: number; y: number }[];
-	updateRooms: { key: string; id: string; name: string }[];
-	updateSpots: { key: string; id: string; label: string; fields: Record<string, FieldValue> }[];
+	updateHouses: {
+		key: string;
+		id: string;
+		name: string;
+		x: number;
+		y: number;
+		details: DetailWrite;
+	}[];
+	updateRooms: { key: string; id: string; name: string; details: DetailWrite }[];
+	updateSpots: { key: string; id: string; label: string; fields: Record<string, WriteValue> }[];
 	/** Innermost first when applied: spots, then rooms, then houses. */
 	removeSpots: { key: string; id: string; label: string; booked: boolean }[];
 	removeRooms: { key: string; id: string; name: string }[];
@@ -571,14 +736,21 @@ export function planChanges(diff: LayoutDiff, selection: Set<string>): LayoutPla
 	for (const house of diff.houses) {
 		if (chosen.has(house.key)) {
 			if (house.own === 'new') {
-				plan.createHouses.push({ key: house.key, name: house.name, x: house.x, y: house.y });
+				plan.createHouses.push({
+					key: house.key,
+					name: house.name,
+					x: house.x,
+					y: house.y,
+					details: detailWrite(house)
+				});
 			} else if (house.own === 'changed' && house.id) {
 				plan.updateHouses.push({
 					key: house.key,
 					id: house.id,
 					name: house.name,
 					x: house.x,
-					y: house.y
+					y: house.y,
+					details: detailWrite(house)
 				});
 			} else if (house.own === 'removed' && house.id) {
 				plan.removeHouses.push({ key: house.key, id: house.id, name: house.name });
@@ -594,10 +766,16 @@ export function planChanges(diff: LayoutDiff, selection: Set<string>): LayoutPla
 						houseName: house.name,
 						name: room.name,
 						room_number: room.number,
+						details: detailWrite(room),
 						spots: room.spots.filter((spot) => chosen.has(spot.key)).length
 					});
 				} else if (room.own === 'changed' && room.id) {
-					plan.updateRooms.push({ key: room.key, id: room.id, name: room.name });
+					plan.updateRooms.push({
+						key: room.key,
+						id: room.id,
+						name: room.name,
+						details: detailWrite(room)
+					});
 				} else if (room.own === 'removed' && room.id) {
 					plan.removeRooms.push({ key: room.key, id: room.id, name: room.name });
 				}
@@ -613,10 +791,15 @@ export function planChanges(diff: LayoutDiff, selection: Set<string>): LayoutPla
 						houseName: house.name,
 						bed: spot.after
 					});
-				} else if (spot.own === 'changed' && spot.id) {
-					const fields: Record<string, FieldValue> = {};
-					for (const change of spot.changes) fields[change.field] = change.to;
-					plan.updateSpots.push({ key: spot.key, id: spot.id, label: spot.label, fields });
+				} else if (spot.own === 'changed' && spot.id && spot.after) {
+					// The file decides, so everything it says is written: the change lines
+					// carry the labels people read, not the values the database wants.
+					plan.updateSpots.push({
+						key: spot.key,
+						id: spot.id,
+						label: spot.label,
+						fields: spotWrite(spot.after)
+					});
 				} else if (spot.own === 'removed' && spot.id) {
 					plan.removeSpots.push({
 						key: spot.key,

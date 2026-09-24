@@ -8,7 +8,7 @@ Some spots are kept for guests who need something special: a lower bunk or a bed
 
 1. **Sign in** on the start page with your ticket code.
 2. **Open the request page from the map.** Before booking opens, the map shows ♿ **Need a special-needs spot? Ask the crew now**. During Live Booking and after it, the button ♿ **Special-needs spot** sits at the top of the map (on a phone it is just ♿). The link is there while the crew accepts requests.
-3. **Tick what you need**: a lower bunk or a bed without a ladder, step-free access or the ground floor, close to a toilet, a quiet room, a power socket for a medical device, or *something else*. Then tell the crew in a few words what they should know (5 to 500 characters; the form counts for you). Describe *what* you need, not *why*: no diagnoses or medical details, the crew doesn't need them.
+3. **Tick what you need**: a lower bunk or a bed without a ladder (a stacked bunk bed tells the crew by itself which of its two spots is the lower one), step-free access or the ground floor, close to a toilet, a quiet room, a power socket for a medical device, or *something else*. Then tell the crew in a few words what they should know (5 to 500 characters; the form counts for you). Describe *what* you need, not *why*: no diagnoses or medical details, the crew doesn't need them.
 4. Optionally enter the **burner name** for your spot (up to 80 characters). The crew's booking uses it unless your ticket already has a burner name; leave it empty and you get a random one.
 5. Tick the **consent** box and press <kbd>Send request</kbd>.
 
@@ -48,4 +48,4 @@ Then the page says *Requests are closed right now*: the crew isn't taking specia
 - **Messages never contain it:** e-mails and Telegram messages only say what the crew decided.
 - **Other guests can't tell** that your spot is a special-needs spot: they see your burner name, like on any other spot.
 
-More in the privacy policy, section *Special-needs requests*; every page of CozyNights links it at the bottom.
+More in the privacy policy (the *Privacy* link at the bottom of every CozyNights page), section *Special-needs requests*.

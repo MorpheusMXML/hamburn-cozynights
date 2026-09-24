@@ -16,6 +16,7 @@ import { burnerNameOf, passSummary, roomLabel } from '$lib/server/pass';
 import type { PassSummary } from '$lib/pass';
 import type { RouletteSpot } from '$lib/roulette';
 import type { BedsResponse, RoomsResponse, HousesResponse } from '$lib/pocketbase-types';
+import { readFilters, spotFacts, spotMatchesFilters } from '$lib/accommodation';
 
 type BedWithHouse = BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>;
 
@@ -36,7 +37,7 @@ const SIGNED_OUT =
 	'You are not signed in anymore. Go to the start page and enter your ticket code again.';
 const CODE_UNKNOWN = 'Your ticket code was not found. Go to the start page and enter it again.';
 
-export const load: PageServerLoad = async ({ locals, cookies }) => {
+export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 	if (!locals.orderNumber) throw redirect(303, signInUrl(locals));
 
 	// Orders contain PII and are never readable via the public `pb` connection
@@ -67,20 +68,38 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 			)
 			.catch(() => null);
 
+		// What the guest wants the dice to respect. The wishes live in the URL, so
+		// a roll can be repeated and the page works without JavaScript.
+		const wishes = readFilters(url.searchParams.get('w'));
+
 		// Only fetch the (possibly large) free-bed list when the user doesn't
 		// already have a spot — they can't spin again without Leave No Trace
 		// first, and the page reloads this list right after the sweep.
 		// Deactivated, locked and special-needs beds are never part of the roulette.
-		const freeBeds: RouletteSpot[] = userBed
+		const allFree: BedWithHouse[] = userBed
 			? []
 			: // beds are admin-only in PocketBase: the service account reads them
-				(
-					await locals.adminPb.collection('beds').getFullList<BedWithHouse>({
-						filter: 'occupied = false && enabled = true && is_locked = false && is_special = false',
-						expand: 'room,room.house',
-						sort: 'label'
-					})
-				).map(rouletteSpot);
+				await locals.adminPb.collection('beds').getFullList<BedWithHouse>({
+					filter: 'occupied = false && enabled = true && is_locked = false && is_special = false',
+					expand: 'room,room.house',
+					sort: 'label'
+				});
+		// The drum holds only the spots that fit the wishes (all of them without any).
+		const freeBeds: RouletteSpot[] = allFree
+			.filter(
+				(bed) =>
+					wishes.length === 0 ||
+					spotMatchesFilters(
+						wishes,
+						spotFacts({
+							bedType: bed.bed_type,
+							house: bed.expand?.room?.expand?.house?.features,
+							room: bed.expand?.room?.features,
+							spot: bed.features
+						})
+					)
+			)
+			.map(rouletteSpot);
 
 		// A guest with a spot sees it as the small booking pass, like on the
 		// house, room and map pages; the Destiny Fulfilled card shows it too.
@@ -102,6 +121,9 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 
 		return {
 			freeBeds,
+			wishes,
+			/** All free spots, so the page can say how many the wishes left out. */
+			freeTotal: allFree.length,
 			isBookingActive,
 			spotFixed,
 			// The crew checked the guest in at arrival: only the crew changes the spot now.

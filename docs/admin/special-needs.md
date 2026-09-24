@@ -26,6 +26,10 @@ On a room page, <kbd>♿ SPECIAL</kbd> marks a spot as a special-needs spot; <kb
 
 Mark the spots before booking opens. Special-needs spots that nobody needs at the end: switch them back to <kbd>♿ NORMAL</kbd> one by one, and guests can book them.
 
+::: tip Fill in the details first
+Which spot fits which need comes from the layout: the **bed type** of a spot and the **features** of its room and house (see [Houses, rooms & spots](./camp-layout#house-details)). A lower bunk in a step-free room with toilets in the building is what a request asking for all three needs; stacked [bunk beds](./camp-layout#bunk-beds) mark their lower and upper level by themselves. Spots nobody described can still be assigned — the list just can't tell you what they answer.
+:::
+
 ## 2. Open requests
 
 Requests have their **own switch**, independent of Staging Mode and Live Booking: <kbd>Open requests</kbd> / <kbd>Close requests</kbd> in the row *♿ Special-needs requests: OPEN / CLOSED* right under the [🎟 BOOKING WINDOW](./#booking-window) panel in the Control Center, or the same button on the requests page (*Requests from guests: OPEN*).
@@ -37,7 +41,7 @@ Every switch goes to the crew group with the admin's e-mail address.
 
 ## 3. Decide and book
 
-<kbd>♿ Special needs</kbd> in the admin header, with the number of requests waiting for a decision. The page groups the requests into *Waiting for a decision*, *Approved* and *Declined*.
+<kbd>♿ Special needs</kbd> in the admin menu, with the number of requests waiting for a decision. The page groups the requests into *Waiting for a decision*, *Approved* and *Declined*.
 
 ![A waiting request with Approve, Decline and Approve & book, and an approved one with the spot the crew booked](../assets/screenshots/admin-requests.webp)
 
@@ -52,13 +56,23 @@ If a guest sends the form again right when you decide, the card says so: read it
 | Button | What happens |
 | --- | --- |
 | <kbd>Approve</kbd> | The request is approved. A guest without a spot hears that the crew picks one; a guest who booked a spot themselves hears they keep it until you book a more fitting one. |
-| <kbd>Approve & book</kbd> · <kbd>Book</kbd> | Pick a free spot from the list (*♿ Special-needs spots* first, then *Other free spots*; 🔒 marks locked ones, deactivated spots never appear) and book it for the guest, right away, also in Staging Mode and after booking closed. A waiting request is approved on the way. The guest gets a message with the spot and the booking pass. If the guest already holds a spot, the field reads **Move to** and the dialog *Move the guest?* says which spot becomes free. |
+| <kbd>Approve & book</kbd> · <kbd>Book</kbd> | Pick a free spot from the list (*♿ Special-needs spots* first, then *Other free spots*; 🔒 marks locked ones, deactivated spots never appear) and book it for the guest, right away, also in Staging Mode and after booking closed. Each spot says what it answers of **this** request — `B1 · Room 2 · Wälderhaus — ✓ a lower bunk or a bed without a ladder, ✓ step-free access or the ground floor` — and the best fits come first; `✗` marks a clear mismatch, like an upper bunk for someone who needs a lower one. A waiting request is approved on the way. The guest gets a message with the spot and the booking pass. If the guest already holds a spot, the field reads **Move to** and the dialog *Move the guest?* says which spot becomes free. |
 | <kbd>Move</kbd> | Books another spot for the guest; the old one becomes free. |
 | <kbd>Release spot</kbd> | The spot becomes free again (a special-needs spot stays one); the request stays approved, so book another one. The guest gets a message. Also offered for a spot the guest booked themselves: the dialog warns that releasing takes it away from them. |
 | <kbd>Decline</kbd> | The guest gets a message that the crew can't offer a special-needs spot: they keep a spot they booked themselves, or book like everyone else once booking opens. To decline a request whose spot you booked, release the spot first. |
 | <kbd>⋯</kbd> → <kbd>Approve after all</kbd> | On a declined card only, deliberately out of the way (a declined card has no other buttons): the request is approved after all (the guest gets the *approved* message), and the spot list comes back so you can book one. |
 
 With no free spot left, the list says *No free spot left. Free or add one in the room editor.*
+
+### What the open requests need
+
+Above the requests, a box compares what the waiting requests (and approved ones without a spot) ticked with the free spots that fit:
+
+> **What the open requests need**
+> A lower bunk or a bed without a ladder — 4 asked · 6 free spots fit
+> Step-free access or the ground floor — 2 asked · 1 free spot fits ⚠️ not enough
+
+⚠️ means the camp has fewer fitting spots than requests: free one, mark more spots ♿, or fill in missing details in the room editor. *Something else* is left out — only a person can answer that one. The counts only see what the crew described, so a camp without details shows nothing here.
 
 Every decision and booking is in the audit log and goes to the crew group — **without the guest's name or what they wrote**.
 
@@ -91,7 +105,7 @@ What guests write is often **health data**. The app treats it that way; please d
 - **Only admins can read it**, here and nowhere else. What guests tick and write is stored encrypted, so the PocketBase dashboard and backups only hold unreadable text. The pages are sent with `Cache-Control: no-store`.
 - **It never leaves the admin area:** not in e-mails, Telegram messages, the crew group, logs or the audit log.
 - **Don't copy it** into chats, e-mails or spreadsheets. Talk about a request in person, and decide based on what the guest needs, not why.
-- **Guests give explicit consent** with a checkbox when they send a request (Art. 9(2)(a) GDPR); the time is stored. The privacy policy (`/privacy`, section *Special-needs requests*) explains it; see [Legal pages](./legal). The checkbox reads: *I agree that the CozyNights crew uses what I write here to find a fitting spot for me. It may include information about my health. Only the crew's admins can read it; it is stored encrypted and deleted after the event at the latest. I can withdraw my request on this page at any time. Details: privacy policy.* (the link opens the policy's section). Keep the text, the policy and this page in step.
+- **Guests give explicit consent** with a checkbox when they send a request (Art. 9(2)(a) GDPR); the time is stored. The privacy policy (`/privacy#special-needs`, section *Special-needs requests*) explains it; see [Legal pages](./legal). The checkbox reads: *I agree that the CozyNights crew uses what I write here to find a fitting spot for me. It may include information about my health. Only the crew's admins can read it; it is stored encrypted and deleted after the event at the latest. I can withdraw my request on this page at any time. Details: privacy policy.* (the link opens the policy's section). Keep the text, the policy and this page in step.
 - **A ticket passed on** to a new holder loses its request the same way, when you hand it over on the [Tickets](./tickets) page (🔁 *Ticket passed on to someone else*, or 🔁 *New holder* in the ticket list review); a spot the crew booked stays with the ticket as an ordinary booking. The server's `tickets import` refuses a changed address on such a ticket unless it is run with `--hand-over`, which deletes the request the same way.
 - **It is deleted after the event** together with the contact data: `./scripts/cozy-admin.sh tickets forget-contacts --yes` also deletes every request. See [After the event](./notifications#after-the-event).
 

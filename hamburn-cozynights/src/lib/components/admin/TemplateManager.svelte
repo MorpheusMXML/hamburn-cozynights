@@ -28,6 +28,8 @@ Staging Mode. Unchanged spots keep their bookings.
 	export let isSuperuser = false;
 	/** Why applying has to wait (the layout is locked), '' while it can be applied. */
 	export let lockedNote = '';
+	/** On its own page (/admin/templates) instead of a dialog over another one. */
+	export let inline = false;
 
 	const EXAMPLE_URL = '/templates/brahmsee-starter.json';
 
@@ -77,8 +79,8 @@ Staging Mode. Unchanged spots keep their bookings.
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
-		// An open confirm dialog handles Escape itself.
-		if (event.key === 'Escape' && $dialogQueue.length === 0) close();
+		// An open confirm dialog handles Escape itself; a page has nothing to close.
+		if (!inline && event.key === 'Escape' && $dialogQueue.length === 0) close();
 	}
 
 	function resetCheck() {
@@ -286,8 +288,9 @@ Staging Mode. Unchanged spots keep their bookings.
 
 <div
 	class="templates-overlay"
-	role="dialog"
-	aria-modal="true"
+	class:inline
+	role={inline ? undefined : 'dialog'}
+	aria-modal={inline ? undefined : 'true'}
 	aria-labelledby="templates-title"
 	in:fade
 	out:fade
@@ -295,9 +298,16 @@ Staging Mode. Unchanged spots keep their bookings.
 	<div class="templates-content" in:fly={{ y: 20 }}>
 		<div class="modal-header">
 			<h2 id="templates-title">Burn Template Manager</h2>
-			<button class="btn-close" type="button" aria-label="Close template manager" on:click={close}>
-				✕
-			</button>
+			{#if !inline}
+				<button
+					class="btn-close"
+					type="button"
+					aria-label="Close template manager"
+					on:click={close}
+				>
+					✕
+				</button>
+			{/if}
 		</div>
 
 		<div class="templates-grid">
@@ -517,6 +527,28 @@ Staging Mode. Unchanged spots keep their bookings.
 		align-items: center;
 		justify-content: center;
 		padding: 2rem;
+	}
+
+	/* On its own page: part of the page, not a layer above it. */
+	.templates-overlay.inline {
+		position: static;
+		inset: auto;
+		z-index: auto;
+		display: block;
+		padding: 0;
+		background: none;
+		backdrop-filter: none;
+	}
+	.inline .templates-content {
+		max-width: none;
+		max-height: none;
+		overflow: visible;
+		box-shadow: none;
+	}
+	/* The page scrolls, not the panel: the apply bar stays in its place (stuck
+	   to the window's bottom edge it lay over the review). */
+	.inline .apply-bar {
+		position: static;
 	}
 
 	.templates-content {
@@ -966,6 +998,11 @@ Staging Mode. Unchanged spots keep their bookings.
 			border-left: none;
 			border-right: none;
 			padding: 1.25rem 1rem 2rem;
+		}
+		.inline .templates-content {
+			border-radius: 16px;
+			border-left: 1px solid #222;
+			border-right: 1px solid #222;
 		}
 		.modal-header {
 			margin-bottom: 1.5rem;

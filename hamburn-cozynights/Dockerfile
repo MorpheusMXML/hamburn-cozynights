@@ -5,6 +5,11 @@ WORKDIR /app
 COPY hamburn-cozynights/package*.json ./
 RUN npm ci
 COPY hamburn-cozynights/ .
+# The commit the image is built from, shown by the version badge and
+# /api/health (build-info.ts). The deploy script passes it; a build without
+# it shows the version alone.
+ARG GIT_SHA=
+ENV GIT_SHA=$GIT_SHA
 RUN npm run build
 
 # The documentation (VitePress), built once per audience: the guest guide for

@@ -2,7 +2,9 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
 import { getBookingSettings } from '$lib/server/settings';
+import { bedTypeMix, defaultRoomKind, parseDetailsForm } from '$lib/accommodation';
 import { countSpots } from '$lib/occupancy';
+import { readBookings } from '$lib/server/bookings';
 import { TEMPLATE_LIMITS } from '$lib/template';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -26,18 +28,28 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			filter: locals.pb.filter('room.house = {:id}', { id: houseId })
 		});
 
-		// 4. Fetch app settings for booking status
-		const settings = await getBookingSettings(locals.pb);
+		// 4. Fetch app settings for booking status, and who holds which spot
+		// (masked like at the check-in desk)
+		const [settings, bookings] = await Promise.all([
+			getBookingSettings(locals.pb),
+			readBookings(locals.adminPb, { houseId }).catch((err) => {
+				console.error('[House] Bookings could not be read:', (err as Error)?.message);
+				return null;
+			})
+		]);
 
 		// 5. Map statistics 📊 (deactivated spots don't count, locked ones aren't free)
 		const roomsWithStats = rooms.map((room) => ({
 			...room,
-			stats: countSpots(beds.filter((b) => b.room === room.id))
+			stats: countSpots(beds.filter((b) => b.room === room.id)),
+			// "4 × lower bunk · 4 × upper bunk" for the card
+			bedMix: bedTypeMix(beds.filter((b) => b.room === room.id).map((b) => b.bed_type))
 		}));
 
 		return {
 			house,
 			rooms: roomsWithStats,
+			bookings,
 			isLayoutLocked: settings.isLayoutLocked,
 			phase: settings.phase
 		};
@@ -56,6 +68,27 @@ function parseWholeNumber(value: string): number | null {
 }
 
 export const actions: Actions = {
+	/**
+	 * What the house is like: kind, features and description (src/lib/accommodation.ts).
+	 * Allowed in every phase, like the room details: they describe the place.
+	 */
+	saveHouse: async ({ request, params, locals }) => {
+		if (!locals.admin) return fail(403, { message: 'Only admins can change houses.' });
+
+		const details = parseDetailsForm(await request.formData(), 'house');
+		if (!details.ok) return fail(400, { message: details.error });
+
+		try {
+			await locals.pb.collection('houses').update(params.id, details.value);
+			return { success: true };
+		} catch (err) {
+			console.error('[Action:saveHouse] FAILED:', err);
+			return fail(500, {
+				message: 'The server could not save the details. Reload the page and try again.'
+			});
+		}
+	},
+
 	createRoom: async ({ request, locals, params }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can create rooms.' });
 
@@ -112,10 +145,18 @@ export const actions: Actions = {
 				});
 			}
 
+			// A hut group's rooms are huts, a tent area's are tents: the crew can
+			// still change the kind in the room's details. A house that can't be
+			// read right now only costs the default, not the room.
+			const house = await locals.pb
+				.collection('houses')
+				.getOne<HousesResponse>(houseId)
+				.catch(() => null);
 			const room = await locals.pb.collection('rooms').create({
 				name,
 				room_number: roomNumber,
 				amount_beds: amountBeds,
+				kind: defaultRoomKind(house?.kind),
 				house: houseId
 			});
 

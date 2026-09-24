@@ -1,17 +1,12 @@
-import { redirect, error, fail, type ActionFailure } from '@sveltejs/kit';
+import { redirect, fail, type ActionFailure } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import type {
-	HousesResponse,
-	BedsResponse,
-	RoomsResponse,
-	TypedPocketBase
-} from '$lib/pocketbase-types';
+import type { TypedPocketBase } from '$lib/pocketbase-types';
 import { APP_SETTINGS_ID } from '$lib/server/constants';
 import { bumpGuestRound } from '$lib/server/guest-session';
 import { getBookingSettings } from '$lib/server/settings';
 import { berlinLocalToIso } from '$lib/time';
-import { deriveLiveStats, opsSnapshot } from '$lib/server/stats';
-import type { LiveStats } from '$lib/live-stats';
+import { readCamp } from '$lib/server/camp';
+import { readBookings } from '$lib/server/bookings';
 import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
 import { parseTemplate, TEMPLATE_LIMITS, type TemplateParseResult } from '$lib/template';
 import { defaultSelection } from '$lib/template-diff';
@@ -262,15 +257,6 @@ async function clearBurnerNames(
 	}
 	return left;
 }
-
-type HouseStats = HousesResponse & {
-	totalBeds: number;
-	occupiedBeds: number;
-	freeBeds: number;
-	/** Booked spots whose guest the crew checked in at arrival. */
-	checkedInBeds: number;
-	occupancyRate: number;
-};
 
 export const actions: Actions = {
 	/** The superuser's override: Staging, Live or Closed, right now. */
@@ -686,90 +672,34 @@ export const actions: Actions = {
 	}
 };
 
+/**
+ * The Control Center: booking window, the special-needs switch, what needs
+ * attention, the live numbers and the latest bookings. The camp editor lives
+ * on /admin/camp; its writes (move, rename, delete a house, templates) stay
+ * actions of this page, so every form, script and test that posts to
+ * /admin?/… keeps working.
+ */
 export const load: PageServerLoad = async ({ locals }) => {
 	// Runs in parallel with the layout load, so it guards itself too.
 	if (!locals.admin) throw redirect(303, '/admin/login');
 
-	// The camp-wide counts (tickets, messages, requests, crew) for the Intel
-	// panel come from the cache the live endpoint shares; asked in parallel.
-	const opsRead = opsSnapshot(locals.adminPb).catch((err) => {
-		console.error('[Admin] Operations counts could not be read:', (err as Error)?.message);
-		return null;
-	});
-
-	const [houses, allRooms, allBeds, settings] = await Promise.all([
-		locals.pb.collection('houses').getFullList<HousesResponse>({ sort: 'name' }),
-		locals.pb.collection('rooms').getFullList<RoomsResponse>(),
-		// No `expand: 'room'`: the rooms are already here, and the spot rows are
-		// the biggest answer on this page — a camp with 400 spots used to carry
-		// a copy of its room record on every one of them.
-		locals.pb.collection('beds').getFullList<BedsResponse>(),
-		getBookingSettings(locals.pb)
-	]);
-
-	// Sanity Checks logic 🛠️
-	const sanityWarnings = houses
-		.map((house) => {
-			const houseRooms = allRooms.filter((r) => r.house === house.id);
-			const roomsWithIssues = houseRooms
-				.map((room) => {
-					const roomBeds = allBeds.filter((b) => b.room === room.id);
-					return {
-						id: room.id,
-						name: room.name,
-						number: room.room_number,
-						bedCount: roomBeds.length,
-						hasNoBeds: roomBeds.length === 0
-					};
-				})
-				.filter((r) => r.hasNoBeds);
-
-			return {
-				id: house.id,
-				name: house.name,
-				noRooms: houseRooms.length === 0,
-				roomsWithNoBeds: roomsWithIssues
-			};
+	const [camp, bookings] = await Promise.all([
+		readCamp(locals),
+		readBookings(locals.adminPb).catch((err) => {
+			console.error('[Admin] Bookings could not be read:', (err as Error)?.message);
+			return null;
 		})
-		.filter((w) => w.noRooms || w.roomsWithNoBeds.length > 0);
-
-	// Spots the crew booked for approved special-needs requests: they survive a
-	// switch back to Staging and "clear all bookings", so the dialogs say so.
-	const crewBooked = await crewBookedBeds(locals.adminPb).catch((err) => {
-		console.error('[Admin] crew-booked spots could not be read:', (err as Error)?.message);
-		return new Map<string, string>();
-	});
-	const crewBookedSpots = allBeds.filter(
-		(bed) => !!bed.order && crewBooked.get(bed.id) === bed.order
-	).length;
-
-	// The same derivation the live endpoint (/admin/api/stats) runs, so the
-	// first paint and every poll afterwards count spots identically. The spots
-	// come from the reads above, fresh after every action.
-	const live = deriveLiveStats(houses, allRooms, allBeds);
-	const liveByHouse = new Map(live.houses.map((house) => [house.id, house]));
-	const ops = await opsRead;
-
-	const housesWithStats: HouseStats[] = houses.map((house: HousesResponse) => {
-		const spots = liveByHouse.get(house.id);
-		const total = spots?.total ?? 0;
-		return {
-			...structuredClone(house),
-			totalBeds: total,
-			occupiedBeds: spots?.occupied ?? 0,
-			freeBeds: spots?.free ?? 0,
-			checkedInBeds: spots?.checkedIn ?? 0,
-			occupancyRate: total > 0 ? Math.round(((spots?.occupied ?? 0) / total) * 100) : 0
-		};
-	});
-
-	const stats: LiveStats = { changedAt: new Date().toISOString(), ...live, ops };
-
+	]);
+	const { settings } = camp;
 	return {
-		houses: housesWithStats,
-		crewBookedSpots,
-		sanityWarnings,
-		stats,
+		houses: camp.houses,
+		crewBookedSpots: camp.crewBookedSpots,
+		sanityIssues: camp.sanityWarnings.reduce(
+			(sum, warning) => sum + (warning.noRooms ? 1 : 0) + warning.roomsWithNoBeds.length,
+			0
+		),
+		stats: camp.stats,
+		bookings,
 		phase: settings.phase,
 		isBookingActive: settings.isBookingActive,
 		bookingUnlockAt: settings.bookingUnlockAt,

@@ -57,7 +57,7 @@ test.describe('Camp map', () => {
 	test('admin: dragging a pin saves the new position', async ({ page, context }) => {
 		await setBookingPhase(pb, false);
 		await context.addCookies([await adminSessionCookie(pb)]);
-		await page.goto('/admin', { waitUntil: 'networkidle' });
+		await page.goto('/admin/camp', { waitUntil: 'networkidle' });
 
 		const pin = page.locator(`g.house-group[aria-label="House ${house.name}"] circle.hit`);
 		await pin.scrollIntoViewIfNeeded();
@@ -84,7 +84,7 @@ test.describe('Camp map', () => {
 		await setBookingPhase(pb, true);
 		const before = await pb.collection('houses').getOne(house.id);
 		await context.addCookies([await adminSessionCookie(pb)]);
-		await page.goto('/admin', { waitUntil: 'networkidle' });
+		await page.goto('/admin/camp', { waitUntil: 'networkidle' });
 
 		const pin = page.locator(`g.house-group[aria-label="House ${house.name}"] circle.hit`);
 		await pin.scrollIntoViewIfNeeded();
@@ -104,14 +104,11 @@ test.describe('Camp map', () => {
 		expect([after.x, after.y]).toEqual([before.x, before.y]);
 	});
 
-	test('admin: typed coordinates are locked during Live Booking too', async ({
-		page,
-		context
-	}) => {
+	test('admin: typed coordinates are locked during Live Booking too', async ({ page, context }) => {
 		await setBookingPhase(pb, true);
 		const before = await pb.collection('houses').getOne(house.id);
 		await context.addCookies([await adminSessionCookie(pb)]);
-		await page.goto('/admin', { waitUntil: 'networkidle' });
+		await page.goto('/admin/camp', { waitUntil: 'networkidle' });
 
 		await page.locator(`g.house-group[aria-label="House ${house.name}"]`).focus();
 		await page.keyboard.press('Enter');

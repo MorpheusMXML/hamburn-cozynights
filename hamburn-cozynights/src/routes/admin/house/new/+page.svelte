@@ -64,7 +64,7 @@
 			submitting = false;
 			if (result.type === 'success') {
 				toast(`🛖 "${name.trim()}" was created. Drag its pin to the right place.`, 'success');
-				await goto('/admin', { invalidateAll: true });
+				await goto('/admin/camp', { invalidateAll: true });
 			} else if (result.type === 'failure') {
 				showFailure(result.data as Failure);
 				revealInvalid(formElement);
@@ -84,7 +84,7 @@
 
 <div class="edit-container">
 	<nav class="breadcrumbs" aria-label="Breadcrumb">
-		<a href="/admin">Control Center</a> <span class="sep">/</span>
+		<a href="/admin/camp">Map & houses</a> <span class="sep">/</span>
 		<span class="current">New house</span>
 	</nav>
 	<h1>Add New House 🛖</h1>
@@ -155,7 +155,7 @@
 		{/if}
 
 		<div class="actions">
-			<a href="/admin" class="btn-cancel">Cancel</a>
+			<a href="/admin/camp" class="btn-cancel">Cancel</a>
 			<button type="submit" class="btn-save" disabled={submitting} {...lockAttrs(addLock)}>
 				{submitting ? 'Saving…' : 'Save House'}
 			</button>

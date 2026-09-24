@@ -24,7 +24,7 @@ timeline
 - [ ] **Houses on the map.** Every house is placed where it really is. See [Houses, rooms & spots](./camp-layout).
 - [ ] **Rooms and spots complete.** Room names and numbers match the signs on the doors.
 - [ ] **Spot states checked.** New spots are active right away. Deactivate ❄️ the ones that aren't in use; after a template import, look for ⚪️ INACTIVE spots that should be bookable.
-- [ ] **Red alert gone.** The Control Center shows no **RED ALERT: THE CAMP LAYOUT IS INCOMPLETE** panel (no house without rooms, no room without spots). See [Red alert](./index#red-alert-sanity-checks).
+- [ ] **Red alert gone.** *Map & houses* shows no **RED ALERT: THE CAMP LAYOUT IS INCOMPLETE** panel (and the Control Center no red line under *Needs attention*) (no house without rooms, no room without spots). See [Red alert](./index#red-alert-sanity-checks).
 - [ ] **Crew beds locked.** Beds that guests shouldn't book are locked 🔒.
 - [ ] **Special-needs spots marked.** Spots that suit guests with special needs (lower bunks, step-free, quiet, near a toilet, with a socket) are marked ♿ on their room pages. See [Special-needs requests](./special-needs).
 - [ ] **Special-needs requests opened** in the Control Center, once the tickets are loaded, and announced to guests together with the booking date.
@@ -47,12 +47,12 @@ timeline
 
 - [ ] **Watch the switch.** At the opening time the panel turns 🎪 LIVE BOOKING by itself, and guests see the countdown to the closing time at the top of every page. The crew group gets *Booking is LIVE now*.
 - [ ] **Need more time?** Move the closing time in the panel (at least one day from now for admins; a superuser can do anything).
-- [ ] **Keep an eye on the Intel panel.** In *Show Intel*, the chart on <kbd>24 h</kbd> shows how fast bookings come in, *Needs attention* lists requests waiting for a decision and messages that failed, and the house table sorted by *Most free spots* shows where room is left. See [Intel panel](./index#intel-panel-the-live-picture).
+- [ ] **Keep an eye on the Intel panel.** On the Control Center, the Intel panel's chart on <kbd>24 h</kbd> shows how fast bookings come in, *Needs attention* lists requests waiting for a decision and messages that failed, and the house table sorted by *Most free spots* shows where room is left. See [Intel panel](./index#intel-panel-the-live-picture).
 - [ ] **Be reachable.** Typical guest questions are answered in the [FAQ](../guide/faq).
 
 ## During the event
 
-- [ ] **Check guests in at arrival** with their booking pass: 🎫 **Check-in** in the admin header (type the code, scan with the camera or a USB scanner: a known pass is checked in right away), or the phone camera on the guest's QR code and <kbd>✅ Check in</kbd>. A checked-in guest can't release their spot anymore; a mistake is undone with <kbd>↩️ Undo check-in</kbd>. *Show Intel* counts them per hour, and its house table sorted by *Most still to check in* shows where guests are still missing. See [Booking passes & check-in](./passes).
+- [ ] **Check guests in at arrival** with their booking pass: <kbd>🎫 Check-in desk</kbd> in the admin menu (type the code, scan with the camera or a USB scanner: a known pass is checked in right away), or the phone camera on the guest's QR code and <kbd>✅ Check in</kbd>. A checked-in guest can't release their spot anymore; a mistake is undone with <kbd>↩️ Undo check-in</kbd>. No pass with them? Find them on <kbd>🛏️ Bookings</kbd> and <kbd>Check in</kbd> there. The Intel panel counts them per hour, its house table sorted by *Most still to check in* shows where guests are still missing, and the bookings list opens on *still to arrive* — who exactly. See [Booking passes & check-in](./passes) and [Bookings & check-ins](./bookings).
 
 - [ ] **Broken bed?** Lock it 🔒 on its room page. That works in every phase.
 - [ ] **Resist restructuring.** Houses, rooms and spots only change in 🛠 Staging, and a superuser's switch back to Staging **offers to release every guest booking** (the dialog says how many there are and how many guests are checked in; released spots lose their burner names and check-ins, it can't be undone, and those guests book again once booking is Live). Keeping them is the other button — then clear them later with 🧨 *Clear all bookings*. During the event only lock 🔒 spots, mark ♿ spots or book a spot for a special-needs request: those work in every phase. If restructuring is unavoidable, export a template first and expect to re-seat every guest by hand; they get a *spot released* e-mail — the dialog's *Don't notify the guests* box starts unticked while booking is still running, because those guests have to book again. See [After the burn](#after-the-burn).

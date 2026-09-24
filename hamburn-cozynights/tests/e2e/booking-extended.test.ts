@@ -184,17 +184,11 @@ test.describe('Extended Booking & Admin Flow', () => {
 		await adminPage.goto('/admin');
 		await expect(adminPage).toHaveURL(/\/admin(\/)?$/, { timeout: 15000 });
 
-		// Helper to ensure we are in List View (stats cards are visible).
-		// TRACE: adminPage.reload() resets the UI state to default (Map View).
-		// Retried: a click before the page has hydrated does nothing.
+		// The house cards live in the camp editor's list view (/admin/camp?view=list);
+		// a reload keeps the view, it is in the address.
 		const ensureListView = async () => {
-			await expect(async () => {
-				const btn = adminPage.locator('button', { hasText: 'LIST VIEW' });
-				if (await btn.isVisible()) await btn.click();
-				await expect(adminPage.locator('button', { hasText: 'MAP VIEW' })).toBeVisible({
-					timeout: 1500
-				});
-			}).toPass({ timeout: 15000 });
+			if (!adminPage.url().includes('/admin/camp')) await adminPage.goto('/admin/camp?view=list');
+			await expect(adminPage.locator('.grid-view')).toBeVisible({ timeout: 15000 });
 		};
 
 		await ensureListView();

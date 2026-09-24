@@ -208,6 +208,10 @@ export function findLayoutProblems(options: LayoutCheckOptions): LayoutProblem[]
 			continue;
 		}
 		if (isIgnored(parent) || !isShown(parent)) continue;
+		// A decorative glyph drawn on a map pin (aria-hidden text inside an SVG)
+		// is part of the pin: at the map's edge the pin is cut off and the glyph
+		// with it, and nobody reads it. Every other SVG text (labels) still counts.
+		if (parent.getAttribute('aria-hidden') === 'true' && parent.closest('svg')) continue;
 		const block = blockOf(parent);
 		const blockStyle = getComputedStyle(block);
 		const truncated = blockStyle.textOverflow === 'ellipsis';

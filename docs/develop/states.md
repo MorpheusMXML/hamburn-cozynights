@@ -37,7 +37,7 @@ still — for something that just went wrong, see the form fields).
 The ring is drawn by a pseudo-element and animates **`opacity` only**. That
 stays on the compositor: a list of forty house cards costs no repaints per
 frame. Animating `border-color` or `box-shadow` instead — as the older
-`pulse-glow` in `layout.css` still does (Baustelle #74) — repaints every frame
+`pulse-glow` in `layout.css` still does (a leftover to replace) — repaints every frame
 for every element.
 
 The element also keeps a static border in its state colour, so the state is
@@ -222,6 +222,22 @@ there is no socket to subscribe to. The control center polls instead.
 The page merges the answer into the numbers only. Which houses exist, and
 where their pins stand, still comes from the page load — if that changed, the
 panel offers a reload instead of drifting.
+
+### Who booked: names only after a change
+
+The snapshot stays counts only. Pages that show *who* holds a spot — the
+Control Center's bookings card, the camp editor's house sidebar, the bookings
+list, the room and house pages — build their rows with
+`readBookings(adminPb, { houseId?, roomId? })` (`$lib/server/bookings.ts`):
+the booked beds, their rooms and houses, and only the tickets on them (read in
+chunks of 50 ids), masked by the check-in desk's rules (`holderName`,
+`maskEmail`, `maskTicketCode`, the burner name decrypted). The browser keeps
+them current with `createBookingsFeed()` (`$lib/live-bookings.ts`): every
+snapshot of the poll goes to `follow()`, and only when `changedAt` moved does
+it ask `GET /admin/api/bookings` once (admins only, `no-store, private`). So
+names travel once per change, never with every 5-second tick, and never
+through the shared cache. Filters, search and sorting are pure functions in
+`$lib/bookings.ts`, shared by server and browser (`tests/bookings.test.ts`).
 
 ### Adding a number to the panel
 

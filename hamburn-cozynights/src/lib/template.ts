@@ -5,9 +5,33 @@
  * import actions, the export endpoint, the admin UI and the unit tests.
  */
 import { MAP_WIDTH, MAP_HEIGHT, MAP_IMAGE, MIN_HOUSE_DISTANCE } from './map-geometry';
+import {
+	BED_TYPES,
+	DESCRIPTION_MAX,
+	HOUSE_KINDS,
+	ROOM_KINDS,
+	cleanDescription,
+	featuresFor,
+	isBedType,
+	isFeature,
+	isHouseKind,
+	isRoomKind,
+	readFeatures,
+	type BedType,
+	type Feature,
+	type FeatureLevel,
+	type HouseKind,
+	type RoomKind
+} from './accommodation';
+
+const HOUSE_KIND_VALUES = HOUSE_KINDS.map((kind) => kind.value);
+const ROOM_KIND_VALUES = ROOM_KINDS.map((kind) => kind.value);
+const BED_TYPE_VALUES = BED_TYPES.map((type) => type.value);
 
 export const TEMPLATE_FORMAT = 'cozynights-layout';
-export const TEMPLATE_VERSION = '2.0';
+export const TEMPLATE_VERSION = '2.1';
+/** Older exports this app still reads. */
+export const TEMPLATE_OLD_VERSIONS = ['1.0', '2.0'] as const;
 
 export const TEMPLATE_LIMITS = {
 	fileBytes: 1024 * 1024,
@@ -17,7 +41,8 @@ export const TEMPLATE_LIMITS = {
 	houseNameLength: 100,
 	roomNameLength: 100,
 	bedLabelLength: 50,
-	roomNumber: 9999
+	roomNumber: 9999,
+	descriptionLength: DESCRIPTION_MAX
 } as const;
 
 /** Long lists of problems are cut off here; nobody reads the 51st line. */
@@ -32,11 +57,23 @@ export interface TemplateBed {
 	 * layouts without special-needs spots look exactly like before.
 	 */
 	is_special?: true;
+	/** What kind of bed it is (src/lib/accommodation.ts); left out when unknown. */
+	bed_type?: BedType;
+	/** What is true for this spot itself; left out when empty. */
+	features?: Feature[];
+	/**
+	 * The label of the other spot of a bunk bed, in the same room; written on
+	 * both spots (src/lib/bunks.ts). Left out for a spot that stands alone.
+	 */
+	bunk_partner?: string;
 }
 
 export interface TemplateRoom {
 	name: string;
 	room_number: number;
+	kind?: RoomKind;
+	features?: Feature[];
+	description?: string;
 	beds: TemplateBed[];
 }
 
@@ -44,6 +81,9 @@ export interface TemplateHouse {
 	name: string;
 	x: number;
 	y: number;
+	kind?: HouseKind;
+	features?: Feature[];
+	description?: string;
 	rooms: TemplateRoom[];
 }
 
@@ -97,15 +137,74 @@ export function summarizeTemplate(houses: TemplateHouse[]): TemplateSummary {
 
 /** The records an export is built from (what PocketBase returns, ids included). */
 export interface LayoutRecords {
-	houses: { id: string; name: string; x?: number; y?: number }[];
-	rooms: { id: string; house: string; name: string; room_number?: number }[];
+	houses: {
+		id: string;
+		name: string;
+		x?: number;
+		y?: number;
+		kind?: string;
+		features?: string[];
+		description?: string;
+	}[];
+	rooms: {
+		id: string;
+		house: string;
+		name: string;
+		room_number?: number;
+		kind?: string;
+		features?: string[];
+		description?: string;
+	}[];
 	beds: {
+		/** Needed to name a spot as another spot's bunk partner. */
+		id?: string;
 		room: string;
 		label?: string;
 		enabled?: boolean;
 		is_locked?: boolean;
 		is_special?: boolean;
+		bed_type?: string;
+		/** A list, or the single value PocketBase returns for a one-value select. */
+		features?: string[] | string;
+		/** The record id of the other spot of a bunk bed. */
+		bunk_partner?: string;
 	}[];
+}
+
+/**
+ * Details are written only when they are there: a layout nobody described
+ * exports exactly as it did before, and the file stays short.
+ */
+function details<K extends string>(
+	level: FeatureLevel,
+	record: { kind?: string; features?: string[]; description?: string },
+	isKind: (value: unknown) => value is K
+): { kind?: K; features?: Feature[]; description?: string } {
+	const features = readFeatures(record.features, level);
+	const description = cleanDescription(record.description).slice(
+		0,
+		TEMPLATE_LIMITS.descriptionLength
+	);
+	return {
+		...(isKind(record.kind) ? { kind: record.kind } : {}),
+		...(features.length > 0 ? { features } : {}),
+		...(description ? { description } : {})
+	};
+}
+
+/**
+ * The label of a spot's bunk partner, when the two spots of the room point at
+ * each other and the partner has a label; '' otherwise (a half-written pairing
+ * is not exported, the app shows it as two single spots too).
+ */
+function bunkPartnerLabel(
+	bed: LayoutRecords['beds'][number],
+	roomBeds: readonly LayoutRecords['beds'][number][]
+): string {
+	if (!bed.id || !bed.bunk_partner) return '';
+	const partner = roomBeds.find((other) => other.id === bed.bunk_partner);
+	if (!partner || partner.bunk_partner !== bed.id) return '';
+	return partner.label ?? '';
 }
 
 /** Builds a version 2.0 template from flat record lists, in a stable order. */
@@ -119,6 +218,7 @@ export function buildTemplate(records: LayoutRecords, exportedAt = new Date()): 
 			name: house.name,
 			x: house.x ?? 0,
 			y: house.y ?? 0,
+			...details('house', house, isHouseKind),
 			rooms: (roomsByHouse.get(house.id) ?? [])
 				.sort(
 					(a, b) => (a.room_number ?? 0) - (b.room_number ?? 0) || compareNatural(a.name, b.name)
@@ -126,13 +226,21 @@ export function buildTemplate(records: LayoutRecords, exportedAt = new Date()): 
 				.map((room) => ({
 					name: room.name,
 					room_number: room.room_number ?? 0,
+					...details('room', room, isRoomKind),
 					beds: (bedsByRoom.get(room.id) ?? [])
-						.map((bed): TemplateBed => ({
-							label: bed.label ?? '',
-							enabled: bed.enabled !== false,
-							is_locked: bed.is_locked === true,
-							...(bed.is_special === true ? { is_special: true } : {})
-						}))
+						.map((bed, _index, roomBeds): TemplateBed => {
+							const features = readFeatures(bed.features, 'spot');
+							const partner = bunkPartnerLabel(bed, roomBeds);
+							return {
+								label: bed.label ?? '',
+								enabled: bed.enabled !== false,
+								is_locked: bed.is_locked === true,
+								...(bed.is_special === true ? { is_special: true } : {}),
+								...(isBedType(bed.bed_type) ? { bed_type: bed.bed_type } : {}),
+								...(features.length > 0 ? { features } : {}),
+								...(partner ? { bunk_partner: partner } : {})
+							};
+						})
 						.sort((a, b) => compareNatural(a.label, b.label))
 				}))
 		}));
@@ -156,9 +264,10 @@ export function stringifyTemplate(template: LayoutTemplate): string {
 		(key, value) =>
 			key === 'beds' && Array.isArray(value)
 				? (value as TemplateBed[]).map((bed) => {
-						spotLines.push(
-							`{ "label": ${JSON.stringify(bed.label)}, "enabled": ${bed.enabled}, "is_locked": ${bed.is_locked}${bed.is_special ? ', "is_special": true' : ''} }`
+						const fields = Object.entries(bed).map(
+							([field, own]) => `${JSON.stringify(field)}: ${JSON.stringify(own)}`
 						);
+						spotLines.push(`{ ${fields.join(', ')} }`);
 						return `${mark}${spotLines.length - 1}`;
 					})
 				: value,
@@ -255,15 +364,17 @@ export function validateTemplate(data: unknown): TemplateParseResult {
 	}
 
 	const version = typeof data.version === 'number' ? data.version.toFixed(1) : data.version;
+	const known = (value: unknown): value is string =>
+		value === TEMPLATE_VERSION || TEMPLATE_OLD_VERSIONS.some((old) => old === value);
 	if (isMissing(version)) {
 		errors.push(`version: is missing. Add "version": "${TEMPLATE_VERSION}" to the file.`);
-	} else if (version !== '1.0' && version !== TEMPLATE_VERSION) {
+	} else if (!known(version)) {
 		errors.push(
-			`version: must be "${TEMPLATE_VERSION}" (or "1.0" for older exports), got ${show(data.version)}. A file from a newer app version can't be imported here.`
+			`version: must be "${TEMPLATE_VERSION}" (or ${TEMPLATE_OLD_VERSIONS.map((old) => `"${old}"`).join(' / ')} for older exports), got ${show(data.version)}. A file from a newer app version can't be imported here.`
 		);
-	} else if (version === TEMPLATE_VERSION && isMissing(data.format)) {
+	} else if (version !== '1.0' && isMissing(data.format)) {
 		errors.push(
-			`format: is missing. A version ${TEMPLATE_VERSION} file needs "format": "${TEMPLATE_FORMAT}".`
+			`format: is missing. A version ${version} file needs "format": "${TEMPLATE_FORMAT}".`
 		);
 	}
 
@@ -395,6 +506,97 @@ function readFlag(
 	return fallback;
 }
 
+/** "house / hut_group / tent_area / other" for an error message. */
+const listed = (values: readonly string[]) => values.map((value) => `"${value}"`).join(', ');
+
+function readKind<K extends string>(
+	value: unknown,
+	where: string,
+	field: string,
+	isKind: (candidate: unknown) => candidate is K,
+	allowed: readonly K[],
+	errors: string[]
+): K | undefined {
+	if (isMissing(value) || value === '') return undefined;
+	if (isKind(value)) return value;
+	errors.push(
+		`${where}: ${field} must be one of ${listed(allowed)} (got ${show(value)}). Leave it out when you don't want to say.`
+	);
+	return undefined;
+}
+
+function readDetailFeatures(
+	value: unknown,
+	where: string,
+	level: FeatureLevel,
+	errors: string[]
+): Feature[] | undefined {
+	if (isMissing(value)) return undefined;
+	const allowed = featuresFor(level);
+	if (!Array.isArray(value)) {
+		errors.push(
+			`${where}: features must be a list like ["${allowed[0]?.value ?? 'quiet'}"] (got ${show(value)}).`
+		);
+		return undefined;
+	}
+	for (const entry of value) {
+		if (!isFeature(entry, level)) {
+			errors.push(
+				`${where}: ${show(entry)} is not a feature a ${level} can have. Use one of ${listed(allowed.map((feature) => feature.value))}.`
+			);
+			return undefined;
+		}
+	}
+	const features = readFeatures(value, level);
+	const opposites = allowed.filter(
+		(feature) =>
+			feature.opposite && features.includes(feature.value) && features.includes(feature.opposite)
+	);
+	if (opposites.length > 0) {
+		const [first] = opposites;
+		errors.push(
+			`${where}: "${first.value}" and "${first.opposite}" say the opposite of each other, so only one of them can be set.`
+		);
+		return undefined;
+	}
+	return features.length > 0 ? features : undefined;
+}
+
+function readDescription(value: unknown, where: string, errors: string[]): string | undefined {
+	if (isMissing(value) || value === '') return undefined;
+	if (typeof value !== 'string') {
+		errors.push(`${where}: description must be text in quotes (got ${show(value)}).`);
+		return undefined;
+	}
+	const text = cleanDescription(value);
+	if (text.length > TEMPLATE_LIMITS.descriptionLength) {
+		errors.push(
+			`${where}: the description is too long (${text.length} characters, the limit is ${TEMPLATE_LIMITS.descriptionLength}).`
+		);
+		return undefined;
+	}
+	return text || undefined;
+}
+
+/** kind, features and description of a house or room; each one may be left out. */
+function readDetails<K extends string>(
+	entry: Json,
+	where: string,
+	level: Exclude<FeatureLevel, 'spot'>,
+	isKind: (candidate: unknown) => candidate is K,
+	allowed: readonly K[],
+	errors: string[]
+): { kind?: K; features?: Feature[]; description?: string } {
+	const kind = readKind(entry.kind, where, 'kind', isKind, allowed, errors);
+	const features = readDetailFeatures(entry.features, where, level, errors);
+	const description = readDescription(entry.description, where, errors);
+	return {
+		...(kind ? { kind } : {}),
+		...(features ? { features } : {}),
+		...(description ? { description } : {})
+	};
+}
+
 function readHouse(
 	entry: unknown,
 	path: string,
@@ -412,6 +614,7 @@ function readHouse(
 		name: readText(entry.name, where, 'name', TEMPLATE_LIMITS.houseNameLength, errors),
 		x: readCoordinate(entry.x, where, 'x', MAP_WIDTH, errors),
 		y: readCoordinate(entry.y, where, 'y', MAP_HEIGHT, errors),
+		...readDetails(entry, where, 'house', isHouseKind, HOUSE_KIND_VALUES, errors),
 		rooms: []
 	};
 
@@ -444,6 +647,7 @@ function readHouse(
 		const room: TemplateRoom = {
 			name: readText(roomEntry.name, roomWhere, 'name', TEMPLATE_LIMITS.roomNameLength, errors),
 			room_number: 0,
+			...readDetails(roomEntry, roomWhere, 'room', isRoomKind, ROOM_KIND_VALUES, errors),
 			beds: []
 		};
 
@@ -541,6 +745,20 @@ function readBeds(room: Json, where: string, errors: string[], warnings: string[
 			is_locked: readFlag(entry.is_locked, bedWhere, 'is_locked', false, errors)
 		};
 		if (readFlag(entry.is_special, bedWhere, 'is_special', false, errors)) bed.is_special = true;
+		const type = readKind(entry.bed_type, bedWhere, 'bed_type', isBedType, BED_TYPE_VALUES, errors);
+		if (type) bed.bed_type = type;
+		const bedFeatures = readDetailFeatures(entry.features, bedWhere, 'spot', errors);
+		if (bedFeatures) bed.features = bedFeatures;
+		if (!isMissing(entry.bunk_partner)) {
+			const partner = readText(
+				entry.bunk_partner,
+				bedWhere,
+				'bunk_partner',
+				TEMPLATE_LIMITS.bedLabelLength,
+				errors
+			);
+			if (partner) bed.bunk_partner = partner;
+		}
 		const key = bed.label.toLowerCase();
 		if (key && firstUse.has(key)) {
 			errors.push(
@@ -551,7 +769,96 @@ function readBeds(room: Json, where: string, errors: string[], warnings: string[
 		}
 		beds.push(bed);
 	});
+	checkBunks(beds, where, errors);
 	return beds;
+}
+
+/**
+ * Bunk beds in a file: a partner must be another spot of the same room, may
+ * be named by one spot only, and the two spots must agree. A pairing written
+ * on one spot only is completed; the levels are filled in from the bed types
+ * (the first spot of the file is the lower bunk when neither says).
+ */
+function checkBunks(beds: TemplateBed[], where: string, errors: string[]) {
+	const byLabel = new Map(beds.map((bed) => [bed.label.toLowerCase(), bed]));
+	const takenBy = new Map<TemplateBed, TemplateBed>();
+	const name = (bed: TemplateBed) => `"${bed.label}"`;
+	const problem = (bed: TemplateBed, text: string) =>
+		errors.push(`${where} > ${name(bed)}: ${text}`);
+
+	for (const bed of beds) {
+		if (!bed.bunk_partner) continue;
+		const partner = byLabel.get(bed.bunk_partner.toLowerCase());
+		if (!partner) {
+			problem(bed, `bunk_partner "${bed.bunk_partner}" is not a spot of this room.`);
+			delete bed.bunk_partner;
+			continue;
+		}
+		if (partner === bed) {
+			problem(bed, 'a spot cannot be its own bunk_partner.');
+			delete bed.bunk_partner;
+			continue;
+		}
+		if (partner.bunk_partner && byLabel.get(partner.bunk_partner.toLowerCase()) !== bed) {
+			problem(
+				bed,
+				`names ${name(partner)} as its bunk_partner, but ${name(partner)} names "${partner.bunk_partner}". A spot has one bunk partner.`
+			);
+			delete bed.bunk_partner;
+			continue;
+		}
+		const claimant = takenBy.get(partner);
+		if (claimant && claimant !== bed) {
+			problem(
+				bed,
+				`names ${name(partner)} as its bunk_partner, but so does ${name(claimant)}. A spot has one bunk partner.`
+			);
+			delete bed.bunk_partner;
+			continue;
+		}
+		takenBy.set(partner, bed);
+		// The other spot may leave the field out: the pairing is completed here.
+		bed.bunk_partner = partner.label;
+		partner.bunk_partner = bed.label;
+	}
+
+	// Levels: a stacked spot is a lower or an upper bunk, nothing else.
+	const done = new Set<TemplateBed>();
+	for (const bed of beds) {
+		if (!bed.bunk_partner || done.has(bed)) continue;
+		const partner = byLabel.get(bed.bunk_partner.toLowerCase());
+		if (!partner) continue;
+		done.add(bed);
+		done.add(partner);
+		const levels = [bed, partner].map((spot) =>
+			spot.bed_type === 'bunk_lower' ? 'lower' : spot.bed_type === 'bunk_upper' ? 'upper' : ''
+		);
+		const odd = [bed, partner].find(
+			(spot) => spot.bed_type && spot.bed_type !== 'bunk_lower' && spot.bed_type !== 'bunk_upper'
+		);
+		if (odd) {
+			problem(
+				odd,
+				`is stacked with ${name(odd === bed ? partner : bed)}, so its bed_type must be "bunk_lower" or "bunk_upper" (got "${odd.bed_type}").`
+			);
+			continue;
+		}
+		if (levels[0] && levels[0] === levels[1]) {
+			problem(
+				bed,
+				`and ${name(partner)} are both the ${levels[0]} bunk. One of them is the other level.`
+			);
+			continue;
+		}
+		if (!levels[0] && !levels[1]) {
+			bed.bed_type = 'bunk_lower';
+			partner.bed_type = 'bunk_upper';
+		} else if (!levels[0]) {
+			bed.bed_type = levels[1] === 'lower' ? 'bunk_upper' : 'bunk_lower';
+		} else if (!levels[1]) {
+			partner.bed_type = levels[0] === 'lower' ? 'bunk_upper' : 'bunk_lower';
+		}
+	}
 }
 
 function warnAboutCloseHouses(houses: TemplateHouse[], warnings: string[]) {

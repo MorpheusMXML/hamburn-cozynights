@@ -5,6 +5,7 @@ import { load as roomLoad, actions as roomActions } from '../src/routes/room/[id
 import { actions as adminActions } from '../src/routes/admin/room/[id]/+page.server';
 import { actions as houseAdminActions } from '../src/routes/admin/house/[id]/+page.server';
 import { APP_SETTINGS_ID } from '../src/lib/server/constants';
+import { FakePb } from './fake-pb';
 
 // Mock environment variables
 vi.mock('$env/dynamic/private', () => ({
@@ -161,7 +162,11 @@ describe('Room Load & Booking Logic', () => {
 		]); // beds list
 		mockAdminPb.update.mockResolvedValueOnce({}); // migration update
 
-		const result: any = await roomLoad({ params: { id: 'room1' }, locals: mockLocals } as any);
+		const result: any = await roomLoad({
+			url: new URL('http://test.local/'),
+			params: { id: 'room1' },
+			locals: mockLocals
+		} as any);
 
 		expect(result.room.id).toBe('room1');
 		expect(result.beds.length).toBe(2);
@@ -173,7 +178,12 @@ describe('Room Load & Booking Logic', () => {
 			label: 'A2',
 			occupied: true,
 			bookable: false,
-			burnerName: 'Dusty Nomad #123'
+			burnerName: 'Dusty Nomad #123',
+			// what kind of bed it is and what only this spot has; nobody said here
+			bedType: '',
+			features: [],
+			// the other spot of a bunk bed; this one stands alone
+			bunkPartner: ''
 		});
 	});
 
@@ -194,7 +204,11 @@ describe('Room Load & Booking Logic', () => {
 			}
 		]);
 
-		const result: any = await roomLoad({ params: { id: 'room1' }, locals: mockLocals } as any);
+		const result: any = await roomLoad({
+			url: new URL('http://test.local/'),
+			params: { id: 'room1' },
+			locals: mockLocals
+		} as any);
 		const serialized = JSON.stringify(result);
 
 		expect(serialized).not.toContain('SECRET-CODE-42');
@@ -389,7 +403,12 @@ describe('Admin Management Actions', () => {
 			await adminActions.deleteBed({ request, locals: noAdmin } as any),
 			await adminActions.toggleOccupied({ request, locals: noAdmin } as any),
 			await adminActions.toggleEnabled({ request, locals: noAdmin } as any),
-			await adminActions.toggleLocked({ request, locals: noAdmin } as any)
+			await adminActions.toggleLocked({ request, locals: noAdmin } as any),
+			await adminActions.saveSpot({ request, params: { id: 'r' }, locals: noAdmin } as any),
+			await adminActions.setBedTypes({ request, params: { id: 'r' }, locals: noAdmin } as any),
+			await adminActions.stackBunk({ request, params: { id: 'r' }, locals: noAdmin } as any),
+			await adminActions.unstackBunk({ request, params: { id: 'r' }, locals: noAdmin } as any),
+			await adminActions.swapBunk({ request, params: { id: 'r' }, locals: noAdmin } as any)
 		] as any[];
 
 		for (const result of results) expect(result.status).toBe(403);
@@ -400,6 +419,8 @@ describe('Admin Management Actions', () => {
 
 	it('should create a room with active spots in staging mode', async () => {
 		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: false }); // Staging mode
+		// the house the room belongs to: its kind decides the new room's kind
+		mockPb.getOne.mockResolvedValueOnce({ id: 'house1', name: 'Villa', kind: 'house' });
 		mockPb.create.mockResolvedValueOnce({ id: 'room1' }); // Room created
 
 		const formData = new FormData();
@@ -415,7 +436,7 @@ describe('Admin Management Actions', () => {
 		} as any);
 
 		expect(mockPb.create).toHaveBeenCalledWith(
-			expect.objectContaining({ name: 'Villa Suite', house: 'house1' })
+			expect.objectContaining({ name: 'Villa Suite', house: 'house1', kind: 'room' })
 		);
 		expect(mockPb.create).toHaveBeenCalledWith(
 			expect.objectContaining({ label: 'Spot 1', room: 'room1', enabled: true })
@@ -472,5 +493,153 @@ describe('Admin Management Actions', () => {
 		await adminActions.toggleLocked({ request, locals: mockLocals } as any);
 
 		expect(mockPb.update).toHaveBeenCalledWith('bed1', { is_locked: true });
+	});
+
+	describe('Bunk beds', () => {
+		type Row = Record<string, any>;
+
+		/** A browser's form post with these fields; an array repeats the field. */
+		const form = (fields: Record<string, string | string[]>) => {
+			const data = new FormData();
+			for (const [key, value] of Object.entries(fields)) {
+				for (const one of Array.isArray(value) ? value : [value]) data.append(key, one);
+			}
+			return { formData: async () => data } as any;
+		};
+
+		/**
+		 * A room of spots in the fake PocketBase, seeded in the order given (the
+		 * real database lists B1, B10, B2; the actions sort naturally), and the
+		 * room page's actions posted to it as the admin of this file.
+		 */
+		function seedRoom(labels: string[]) {
+			const pb = new FakePb();
+			const room = pb.seed('rooms', { name: 'Dorm', house: 'house1' });
+			const ids: Record<string, string> = {};
+			for (const label of labels) {
+				ids[label] = pb.seed('beds', {
+					label,
+					room: room.id,
+					enabled: true,
+					occupied: false,
+					bed_type: '',
+					bunk_partner: '',
+					features: []
+				}).id;
+			}
+			const locals = { pb, admin: mockLocals.admin };
+			const post = async (action: string, fields: Record<string, string | string[]>) =>
+				(await adminActions[action]({
+					request: form(fields),
+					params: { id: room.id },
+					locals
+				} as any)) as any;
+			const spot = (label: string): Row => pb.rows('beds').find((row) => row.label === label)!;
+			return { pb, ids, post, spot };
+		}
+
+		it('stacks two spots into a bunk bed, written on both sides', async () => {
+			const { ids, post, spot } = seedRoom(['B1', 'B2', 'B3']);
+
+			const result = await post('stackBunk', { lower: ids.B1, upper: ids.B2 });
+
+			expect(result).toEqual({ success: true });
+			expect(spot('B1')).toMatchObject({ bunk_partner: ids.B2, bed_type: 'bunk_lower' });
+			expect(spot('B2')).toMatchObject({ bunk_partner: ids.B1, bed_type: 'bunk_upper' });
+			expect(spot('B3')).toMatchObject({ bunk_partner: '', bed_type: '' });
+		});
+
+		it('refuses to stack a spot on itself, one of another room, or one stacked already', async () => {
+			const { pb, ids, post, spot } = seedRoom(['B1', 'B2', 'B3']);
+			const elsewhere = pb.seed('beds', { label: 'C1', room: 'other-room', bunk_partner: '' });
+			await post('stackBunk', { lower: ids.B1, upper: ids.B2 });
+
+			const refused = [
+				await post('stackBunk', { lower: ids.B3, upper: ids.B3 }),
+				await post('stackBunk', { lower: ids.B3, upper: elsewhere.id }),
+				await post('stackBunk', { lower: ids.B3, upper: ids.B2 }),
+				await post('stackBunk', { lower: ids.B1, upper: ids.B3 })
+			];
+
+			expect(refused.map((result) => result.status)).toEqual([400, 400, 400, 400]);
+			expect(refused[0].data.message).toMatch(/cannot be stacked on itself/);
+			expect(refused[1].data.message).toMatch(/not in this room/);
+			expect(refused[2].data.message).toMatch(/"B2" is part of a bunk bed already/);
+			expect(refused[3].data.message).toMatch(/"B1" is part of a bunk bed already/);
+			// Nothing was written: B3 and the other room's spot still stand alone.
+			expect(spot('B3')).toMatchObject({ bunk_partner: '', bed_type: '' });
+			expect(spot('C1').bunk_partner).toBe('');
+		});
+
+		it('takes a bunk bed apart from either of its spots', async () => {
+			const { ids, post, spot } = seedRoom(['B1', 'B2', 'B3']);
+			await post('stackBunk', { lower: ids.B1, upper: ids.B2 });
+
+			expect(await post('unstackBunk', { id: ids.B2 })).toEqual({ success: true });
+
+			for (const label of ['B1', 'B2']) {
+				expect(spot(label)).toMatchObject({ bunk_partner: '', bed_type: '' });
+			}
+			// A spot that stands alone has nothing to take apart.
+			const alone = await post('unstackBunk', { id: ids.B3 });
+			expect(alone.status).toBe(400);
+			expect(alone.data.message).toMatch(/not part of a bunk bed/);
+		});
+
+		it('swaps the two levels of a bunk bed and keeps the pairing', async () => {
+			const { ids, post, spot } = seedRoom(['B1', 'B2']);
+			await post('stackBunk', { lower: ids.B1, upper: ids.B2 });
+
+			expect(await post('swapBunk', { id: ids.B2 })).toEqual({ success: true });
+
+			expect(spot('B1')).toMatchObject({ bunk_partner: ids.B2, bed_type: 'bunk_upper' });
+			expect(spot('B2')).toMatchObject({ bunk_partner: ids.B1, bed_type: 'bunk_lower' });
+		});
+
+		it('SPOT TYPES "bunks" stacks consecutive spots in natural label order, "single" takes them apart', async () => {
+			// Seeded as PocketBase sorts labels (B1, B10, B11, B2, …): the action
+			// pairs B1 + B2, …, B9 + B10 all the same, and B11 has nobody left.
+			const labels = ['B1', 'B10', 'B11', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9'];
+			const { ids, post, spot } = seedRoom(labels);
+
+			expect(await post('setBedTypes', { pattern: 'bunks' })).toEqual({ success: true });
+
+			const pairs = [
+				['B1', 'B2'],
+				['B3', 'B4'],
+				['B5', 'B6'],
+				['B7', 'B8'],
+				['B9', 'B10']
+			];
+			for (const [lower, upper] of pairs) {
+				expect(spot(lower)).toMatchObject({ bunk_partner: ids[upper], bed_type: 'bunk_lower' });
+				expect(spot(upper)).toMatchObject({ bunk_partner: ids[lower], bed_type: 'bunk_upper' });
+			}
+			expect(spot('B11')).toMatchObject({ bunk_partner: '', bed_type: '' });
+
+			expect(await post('setBedTypes', { pattern: 'single' })).toEqual({ success: true });
+			for (const label of labels) {
+				expect(spot(label)).toMatchObject({ bunk_partner: '', bed_type: 'single' });
+			}
+		});
+
+		it('refuses a bed change on a stacked spot, but still saves its features', async () => {
+			const { ids, post, spot } = seedRoom(['B1', 'B2']);
+			await post('stackBunk', { lower: ids.B1, upper: ids.B2 });
+
+			const refused = await post('saveSpot', { id: ids.B1, bed_type: 'single' });
+			expect(refused.status).toBe(400);
+			expect(refused.data.message).toMatch(/part of a bunk bed/);
+			expect(spot('B1')).toMatchObject({ bunk_partner: ids.B2, bed_type: 'bunk_lower' });
+
+			// The details editor sends the stored level back (its select is disabled).
+			const saved = await post('saveSpot', {
+				id: ids.B1,
+				bed_type: 'bunk_lower',
+				features: ['power']
+			});
+			expect(saved).toEqual({ success: true });
+			expect(spot('B1')).toMatchObject({ bed_type: 'bunk_lower', features: ['power'] });
+		});
 	});
 });

@@ -594,7 +594,8 @@ export interface TicketView {
 }
 
 export interface TicketSearch {
-	by: 'code' | 'email';
+	/** booking: opened from a booked spot (Open ticket); `query` names the spot. */
+	by: 'code' | 'email' | 'booking';
 	query: string;
 	tickets: TicketView[];
 	/** More tickets matched than are shown. */

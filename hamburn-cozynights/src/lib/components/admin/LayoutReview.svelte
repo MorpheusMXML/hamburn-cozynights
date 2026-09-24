@@ -7,6 +7,7 @@ difference has a checkbox; `selection` holds the keys of the chosen ones
 takes its rooms and spots along).
 -->
 <script lang="ts">
+	import { houseKindEntry } from '$lib/accommodation';
 	import { slide } from 'svelte/transition';
 	import type { Action } from 'svelte/action';
 	import {
@@ -95,7 +96,12 @@ takes its rooms and spots along).
 		is_special: 'special needs',
 		position: 'position',
 		name: 'name',
-		label: 'label'
+		label: 'label',
+		kind: 'kind',
+		bed_type: 'bed',
+		bunk_partner: 'bunk partner',
+		features: 'features',
+		description: 'description'
 	};
 
 	const describe = (change: FieldChange) =>
@@ -199,7 +205,7 @@ takes its rooms and spots along).
 								disabled={readOnly}
 								on:change={() => choose(house.key)}
 							/>
-							<span class="name">🛖 {house.name}</span>
+							<span class="name">{houseKindEntry(house.kind)?.icon ?? '🛖'} {house.name}</span>
 						</label>
 						{#if house.own}<span class="badge {house.own}">{KIND_LABEL[house.own]}</span>{/if}
 						{#if house.booked > 0 && house.own === 'removed'}

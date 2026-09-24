@@ -23,7 +23,7 @@ flowchart LR
 
 1. **Enter your ticket code**
 
-   Open the CozyNights start page, type your code into the **TICKET CODE** field and press <kbd>ENTER THE DUST 🌵</kbd>.
+   Open the CozyNights start page, type your code into the **TICKET CODE** field and press <kbd>ENTER THE DUST 🌵</kbd>. (The small `v0.18.1` at the top right of the title is the version you are looking at; it helps when you report a problem.)
 
    If the code is refused, the box around it turns red and gives a short shake, the reason appears right under it, and the cursor is back in the field — fix the code and press the button again. The [FAQ](./faq#for-guests) explains every message.
 
@@ -48,6 +48,8 @@ flowchart LR
 4. **Grab a free spot**
 
    Inside the room every spot shows its state (see the table below). Click an **Available** spot.
+
+   A **bunk bed** shows as one stacked card: the upper bunk on top, a small ladder, the lower bunk below. Each half is a spot of its own, with its own state, and is booked on its own. A chip next to the label says **Upper bunk** or **Lower bunk**, and the line under it where the other level is (*above B1*, *below B2*); the booking dialog repeats it: *Spot B2 — the upper bunk above B1.*
 
    ![Room page with free, occupied and reserved spots](../assets/screenshots/guest-room-available.webp)
 
@@ -75,9 +77,39 @@ That's it: fireworks go up from your new spot 🎆, and the spot now shows **You
 
 ![A booked room: the Welcome Home box with the booking pass, the e-mail address and Telegram; your spot, other guests' burner names and spots reserved by the crew](../assets/screenshots/guest-room.webp)
 
+## What a place is like
+
+Houses and rooms can carry a few details, and spots say what kind of bed they are:
+
+| You see | Meaning |
+| --- | --- |
+| 🏠 House · 🛖 Hut group · ⛺ Tent area | What the place on the map is. A hut group is one pin with several huts; the map pin carries the icon, and the house page then asks you to choose a **hut**. |
+| ♿ Wheelchair accessible · ⬇️ Ground floor | A step-free way in with an accessible bathroom, or no stairs to the bed. |
+| 🚻 Toilets + showers inside · 🛁 Own bathroom | In the building itself, or in the room. Nothing written means the toilets are somewhere else on the site — the description usually says where. |
+| 🔥 Heated · ❄️ No heating | Late October nights are cold; this is worth reading. |
+| 🤫 Quiet zone · 🔌 Power socket | A calm corner of the camp; a socket in the room or at the bed. |
+| *Lower bunk · Upper bunk · Single bed · Double bed (shared) · Sofa · Mattress · Camp bed* | What you actually sleep in, under the spot's label. In a stacked bunk bed the level is on the chip next to the label, and the line says *above B1* or *below B2* instead. |
+
+A room shows what its house says too, and the crew can add a sentence of their own ("Showers in the wash house, 50 m along the path").
+
+> [!NOTE] Nothing is invented
+> The app only shows what the crew filled in. An empty spot card means *nobody said*, not *no* — ask the crew if a detail matters to you. If you need a particular kind of spot, [ask for a special-needs spot](./special-needs) instead of guessing.
+
+## Looking for something special?
+
+Above the map, **Looking for…** turns your wishes on and off: <kbd>🛏️ No ladder</kbd>, <kbd>⬇️ Step-free</kbd>, <kbd>🚻 Toilets inside</kbd>, <kbd>🔥 Heated</kbd>, <kbd>🤫 Quiet</kbd>, <kbd>🔌 Power socket</kbd>.
+
+- Houses without a fitting free spot fade back, and the bar says how many houses are left.
+- Open a house and each room tells you how many of its free spots fit.
+- The wishes are part of the address, so a filtered map can be shared or bookmarked. <kbd>Clear</kbd> shows everything again.
+
+Only spots the crew described can match, so a wish never promises more than the crew wrote down.
+
 ## Destiny Roulette
 
 Can't decide? On the map press <kbd>🎰 DESTINY ROULETTE</kbd>. A neon slot machine waits with three reels, **House**, **Room** and **Spot**: grab its lever, pull it down and let go, or press <kbd>SPIN 🎰</kbd>. The reels stop one after the other on a random free spot anywhere in the camp. Every free spot has the same chance; how hard you pull only changes how long the reels run.
+
+**The reels respect…** on the machine, right under the reels, takes the same wishes as the map: tap <kbd>🛏️ No ladder</kbd> or <kbd>🔥 Heated</kbd> and only fitting spots go into the drum. The line next to the chips says how many that is. If none fits, the machine says so and offers <kbd>Spin without wishes</kbd>.
 
 Then the burner name that goes with the spot:
 
