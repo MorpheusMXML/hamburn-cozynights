@@ -90,7 +90,12 @@
 		<legend>FEATURES</legend>
 		{#each available as feature}
 			<label class="check" title={feature.hint ?? ''}>
-				<input type="checkbox" name="features" value={feature.value} checked={chosen.has(feature.value)} />
+				<input
+					type="checkbox"
+					name="features"
+					value={feature.value}
+					checked={chosen.has(feature.value)}
+				/>
 				<span class="check-icon" aria-hidden="true">{feature.icon}</span>
 				<span class="check-label">{feature.label}</span>
 			</label>

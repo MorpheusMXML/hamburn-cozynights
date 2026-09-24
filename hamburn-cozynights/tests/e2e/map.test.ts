@@ -104,10 +104,7 @@ test.describe('Camp map', () => {
 		expect([after.x, after.y]).toEqual([before.x, before.y]);
 	});
 
-	test('admin: typed coordinates are locked during Live Booking too', async ({
-		page,
-		context
-	}) => {
+	test('admin: typed coordinates are locked during Live Booking too', async ({ page, context }) => {
 		await setBookingPhase(pb, true);
 		const before = await pb.collection('houses').getOne(house.id);
 		await context.addCookies([await adminSessionCookie(pb)]);

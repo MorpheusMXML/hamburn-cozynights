@@ -672,11 +672,11 @@
 							open={false}
 						>
 							<p class="hint">
-								These tickets are in the database but not in the file — cancelled in the ticket shop,
-								or from another file. They stay unless you tick one: a ticked ticket is deleted with
-								the import, together with its Telegram link and its special-needs request. Their
-								codes are shown shortened, and a ticket that holds a spot 🛏 cannot be deleted here
-								— free the spot first.
+								These tickets are in the database but not in the file — cancelled in the ticket
+								shop, or from another file. They stay unless you tick one: a ticked ticket is
+								deleted with the import, together with its Telegram link and its special-needs
+								request. Their codes are shown shortened, and a ticket that holds a spot 🛏 cannot be
+								deleted here — free the spot first.
 							</p>
 							<ul class="code-list">
 								{#each diff.notInFile as ticket}

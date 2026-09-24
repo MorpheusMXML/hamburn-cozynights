@@ -19,13 +19,7 @@ import { SPECIAL_NEEDS, cleanRequestText, needLabel, type SpecialNeed } from './
 export type HouseKind = 'house' | 'hut_group' | 'tent_area' | 'other';
 export type RoomKind = 'room' | 'hut' | 'tent' | 'other';
 export type BedType =
-	| 'single'
-	| 'bunk_lower'
-	| 'bunk_upper'
-	| 'double'
-	| 'sofa'
-	| 'mattress'
-	| 'camp_bed';
+	'single' | 'bunk_lower' | 'bunk_upper' | 'double' | 'sofa' | 'mattress' | 'camp_bed';
 export type Feature =
 	| 'wheelchair'
 	| 'ground_floor'
@@ -49,29 +43,32 @@ export interface KindEntry<V extends string> {
 }
 
 /** Keep in sync with `houses.kind` in pb_migrations/1759900000_accommodation.js. */
-export const HOUSE_KINDS: (KindEntry<HouseKind> & { room: RoomKind; word: string; plural: string })[] =
-	[
-		{ value: 'house', label: 'House', icon: '🏠', room: 'room', word: 'room', plural: 'rooms' },
-		{
-			value: 'hut_group',
-			label: 'Hut group',
-			icon: '🛖',
-			hint: 'Several huts under one pin on the map; each hut is a room.',
-			room: 'hut',
-			word: 'hut',
-			plural: 'huts'
-		},
-		{
-			value: 'tent_area',
-			label: 'Tent area',
-			icon: '⛺',
-			hint: 'Tents or yurts under one pin; each tent is a room.',
-			room: 'tent',
-			word: 'tent',
-			plural: 'tents'
-		},
-		{ value: 'other', label: 'Other', icon: '📍', room: 'other', word: 'place', plural: 'places' }
-	];
+export const HOUSE_KINDS: (KindEntry<HouseKind> & {
+	room: RoomKind;
+	word: string;
+	plural: string;
+})[] = [
+	{ value: 'house', label: 'House', icon: '🏠', room: 'room', word: 'room', plural: 'rooms' },
+	{
+		value: 'hut_group',
+		label: 'Hut group',
+		icon: '🛖',
+		hint: 'Several huts under one pin on the map; each hut is a room.',
+		room: 'hut',
+		word: 'hut',
+		plural: 'huts'
+	},
+	{
+		value: 'tent_area',
+		label: 'Tent area',
+		icon: '⛺',
+		hint: 'Tents or yurts under one pin; each tent is a room.',
+		room: 'tent',
+		word: 'tent',
+		plural: 'tents'
+	},
+	{ value: 'other', label: 'Other', icon: '📍', room: 'other', word: 'place', plural: 'places' }
+];
 
 /** Keep in sync with `rooms.kind` in pb_migrations/1759900000_accommodation.js. */
 export const ROOM_KINDS: KindEntry<RoomKind>[] = [
@@ -257,8 +254,7 @@ export interface DetailsInput {
 }
 
 export type DetailsResult =
-	| { ok: true; value: DetailsInput }
-	| { ok: false; value: DetailsInput; error: string };
+	{ ok: true; value: DetailsInput } | { ok: false; value: DetailsInput; error: string };
 
 /**
  * Reads the details form of a house or room. Never throws; the messages are
@@ -297,7 +293,9 @@ export function parseDetailsForm(form: FormData, level: 'house' | 'room'): Detai
 }
 
 /** The same for one spot: its bed type and the features of the spot itself. */
-export function parseSpotForm(form: FormData):
+export function parseSpotForm(
+	form: FormData
+):
 	| { ok: true; value: { bed_type: BedType | ''; features: Feature[] } }
 	| { ok: false; error: string } {
 	const raw = String(form.get('bed_type') ?? '').trim();
@@ -306,7 +304,10 @@ export function parseSpotForm(form: FormData):
 	}
 	return {
 		ok: true,
-		value: { bed_type: raw as BedType | '', features: readFeatures(form.getAll('features'), 'spot') }
+		value: {
+			bed_type: raw as BedType | '',
+			features: readFeatures(form.getAll('features'), 'spot')
+		}
 	};
 }
 
@@ -357,7 +358,9 @@ export function factsOf(type: unknown, features: readonly string[] | undefined):
 	const chosen = new Set((features ?? []).filter((value): value is Feature => isFeature(value)));
 	return {
 		bedType: bedType(type),
-		features: FEATURES.filter((feature) => chosen.has(feature.value)).map((feature) => feature.value)
+		features: FEATURES.filter((feature) => chosen.has(feature.value)).map(
+			(feature) => feature.value
+		)
 	};
 }
 
@@ -487,8 +490,20 @@ export const SPOT_FILTERS: SpotFilterEntry[] = [
 		need: 'near_toilet'
 	},
 	{ value: 'heated', label: 'Heated', icon: '🔥', hint: 'The room is heated.' },
-	{ value: 'quiet', label: 'Quiet', icon: '🤫', hint: 'In a quiet corner of the camp.', need: 'quiet' },
-	{ value: 'power', label: 'Power socket', icon: '🔌', hint: 'A socket at the bed or in the room.', need: 'power' }
+	{
+		value: 'quiet',
+		label: 'Quiet',
+		icon: '🤫',
+		hint: 'In a quiet corner of the camp.',
+		need: 'quiet'
+	},
+	{
+		value: 'power',
+		label: 'Power socket',
+		icon: '🔌',
+		hint: 'A socket at the bed or in the room.',
+		need: 'power'
+	}
 ];
 
 const FILTER_VALUES: readonly string[] = SPOT_FILTERS.map((filter) => filter.value);

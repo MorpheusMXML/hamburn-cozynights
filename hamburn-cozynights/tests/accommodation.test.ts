@@ -197,7 +197,9 @@ describe('wishes on the map and at the roulette', () => {
 describe('summaries', () => {
 	it('names the bed type and the features of the spot itself', () => {
 		expect(spotSummary(facts('bunk_lower'), [])).toBe('Lower bunk');
-		expect(spotSummary(facts('bunk_lower', ['power']), ['power'])).toBe('Lower bunk · Power socket');
+		expect(spotSummary(facts('bunk_lower', ['power']), ['power'])).toBe(
+			'Lower bunk · Power socket'
+		);
 		expect(spotSummary(facts(''), [])).toBe('');
 	});
 

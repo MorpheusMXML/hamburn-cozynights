@@ -10,7 +10,12 @@ shown here and nowhere else.
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import type { ActionData, PageData } from './$types';
 	import { confirmDialog, toast } from '$lib/dialogs';
-	import { STATUS_LABELS, needLabel, type AdminRequestView, type SpotInfo } from '$lib/special-needs';
+	import {
+		STATUS_LABELS,
+		needLabel,
+		type AdminRequestView,
+		type SpotInfo
+	} from '$lib/special-needs';
 	import { factsOf, matchNeeds, needShort } from '$lib/accommodation';
 
 	export let data: PageData;
@@ -33,7 +38,10 @@ shown here and nowhere else.
 	function ranked(request: AdminRequestView, special: boolean) {
 		return data.spots
 			.filter((spot) => spot.special === special)
-			.map((spot) => ({ spot, match: matchNeeds(request.needs, factsOf(spot.bedType, spot.features)) }))
+			.map((spot) => ({
+				spot,
+				match: matchNeeds(request.needs, factsOf(spot.bedType, spot.features))
+			}))
 			.sort((a, b) => b.match.score - a.match.score)
 			.map(({ spot, match }) => ({ spot, text: `${spotText(spot)}${fitText(match)}` }));
 	}

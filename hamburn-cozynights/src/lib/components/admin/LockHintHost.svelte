@@ -73,7 +73,8 @@ locked control, it still opens its house.
 		if (!(anchor instanceof Element)) return { left: anchor.x, top: anchor.y, width: 0, height: 0 };
 		if (!anchor.isConnected) return null;
 		const box = anchor.getBoundingClientRect();
-		if (box.bottom < 0 || box.top > innerHeight || (box.width === 0 && box.height === 0)) return null;
+		if (box.bottom < 0 || box.top > innerHeight || (box.width === 0 && box.height === 0))
+			return null;
 		return { left: box.left, top: box.top, width: box.width, height: box.height };
 	}
 
