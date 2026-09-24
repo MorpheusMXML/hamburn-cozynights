@@ -122,6 +122,13 @@ export function applePassJson(
 		});
 	}
 
+	// The kind of bed and what is at the spot: only when the crew wrote them down.
+	const details: Field[] = [];
+	if (spot && !content.voided) {
+		if (spot.bed) details.push({ key: 'bed', label: 'Bed', value: spot.bed });
+		if (spot.features)
+			details.push({ key: 'features', label: 'At your spot', value: spot.features });
+	}
 	const back: Field[] = [
 		{
 			// the whole spot in one field: its change is what the lock screen tells
@@ -133,6 +140,7 @@ export function applePassJson(
 					'Your ticket holds no spot right now. Pick one on the map while booking is open.',
 			changeMessage: 'Your CozyNights spot: %@'
 		},
+		...details,
 		{ key: 'code', label: 'Pass code', value: content.code },
 		{
 			key: 'pass',

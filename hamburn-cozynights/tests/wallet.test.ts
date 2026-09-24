@@ -13,6 +13,7 @@ import zlib from 'zlib';
 import { execFileSync } from 'child_process';
 import forge from 'node-forge';
 import { encrypt } from '../src/lib/server/crypto';
+import { findPass } from '../src/lib/server/pass';
 import { encodeMonochromePng } from '../src/lib/server/png';
 import { parseWalletConfig, readPem, walletPlatforms } from '../src/lib/server/wallet/config';
 import {
@@ -54,6 +55,15 @@ import {
 } from './wallet-fixtures';
 
 const extras = { telegram: true };
+
+/** The same spot with what the crew wrote down: a lower bunk with a socket, in a heated room. */
+const STACKED = {
+	house: 'Villa',
+	room: 'Dorm #2',
+	spot: 'B1',
+	bed: 'Lower bunk · below B2',
+	features: '🔥 Heated · 🔌 Power socket'
+};
 
 function content(overrides: Partial<WalletContent> = {}): WalletContent {
 	return {
@@ -148,6 +158,30 @@ describe('what a wallet pass shows', () => {
 		expect(voided).toMatchObject({ voided: true, spot: null });
 	});
 
+	it('carries the kind of bed and the features at the spot, only when the crew wrote them down', () => {
+		// findPass says '' for both when nobody said: the pass then has no such keys.
+		expect(content().spot).toEqual({ house: 'Villa', room: 'Dorm #2', spot: 'B1' });
+		const blank = contentFromLookup(
+			'AAAABBBBCCCC',
+			{ spot: { ...STACKED, bed: '', features: '' }, burnerName: 'Sunny' },
+			'https://cozy.test'
+		);
+		expect(blank.spot).toEqual({ house: 'Villa', room: 'Dorm #2', spot: 'B1' });
+		const stacked = contentFromLookup(
+			'AAAABBBBCCCC',
+			{ spot: STACKED, burnerName: 'Sunny' },
+			'https://cozy.test'
+		);
+		expect(stacked.spot).toEqual(STACKED);
+		const bedOnly = contentFromLookup(
+			'AAAABBBBCCCC',
+			{ spot: { ...STACKED, features: '' }, burnerName: 'Sunny' },
+			'https://cozy.test'
+		);
+		expect(bedOnly.spot).toEqual({ ...STACKED, features: undefined });
+		expect(bedOnly.spot).not.toHaveProperty('features');
+	});
+
 	it('changes its fingerprint with the spot, the offers and the event, and only then', () => {
 		const config = testWalletConfig();
 		const base = contentHash(content(), config, extras);
@@ -159,6 +193,16 @@ describe('what a wallet pass shows', () => {
 				extras
 			)
 		).not.toBe(base);
+		// The bed or the features change (the guest moved to the upper bunk, the
+		// crew wrote down the socket): the wallets are told.
+		const stacked = contentHash(content({ spot: STACKED }), config, extras);
+		expect(stacked).not.toBe(base);
+		expect(
+			contentHash(content({ spot: { ...STACKED, bed: 'Upper bunk · above B2' } }), config, extras)
+		).not.toBe(stacked);
+		expect(
+			contentHash(content({ spot: { ...STACKED, features: '🔥 Heated' } }), config, extras)
+		).not.toBe(stacked);
 		expect(contentHash(content(), config, { telegram: false })).not.toBe(base);
 		expect(
 			contentHash(content(), testWalletConfig({ WALLET_EVENT_NAME: 'Hamburn 2027' }), extras)
@@ -274,6 +318,42 @@ describe('Apple Wallet pass', () => {
 		expect(
 			JSON.stringify(applePassJson(content(), config, config.apple!, { telegram: false }))
 		).not.toContain('/telegram');
+	});
+
+	it('tells the kind of bed and what is at the spot on the back, when the crew wrote them down', () => {
+		const pass = applePassJson(content({ spot: STACKED }), config, config.apple!, extras) as any;
+		const back = pass.eventTicket.backFields;
+		// right after the spot, before the code
+		expect(back.slice(0, 4).map((f: any) => f.key)).toEqual(['where', 'bed', 'features', 'code']);
+		expect(back[1]).toEqual({ key: 'bed', label: 'Bed', value: 'Lower bunk · below B2' });
+		expect(back[2]).toEqual({
+			key: 'features',
+			label: 'At your spot',
+			value: '🔥 Heated · 🔌 Power socket'
+		});
+		// the front stays as it was: the spot, the room, the house, the burner
+		expect(pass.eventTicket.headerFields[0].value).toBe('B1');
+		expect(pass.semantics.seats).toEqual([
+			{ seatSection: 'Villa', seatRow: 'Dorm #2', seatNumber: 'B1' }
+		]);
+
+		// Only the bed known: one field. Nothing known: neither.
+		const bedOnly = applePassJson(
+			content({ spot: { ...STACKED, features: undefined } }),
+			config,
+			config.apple!,
+			extras
+		) as any;
+		expect(bedOnly.eventTicket.backFields.slice(0, 3).map((f: any) => f.key)).toEqual([
+			'where',
+			'bed',
+			'code'
+		]);
+		const plain = applePassJson(content(), config, config.apple!, extras) as any;
+		const keys = plain.eventTicket.backFields.map((f: any) => f.key);
+		expect(keys).not.toContain('bed');
+		expect(keys).not.toContain('features');
+		expect(JSON.stringify(plain)).not.toMatch(/At your spot|"Bed"/);
 	});
 
 	it('says so when the ticket holds no spot, and is void after a hand-over', () => {
@@ -457,6 +537,33 @@ describe('Google Wallet pass', () => {
 		expect(voided.ticketHolderName).toBeUndefined();
 	});
 
+	it('tells the kind of bed and what is at the spot in its own module, when the crew wrote them down', () => {
+		const object = googleObject(config.google!, content({ spot: STACKED }), config, extras) as any;
+		expect(object.textModulesData.map((m: any) => m.id)).toEqual(['where', 'bed', 'arrival']);
+		expect(object.textModulesData[1]).toEqual({
+			id: 'bed',
+			header: 'Your bed',
+			body: 'Lower bunk · below B2 · 🔥 Heated · 🔌 Power socket'
+		});
+		// the seat stays the spot's label
+		expect(object.seatInfo.seat.defaultValue.value).toBe('B1');
+
+		const featuresOnly = googleObject(
+			config.google!,
+			content({ spot: { ...STACKED, bed: undefined } }),
+			config,
+			extras
+		) as any;
+		expect(featuresOnly.textModulesData[1]).toMatchObject({
+			id: 'bed',
+			body: '🔥 Heated · 🔌 Power socket'
+		});
+
+		const plain = googleObject(config.google!, content(), config, extras) as any;
+		expect(plain.textModulesData.map((m: any) => m.id)).toEqual(['where', 'arrival']);
+		expect(JSON.stringify(plain)).not.toContain('Your bed');
+	});
+
 	it('saves through a link with a signed token that names the object', () => {
 		const c = testCredentials();
 		const url = googleSaveUrl(config.google!, config.origin, 'AAAABBBBCCCC');
@@ -520,10 +627,21 @@ describe('Apple pushes', () => {
 
 // --- the records and the sync ------------------------------------------------------
 
+/**
+ * One quiet house with one heated room and a bunk bed: B1 below (with a
+ * socket), B2 above. The ticket sleeps in B1.
+ */
 function seedCamp(pb: FakePb) {
-	const house = pb.seed('houses', { name: 'Villa' });
-	const room = pb.seed('rooms', { name: 'Dorm', room_number: 2, house: house.id });
+	const house = pb.seed('houses', { name: 'Villa', features: ['quiet'] });
+	const room = pb.seed('rooms', {
+		name: 'Dorm',
+		room_number: 2,
+		house: house.id,
+		features: ['heated']
+	});
 	const beds = ['B1', 'B2'].map((label) => pb.seed('beds', { label, room: room.id, order: '' }));
+	Object.assign(beds[0], { bed_type: 'bunk_lower', bunk_partner: beds[1].id, features: 'power' });
+	Object.assign(beds[1], { bed_type: 'bunk_upper', bunk_partner: beds[0].id });
 	const order = pb.seed('orders', {
 		order_number: 'HB-1',
 		pass_code: 'AAAABBBBCCCC',
@@ -614,11 +732,27 @@ describe('the wallet sync', () => {
 		);
 		expect(contents.get('AAAABBBBCCCC')).toMatchObject({
 			voided: false,
-			spot: { house: 'Villa', room: 'Dorm #2', spot: 'B1' },
+			spot: {
+				house: 'Villa',
+				room: 'Dorm #2',
+				spot: 'B1',
+				// the other level of the bunk bed, and the house's, the room's and the
+				// spot's features together, in the catalogue's order
+				bed: 'Lower bunk · below B2',
+				features: '🔥 Heated · 🤫 Quiet zone · 🔌 Power socket'
+			},
 			burnerName: 'Sunny'
 		});
 		expect(contents.get('ZZZZYYYYXXXX')?.voided).toBe(true);
 		expect(order.id).toBeTruthy();
+		// word for word what the pass page reads for one pass
+		expect(contents.get('AAAABBBBCCCC')).toEqual(
+			contentFromLookup(
+				'AAAABBBBCCCC',
+				await findPass(pb as any, 'AAAABBBBCCCC'),
+				'https://cozy.test'
+			)
+		);
 	});
 
 	it('pushes a move to Apple devices and to Google, and forgets dead devices', async () => {
@@ -685,10 +819,14 @@ describe('the wallet sync', () => {
 		const moved = await syncWalletPasses(pb as any, config, now + 60_000);
 		expect(moved).toMatchObject({ changed: 2, pushed: 2 });
 		expect(apple.seen.map((s) => s.token)).toEqual(['aaaa0000aaaa0000']);
-		expect(
-			google.store.get('eventTicketObject/3388000000012345678.cozy-test-AAAABBBBCCCC').seatInfo.seat
-				.defaultValue.value
-		).toBe('B2');
+		const movedObject = google.store.get(
+			'eventTicketObject/3388000000012345678.cozy-test-AAAABBBBCCCC'
+		);
+		expect(movedObject.seatInfo.seat.defaultValue.value).toBe('B2');
+		// the upper bunk now, above a B1 nobody holds: the free partner is still named
+		expect(movedObject.textModulesData.find((m: any) => m.id === 'bed')).toMatchObject({
+			body: 'Upper bunk · above B1 · 🔥 Heated · 🤫 Quiet zone'
+		});
 		expect(pb.rows('wallet_passes')[0].changed_at).toBe(new Date(now + 60_000).toISOString());
 	});
 

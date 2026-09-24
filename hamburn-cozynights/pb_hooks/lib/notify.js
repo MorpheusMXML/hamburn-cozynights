@@ -648,19 +648,40 @@ function currentSpot(app, orderId) {
 	});
 	if (beds.length === 0) return null;
 	const bed = beds[0];
+	const kinds = require(`${__hooks}/lib/beds.js`);
 	const spot = { bedId: bed.id, roomId: bed.getString('room'), spot: bed.getString('label') };
 	spot.room = '';
 	spot.house = '';
+	let roomFeatures = [];
+	let houseFeatures = [];
 	try {
 		const room = app.findRecordById('rooms', spot.roomId);
 		const number = room.getInt('room_number');
 		spot.room = (room.getString('name') || 'Room') + (number ? ' #' + number : '');
-		spot.house = app.findRecordById('houses', room.getString('house')).getString('name');
+		roomFeatures = room.get('features');
+		const house = app.findRecordById('houses', room.getString('house'));
+		spot.house = house.getString('name');
+		houseFeatures = house.get('features');
 	} catch (_) {
-		// a dangling relation: the spot label has to do
+		// a dangling relation: the spot label has to do, and the features of
+		// the missing level are just empty
 	}
-	// What kind of bed it is, when the crew wrote it down (src/lib/accommodation.ts).
-	spot.bed = require(`${__hooks}/lib/beds.js`).bedTypeLabel(bed.getString('bed_type'));
+	// What kind of bed it is (for a bunk bed: where the other level is) and
+	// what is at it, when the crew wrote it down (src/lib/accommodation.ts).
+	const bedType = bed.getString('bed_type');
+	const partnerId = bed.getString('bunk_partner');
+	let partnerLabel = '';
+	if (partnerId) {
+		try {
+			partnerLabel = app.findRecordById('beds', partnerId).getString('label');
+		} catch (_) {
+			// the other level is gone: just the kind of bed
+		}
+	}
+	spot.bed = kinds.bedRow(bedType, partnerLabel);
+	spot.features = kinds.featureText(
+		kinds.effectiveFeatures(houseFeatures, roomFeatures, bed.get('features'), bedType)
+	);
 	spot.label = clip([spot.spot, spot.room, spot.house].filter((s) => !!s).join(' · '), LABEL_MAX);
 	return spot;
 }
@@ -888,13 +909,33 @@ function ticketLabel(order) {
 	return TICKETS.maskedTicketLabel(order.getString('order_number')) || '#' + order.id.slice(0, 5);
 }
 
+/**
+ * The rows of an e-mail that shows the spot: House, Room, Spot and, when the
+ * crew wrote them down, Bed ("Upper bunk · above B1") and Features
+ * ("🔥 Heated · 🔌 Power socket"). Empty rows are left out.
+ */
 function spotLines(spot) {
 	return [
 		['House', spot.house],
 		['Room', spot.room],
 		['Spot', spot.spot],
-		['Bed', spot.bed]
+		['Bed', spot.bed],
+		['Features', spot.features]
 	].filter((row) => !!row[1]);
+}
+
+/**
+ * The bed and what is at it in one line, "Lower bunk · below B2 · 🔥 Heated",
+ * or '' when the crew wrote nothing down (or there is no spot).
+ */
+function bedText(spot) {
+	return spot ? [spot.bed, spot.features].filter((s) => !!s).join(' · ') : '';
+}
+
+/** The 🛏 line under the spot of a Telegram message, line break included; '' without a bed. */
+function bedLine(cfg, spot) {
+	const bed = bedText(spot);
+	return bed ? '\n' + t(cfg, 'tg.bed', { bed: bed }) : '';
 }
 
 /**
@@ -1021,7 +1062,7 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) 
 	const footer = T('mail.footer');
 
 	const text = [hello, '', intro]
-		.concat(rows.length ? [''].concat(rows.map((r) => '  ' + (r[0] + ':').padEnd(7) + r[1])) : [])
+		.concat(rows.length ? [''].concat(rows.map((r) => '  ' + (r[0] + ':').padEnd(10) + r[1])) : [])
 		.concat([''])
 		.concat(after)
 		.concat(['', signature, '', footer])
@@ -1101,6 +1142,7 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 	const roomUrl = spot ? cfg.appUrl + '/room/' + spot.roomId : mapUrl;
 	const vars = {
 		spot: spot ? spot.label : '',
+		bed: bedText(spot),
 		before: previousLabel || '',
 		roomUrl: roomUrl,
 		mapUrl: mapUrl,
@@ -1111,6 +1153,8 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 	};
 	const T = (key) => t(cfg, key, vars);
 	const passLine = pass && spot ? '\n\n' + T('tg.pass') : '';
+	// The 🛏 line right under the spot, when the crew wrote the bed down.
+	const bed = bedLine(cfg, spot);
 	const crewBooked = req.kind === 'approved' && req.fixed && !!spot;
 	let text;
 	if (kind === 'connected') {
@@ -1119,13 +1163,14 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 		text =
 			T('tg.connected.intro') +
 			'\n\n' +
-			(spot ? T('tg.connected.spot') + passLine : T('tg.connected.no_spot')) +
+			(spot ? T('tg.connected.spot') + bed + passLine : T('tg.connected.no_spot')) +
 			(vars.status ? '\n\n' + T('tg.connected.request') : '') +
 			'\n\n' +
 			T('tg.connected.stop');
 	} else if (crewBooked) {
 		text =
 			T('tg.crew_booked.intro') +
+			bed +
 			(kind === 'changed' && previousLabel ? '\n' + T('tg.before') : '') +
 			'\n\n' +
 			roomUrl +
@@ -1163,6 +1208,7 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 			text =
 				news +
 				T('tg.changed.intro') +
+				bed +
 				(previousLabel ? '\n' + T('tg.before') : '') +
 				'\n\n' +
 				(req.fixed ? T('tg.changed.by_crew') : T('tg.changed.maybe_crew')) +
@@ -1171,6 +1217,7 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 			text =
 				news +
 				T('tg.booked.intro') +
+				bed +
 				'\n\n' +
 				(req.fixed ? T('tg.booked.by_crew') : T('tg.booked.change')) +
 				passLine;
@@ -1243,7 +1290,9 @@ function previewMessages(cfg) {
 		spot: 'B1',
 		room: 'Dorm #2',
 		house: 'Villa',
-		label: 'B1 · Dorm #2 · Villa'
+		label: 'B1 · Dorm #2 · Villa',
+		bed: 'Lower bunk · below B2',
+		features: '🔥 Heated · 🔌 Power socket'
 	};
 	const before = 'B7 · Loft #1 · Hut';
 	const pass = { code: 'AAAA-BBBB-CCCC', url: cfg.appUrl + '/pass/AAAA-BBBB-CCCC' };
@@ -1442,7 +1491,8 @@ function previewMessages(cfg) {
 			title: '/pass (the QR code comes along as a picture)',
 			text: prefixed(
 				cfg,
-				t(cfg, 'bot.pass', { spot: spot.label, passCode: pass.code, passUrl: pass.url })
+				t(cfg, 'bot.pass', { spot: spot.label, passCode: pass.code, passUrl: pass.url }) +
+					bedLine(cfg, spot)
 			)
 		},
 		{
@@ -1895,15 +1945,21 @@ function replyWithPass(app, cfg, chatId) {
 		const spot = currentSpot(app, order.id);
 		const pass = spot ? bookingPass(app, cfg, order) : null;
 		if (!spot || !pass) {
-			reply(cfg, chatId, prefixed(cfg, t(cfg, 'bot.pass_no_spot', { mapUrl: cfg.appUrl + '/map' })));
+			reply(
+				cfg,
+				chatId,
+				prefixed(cfg, t(cfg, 'bot.pass_no_spot', { mapUrl: cfg.appUrl + '/map' }))
+			);
 			continue;
 		}
 		const text = prefixed(
 			cfg,
-			t(cfg, 'bot.pass', { spot: spot.label, passCode: pass.code, passUrl: pass.url })
+			t(cfg, 'bot.pass', { spot: spot.label, passCode: pass.code, passUrl: pass.url }) +
+				bedLine(cfg, spot)
 		);
 		const r = sendGuestTelegram(cfg, chatId, text, passAttachments(cfg, pass));
-		if (!r.ok) console.warn('[cozy-notify] Telegram /pass failed: ' + r.status + ' ' + r.description);
+		if (!r.ok)
+			console.warn('[cozy-notify] Telegram /pass failed: ' + r.status + ' ' + r.description);
 	}
 }
 
@@ -1920,7 +1976,12 @@ function registerCommands(app, cfg) {
 		10
 	);
 	if (r.ok) app.store().set('cozy_tg_commands', true);
-	else warnOnce(app, 'commands', '[cozy-notify] Telegram setMyCommands failed: ' + r.status + ' ' + r.description);
+	else
+		warnOnce(
+			app,
+			'commands',
+			'[cozy-notify] Telegram setMyCommands failed: ' + r.status + ' ' + r.description
+		);
 }
 
 /**

@@ -18,6 +18,11 @@
 const PLACEHOLDERS = [
 	{ name: 'name', meaning: "the guest's name from the ticket list" },
 	{ name: 'spot', meaning: 'the spot with its room and house, like "B1 · Dorm #2 · Villa"' },
+	{
+		name: 'bed',
+		meaning:
+			'the bed, when the crew wrote it down: its kind, the other level of a bunk bed and what is at it, like "Upper bunk · above B1 · 🔌 Power socket"'
+	},
 	{ name: 'before', meaning: 'the spot the ticket held before' },
 	{ name: 'roomUrl', meaning: "the link to the guest's room (to the map while they have no spot)" },
 	{ name: 'mapUrl', meaning: 'the link to the map' },
@@ -159,6 +164,8 @@ const TEXTS = [
 	// --- Telegram: in several messages ------------------------------------------------
 	{ key: 'tg.pass', group: 'tg.common', label: 'Booking pass', hint: 'Below every message that shows the spot.', placeholders: ['passCode', 'passUrl'],
 		text: '🎫 Booking pass {passCode}:\n{passUrl}' },
+	{ key: 'tg.bed', group: 'tg.common', label: 'The bed', hint: 'Below the spot in every message that shows it, when the crew wrote down what kind of bed it is or what is at it.', placeholders: ['bed'],
+		text: '🛏 {bed}' },
 	{ key: 'tg.before', group: 'tg.common', label: 'The old spot', hint: 'When the spot changed.', placeholders: ['before'],
 		text: 'Before: {before}' },
 	{ key: 'tg.contact_crew', group: 'tg.common', label: 'A spot the crew booked: how to change it', hint: 'When the crew booked the spot for a special-needs request.', placeholders: [],

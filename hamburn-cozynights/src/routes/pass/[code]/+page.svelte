@@ -93,6 +93,10 @@
 				{#if data.spot}
 					<dt>Spot</dt>
 					<dd><strong>{data.spot.spot}</strong> · {data.spot.room} · {data.spot.house}</dd>
+					{#if data.spot.bed}
+						<dt>Bed</dt>
+						<dd>{data.spot.bed}</dd>
+					{/if}
 					{#if data.burnerName}
 						<dt>Burner name</dt>
 						<dd>{data.burnerName}</dd>
@@ -152,6 +156,15 @@
 				<dd>{data.spot.room}</dd>
 				<dt>Spot</dt>
 				<dd>{data.spot.spot}</dd>
+				<!-- the kind of bed and what is at the spot: only when the crew wrote them down -->
+				{#if data.spot.bed}
+					<dt>Bed</dt>
+					<dd>{data.spot.bed}</dd>
+				{/if}
+				{#if data.spot.features}
+					<dt>Features</dt>
+					<dd>{data.spot.features}</dd>
+				{/if}
 				{#if data.burnerName}
 					<dt>Burner</dt>
 					<dd>{data.burnerName}</dd>

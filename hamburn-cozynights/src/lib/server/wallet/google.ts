@@ -123,6 +123,8 @@ export function googleObject(
 ): Record<string, unknown> {
 	const spot = content.spot;
 	const where = spot ? [spot.spot, spot.room, spot.house].filter(Boolean).join(' · ') : '';
+	// "Upper bunk · above B1 · 🔥 Heated": only when the crew wrote it down.
+	const bed = spot && !content.voided ? [spot.bed, spot.features].filter(Boolean).join(' · ') : '';
 	const modules = [
 		{
 			id: 'where',
@@ -131,6 +133,7 @@ export function googleObject(
 				? 'This pass no longer belongs to a ticket. If the ticket was passed on, its new holder has a new pass.'
 				: where || 'Your ticket holds no spot right now. Pick one on the map while booking is open.'
 		},
+		...(bed ? [{ id: 'bed', header: 'Your bed', body: bed }] : []),
 		{
 			id: 'arrival',
 			header: 'At arrival',

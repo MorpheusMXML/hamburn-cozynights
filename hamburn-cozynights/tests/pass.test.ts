@@ -53,6 +53,17 @@ const BED = {
 		room: { name: 'Blue Room', room_number: 2, expand: { house: { name: 'Brahmsee-Villa' } } }
 	}
 };
+/** B1 as the lower bunk under B2, in a heated room, with a socket at the bed. */
+const STACKED = {
+	...BED,
+	bed_type: 'bunk_lower',
+	bunk_partner: 'bed2',
+	features: ['power'],
+	expand: {
+		room: { ...BED.expand.room, features: ['heated'] },
+		bunk_partner: { id: 'bed2', label: 'B2' }
+	}
+};
 
 /** adminPb stand-in: orders and beds answer per collection. */
 function fakeAdminPb({ order = ORDER as any, bed = BED as any } = {}) {
@@ -161,6 +172,57 @@ describe('findPass', () => {
 	it('knows tickets without a spot, and unknown codes', async () => {
 		expect((await findPass(fakeAdminPb({ bed: null }), CODE))?.spot).toBeNull();
 		expect(await findPass(fakeAdminPb({ order: null }), CODE)).toBeNull();
+	});
+
+	it('says what kind of bed the spot is and what is at it, when the crew wrote it down', async () => {
+		// Nobody said anything: nothing is guessed.
+		expect((await findPass(fakeAdminPb(), CODE))?.spot).toMatchObject({ bed: '', features: '' });
+
+		// A lower bunk: the other level is read along with the room and the house.
+		const pb = fakeAdminPb({ bed: STACKED });
+		expect((await findPass(pb, CODE))?.spot).toMatchObject({
+			bed: 'Lower bunk · below B2',
+			features: '🔥 Heated · 🔌 Power socket'
+		});
+		expect(pb.collection('beds').getFirstListItem).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({ expand: 'room,room.house,bunk_partner' })
+		);
+
+		// An upper bunk in a wheelchair-accessible room: the room is, the bed is not.
+		const upper = {
+			...BED,
+			id: 'bed2',
+			label: 'B2',
+			bed_type: 'bunk_upper',
+			bunk_partner: 'bed1',
+			expand: {
+				room: { ...BED.expand.room, features: ['wheelchair', 'heated'] },
+				bunk_partner: { id: 'bed1', label: 'B1' }
+			}
+		};
+		expect((await findPass(fakeAdminPb({ bed: upper }), CODE))?.spot).toMatchObject({
+			bed: 'Upper bunk · above B1',
+			features: '🔥 Heated'
+		});
+
+		// A single bed says only what it is; the house's features count too, and
+		// the room's word wins over the house's where they say the opposite.
+		const single = {
+			...BED,
+			bed_type: 'single',
+			expand: {
+				room: {
+					...BED.expand.room,
+					features: ['heated'],
+					expand: { house: { name: 'Brahmsee-Villa', features: ['toilets_inside', 'unheated'] } }
+				}
+			}
+		};
+		expect((await findPass(fakeAdminPb({ bed: single }), CODE))?.spot).toMatchObject({
+			bed: 'Single bed',
+			features: '🚻 Toilets + showers inside · 🔥 Heated'
+		});
 	});
 
 	it('dates the booking by booked_at, not by the last change of the spot', async () => {
@@ -444,13 +506,34 @@ describe('pass page', () => {
 		const { event, headers } = passEvent('7F3K-9QXM-2CWD', { adminPb: fakeAdminPb(), admin: null });
 		const data: any = await passLoad(event);
 		expect(data.code).toBe('7F3K-9QXM-2CWD');
-		expect(data.spot).toEqual({ house: 'Brahmsee-Villa', room: 'Blue Room #2', spot: 'B1' });
+		expect(data.spot).toEqual({
+			house: 'Brahmsee-Villa',
+			room: 'Blue Room #2',
+			spot: 'B1',
+			bed: '',
+			features: ''
+		});
 		expect(data.burnerName).toBe('Disco Druid');
 		expect(data.qrSvg).toMatch(/^<svg /);
 		expect(data.check).toBeNull();
 		expect(JSON.stringify(data)).not.toMatch(/Ada|ada@|HB-1001/);
 		expect(headers['referrer-policy']).toBe('no-referrer');
 		expect(headers['x-robots-tag']).toContain('noindex');
+	});
+
+	it('shows the kind of bed and what is at the spot, when the crew wrote them down', async () => {
+		const { event } = passEvent('7F3K-9QXM-2CWD', {
+			adminPb: fakeAdminPb({ bed: STACKED }),
+			admin: null
+		});
+		const data: any = await passLoad(event);
+		expect(data.spot).toEqual({
+			house: 'Brahmsee-Villa',
+			room: 'Blue Room #2',
+			spot: 'B1',
+			bed: 'Lower bunk · below B2',
+			features: '🔥 Heated · 🔌 Power socket'
+		});
 	});
 
 	it('shows signed-in admins the check result on top', async () => {
