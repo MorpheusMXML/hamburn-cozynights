@@ -385,8 +385,11 @@
 		background: rgba(74, 222, 128, 0.1);
 	}
 
+	/* The bar sits under the header; the chips of the room's details follow
+	   with a clear gap, so they never crowd the bar. */
 	.progress-bar {
 		height: 4px;
+		margin: 0 0 1rem;
 		background: #333;
 		border-radius: 2px;
 		overflow: hidden;

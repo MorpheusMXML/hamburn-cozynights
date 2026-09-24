@@ -154,6 +154,15 @@ export const FEATURES: FeatureEntry[] = [
 	}
 ];
 
+/**
+ * What a bed with a ladder can never be, whatever its room and house say: an
+ * upper bunk is never wheelchair accessible — whoever needs the ♿ can't get
+ * up the ladder. The room stays accessible; the bed is not. Applied wherever
+ * a spot's features are summed up (effectiveFeatures, factsOf), so the ♿
+ * picker, the map filters, the guest pages and the messages all agree.
+ */
+export const NOT_UP_A_LADDER: readonly Feature[] = ['wheelchair'];
+
 const HOUSE_KIND_VALUES: readonly string[] = HOUSE_KINDS.map((kind) => kind.value);
 const ROOM_KIND_VALUES: readonly string[] = ROOM_KINDS.map((kind) => kind.value);
 const BED_TYPE_VALUES: readonly string[] = BED_TYPES.map((type) => type.value);
@@ -343,12 +352,23 @@ export interface FeatureSource {
 	room?: readonly string[] | string | null;
 	/** PocketBase returns a single value for a select that allows only one. */
 	spot?: readonly string[] | string | null;
+	/**
+	 * The spot's bed type, when the sum is for one spot: a bed with a ladder
+	 * loses what NOT_UP_A_LADDER lists. Leave it out for a room or a house.
+	 */
+	bedType?: unknown;
+}
+
+/** The features a bed of this type can't have, whatever is around it. */
+function droppedForBed(type: unknown): readonly Feature[] {
+	return bedTypeEntry(type)?.ladder ? NOT_UP_A_LADDER : [];
 }
 
 /**
  * What is true for one spot: its own features plus those of its room and
  * house. Where two levels say the opposite ("heated" in an "unheated" hut
- * group), the closer one wins.
+ * group), the closer one wins. An upper bunk is never wheelchair accessible,
+ * however accessible its room is (NOT_UP_A_LADDER).
  */
 export function effectiveFeatures(source: FeatureSource): Feature[] {
 	const byLevel: [FeatureLevel, Feature[]][] = [
@@ -364,19 +384,22 @@ export function effectiveFeatures(source: FeatureSource): Feature[] {
 			chosen.add(feature);
 		}
 	}
+	for (const feature of droppedForBed(source.bedType)) chosen.delete(feature);
 	return FEATURES.filter((feature) => chosen.has(feature.value)).map((feature) => feature.value);
 }
 
-export function spotFacts(source: FeatureSource & { bedType?: unknown }): SpotFacts {
+export function spotFacts(source: FeatureSource): SpotFacts {
 	return { bedType: bedType(source.bedType), features: effectiveFeatures(source) };
 }
 
 /**
  * The same from a list that is already the sum of house, room and spot (what a
- * page or the ♿ picker was given), so no level filter narrows it again.
+ * page or the ♿ picker was given), so no level filter narrows it again — only
+ * the bed's own rule still applies (an upper bunk is never ♿).
  */
 export function factsOf(type: unknown, features: readonly string[] | undefined): SpotFacts {
 	const chosen = new Set((features ?? []).filter((value): value is Feature => isFeature(value)));
+	for (const feature of droppedForBed(type)) chosen.delete(feature);
 	return {
 		bedType: bedType(type),
 		features: FEATURES.filter((feature) => chosen.has(feature.value)).map(
@@ -584,6 +607,19 @@ export function needShort(need: SpecialNeed): string {
 
 export function filterLabel(value: unknown): string {
 	return SPOT_FILTERS.find((filter) => filter.value === value)?.label ?? String(value ?? '');
+}
+
+/**
+ * "🔥 Heated · 🔌 Power socket": a list of features as words with their icons,
+ * for the booking pass, the wallet passes and the messages. Empty when the
+ * list is.
+ */
+export function featureText(features: readonly string[] | undefined): string {
+	return (features ?? [])
+		.map((value) => featureEntry(value))
+		.filter((entry): entry is FeatureEntry => !!entry)
+		.map((entry) => `${entry.icon} ${entry.label}`)
+		.join(' · ');
 }
 
 /** "Lower bunk · 🔌 Power socket" for a spot card, empty when nothing is known. */

@@ -6,6 +6,7 @@ import {
 	BED_TYPES,
 	FEATURES,
 	HOUSE_KINDS,
+	NOT_UP_A_LADDER,
 	ROOM_KINDS,
 	SPOT_FILTERS,
 	availableFilters,
@@ -13,6 +14,8 @@ import {
 	defaultRoomKind,
 	detailsSummary,
 	effectiveFeatures,
+	factsOf,
+	featureText,
 	featuresFor,
 	isFeature,
 	matchNeeds,
@@ -28,6 +31,7 @@ import {
 	type SpotFacts
 } from '../src/lib/accommodation';
 import { SPECIAL_NEEDS, type SpecialNeed } from '../src/lib/special-needs';
+import { loadHookModule } from './hook-module';
 
 const facts = (bedType: string, features: Feature[] = []): SpotFacts =>
 	spotFacts({ bedType, spot: features.filter((f) => isFeature(f, 'spot')), room: features });
@@ -80,6 +84,31 @@ describe('the catalogue', () => {
 		expect(inHook.sort()).toEqual(BED_TYPES.map((type) => type.value).sort());
 	});
 
+	it('keeps the features and their rules PocketBase applies in step with it', () => {
+		const beds = loadHookModule('lib/beds.js');
+		expect(beds.FEATURES).toEqual(
+			FEATURES.map(({ value, label, icon, levels, opposite }) => ({
+				value,
+				label,
+				icon,
+				levels,
+				...(opposite ? { opposite } : {})
+			}))
+		);
+		expect(beds.NOT_UP_A_LADDER).toEqual(NOT_UP_A_LADDER);
+		expect(
+			beds.effectiveFeatures(['wheelchair', 'unheated'], ['heated'], ['power'], 'bunk_upper')
+		).toEqual(
+			effectiveFeatures({
+				house: ['wheelchair', 'unheated'],
+				room: ['heated'],
+				spot: ['power'],
+				bedType: 'bunk_upper'
+			})
+		);
+		expect(beds.featureText(['heated', 'power'])).toBe(featureText(['heated', 'power']));
+	});
+
 	it('calls a room of a hut group a hut', () => {
 		expect(roomWord('hut_group')).toBe('hut');
 		expect(roomWord('hut_group', true)).toBe('huts');
@@ -126,6 +155,32 @@ describe('what a spot inherits', () => {
 
 	it('drops what a level may not set', () => {
 		expect(effectiveFeatures({ house: ['own_bathroom'], spot: ['quiet'] })).toEqual([]);
+	});
+
+	it('never calls an upper bunk wheelchair accessible, however accessible its room is', () => {
+		const around = { house: ['wheelchair', 'heated'], room: ['ground_floor'], spot: ['power'] };
+		expect(effectiveFeatures({ ...around, bedType: 'bunk_upper' })).toEqual([
+			'ground_floor',
+			'heated',
+			'power'
+		]);
+		// the lower bunk and every other bed keep the room's accessibility
+		expect(effectiveFeatures({ ...around, bedType: 'bunk_lower' })).toContain('wheelchair');
+		expect(effectiveFeatures({ ...around, bedType: 'single' })).toContain('wheelchair');
+		expect(effectiveFeatures({ ...around })).toContain('wheelchair');
+		// the same when the sum was made elsewhere (the ♿ picker's list)
+		expect(factsOf('bunk_upper', ['wheelchair', 'quiet']).features).toEqual(['quiet']);
+		expect(factsOf('bunk_lower', ['wheelchair', 'quiet']).features).toEqual([
+			'wheelchair',
+			'quiet'
+		]);
+		// so an upper bunk never answers "step-free" through the ♿ mark alone
+		expect(needFit('step_free', spotFacts({ bedType: 'bunk_upper', room: ['wheelchair'] }))).toBe(
+			'unknown'
+		);
+		expect(
+			spotMatchesFilter('step_free', spotFacts({ bedType: 'bunk_upper', room: ['wheelchair'] }))
+		).toBe(false);
 	});
 });
 
@@ -214,6 +269,13 @@ describe('wishes on the map and at the roulette', () => {
 });
 
 describe('summaries', () => {
+	it('writes a list of features as words with their icons', () => {
+		expect(featureText(['heated', 'power'])).toBe('🔥 Heated · 🔌 Power socket');
+		expect(featureText(['nonsense', 'quiet'])).toBe('🤫 Quiet zone');
+		expect(featureText([])).toBe('');
+		expect(featureText(undefined)).toBe('');
+	});
+
 	it('names the bed type and the features of the spot itself', () => {
 		expect(spotSummary(facts('bunk_lower'), [])).toBe('Lower bunk');
 		expect(spotSummary(facts('bunk_lower', ['power']), ['power'])).toBe(

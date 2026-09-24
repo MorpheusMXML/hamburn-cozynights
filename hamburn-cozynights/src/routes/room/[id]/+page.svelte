@@ -2,7 +2,7 @@
 	import PlaceDetails from '$lib/components/PlaceDetails.svelte';
 	import { bedTypeEntry, featureEntry } from '$lib/accommodation';
 	import { bunkNote, bunkOf, groupBunks, type BunkLevel } from '$lib/bunks';
-	import PixelBunk from '$lib/components/PixelBunk.svelte';
+	import BunkLadder from '$lib/components/BunkLadder.svelte';
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
@@ -425,18 +425,21 @@
 	<div class="beds-grid">
 		{#each units as unit (unit.kind === 'bunk' ? unit.lower.id : unit.spot.id)}
 			{#if unit.kind === 'bunk'}
-				<!-- One bed, two levels, drawn as a neon pixel bunk bed: the upper
-				     half on top, the frame and ladder around, the lower half below.
-				     Each half books like a card of its own. -->
-				<div class="bunk-unit" in:fade={{ duration: reduceMotion ? 0 : 300 }}>
-					<PixelBunk upperState={spotState(unit.upper)} lowerState={spotState(unit.lower)}>
-						{#snippet upper()}
-							{@render spotCard(unit.upper, 'upper')}
-						{/snippet}
-						{#snippet lower()}
-							{@render spotCard(unit.lower, 'lower')}
-						{/snippet}
-					</PixelBunk>
+				<!-- One bed, two levels: the upper half on top, the ladder between,
+				     the lower half below. Each half books like a card of its own and
+				     wears its own state colour; the tile only frames the pair. -->
+				<div
+					class="bunk-tile"
+					class:state-ring={unit.lower.id === data.userBedId || unit.upper.id === data.userBedId}
+					in:fade={{ duration: reduceMotion ? 0 : 300 }}
+				>
+					{@render spotCard(unit.upper, 'upper')}
+					<div class="bunk-rail" aria-hidden="true">
+						<span class="rail-line"></span>
+						<BunkLadder height={26} rungs={3} />
+						<span class="rail-line"></span>
+					</div>
+					{@render spotCard(unit.lower, 'lower')}
 				</div>
 			{:else}
 				{@render spotCard(unit.spot, null)}
@@ -1016,26 +1019,50 @@
 		outline-offset: 2px;
 	}
 
-	/* A bunk bed: one tile in the grid (PixelBunk), the two halves stacked as
-	   its mattresses. A half is the whole mattress: the pixel border and the
-	   colour are drawn by the mattress box, so the card itself goes flat. */
-	.bunk-unit {
+	/* A bunk bed: one tile in the grid, the two halves stacked with the ladder
+	   between them. The halves keep the card look and the colour of their own
+	   state (data-state); the tile only frames them, and breathes (state-ring,
+	   in my colour) when one of them is mine. */
+	.bunk-tile {
+		--state: var(--state-checked-in);
+		display: flex;
+		flex-direction: column;
 		min-width: 0;
+		padding: 0.4rem;
+		border: 1px solid #222;
+		border-radius: 20px;
+		background:
+			radial-gradient(120% 90% at 50% 0%, rgba(45, 212, 191, 0.08), transparent 60%), #0b0b0b;
+		transition: border-color 0.2s;
 	}
-	.bed-card.bunk-half {
-		border: 0;
-		border-radius: 0;
-		background: transparent;
-		box-shadow: none;
+	.bunk-tile:hover {
+		border-color: #333;
+	}
+	.bunk-tile .bed-card {
+		border-radius: 14px;
+		flex: 1;
 	}
 	/* The hover lift would hide behind the neighbouring half. The selectors
 	   must outrank `.bed-card.free:hover:not(.disabled)` above, so they name
 	   the half and the :not() too. */
-	.bed-card.bunk-half.free:hover:not(.disabled),
-	.bed-card.bunk-half.mine:hover {
+	.bunk-tile .bed-card.bunk-half.free:hover:not(.disabled),
+	.bunk-tile .bed-card.bunk-half.mine:hover {
 		transform: none;
-		box-shadow: none;
-		border-color: transparent;
+	}
+	.bunk-rail {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.1rem 1rem;
+		pointer-events: none;
+	}
+	.rail-line {
+		flex: 1;
+		height: 0;
+		border-top: 1px dashed #2a2a2a;
+	}
+	.bunk-tile:hover .rail-line {
+		border-top-color: rgba(45, 212, 191, 0.4);
 	}
 
 	/* "▲ Upper" / "▼ Lower" next to the label, on the label's line while there
@@ -1058,6 +1085,7 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
+		.bunk-tile,
 		.bed-card {
 			transition: none;
 		}
