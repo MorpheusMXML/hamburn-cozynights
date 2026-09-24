@@ -231,6 +231,30 @@ describe('passSummary', () => {
 		expect(await passSummary(c.pb as any, c.order as any, c.bed as any)).toEqual(TICKET);
 	});
 
+	it('says which level of a bunk bed the spot is and where the other one is', async () => {
+		const c = campWithGuest();
+		const top = c.pb.seed('beds', {
+			label: 'B2',
+			room: c.bed.room,
+			enabled: true,
+			bed_type: 'bunk_upper',
+			bunk_partner: c.bed.id
+		});
+		Object.assign(c.bed, { bed_type: 'bunk_lower', bunk_partner: top.id });
+		expect((await passSummary(c.pb as any, c.order as any, c.bed as any)).bed).toBe(
+			'Lower bunk · below B2'
+		);
+		expect((await passSummary(c.pb as any, c.order as any, top as any)).bed).toBe(
+			'Upper bunk · above B1'
+		);
+		// The partner is gone (a half-written pairing): the level alone.
+		Object.assign(c.bed, { bunk_partner: 'nosuchspot' });
+		expect((await passSummary(c.pb as any, c.order as any, c.bed as any)).bed).toBe('Lower bunk');
+		// A single bed says only what it is.
+		Object.assign(c.bed, { bed_type: 'single', bunk_partner: '' });
+		expect((await passSummary(c.pb as any, c.order as any, c.bed as any)).bed).toBe('Single bed');
+	});
+
 	it('makes the pass code on first use', async () => {
 		const c = campWithGuest({ passCode: '' });
 		const send = vi.fn(async () => ({ code: 'NEWCODE23456' }));

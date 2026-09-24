@@ -5,6 +5,14 @@ import { getBookingSettings } from '$lib/server/settings';
 import { readBookings } from '$lib/server/bookings';
 import { TEMPLATE_LIMITS, compareNatural } from '$lib/template';
 import { parseDetailsForm, parseSpotForm, type BedType } from '$lib/accommodation';
+import {
+	BUNK_LEVEL_TYPE,
+	bunkOf,
+	stackProblem,
+	stackWrites,
+	unstackWrite,
+	type BunkSpot
+} from '$lib/bunks';
 
 // 1. Define the type including "expand" for related records 🔗
 type RoomWithHouse = RoomsResponse<{ house: HousesResponse }>;
@@ -26,6 +34,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			filter: locals.pb.filter('room = {:roomId}', { roomId: roomId }),
 			sort: 'label'
 		});
+		// PocketBase sorts "B1, B10, B2"; the crew reads B1, B2, … B10. The bunk
+		// pairing and the SPOT TYPES patterns use the same order.
+		beds.sort((a, b) => compareNatural(a.label ?? '', b.label ?? ''));
 
 		const [{ isLayoutLocked, phase }, bookings] = await Promise.all([
 			getBookingSettings(locals.pb),
@@ -46,6 +57,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 const LOCKED_MESSAGE =
 	"Spots are locked while booking is live or closed: the layout holds the guests' bookings. Only locking 🔒 and the ♿ special-needs mark still work. A superuser can switch back to Staging Mode in the Control Center.";
 const SERVER_ERROR = 'The server could not save the change. Reload the page and try again.';
+
+/** The spots of the room in the order the page shows, with what a bunk bed needs. */
+async function readRoomBeds(pb: App.Locals['pb'], roomId: string) {
+	const beds = await pb.collection('beds').getFullList<BedsResponse>({
+		filter: pb.filter('room = {:id}', { id: roomId }),
+		fields: 'id,label,bed_type,bunk_partner'
+	});
+	beds.sort((a, b) => compareNatural(a.label ?? '', b.label ?? ''));
+	return beds as (BedsResponse & BunkSpot)[];
+}
 
 export const actions: Actions = {
 	createBed: async ({ request, params, locals }) => {
@@ -238,6 +259,24 @@ export const actions: Actions = {
 		if (!spot.ok) return fail(400, { message: spot.error });
 
 		const patch: Record<string, unknown> = { ...spot.value };
+
+		// The level of a stacked spot comes from the stacking, not from the form.
+		// Features and the label may still change.
+		try {
+			const stored = await locals.pb.collection('beds').getOne<BedsResponse>(id, {
+				fields: 'id,bed_type,bunk_partner'
+			});
+			if (stored.bunk_partner && (stored.bed_type ?? '') !== spot.value.bed_type) {
+				return fail(400, {
+					message:
+						'This spot is part of a bunk bed, so its level comes from the stacking. Unstack it to change the bed.'
+				});
+			}
+		} catch (err) {
+			console.error('[Action:saveSpot] The spot could not be read:', err);
+			return fail(400, { message: 'The spot was not found. Reload the page and try again.' });
+		}
+
 		const { isLayoutLocked } = await getBookingSettings(locals.pb);
 		if (data.has('label') && !isLayoutLocked) {
 			const label = String(data.get('label') ?? '').trim();
@@ -276,14 +315,21 @@ export const actions: Actions = {
 	/**
 	 * The bed type of every spot of the room at once — a room of bunk beds is
 	 * entered in one click instead of eight. Spots keep their labels; the order
-	 * is the one the page shows.
+	 * is the one the page shows (natural label order: B1, B2, … B10). "Bunk
+	 * beds" also stacks the spots in pairs — B1 + B2, B3 + B4, … — so each pair
+	 * shows as one bed; a trailing odd spot stands alone with no bed type. The
+	 * other patterns take every bunk bed apart again.
 	 */
 	setBedTypes: async ({ request, params, locals }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
 
 		const pattern = String((await request.formData()).get('pattern') ?? '');
-		const patterns: Record<string, (index: number) => BedType | ''> = {
-			bunks: (index) => (index % 2 === 0 ? 'bunk_lower' : 'bunk_upper'),
+		const patterns: Record<string, (index: number, count: number) => BedType | ''> = {
+			bunks: (index, count) => {
+				// The last spot of an odd room has nobody to stack with.
+				if (index % 2 === 0 && index === count - 1) return '';
+				return index % 2 === 0 ? BUNK_LEVEL_TYPE.lower : BUNK_LEVEL_TYPE.upper;
+			},
 			single: () => 'single',
 			clear: () => ''
 		};
@@ -291,17 +337,105 @@ export const actions: Actions = {
 		if (!bedType) return fail(400, { message: 'Pick what the spots of this room are.' });
 
 		try {
-			const beds = await locals.pb.collection('beds').getFullList<BedsResponse>({
-				filter: locals.pb.filter('room = {:id}', { id: params.id }),
-				fields: 'id,label'
-			});
-			beds.sort((a, b) => compareNatural(a.label ?? '', b.label ?? ''));
+			const beds = await readRoomBeds(locals.pb, params.id);
 			for (const [index, bed] of beds.entries()) {
-				await locals.pb.collection('beds').update(bed.id, { bed_type: bedType(index) });
+				const bed_type = bedType(index, beds.length);
+				let bunk_partner = '';
+				if (pattern === 'bunks' && bed_type) {
+					// Even index: the lower bunk, its partner is the next spot; odd
+					// index: the upper bunk above the spot before it.
+					bunk_partner = index % 2 === 0 ? beds[index + 1].id : beds[index - 1].id;
+				}
+				await locals.pb.collection('beds').update(bed.id, { bed_type, bunk_partner });
 			}
 			return { success: true };
 		} catch (err) {
 			console.error('[Action:setBedTypes] FAILED:', err);
+			return fail(500, { message: SERVER_ERROR });
+		}
+	},
+
+	/**
+	 * Two spots become one bunk bed: `lower` gets `upper` stacked on top.
+	 * Allowed in every phase, like 🔒 and ♿: a detail of the spots, not a
+	 * change of the layout — a booked spot keeps its guest and gets a level.
+	 * Both sides are written here; pb_hooks/cozy_bunks.pb.js only heals.
+	 */
+	stackBunk: async ({ request, params, locals }) => {
+		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
+
+		const data = await request.formData();
+		const lower = String(data.get('lower') ?? '');
+		const upper = String(data.get('upper') ?? '');
+		if (!lower || !upper) {
+			return fail(400, { message: 'Pick the two spots to stack. Reload the page and try again.' });
+		}
+
+		try {
+			const beds = await readRoomBeds(locals.pb, params.id);
+			const problem = stackProblem(beds, lower, upper);
+			if (problem) return fail(400, { message: problem });
+
+			const writes = stackWrites(lower, upper);
+			await locals.pb.collection('beds').update(writes.lower.id, {
+				bunk_partner: writes.lower.bunk_partner,
+				bed_type: writes.lower.bed_type
+			});
+			await locals.pb.collection('beds').update(writes.upper.id, {
+				bunk_partner: writes.upper.bunk_partner,
+				bed_type: writes.upper.bed_type
+			});
+			console.log(`[Action:stackBunk] Admin: ${locals.admin.email}, ${upper} above ${lower}`);
+			return { success: true };
+		} catch (err) {
+			console.error('[Action:stackBunk] FAILED:', err);
+			return fail(500, { message: SERVER_ERROR });
+		}
+	},
+
+	/** A bunk bed is taken apart: both spots stand alone again, with no level. */
+	unstackBunk: async ({ request, params, locals }) => {
+		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
+
+		const id = String((await request.formData()).get('id') ?? '');
+		if (!id) return fail(400, { message: 'No spot was selected. Reload the page and try again.' });
+
+		try {
+			const beds = await readRoomBeds(locals.pb, params.id);
+			const bunk = bunkOf(beds, id);
+			if (!bunk) {
+				return fail(400, { message: 'This spot is not part of a bunk bed. Reload the page.' });
+			}
+			for (const spot of [bunk.lower, bunk.upper]) {
+				const { id: spotId, ...patch } = unstackWrite(spot);
+				await locals.pb.collection('beds').update(spotId, patch);
+			}
+			console.log(`[Action:unstackBunk] Admin: ${locals.admin.email}, ${bunk.lower.id}`);
+			return { success: true };
+		} catch (err) {
+			console.error('[Action:unstackBunk] FAILED:', err);
+			return fail(500, { message: SERVER_ERROR });
+		}
+	},
+
+	/** The two levels of a bunk bed change places; the pairing stays. */
+	swapBunk: async ({ request, params, locals }) => {
+		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
+
+		const id = String((await request.formData()).get('id') ?? '');
+		if (!id) return fail(400, { message: 'No spot was selected. Reload the page and try again.' });
+
+		try {
+			const beds = await readRoomBeds(locals.pb, params.id);
+			const bunk = bunkOf(beds, id);
+			if (!bunk) {
+				return fail(400, { message: 'This spot is not part of a bunk bed. Reload the page.' });
+			}
+			await locals.pb.collection('beds').update(bunk.lower.id, { bed_type: BUNK_LEVEL_TYPE.upper });
+			await locals.pb.collection('beds').update(bunk.upper.id, { bed_type: BUNK_LEVEL_TYPE.lower });
+			return { success: true };
+		} catch (err) {
+			console.error('[Action:swapBunk] FAILED:', err);
 			return fail(500, { message: SERVER_ERROR });
 		}
 	},

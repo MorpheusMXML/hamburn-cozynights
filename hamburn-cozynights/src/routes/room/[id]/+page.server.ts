@@ -8,6 +8,7 @@ import type {
 	OrdersResponse
 } from '$lib/pocketbase-types';
 import { effectiveFeatures, readFeatures, roomKind } from '$lib/accommodation';
+import { compareNatural } from '$lib/template';
 import { decrypt } from '$lib/server/crypto';
 import {
 	BookingService,
@@ -76,6 +77,10 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			})
 		]);
 
+		// PocketBase sorts labels as text (B1, B10, B2); the page shows and pairs
+		// them in the order people count in (B1, B2, …, B10).
+		beds.sort((a, b) => compareNatural(a.label, b.label));
+
 		// Only these fields reach the browser. The expanded orders carry other
 		// guests' ticket codes and customer names and must never be serialized.
 		// `bookable` only matters for free spots: for a taken one it would tell
@@ -98,7 +103,10 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				// What kind of bed it is and what only this spot has: the room's and
 				// the house's features are shown once, above the list.
 				bedType: bed.bed_type ?? '',
-				features: readFeatures(bed.features, 'spot')
+				features: readFeatures(bed.features, 'spot'),
+				// The other spot of a bunk bed (a record id, not personal data): the
+				// page stacks the two into one tile.
+				bunkPartner: bed.bunk_partner ?? ''
 			};
 		});
 

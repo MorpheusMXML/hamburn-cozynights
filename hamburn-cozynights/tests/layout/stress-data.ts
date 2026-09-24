@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
 import { BURNER_NAME_MAX } from '../../src/lib/special-needs';
 import { TEMPLATE_LIMITS } from '../../src/lib/template';
-import { BED_TYPES, DESCRIPTION_MAX } from '../../src/lib/accommodation';
+import { BED_TYPES, DESCRIPTION_MAX, type BedType } from '../../src/lib/accommodation';
 import { TICKET_LIMITS } from '../../src/lib/tickets';
 
 export const TEXTS = {
@@ -47,6 +47,16 @@ export const BED_LABELS = [
 	'1',
 	'Sofa'
 ] as const;
+
+/**
+ * The two bunk beds of the stress room, lower level first. Each tile mixes
+ * states: a locked upper bunk over a spot another guest booked, and a booked
+ * upper bunk over "my" spot.
+ */
+export const BUNK_PAIRS: readonly [lower: string, upper: string][] = [
+	['Lower 1', 'Upper 1'],
+	['Lower 2', 'Upper 2']
+];
 
 for (const [what, value, max] of [
 	['house name', TEXTS.houseLong, TEMPLATE_LIMITS.houseNameLength],
@@ -221,18 +231,16 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 	const tag = uid();
 	// Houses on all four edges of the map (0–1000 × 0–700): their labels must
 	// stay on the map. Far enough apart that labels don't cover each other.
-	const house = await pb
-		.collection('houses')
-		.create({
-			name: `${TEXTS.houseLong.slice(0, 90)} ${tag}`,
-			x: 12,
-			y: 330,
-			// The details of a place at their worst: every chip a house can have
-			// and a description at the limit (src/lib/accommodation.ts).
-			kind: 'hut_group',
-			features: ['wheelchair', 'ground_floor', 'toilets_inside', 'heated', 'quiet'],
-			description: TEXTS.descriptionLong
-		});
+	const house = await pb.collection('houses').create({
+		name: `${TEXTS.houseLong.slice(0, 90)} ${tag}`,
+		x: 12,
+		y: 330,
+		// The details of a place at their worst: every chip a house can have
+		// and a description at the limit (src/lib/accommodation.ts).
+		kind: 'hut_group',
+		features: ['wheelchair', 'ground_floor', 'toilets_inside', 'heated', 'quiet'],
+		description: TEXTS.descriptionLong
+	});
 	const otherHouseIds: string[] = [];
 	const otherRoomIds: string[] = [];
 	for (const [name, x, y] of [
@@ -260,6 +268,17 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		description: TEXTS.descriptionLong
 	});
 	const beds: Record<string, string> = {};
+	// One of every kind of bed: the stacked spots carry their level, the other
+	// five labels get the other five kinds (src/lib/accommodation.ts).
+	const levels: Record<string, BedType> = {};
+	for (const [lower, upper] of BUNK_PAIRS) {
+		levels[lower] = 'bunk_lower';
+		levels[upper] = 'bunk_upper';
+	}
+	const otherKinds = BED_TYPES.map((type) => type.value).filter(
+		(kind) => kind !== 'bunk_lower' && kind !== 'bunk_upper'
+	);
+	let kind = 0;
 	for (const label of BED_LABELS) {
 		const bed = await pb.collection('beds').create({
 			label,
@@ -268,11 +287,17 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 			occupied: false,
 			is_locked: label === 'Upper 1',
 			is_special: label.startsWith('Doppelbett'),
-			// One of every kind of bed, and a socket at the longest label.
-			bed_type: BED_TYPES[BED_LABELS.indexOf(label) % BED_TYPES.length].value,
+			// A socket at the longest label.
+			bed_type: levels[label] ?? otherKinds[kind++ % otherKinds.length],
 			features: label.startsWith('Doppelbett') ? ['power'] : []
 		});
 		beds[label] = bed.id;
+	}
+	// The pairing is written on both sides, like the room page does (the
+	// PocketBase hook would complete the other side too).
+	for (const [lower, upper] of BUNK_PAIRS) {
+		await pb.collection('beds').update(beds[lower], { bunk_partner: beds[upper] });
+		await pb.collection('beds').update(beds[upper], { bunk_partner: beds[lower] });
 	}
 
 	// Bookings: other guests with awkward burner names, and "me".

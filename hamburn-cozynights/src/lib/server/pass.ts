@@ -1,6 +1,7 @@
 import encodeQR from 'qr';
 import { FailureRateLimiter } from '$lib/server/rate-limit';
 import { bedTypeLabel } from '$lib/accommodation';
+import { levelOf } from '$lib/bunks';
 import type { ClientResponseError } from 'pocketbase';
 import type {
 	BedsResponse,
@@ -131,18 +132,31 @@ export function checkInOf(
 
 /**
  * The small ticket on house, room and map pages: the guest's pass code (made
- * on first use) and the spot `bed` they hold.
+ * on first use) and the spot `bed` they hold. For a bunk bed the "Bed" row
+ * also says where the other level is ("Upper bunk · above B1"), which costs
+ * one more read — the partner spot's label — only for a stacked spot.
  */
 export async function passSummary(
 	adminPb: TypedPocketBase,
 	order: Pick<OrdersResponse, 'id' | 'pass_code' | 'burner_name'>,
-	bed: Pick<BedsResponse, 'room' | 'label'> & { bed_type?: string }
+	bed: Pick<BedsResponse, 'room' | 'label'> & { bed_type?: string; bunk_partner?: string }
 ): Promise<PassSummary> {
-	const [code, room] = await Promise.all([
+	const level = levelOf(bed);
+	const [code, room, partner] = await Promise.all([
 		ensurePassCode(adminPb, order),
 		adminPb
 			.collection('rooms')
-			.getOne<RoomsResponse<{ house?: HousesResponse }>>(bed.room, { expand: 'house' })
+			.getOne<RoomsResponse<{ house?: HousesResponse }>>(bed.room, { expand: 'house' }),
+		bed.bunk_partner && level
+			? adminPb
+					.collection('beds')
+					.getOne<Pick<BedsResponse, 'id' | 'label'>>(bed.bunk_partner, { fields: 'id,label' })
+					// A half-written pairing (the partner gone): say the level alone.
+					.catch((err) => {
+						if (!isNotFound(err)) throw err;
+						return null;
+					})
+			: null
 	]);
 	return {
 		code: formatPassCode(code),
@@ -151,8 +165,15 @@ export async function passSummary(
 		spot: bed.label,
 		burnerName: burnerNameOf(order),
 		// Only when the crew wrote it down, like every other detail.
-		...(bedTypeLabel(bed.bed_type) ? { bed: bedTypeLabel(bed.bed_type) } : {})
+		...(bedTypeLabel(bed.bed_type) ? { bed: bedRow(bed.bed_type, level, partner?.label) } : {})
 	};
+}
+
+/** "Upper bunk · above B1", or just "Upper bunk" when the other level is unknown. */
+function bedRow(bedType: string | undefined, level: 'lower' | 'upper' | null, partner?: string) {
+	const label = bedTypeLabel(bedType);
+	if (!level || !partner) return label;
+	return `${label} · ${level === 'lower' ? 'below' : 'above'} ${partner}`;
 }
 
 /** Where the guest's pass lives; also what its QR code holds. */

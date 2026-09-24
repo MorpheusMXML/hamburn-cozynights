@@ -7,9 +7,22 @@
 	import LayoutLockNotice from '$lib/components/admin/LayoutLockNotice.svelte';
 	import SpotDetails from '$lib/components/admin/SpotDetails.svelte';
 	import LockGlyph from '$lib/components/LockGlyph.svelte';
+	import BunkLadder from '$lib/components/BunkLadder.svelte';
 	import { bedTypeEntry, bedTypeMix, featureEntry, readFeatures } from '$lib/accommodation';
 	import { LOCK_SPOT_TIP, layoutLock, lockAttrs } from '$lib/layout-lock';
+	import {
+		bunkOf,
+		groupBunks,
+		levelOf,
+		partnerOf,
+		stackCandidates,
+		type BunkLevel,
+		type SpotUnit
+	} from '$lib/bunks';
+	import { compareNatural } from '$lib/template';
 	import { fade, fly, scale } from 'svelte/transition';
+	import { flip } from 'svelte/animate';
+	import { onMount, tick } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
 	import { bookingsBySpot, guestLabel } from '$lib/bookings';
@@ -36,6 +49,132 @@
 	$: bedMix = bedTypeMix(beds.map((bed) => bed.bed_type));
 
 	const spotName = (bed: Bed) => (bed.label ? `"${bed.label}"` : 'the unnamed spot');
+	const plainName = (bed: Bed) => bed.label || 'the unnamed spot';
+
+	// Bunk beds: the grid shows units — a spot on its own, or two stacked into
+	// one tile. Natural label order (B1, B2, … B10), the same the server pairs in.
+	$: sortedBeds = [...beds].sort((a, b) => compareNatural(a.label ?? '', b.label ?? ''));
+	$: units = groupBunks(sortedBeds);
+	$: singles = units.filter((unit) => unit.kind === 'single').length;
+	// A bunk bed is keyed by its first spot in list order — where groupBunks
+	// places the tile — not by its lower one: a SWAP exchanges the levels
+	// inside the tile instead of tearing the tile down and building a new one.
+	$: position = new Map(sortedBeds.map((bed, index) => [bed.id, index]));
+	$: unitKey = (unit: SpotUnit<Bed>) => {
+		if (unit.kind === 'single') return unit.spot.id;
+		const lowerFirst = (position.get(unit.lower.id) ?? 0) <= (position.get(unit.upper.id) ?? 0);
+		return lowerFirst ? unit.lower.id : unit.upper.id;
+	};
+
+	// Every animation on this page is gated on the visitor's motion preference.
+	let reduceMotion = false;
+	onMount(() => {
+		reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	});
+	const ms = (duration: number) => (reduceMotion ? 0 : duration);
+	const wait = (duration: number) => new Promise((r) => setTimeout(r, duration));
+
+	/**
+	 * Stacking mode: the crew picked a spot to be the lower bunk (stackingId)
+	 * and every other single spot offers itself as the upper one. Escape,
+	 * CANCEL ✕ or the STACK button again leave the mode.
+	 */
+	let stackingId: string | null = null;
+	/** The spot that was just put on top: it lifts off before the tile appears. */
+	let mergingId: string | null = null;
+	/** The lower spot of the tile that was just stacked: its ladder draws itself. */
+	let drawnBunkId: string | null = null;
+	/** The upper spot of the tile being taken apart: it flies out. */
+	let unstackingUpperId: string | null = null;
+
+	$: stackSource = stackingId ? (sortedBeds.find((bed) => bed.id === stackingId) ?? null) : null;
+	$: stackTargets = new Set(
+		stackingId ? stackCandidates(sortedBeds, stackingId).map((bed) => bed.id) : []
+	);
+	// The source got stacked or deleted from elsewhere: the mode is over.
+	$: if (
+		stackingId &&
+		(!sortedBeds.some((bed) => bed.id === stackingId) || bunkOf(sortedBeds, stackingId))
+	) {
+		stackingId = null;
+	}
+
+	async function leaveStacking() {
+		const id = stackingId;
+		stackingId = null;
+		// The CANCEL button goes away with the mode; the focus returns to STACK.
+		await tick();
+		if (id) document.getElementById(`stack-${id}`)?.focus();
+	}
+
+	function onKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape' && stackingId) {
+			event.preventDefault();
+			leaveStacking();
+		}
+	}
+
+	/** ▲ PUT ON TOP: the target becomes the upper bunk above the source. */
+	function stackOn(target: Bed): SubmitFunction {
+		return () =>
+			async ({ result, update }) => {
+				if (result.type === 'success') {
+					const source = stackSource;
+					stackingId = null;
+					// The chosen card lifts off and fades; then the list regroups, the
+					// tile takes the lower spot's place and its ladder draws itself.
+					mergingId = target.id;
+					drawnBunkId = source?.id ?? null;
+					await wait(ms(600));
+					await update({ reset: false });
+					await tick();
+					mergingId = null;
+					toast(
+						`🪜 ${plainName(target)} is now the upper bunk above ${source ? plainName(source) : 'its partner'}.`,
+						'success'
+					);
+					const drawn = drawnBunkId;
+					setTimeout(() => {
+						if (drawnBunkId === drawn) drawnBunkId = null;
+					}, 1500);
+					return;
+				}
+				await explainFailure(result, 'Spots not stacked');
+				await update({ reset: false });
+			};
+	}
+
+	function unstack(lower: Bed, upper: Bed): SubmitFunction {
+		return () =>
+			async ({ result, update }) => {
+				if (result.type === 'success') {
+					unstackingUpperId = upper.id;
+					await update({ reset: false });
+					await tick();
+					unstackingUpperId = null;
+					toast(`⤴ ${plainName(upper)} and ${plainName(lower)} are single spots again.`, 'success');
+					return;
+				}
+				await explainFailure(result, 'Bunk bed not taken apart');
+				await update({ reset: false });
+			};
+	}
+
+	function swapLevels(lower: Bed, upper: Bed): SubmitFunction {
+		return () =>
+			async ({ result, update }) => {
+				if (result.type === 'success') {
+					await update({ reset: false });
+					toast(
+						`⇅ ${plainName(upper)} is now the lower bunk, ${plainName(lower)} the upper one.`,
+						'success'
+					);
+					return;
+				}
+				await explainFailure(result, 'Levels not swapped');
+				await update({ reset: false });
+			};
+	}
 
 	/** Shows why an action failed; the list is reloaded either way. */
 	async function explainFailure(result: ActionResult, title: string) {
@@ -89,11 +228,13 @@
 
 	function deleteSpot(bed: Bed): SubmitFunction {
 		return async ({ cancel }) => {
+			const partner = partnerOf(sortedBeds, bed.id);
 			const confirmed = await confirmDialog(
 				`Spot ${spotName(bed)} is removed from this room.` +
 					(bed.occupied
 						? ' It is currently taken: that booking is deleted too and the guest has to book again.'
 						: '') +
+					(partner ? ` Its bunk partner ${spotName(partner)} becomes a single spot again.` : '') +
 					' This cannot be undone.',
 				{
 					title: 'Delete this spot?',
@@ -123,6 +264,175 @@
 <svelte:head>
 	<title>{roomTitle}{house ? ` · ${house.name}` : ''} · CozyNights</title>
 </svelte:head>
+
+<svelte:window on:keydown={onKeydown} />
+
+{#snippet spotBody(bed: Bed, level: BunkLevel | null)}
+	<!-- One spot: the same body for a card of its own and for each level of a bunk bed. -->
+	<div class="bed-glow" class:red={bed.occupied} class:gray={bed.enabled === false}></div>
+	<div class="bed-icon">
+		{#if bed.enabled === false}
+			⚪️
+		{:else if bed.occupied}
+			🔴
+		{:else}
+			🟢
+		{/if}
+	</div>
+	<div class="bed-info">
+		<span class="bed-label">{bed.label || 'Unnamed Spot'}</span>
+		<span class="bed-status">
+			{#if bed.is_locked}
+				LOCKED 🔒
+			{:else if bed.enabled === false}
+				INACTIVE 🧊
+			{:else}
+				{bed.occupied ? 'CLAIMED 👥' : 'VACANT ✨'}
+			{/if}
+		</span>
+		{#if bed.is_special}
+			<span class="bed-status special">SPECIAL NEEDS ♿</span>
+		{/if}
+		{#if level}
+			<span class="state-chip level-chip" data-state="checked-in">
+				{level} bunk{#if level === 'upper'}&nbsp;<span aria-hidden="true">🪜</span>{/if}
+			</span>
+		{/if}
+		{#if bedTypeEntry(bed.bed_type) || readFeatures(bed.features, 'spot').length > 0}
+			<span class="bed-detail">
+				{bedTypeEntry(bed.bed_type)?.label ?? ''}
+				{#each readFeatures(bed.features, 'spot') as feature}
+					<span title={featureEntry(feature)?.label}>{featureEntry(feature)?.icon}</span>
+				{/each}
+			</span>
+		{/if}
+	</div>
+
+	{#if bookingOf[bed.id]}
+		<div class="bed-booking">
+			<BookingGuest row={bookingOf[bed.id]} />
+		</div>
+	{:else if bed.occupied && data.bookings === null}
+		<p class="bed-booking-missing">Who booked it could not be read. Reload the page.</p>
+	{/if}
+
+	<div class="bed-actions">
+		<form action="?/toggleLocked" method="POST" use:enhance={toggleSpot('Lock not changed')}>
+			<input type="hidden" name="id" value={bed.id} />
+			<input type="hidden" name="is_locked" value={bed.is_locked?.toString()} />
+			<button
+				class="btn-icon"
+				class:orange={bed.is_locked}
+				title={bed.is_locked
+					? 'Unlock: guests can book this spot again'
+					: 'Lock: guests cannot book this spot'}
+			>
+				<span class="btn-emoji">{bed.is_locked ? '🔓' : '🔒'}</span>
+				<span class="btn-text">{bed.is_locked ? 'UNLOCK' : 'LOCK'}</span>
+			</button>
+		</form>
+
+		<form
+			action="?/toggleSpecial"
+			method="POST"
+			use:enhance={toggleSpot('Special-needs mark not changed')}
+		>
+			<input type="hidden" name="id" value={bed.id} />
+			<input type="hidden" name="is_special" value={String(!!bed.is_special)} />
+			<button
+				class="btn-icon pink"
+				class:active={bed.is_special}
+				title={bed.is_special
+					? 'Special-needs spot: only the crew assigns it. Click to make it a normal spot again.'
+					: 'Special-needs spot: guests cannot book it, the crew assigns it to approved special-needs requests'}
+			>
+				<span class="btn-emoji">♿</span>
+				<span class="btn-text">{bed.is_special ? 'NORMAL' : 'SPECIAL'}</span>
+			</button>
+		</form>
+
+		<form action="?/toggleEnabled" method="POST" use:enhance={toggleSpot('Spot not changed')}>
+			<input type="hidden" name="id" value={bed.id} />
+			<input type="hidden" name="enabled" value={bed.enabled !== false} />
+			<button
+				class="btn-icon"
+				class:orange={bed.enabled === false}
+				title={bed.enabled === false
+					? 'Activate: the spot counts and can be booked'
+					: 'Deactivate: the spot is not in use and does not count'}
+				{...lockAttrs(lock?.('activate or deactivate spots', LOCK_SPOT_TIP))}
+			>
+				<span class="btn-emoji">{bed.enabled === false ? '⚡️' : '❄️'}</span>
+				<span class="btn-text">{bed.enabled === false ? 'ACTIVATE' : 'DEACTIVATE'}</span>
+			</button>
+		</form>
+
+		<form action="?/toggleOccupied" method="POST" use:enhance={toggleOccupied(bed)}>
+			<input type="hidden" name="id" value={bed.id} />
+			<input type="hidden" name="occupied" value={bed.occupied.toString()} />
+			<button
+				class="btn-icon turquoise"
+				title={bed.occupied ? 'Free this spot' : 'Mark this spot as taken without a ticket'}
+				disabled={!lock && bed.enabled === false}
+				class:disabled={!lock && bed.enabled === false}
+				{...lockAttrs(
+					bed.occupied ? lock?.('free booked spots') : lock?.('mark spots as taken', LOCK_SPOT_TIP)
+				)}
+			>
+				<span class="btn-emoji">🔄</span>
+				<span class="btn-text">{bed.occupied ? 'FREE' : 'TAKEN'}</span>
+			</button>
+		</form>
+
+		{#if level === null}
+			<!-- Only a spot on its own can become the lower bunk of a new bunk bed. -->
+			<div class="stack-slot">
+				<button
+					type="button"
+					id="stack-{bed.id}"
+					class="btn-icon turquoise"
+					class:active={stackingId === bed.id}
+					aria-pressed={stackingId === bed.id}
+					disabled={stackingId !== bed.id && singles < 2}
+					class:disabled={stackingId !== bed.id && singles < 2}
+					title={stackingId === bed.id
+						? 'Leave stacking: nothing changes'
+						: singles < 2
+							? 'A bunk bed needs two spots on their own: add another spot first'
+							: 'Stack another spot on top of this one: this spot becomes the lower bunk'}
+					on:click={() => (stackingId === bed.id ? leaveStacking() : (stackingId = bed.id))}
+				>
+					<span class="btn-emoji">🪜</span>
+					<span class="btn-text">STACK</span>
+				</button>
+			</div>
+		{/if}
+
+		<form action="?/deleteBed" method="POST" use:enhance={deleteSpot(bed)}>
+			<input type="hidden" name="id" value={bed.id} />
+			<button
+				class="btn-icon vanish"
+				title="Delete this spot"
+				{...lockAttrs(lock?.('delete spots'))}
+			>
+				<span class="btn-emoji">🗑</span>
+				<span class="btn-text">DELETE</span>
+			</button>
+		</form>
+	</div>
+
+	<SpotDetails
+		bed={{
+			id: bed.id,
+			label: bed.label,
+			bed_type: bed.bed_type,
+			features: bed.features
+		}}
+		canRename={!isLayoutLocked}
+		partnerLabel={partnerOf(sortedBeds, bed.id)?.label ?? ''}
+		level={levelOf(bed)}
+	/>
+{/snippet}
 
 <div class="dashboard-container">
 	<div class="header-row" in:fly={{ y: -20, duration: 500 }}>
@@ -224,13 +534,16 @@
 				>
 					<label class="sr-only" for="bed-type-pattern">Set the bed of every spot</label>
 					<select id="bed-type-pattern" name="pattern" bind:value={bedTypePattern}>
-						<option value="bunks">Bunk beds: lower, upper, lower…</option>
+						<option value="bunks">Bunk beds: B1 + B2 stacked, B3 + B4, …</option>
 						<option value="single">All single beds</option>
 						<option value="clear">Not specified</option>
 					</select>
 					<button class="btn-apply" type="submit">APPLY TO ALL {beds.length} SPOTS</button>
 				</form>
-				<p class="hint">In label order, so B1 is a lower bunk and B2 the upper one above it.</p>
+				<p class="hint">
+					In label order: B1 is the lower bunk, B2 the upper one above it, and the two are stacked
+					as one bed.
+				</p>
 			</section>
 		</aside>
 
@@ -240,160 +553,129 @@
 				<h3 class="column-title">ROOM CAPACITY 🛌</h3>
 			</header>
 
-			<div class="beds-grid">
-				{#each beds as bed (bed.id)}
-					<div
-						class="bed-card"
-						class:occupied={bed.occupied}
-						class:disabled={isLayoutLocked}
-						class:inactive={bed.enabled === false}
-						class:disintegrating={deletingBedId === bed.id}
-						in:fade
-					>
-						<div class="bed-glow" class:red={bed.occupied} class:gray={bed.enabled === false}></div>
-						<div class="bed-icon">
-							{#if bed.enabled === false}
-								⚪️
-							{:else if bed.occupied}
-								🔴
-							{:else}
-								🟢
-							{/if}
-						</div>
-						<div class="bed-info">
-							<span class="bed-label">{bed.label || 'Unnamed Spot'}</span>
-							<span class="bed-status">
-								{#if bed.is_locked}
-									LOCKED 🔒
-								{:else if bed.enabled === false}
-									INACTIVE 🧊
-								{:else}
-									{bed.occupied ? 'CLAIMED 👥' : 'VACANT ✨'}
-								{/if}
-							</span>
-							{#if bed.is_special}
-								<span class="bed-status special">SPECIAL NEEDS ♿</span>
-							{/if}
-							{#if bedTypeEntry(bed.bed_type) || readFeatures(bed.features, 'spot').length > 0}
-								<span class="bed-detail">
-									{bedTypeEntry(bed.bed_type)?.label ?? ''}
-									{#each readFeatures(bed.features, 'spot') as feature}
-										<span title={featureEntry(feature)?.label}>{featureEntry(feature)?.icon}</span>
-									{/each}
-								</span>
-							{/if}
-						</div>
+			<div class="beds-grid" class:stacking={stackingId !== null}>
+				{#each units as unit (unitKey(unit))}
+					<div class="unit" animate:flip={{ duration: ms(450) }} in:fade={{ duration: ms(300) }}>
+						{#if unit.kind === 'bunk'}
+							{@const fresh = drawnBunkId === unit.lower.id}
+							<div
+								class="bed-card bunk"
+								class:occupied={unit.lower.occupied || unit.upper.occupied}
+								class:disabled={isLayoutLocked}
+								class:state-ring={fresh}
+								class:state-ring-strong={fresh}
+								class:splitting={unit.upper.id === unstackingUpperId}
+								data-state={fresh ? 'checked-in' : undefined}
+								in:fade={{ duration: ms(250) }}
+								out:fade={{ duration: ms(300) }}
+							>
+								{#each [unit.upper, unit.lower] as half, i (half.id)}
+									<div
+										class="bunk-half"
+										class:upper={i === 0}
+										class:lower={i === 1}
+										class:occupied={half.occupied}
+										class:inactive={half.enabled === false}
+										class:disintegrating={deletingBedId === half.id}
+										animate:flip={{ duration: ms(450) }}
+										in:fly|global={{ y: -24, duration: ms(i === 0 ? 350 : 0) }}
+										out:fly|global={{
+											y: -30,
+											duration: ms(half.id === unstackingUpperId ? 350 : 0)
+										}}
+									>
+										{@render spotBody(half, i === 0 ? 'upper' : 'lower')}
+									</div>
+								{/each}
 
-						{#if bookingOf[bed.id]}
-							<div class="bed-booking">
-								<BookingGuest row={bookingOf[bed.id]} />
+								<div class="bunk-rungs">
+									<BunkLadder draw={fresh} height={40} rungs={4} />
+									<span class="rung-label">Bunk bed</span>
+									<form
+										action="?/swapBunk"
+										method="POST"
+										use:enhance={swapLevels(unit.lower, unit.upper)}
+									>
+										<input type="hidden" name="id" value={unit.lower.id} />
+										<button
+											class="btn-rung"
+											title="The two levels change places: {plainName(
+												unit.upper
+											)} goes down, {plainName(unit.lower)} up"
+										>
+											<span aria-hidden="true">⇅</span> SWAP
+										</button>
+									</form>
+									<form
+										action="?/unstackBunk"
+										method="POST"
+										use:enhance={unstack(unit.lower, unit.upper)}
+									>
+										<input type="hidden" name="id" value={unit.lower.id} />
+										<button
+											class="btn-rung"
+											title="Take the bunk bed apart: {plainName(unit.lower)} and {plainName(
+												unit.upper
+											)} become single spots again"
+										>
+											UNSTACK <span aria-hidden="true">⤴</span>
+										</button>
+									</form>
+								</div>
 							</div>
-						{:else if bed.occupied && data.bookings === null}
-							<p class="bed-booking-missing">Who booked it could not be read. Reload the page.</p>
+						{:else}
+							{@const bed = unit.spot}
+							{@const isSource = stackingId === bed.id}
+							{@const isTarget = stackingId !== null && stackTargets.has(bed.id)}
+							<div
+								class="bed-card"
+								class:occupied={bed.occupied}
+								class:disabled={isLayoutLocked}
+								class:inactive={bed.enabled === false}
+								class:disintegrating={deletingBedId === bed.id}
+								class:merging={mergingId === bed.id}
+								class:stack-source={isSource}
+								class:stack-target={isTarget}
+								class:state-ring={isSource || isTarget}
+								class:state-ring-strong={isSource}
+								data-state={isSource ? 'live' : isTarget ? 'staging' : undefined}
+								inert={isTarget}
+							>
+								{@render spotBody(bed, null)}
+
+								{#if isSource}
+									<div class="stack-hint" role="status" in:fly={{ y: -6, duration: ms(200) }}>
+										<span class="stack-hint-text">Pick the spot that goes on top ▲</span>
+										<button type="button" class="btn-cancel" on:click={leaveStacking}>
+											CANCEL ✕
+										</button>
+									</div>
+								{/if}
+							</div>
+
+							{#if isTarget}
+								<!-- Next to the card, not inside it: the covered card is inert, so
+								     the keyboard lands on this button and not on a control under the veil. -->
+								<form
+									class="stack-overlay"
+									method="POST"
+									action="?/stackBunk"
+									use:enhance={stackOn(bed)}
+									in:fade={{ duration: ms(200) }}
+								>
+									<input type="hidden" name="lower" value={stackingId} />
+									<input type="hidden" name="upper" value={bed.id} />
+									<button
+										class="btn-put-on-top"
+										title="{plainName(bed)} becomes the upper bunk above {stackSource
+											? plainName(stackSource)
+											: 'the chosen spot'}"
+									>
+										<span aria-hidden="true">▲</span> PUT ON TOP
+									</button>
+								</form>
+							{/if}
 						{/if}
-
-						<div class="bed-actions">
-							<form
-								action="?/toggleLocked"
-								method="POST"
-								use:enhance={toggleSpot('Lock not changed')}
-							>
-								<input type="hidden" name="id" value={bed.id} />
-								<input type="hidden" name="is_locked" value={bed.is_locked?.toString()} />
-								<button
-									class="btn-icon"
-									class:orange={bed.is_locked}
-									title={bed.is_locked
-										? 'Unlock: guests can book this spot again'
-										: 'Lock: guests cannot book this spot'}
-								>
-									<span class="btn-emoji">{bed.is_locked ? '🔓' : '🔒'}</span>
-									<span class="btn-text">{bed.is_locked ? 'UNLOCK' : 'LOCK'}</span>
-								</button>
-							</form>
-
-							<form
-								action="?/toggleSpecial"
-								method="POST"
-								use:enhance={toggleSpot('Special-needs mark not changed')}
-							>
-								<input type="hidden" name="id" value={bed.id} />
-								<input type="hidden" name="is_special" value={String(!!bed.is_special)} />
-								<button
-									class="btn-icon pink"
-									class:active={bed.is_special}
-									title={bed.is_special
-										? 'Special-needs spot: only the crew assigns it. Click to make it a normal spot again.'
-										: 'Special-needs spot: guests cannot book it, the crew assigns it to approved special-needs requests'}
-								>
-									<span class="btn-emoji">♿</span>
-									<span class="btn-text">{bed.is_special ? 'NORMAL' : 'SPECIAL'}</span>
-								</button>
-							</form>
-
-							<form
-								action="?/toggleEnabled"
-								method="POST"
-								use:enhance={toggleSpot('Spot not changed')}
-							>
-								<input type="hidden" name="id" value={bed.id} />
-								<input type="hidden" name="enabled" value={bed.enabled !== false} />
-								<button
-									class="btn-icon"
-									class:orange={bed.enabled === false}
-									title={bed.enabled === false
-										? 'Activate: the spot counts and can be booked'
-										: 'Deactivate: the spot is not in use and does not count'}
-									{...lockAttrs(lock?.('activate or deactivate spots', LOCK_SPOT_TIP))}
-								>
-									<span class="btn-emoji">{bed.enabled === false ? '⚡️' : '❄️'}</span>
-									<span class="btn-text">{bed.enabled === false ? 'ACTIVATE' : 'DEACTIVATE'}</span>
-								</button>
-							</form>
-
-							<form action="?/toggleOccupied" method="POST" use:enhance={toggleOccupied(bed)}>
-								<input type="hidden" name="id" value={bed.id} />
-								<input type="hidden" name="occupied" value={bed.occupied.toString()} />
-								<button
-									class="btn-icon turquoise"
-									title={bed.occupied
-										? 'Free this spot'
-										: 'Mark this spot as taken without a ticket'}
-									disabled={!lock && bed.enabled === false}
-									class:disabled={!lock && bed.enabled === false}
-									{...lockAttrs(
-										bed.occupied
-											? lock?.('free booked spots')
-											: lock?.('mark spots as taken', LOCK_SPOT_TIP)
-									)}
-								>
-									<span class="btn-emoji">🔄</span>
-									<span class="btn-text">{bed.occupied ? 'FREE' : 'TAKEN'}</span>
-								</button>
-							</form>
-
-							<form action="?/deleteBed" method="POST" use:enhance={deleteSpot(bed)}>
-								<input type="hidden" name="id" value={bed.id} />
-								<button
-									class="btn-icon vanish"
-									title="Delete this spot"
-									{...lockAttrs(lock?.('delete spots'))}
-								>
-									<span class="btn-emoji">🗑</span>
-									<span class="btn-text">DELETE</span>
-								</button>
-							</form>
-						</div>
-
-						<SpotDetails
-							bed={{
-								id: bed.id,
-								label: bed.label,
-								bed_type: bed.bed_type,
-								features: bed.features
-							}}
-							canRename={!isLayoutLocked}
-						/>
 					</div>
 				{/each}
 
@@ -757,11 +1039,229 @@
 		white-space: nowrap;
 		border: 0;
 	}
-	.occupied .bed-status {
+	.bed-card:not(.bunk).occupied .bed-status,
+	.bunk-half.occupied .bed-status {
 		color: #f87171;
 	}
 	.inactive .bed-label {
 		color: #777;
+	}
+
+	/* One grid cell: a spot on its own or a bunk bed. The flip slides it when
+	   the list regroups; the card inside keeps its own hover lift. */
+	.unit {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+	.unit > .bed-card {
+		flex: 1;
+	}
+
+	/* Stacking mode: the source breathes pink, the targets turquoise (the
+	   state ring from state.css), and bunk beds step back — they are no targets. */
+	.stacking .bed-card.bunk {
+		opacity: 0.45;
+	}
+	.stack-hint {
+		flex-basis: 100%;
+		min-width: 0;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem 1rem;
+		padding: 0.6rem 0.8rem;
+		border-radius: 8px;
+		background: var(--state-live-soft);
+		border: 1px solid rgba(244, 114, 182, 0.4);
+		color: #f472b6;
+		font-size: 0.72rem;
+		font-weight: 900;
+		letter-spacing: 1px;
+	}
+	.stack-hint-text {
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+	.btn-cancel {
+		background: transparent;
+		border: 1px solid #f472b6;
+		color: #f472b6;
+		border-radius: 6px;
+		padding: 0.35rem 0.6rem;
+		font: inherit;
+		font-size: 0.65rem;
+		font-weight: 900;
+		letter-spacing: 1px;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.btn-cancel:hover,
+	.btn-cancel:focus-visible {
+		background: rgba(244, 114, 182, 0.15);
+		color: #fff;
+	}
+	.stack-overlay {
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1rem;
+		border-radius: 12px;
+		background: rgba(4, 18, 26, 0.72);
+		backdrop-filter: blur(2px);
+	}
+	.btn-put-on-top {
+		max-width: 100%;
+		background: rgba(45, 212, 191, 0.14);
+		border: 2px solid #2dd4bf;
+		color: #00ffe0;
+		border-radius: 12px;
+		padding: 0.9rem 1.2rem;
+		font: inherit;
+		font-size: 0.95rem;
+		font-weight: 900;
+		letter-spacing: 2px;
+		cursor: pointer;
+		box-shadow: 0 0 18px rgba(45, 212, 191, 0.35);
+		transition:
+			transform 0.2s,
+			box-shadow 0.2s;
+		overflow-wrap: anywhere;
+	}
+	.btn-put-on-top:hover,
+	.btn-put-on-top:focus-visible {
+		transform: translateY(-3px);
+		box-shadow: 0 0 28px rgba(45, 212, 191, 0.6);
+		background: rgba(45, 212, 191, 0.25);
+		color: #fff;
+	}
+	/* The chosen spot lifts off and fades; then the list regroups under it. */
+	.bed-card.merging {
+		pointer-events: none;
+		transform: translateY(-40px) scale(0.85);
+		opacity: 0;
+		transition:
+			transform 0.55s cubic-bezier(0.2, 0.9, 0.3, 1),
+			opacity 0.5s ease;
+	}
+
+	/* The bunk tile: upper half, the rung strip, lower half, in one column. */
+	.bed-card.bunk {
+		flex-direction: column;
+		flex-wrap: nowrap;
+		align-items: stretch;
+		gap: 0;
+		padding: 0;
+		border-color: rgba(45, 212, 191, 0.35);
+	}
+	.bed-card.bunk.occupied {
+		border-color: #311;
+		background: #111;
+	}
+	.bed-card.bunk:hover:not(.disabled) {
+		border-color: #2dd4bf;
+	}
+	.bed-card.bunk.occupied:hover:not(.disabled) {
+		border-color: #ef4444;
+	}
+	.bunk-half {
+		position: relative;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 1rem;
+		padding: 1.5rem;
+		min-width: 0;
+	}
+	.bunk-half.upper {
+		order: 1;
+	}
+	.bunk-rungs {
+		order: 2;
+	}
+	.bunk-half.lower {
+		order: 3;
+	}
+	.bunk-half.occupied {
+		background: #150a0a;
+	}
+	.bunk-half.inactive {
+		background: #0a0a0a;
+	}
+	.bunk-half.inactive .bed-glow {
+		background: none;
+	}
+	/* While the tile splits, it floats over the single cards that take its place. */
+	.bed-card.bunk.splitting {
+		position: absolute;
+		inset: 0 auto auto 0;
+		width: 100%;
+		z-index: 2;
+		pointer-events: none;
+	}
+	.bunk-rungs {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 0.75rem;
+		padding: 0.5rem 1rem;
+		min-width: 0;
+		border-top: 1px solid rgba(45, 212, 191, 0.35);
+		border-bottom: 1px solid rgba(45, 212, 191, 0.35);
+		background: rgba(45, 212, 191, 0.05);
+	}
+	.rung-label {
+		flex: 1;
+		min-width: 0;
+		color: #2dd4bf;
+		font-size: 0.6rem;
+		font-weight: 900;
+		letter-spacing: 2px;
+		text-transform: uppercase;
+	}
+	.bunk-rungs form {
+		display: flex;
+		min-width: 0;
+	}
+	.btn-rung {
+		background: rgba(45, 212, 191, 0.08);
+		border: 1px solid rgba(45, 212, 191, 0.5);
+		color: #2dd4bf;
+		border-radius: 6px;
+		padding: 0.4rem 0.6rem;
+		font: inherit;
+		font-size: 0.62rem;
+		font-weight: 900;
+		letter-spacing: 1px;
+		cursor: pointer;
+		white-space: nowrap;
+		transition:
+			background 0.2s,
+			color 0.2s;
+	}
+	.btn-rung:hover,
+	.btn-rung:focus-visible {
+		background: rgba(45, 212, 191, 0.22);
+		color: #fff;
+	}
+	.level-chip {
+		align-self: flex-start;
+		margin-top: 2px;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.bed-card,
+		.bed-card.merging,
+		.btn-put-on-top,
+		.btn-rung,
+		.btn-icon {
+			transition: none;
+		}
 	}
 
 	/* Own row below the label: the five buttons don't fit next to it in a card of
@@ -790,7 +1290,8 @@
 		padding-top: 1rem;
 		border-top: 1px solid #222;
 	}
-	.bed-actions form {
+	.bed-actions form,
+	.stack-slot {
 		display: flex;
 		min-width: 0;
 	}
@@ -838,6 +1339,11 @@
 		color: #2dd4bf;
 		box-shadow: 0 0 10px rgba(45, 212, 191, 0.2);
 	}
+	.btn-icon.turquoise.active {
+		border-color: #f472b6;
+		color: #f472b6;
+		box-shadow: 0 0 10px rgba(244, 114, 182, 0.2);
+	}
 	.btn-icon.orange:hover:not(.disabled, [data-locked]) {
 		border-color: #fb923c;
 		color: #fb923c;
@@ -881,6 +1387,12 @@
 			padding: 1.25rem 1rem;
 		}
 		.bed-card {
+			padding: 1rem;
+		}
+		.bed-card.bunk {
+			padding: 0;
+		}
+		.bunk-half {
 			padding: 1rem;
 		}
 	}

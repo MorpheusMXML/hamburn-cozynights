@@ -43,7 +43,10 @@ export interface PassSummary {
 	room: string;
 	spot: string;
 	burnerName: string;
-	/** What kind of bed it is ("Lower bunk"), empty when nobody said. */
+	/**
+	 * What kind of bed it is ("Lower bunk"), and for a bunk bed where the
+	 * other level is ("Upper bunk · above B1"); absent when nobody said.
+	 */
 	bed?: string;
 }
 

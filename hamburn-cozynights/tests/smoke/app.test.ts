@@ -394,6 +394,8 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		});
 		const roomPage = await (await get(`/admin/room/${room.id}`, cookie)).text();
 		expect(roomPage).toContain('List Arriver');
+		// the bunk-bed control is on the spot's card (disabled: it stands alone)
+		expect(roomPage).toContain(`id="stack-${beds[0].id}"`);
 		expect(roomPage).toContain('action="/admin/tickets?/open"');
 		expect(roomPage).not.toContain(ticket.code);
 

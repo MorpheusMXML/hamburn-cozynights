@@ -1,13 +1,15 @@
 <script lang="ts">
 	import PlaceDetails from '$lib/components/PlaceDetails.svelte';
 	import { bedTypeEntry, featureEntry } from '$lib/accommodation';
+	import { bunkNote, bunkOf, groupBunks, type BunkLevel } from '$lib/bunks';
+	import BunkLadder from '$lib/components/BunkLadder.svelte';
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
-	import { onDestroy, tick } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import type { PageData, ActionData } from './$types';
 	import SlotMachine from '$lib/components/SlotMachine.svelte';
@@ -66,10 +68,43 @@
 	$: selectedBed = data.beds.find((b) => b.id === selectedBedId);
 	$: roomTitle = `${data.room.name || 'Room'} #${data.room.room_number}`;
 
-	/** "Lower bunk · 🔌 Power socket" under a spot's label. */
-	const spotLine = (bed: { bedType: string; features: string[] }) =>
+	/** A spot as $lib/bunks reads it: the server's safe fields plus the pairing. */
+	type Spot = PageData['beds'][number] & { bed_type: string; bunk_partner: string };
+	$: spots = data.beds.map((bed): Spot => ({
+		...bed,
+		bed_type: bed.bedType,
+		bunk_partner: bed.bunkPartner
+	}));
+	// The cards of the room: single spots as they are, a bunk bed as one tile.
+	// The server sorted the spots the way people count (B1, B2, …, B10), and a
+	// bunk bed sits where its first spot was.
+	$: units = groupBunks(spots);
+	// What the modal says about a stacked spot: "the upper bunk above B1".
+	$: selectedBunk = selectedBedId ? bunkOf(spots, selectedBedId) : null;
+	$: selectedLevel = selectedBunk
+		? selectedBunk.lower.id === selectedBedId
+			? 'lower'
+			: 'upper'
+		: null;
+	$: selectedNote = selectedBedId ? bunkNote(spots, selectedBedId) : '';
+
+	// Visitors who prefer reduced motion get the tiles without the fade.
+	let reduceMotion = false;
+	onMount(() => {
+		reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	});
+
+	/**
+	 * "Lower bunk · 🔌 Power socket" under a spot's label. In a bunk bed the
+	 * level chip says "Upper bunk" already, so its half only adds where the
+	 * other level is: "above B1 · 🔌 Power socket".
+	 */
+	$: spotLine = (
+		bed: { id: string; bedType: string; features: string[] },
+		level: BunkLevel | null
+	) =>
 		[
-			bedTypeEntry(bed.bedType)?.label,
+			level ? bunkNote(spots, bed.id) : bedTypeEntry(bed.bedType)?.label,
 			...bed.features.map((feature) => {
 				const entry = featureEntry(feature);
 				return entry ? `${entry.icon} ${entry.label}` : '';
@@ -77,6 +112,11 @@
 		]
 			.filter(Boolean)
 			.join(' · ');
+	/** The level chip on a half of a bunk bed. */
+	const LEVEL_NAME: Record<BunkLevel, string> = { lower: 'Lower bunk', upper: 'Upper bunk' };
+	/** Whether a card has a detail line at all. */
+	const hasDetail = (bed: { bedType: string; features: string[] }, level: BunkLevel | null) =>
+		!!level || !!bedTypeEntry(bed.bedType) || bed.features.length > 0;
 
 	// The page behind an open modal must not scroll along on phones.
 	$: if (typeof document !== 'undefined') {
@@ -359,104 +399,140 @@
 	{/if}
 
 	<div class="beds-grid">
-		{#each data.beds as bed}
-			{@const isMyBed = bed.id === data.userBedId}
-			{@const someoneElseBooked = bed.occupied && !isMyBed}
-			{@const iHaveAnotherBooking = !!data.userBedId && !isMyBed}
-			{@const isLocked = !data.isBookingActive}
-			{@const nameFinal = data.phase === 'closed'}
-
-			{#if someoneElseBooked}
-				<div class="bed-card occupied" data-bed-id={bed.id}>
-					<div class="icon" aria-hidden="true">🛏️</div>
-					<span class="label">{bed.label}</span>
-					{#if bedTypeEntry(bed.bedType) || bed.features.length > 0}
-						<span class="bed-detail">{spotLine(bed)}</span>
-					{/if}
-					<div class="status-box occupied">
-						<span class="status-text">Occupied</span>
-						<span class="guest-name">
-							{bed.burnerName || 'Mystery Burner'}
-						</span>
-					</div>
-				</div>
-			{:else if isMyBed}
-				<!-- The burner name can change in every phase but Closed (a handed-over
-				     ticket comes without one); moving or releasing needs Live Booking. -->
-				<button
-					class="bed-card mine {nameFinal ? 'locked' : ''}"
-					data-bed-id={bed.id}
-					on:click={() => !nameFinal && openBookingModal(bed.id, bed.burnerName)}
-					disabled={nameFinal}
+		{#each units as unit (unit.kind === 'bunk' ? unit.lower.id : unit.spot.id)}
+			{#if unit.kind === 'bunk'}
+				<!-- One bed, two levels: the upper half on top, the ladder between,
+				     the lower half below. Each half books like a card of its own. -->
+				<div
+					class="bunk-tile"
+					class:state-ring={unit.lower.id === data.userBedId || unit.upper.id === data.userBedId}
+					in:fade={{ duration: reduceMotion ? 0 : 300 }}
 				>
-					<div class="icon" aria-hidden="true">🛏️</div>
-					<span class="label">{bed.label}</span>
-					{#if bedTypeEntry(bed.bedType) || bed.features.length > 0}
-						<span class="bed-detail">{spotLine(bed)}</span>
-					{/if}
-					<div class="status-box my-status">
-						<span class="status-text">Your Spot</span>
-						<span class="guest-name">{bed.burnerName}</span>
-						<small class="edit-hint"
-							>{nameFinal
-								? data.guestPhase === 'closed'
-									? 'Spots are final now'
-									: 'Not open yet'
-								: isLocked || data.spotFixed || data.checkedIn
-									? 'Tap to change your burner name'
-									: 'Tap to change or release'}</small
-						>
+					{@render spotCard(unit.upper, 'upper')}
+					<div class="bunk-rail" aria-hidden="true">
+						<span class="rail-line"></span>
+						<BunkLadder height={26} rungs={3} />
+						<span class="rail-line"></span>
 					</div>
-				</button>
-			{:else if !bed.bookable}
-				<div class="bed-card occupied" data-bed-id={bed.id}>
-					<div class="icon" aria-hidden="true">🔒</div>
-					<span class="label">{bed.label}</span>
-					{#if bedTypeEntry(bed.bedType) || bed.features.length > 0}
-						<span class="bed-detail">{spotLine(bed)}</span>
-					{/if}
-					<div class="status-box occupied">
-						<span class="status-text">Not available</span>
-						<span class="guest-name">Reserved by the crew</span>
-					</div>
+					{@render spotCard(unit.lower, 'lower')}
 				</div>
 			{:else}
-				<button
-					class="bed-card free {iHaveAnotherBooking || isLocked ? 'disabled' : ''}"
-					data-bed-id={bed.id}
-					on:click={() => !iHaveAnotherBooking && !isLocked && openBookingModal(bed.id)}
-					disabled={iHaveAnotherBooking || isLocked}
-				>
-					<div class="icon" aria-hidden="true">🛏️</div>
-					<span class="label">{bed.label}</span>
-					{#if bedTypeEntry(bed.bedType) || bed.features.length > 0}
-						<span class="bed-detail">{spotLine(bed)}</span>
-					{/if}
-					<div class="status-box free">
-						<span
-							>{isLocked
-								? data.guestPhase === 'closed'
-									? 'Booking closed'
-									: 'Not open yet'
-								: iHaveAnotherBooking
-									? 'Unavailable'
-									: 'Available'}</span
-						>
-						<small
-							>{isLocked
-								? data.guestPhase === 'closed'
-									? 'Spots are final'
-									: 'Booking opens soon'
-								: iHaveAnotherBooking
-									? 'Release your other spot first'
-									: 'Grab it now!'}</small
-						>
-					</div>
-				</button>
+				{@render spotCard(unit.spot, null)}
 			{/if}
 		{/each}
 	</div>
 </div>
+
+<!-- A spot's card in its four states; `level` marks a half of a bunk bed. -->
+{#snippet spotCard(bed: Spot, level: BunkLevel | null)}
+	{@const isMyBed = bed.id === data.userBedId}
+	{@const someoneElseBooked = bed.occupied && !isMyBed}
+	{@const iHaveAnotherBooking = !!data.userBedId && !isMyBed}
+	{@const isLocked = !data.isBookingActive}
+	{@const nameFinal = data.phase === 'closed'}
+	{@const half = level ? `bunk-half ${level}` : ''}
+
+	{#if someoneElseBooked}
+		<div class="bed-card occupied {half}" data-bed-id={bed.id}>
+			<div class="icon" aria-hidden="true">🛏️</div>
+			<span class="label">
+				{bed.label}
+				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
+			</span>
+			{#if hasDetail(bed, level)}
+				<span class="bed-detail">{spotLine(bed, level)}</span>
+			{/if}
+			<div class="status-box occupied">
+				<span class="status-text">Occupied</span>
+				<span class="guest-name">
+					{bed.burnerName || 'Mystery Burner'}
+				</span>
+			</div>
+		</div>
+	{:else if isMyBed}
+		<!-- The burner name can change in every phase but Closed (a handed-over
+		     ticket comes without one); moving or releasing needs Live Booking. -->
+		<button
+			class="bed-card mine {nameFinal ? 'locked' : ''} {half}"
+			data-bed-id={bed.id}
+			on:click={() => !nameFinal && openBookingModal(bed.id, bed.burnerName)}
+			disabled={nameFinal}
+		>
+			<div class="icon" aria-hidden="true">🛏️</div>
+			<span class="label">
+				{bed.label}
+				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
+			</span>
+			{#if hasDetail(bed, level)}
+				<span class="bed-detail">{spotLine(bed, level)}</span>
+			{/if}
+			<div class="status-box my-status">
+				<span class="status-text">Your Spot</span>
+				<span class="guest-name">{bed.burnerName}</span>
+				<small class="edit-hint"
+					>{nameFinal
+						? data.guestPhase === 'closed'
+							? 'Spots are final now'
+							: 'Not open yet'
+						: isLocked || data.spotFixed || data.checkedIn
+							? 'Tap to change your burner name'
+							: 'Tap to change or release'}</small
+				>
+			</div>
+		</button>
+	{:else if !bed.bookable}
+		<div class="bed-card occupied {half}" data-bed-id={bed.id}>
+			<div class="icon" aria-hidden="true">🔒</div>
+			<span class="label">
+				{bed.label}
+				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
+			</span>
+			{#if hasDetail(bed, level)}
+				<span class="bed-detail">{spotLine(bed, level)}</span>
+			{/if}
+			<div class="status-box occupied">
+				<span class="status-text">Not available</span>
+				<span class="guest-name">Reserved by the crew</span>
+			</div>
+		</div>
+	{:else}
+		<button
+			class="bed-card free {iHaveAnotherBooking || isLocked ? 'disabled' : ''} {half}"
+			data-bed-id={bed.id}
+			on:click={() => !iHaveAnotherBooking && !isLocked && openBookingModal(bed.id)}
+			disabled={iHaveAnotherBooking || isLocked}
+		>
+			<div class="icon" aria-hidden="true">🛏️</div>
+			<span class="label">
+				{bed.label}
+				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
+			</span>
+			{#if hasDetail(bed, level)}
+				<span class="bed-detail">{spotLine(bed, level)}</span>
+			{/if}
+			<div class="status-box free">
+				<span
+					>{isLocked
+						? data.guestPhase === 'closed'
+							? 'Booking closed'
+							: 'Not open yet'
+						: iHaveAnotherBooking
+							? 'Unavailable'
+							: 'Available'}</span
+				>
+				<small
+					>{isLocked
+						? data.guestPhase === 'closed'
+							? 'Spots are final'
+							: 'Booking opens soon'
+						: iHaveAnotherBooking
+							? 'Release your other spot first'
+							: 'Grab it now!'}</small
+				>
+			</div>
+		</button>
+	{/if}
+{/snippet}
 
 {#if showModal}
 	<!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -476,8 +552,15 @@
 				{selectedBedId === data.userBedId ? 'Edit Your Spot' : 'Grab This Spot'}
 			</h2>
 			<p>
-				{#if selectedBed}Spot <strong>{selectedBed.label}</strong>.{/if}
-				Set your Burner Name (optional). Everyone in this room can see it.
+				{#if selectedBed}
+					<!-- One expression, not an {#if}: Svelte drops the whitespace at the
+					     start of a block, and "B2— the upper bunk" needs its space. -->
+					Spot <strong>{selectedBed.label}</strong>{selectedLevel
+						? ` — the ${selectedLevel} bunk ${selectedNote}`
+						: ''}. Set your Burner Name (optional). Everyone in this room can see it.
+				{:else}
+					Set your Burner Name (optional). Everyone in this room can see it.
+				{/if}
 			</p>
 
 			{#if modalError}
@@ -891,6 +974,73 @@
 	.bed-card:focus-visible {
 		outline: 2px solid #fff;
 		outline-offset: 2px;
+	}
+
+	/* A bunk bed: one tile in the grid, the two halves stacked with the ladder
+	   between them. The halves keep the card look and colours of their state;
+	   the tile only frames them, and breathes (state-ring) when one is mine. */
+	.bunk-tile {
+		--state: var(--state-checked-in);
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		padding: 0.4rem;
+		border: 1px solid #222;
+		border-radius: 20px;
+		background:
+			radial-gradient(120% 90% at 50% 0%, rgba(45, 212, 191, 0.08), transparent 60%), #0b0b0b;
+		transition: border-color 0.2s;
+	}
+	.bunk-tile:hover {
+		border-color: #333;
+	}
+	.bunk-tile .bed-card {
+		border-radius: 14px;
+		flex: 1;
+	}
+	/* The hover lift would hide behind the neighbouring half. The selector
+	   must outrank `.bed-card.free:hover:not(.disabled)` above, so it names
+	   the half and the :not() too. */
+	.bunk-tile .bed-card.bunk-half:hover:not(.disabled) {
+		transform: none;
+	}
+	.bunk-rail {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.1rem 1rem;
+		pointer-events: none;
+	}
+	.rail-line {
+		flex: 1;
+		height: 0;
+		border-top: 1px dashed #2a2a2a;
+	}
+	.bunk-tile:hover .rail-line {
+		border-top-color: rgba(45, 212, 191, 0.4);
+	}
+
+	/* "Upper bunk" / "Lower bunk" next to the label, on the label's line
+	   while there is room and below it when there is not. */
+	.level-chip {
+		display: inline-block;
+		vertical-align: 0.2em;
+		margin-left: 0.35em;
+		--state-soft: rgba(45, 212, 191, 0.1);
+	}
+	.level-chip.upper {
+		--state: #2dd4bf;
+	}
+	.level-chip.lower {
+		--state: #f472b6;
+		--state-soft: rgba(244, 114, 182, 0.1);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.bunk-tile,
+		.bed-card {
+			transition: none;
+		}
 	}
 
 	.icon {

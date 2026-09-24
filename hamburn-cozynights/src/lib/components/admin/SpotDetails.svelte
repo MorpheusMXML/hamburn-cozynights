@@ -19,6 +19,10 @@
 	};
 	/** The label belongs to the layout: only in Staging Mode. */
 	export let canRename = false;
+	/** The other spot of the bunk bed this spot is part of; '' when it stands alone. */
+	export let partnerLabel = '';
+	/** Which level of the bunk bed this spot is; null when it stands alone. */
+	export let level: 'lower' | 'upper' | null = null;
 
 	let open = false;
 	let error = '';
@@ -27,6 +31,11 @@
 	$: spotFeatures = featuresFor('spot');
 	$: chosen = new Set(readFeatures(bed.features, 'spot'));
 	$: name = bed.label || 'this spot';
+	// A stacked spot's bed is set by the stacking: "lower bunk, below B2".
+	$: stacked = !!partnerLabel;
+	$: levelNote = level
+		? `${level} bunk, ${level === 'lower' ? 'below' : 'above'} ${partnerLabel}`
+		: `stacked with ${partnerLabel}`;
 
 	const handleSubmit: SubmitFunction = () => {
 		error = '';
@@ -81,12 +90,25 @@
 
 			<div class="field">
 				<label for="bed-type-{bed.id}">BED</label>
-				<select id="bed-type-{bed.id}" name="bed_type" value={bed.bed_type ?? ''}>
+				<select
+					id="bed-type-{bed.id}"
+					name="bed_type"
+					value={bed.bed_type ?? ''}
+					disabled={stacked}
+					aria-describedby={stacked ? `bed-type-note-${bed.id}` : undefined}
+				>
 					<option value="">Not specified</option>
 					{#each BED_TYPES as type}
 						<option value={type.value}>{type.label}</option>
 					{/each}
 				</select>
+				{#if stacked}
+					<!-- A disabled select is not submitted; the stored level goes along unchanged. -->
+					<input type="hidden" name="bed_type" value={bed.bed_type ?? ''} />
+					<p class="field-note" id="bed-type-note-{bed.id}">
+						Set by the bunk bed: {levelNote}. Unstack it to change.
+					</p>
+				{/if}
 			</div>
 
 			{#each spotFeatures as feature}
@@ -204,6 +226,21 @@
 		margin: 0;
 		font-size: 0.78rem;
 		color: #ff6b8b;
+	}
+
+	select:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.field-note {
+		margin: 0;
+		font-size: 0.72rem;
+		font-weight: 600;
+		letter-spacing: 0;
+		text-transform: none;
+		color: #2dd4bf;
+		overflow-wrap: anywhere;
 	}
 
 	.btn-save {
