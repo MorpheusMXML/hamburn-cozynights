@@ -113,11 +113,8 @@
 		]
 			.filter(Boolean)
 			.join(' · ');
-	/** The level chip on a half of a bunk bed: what it shows, and what it says. */
-	const LEVEL_CHIP: Record<BunkLevel, { text: string; name: string }> = {
-		lower: { text: '▼ Lower', name: 'Lower bunk' },
-		upper: { text: '▲ Upper', name: 'Upper bunk' }
-	};
+	/** The level chip on a half of a bunk bed, as Deploy 20 drew it. */
+	const LEVEL_NAME: Record<BunkLevel, string> = { lower: 'Lower bunk', upper: 'Upper bunk' };
 
 	/**
 	 * A spot's state for the colours of src/routes/state.css (data-state):
@@ -464,7 +461,7 @@
 			<div class="icon" aria-hidden="true">🛏️</div>
 			<span class="label">
 				{bed.label}
-				{#if level}{@render levelChip(level)}{/if}
+				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
 			</span>
 			{#if hasDetail(bed, level)}
 				<span class="bed-detail">{spotLine(bed, level)}</span>
@@ -489,7 +486,7 @@
 			<div class="icon" aria-hidden="true">🛏️</div>
 			<span class="label">
 				{bed.label}
-				{#if level}{@render levelChip(level)}{/if}
+				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
 			</span>
 			{#if hasDetail(bed, level)}
 				<span class="bed-detail">{spotLine(bed, level)}</span>
@@ -513,7 +510,7 @@
 			<div class="icon" aria-hidden="true">🔒</div>
 			<span class="label">
 				{bed.label}
-				{#if level}{@render levelChip(level)}{/if}
+				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
 			</span>
 			{#if hasDetail(bed, level)}
 				<span class="bed-detail">{spotLine(bed, level)}</span>
@@ -536,7 +533,7 @@
 			<div class="icon" aria-hidden="true">🛏️</div>
 			<span class="label">
 				{bed.label}
-				{#if level}{@render levelChip(level)}{/if}
+				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
 			</span>
 			{#if hasDetail(bed, level)}
 				<span class="bed-detail">{spotLine(bed, level)}</span>
@@ -561,14 +558,6 @@
 			</div>
 		</button>
 	{/if}
-{/snippet}
-
-<!-- "▲ Upper" / "▼ Lower" on a half of a bunk bed: a neutral outline, never a
-     status colour. -->
-{#snippet levelChip(level: BunkLevel)}
-	<span class="level-chip" role="img" aria-label={LEVEL_CHIP[level].name}
-		>{LEVEL_CHIP[level].text}</span
-	>
 {/snippet}
 
 {#if showModal}
@@ -1065,23 +1054,22 @@
 		border-top-color: rgba(45, 212, 191, 0.4);
 	}
 
-	/* "▲ Upper" / "▼ Lower" next to the label, on the label's line while there
-	   is room and below it when there is not. Neutral on purpose: a status
-	   colour on a chip would read as a state. */
+	/* "Upper bunk" / "Lower bunk" next to the label, on the label's line
+	   while there is room and below it when there is not — the coloured chips
+	   of Deploy 20, which Max asked back for on 24 Sep. The lower one is blue,
+	   not Deploy 20's pink: pink means ♿ and nothing else since Deploy 21. */
 	.level-chip {
 		display: inline-block;
 		vertical-align: 0.2em;
 		margin-left: 0.35em;
-		padding: 4px 8px;
-		border: 1px solid rgba(255, 255, 255, 0.5);
-		border-radius: 6px;
-		font-size: 0.6rem;
-		font-weight: 900;
-		letter-spacing: 1px;
-		text-transform: uppercase;
-		white-space: nowrap;
-		color: #e5e5e5;
-		background: transparent;
+		--state-soft: rgba(45, 212, 191, 0.1);
+	}
+	.level-chip.upper {
+		--state: #2dd4bf;
+	}
+	.level-chip.lower {
+		--state: #60a5fa;
+		--state-soft: rgba(96, 165, 250, 0.1);
 	}
 
 	@media (prefers-reduced-motion: reduce) {

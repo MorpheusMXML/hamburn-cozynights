@@ -35,23 +35,32 @@ flowchart LR
 
 Staging is deployed **on demand** with a button in GitHub Actions. It runs **`integration/staging`** (see [Branches, integration & releases](./integration)): deploying a single feature branch would drop every other feature from the server.
 
+Since 24 September 2026 `integration/staging` is protected like `main`: **a direct push is refused, every deploy goes through a pull request.** The branch rule stayed, the required approvals were set to zero and code-owner review switched off, so the pull request is a formality you merge yourself — but the route is fixed:
+
 ::: code-group
 
 ```text [GitHub UI]
-scripts/release.sh 0.18.1 "Deploy Nr. 18: …"   (in hamburn-cozynights/, see Versions and releases below)
-git push origin integration/staging v0.18.1
-Actions → Deploy staging → Run workflow → choose the branch
+git switch -c deploy/23-bunk-cards          (the deploy's own branch, off integration/staging)
+scripts/release.sh 0.23.0 "Deploy Nr. 23: …"   (in hamburn-cozynights/, see Versions and releases below)
+git push origin deploy/23-bunk-cards v0.23.0
+→ open the pull request against integration/staging and merge it
+Actions → Deploy staging → Run workflow → branch integration/staging
 → approve the "staging" deployment in the run
 ```
 
 ```bash [gh CLI]
-scripts/release.sh 0.18.1 "Deploy Nr. 18: …"   # in hamburn-cozynights/, stamps the version
-git push origin integration/staging v0.18.1
+git switch -c deploy/23-bunk-cards
+scripts/release.sh 0.23.0 "Deploy Nr. 23: …"   # in hamburn-cozynights/, stamps the version
+git push origin deploy/23-bunk-cards v0.23.0
+gh pr create --base integration/staging --head deploy/23-bunk-cards --fill
+gh pr merge --merge                             # the merge commit is what the server will build
 gh workflow run deploy-staging.yml --ref integration/staging
 gh run watch
 ```
 
 :::
+
+**Dispatch after the merge, never before.** The workflow builds the tip of `integration/staging` at the moment it starts; started too early it deploys the state without your merge, and the run has to be cancelled.
 
 ```mermaid
 flowchart TD
@@ -106,15 +115,19 @@ Every deploy carries a version in the shape **`0.<deploy number>.<fix>`**: Deplo
 - as a small badge next to the title on the start page, in the footer of every other page and in the admin menu — hover it for the build (commit and day), click it for the release notes on GitHub;
 - in `GET /api/health`, as `version` and `commit`, so the [deploy runbook](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md) can compare it with the release that was just approved.
 
-The version lives in `package.json` and is baked into the build together with the commit (`build-info.ts`; the deploy script passes the commit as the Docker build argument `GIT_SHA`). Stamp it on the state that is about to be deployed, **before** the deploy run:
+The version lives in `package.json` and is baked into the build together with the commit (`build-info.ts`; the deploy script passes the commit as the Docker build argument `GIT_SHA`). The script that does that is the copy in `/usr/local/sbin/deploy-staging.sh` on the server, **not** the one in the checkout: after changing `deploy/deploy-staging.sh`, install it again, otherwise the image is built without `GIT_SHA` and the badge shows the version with an empty commit.
 
 ```bash
-# from hamburn-cozynights/, on integration/staging with a clean tree
-scripts/release.sh 0.18.1 "Deploy Nr. 18: admins see who booked each spot"
-git push origin integration/staging v0.18.1
+ssh -t mauersegler 'sudo install -o root -g root -m 755 /opt/hamburn-cozynights-staging/hamburn-cozynights/deploy/deploy-staging.sh /usr/local/sbin/deploy-staging.sh && grep -c GIT_SHA /usr/local/sbin/deploy-staging.sh'
+``` Stamp it on the state that is about to be deployed, **before** the deploy run:
+
+```bash
+# from hamburn-cozynights/, on the deploy branch with a clean tree
+scripts/release.sh 0.23.0 "Deploy Nr. 23: the bunk bed cards are back"
+git push origin deploy/23-bunk-cards v0.23.0
 ```
 
-The script bumps `package.json` and `package-lock.json`, makes a signed commit and a signed tag `v0.18.1`, and pushes nothing; the push is yours. Pushing the tag runs [`.github/workflows/release.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/release.yml), which creates the **GitHub release** with the generated notes since the previous tag. A tag whose commit is not on `main` yet is a **pre-release** — that is every staging deploy. When the release PR lands on `main`, the same workflow turns those pre-releases into releases. The workflow refuses a tag that does not match `package.json`, so the badge, the health check and the release page can never disagree.
+The script bumps `package.json` and `package-lock.json`, makes a signed commit and a signed tag `v0.23.0`, and pushes nothing; the push is yours. Pushing the tag runs [`.github/workflows/release.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/release.yml), which creates the **GitHub release** with the generated notes since the previous tag. A tag whose commit is not on `main` yet is a **pre-release** — that is every staging deploy. When the release PR lands on `main`, the same workflow turns those pre-releases into releases. The workflow refuses a tag that does not match `package.json`, so the badge, the health check and the release page can never disagree.
 
 The same push also runs [`.github/workflows/docs.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/docs.yml): the **public guide on GitHub Pages** is rebuilt from that tag, so it matches the version that was just deployed instead of waiting for the release PR. The app itself carries both guides in its image, built from the same commit — the admin guide behind the login at `/admin/docs/`, the public one at `/docs/`. See [Publishing](./docs#publishing).
 
