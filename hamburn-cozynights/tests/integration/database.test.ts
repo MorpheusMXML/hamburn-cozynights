@@ -74,9 +74,7 @@ describe('the details of a place (pb_migrations/1759900000_accommodation.js)', (
 			expect.arrayContaining(['kind', 'features', 'description'])
 		);
 		expect(await fieldsOf('beds')).toEqual(expect.arrayContaining(['bed_type', 'features']));
-	});
-
-	it('has the bunk partner of a spot (pb_migrations/1759970000_bunk_beds.js)', async () => {
+		// pb_migrations/1759970000_bunk_beds.js: the other spot of a bunk bed.
 		expect(await fieldsOf('beds')).toEqual(expect.arrayContaining(['bunk_partner']));
 	});
 
