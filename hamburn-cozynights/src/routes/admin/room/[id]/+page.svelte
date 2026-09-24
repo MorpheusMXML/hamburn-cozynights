@@ -281,7 +281,18 @@
 	</div>
 	<div class="bed-info">
 		<span class="bed-label">{bed.label || 'Unnamed Spot'}</span>
-		<span class="bed-status">
+		<!-- The status colour comes from state.css: claimed is red, vacant green,
+		     locked violet, inactive grey — the same tokens the guests see. -->
+		<span
+			class="bed-status"
+			data-state={bed.is_locked
+				? 'locked'
+				: bed.enabled === false
+					? 'idle'
+					: bed.occupied
+						? 'full'
+						: 'open'}
+		>
 			{#if bed.is_locked}
 				LOCKED 🔒
 			{:else if bed.enabled === false}
@@ -294,8 +305,8 @@
 			<span class="bed-status special">SPECIAL NEEDS ♿</span>
 		{/if}
 		{#if level}
-			<span class="state-chip level-chip" data-state="checked-in">
-				{level} bunk{#if level === 'upper'}&nbsp;<span aria-hidden="true">🪜</span>{/if}
+			<span class="level-chip" role="img" aria-label="{level === 'upper' ? 'Upper' : 'Lower'} bunk">
+				{level === 'upper' ? '▲ Upper' : '▼ Lower'}
 			</span>
 		{/if}
 		<!-- The level chip already says "upper bunk": no need to repeat it here. -->
@@ -989,7 +1000,7 @@
 	}
 	.bed-status {
 		font-size: 0.65rem;
-		color: #888;
+		color: var(--state, #888);
 		font-weight: 900;
 		letter-spacing: 1px;
 	}
@@ -1040,10 +1051,6 @@
 		white-space: nowrap;
 		border: 0;
 	}
-	.bed-card:not(.bunk).occupied .bed-status,
-	.bunk-half.occupied .bed-status {
-		color: #f87171;
-	}
 	.inactive .bed-label {
 		color: #777;
 	}
@@ -1065,6 +1072,8 @@
 	.stacking .bed-card.bunk {
 		opacity: 0.45;
 	}
+	/* The hint and its cancel button wear the source card's own state colour
+	   (data-state on the card, state.css), so they always match its ring. */
 	.stack-hint {
 		flex-basis: 100%;
 		min-width: 0;
@@ -1075,9 +1084,9 @@
 		gap: 0.5rem 1rem;
 		padding: 0.6rem 0.8rem;
 		border-radius: 8px;
-		background: var(--state-live-soft);
-		border: 1px solid rgba(244, 114, 182, 0.4);
-		color: #f472b6;
+		background: var(--state-soft, var(--state-live-soft));
+		border: 1px solid var(--state, var(--state-live));
+		color: var(--state, var(--state-live));
 		font-size: 0.72rem;
 		font-weight: 900;
 		letter-spacing: 1px;
@@ -1088,8 +1097,8 @@
 	}
 	.btn-cancel {
 		background: transparent;
-		border: 1px solid #f472b6;
-		color: #f472b6;
+		border: 1px solid var(--state, var(--state-live));
+		color: var(--state, var(--state-live));
 		border-radius: 6px;
 		padding: 0.35rem 0.6rem;
 		font: inherit;
@@ -1101,7 +1110,7 @@
 	}
 	.btn-cancel:hover,
 	.btn-cancel:focus-visible {
-		background: rgba(244, 114, 182, 0.15);
+		background: var(--state-soft, var(--state-live-soft));
 		color: #fff;
 	}
 	.stack-overlay {
@@ -1253,9 +1262,21 @@
 		background: rgba(45, 212, 191, 0.22);
 		color: #fff;
 	}
+	/* "▲ Upper" / "▼ Lower": a neutral white outline, never a status colour
+	   (the turquoise of the tile is the bunk frame's accent, not a state). */
 	.level-chip {
 		align-self: flex-start;
 		margin-top: 2px;
+		padding: 4px 8px;
+		border: 1px solid rgba(255, 255, 255, 0.5);
+		border-radius: 6px;
+		font-size: 0.6rem;
+		font-weight: 900;
+		letter-spacing: 1px;
+		text-transform: uppercase;
+		white-space: nowrap;
+		color: #e5e5e5;
+		background: transparent;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
@@ -1361,7 +1382,7 @@
 	}
 	.bed-status.special {
 		display: block;
-		color: #f472b6;
+		color: var(--state-special);
 	}
 	.btn-icon.vanish:hover:not(.disabled, [data-locked]) {
 		border-color: #f87171;

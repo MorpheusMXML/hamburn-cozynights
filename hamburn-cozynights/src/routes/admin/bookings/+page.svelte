@@ -81,7 +81,7 @@
 	}
 
 	const COUNT_TILES = [
-		{ key: 'all', label: 'booked', state: 'live', value: (c: typeof counts) => c.booked },
+		{ key: 'all', label: 'booked', state: 'full', value: (c: typeof counts) => c.booked },
 		{
 			key: 'checkedin',
 			label: 'checked in',
@@ -287,7 +287,7 @@
 				{@const state = bookingState(row)}
 				<li
 					class="booking-row"
-					data-state={state === 'checkedin' ? 'checked-in' : state === 'booked' ? 'live' : 'locked'}
+					data-state={state === 'checkedin' ? 'checked-in' : state === 'booked' ? 'full' : 'locked'}
 				>
 					<div class="cell guest">
 						<span class="guest-name">{guestLabel(row.guest)}</span>

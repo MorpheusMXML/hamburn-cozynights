@@ -16,8 +16,9 @@
 	/** The "Open ticket" button (a POST to /admin/tickets, no id in any URL). */
 	export let openTicket = true;
 
-	/** The colour of each state (src/routes/state.css). */
-	const STATE_ATTR = { crew: 'locked', booked: 'live', checkedin: 'checked-in' } as const;
+	/** The colour of each state (src/routes/state.css): a booked spot is
+	 *  occupied, so it is red like everywhere else, not the phase's yellow. */
+	const STATE_ATTR = { crew: 'locked', booked: 'full', checkedin: 'checked-in' } as const;
 
 	$: state = bookingState(row);
 	$: chip = state === 'checkedin' ? '✅ Checked in' : state === 'booked' ? '🎟 Booked' : '🛠 Crew';
