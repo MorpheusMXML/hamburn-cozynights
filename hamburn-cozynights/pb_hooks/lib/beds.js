@@ -51,6 +51,9 @@ const FEATURES = [
 /** What a bed with a ladder can never be. */
 const NOT_UP_A_LADDER = ['wheelchair'];
 
+/** The levels a room or spot inherits from. */
+const LEVELS_ABOVE = { room: ['house'], spot: ['house', 'room'] };
+
 /** The label of a stored bed type, or '' when a spot doesn't say. */
 function bedTypeLabel(value) {
 	return BED_TYPE_LABELS[value] || '';
@@ -72,9 +75,25 @@ function readFeatures(raw, level) {
 	return FEATURES.filter((entry) => chosen[entry.value]).map((entry) => entry.value);
 }
 
+/** What a room or spot may switch off: any feature a level above it can have (src/lib/accommodation.ts, offAllowed). */
+function offAllowed(level) {
+	const above = LEVELS_ABOVE[level] || [];
+	return FEATURES.filter((entry) => entry.levels.some((l) => above.indexOf(l) >= 0));
+}
+
+/** A stored features_off value as a clean list: what this level may switch off, catalogue order. */
+function readFeaturesOff(raw, level) {
+	const values = Array.isArray(raw) ? raw : typeof raw === 'string' && raw ? [raw] : [];
+	const allowed = offAllowed(level).map((entry) => entry.value);
+	const chosen = {};
+	for (const value of values) if (allowed.indexOf(value) >= 0) chosen[value] = true;
+	return FEATURES.filter((entry) => chosen[entry.value]).map((entry) => entry.value);
+}
+
 /**
- * Why a house or room record can't be written: two of its features say the
- * opposite of each other. Returns the reason, or '' when it is fine.
+ * Why a house, room or spot record can't be written: two of its features say
+ * the opposite of each other, or (rooms and spots) it switches a feature off
+ * that it claims itself. Returns the reason, or '' when it is fine.
  */
 function featureProblem(record, level) {
 	const features = readFeatures(record.get('features'), level);
@@ -94,27 +113,43 @@ function featureProblem(record, level) {
 			);
 		}
 	}
+	if (level === 'room' || level === 'spot') {
+		const off = readFeaturesOff(record.get('features_off'), level);
+		for (const value of off) {
+			if (features.indexOf(value) >= 0) {
+				const entry = featureEntry(value);
+				return (
+					'"' +
+					(entry ? entry.label : value) +
+					'" is switched off here and ticked here at the same time. Do one or the other.'
+				);
+			}
+		}
+	}
 	return '';
+}
+
+function addOwn(chosen, features) {
+	for (const value of features) {
+		const entry = featureEntry(value);
+		if (entry && entry.opposite) delete chosen[entry.opposite];
+		chosen[value] = true;
+	}
 }
 
 /**
  * What is true for one spot: house, room and spot features together, the
- * closer level winning an argument, and nothing a ladder rules out.
+ * closer level winning an argument, what a room or spot switched off gone
+ * before its own features count, and nothing a ladder rules out. The same
+ * as effectiveFeatures() in src/lib/accommodation.ts.
  */
-function effectiveFeatures(house, room, spot, bedType) {
+function effectiveFeatures(house, room, spot, bedType, roomOff, spotOff) {
 	const chosen = {};
-	const levels = [
-		readFeatures(house, 'house'),
-		readFeatures(room, 'room'),
-		readFeatures(spot, 'spot')
-	];
-	for (const features of levels) {
-		for (const value of features) {
-			const entry = featureEntry(value);
-			if (entry && entry.opposite) delete chosen[entry.opposite];
-			chosen[value] = true;
-		}
-	}
+	addOwn(chosen, readFeatures(house, 'house'));
+	for (const value of readFeaturesOff(roomOff, 'room')) delete chosen[value];
+	addOwn(chosen, readFeatures(room, 'room'));
+	for (const value of readFeaturesOff(spotOff, 'spot')) delete chosen[value];
+	addOwn(chosen, readFeatures(spot, 'spot'));
 	if (LADDER_TYPES.indexOf(bedType) >= 0) {
 		for (const value of NOT_UP_A_LADDER) delete chosen[value];
 	}
@@ -148,6 +183,8 @@ module.exports = {
 	NOT_UP_A_LADDER: NOT_UP_A_LADDER,
 	bedTypeLabel: bedTypeLabel,
 	readFeatures: readFeatures,
+	offAllowed: offAllowed,
+	readFeaturesOff: readFeaturesOff,
 	featureProblem: featureProblem,
 	effectiveFeatures: effectiveFeatures,
 	featureText: featureText,

@@ -19,6 +19,22 @@ describe('features on the records API', () => {
 		).toMatch(/say the opposite/);
 	});
 
+	it('refuses a room or spot that switches a feature off and claims it at once', () => {
+		expect(
+			beds.featureProblem(record({ features: ['heated'], features_off: ['heated'] }), 'room')
+		).toMatch(/"Heated" is switched off here and ticked here/);
+		expect(
+			beds.featureProblem(record({ features: 'power', features_off: ['quiet', 'power'] }), 'spot')
+		).toMatch(/"Power socket" is switched off/);
+		// switching off something else is fine, and a house has no off list
+		expect(
+			beds.featureProblem(record({ features: ['power'], features_off: ['quiet'] }), 'spot')
+		).toBe('');
+		expect(
+			beds.featureProblem(record({ features: ['heated'], features_off: ['heated'] }), 'house')
+		).toBe('');
+	});
+
 	it('lets every other list through, including one that is empty or a single value', () => {
 		expect(beds.featureProblem(record({ features: ['heated', 'quiet'] }), 'room')).toBe('');
 		expect(beds.featureProblem(record({ features: 'unheated' }), 'house')).toBe('');
@@ -45,6 +61,13 @@ describe('what a message says about the bed', () => {
 		).toEqual(['wheelchair', 'heated', 'power']);
 		expect(beds.effectiveFeatures(['wheelchair'], [], [], 'bunk_upper')).toEqual([]);
 		expect(beds.effectiveFeatures(['wheelchair'], [], [], 'bunk_lower')).toEqual(['wheelchair']);
+		// what a room or spot switched off is gone before its own features count
+		expect(beds.effectiveFeatures(['heated', 'quiet'], [], [], 'single', ['heated'])).toEqual([
+			'quiet'
+		]);
+		expect(
+			beds.effectiveFeatures(['quiet'], ['power'], [], 'single', [], ['power', 'quiet'])
+		).toEqual([]);
 		expect(beds.featureText(['heated', 'power'])).toBe('🔥 Heated · 🔌 Power socket');
 		expect(beds.featureText([])).toBe('');
 	});

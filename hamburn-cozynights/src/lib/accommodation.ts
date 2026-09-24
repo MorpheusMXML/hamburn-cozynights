@@ -184,6 +184,44 @@ export function featuresFor(level: FeatureLevel): FeatureEntry[] {
 	return FEATURES.filter((feature) => feature.levels.includes(level));
 }
 
+/** The levels a room or spot inherits from: everything above it. */
+const LEVELS_ABOVE: Record<'room' | 'spot', FeatureLevel[]> = {
+	room: ['house'],
+	spot: ['house', 'room']
+};
+
+/**
+ * What a room or spot may switch OFF for itself: any feature a level above
+ * it can have (`features_off`). A room in a heated house that stays cold, a
+ * spot without the socket the room has. Only superusers set it (the actions
+ * check), and "reset" simply empties the list, so the place inherits again.
+ */
+export function offAllowed(level: 'room' | 'spot'): FeatureEntry[] {
+	const above = LEVELS_ABOVE[level];
+	return FEATURES.filter((feature) => feature.levels.some((l) => above.includes(l)));
+}
+
+/** Cleans a `features_off` list: only what this level may switch off, no duplicates, catalogue order. */
+export function readFeaturesOff(raw: unknown, level: 'room' | 'spot'): Feature[] {
+	const values = Array.isArray(raw) ? raw : typeof raw === 'string' && raw ? [raw] : [];
+	const allowed = new Set(offAllowed(level).map((feature) => feature.value));
+	const chosen = new Set(
+		values.filter((value): value is Feature => isFeature(value) && allowed.has(value))
+	);
+	return FEATURES.filter((feature) => chosen.has(feature.value)).map((feature) => feature.value);
+}
+
+/**
+ * Why a place can't both switch a feature off and claim it itself: '' when
+ * the lists agree. The same rule runs in pb_hooks/lib/beds.js.
+ */
+export function overrideProblem(own: readonly Feature[], off: readonly Feature[]): string {
+	const clash = off.find((feature) => own.includes(feature));
+	return clash
+		? `"${featureLabel(clash)}" is switched off here and ticked here at the same time. Do one or the other.`
+		: '';
+}
+
 export function isFeature(value: unknown, level?: FeatureLevel): value is Feature {
 	const entry = FEATURES.find((feature) => feature.value === value);
 	return !!entry && (!level || entry.levels.includes(level));
@@ -281,6 +319,13 @@ export interface DetailsInput {
 	kind: string;
 	features: Feature[];
 	description: string;
+	/** Only when the caller may override (a superuser on a room): what the room switches off. */
+	features_off?: Feature[];
+}
+
+/** Who may set what: `canOverride` lets the form carry `features_off`. */
+export interface ParseOptions {
+	canOverride?: boolean;
 }
 
 export type DetailsResult =
@@ -290,13 +335,24 @@ export type DetailsResult =
  * Reads the details form of a house or room. Never throws; the messages are
  * written for the crew. The server checks the same rules the file import does.
  */
-export function parseDetailsForm(form: FormData, level: 'house' | 'room'): DetailsResult {
+export function parseDetailsForm(
+	form: FormData,
+	level: 'house' | 'room',
+	options: ParseOptions = {}
+): DetailsResult {
 	const raw = String(form.get('kind') ?? '').trim();
 	const known = level === 'house' ? isHouseKind(raw) : isRoomKind(raw);
 	const kind = known ? raw : '';
 	const features = readFeatures(form.getAll('features'), level);
 	const description = cleanDescription(form.get('description'));
 	const value: DetailsInput = { kind, features, description };
+	// A house has nothing above it to switch off; a room's overrides are a
+	// superuser's call, so an admin's form never touches what is stored.
+	if (level === 'room' && options.canOverride) {
+		value.features_off = readFeaturesOff(form.getAll('features_off'), 'room');
+		const problem = overrideProblem(features, value.features_off);
+		if (problem) return { ok: false, value, error: problem };
+	}
 
 	if (raw && !known) {
 		return { ok: false, value, error: 'Pick a kind from the list, or leave it open.' };
@@ -322,23 +378,32 @@ export function parseDetailsForm(form: FormData, level: 'house' | 'room'): Detai
 	return { ok: true, value };
 }
 
-/** The same for one spot: its bed type and the features of the spot itself. */
+export interface SpotInput {
+	bed_type: BedType | '';
+	features: Feature[];
+	/** Only when the caller may override (a superuser): what the spot switches off. */
+	features_off?: Feature[];
+}
+
+/** The same for one spot: its bed type, the features of the spot itself and, for a superuser, its overrides. */
 export function parseSpotForm(
-	form: FormData
-):
-	| { ok: true; value: { bed_type: BedType | ''; features: Feature[] } }
-	| { ok: false; error: string } {
+	form: FormData,
+	options: ParseOptions = {}
+): { ok: true; value: SpotInput } | { ok: false; error: string } {
 	const raw = String(form.get('bed_type') ?? '').trim();
 	if (raw && !isBedType(raw)) {
 		return { ok: false, error: 'Pick a bed from the list, or leave it open.' };
 	}
-	return {
-		ok: true,
-		value: {
-			bed_type: raw as BedType | '',
-			features: readFeatures(form.getAll('features'), 'spot')
-		}
+	const value: SpotInput = {
+		bed_type: raw as BedType | '',
+		features: readFeatures(form.getAll('features'), 'spot')
 	};
+	if (options.canOverride) {
+		value.features_off = readFeaturesOff(form.getAll('features_off'), 'spot');
+		const problem = overrideProblem(value.features, value.features_off);
+		if (problem) return { ok: false, error: problem };
+	}
+	return { ok: true, value };
 }
 
 export interface SpotFacts {
@@ -352,6 +417,10 @@ export interface FeatureSource {
 	room?: readonly string[] | string | null;
 	/** PocketBase returns a single value for a select that allows only one. */
 	spot?: readonly string[] | string | null;
+	/** What the room switched off of the house's features (`rooms.features_off`). */
+	roomOff?: readonly string[] | string | null;
+	/** What the spot switched off of what it would inherit (`beds.features_off`). */
+	spotOff?: readonly string[] | string | null;
 	/**
 	 * The spot's bed type, when the sum is for one spot: a bed with a ladder
 	 * loses what NOT_UP_A_LADDER lists. Leave it out for a room or a house.
@@ -364,28 +433,47 @@ function droppedForBed(type: unknown): readonly Feature[] {
 	return bedTypeEntry(type)?.ladder ? NOT_UP_A_LADDER : [];
 }
 
+/** Adds one level's own features to the sum; a feature's opposite leaves. */
+function addOwn(chosen: Set<Feature>, features: readonly Feature[]): void {
+	for (const feature of features) {
+		const opposite = featureEntry(feature)?.opposite;
+		if (opposite) chosen.delete(opposite);
+		chosen.add(feature);
+	}
+}
+
 /**
  * What is true for one spot: its own features plus those of its room and
  * house. Where two levels say the opposite ("heated" in an "unheated" hut
- * group), the closer one wins. An upper bunk is never wheelchair accessible,
- * however accessible its room is (NOT_UP_A_LADDER).
+ * group), the closer one wins; what a room or spot switched off for itself
+ * (`features_off`, a superuser's call) is gone before its own features count.
+ * An upper bunk is never wheelchair accessible, however accessible its room
+ * is (NOT_UP_A_LADDER).
  */
 export function effectiveFeatures(source: FeatureSource): Feature[] {
-	const byLevel: [FeatureLevel, Feature[]][] = [
-		['house', readFeatures(source.house, 'house')],
-		['room', readFeatures(source.room, 'room')],
-		['spot', readFeatures(source.spot, 'spot')]
-	];
 	const chosen = new Set<Feature>();
-	for (const [, features] of byLevel) {
-		for (const feature of features) {
-			const opposite = featureEntry(feature)?.opposite;
-			if (opposite) chosen.delete(opposite);
-			chosen.add(feature);
-		}
-	}
+	addOwn(chosen, readFeatures(source.house, 'house'));
+	for (const feature of readFeaturesOff(source.roomOff, 'room')) chosen.delete(feature);
+	addOwn(chosen, readFeatures(source.room, 'room'));
+	for (const feature of readFeaturesOff(source.spotOff, 'spot')) chosen.delete(feature);
+	addOwn(chosen, readFeatures(source.spot, 'spot'));
 	for (const feature of droppedForBed(source.bedType)) chosen.delete(feature);
 	return FEATURES.filter((feature) => chosen.has(feature.value)).map((feature) => feature.value);
+}
+
+/**
+ * What a room or spot inherits from the levels above it, before its own
+ * features and its own overrides: what the admin forms show greyed out as
+ * "from the house" / "from the room and house", and what a superuser may
+ * switch off there.
+ */
+export function inheritedFeatures(
+	level: 'room' | 'spot',
+	source: Pick<FeatureSource, 'house' | 'room' | 'roomOff'>
+): Feature[] {
+	return level === 'room'
+		? effectiveFeatures({ house: source.house })
+		: effectiveFeatures({ house: source.house, room: source.room, roomOff: source.roomOff });
 }
 
 export function spotFacts(source: FeatureSource): SpotFacts {

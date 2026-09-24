@@ -149,6 +149,8 @@ export type BedsRecord = {
 	 * catalogue allows only one spot feature — read it with `readFeatures`.
 	 */
 	features?: string[] | string;
+	/** What this spot switches off of what it inherits (a superuser's call); see src/lib/accommodation.ts. */
+	features_off?: string[];
 };
 
 export type HousesRecord = {
@@ -194,6 +196,8 @@ export type RoomsRecord = {
 	kind?: string;
 	/** What is true for this room; its spots inherit it, on top of the house's features. */
 	features?: string[];
+	/** What this room switches off of the house's features (a superuser's call). */
+	features_off?: string[];
 	/** Free text for what only this venue knows, shown to guests. */
 	description?: string;
 };

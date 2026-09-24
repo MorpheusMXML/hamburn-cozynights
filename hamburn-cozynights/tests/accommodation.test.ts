@@ -15,6 +15,12 @@ import {
 	detailsSummary,
 	effectiveFeatures,
 	factsOf,
+	inheritedFeatures,
+	offAllowed,
+	overrideProblem,
+	parseDetailsForm,
+	parseSpotForm,
+	readFeaturesOff,
 	featureText,
 	featuresFor,
 	isFeature,
@@ -72,6 +78,15 @@ describe('the catalogue', () => {
 		expect(list('HOUSE_FEATURES')).toEqual(featuresFor('house').map((f) => f.value));
 		expect(list('ROOM_FEATURES')).toEqual(featuresFor('room').map((f) => f.value));
 		expect(list('BED_FEATURES')).toEqual(featuresFor('spot').map((f) => f.value));
+
+		const overrides = readFileSync('pb_migrations/1760100000_feature_overrides.js', 'utf8');
+		const offList = (name: string) =>
+			(new RegExp(`const ${name} = \\[([^\\]]*)\\]`).exec(overrides)?.[1] ?? '')
+				.split(',')
+				.map((value) => value.trim().replace(/^'|'$/g, ''))
+				.filter(Boolean);
+		expect(offList('HOUSE_FEATURES')).toEqual(offAllowed('room').map((f) => f.value));
+		expect(offList('ABOVE_A_SPOT')).toEqual(offAllowed('spot').map((f) => f.value));
 	});
 
 	it('keeps the labels PocketBase sends in step with it', () => {
@@ -107,6 +122,23 @@ describe('the catalogue', () => {
 			})
 		);
 		expect(beds.featureText(['heated', 'power'])).toBe(featureText(['heated', 'power']));
+		expect(beds.offAllowed('room').map((f: { value: string }) => f.value)).toEqual(
+			offAllowed('room').map((f) => f.value)
+		);
+		expect(beds.offAllowed('spot').map((f: { value: string }) => f.value)).toEqual(
+			offAllowed('spot').map((f) => f.value)
+		);
+		expect(
+			beds.effectiveFeatures(['heated', 'quiet'], ['power'], [], 'single', ['quiet'], ['power'])
+		).toEqual(
+			effectiveFeatures({
+				house: ['heated', 'quiet'],
+				room: ['power'],
+				roomOff: ['quiet'],
+				spotOff: ['power'],
+				bedType: 'single'
+			})
+		);
 	});
 
 	it('calls a room of a hut group a hut', () => {
@@ -155,6 +187,89 @@ describe('what a spot inherits', () => {
 
 	it('drops what a level may not set', () => {
 		expect(effectiveFeatures({ house: ['own_bathroom'], spot: ['quiet'] })).toEqual([]);
+	});
+
+	it('lets a room or spot switch an inherited feature off, before its own features count', () => {
+		// a cold room in a heated, quiet house
+		expect(effectiveFeatures({ house: ['heated', 'quiet'], roomOff: ['heated'] })).toEqual([
+			'quiet'
+		]);
+		// the room may still claim it back itself (no clash, the form refuses that pair)
+		expect(
+			effectiveFeatures({ house: ['heated'], roomOff: ['heated'], room: ['own_bathroom'] })
+		).toEqual(['own_bathroom']);
+		// a spot without the socket its room has, and without the house's quiet
+		expect(
+			effectiveFeatures({ house: ['quiet'], room: ['power'], spotOff: ['power', 'quiet'] })
+		).toEqual([]);
+		// an off list only knows what the level may inherit; nonsense is ignored
+		expect(effectiveFeatures({ house: ['quiet'], roomOff: ['power', 'nonsense'] })).toEqual([
+			'quiet'
+		]);
+		// PocketBase's single-value shape works too
+		expect(effectiveFeatures({ house: ['quiet'], roomOff: 'quiet' })).toEqual([]);
+	});
+
+	it('names what a room or spot may switch off, and what it inherits', () => {
+		expect(offAllowed('room').map((f) => f.value)).toEqual(
+			featuresFor('house').map((f) => f.value)
+		);
+		expect(offAllowed('spot').map((f) => f.value)).toEqual([
+			'wheelchair',
+			'ground_floor',
+			'toilets_inside',
+			'own_bathroom',
+			'heated',
+			'unheated',
+			'quiet',
+			'power'
+		]);
+		expect(readFeaturesOff(['power', 'quiet', 'quiet'], 'room')).toEqual(['quiet']);
+		expect(readFeaturesOff(['power', 'quiet'], 'spot')).toEqual(['quiet', 'power']);
+		expect(inheritedFeatures('room', { house: ['heated', 'quiet'] })).toEqual(['heated', 'quiet']);
+		expect(
+			inheritedFeatures('spot', { house: ['heated', 'quiet'], room: ['power'], roomOff: ['quiet'] })
+		).toEqual(['heated', 'power']);
+		expect(overrideProblem(['heated'], ['heated'])).toMatch(/switched off here and ticked here/);
+		expect(overrideProblem(['heated'], ['quiet'])).toBe('');
+	});
+
+	it('reads overrides from a form only for a superuser, and refuses a clash', () => {
+		const form = new FormData();
+		form.append('kind', 'room');
+		form.append('features', 'own_bathroom');
+		form.append('features_off', 'heated');
+		form.append('features_off', 'power'); // not a house feature: ignored
+		// an admin's form never carries features_off
+		const admin = parseDetailsForm(form, 'room');
+		expect(admin.ok).toBe(true);
+		expect('features_off' in admin.value).toBe(false);
+		// a superuser's does
+		const su = parseDetailsForm(form, 'room', { canOverride: true });
+		expect(su.ok).toBe(true);
+		expect(su.value.features_off).toEqual(['heated']);
+		// a house has nothing above it
+		expect('features_off' in parseDetailsForm(form, 'house', { canOverride: true }).value).toBe(
+			false
+		);
+		// switched off and ticked at once is refused
+		form.append('features', 'heated');
+		const clash = parseDetailsForm(form, 'room', { canOverride: true });
+		expect(clash.ok).toBe(false);
+		if (!clash.ok) expect(clash.error).toMatch(/Heated.*switched off/);
+
+		const spot = new FormData();
+		spot.append('bed_type', 'single');
+		spot.append('features_off', 'quiet');
+		spot.append('features_off', 'power');
+		const adminSpot = parseSpotForm(spot);
+		expect(adminSpot.ok).toBe(true);
+		if (adminSpot.ok) expect('features_off' in adminSpot.value).toBe(false);
+		const suSpot = parseSpotForm(spot, { canOverride: true });
+		expect(suSpot.ok).toBe(true);
+		if (suSpot.ok) expect(suSpot.value.features_off).toEqual(['quiet', 'power']);
+		spot.append('features', 'power');
+		expect(parseSpotForm(spot, { canOverride: true }).ok).toBe(false);
 	});
 
 	it('never calls an upper bunk wheelchair accessible, however accessible its room is', () => {
