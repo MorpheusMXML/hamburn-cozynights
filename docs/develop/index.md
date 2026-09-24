@@ -92,6 +92,7 @@ Cookies belong to a host name, not to a port. Two CozyNights instances on `local
 | `npm run test:integration` | Integration tests against a real, empty PocketBase in Docker |
 | `npm run test:smoke` | Smoke tests against the staging Docker image, driven over HTTP |
 | `npm run verify` | Type check, unit, integration and smoke tests — everything CI runs |
+| `scripts/release.sh 0.18.1 "…"` | Stamps the version into `package.json`, signed commit + signed tag `v0.18.1`; pushes nothing. See [Versions and releases](./deployment#versions-and-releases) |
 | `npm run smoke:remote` | The read-only smoke tests against a deployed site (`SMOKE_BASE_URL`) |
 | `npm run test:e2e` | Playwright end-to-end tests; starts the dev server if needed |
 | `npm run test:e2e:ui` | Playwright in UI mode |
@@ -160,8 +161,8 @@ Guests and admins see one picture of the camp, `static/lageplan-brahmsee-<year>.
 
 ## Conventions
 
-- **One feature per branch, merged into `integration/staging` with a signed merge commit**, released to `main` by pull request. See [Branches, integration & releases](./integration).
-- **Never commit data or secrets.** The repository is public: `.env` files, `pb_data/` and database snapshots (encrypted or not) stay out of git, and no password, token or key goes into a script, a compose file or `package.json`; scripts read them from the environment. The gitleaks hook (setup step 5) and the `Secrets` CI job refuse the obvious cases. Share data through a private channel.
+- **One feature per branch, merged into `integration/staging` with a signed merge commit**, released to `main` by pull request; every deployed state carries a version tag `v0.<deploy>.<fix>`. See [Branches, integration & releases](./integration).
+- **Never commit data or secrets.** The repository is public: `.env` files, `pb_data/` and database snapshots (encrypted or not) stay out of git, and no password, token or key goes into a script, a compose file or `package.json`; scripts read them from the environment. The gitleaks hook ([Setup](#setup), step 5) and the `Secrets` CI job refuse the obvious cases. Share data through a private channel.
 - Format with Prettier and satisfy ESLint: `npm run lint` must pass.
 - Server-only code goes to `src/lib/server/`; it must never be imported by client components.
 - Every read of ticket data happens on the server, and page data is trimmed to what the page shows. See [Security & privacy](../reference/security).

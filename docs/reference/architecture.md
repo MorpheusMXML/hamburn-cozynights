@@ -175,7 +175,7 @@ erDiagram
 | `/admin/api/export-template` | admins | Layout template download |
 | `/admin/api/stats` | admins | The live numbers (counts only), polled by the Control Center, the camp editor and the bookings list |
 | `/admin/api/bookings` | admins | The booked spots with their guests, masked (`?house=` / `?room=`); fetched again only when the live numbers changed |
-| `/api/health` | everyone | Readiness check for the deploy script and the smoke tests: 200 only while the app's service account is signed in to the database |
+| `/api/health` | everyone | Readiness check for the deploy script and the smoke tests: 200 only while the app's service account is signed in to the database; the answer names the running `version` and `commit` |
 
 A single server hook (`src/hooks.server.ts`) runs before every request. It restores the guest's ticket session and the admin session, re-checks the admin's role, and refuses admin form actions and API calls without an approved session, so no single action can forget the check.
 
@@ -212,7 +212,7 @@ sequenceDiagram
 ```text
 hamburn-cozynights/                 repository root
 ├── docs/                           this documentation site (VitePress)
-├── .github/workflows/              staging deploy, docs deploy
+├── .github/workflows/              staging deploy, docs deploy, release (a GitHub release per `v*` tag)
 └── hamburn-cozynights/             the app
     ├── src/
     │   ├── hooks.server.ts         sessions and the admin gate for every request
@@ -224,7 +224,7 @@ hamburn-cozynights/                 repository root
     ├── pb_migrations/              database schema and API rules
     ├── pb_hooks/                   PocketBase hooks: admin sign-in guard, admin tool,
     │                               notifications, booking passes, backups
-    ├── scripts/                    admin tool, health check, test setup, backups
+    ├── scripts/                    admin tool, health check, test setup, backups, release stamp
     ├── deploy/                     deploy script, nginx vhost, server runbook
     ├── tests/                      Vitest and Playwright tests
     ├── static/                     logo, site plan, background video

@@ -23,7 +23,7 @@ flowchart LR
 
 1. **Enter your ticket code**
 
-   Open the CozyNights start page, type your code into the **TICKET CODE** field and press <kbd>ENTER THE DUST 🌵</kbd>.
+   Open the CozyNights start page, type your code into the **TICKET CODE** field and press <kbd>ENTER THE DUST 🌵</kbd>. (The small `v0.18.1` at the top right of the title is the version you are looking at; it helps when you report a problem.)
 
    If the code is refused, the box around it turns red and gives a short shake, the reason appears right under it, and the cursor is back in the field — fix the code and press the button again. The [FAQ](./faq#for-guests) explains every message.
 
@@ -48,6 +48,8 @@ flowchart LR
 4. **Grab a free spot**
 
    Inside the room every spot shows its state (see the table below). Click an **Available** spot.
+
+   A **bunk bed** shows as one stacked card: the upper bunk on top, a small ladder, the lower bunk below. Each half is a spot of its own, with its own state, and is booked on its own. A chip next to the label says **Upper bunk** or **Lower bunk**, and the line under it where the other level is (*above B1*, *below B2*); the booking dialog repeats it: *Spot B2 — the upper bunk above B1.*
 
    ![Room page with free, occupied and reserved spots](../assets/screenshots/guest-room-available.webp)
 
@@ -86,7 +88,7 @@ Houses and rooms can carry a few details, and spots say what kind of bed they ar
 | 🚻 Toilets + showers inside · 🛁 Own bathroom | In the building itself, or in the room. Nothing written means the toilets are somewhere else on the site — the description usually says where. |
 | 🔥 Heated · ❄️ No heating | Late October nights are cold; this is worth reading. |
 | 🤫 Quiet zone · 🔌 Power socket | A calm corner of the camp; a socket in the room or at the bed. |
-| *Lower bunk · Upper bunk · Single bed · Double bed (shared) · Sofa · Mattress · Camp bed* | What you actually sleep in, under the spot's label. |
+| *Lower bunk · Upper bunk · Single bed · Double bed (shared) · Sofa · Mattress · Camp bed* | What you actually sleep in, under the spot's label. In a stacked bunk bed the level is on the chip next to the label, and the line says *above B1* or *below B2* instead. |
 
 A room shows what its house says too, and the crew can add a sentence of their own ("Showers in the wash house, 50 m along the path").
 

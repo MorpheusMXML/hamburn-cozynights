@@ -38,12 +38,16 @@ Staging is deployed **on demand** with a button in GitHub Actions. It runs **`in
 ::: code-group
 
 ```text [GitHub UI]
+scripts/release.sh 0.18.1 "Deploy Nr. 18: …"   (in hamburn-cozynights/, see Versions and releases below)
+git push origin integration/staging v0.18.1
 Actions → Deploy staging → Run workflow → choose the branch
 → approve the "staging" deployment in the run
 ```
 
 ```bash [gh CLI]
-gh workflow run deploy-staging.yml --ref <branch>
+scripts/release.sh 0.18.1 "Deploy Nr. 18: …"   # in hamburn-cozynights/, stamps the version
+git push origin integration/staging v0.18.1
+gh workflow run deploy-staging.yml --ref integration/staging
 gh run watch
 ```
 
@@ -100,7 +104,7 @@ The `smoke` job has already confirmed that pages are served and the app reaches 
 Every deploy carries a version in the shape **`0.<deploy number>.<fix>`**: Deploy Nr. 18 is `v0.18.0`, a fix on top of it `v0.18.1`. The version is visible wherever someone might report a bug:
 
 - as a small badge next to the title on the start page, in the footer of every other page and in the admin menu — hover it for the build (commit and day), click it for the release notes on GitHub;
-- in `GET /api/health`, as `version` and `commit`, so the runbook can check what the server runs.
+- in `GET /api/health`, as `version` and `commit`, so the [deploy runbook](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md) can compare it with the release that was just approved.
 
 The version lives in `package.json` and is baked into the build together with the commit (`build-info.ts`; the deploy script passes the commit as the Docker build argument `GIT_SHA`). Stamp it on the state that is about to be deployed, **before** the deploy run:
 
@@ -112,7 +116,7 @@ git push origin integration/staging v0.18.1
 
 The script bumps `package.json` and `package-lock.json`, makes a signed commit and a signed tag `v0.18.1`, and pushes nothing; the push is yours. Pushing the tag runs [`.github/workflows/release.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/release.yml), which creates the **GitHub release** with the generated notes since the previous tag. A tag whose commit is not on `main` yet is a **pre-release** — that is every staging deploy. When the release PR lands on `main`, the same workflow turns those pre-releases into releases. The workflow refuses a tag that does not match `package.json`, so the badge, the health check and the release page can never disagree.
 
-Deploy scripts written for a single deploy (`deploy18-….sh` and the like) call `scripts/release.sh` as their last step before the push, with the deploy number as the minor version.
+A one-off deploy script kept outside the repository does the same: it calls `scripts/release.sh` with the deploy number as the minor version as its last step before the push.
 
 ## Backups and where data lives
 
@@ -154,9 +158,9 @@ What this does and does not cover, verified against PocketBase 0.40.4 with a cop
 - **Existing databases keep working.** PocketBase reads plain-text settings with or without the key and only encrypts when the row is saved. `pb_hooks/cozy_settings.pb.js` does that save once on the first start with the key (log: `settings were stored in plain text and are now encrypted`, unless another hook's start-up save got there first). Nothing has to be re-entered, and the plain text is gone from the database file after that save; older backups keep the old row.
 - **Without the key PocketBase does not start** once the settings are encrypted (`invalid settings db data or missing encryption key`), and neither with a wrong one (`cipher: message authentication failed`). That includes every `pocketbase` command run inside the container: `scripts/cozy-admin.sh` and the test stack pass the flag, a bare `docker compose exec pocketbase /usr/local/bin/pocketbase …` has to add `--encryptionEnv=PB_ENCRYPTION_KEY`. `PB_ADMIN_EMAIL`/`PB_ADMIN_PASSWORD` must never reach the PocketBase container: the image's entrypoint would run a `superuser upsert` without the flag and the container would not come up.
 - **The key must be exactly 32 characters.** The hook refuses to start with any other length, before any setting is saved: AES would silently accept 16 or 24 characters (a weaker cipher) and fail every save with any other length, which only shows as "An error occurred while saving the new settings" in the dashboard and as `.env` values that never reach the settings.
-- **Losing or changing the key is recoverable.** Everything secret in the settings comes from `.env` and is re-applied by the hooks on start (SMTP, sender, backup schedule, dashboard controls, log retention). With PocketBase stopped, delete the settings row and start with the new key; only values set by hand in the dashboard (rate limits, trusted proxy headers, …) have to be re-entered. The commands are in the runbook, section "PocketBase-Settings-Schlüssel".
+- **Losing or changing the key is recoverable.** Everything secret in the settings comes from `.env` and is re-applied by the hooks on start (SMTP, sender, backup schedule, dashboard controls, log retention). With PocketBase stopped, delete the settings row and start with the new key; only values set by hand in the dashboard (rate limits, trusted proxy headers, …) have to be re-entered. The commands are in the runbook, section [PocketBase-Settings-Schlüssel](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md#pocketbase-settings-schlüssel).
 - **Not covered: a collection's OAuth2 provider settings.** PocketBase keeps those outside this encryption, so a database backup still holds the admin sign-in's client secret: backups stay secret material, and an exposed one means rotating that secret.
-- The key belongs next to `ENCRYPTION_KEY` in the team's password manager and on the emergency sheet (`deploy/backup/README.md`): a restic snapshot includes `.env`, so a restore on the same server has it; a rebuilt server does not.
+- The key belongs next to `ENCRYPTION_KEY` in the team's password manager and on the [emergency sheet](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/backup/README.md#notfallblatt) of the backup runbook: a restic snapshot includes `.env`, so a restore on the same server has it; a rebuilt server does not.
 
 ## Google sign-in per environment
 

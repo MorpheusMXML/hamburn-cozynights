@@ -20,7 +20,7 @@ Every admin page has the same menu. On a wide screen (from about 1100 px) it is 
 | **Crew** | <kbd>✉️ Messages</kbd> | Every text guests get. See [Message texts](./notifications#message-texts). |
 | | <kbd>📖 Admin guide ↗</kbd> | This documentation, in a new tab, admin pages included. |
 
-Numbers next to an entry say what waits: at <kbd>♿ Special needs</kbd> the requests waiting for a decision (pink), at <kbd>🛏️ Bookings</kbd> how many spots are booked (grey) — and after booking closed, how many booked guests are still to arrive (pink). Below the entries: the account you're signed in with, a **SUPERUSER ⚡️** badge if you are one, and <kbd>🚀 Eject</kbd> to sign out (on phones: <kbd>Eject 🚀</kbd> in the top bar). While a countdown runs, a slim bar above everything shows when booking opens or closes, the same one guests see.
+Numbers next to an entry say what waits: at <kbd>♿ Special needs</kbd> the requests waiting for a decision (pink), at <kbd>🛏️ Bookings</kbd> how many spots are booked (grey) — and after booking closed, how many booked guests are still to arrive (pink). Below the entries: the account you're signed in with, a **SUPERUSER ⚡️** badge if you are one, and <kbd>🚀 Eject</kbd> to sign out (on phones: <kbd>Eject 🚀</kbd> in the top bar). Next to the *Admin* tag sits the app's version, e.g. `v0.18.1` (on phones in the top bar): hover it for the build, click it for the release notes on GitHub, and quote it when you report a problem. While a countdown runs, a slim bar above everything shows when booking opens or closes, the same one guests see.
 
 ## What's on this page
 
@@ -251,7 +251,7 @@ Every house as a card with its occupancy badge (*n spots free*, *Fully booked* o
 
 ![Control Center during Live Booking](../assets/screenshots/admin-live.webp)
 
-The Control Center, the camp editor and the bookings list stay fully usable for watching: statistics, occupancy, who is where, template export. Structural buttons and fields stay in place, greyed out with a padlock, and [explain themselves](#locked-not-now) when you try them; the server refuses those changes too. The house, room and new-house pages say at the top whether the layout can be changed right now. What you can still change: on the [room page](./camp-layout#spots), lock or unlock single spots and mark spots ♿ special or normal; on ♿ **Special needs**, decide requests and book spots for them.
+The Control Center, the camp editor and the bookings list stay fully usable for watching: statistics, occupancy, who is where, template export. Structural buttons and fields stay in place, greyed out with a padlock, and [explain themselves](#locked-not-now) when you try them; the server refuses those changes too. The house, room and new-house pages say at the top whether the layout can be changed right now. What you can still change: on the [room page](./camp-layout#spots), lock or unlock single spots and mark spots ♿ special or normal; the [details](./camp-layout#house-details) of houses, rooms and spots (kind, features, description, bed type and 🔌 socket — names and labels belong to the layout and stay locked); [bunk beds](./camp-layout#bunk-beds), stacked, swapped or taken apart; on ♿ **Special needs**, decide requests and book spots for them.
 
 ## Next
 

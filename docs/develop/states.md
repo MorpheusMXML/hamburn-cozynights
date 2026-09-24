@@ -37,7 +37,7 @@ still — for something that just went wrong, see the form fields).
 The ring is drawn by a pseudo-element and animates **`opacity` only**. That
 stays on the compositor: a list of forty house cards costs no repaints per
 frame. Animating `border-color` or `box-shadow` instead — as the older
-`pulse-glow` in `layout.css` still does (Baustelle #74) — repaints every frame
+`pulse-glow` in `layout.css` still does (a leftover to replace) — repaints every frame
 for every element.
 
 The element also keeps a static border in its state colour, so the state is

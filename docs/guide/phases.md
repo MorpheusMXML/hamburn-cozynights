@@ -33,6 +33,7 @@ stateDiagram-v2
 | Admins: activate / deactivate spots, mark as taken | <span class="yes">✓</span> | <span class="no">✗</span> | <span class="no">✗</span> |
 | Admins: **lock / unlock a spot** | <span class="yes">✓</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | Admins: mark special-needs spots ♿, book a spot for a request | <span class="yes">✓</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
+| Admins: describe places (details) and stack bunk beds | <span class="yes">✓</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | Admins: export a layout template | <span class="yes">✓</span> | <span class="yes">✓</span> | <span class="yes">✓</span> |
 | Superusers: import a layout template | <span class="yes">✓</span> | <span class="no">✗</span> | <span class="no">✗</span> |
 
@@ -96,7 +97,7 @@ A window planned for later (its opening time still ahead) stays armed when a sup
 
 ## During Live Booking
 
-Almost everything structural is locked. The exceptions: **locking and unlocking single spots**, so the crew can take a broken bed out of service mid-event (guests then see it as *Not available · Reserved by the crew*), and everything around [special-needs spots](./special-needs): marking spots ♿ and booking a spot for a request.
+Almost everything structural is locked. The exceptions: **locking and unlocking single spots**, so the crew can take a broken bed out of service mid-event (guests then see it as *Not available · Reserved by the crew*), everything around [special-needs spots](./special-needs): marking spots ♿ and booking a spot for a request, and what only *describes* a place: the details of houses, rooms and spots and stacking spots into bunk beds.
 
 ## After booking closed
 
@@ -110,5 +111,5 @@ When the crew has planned a new opening time, the same panel counts down to it �
 ![The map after booking closed: the panel with your spot as a small ticket and LOOK AROUND](../assets/screenshots/guest-map-closed.webp)
 <!-- /audience -->
 <!-- audience:admin -->
-The layout stays locked; locking and unlocking single spots, ♿ marks and booking spots for special-needs requests still work. For another booking round, plan a new window: the camp stays closed until its opening time, and guests see the countdown to it instead of final spots. Nobody is signed out and the bookings stay — releasing them is the switch back to Staging, which only a superuser can make (for example to rebuild the layout).
+The layout stays locked; locking and unlocking single spots, ♿ marks, booking spots for special-needs requests, the details of places and bunk beds still work. For another booking round, plan a new window: the camp stays closed until its opening time, and guests see the countdown to it instead of final spots. Nobody is signed out and the bookings stay — releasing them is the switch back to Staging, which only a superuser can make (for example to rebuild the layout).
 <!-- /audience -->
