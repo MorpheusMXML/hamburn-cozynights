@@ -543,6 +543,17 @@ export function spotMatchesFilters(filters: readonly SpotFilter[], facts: SpotFa
 }
 
 /**
+ * The wishes worth offering: the filters at least one of these spots answers,
+ * in the catalogue's order. A camp without a heated room offers no "Heated"
+ * chip, and a camp nobody described offers none at all.
+ */
+export function availableFilters(spots: readonly SpotFacts[]): SpotFilter[] {
+	return SPOT_FILTERS.filter((filter) =>
+		spots.some((spot) => spotMatchesFilter(filter.value, spot))
+	).map((filter) => filter.value);
+}
+
+/**
  * A need in a few words ("No ladder"), for lists where the whole sentence of
  * the guest form would not fit. Falls back to the sentence itself.
  */

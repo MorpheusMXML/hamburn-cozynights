@@ -8,6 +8,7 @@ import {
 	HOUSE_KINDS,
 	ROOM_KINDS,
 	SPOT_FILTERS,
+	availableFilters,
 	bedTypeMix,
 	defaultRoomKind,
 	effectiveFeatures,
@@ -183,6 +184,23 @@ describe('wishes on the map and at the roulette', () => {
 		expect(spotMatchesFilters(['no_ladder', 'quiet', 'power'], spot)).toBe(true);
 		expect(spotMatchesFilters(['no_ladder', 'step_free'], spot)).toBe(false);
 		expect(spotMatchesFilters([], facts(''))).toBe(true);
+	});
+
+	it('offers only the wishes some spot answers, in the catalogue order', () => {
+		// a heated hut with a lower bunk and a socket, and an upper bunk nobody described
+		const spots = [facts('bunk_lower', ['heated', 'power']), facts('bunk_upper')];
+		expect(availableFilters(spots)).toEqual(['no_ladder', 'heated', 'power']);
+		// the order is the catalogue's, whatever the spots' order
+		expect(availableFilters([...spots].reverse())).toEqual(['no_ladder', 'heated', 'power']);
+		// a camp nobody described offers nothing; an empty camp neither
+		expect(availableFilters([facts(''), facts('bunk_upper')])).toEqual([]);
+		expect(availableFilters([])).toEqual([]);
+		// every filter, once some spot answers it
+		expect(
+			availableFilters([
+				facts('single', ['wheelchair', 'own_bathroom', 'heated', 'quiet', 'power'])
+			])
+		).toEqual(SPOT_FILTERS.map((filter) => filter.value));
 	});
 
 	it('answers a need with the filter that stands for it', () => {

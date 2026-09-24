@@ -93,9 +93,10 @@
 			border-color 0.4s,
 			box-shadow 0.4s;
 	}
+	/* The closing countdown wears the live phase's yellow (state.css), never pink. */
 	.countdown-wrapper.closes {
-		--accent: #f472b6;
-		--accent-rgb: 244, 114, 182;
+		--accent: var(--state-live);
+		--accent-rgb: 250, 204, 21;
 	}
 	.countdown-wrapper.urgent {
 		--accent: #f87171;

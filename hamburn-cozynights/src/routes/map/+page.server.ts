@@ -5,7 +5,7 @@ import type { OrdersResponse } from '$lib/pocketbase-types';
 import { BookingService } from '$lib/server/booking';
 import { signInUrl } from '$lib/server/guest-session';
 import { getBookingSettings } from '$lib/server/settings';
-import { findRequest } from '$lib/server/special-requests';
+import { readAvailableFilters } from '$lib/server/wishes';
 import { passSummary } from '$lib/server/pass';
 import { openingCountdownAt } from '$lib/booking-phase';
 import { readFilters, spotFacts, spotMatchesFilters, type SpotFilter } from '$lib/accommodation';
@@ -32,19 +32,12 @@ function countFitting(house: { features?: string[]; rooms: any[] }, wishes: Spot
 	);
 }
 
-/**
- * The signed-in ticket — read once per request in hooks.server.ts — and
- * whether it has a special-needs request. Both optional for the map.
- */
-async function signedInTicket(locals: App.Locals) {
-	const order = locals.order;
-	if (!order) return null;
-	try {
-		return { order, requestSent: !!(await findRequest(locals.adminPb, order.id)) };
-	} catch (err) {
-		console.error('[Map] Special-needs request lookup failed:', (err as Error)?.message);
-		return { order, requestSent: false };
+/** What the wishes found, as the top bar says it next to the chips. */
+function wishFitText(matchingHouses: number): string {
+	if (matchingHouses === 0) {
+		return 'No house has a free spot that fits — the crew may not have filled in every detail.';
 	}
+	return `${matchingHouses} ${matchingHouses === 1 ? 'house has' : 'houses have'} a fitting free spot`;
 }
 
 /** Closed: the ticket's spot as a small booking pass, or that it holds none. Optional too. */
@@ -68,9 +61,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// beds carry is_special, order and booked_at); getFullTree strips all of it.
 		const inventory = new InventoryService(locals.adminPb);
 		let houses = await inventory.getFullTree();
-		const [{ isBookingActive, phase, guestPhase, next, requestsOpen }, ticket] = await Promise.all([
+		const [{ isBookingActive, phase, guestPhase, next }, availableFilters] = await Promise.all([
 			getBookingSettings(locals.pb),
-			signedInTicket(locals)
+			// The wish chips of the top bar: only the wishes some spot answers.
+			readAvailableFilters(locals.adminPb)
 		]);
 
 		if (phase !== 'staging') {
@@ -81,27 +75,31 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// What the guest is looking for. Strict on purpose: a spot nobody described
 		// never matches, so a wish never promises something the crew never wrote down.
 		const wishes = readFilters(url.searchParams.get('w'));
+		let wishFit = '';
 		if (wishes.length > 0) {
 			houses = houses.map((house) => ({ ...house, fittingFree: countFitting(house, wishes) }));
+			wishFit = wishFitText(houses.filter((house) => (house.fittingFree ?? 0) > 0).length);
 		}
 
-		// Closed: the panel over the map shows the guest's spot as a small booking pass.
+		// Closed: the panel over the map shows the guest's spot as a small booking
+		// pass. The ticket was read once per request in hooks.server.ts; whether
+		// it sent a special-needs request comes with the layout data (the ♿ link).
 		const { pass, noSpot } =
-			phase === 'closed' && ticket
-				? await closedPanelPass(locals, ticket.order)
+			phase === 'closed' && locals.order
+				? await closedPanelPass(locals, locals.order)
 				: { pass: null, noSpot: false };
 
 		return {
 			houses,
 			wishes,
+			availableFilters,
+			wishFit,
 			isBookingActive,
 			phase,
 			// what the boxes and banners say; the phase itself still decides what is allowed
 			guestPhase,
 			// only an armed opening still ahead: a paused or elapsed time shows no countdown
 			bookingUnlockAt: openingCountdownAt(phase, next),
-			// the "special-needs spot" link: while requests are open, or to see one's own
-			specialNeeds: { open: requestsOpen, requestSent: !!ticket?.requestSent },
 			pass,
 			noSpot
 		};

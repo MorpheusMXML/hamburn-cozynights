@@ -54,8 +54,9 @@
 	$: errorMessage = clientError || (isSubmitting ? '' : (form?.error ?? ''));
 
 	// The big countdown between the title and the ticket-code field: until
-	// booking opens, and while it is live until it closes. It replaces the slim
-	// bar on this page (showCountdownBar). When it ends, the page data is
+	// booking opens, and while it is live until it closes. The start page has
+	// no guest top bar (showTopBar), so this is the only countdown here. When
+	// it ends, the page data is
 	// reloaded and the server says which phase it is now.
 	$: countdown = countdownKind(data.booking.phase, data.booking.next);
 

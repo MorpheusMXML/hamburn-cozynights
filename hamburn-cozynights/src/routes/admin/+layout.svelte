@@ -35,21 +35,6 @@
 		overflow-x: hidden;
 	}
 
-	/*
-	 * The admin bar (AdminNav → AdminStatus) carries the phase and the countdown
-	 * itself, so the slim guest countdown that the root layout puts on top of
-	 * every page stays away from /admin: no height reserved, the bar hidden.
-	 * Anchored to this layout's root, so it never touches a guest page; the
-	 * `div` outranks the root layout's own (scoped) height rule.
-	 * TODO(root layout): render no BookingCountdownBar under /admin instead.
-	 */
-	:global(div.app-root.has-booking-bar:has(> .admin-layout)) {
-		--booking-bar-height: 0px;
-	}
-	:global(.app-root:has(> .admin-layout) > .booking-bar) {
-		display: none;
-	}
-
 	.admin-layout {
 		min-height: 100vh;
 		min-height: 100dvh;

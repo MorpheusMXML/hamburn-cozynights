@@ -81,7 +81,7 @@ locked control, it still opens its house.
 	/** The bottom edge of the bars stuck to the top (admin header, countdown bar). */
 	function safeTop(): number {
 		let bottom = 0;
-		for (const bar of document.querySelectorAll('.admin-header, .booking-bar')) {
+		for (const bar of document.querySelectorAll('.admin-header, .admin-topbar')) {
 			const box = bar.getBoundingClientRect();
 			if (box.top < 120 && box.bottom > bottom) bottom = box.bottom;
 		}

@@ -17,7 +17,8 @@ import { burnerNameOf, passSummary, roomLabel } from '$lib/server/pass';
 import type { PassSummary } from '$lib/pass';
 import type { RouletteSpot } from '$lib/roulette';
 import type { BedsResponse, RoomsResponse, HousesResponse } from '$lib/pocketbase-types';
-import { readFilters, spotFacts, spotMatchesFilters } from '$lib/accommodation';
+import { readFilters, spotFacts, spotMatchesFilters, type SpotFilter } from '$lib/accommodation';
+import { readAvailableFilters } from '$lib/server/wishes';
 
 type BedWithHouse = BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>;
 
@@ -103,6 +104,16 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 			)
 			.map(rouletteSpot);
 
+		// The wish chips of the top bar, only while the drum is in play: a guest
+		// with a spot can't spin, and outside Live Booking the machine rests.
+		const availableFilters: SpotFilter[] =
+			!userBed && isBookingActive ? await readAvailableFilters(locals.adminPb) : [];
+		// What the wishes left in the drum, as the bar says it next to the chips.
+		const wishFit =
+			wishes.length > 0
+				? `${freeBeds.length} ${freeBeds.length === 1 ? 'spot' : 'spots'} in the drum of ${allFree.length} free`
+				: '';
+
 		// A guest with a spot sees it as the small booking pass, like on the
 		// house, room and map pages; the Destiny Fulfilled card shows it too.
 		const [spotFixed, pass]: [boolean, PassSummary | null] = userBed
@@ -134,6 +145,8 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 		return {
 			freeBeds,
 			wishes,
+			availableFilters,
+			wishFit,
 			/** All free spots, so the page can say how many the wishes left out. */
 			freeTotal: allFree.length,
 			isBookingActive,

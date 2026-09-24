@@ -15,7 +15,7 @@ No Trace to give it up and spin again.
 	import { deserialize, enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import type { SubmitFunction } from '@sveltejs/kit';
-	import { SPOT_FILTERS, type SpotFilter } from '$lib/accommodation';
+	import type { SpotFilter } from '$lib/accommodation';
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
@@ -79,13 +79,9 @@ No Trace to give it up and spin again.
 	let sweepSpot = $state<RouletteSpot | null>(null);
 	let sweptSpot = $state<{ id: string; label: string } | null>(null);
 
-	// Wishes the reels respect. They live in the URL, like on the map.
+	// Wishes the reels respect. They live in the URL, like on the map; the chips
+	// to pick them are in the top bar (GuestTopBar, from the page data).
 	let wishes = $derived(data.wishes as SpotFilter[]);
-	/** Where a wish chip leads: the current wishes with this one turned on or off. */
-	function wishLink(filter: SpotFilter, on: boolean): string {
-		const next = on ? wishes.filter((wish) => wish !== filter) : [...wishes, filter];
-		return next.length > 0 ? `/random-bed?w=${next.join(',')}` : '/random-bed';
-	}
 	let freshSpots: Promise<void> = Promise.resolve();
 
 	let soundOn = $state(false);
@@ -470,32 +466,6 @@ No Trace to give it up and spin again.
 				✨ Spot {sweptSpot.label} left no trace, and you have no spot right now. Book a new one before
 				you leave.
 			</p>
-		{/if}
-
-		{#if (mode === 'play' || mode === 'soldout') && !fate}
-			<nav class="wish-bar" aria-label="What should the reels respect?">
-				<span class="wish-title">The reels respect…</span>
-				{#each SPOT_FILTERS as filter}
-					{@const on = wishes.includes(filter.value)}
-					<a
-						class="wish"
-						class:on
-						href={wishLink(filter.value, on)}
-						data-sveltekit-noscroll
-						aria-current={on ? 'true' : undefined}
-						title={filter.hint ?? ''}
-					>
-						<span aria-hidden="true">{filter.icon}</span>
-						{filter.label}
-					</a>
-				{/each}
-				<span class="wish-result" role="status">
-					{freeBeds.length}
-					{freeBeds.length === 1 ? 'spot' : 'spots'} in the drum{wishes.length > 0
-						? ` of ${data.freeTotal} free`
-						: ''}
-				</span>
-			</nav>
 		{/if}
 
 		<div class="tray">
@@ -998,50 +968,6 @@ No Trace to give it up and spin again.
 		border-left-width: 4px;
 		background: rgba(139, 92, 246, 0.12);
 		color: #ede9fe;
-	}
-
-	.wish-bar {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		justify-content: center;
-		gap: 0.4rem;
-		margin: 0 auto 1rem;
-		max-width: 44rem;
-		min-width: 0;
-	}
-	.wish-title {
-		font-size: 0.72rem;
-		font-weight: 900;
-		letter-spacing: 0.08em;
-		color: #8a8f98;
-		text-transform: uppercase;
-	}
-	.wish {
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		border-radius: 999px;
-		padding: 0.2rem 0.65rem;
-		font-size: 0.78rem;
-		color: #dbe3ea;
-		text-decoration: none;
-		background: rgba(255, 255, 255, 0.04);
-		overflow-wrap: anywhere;
-	}
-	.wish:hover,
-	.wish:focus-visible {
-		border-color: rgba(255, 45, 149, 0.7);
-		color: #fff;
-	}
-	.wish.on {
-		background: rgba(255, 45, 149, 0.2);
-		border-color: rgba(255, 45, 149, 0.8);
-		color: #ffd2e6;
-		font-weight: 700;
-	}
-	.wish-result {
-		font-size: 0.78rem;
-		color: #9fb3c8;
-		overflow-wrap: anywhere;
 	}
 
 	.tray {

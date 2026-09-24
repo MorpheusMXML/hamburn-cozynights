@@ -785,9 +785,10 @@
 			box-shadow 0.5s;
 		overflow: hidden;
 	}
+	/* The live phase is yellow (state.css); pink belongs to special needs alone. */
 	.booking-panel.phase-live {
-		--accent: #f472b6;
-		--accent-rgb: 244, 114, 182;
+		--accent: var(--state-live);
+		--accent-rgb: 250, 204, 21;
 	}
 	.booking-panel.phase-closed {
 		--accent: #e5e5e5;
@@ -880,8 +881,8 @@
 		text-shadow: 0 0 14px rgba(251, 146, 60, 0.45);
 	}
 	.status-time.closed {
-		color: #f472b6;
-		text-shadow: 0 0 14px rgba(244, 114, 182, 0.45);
+		color: var(--state-live);
+		text-shadow: 0 0 14px rgba(250, 204, 21, 0.45);
 	}
 	.status-at {
 		font-size: 0.72rem;
@@ -976,17 +977,17 @@
 		box-shadow: none;
 	}
 	.segment.live {
-		background: rgba(244, 114, 182, 0.14);
+		background: rgba(250, 204, 21, 0.14);
 	}
 	.live-fill {
 		position: absolute;
 		inset: 0;
 		transform-origin: left center;
-		background: linear-gradient(90deg, #f472b6, #fb923c);
+		background: linear-gradient(90deg, var(--state-live), #fb923c);
 		transition: transform 1s linear;
 	}
 	.segment.live.current {
-		box-shadow: 0 0 16px rgba(244, 114, 182, 0.4);
+		box-shadow: 0 0 16px rgba(250, 204, 21, 0.4);
 	}
 	.segment.after.current {
 		background: rgba(229, 229, 229, 0.3);
@@ -1017,7 +1018,7 @@
 		border-color: #fb923c;
 	}
 	.marker.closes:not(.done) {
-		border-color: #f472b6;
+		border-color: var(--state-live);
 	}
 	.now-dot {
 		position: absolute;
@@ -1387,8 +1388,8 @@
 		box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.5);
 	}
 	.segmented-glider.live {
-		background: rgba(244, 114, 182, 0.14);
-		box-shadow: inset 0 0 0 1px rgba(244, 114, 182, 0.55);
+		background: rgba(250, 204, 21, 0.14);
+		box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.55);
 	}
 	.segmented-glider.closed {
 		background: rgba(229, 229, 229, 0.08);
@@ -1435,7 +1436,7 @@
 		color: #2dd4bf;
 	}
 	.segment-option.active.live {
-		color: #f472b6;
+		color: var(--state-live);
 	}
 	.segment-option.active.closed {
 		color: #f5f5f5;

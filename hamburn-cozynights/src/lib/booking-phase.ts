@@ -165,19 +165,47 @@ export function openingCountdownAt(
 }
 
 /**
- * Whether the slim countdown bar shows on a page. The start page always draws
- * the big countdown itself (above the ticket-code field), and the map its
- * "IGNITION IN" whenever booking is not open yet for guests (Staging, and
- * Closed with an opening armed) — the bar would count the same seconds twice.
+ * The pages that carry the guest top bar (GuestTopBar in the root layout):
+ * the booking pages a signed-in guest moves between. The start page draws
+ * the big countdown itself, the legal texts and the booking pass are read
+ * quietly, and the crew's pages have their own bar (AdminNav).
+ */
+const TOP_BAR_PAGES = /^\/(map|house|room|random-bed|special-needs|telegram)(\/|$)/;
+
+export function showTopBar(pathname: string): boolean {
+	return TOP_BAR_PAGES.test(pathname);
+}
+
+/**
+ * Whether the top bar's countdown shows on a page: where the bar is, and a
+ * timer is armed. On the map, the phase panel counts down itself whenever
+ * booking is not open yet for guests (Staging, and Closed with an opening
+ * armed) — the bar would count the same seconds twice — unless the guest put
+ * the panel away to look around (`lookingAround`, Closed only).
  */
 export function showCountdownBar(
 	phase: BookingPhase,
 	next: PhaseTransition | null | undefined,
-	pathname: string
+	pathname: string,
+	lookingAround = false
 ): boolean {
-	const kind = countdownKind(phase, next);
-	if (!kind || pathname === '/') return false;
-	return kind === 'closes' || !(guestPhase(phase, next) === 'staging' && pathname === '/map');
+	if (!countdownKind(phase, next) || !showTopBar(pathname)) return false;
+	return !mapCovered(phase, next, pathname, lookingAround);
+}
+
+/**
+ * Whether the map's phase panel lies over the map: the map isn't usable, so
+ * the bar shows no wish filters and no second countdown there. Mirrors
+ * `showPanel` on the map page.
+ */
+export function mapCovered(
+	phase: BookingPhase,
+	next: PhaseTransition | null | undefined,
+	pathname: string,
+	lookingAround = false
+): boolean {
+	if (pathname !== '/map') return false;
+	return guestPhase(phase, next) !== 'live' && !(phase === 'closed' && lookingAround);
 }
 
 /**
