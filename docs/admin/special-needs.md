@@ -34,7 +34,7 @@ Which spot fits which need comes from the layout: the **bed type** of a spot and
 
 Requests have their **own switch**, independent of Staging Mode and Live Booking: <kbd>Open requests</kbd> / <kbd>Close requests</kbd> in the row *♿ Special-needs requests: OPEN / CLOSED* right under the [🎟 BOOKING WINDOW](./#booking-window) panel in the Control Center, or the same button on the requests page (*Requests from guests: OPEN*).
 
-- **Open:** guests see a link on the map and can send a request, and change it while it waits. Before booking opens the link reads *♿ Need a special-needs spot? Ask the crew now*; during Live Booking and after it, it is the button *♿ Special-needs spot* at the top of the map.
+- **Open:** guests see a link on the map and can send a request, and change it while it waits. Before booking opens the link reads *♿ Need a special-needs spot? Ask the crew now*; during Live Booking and after it, it is the link *♿ Special-needs spot* in the top bar of every booking page.
 - **Closed:** no new requests and no changes. Waiting requests stay; guests still see theirs (the map link then reads *♿ See your special-needs request* or *♿ My request*) and can withdraw it.
 
 Every switch goes to the crew group with the admin's e-mail address.

@@ -5,7 +5,7 @@ All you need is the **ticket code** from your Hamburn ticket. There is no accoun
 Beds come with **Indoor memberships** only. Camper memberships (camper or tent) don't include a bed and don't need CozyNights.
 
 > [!NOTE] Booking opens and closes at set times
-> Before booking opens, the start page and the (still blurred) map count down to the start. You can already sign in with your code. While booking is open, a countdown on every page shows when it closes; after that, spots are final.
+> Before booking opens, the start page and the (still blurred) map count down to the start. You can already sign in with your code. While booking is open, the top bar of every booking page counts down to the close; after that, spots are final.
 
 ## At a glance
 
@@ -37,7 +37,7 @@ flowchart LR
 
    ![Camp map during Live Booking](../assets/screenshots/guest-map-live.webp)
 
-   The badge at the top shows the phase: 🎪 LIVE BOOKING, 🛠 STAGING MODE or 🔒 BOOKING CLOSED. Next to it are ♿ **Special-needs spot** (while the crew takes [special-needs requests](./special-needs)) and **Help & FAQ**. <kbd>🎰 DESTINY ROULETTE</kbd> at the bottom picks a spot for you (see [Destiny Roulette](#destiny-roulette)).
+   The **top bar** is the same on every booking page. **Hamburn** on the left takes you back to the map. The phase pill — 🛠 STAGING, 🎪 LIVE or 🔒 CLOSED — counts down to the next switch while a timer is armed (*opens in 1d 23:59:57*, *closes in …*, red in the last hour); tap it for the exact Berlin time. In the middle, the wish chips (see [Looking for something special?](#looking-for-something-special)). On the right: ♿ **Special-needs spot** (while the crew takes [special-needs requests](./special-needs)), **Help & FAQ**, <kbd>Sign out</kbd> and the version. On a phone the links shrink to their icons and the chips take a row of their own. <kbd>🎰 DESTINY ROULETTE</kbd> at the bottom picks a spot for you (see [Destiny Roulette](#destiny-roulette)).
 
 3. **Choose a room**
 
@@ -100,11 +100,11 @@ A room shows what its house says too, and the crew can add a sentence of their o
 
 ## Looking for something special?
 
-Above the map, **Looking for…** turns your wishes on and off: <kbd>🛏️ No ladder</kbd>, <kbd>⬇️ Step-free</kbd>, <kbd>🚻 Toilets inside</kbd>, <kbd>🔥 Heated</kbd>, <kbd>🤫 Quiet</kbd>, <kbd>🔌 Power socket</kbd>.
+The chips in the top bar of the map turn your wishes on and off: <kbd>🛏️ No ladder</kbd>, <kbd>⬇️ Step-free</kbd>, <kbd>🚻 Toilets inside</kbd>, <kbd>🔥 Heated</kbd>, <kbd>🤫 Quiet</kbd>, <kbd>🔌 Power socket</kbd>. Only wishes some spot of the camp can answer are offered; if the crew described nothing, there is no chip row. On a phone the chips are their icons, and while the map's phase panel is up they wait.
 
-- Houses without a fitting free spot fade back, and the bar says how many houses are left.
+- Houses without a fitting free spot fade back, and the bar says *3 houses have a fitting free spot* — or that no house has one.
 - Open a house and each room tells you how many of its free spots fit.
-- The wishes are part of the address, so a filtered map can be shared or bookmarked. <kbd>Clear</kbd> shows everything again.
+- The wishes are part of the address, so a filtered map can be shared or bookmarked. <kbd>Clear</kbd> next to the chips shows everything again.
 
 Only spots the crew described can match, so a wish never promises more than the crew wrote down.
 
@@ -112,7 +112,7 @@ Only spots the crew described can match, so a wish never promises more than the 
 
 Can't decide? On the map press <kbd>🎰 DESTINY ROULETTE</kbd>. A neon slot machine waits with three reels, **House**, **Room** and **Spot**: grab its lever, pull it down and let go, or press <kbd>SPIN 🎰</kbd>. The reels stop one after the other on a random free spot anywhere in the camp. Every free spot has the same chance; how hard you pull only changes how long the reels run.
 
-**The reels respect…** on the machine, right under the reels, takes the same wishes as the map: tap <kbd>🛏️ No ladder</kbd> or <kbd>🔥 Heated</kbd> and only fitting spots go into the drum. The line next to the chips says how many that is. If none fits, the machine says so and offers <kbd>Spin without wishes</kbd>.
+The wish chips in the top bar work here too: tap <kbd>🛏️ No ladder</kbd> or <kbd>🔥 Heated</kbd> and only fitting spots go into the drum; the bar says *4 spots in the drum of 12 free*. If none fits, the machine says so and offers <kbd>Spin without wishes</kbd>. The chips show while you can spin: during Live Booking, until your ticket holds a spot.
 
 Then the burner name that goes with the spot:
 
@@ -185,7 +185,7 @@ CozyNights works in any mobile browser, no app needed. If you booked on your lap
 
 ## Shared devices
 
-Your ticket code stays on a device for 30 days. On a shared computer or somebody else's phone, sign out when you're done: on the start page, press <kbd>Not your ticket? Sign out</kbd>. The start page then says *Your ticket code was removed from this device.* Your booking stays; it belongs to the ticket, not to the device. Entering another code on the same device switches it to that ticket.
+Your ticket code stays on a device for 30 days. On a shared computer or somebody else's phone, sign out when you're done: press <kbd>Sign out</kbd> (⏏ on a phone) in the top bar of any booking page, or <kbd>Not your ticket? Sign out</kbd> on the start page. The start page then says *Your ticket code was removed from this device.* Your booking stays; it belongs to the ticket, not to the device. Entering another code on the same device switches it to that ticket.
 
 ## Privacy: what others see
 

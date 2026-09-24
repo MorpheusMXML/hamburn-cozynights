@@ -23,11 +23,15 @@ CozyNights couldn't reach its database for a moment. Your code is fine. Try agai
 :::
 
 ::: details A spot says nothing about its bed, or my wish finds no spot
-CozyNights only shows what the crew filled in: an empty spot card means *nobody said*, not *no bed*. The wishes above the map (**Looking for…**) are strict for the same reason — they only keep spots the crew actually described, so nothing is promised that isn't written down. Ask the crew if a detail matters to you, and use the [special-needs request](./special-needs) if you need a particular kind of spot.
+CozyNights only shows what the crew filled in: an empty spot card means *nobody said*, not *no bed*. The wish chips in the top bar (on the map and the roulette) are strict for the same reason — they only keep spots the crew actually described, so nothing is promised that isn't written down; a wish no spot answers isn't even offered as a chip. Ask the crew if a detail matters to you, and use the [special-needs request](./special-needs) if you need a particular kind of spot.
 :::
 
 ::: details The map is blurry and houses don't open ("Booking is not open yet…")
 Booking hasn't opened yet. Once the crew has armed the timer, a countdown shows when it starts, and the map unlocks by itself when it ends. Without a countdown the map says *Booking is not open yet. The crew is still setting up the houses. Check back soon.* <kbd>📡 RELOAD SENSORS</kbd> refreshes the page state.
+:::
+
+::: details Where is the countdown?
+In the top bar of every booking page, fused with the phase pill: *opens in …* before booking opens, *closes in …* while it is live (red in the last hour). Tap it for the exact Berlin time. The start page shows the same countdown big, and the map counts down on its panel while booking is not open yet — there the bar shows the phase alone. No countdown anywhere means the crew hasn't armed the timer yet.
 :::
 
 ::: details I can't book or change my spot any more ("Booking is closed")
@@ -51,7 +55,7 @@ Your browser has forgotten your ticket code, typically in a tab that was open fo
 :::
 
 ::: details How do I sign out on a shared device?
-On the start page, press <kbd>Not your ticket? Sign out</kbd>. The code is removed from that browser, your booking stays. See [Shared devices](./booking#shared-devices).
+Press <kbd>Sign out</kbd> (⏏ on a phone) in the top bar of any booking page, or <kbd>Not your ticket? Sign out</kbd> on the start page. The code is removed from that browser, your booking stays. See [Shared devices](./booking#shared-devices).
 :::
 
 ::: details How do I get back to my room and my booking pass?
@@ -83,7 +87,7 @@ Enter your ticket code on the start page of the new device. Your booking is atta
 :::
 
 ::: details Can I book for a friend?
-Only with their ticket code. On a shared device, entering another code switches that browser to the other ticket: enter your own code again afterwards, or press <kbd>Not your ticket? Sign out</kbd> on the start page.
+Only with their ticket code. On a shared device, entering another code switches that browser to the other ticket: enter your own code again afterwards, or press <kbd>Sign out</kbd> in the top bar (or <kbd>Not your ticket? Sign out</kbd> on the start page).
 :::
 
 ::: details My spot shows no burner name (the ticket was handed to me)
@@ -119,7 +123,7 @@ Yes: send `/pass` to the bot and it sends your pass with its QR code as a pictur
 :::
 
 ::: details I need a special spot (lower bunk, step-free, quiet, a socket for a medical device)
-Ask the crew for a special-needs spot, even before booking opens: sign in with your ticket code and follow the ♿ link on the map (*Need a special-needs spot? Ask the crew now* before booking opens, the ♿ **Special-needs spot** button after that) while the crew accepts requests. See [Special-needs spot](./special-needs).
+Ask the crew for a special-needs spot, even before booking opens: sign in with your ticket code and follow the ♿ link (*Need a special-needs spot? Ask the crew now* on the map before booking opens, ♿ **Special-needs spot** in the top bar of every booking page after that) while the crew accepts requests. See [Special-needs spot](./special-needs).
 :::
 
 ::: details My special-needs request won't send, or says the crew has already decided

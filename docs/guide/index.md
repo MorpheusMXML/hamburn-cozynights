@@ -54,7 +54,7 @@ flowchart TB
 2. **Load the tickets.** The ticket list goes into the database, so every ticket code can sign in and confirmations reach the right address.
 3. **Special needs first.** Guests who need a particular spot ask the crew with their ticket code, and the crew books a fitting spot for them before booking opens. See [Special-needs spot](./special-needs).
 4. **Announce the booking window.** An admin plans when booking opens and when it closes, and arms the timer. Guests see a countdown.
-5. **Booking opens.** Guests pick their beds; the layout is now frozen. A countdown shows when booking closes: big on the start page, a slim bar on every other page. See [Staging, Live Booking & Closed](./phases).
+5. **Booking opens.** Guests pick their beds; the layout is now frozen. A countdown shows when booking closes: big on the start page, in the top bar of every booking page. See [Staging, Live Booking & Closed](./phases).
 6. **Booking closes.** At the closing time the spots are final. Guests keep their spot and their booking pass.
 7. **During the event.** The crew checks booking passes at arrival where needed, watches occupancy and locks single spots if something breaks.
 8. **After the burn.** Export the layout as a template; the guests' contact data is deleted, and a superuser switches back to staging, which frees every spot for next time.
