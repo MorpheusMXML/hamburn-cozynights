@@ -73,6 +73,18 @@ write" means an approved `admins` record (see [Security & privacy](./security)).
   (`pb_hooks/cozy_bunks.pb.js`, logic in `pb_hooks/lib/bunks.js`). Stacking
   works in every phase, like 🔒 and ♿: it moves no booking (see
   [Bunk beds](../admin/camp-layout#bunk-beds)).
+- **Features add up from the house down, and the closer level wins:** what
+  is true for one spot is the house's `features`, then the room's, then the
+  spot's own, with a heated room in an unheated hut group counting as heated
+  (`effectiveFeatures` in `src/lib/accommodation.ts`, mirrored in
+  `pb_hooks/lib/beds.js`). Two features that say the opposite of each other,
+  `heated` and `unheated`, are never both set on one house or room: the forms
+  clear the other box, the template import refuses the file, and PocketBase
+  refuses the write on the records API (`pb_hooks/cozy_features.pb.js`, logic
+  in `pb_hooks/lib/beds.js`). An upper bunk is never `wheelchair`, however
+  accessible its room or house is: a bed with a ladder loses ♿ wherever a
+  spot's features are summed up, so the ♿ picker, the map wishes, the guest
+  pages, the messages and the passes never show it for one.
 - **While booking is live or closed**, the structure is locked on the server:
   houses and rooms can't be added, moved, renamed or deleted, beds can't be
   added or deleted, and templates can't be imported (see

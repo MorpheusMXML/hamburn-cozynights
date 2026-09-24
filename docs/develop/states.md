@@ -26,9 +26,10 @@ highlight. The ▲ Upper / ▼ Lower chip of a bunk bed is a neutral white
 outline, the phase Live has its own yellow so pink stays ♿ only, and *booked*
 rows on the admin pages are red, not pink. The guest room page's `spotState()`
 and the admin room page's `bed-status` put `data-state` on the card, so both
-sides read the same tokens; `PixelBunk.svelte` colours the two mattresses of a
-bunk bed with them, and `tests/layout` checks that the status line stays
-readable at 320 px.
+sides read the same tokens; the bunk tile on the guest room page gives each
+half its own `data-state`, and the tile itself wears `state-ring` in
+`--state-checked-in` (the *mine* turquoise) when one half is yours.
+`tests/layout` checks that the status line stays readable at 320 px.
 
 Put `data-state="…"` on an element and it gets `--state` and `--state-soft`.
 Add `class="state-ring"` and it gets a border in that colour that breathes:
