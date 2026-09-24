@@ -11,6 +11,8 @@
 		value: string;
 		/** Colours the value when it asks for attention (danger / warning). */
 		state?: string;
+		/** The filtered list behind the number (/admin/guests?show=…). */
+		href?: string;
 	}
 	interface Card {
 		key: string;
@@ -37,17 +39,26 @@
 				icon: '🎟',
 				title: 'Tickets',
 				lines: [
-					{ label: 'Loaded', value: count(tickets?.total) },
-					{ label: 'With a spot', value: count(ticketsWithSpot) },
+					{ label: 'Loaded', value: count(tickets?.total), href: '/admin/guests?show=all' },
+					{
+						label: 'With a spot',
+						value: count(ticketsWithSpot),
+						href: '/admin/guests?show=spot'
+					},
 					{
 						label: 'Without a spot',
-						value: typeof tickets?.total === 'number' ? count(ticketsWithoutSpot) : '—'
+						value: typeof tickets?.total === 'number' ? count(ticketsWithoutSpot) : '—',
+						href: '/admin/guests?show=nospot'
 					},
 					{ label: 'With an e-mail address', value: count(tickets?.withEmail) },
-					{ label: 'Telegram linked', value: count(tickets?.telegram) }
+					{
+						label: 'Telegram linked',
+						value: count(tickets?.telegram),
+						href: '/admin/guests?show=telegram'
+					}
 				],
 				href: '/admin/tickets',
-				linkLabel: 'Tickets'
+				linkLabel: 'Find a ticket'
 			},
 			{
 				key: 'messages',
@@ -56,7 +67,11 @@
 				lines: [
 					{ label: 'E-mail to guests', value: ops ? onOff(messages?.mailOn) : '—' },
 					{ label: 'Telegram bot', value: ops ? onOff(messages?.telegramOn) : '—' },
-					{ label: 'Guests e-mailed', value: count(tickets?.mailed) },
+					{
+						label: 'Guests e-mailed',
+						value: count(tickets?.mailed),
+						href: '/admin/guests?show=mailed'
+					},
 					{ label: 'Waiting to go out', value: count(messages?.queued) },
 					{
 						label: 'Being retried',
@@ -80,7 +95,8 @@
 					{
 						label: 'Waiting for a decision',
 						value: count(requests?.pending),
-						state: flag(requests?.pending, 'warning')
+						state: flag(requests?.pending, 'warning'),
+						href: '/admin/requests'
 					},
 					{ label: 'Approved', value: count(requests?.approved) },
 					{ label: 'Declined', value: count(requests?.declined) }
@@ -124,7 +140,9 @@
 				<dl>
 					{#each card.lines as line (line.label)}
 						<div class="ops-line">
-							<dt>{line.label}</dt>
+							<dt>
+								{#if line.href}<a href={line.href}>{line.label}</a>{:else}{line.label}{/if}
+							</dt>
 							<dd data-state={line.state}>{line.value}</dd>
 						</div>
 					{/each}
@@ -180,6 +198,15 @@
 		font-size: 0.7rem;
 		font-weight: 700;
 		color: #a3a3a3;
+	}
+	.ops-line dt a {
+		color: inherit;
+		text-decoration: underline dotted #525252;
+		text-underline-offset: 3px;
+	}
+	.ops-line dt a:hover {
+		color: #2dd4bf;
+		text-decoration-color: currentColor;
 	}
 	.ops-line dd {
 		margin: 0;
