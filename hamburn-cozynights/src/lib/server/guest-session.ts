@@ -54,9 +54,23 @@ export function clearGuestSession(cookies: Cookies): void {
 	cookies.delete(ROUND_COOKIE, { path: COOKIE_OPTIONS.path });
 }
 
-/** `/?login=…` with the reason this device has to sign in again. */
-export function signInUrl(locals: App.Locals): string {
-	return `/?login=${locals.guestSignOut ?? 'required'}`;
+/**
+ * `/?login=…` with the reason this device has to sign in again, and the guest
+ * page to come back to afterwards (`next`): a link from a confirmation e-mail
+ * to a room or to the Telegram page then ends up there, not on the map.
+ */
+export function signInUrl(locals: App.Locals, next?: string): string {
+	const back = safeReturnPath(next);
+	return `/?login=${locals.guestSignOut ?? 'required'}${back ? `&next=${encodeURIComponent(back)}` : ''}`;
+}
+
+// The guest pages a sign-in may return to. Nothing else: `next` comes from the
+// URL, and a free-form target would make the start page an open redirect.
+const RETURN_PATH = /^\/(?:map|random-bed|special-needs|telegram|(?:room|house)\/[a-z0-9]{1,32})$/;
+
+/** A page to return to after signing in, or null for anything that isn't one. */
+export function safeReturnPath(value: unknown): string | null {
+	return typeof value === 'string' && RETURN_PATH.test(value) ? value : null;
 }
 
 /**

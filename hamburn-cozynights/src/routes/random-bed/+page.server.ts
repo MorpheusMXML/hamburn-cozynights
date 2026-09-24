@@ -11,7 +11,8 @@ import {
 	SpotChangedError
 } from '$lib/server/booking';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
-import { holdGuestMessage } from '$lib/server/notifications';
+import { getGuestNotifyStatus, holdGuestMessage } from '$lib/server/notifications';
+import { walletPlatforms } from '$lib/server/wallet/config';
 import { burnerNameOf, passSummary, roomLabel } from '$lib/server/pass';
 import type { PassSummary } from '$lib/pass';
 import type { RouletteSpot } from '$lib/roulette';
@@ -38,7 +39,7 @@ const SIGNED_OUT =
 const CODE_UNKNOWN = 'Your ticket code was not found. Go to the start page and enter it again.';
 
 export const load: PageServerLoad = async ({ locals, cookies, url }) => {
-	if (!locals.orderNumber) throw redirect(303, signInUrl(locals));
+	if (!locals.orderNumber) throw redirect(303, signInUrl(locals, '/random-bed'));
 
 	// Orders contain PII and are never readable via the public `pb` connection
 	// (see BookingService.getOrderByNumber, which uses the privileged adminPb).
@@ -58,7 +59,8 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 	}
 
 	try {
-		const { isBookingActive, phase, guestPhase } = await getBookingSettings(locals.pb);
+		const settings = await getBookingSettings(locals.pb);
+		const { isBookingActive, phase, guestPhase } = settings;
 
 		const userBed = await locals.adminPb
 			.collection('beds')
@@ -119,6 +121,16 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 				])
 			: [false, null];
 
+		// The Destiny Fulfilled card offers the wallets and Telegram under the pass.
+		const telegram = settings.telegramBot
+			? await getGuestNotifyStatus(locals.adminPb, order, settings)
+					.then((status) => ({ connected: !!status.telegram?.connected, form: true }))
+					.catch((err) => {
+						console.error('[RandomBed] Notification status failed:', (err as Error)?.message);
+						return null;
+					})
+			: null;
+
 		return {
 			freeBeds,
 			wishes,
@@ -133,6 +145,8 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 			// who spins again keeps their name unless they change it.
 			burnerName: burnerNameOf(order),
 			pass,
+			wallet: walletPlatforms(),
+			telegram,
 			// what the page says; what is allowed still follows `phase`
 			guestPhase,
 			userBed: userBed ? rouletteSpot(userBed) : null

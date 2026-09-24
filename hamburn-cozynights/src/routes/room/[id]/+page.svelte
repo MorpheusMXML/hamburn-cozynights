@@ -6,6 +6,7 @@
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
+	import PassActions from '$lib/components/PassActions.svelte';
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
@@ -331,6 +332,7 @@
 								<span class="notify-icon" aria-hidden="true">🎫</span> Show booking pass
 							</a>
 						</p>
+						<PassActions code={data.pass.code} wallet={data.wallet} />
 					{/if}
 					{#if data.notify && (data.notify.email || data.notify.telegram)}
 						<div class="notify-box">
@@ -382,8 +384,8 @@
 										<span class="notify-icon" aria-hidden="true">✈️</span> Get updates on Telegram
 									</button>
 									<small class="field-hint">
-										Optional. Opens Telegram — tap <strong>START</strong> there and the bot confirms your
-										spot. Reload this page afterwards.
+										Optional. Opens Telegram — tap <strong>START</strong> there and the bot sends your
+										spot and your pass, and every change from then on. Reload this page afterwards.
 									</small>
 								</form>
 							{/if}

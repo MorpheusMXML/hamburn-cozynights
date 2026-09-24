@@ -5,9 +5,7 @@
 // and the cleanup after the event. The app side is used like the app does,
 // through $lib/server/special-requests with the service account.
 import { describe, it, expect, beforeAll } from 'vitest';
-import { spawnSync } from 'child_process';
 import crypto from 'crypto';
-import path from 'path';
 import type PocketBase from 'pocketbase';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
 import {
@@ -19,6 +17,7 @@ import {
 import type { RequestInput } from '../../src/lib/special-needs';
 import {
 	anonymous,
+	cozyAdmin,
 	createAdmin,
 	expectRefused,
 	seedHouse,
@@ -31,7 +30,6 @@ const MOCK_URL = process.env.MOCK_URL || '';
 const MAILPIT_URL = process.env.MAILPIT_URL || '';
 const CREW_CHAT = '-1001234567890'; // docker-compose.test.yml
 const APP_URL = `http://127.0.0.1:${process.env.TEST_APP_PORT || '3290'}`;
-const COMPOSE_FILE = path.resolve(__dirname, '../../docker-compose.test.yml');
 
 const SECRET_TEXT = 'Wheelchair user, I need step-free access to the room.';
 const INPUT: RequestInput = {
@@ -119,31 +117,6 @@ async function specialBed() {
 
 async function crewTexts(): Promise<string> {
 	return (await telegramTo(CREW_CHAT)).map((m) => m.text).join('\n---\n');
-}
-
-function cozyAdmin(args: string[]): string {
-	const run = spawnSync(
-		'docker',
-		[
-			'compose',
-			'-f',
-			COMPOSE_FILE,
-			'exec',
-			'-T',
-			'pocketbase',
-			'/usr/local/bin/pocketbase',
-			'cozy-admin',
-			...args,
-			'--dir=/pb_data',
-			'--hooksDir=/pb_hooks',
-			'--migrationsDir=/pb_migrations',
-			'--encryptionEnv=PB_ENCRYPTION_KEY'
-		],
-		{ encoding: 'utf8' }
-	);
-	const output = `${run.stdout}${run.stderr}`;
-	if (run.status !== 0) throw new Error(`cozy-admin ${args.join(' ')} failed:\n${output}`);
-	return output;
 }
 
 // --- storage -------------------------------------------------------------------------

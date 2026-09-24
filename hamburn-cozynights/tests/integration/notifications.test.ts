@@ -15,6 +15,7 @@ import { BookingService } from '../../src/lib/server/booking';
 import { holdGuestMessage, RESPIN_HOLD_MINUTES } from '../../src/lib/server/notifications';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
 import { maskedTicketLabel } from '../../src/lib/tickets';
+import { formatPassCode } from '../../src/lib/pass';
 import {
 	anonymous,
 	createAdmin,
@@ -58,7 +59,14 @@ async function mock(route: string, body?: unknown) {
 	return res.json();
 }
 
-type SentMessage = { chat_id: string; text: string };
+type SentMessage = {
+	chat_id: string;
+	text: string;
+	/** sendMessage or sendPhoto (the mock puts a photo's caption into `text`). */
+	method?: string;
+	photo?: string;
+	reply_markup?: { inline_keyboard: { text: string; url: string }[][] };
+};
 async function telegramTo(chat: string | number): Promise<SentMessage[]> {
 	const sent: SentMessage[] = await mock('/_mock/telegram/sent');
 	return sent.filter((m) => m.chat_id === String(chat));
@@ -405,6 +413,80 @@ describe('booking updates on Telegram', () => {
 		expect(toStopper.some((m) => m.text.includes('is booked'))).toBe(false);
 	});
 
+	it('send the pass as a picture with buttons, and again on /pass', async () => {
+		const { beds } = await seedHouse(su, 1);
+		const guest = await seedTicket(su);
+		await su
+			.collection('app_settings')
+			.update(APP_SETTINGS_ID, { wallet_platforms: 'apple,google' });
+		await booking.bookBed(guest.order as any, beds[0].id, 'Snapper');
+		const chat = chatId();
+		await mock('/_mock/telegram/update', {
+			chat_id: chat,
+			text: `/start ${await telegramLink(guest.order.id)}`
+		});
+		await flush();
+
+		const code = (await su.collection('orders').getOne(guest.order.id)).pass_code;
+		const connected = (await telegramTo(chat)).at(-1)!;
+		expect(connected.method).toBe('sendPhoto');
+		expect(connected.photo).toBe(`${APP_URL}/pass/${formatPassCode(code)}/qr.png`);
+		expect(connected.text).toContain(beds[0].label);
+		const buttons = (connected.reply_markup?.inline_keyboard ?? []).flat();
+		expect(buttons.map((b) => b.text)).toEqual([
+			'🎫 Show booking pass',
+			'Add to Apple Wallet',
+			'Add to Google Wallet'
+		]);
+		expect(buttons[1].url).toBe(`${APP_URL}/pass/${formatPassCode(code)}/wallet/apple`);
+
+		// /pass shows it again, in this chat only
+		await mock('/_mock/telegram/update', { chat_id: chat, text: '/pass' });
+		const other = chatId();
+		await mock('/_mock/telegram/update', { chat_id: other, text: '/pass' });
+		await flush();
+		const again = (await telegramTo(chat)).at(-1)!;
+		expect(again.method).toBe('sendPhoto');
+		expect(again.text).toContain(formatPassCode(code));
+		expect((await telegramTo(other)).at(-1)?.text).toContain('not connected to a ticket');
+
+		// the guest commands are in the bot's menu, for private chats only
+		const commands = (await mock('/_mock/telegram/commands')) as {
+			commands: { command: string }[];
+			scope: { type: string };
+		};
+		expect(commands.commands.map((c) => c.command)).toEqual(['pass', 'stop', 'help']);
+		expect(commands.scope).toEqual({ type: 'all_private_chats' });
+		await su.collection('app_settings').update(APP_SETTINGS_ID, { wallet_platforms: '' });
+	});
+
+	it('offer Telegram and the wallets in the e-mail, until the guest has connected', async () => {
+		const { beds } = await seedHouse(su, 2);
+		const guest = await ticketWithEmail();
+		await su.collection('app_settings').update(APP_SETTINGS_ID, { wallet_platforms: 'apple' });
+		await booking.bookBed(guest.order as any, beds[0].id, 'Offered');
+		await flush();
+
+		const first = await mailBody((await mailsTo(guest.email)).at(-1)!.ID);
+		expect(first.Text).toContain(`${APP_URL}/telegram`);
+		expect(first.Text).toContain('Apple Wallet or Google Wallet');
+		expect(first.HTML).toContain(`href="${APP_URL}/telegram"`);
+
+		// once a chat is linked, the offer is gone
+		const chat = chatId();
+		await mock('/_mock/telegram/update', {
+			chat_id: chat,
+			text: `/start ${await telegramLink(guest.order.id)}`
+		});
+		await flush();
+		await booking.bookBed(guest.order as any, beds[1].id, 'Offered');
+		await flush();
+		const second = await mailBody((await mailsTo(guest.email)).at(-1)!.ID);
+		expect(second.Text).toContain('different spot');
+		expect(second.Text).not.toContain(`${APP_URL}/telegram`);
+		await su.collection('app_settings').update(APP_SETTINGS_ID, { wallet_platforms: '' });
+	});
+
 	it('answer unknown links and other messages with how to connect', async () => {
 		const chat = chatId();
 		await mock('/_mock/telegram/update', { chat_id: chat, text: '/start not-a-real-token' });
@@ -715,7 +797,9 @@ describe('message texts', () => {
 		expect(preview.mail[0].subject).toContain('[TEST] Your CozyNights spot: ');
 		expect(preview.mail[0].text).toContain('— Your Cozy crew 🌙');
 		expect(preview.mail[0].html).toContain('— Your Cozy crew 🌙');
-		expect(preview.telegram[0].text).toContain('Send /stop to disconnect.'); // '' = the default
+		expect(preview.telegram[0].text).toContain(
+			'Send /pass to see your booking pass again, /stop to disconnect.'
+		); // '' = the default
 		expect(preview.bot[0].text).toContain(APP_URL);
 
 		// the crew hears about a change (the app records the event)

@@ -49,7 +49,7 @@ async function sessionOrder(
 }
 
 export const load: PageServerLoad = async ({ locals, cookies, setHeaders }) => {
-	if (!locals.orderNumber) throw redirect(303, signInUrl(locals));
+	if (!locals.orderNumber) throw redirect(303, signInUrl(locals, '/special-needs'));
 	// The page shows what the guest wrote about their needs: never keep it in a cache.
 	setHeaders({ 'cache-control': 'no-store' });
 

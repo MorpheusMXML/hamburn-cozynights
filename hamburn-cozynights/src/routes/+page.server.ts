@@ -2,7 +2,12 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { BookingService } from '$lib/server/booking';
-import { clearGuestSession, readGuestRound, setGuestSession } from '$lib/server/guest-session';
+import {
+	clearGuestSession,
+	readGuestRound,
+	safeReturnPath,
+	setGuestSession
+} from '$lib/server/guest-session';
 import { FailureRateLimiter } from '$lib/server/rate-limit';
 
 // Ticket codes are bearer secrets: slow down guessing them.
@@ -18,11 +23,16 @@ function cleanTicketCode(raw: FormDataEntryValue | null): string {
 	return (typeof raw === 'string' ? raw : '').replace(SURROUNDING_BLANKS, '');
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	// `orderNumber` is only set for a ticket the server just found (hooks.server.ts),
 	// so a code that is no longer in the ticket list never gets "already signed in".
 	// `signedOut` says why this visit lost its session, for the hint on the page.
-	return { hasTicket: !!locals.orderNumber, signedOut: locals.guestSignOut ?? null };
+	// `next`: the guest page that sent the visitor here (signInUrl), checked.
+	return {
+		hasTicket: !!locals.orderNumber,
+		signedOut: locals.guestSignOut ?? null,
+		next: safeReturnPath(url.searchParams.get('next'))
+	};
 };
 
 export const actions: Actions = {
@@ -92,7 +102,7 @@ export const actions: Actions = {
 		// rounds ends the session (see $lib/server/guest-session).
 		setGuestSession(cookies, matchedCode, (await readGuestRound(locals.pb)) ?? 0);
 
-		throw redirect(303, '/map');
+		throw redirect(303, safeReturnPath(data.get('next')) ?? '/map');
 	},
 
 	/**
