@@ -91,7 +91,7 @@ Only with their ticket code. On a shared device, entering another code switches 
 :::
 
 ::: details My spot shows no burner name (the ticket was handed to me)
-Open the room of your spot (the room link in your confirmation, or its house on the map), tap **Yours**, type a name and press <kbd>Save Spot</kbd>; leave the field empty and the slot machine rolls one. That works before booking opens too. Only once booking has closed is the name final, like the spot itself.
+Open the room of your spot (the room link in your confirmation, or its house on the map), tap **Yours**, type a name or press <kbd>New Name 🎲</kbd> to roll one, and press <kbd>Save Spot</kbd>; leave the field empty and the slot machine rolls one for you first. That works before booking opens too. Only once booking has closed is the name final, like the spot itself.
 :::
 
 ::: details I didn't get a confirmation e-mail

@@ -2,13 +2,13 @@
 @component
 The name plate under the reels (/random-bed): the burner name that goes with
 the spot. Keep the one the ticket already has, type your own, or roll one:
-🎲 runs a small reel through the name list (the same list the server draws
+🎲 runs a small reel through rolled names (the same source the server draws
 from, $lib/burner-names) and drops the result into the field, where it can
 still be changed. The field is the booking form's `guestName`.
 -->
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { BURNER_NAMES, randomBurnerName } from '$lib/burner-names';
+	import { randomBurnerName } from '$lib/burner-names';
 	import { tickTimes } from '$lib/roulette';
 
 	let {
@@ -41,7 +41,7 @@ still be changed. The field is the booking form's `guestName`.
 		const final = randomBurnerName();
 		const rows = [final];
 		for (let i = 1; i < ROLL_ROWS - 1; i++) {
-			rows.push(randomBurnerName(BURNER_NAMES[Math.floor(Math.random() * BURNER_NAMES.length)]));
+			rows.push(randomBurnerName());
 		}
 		rows.push(value.trim() || '…');
 		const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

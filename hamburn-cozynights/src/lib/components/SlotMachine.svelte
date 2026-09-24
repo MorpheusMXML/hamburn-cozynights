@@ -5,7 +5,7 @@
 	 * It features a technical "laser" aesthetic with exponential deceleration and confetti effects.
 	 */
 	import { createEventDispatcher, onMount } from 'svelte';
-	import { BURNER_NAMES, randomBurnerName } from '$lib/burner-names';
+	import { burnerNameBase, randomBurnerName } from '$lib/burner-names';
 	const dispatch = createEventDispatcher();
 
 	/** @type {boolean} Whether the slot machine should start spinning automatically on mount. */
@@ -33,8 +33,8 @@
 	}
 
 	function runSpin() {
-		// The same list the server draws from when a booking comes without a name.
-		currentName = BURNER_NAMES[Math.floor(Math.random() * BURNER_NAMES.length)];
+		// The same source the server draws from when a booking comes without a name.
+		currentName = burnerNameBase();
 		iterations++;
 
 		if (iterations < maxIterations) {
