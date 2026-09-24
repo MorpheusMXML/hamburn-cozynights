@@ -8,7 +8,7 @@
 type Row = Record<string, any>;
 
 const RELATIONS: Record<string, Record<string, string>> = {
-	beds: { room: 'rooms', order: 'orders' },
+	beds: { room: 'rooms', order: 'orders', bunk_partner: 'beds' },
 	rooms: { house: 'houses' },
 	special_requests: { order: 'orders' },
 	guest_notify: { order: 'orders' },

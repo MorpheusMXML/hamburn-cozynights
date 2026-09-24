@@ -66,7 +66,16 @@ export const load: PageServerLoad = async ({
 		qrSvg: passQrSvg(link),
 		wallet: pass.spot ? walletPlatforms() : [],
 		telegram: !!telegramBot,
-		spot: pass.spot ? { house: pass.spot.house, room: pass.spot.room, spot: pass.spot.spot } : null,
+		spot: pass.spot
+			? {
+					house: pass.spot.house,
+					room: pass.spot.room,
+					spot: pass.spot.spot,
+					// the kind of bed and what is at the spot, '' when nobody wrote it down
+					bed: pass.spot.bed,
+					features: pass.spot.features
+				}
+			: null,
 		burnerName: pass.spot ? pass.burnerName : '',
 		// Only for the crew: who the ticket belongs to, and anything odd about the spot.
 		check: locals.admin

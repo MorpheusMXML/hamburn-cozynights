@@ -1,10 +1,11 @@
 // src/lib/server/wallet/content.ts
 /**
  * What a wallet pass shows, for both platforms: the same as the pass page
- * shows to anyone with its link (house, room, spot, burner name, the code and
- * the QR code), never the ticket code, the name on the ticket, an address or
- * the check-in. A wallet pass belongs to a pass code: when the ticket gets a
- * new one (a hand-over) or is deleted, the old wallet pass is voided.
+ * shows to anyone with its link (house, room, spot, burner name, the kind of
+ * bed and the features at the spot when the crew wrote them down, the code
+ * and the QR code), never the ticket code, the name on the ticket, an address
+ * or the check-in. A wallet pass belongs to a pass code: when the ticket gets
+ * a new one (a hand-over) or is deleted, the old wallet pass is voided.
  */
 import crypto from 'crypto';
 import type {
@@ -14,14 +15,26 @@ import type {
 	RoomsResponse,
 	TypedPocketBase
 } from '$lib/pocketbase-types';
+import { levelOf } from '$lib/bunks';
 import { formatPassCode } from '$lib/pass';
-import { burnerNameOf, findPass, passUrl, roomLabel } from '$lib/server/pass';
+import {
+	bedRow,
+	burnerNameOf,
+	findPass,
+	passUrl,
+	roomLabel,
+	spotFeatureText
+} from '$lib/server/pass';
 import type { WalletConfig } from './config';
 
 export interface WalletSpot {
 	house: string;
 	room: string;
 	spot: string;
+	/** "Upper bunk · above B1": the kind of bed; absent when nobody said. */
+	bed?: string;
+	/** "🔥 Heated · 🔌 Power socket": what is true at the spot; absent when nothing is. */
+	features?: string;
 }
 
 export interface WalletContent {
@@ -61,7 +74,16 @@ export function contentFromLookup(
 		code: formatPassCode(serial),
 		passUrl: passUrl(origin, serial),
 		voided: !lookup,
-		spot: spot ? { house: spot.house, room: spot.room, spot: spot.spot } : null,
+		spot: spot
+			? {
+					house: spot.house,
+					room: spot.room,
+					spot: spot.spot,
+					// only when the crew wrote it down: a pass without says nothing
+					...(spot.bed ? { bed: spot.bed } : {}),
+					...(spot.features ? { features: spot.features } : {})
+				}
+			: null,
 		burnerName: spot ? (lookup?.burnerName ?? '') : ''
 	};
 }
@@ -94,12 +116,19 @@ export function contentHash(
 	return crypto.createHash('sha256').update(JSON.stringify(shown)).digest('hex');
 }
 
-type Bed = Pick<BedsResponse, 'id' | 'order' | 'label' | 'room' | 'updated'>;
+type Bed = Pick<
+	BedsResponse,
+	'id' | 'order' | 'label' | 'room' | 'updated' | 'bed_type' | 'bunk_partner' | 'features'
+>;
+type Room = Pick<RoomsResponse, 'id' | 'name' | 'room_number' | 'house' | 'features'>;
+type House = Pick<HousesResponse, 'id' | 'name' | 'features'>;
 
 /**
  * The content of many passes at once, for the sync: four list requests
  * instead of two per pass. The same rules as findPass: a ticket's spot is its
- * most recently changed bed.
+ * most recently changed bed, its bed row names the other level of a bunk bed
+ * (which may be free, so every spot is read, not only the booked ones) and
+ * its features are the spot's, the room's and the house's together.
  */
 export async function loadContents(
 	adminPb: TypedPocketBase,
@@ -119,26 +148,25 @@ export async function loadContents(
 				requestKey: null
 			}),
 		adminPb.collection('beds').getFullList<Bed>({
-			filter: "order != ''",
-			fields: 'id,order,label,room,updated',
+			fields: 'id,order,label,room,updated,bed_type,bunk_partner,features',
 			requestKey: null
 		}),
-		adminPb
-			.collection('rooms')
-			.getFullList<Pick<RoomsResponse, 'id' | 'name' | 'room_number' | 'house'>>({
-				fields: 'id,name,room_number,house',
-				requestKey: null
-			}),
-		adminPb.collection('houses').getFullList<Pick<HousesResponse, 'id' | 'name'>>({
-			fields: 'id,name',
+		adminPb.collection('rooms').getFullList<Room>({
+			fields: 'id,name,room_number,house,features',
+			requestKey: null
+		}),
+		adminPb.collection('houses').getFullList<House>({
+			fields: 'id,name,features',
 			requestKey: null
 		})
 	]);
 
 	const roomById = new Map(rooms.map((room) => [room.id, room]));
 	const houseById = new Map(houses.map((house) => [house.id, house]));
+	const bedById = new Map(beds.map((bed) => [bed.id, bed]));
 	const bedByOrder = new Map<string, Bed>();
 	for (const bed of beds) {
+		if (!bed.order) continue;
 		const known = bedByOrder.get(bed.order);
 		if (!known || bed.updated > known.updated) bedByOrder.set(bed.order, bed);
 	}
@@ -147,12 +175,16 @@ export async function loadContents(
 		if (!wanted.has(order.pass_code)) continue;
 		const bed = bedByOrder.get(order.id);
 		const room = bed ? roomById.get(bed.room) : undefined;
+		const house = room ? houseById.get(room.house) : undefined;
+		const partner = bed?.bunk_partner ? bedById.get(bed.bunk_partner) : undefined;
 		const lookup: ContentSource = {
 			spot: bed
 				? {
-						house: (room && houseById.get(room.house)?.name) ?? '',
+						house: house?.name ?? '',
 						room: room ? roomLabel(room) : '',
-						spot: bed.label
+						spot: bed.label,
+						bed: bedRow(bed.bed_type, levelOf(bed), partner?.label),
+						features: spotFeatureText(house, room, bed)
 					}
 				: null,
 			burnerName: bed ? burnerNameOf(order) : ''

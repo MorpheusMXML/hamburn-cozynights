@@ -49,7 +49,7 @@ flowchart LR
 
    Inside the room every spot card says what it is, in bold and in one colour with a dot in front: **green** it's free, **red** somebody has it, **turquoise** it's yours, **violet** the crew keeps it, **grey** it can't be booked right now (see the table below). Click an **Available** spot.
 
-   A **bunk bed** is drawn as neon pixel art: the frame posts, the bed ends and the ladder as glowing pixel lines, the two mattresses as edgy boxes — the upper bunk on top, the lower one below. Each mattress is a spot of its own, with its own state, and *is* its booking button: tap the mattress. A chip next to the label says **▲ Upper** or **▼ Lower**, and the line under it where the other level is (*above B1*, *below B2*); the booking dialog repeats it: *Spot B2 — the upper bunk above B1.*
+   A **bunk bed** is one tile: the upper bunk's card on top, a short dashed rail with a small turquoise ladder between, the lower bunk's card below. Each half is a spot of its own, in its own colour and with its own booking button. A chip next to the label says **▲ Upper** or **▼ Lower**, and the line under it where the other level is (*above B1*, *below B2*); the booking dialog repeats it: *Spot B2 — the upper bunk above B1.*
 
    ![Room page with free, occupied and reserved spots](../assets/screenshots/guest-room-available.webp)
 
@@ -87,7 +87,7 @@ Houses and rooms can carry a few details, and spots say what kind of bed they ar
 | You see | Meaning |
 | --- | --- |
 | 🏠 House · 🛖 Hut group · ⛺ Tent area | What the place on the map is. A hut group is one pin with several huts; the map pin carries the icon, and the house page then asks you to choose a **hut**. |
-| ♿ Wheelchair accessible · ⬇️ Ground floor | A step-free way in with an accessible bathroom, or no stairs to the bed. |
+| ♿ Wheelchair accessible · ⬇️ Ground floor | A step-free way in with an accessible bathroom, or no stairs to the bed. An upper bunk never shows ♿, however accessible its room is: the ladder is in the way. |
 | 🚻 Toilets + showers inside · 🛁 Own bathroom | In the building itself, or in the room. Nothing written means the toilets are somewhere else on the site — the description usually says where. |
 | 🔥 Heated · ❄️ No heating | Late October nights are cold; this is worth reading. |
 | 🤫 Quiet zone · 🔌 Power socket | A calm corner of the camp; a socket in the room or at the bed. |
@@ -106,7 +106,7 @@ The chips in the top bar of the map turn your wishes on and off: <kbd>🛏️ No
 - Open a house and each room tells you how many of its free spots fit.
 - The wishes are part of the address, so a filtered map can be shared or bookmarked. <kbd>Clear</kbd> next to the chips shows everything again.
 
-Only spots the crew described can match, so a wish never promises more than the crew wrote down.
+Only spots the crew described can match, so a wish never promises more than the crew wrote down. An upper bunk in a ♿ wheelchair-accessible room is not step-free — the ladder is in the way — so <kbd>⬇️ Step-free</kbd> offers it only when the room is on the ⬇️ ground floor, and <kbd>🛏️ No ladder</kbd> never.
 
 ## Destiny Roulette
 

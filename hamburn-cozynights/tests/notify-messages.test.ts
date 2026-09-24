@@ -17,7 +17,10 @@ const spot = {
 	spot: 'B1',
 	room: 'Dorm #1',
 	house: 'Villa',
-	label: 'B1 · Dorm #1 · Villa'
+	label: 'B1 · Dorm #1 · Villa',
+	// what the crew wrote down about the bed (pb_hooks/lib/beds.js)
+	bed: 'Lower bunk · below B2',
+	features: '🔥 Heated · 🔌 Power socket'
 };
 const pass = { code: 'AAAA-BBBB-CCCC', url: 'https://cozy.test/pass/AAAA-BBBB-CCCC' };
 
@@ -50,6 +53,90 @@ describe('spot messages without a request stay as they were', () => {
 
 		for (const m of [booked, changed, released]) expect(m.text).not.toMatch(/special-needs/);
 		expect(telegram('booked', true, none)).toContain('Change or release it');
+	});
+});
+
+// The kind of bed (for a bunk bed: where the other level is) and what is at
+// the spot: two more rows in the e-mail, one 🛏 line under the spot on
+// Telegram — only when the crew wrote them down on the layout.
+describe('the bed and what is at it', () => {
+	const BED_LINE = '🛏 Lower bunk · below B2 · 🔥 Heated · 🔌 Power socket';
+	// the same spot on a layout where nobody wrote the bed down
+	const plain = {
+		bedId: spot.bedId,
+		roomId: spot.roomId,
+		spot: spot.spot,
+		room: spot.room,
+		house: spot.house,
+		label: spot.label
+	};
+
+	it('has its rows in the e-mail, text and HTML, lined up with the others', () => {
+		const m = notify.guestMail(cfg, 'booked', spot, '', 'Ada', pass, none);
+		expect(m.text).toContain(
+			'\n  House:    Villa\n  Room:     Dorm #1\n  Spot:     B1\n  Bed:      Lower bunk · below B2\n  Features: 🔥 Heated · 🔌 Power socket\n'
+		);
+		const cell = (name: string, value: string) =>
+			`<td style="padding:4px 16px 4px 0;color:#6b6478">${name}</td><td style="padding:4px 0;font-weight:bold">${value}</td>`;
+		expect(m.html).toContain(cell('Bed', 'Lower bunk · below B2'));
+		expect(m.html).toContain(cell('Features', '🔥 Heated · 🔌 Power socket'));
+		// in the messages that show the spot as well
+		for (const kind of ['changed', 'handed_over']) {
+			expect(mail(kind, true, none, 'B9').text).toContain('Bed:      Lower bunk · below B2');
+		}
+		expect(mail('', true, { kind: 'approved', status: 'approved', fixed: true }).text).toContain(
+			'Features: 🔥 Heated · 🔌 Power socket'
+		);
+	});
+
+	it('is one 🛏 line right under the spot on Telegram', () => {
+		expect(telegram('booked', true, none)).toContain(
+			'✨ Your CozyNights spot is booked\nB1 · Dorm #1 · Villa\n' + BED_LINE + '\n\n'
+		);
+		expect(telegram('changed', true, none, 'B9 · Loft #2 · Hut')).toContain(
+			'Now: B1 · Dorm #1 · Villa\n' + BED_LINE + '\nBefore: B9 · Loft #2 · Hut'
+		);
+		expect(telegram('connected', true, none)).toContain(
+			'Your spot: B1 · Dorm #1 · Villa\nhttps://cozy.test/room/room1\n' + BED_LINE + '\n\n'
+		);
+		expect(
+			telegram('booked', true, { kind: 'approved', status: 'approved', fixed: true })
+		).toContain('booked this spot for you:\nB1 · Dorm #1 · Villa\n' + BED_LINE + '\n\n');
+		// and under the bot's /pass reply
+		const preview = notify.previewMessages(cfg);
+		const passReply = preview.bot.find((m: { id: string }) => m.id === 'pass');
+		expect(passReply.text).toContain(pass.url + '\n🛏 Lower bunk · below B2 · 🔥 Heated');
+		expect(preview.telegram.find((m: { id: string }) => m.id === 'booked').text).toContain(
+			'🛏 Lower bunk · below B2 · 🔥 Heated · 🔌 Power socket'
+		);
+	});
+
+	it('is left out when the crew wrote nothing down', () => {
+		const m = notify.guestMail(cfg, 'booked', plain, '', 'Ada', pass, none);
+		expect(m.text).toContain('  Spot:     B1\n\n');
+		expect(m.text).not.toContain('Bed:');
+		expect(m.text).not.toContain('Features:');
+		expect(m.html).not.toContain('>Bed<');
+		expect(m.html).not.toContain('>Features<');
+		for (const kind of ['booked', 'changed', 'connected']) {
+			expect(notify.guestTelegram(cfg, kind, plain, 'B9', pass, none)).not.toContain('🛏');
+		}
+		// only one of the two known: the line is just that
+		const onlyBed = { ...plain, bed: 'Single bed' };
+		expect(notify.guestTelegram(cfg, 'booked', onlyBed, '', pass, none)).toContain(
+			'\n🛏 Single bed\n\n'
+		);
+		const onlyFeatures = { ...plain, features: '🔌 Power socket' };
+		const text = notify.guestMail(cfg, 'booked', onlyFeatures, '', 'Ada', pass, none).text;
+		expect(text).toContain('  Spot:     B1\n  Features: 🔌 Power socket\n');
+		expect(text).not.toContain('Bed:');
+	});
+
+	it('is a text the crew can change, with the bed as its placeholder', () => {
+		const custom = { ...cfg, texts: { 'tg.bed': 'Dein Bett: {bed}' } };
+		expect(notify.guestTelegram(custom, 'booked', spot, '', pass, none)).toContain(
+			'\nDein Bett: Lower bunk · below B2 · 🔥 Heated · 🔌 Power socket\n'
+		);
 	});
 });
 

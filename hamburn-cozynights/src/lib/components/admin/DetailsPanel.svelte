@@ -15,8 +15,10 @@
 		DESCRIPTION_MAX,
 		HOUSE_KINDS,
 		ROOM_KINDS,
+		featureLabel,
 		featuresFor,
-		type Feature
+		type Feature,
+		type FeatureEntry
 	} from '$lib/accommodation';
 
 	export let level: 'house' | 'room';
@@ -36,6 +38,25 @@
 	$: available = featuresFor(level);
 	$: chosen = new Set(features as Feature[]);
 	$: left = DESCRIPTION_MAX - description.length;
+	// The pairs that rule each other out, for the hint under the boxes.
+	$: pairs = available
+		.filter((feature) => feature.opposite && feature.value < feature.opposite)
+		.map((feature) => `${feature.label} / ${featureLabel(feature.opposite)}`);
+
+	/**
+	 * Two features that say the opposite ("Heated", "No heating") can't both
+	 * be true: ticking one clears the other, so the form can never send both.
+	 * The server refuses such a pair anyway (parseDetailsForm); this keeps the
+	 * boxes honest before anything is sent.
+	 */
+	function tickOne(event: Event, feature: FeatureEntry) {
+		const box = event.currentTarget as HTMLInputElement;
+		if (!box.checked || !feature.opposite) return;
+		const other = box.form?.querySelector<HTMLInputElement>(
+			`input[name="features"][value="${feature.opposite}"]`
+		);
+		if (other) other.checked = false;
+	}
 
 	const handleSubmit: SubmitFunction = () => {
 		error = '';
@@ -95,6 +116,7 @@
 					name="features"
 					value={feature.value}
 					checked={chosen.has(feature.value)}
+					on:change={(event) => tickOne(event, feature)}
 				/>
 				<span class="check-icon" aria-hidden="true">{feature.icon}</span>
 				<span class="check-label">{feature.label}</span>
@@ -102,7 +124,8 @@
 		{/each}
 		<p class="hint">
 			A spot inherits what its room and its house say. Leave a box empty when you don't know: the
-			app never guesses.
+			app never guesses.{#if pairs.length > 0}
+				{' '}{pairs.join(', ')}: one or the other, never both — ticking one clears the other.{/if}
 		</p>
 	</fieldset>
 

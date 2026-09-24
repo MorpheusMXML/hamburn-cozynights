@@ -34,7 +34,7 @@ The forms on the house and room pages (**HOUSE DETAILS**, **ADD ROOM**, **ADD SP
 | Field | What it is |
 | --- | --- |
 | KIND | 🏠 House · 🛖 Hut group · ⛺ Tent area · 📍 Other. A **hut group** keeps one pin on the map and its huts are its rooms: the pin gets the 🛖 icon and the guest page says *Choose a hut*. |
-| FEATURES | ♿ Wheelchair accessible · ⬇️ Ground floor · 🚻 Toilets + showers inside · 🔥 Heated · ❄️ No heating · 🤫 Quiet zone. Everything inside the house inherits them. |
+| FEATURES | ♿ Wheelchair accessible · ⬇️ Ground floor · 🚻 Toilets + showers inside · 🔥 Heated · ❄️ No heating · 🤫 Quiet zone. Everything inside the house inherits them — except that an [upper bunk](#bunk-beds) never inherits ♿. 🔥 Heated and ❄️ No heating rule each other out: ticking one clears the other (a hint under the boxes says so), and the server refuses a house that claims both. |
 | DESCRIPTION | Up to 500 characters of your own, shown to guests: *"Showers and toilets in the wash house, 50 m along the path."* |
 
 Press <kbd>SAVE DETAILS 🏷️</kbd>. Details can be changed **in every phase** — they describe the place, they don't move a booking.
@@ -74,7 +74,7 @@ Press <kbd>IGNITE ROOM ✨</kbd>.
 | --- | --- |
 | NAME | Only in Staging Mode: the name belongs to the layout. The field is gone while booking is live or closed. |
 | KIND | Room · Hut · Tent · Other. A room added to a hut group starts as a **hut** (and in a tent area as a tent), so you rarely have to set it. |
-| FEATURES | ♿ Wheelchair accessible · ⬇️ Ground floor · 🛁 Own bathroom · 🔥 Heated · ❄️ No heating · 🤫 Quiet zone · 🔌 Power socket. They come **on top of** the house's: a heated room in an unheated hut group counts as heated. |
+| FEATURES | ♿ Wheelchair accessible · ⬇️ Ground floor · 🛁 Own bathroom · 🔥 Heated · ❄️ No heating · 🤫 Quiet zone · 🔌 Power socket. They come **on top of** the house's: a heated room in an unheated hut group counts as heated. 🔥 Heated and ❄️ No heating rule each other out here too, and an [upper bunk](#bunk-beds) never inherits ♿ from its room either. |
 | DESCRIPTION | Up to 500 characters, shown to guests. |
 
 ### Room cards
@@ -99,7 +99,7 @@ Open a room by clicking its card on the house page.
 | All single beds | Every spot a single bed. Bunk beds are taken apart. |
 | Not specified | Clears the bed type again. Bunk beds are taken apart. |
 
-<kbd>🏷️ DETAILS</kbd> on a spot card opens its own editor: the **BED** (single bed, lower or upper bunk, one half of a double bed, sofa, mattress, camp bed), a **🔌 power socket** at that spot, and in Staging Mode its **LABEL**. Guests see the bed under the spot's label, and the ♿ picker uses it: *a lower bunk or a bed without a ladder* fits every bed but an upper bunk. A spot that is part of a [bunk bed](#bunk-beds) gets its bed from the stacking: the **BED** field is greyed out there and says so.
+<kbd>🏷️ DETAILS</kbd> on a spot card opens its own editor: the **BED** (single bed, lower or upper bunk, one half of a double bed, sofa, mattress, camp bed), a **🔌 power socket** at that spot, and in Staging Mode its **LABEL**. Guests see the bed under the spot's label, and the ♿ picker uses it: *a lower bunk or a bed without a ladder* fits every bed but an upper bunk, and an upper bunk is never ♿ wheelchair accessible, whatever its room says (see [Bunk beds](#bunk-beds)). A spot that is part of a [bunk bed](#bunk-beds) gets its bed from the stacking: the **BED** field is greyed out there and says so.
 
 ### Bunk beds 🪜 {#bunk-beds}
 
@@ -118,8 +118,9 @@ Two spots of a room can be **stacked** into one bunk bed: a lower bunk and an up
 - **A whole room at once:** **SPOT TYPES 🛏️** → *Bunk beds: B1 + B2 stacked, B3 + B4, …* stacks the spots in pairs, in label order (B1 + B2, B3 + B4, …). *All single beds* and *Not specified* take every bunk bed apart again.
 - **In every phase.** Stacking, swapping and unstacking work in Staging Mode, during Live Booking and after booking closed, like 🔒 and ♿: they describe the beds and move no booking. A booked spot keeps its guest and simply gets a level.
 - **The level is the bed.** A stacked spot's bed type is *Lower bunk* or *Upper bunk*, set by the stacking. In <kbd>🏷️ DETAILS</kbd> the **BED** field is greyed out and reads *Set by the bunk bed: lower bunk, below B2. Unstack it to change.* The 🔌 socket and the label can still be changed there.
-- **What guests see:** a neon pixel bunk bed — the frame posts, the bed ends and the ladder as glowing pixel lines, the two mattresses as edgy boxes in their [state colour](./index#the-state-colours), the upper bunk on top. Each mattress *is* that spot's booking button, with the chip *▲ Upper* / *▼ Lower* next to the label and *above B1* / *below B2* under it (see [Booking a bed](../guide/booking#step-by-step)). Their booking pass says *Upper bunk · above B1*.
+- **What guests see:** one tile, like yours: the upper bunk's card on top, a short dashed rail with a small turquoise ladder between, the lower bunk's card below. Each half wears its own [state colour](./index#the-state-colours) and has its own booking button, with the chip *▲ Upper* / *▼ Lower* next to the label and *above B1* / *below B2* under it (see [Booking a bed](../guide/booking#step-by-step)). Their booking pass says *Upper bunk · above B1*.
 - **The ♿ picker and the wishes read the levels.** *A lower bunk or a bed without a ladder* fits the lower bunk and marks the upper one as a clear mismatch, and the roulette wish <kbd>🛏️ No ladder</kbd> keeps only the lower one — so a stacked pair needs nothing else filled in (see [Special-needs requests](./special-needs#_1-mark-special-needs-spots)).
+- **An upper bunk is never wheelchair accessible.** Whatever its room or house says, an upper bunk loses *♿ Wheelchair accessible* wherever a spot's features are summed up: the ♿ picker doesn't count it as step-free through the room's ♿ (through ⬇️ Ground floor it still does), the map wish <kbd>⬇️ Step-free</kbd> never offers it that way, and guests, messages and passes never see ♿ on it. The ♿ *mark* of a special-needs spot is something else and stays.
 - **Templates keep the pairing** as `bunk_partner`, the label of the other spot, on both spots (see [Layout templates](./templates#file-format)).
 
 ### Spot states

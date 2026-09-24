@@ -135,7 +135,7 @@ The crew holds it back: the bed is broken, kept free on purpose, not in use, or 
 :::
 
 ::: details What do the colours on the spot cards mean?
-One colour, one meaning, on every page: **green** free, **red** taken by another guest, **turquoise** yours, **violet** reserved by the crew, **grey** not bookable right now (booking hasn't opened, or has closed). Pink is only ever ♿ special needs. In a bunk bed each mattress carries its own colour, and each is its own button.
+One colour, one meaning, on every page: **green** free, **red** taken by another guest, **turquoise** yours, **violet** reserved by the crew, **grey** not bookable right now (booking hasn't opened, or has closed). Pink is only ever ♿ special needs. In a bunk bed each half carries its own colour, and each is its own button.
 :::
 
 ::: details The burning title is too much for me

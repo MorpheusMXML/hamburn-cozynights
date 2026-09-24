@@ -253,6 +253,8 @@ function hookRecord(collection: string, row: HookRow) {
 	return {
 		id: draft.id,
 		raw: draft,
+		// the raw value, like the JSVM's record.get(): a multi-select is an array
+		get: (field: string) => draft[field],
 		getString: (field: string) => String(draft[field] ?? ''),
 		getBool: (field: string) => !!draft[field],
 		getInt: (field: string) => Number(draft[field] ?? 0),

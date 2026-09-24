@@ -1,8 +1,8 @@
 import encodeQR from 'qr';
 import { error } from '@sveltejs/kit';
 import { FailureRateLimiter } from '$lib/server/rate-limit';
-import { bedTypeLabel } from '$lib/accommodation';
-import { levelOf } from '$lib/bunks';
+import { bedTypeLabel, effectiveFeatures, featureText } from '$lib/accommodation';
+import { levelOf, type BunkLevel } from '$lib/bunks';
 import type { ClientResponseError } from 'pocketbase';
 import type {
 	BedsResponse,
@@ -29,6 +29,16 @@ export interface PassSpot {
 	house: string;
 	room: string;
 	spot: string;
+	/**
+	 * What kind of bed it is ("Lower bunk"), and for a bunk bed where the
+	 * other level is ("Upper bunk · above B1"); '' when nobody said.
+	 */
+	bed: string;
+	/**
+	 * "🔥 Heated · 🔌 Power socket": what is true at the spot — its own
+	 * features and its room's and house's (src/lib/accommodation.ts); '' for none.
+	 */
+	features: string;
 	enabled: boolean;
 	locked: boolean;
 	/** When the spot got this ticket. */
@@ -44,7 +54,11 @@ export interface PassLookup {
 	burnerName: string;
 }
 
-type BedWithRoom = BedsResponse<{ room?: RoomsResponse<{ house?: HousesResponse }> }>;
+type BedWithRoom = BedsResponse<{
+	room?: RoomsResponse<{ house?: HousesResponse }>;
+	/** The other level of a bunk bed, for its label. */
+	bunk_partner?: Pick<BedsResponse, 'id' | 'label'>;
+}>;
 
 function isNotFound(err: unknown): boolean {
 	return (err as ClientResponseError | undefined)?.status === 404;
@@ -96,13 +110,14 @@ export async function findPass(adminPb: TypedPocketBase, code: string): Promise<
 			.collection('beds')
 			.getFirstListItem<BedWithRoom>(adminPb.filter('order = {:order}', { order: order.id }), {
 				sort: '-updated',
-				expand: 'room,room.house'
+				expand: 'room,room.house,bunk_partner'
 			});
 	} catch (err) {
 		if (!isNotFound(err)) throw err;
 	}
 
 	const room = bed?.expand?.room;
+	const house = room?.expand?.house;
 	return {
 		code,
 		order,
@@ -111,9 +126,11 @@ export async function findPass(adminPb: TypedPocketBase, code: string): Promise<
 			? {
 					bedId: bed.id,
 					roomId: bed.room,
-					house: room?.expand?.house?.name ?? '',
+					house: house?.name ?? '',
 					room: room ? roomLabel(room) : '',
 					spot: bed.label,
+					bed: bedRow(bed.bed_type, levelOf(bed), bed.expand?.bunk_partner?.label),
+					features: spotFeatureText(house, room, bed),
 					enabled: bed.enabled !== false,
 					locked: !!bed.is_locked,
 					// when the spot got this ticket (pb_hooks/lib/booked.js); `updated`
@@ -171,11 +188,39 @@ export async function passSummary(
 	};
 }
 
-/** "Upper bunk · above B1", or just "Upper bunk" when the other level is unknown. */
-function bedRow(bedType: string | undefined, level: 'lower' | 'upper' | null, partner?: string) {
+/**
+ * "Upper bunk · above B1", or just "Upper bunk" when the other level is
+ * unknown; '' when nobody wrote the bed type down. The one wording for the
+ * small ticket, the pass page and the wallet passes.
+ */
+export function bedRow(
+	bedType: string | undefined,
+	level: BunkLevel | null,
+	partner?: string
+): string {
 	const label = bedTypeLabel(bedType);
-	if (!level || !partner) return label;
+	if (!label || !level || !partner) return label;
 	return `${label} · ${level === 'lower' ? 'below' : 'above'} ${partner}`;
+}
+
+/**
+ * "🔥 Heated · 🔌 Power socket": what is true at one spot, its room's and
+ * house's features included (effectiveFeatures: the closer level wins, an
+ * upper bunk is never ♿). '' when nobody wrote anything down.
+ */
+export function spotFeatureText(
+	house: Pick<HousesResponse, 'features'> | undefined,
+	room: Pick<RoomsResponse, 'features'> | undefined,
+	bed: Pick<BedsResponse, 'features' | 'bed_type'>
+): string {
+	return featureText(
+		effectiveFeatures({
+			house: house?.features,
+			room: room?.features,
+			spot: bed.features,
+			bedType: bed.bed_type
+		})
+	);
 }
 
 /** Where the guest's pass lives; also what its QR code holds. */
