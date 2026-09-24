@@ -45,6 +45,38 @@ describe('features on the records API', () => {
 	});
 });
 
+describe('who may change features_off on the records API', () => {
+	const auth = (collection: string, role = '') => ({
+		collection: () => ({ name: collection }),
+		get: (key: string) => (key === 'role' ? role : '')
+	});
+
+	it('lets an unchanged list through, whoever writes', () => {
+		expect(beds.overrideChangeProblem(auth('admins', 'admin'), ['quiet'], ['quiet'], 'room')).toBe(
+			''
+		);
+		expect(beds.overrideChangeProblem(auth('admins', 'admin'), 'quiet', ['quiet'], 'spot')).toBe(
+			''
+		);
+		expect(beds.overrideChangeProblem(auth('admins', 'admin'), [], undefined, 'room')).toBe('');
+	});
+
+	it('refuses an admin and lets superusers of both kinds change it', () => {
+		const message = 'Only a superuser can switch an inherited feature off or on again.';
+		expect(beds.overrideChangeProblem(auth('admins', 'admin'), [], ['quiet'], 'room')).toBe(
+			message
+		);
+		expect(beds.overrideChangeProblem(auth('admins', 'admin'), ['quiet'], [], 'spot')).toBe(
+			message
+		);
+		expect(beds.overrideChangeProblem(auth('admins', 'superuser'), [], ['quiet'], 'room')).toBe('');
+		expect(beds.overrideChangeProblem(auth('_superusers'), [], ['quiet'], 'room')).toBe('');
+		expect(beds.overrideChangeProblem(null, [], ['quiet'], 'room')).toBe('');
+		// a house has no off list to guard
+		expect(beds.overrideChangeProblem(auth('admins', 'admin'), [], ['quiet'], 'house')).toBe('');
+	});
+});
+
 describe('what a message says about the bed', () => {
 	it('names the bed and, for a bunk bed, where the other level is', () => {
 		expect(beds.bedRow('bunk_upper', 'B1')).toBe('Upper bunk · above B1');

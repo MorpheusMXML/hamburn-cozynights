@@ -32,7 +32,7 @@ Drop a layout file on <kbd>Compare & Import</kbd>, or tap the field to choose on
 | Room | it has the same **room number** in that house |
 | Spot | it has the same **label** in that room (upper and lower case don't matter) |
 
-So a house that was renamed shows up twice: as a new house and as a house that is not in the file. Positions, room names, the spot switches (active, locked, special needs ♿), the **details** of a place (kind, features, description, bed type) and the bunk partner of a spot are compared.
+So a house that was renamed shows up twice: as a new house and as a house that is not in the file. Positions, room names, the spot switches (active, locked, special needs ♿), the **details** of a place (kind, features, description, bed type, and what a room or spot switches off), and the bunk partner of a spot are compared.
 
 ### The review
 
@@ -41,7 +41,7 @@ The review names the file and counts what is in it (houses, rooms, spots and spe
 | Badge | Meaning | Ticked at the start |
 | --- | --- | --- |
 | **NEW** | In the file, not in the camp | ✓ |
-| **CHANGED** | Moved, renamed, or a switch or detail differs (the line says what: `position: 425 / 150 → 455 / 150`, `special needs: off → on`, `bed: Upper bunk → Lower bunk`, `bunk partner: — → B2`, `features: Heated → Heated · Quiet zone`, `description: — → Showers in the wash…`) | ✓ |
+| **CHANGED** | Moved, renamed, or a switch or detail differs (the line says what: `position: 425 / 150 → 455 / 150`, `special needs: off → on`, `bed: Upper bunk → Lower bunk`, `bunk partner: — → B2`, `features: Heated → Heated · Quiet zone`, `features off: Heated → —`, `description: — → Showers in the wash…`) | ✓ |
 | **NOT IN FILE** | In the camp, not in the file. ⚠️ marks spots that are booked. | ✗ |
 
 Tick or untick anything. A house's checkbox covers everything inside it; a half-filled box means only part of it is chosen. Two rules keep the choice consistent:
@@ -74,12 +74,12 @@ The crew group gets a *🗺️ Layout template applied* message with what change
 
 ## File format
 
-```json [cozynights-layout-2026-09-21.json]
+```json [cozynights-layout-2026-09-25.json]
 {
 	"format": "cozynights-layout",
-	"version": "2.1",
+	"version": "2.2",
 	"name": "CozyNights camp layout",
-	"exported_at": "2026-09-21T15:04:05.000Z",
+	"exported_at": "2026-09-25T15:04:05.000Z",
 	"map": { "image": "/lageplan-brahmsee-2026-v2.jpg", "width": 1000, "height": 700 },
 	"houses": [
 		{
@@ -95,10 +95,11 @@ The crew group gets a *🗺️ Layout template applied* message with what change
 					"room_number": 1,
 					"kind": "room",
 					"features": ["ground_floor", "power"],
+					"features_off": ["heated"],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
 						{ "label": "B2", "enabled": true, "is_locked": true, "bed_type": "bunk_upper", "bunk_partner": "B1" },
-						{ "label": "B3", "enabled": false, "is_locked": false }
+						{ "label": "B3", "enabled": false, "is_locked": false, "features_off": ["power"] }
 					]
 				}
 			]
@@ -114,10 +115,11 @@ The crew group gets a *🗺️ Layout template applied* message with what change
 | `kind` | What the place is. House: `house`, `hut_group`, `tent_area`, `other`. Room: `room`, `hut`, `tent`, `other`. Optional. |
 | `features` | What is true there, as a list. House: `wheelchair`, `ground_floor`, `toilets_inside`, `heated`, `unheated`, `quiet`. Room: `wheelchair`, `ground_floor`, `own_bathroom`, `heated`, `unheated`, `quiet`, `power`. Spot: `power`. `heated` and `unheated` can't both be set. Optional. |
 | `description` | Up to 500 characters, shown to guests. Optional. |
+| `features_off` | What this room or spot does **not** take over from the levels above it (a room inherits its house's features, a spot its room's and house's; see [Camp layout](./camp-layout)). Room: only what a house can have (`wheelchair`, `ground_floor`, `toilets_inside`, `heated`, `unheated`, `quiet`). Spot: only what a house or a room can have (the room list plus `own_bathroom` and `power`). A feature can't be in `features` and `features_off` of the same place, and a house has no `features_off`. A superuser sets it in the app; the file carries it so an export brings it back. Optional. |
 | `rooms[]` | `name` and `room_number` (unique in the house; missing numbers are filled in). |
-| `beds[]` | Spots: `label` (unique in the room), `enabled` (active, default `true`), `is_locked` (default `false`), `"is_special": true` for a [special-needs spot](./special-needs), `bed_type` (`single`, `bunk_lower`, `bunk_upper`, `double`, `sofa`, `mattress`, `camp_bed`), `features` and `bunk_partner`: the label of the other spot of a [bunk bed](./camp-layout#bunk-beds), in the same room, on both spots. A pairing written on one spot only is completed, and missing levels are filled in (the first spot of the file is the lower bunk); two spots that name different partners, or a stacked spot with another bed type, are refused. Everything but the label is optional. |
+| `beds[]` | Spots: `label` (unique in the room), `enabled` (active, default `true`), `is_locked` (default `false`), `"is_special": true` for a [special-needs spot](./special-needs), `bed_type` (`single`, `bunk_lower`, `bunk_upper`, `double`, `sofa`, `mattress`, `camp_bed`), `features`, `features_off` and `bunk_partner`: the label of the other spot of a [bunk bed](./camp-layout#bunk-beds), in the same room, on both spots. A pairing written on one spot only is completed, and missing levels are filled in (the first spot of the file is the lower bunk); two spots that name different partners, or a stacked spot with another bed type, are refused. Everything but the label is optional. |
 
-A detail nobody filled in is **left out** of the file, so a layout without details exports exactly as it did before. Files of version `2.0` and `1.0` (older exports, spots only as `amount_beds`) are still read; their places simply carry no details. `name`, `exported_at` and `map` describe the file: `map.image` is the map picture the layout was made for, and a file made for another year's picture imports with a warning to check the pins.
+A detail nobody filled in is **left out** of the file, so a layout without details exports exactly as it did before. The running app always writes version `2.2`. Files of version `2.1` (no `features_off`), `2.0` (no bunk partners either) and `1.0` (older exports, spots only as `amount_beds`) are still read; their places simply carry no such details, and a room or spot from such a file inherits everything. `name`, `exported_at` and `map` describe the file: `map.image` is the map picture the layout was made for, and a file made for another year's picture imports with a warning to check the pins.
 
 ::: tip Hand-editing templates
 Templates are plain JSON, so a layout can be prepared in a text editor: copy a house block, change name and coordinates, drop the file on Compare & Import. The whole file is checked first. If anything is wrong, the manager lists every problem with its place in the file (`houses[2] "Neon Cave" > rooms[0]: room_number …`) and nothing changes.

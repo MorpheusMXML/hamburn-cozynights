@@ -10,8 +10,8 @@ data lives and how it is backed up: [Backups and where data lives](../develop/de
 | Collection     | Holds                                                                                    | Personal data | Written by                                           | API rules                             |
 | :------------- | :--------------------------------------------------------------------------------------- | :------------ | :--------------------------------------------------- | :------------------------------------ |
 | `houses`       | `name`, `x`, `y` (map position), `kind` (house, hut group, tent area, other), `features`, `description` | no            | admins                                               | public read, admin write              |
-| `rooms`        | `name`, `room_number`, `house`, `amount_beds` (spots created with the room; an initial count only, not maintained: count the room's `beds`) | no            | admins                                               | public read, admin write              |
-| `beds`         | `label`, `room`, `occupied`, `order`, `is_locked`, `enabled`, `is_special` (special-needs spot), `bed_type` (single bed, lower/upper bunk, half of a double bed, sofa, mattress, camp bed), `bunk_partner` (the other spot of a bunk bed, set on both spots), `features`, `booked_at` (when the spot got its ticket, set by PocketBase), `checked_in_at` and `checked_in_by` (the check-in at arrival: when, which admin) | no      | admins; guest bookings via the app's service account; a check-in with the checking admin's own session (the service account only moves it along or clears it) | admin read, admin write (guests see spots only through the app) |
+| `rooms`        | `name`, `room_number`, `house`, `amount_beds` (spots created with the room; an initial count only, not maintained: count the room's `beds`), `kind`, `features`, `description` (like a house), `features_off` (house features this room switches off for itself; superusers only) | no            | admins                                               | public read, admin write              |
+| `beds`         | `label`, `room`, `occupied`, `order`, `is_locked`, `enabled`, `is_special` (special-needs spot), `bed_type` (single bed, lower/upper bunk, half of a double bed, sofa, mattress, camp bed), `bunk_partner` (the other spot of a bunk bed, set on both spots), `features`, `features_off` (house or room features this spot switches off for itself; superusers only), `booked_at` (when the spot got its ticket, set by PocketBase), `checked_in_at` and `checked_in_by` (the check-in at arrival: when, which admin) | no      | admins; guest bookings via the app's service account; a check-in with the checking admin's own session (the service account only moves it along or clears it) | admin read, admin write (guests see spots only through the app) |
 | `orders`       | `order_number`, `order_hash`, `customer_name`, `burner_name` (encrypted), `email`, `pass_code` (booking pass, unique), `handed_over_at` (when the ticket was last passed on) | yes | the app's service account, `scripts/cozy-admin.sh tickets`; `pass_code` only by PocketBase | none (superusers only) |
 | `app_settings` | the phase set by hand: `is_booking_active` (live), `booking_closed` (closed); the booking window: `booking_unlock_at`, `booking_close_at`, `booking_timer_paused`; `notify_mail`, `telegram_bot`, `wallet_platforms` (which wallets the app offers), `special_requests_open`, `guest_round` (the booking round guests are signed in for; released bookings count it up) (single record `appsettings0123`) | no | admins (a phase switch right now: superusers only); PocketBase keeps the notification flags current, the app the wallet one | public read, admin write |
 | `admins`       | `email`, `name`, `role` (`pending`, `admin`, `superuser`), `last_sign_in`                | yes (email)   | Google sign-in, `scripts/cozy-admin.sh`              | none (sign-in creates `pending` only) |
@@ -74,14 +74,24 @@ write" means an approved `admins` record (see [Security & privacy](./security)).
   works in every phase, like 🔒 and ♿: it moves no booking (see
   [Bunk beds](../admin/camp-layout#bunk-beds)).
 - **Features add up from the house down, and the closer level wins:** what
-  is true for one spot is the house's `features`, then the room's, then the
-  spot's own, with a heated room in an unheated hut group counting as heated
-  (`effectiveFeatures` in `src/lib/accommodation.ts`, mirrored in
-  `pb_hooks/lib/beds.js`). Two features that say the opposite of each other,
-  `heated` and `unheated`, are never both set on one house or room: the forms
-  clear the other box, the template import refuses the file, and PocketBase
-  refuses the write on the records API (`pb_hooks/cozy_features.pb.js`, logic
-  in `pb_hooks/lib/beds.js`). An upper bunk is never `wheelchair`, however
+  is true for one spot is the house's `features`, minus what the room
+  switched off (`rooms.features_off`), plus the room's own, minus what the
+  spot switched off (`beds.features_off`), plus the spot's own — so a heated
+  room in an unheated hut group counts as heated, and a room with `heated` in
+  its off list stays cold in a heated house (`effectiveFeatures` in
+  `src/lib/accommodation.ts`, mirrored in `pb_hooks/lib/beds.js`). An off
+  list drops a feature before the level's own features count, may name any
+  feature a level above can have (a room: the house's; a spot: the house's
+  and the room's; `offAllowed`), is set and reset by superusers only (the
+  app's actions check for a superuser session; an admin's form never carries
+  it), and an empty list means *inherit everything*. Two features that say
+  the opposite of each other, `heated` and `unheated`, are never both set on
+  one house or room: the forms clear the other box, the template import
+  refuses the file, and PocketBase refuses the write on the records API. A
+  room or spot never switches a feature off that it ticks itself either: the
+  forms clear the other box, the template import refuses the file, and the
+  same hook refuses the write — it guards `houses`, `rooms` and `beds`
+  (`pb_hooks/cozy_features.pb.js`, logic in `pb_hooks/lib/beds.js`). An upper bunk is never `wheelchair`, however
   accessible its room or house is: a bed with a ladder loses ♿ wherever a
   spot's features are summed up, so the ♿ picker, the map wishes, the guest
   pages, the messages and the passes never show it for one.
@@ -102,17 +112,18 @@ A template is the camp's structure as JSON: houses with their map positions,
 rooms, beds and what each place is like. It contains no personal data, so
 layouts can be kept in Git. The format is described in
 [Layout templates](../admin/templates#file-format) (`format`
-`cozynights-layout`, version `2.1`; version `2.0` and `1.0` files are still
-read).
+`cozynights-layout`, version `2.2`; version `2.1`, `2.0` and `1.0` files are
+still read).
 
-- **Details:** `kind`, `features` and `description` of a house or room and a
-  spot's `bed_type` travel with the layout, and so does a bunk bed: each of its
-  two spots carries `bunk_partner`, the **label** of the other one. They are
-  written only when they are set, so a layout nobody described exports as it
-  always did. The catalogue of
-  allowed values is `src/lib/accommodation.ts` — one fixed, venue-independent
-  list, because the ♿ matching, the map filters and the roulette wishes read
-  meaning out of it. Anything true for one venue only belongs in `description`.
+- **Details:** `kind`, `features` and `description` of a house or room, a
+  spot's `bed_type` and what a room or spot switched off (`features_off`, see
+  above) travel with the layout, and so does a bunk bed: each of its two spots
+  carries `bunk_partner`, the **label** of the other one. They are written
+  only when they are set, so a layout nobody described exports as it always
+  did, and a place that inherits everything looks as it did in version `2.1`.
+  The catalogue of allowed values is `src/lib/accommodation.ts` — one fixed,
+  venue-independent list, because the ♿ matching, the map filters and the
+  roulette wishes read meaning out of it. Anything true for one venue only belongs in `description`.
 - **Export:** admin dashboard → TEMPLATES → download (any approved admin).
 - **Compare & import:** any admin can compare a file with the camp; superusers
   apply the chosen differences, only in Staging Mode. Houses are matched by

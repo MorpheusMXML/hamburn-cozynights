@@ -755,6 +755,24 @@ describe('the wallet sync', () => {
 		);
 	});
 
+	it('drops what a room or spot switched off, word for word like the pass page', async () => {
+		const pb = new FakePb();
+		const { room, beds } = seedCamp(pb);
+		// A superuser's call (features_off): the Dorm gives up the Villa's quiet,
+		// B1 the Dorm's heating. Only the socket at the bed is left.
+		Object.assign(room, { features_off: ['quiet'] });
+		Object.assign(beds[0], { features_off: ['heated'] });
+		const contents = await loadContents(pb as any, ['AAAABBBBCCCC'], 'https://cozy.test');
+		expect(contents.get('AAAABBBBCCCC')?.spot?.features).toBe('🔌 Power socket');
+		expect(contents.get('AAAABBBBCCCC')).toEqual(
+			contentFromLookup(
+				'AAAABBBBCCCC',
+				await findPass(pb as any, 'AAAABBBBCCCC'),
+				'https://cozy.test'
+			)
+		);
+	});
+
 	it('pushes a move to Apple devices and to Google, and forgets dead devices', async () => {
 		const pb = new FakePb();
 		const { beds, order } = seedCamp(pb);

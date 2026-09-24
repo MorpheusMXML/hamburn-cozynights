@@ -87,7 +87,8 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 					expand: 'room,room.house',
 					sort: 'label'
 				});
-		// The drum holds only the spots that fit the wishes (all of them without any).
+		// The drum holds only the spots that fit the wishes (all of them without
+		// any); what a room or spot switched off (a superuser's call) never fits.
 		const freeBeds: RouletteSpot[] = allFree
 			.filter(
 				(bed) =>
@@ -98,7 +99,9 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 							bedType: bed.bed_type,
 							house: bed.expand?.room?.expand?.house?.features,
 							room: bed.expand?.room?.features,
-							spot: bed.features
+							spot: bed.features,
+							roomOff: bed.expand?.room?.features_off,
+							spotOff: bed.features_off
 						})
 					)
 			)

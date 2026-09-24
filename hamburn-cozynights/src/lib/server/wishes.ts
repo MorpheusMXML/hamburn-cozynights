@@ -16,13 +16,20 @@ const CACHE_MS = 60_000;
 let cached: { at: number; filters: SpotFilter[] } | null = null;
 let pending: Promise<SpotFilter[]> | null = null;
 
-/** Every active spot of the camp as facts: its own features plus its room's and house's. */
+/**
+ * Every active spot of the camp as facts: its own features plus its room's and
+ * house's, minus what the room or the spot switched off (`features_off`, a
+ * superuser's call) — otherwise a chip would promise a heating the spot gave up.
+ */
 async function readSpotFacts(pb: TypedPocketBase) {
 	const [houses, rooms, beds] = await Promise.all([
 		pb.collection('houses').getFullList({ fields: 'id,features', requestKey: null }),
-		pb.collection('rooms').getFullList({ fields: 'id,house,features', requestKey: null }),
+		pb.collection('rooms').getFullList({
+			fields: 'id,house,features,features_off',
+			requestKey: null
+		}),
 		pb.collection('beds').getFullList({
-			fields: 'room,bed_type,features,enabled',
+			fields: 'room,bed_type,features,features_off,enabled',
 			requestKey: null
 		})
 	]);
@@ -36,7 +43,9 @@ async function readSpotFacts(pb: TypedPocketBase) {
 				bedType: bed.bed_type,
 				house: room ? houseById.get(room.house)?.features : undefined,
 				room: room?.features,
-				spot: bed.features
+				spot: bed.features,
+				roomOff: room?.features_off,
+				spotOff: bed.features_off
 			});
 		});
 }

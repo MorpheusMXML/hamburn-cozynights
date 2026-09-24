@@ -61,6 +61,8 @@ export interface SpotDiff extends DiffNode {
 export interface DetailFields {
 	kind?: string;
 	features?: Feature[];
+	/** Rooms only: what the room does not take over from its house. A house has nothing above it. */
+	features_off?: Feature[];
 	description?: string;
 }
 
@@ -112,6 +114,7 @@ export interface CampRecords {
 		room_number?: number;
 		kind?: string;
 		features?: string[];
+		features_off?: string[];
 		description?: string;
 	}[];
 	beds: ({
@@ -177,8 +180,8 @@ const shorten = (text: string | undefined): FieldValue =>
  * values, and one line per detail even for a list of features.
  */
 function detailChanges(
-	before: { kind?: string; features?: Feature[]; description?: string },
-	after: { kind?: string; features?: Feature[]; description?: string },
+	before: DetailFields,
+	after: DetailFields,
 	kindLabel: (value: unknown) => FieldValue
 ): FieldChange[] {
 	const changes: FieldChange[] = [];
@@ -189,6 +192,12 @@ function detailChanges(
 	const toFeatures = featureList(after.features);
 	if (fromFeatures !== toFeatures) {
 		changes.push({ field: 'features', from: fromFeatures, to: toFeatures });
+	}
+	// Only rooms have it; for a house both sides are always empty.
+	const fromOff = featureList(before.features_off);
+	const toOff = featureList(after.features_off);
+	if (fromOff !== toOff) {
+		changes.push({ field: 'features_off', from: fromOff, to: toOff });
 	}
 	// The whole text would flood the review, so the line only says it changed.
 	if ((before.description ?? '') !== (after.description ?? '')) {
@@ -205,13 +214,19 @@ function detailChanges(
 const detailsOf = (item: DetailFields): DetailFields => ({
 	...(item.kind ? { kind: item.kind } : {}),
 	...(item.features && item.features.length > 0 ? { features: item.features } : {}),
+	...(item.features_off && item.features_off.length > 0 ? { features_off: item.features_off } : {}),
 	...(item.description ? { description: item.description } : {})
 });
 
-/** The file decides: a detail it doesn't have is cleared in the camp. */
-const detailWrite = (item: DetailFields): DetailWrite => ({
+/**
+ * The file decides: a detail it doesn't have is cleared in the camp. Only a
+ * room gets `features_off` written (an empty list means "inherit everything");
+ * the houses collection has no such field.
+ */
+const detailWrite = (item: DetailFields, level: 'house' | 'room'): DetailWrite => ({
 	kind: item.kind ?? '',
 	features: item.features ?? [],
+	...(level === 'room' ? { features_off: item.features_off ?? [] } : {}),
 	description: item.description ?? ''
 });
 
@@ -222,7 +237,8 @@ const spotWrite = (bed: TemplateBed): Record<string, WriteValue> => ({
 	is_locked: bed.is_locked,
 	is_special: bed.is_special === true,
 	bed_type: bed.bed_type ?? '',
-	features: bed.features ?? []
+	features: bed.features ?? [],
+	features_off: bed.features_off ?? []
 });
 
 const houseKindLabel = (value: unknown): FieldValue => houseKindEntry(value)?.label ?? null;
@@ -251,6 +267,11 @@ function spotChanges(before: TemplateBed, after: TemplateBed): FieldChange[] {
 	const toFeatures = featureList(after.features);
 	if (fromFeatures !== toFeatures) {
 		changes.push({ field: 'features', from: fromFeatures, to: toFeatures });
+	}
+	const fromOff = featureList(before.features_off);
+	const toOff = featureList(after.features_off);
+	if (fromOff !== toOff) {
+		changes.push({ field: 'features_off', from: fromOff, to: toOff });
 	}
 	// The partner is a label; the import resolves it to the spot after every
 	// spot of the room exists (src/lib/server/template.ts, syncBunks).
@@ -677,6 +698,8 @@ export function toggleSelection(
 export interface DetailWrite {
 	kind: string;
 	features: string[];
+	/** Rooms only: what the room switches off, [] when the file says nothing. */
+	features_off?: string[];
 	description: string;
 }
 
@@ -741,7 +764,7 @@ export function planChanges(diff: LayoutDiff, selection: Set<string>): LayoutPla
 					name: house.name,
 					x: house.x,
 					y: house.y,
-					details: detailWrite(house)
+					details: detailWrite(house, 'house')
 				});
 			} else if (house.own === 'changed' && house.id) {
 				plan.updateHouses.push({
@@ -750,7 +773,7 @@ export function planChanges(diff: LayoutDiff, selection: Set<string>): LayoutPla
 					name: house.name,
 					x: house.x,
 					y: house.y,
-					details: detailWrite(house)
+					details: detailWrite(house, 'house')
 				});
 			} else if (house.own === 'removed' && house.id) {
 				plan.removeHouses.push({ key: house.key, id: house.id, name: house.name });
@@ -766,7 +789,7 @@ export function planChanges(diff: LayoutDiff, selection: Set<string>): LayoutPla
 						houseName: house.name,
 						name: room.name,
 						room_number: room.number,
-						details: detailWrite(room),
+						details: detailWrite(room, 'room'),
 						spots: room.spots.filter((spot) => chosen.has(spot.key)).length
 					});
 				} else if (room.own === 'changed' && room.id) {
@@ -774,7 +797,7 @@ export function planChanges(diff: LayoutDiff, selection: Set<string>): LayoutPla
 						key: room.key,
 						id: room.id,
 						name: room.name,
-						details: detailWrite(room)
+						details: detailWrite(room, 'room')
 					});
 				} else if (room.own === 'removed' && room.id) {
 					plan.removeRooms.push({ key: room.key, id: room.id, name: room.name });

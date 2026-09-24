@@ -7,7 +7,13 @@ import type {
 	HousesResponse,
 	OrdersResponse
 } from '$lib/pocketbase-types';
-import { effectiveFeatures, readFeatures, roomKind } from '$lib/accommodation';
+import {
+	effectiveFeatures,
+	inheritedFeatures,
+	readFeatures,
+	readFeaturesOff,
+	roomKind
+} from '$lib/accommodation';
 import { compareNatural } from '$lib/template';
 import { decrypt } from '$lib/server/crypto';
 import {
@@ -105,6 +111,14 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				// the house's features are shown once, above the list.
 				bedType: bed.bed_type ?? '',
 				features: readFeatures(bed.features, 'spot'),
+				// What this spot does NOT have although the room or house has it (a
+				// superuser switched it off): the card says "no 🔌 Power socket", so
+				// the room's chips above don't promise it for this bed.
+				missing: inheritedFeatures('spot', {
+					house: room.expand?.house?.features,
+					room: room.features,
+					roomOff: room.features_off
+				}).filter((feature) => readFeaturesOff(bed.features_off, 'spot').includes(feature)),
 				// The other spot of a bunk bed (a record id, not personal data): the
 				// page stacks the two into one tile.
 				bunkPartner: bed.bunk_partner ?? ''
@@ -150,10 +164,12 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				houseKind: room.expand?.house?.kind ?? '',
 				kind: roomKind(room.kind),
 				description: room.description ?? '',
-				// The house's features count for this room too.
+				// The house's features count for this room too, minus what the
+				// room switched off (a superuser's call).
 				features: effectiveFeatures({
 					house: room.expand?.house?.features,
-					room: room.features
+					room: room.features,
+					roomOff: room.features_off
 				})
 			},
 			beds: safeBeds,

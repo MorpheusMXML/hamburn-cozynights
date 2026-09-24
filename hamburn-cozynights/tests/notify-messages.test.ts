@@ -447,3 +447,75 @@ describe('✨ Leave No Trace & Respin ends in one message', () => {
 		expect(tg).toContain('B9 · Loft #2 · Hut');
 	});
 });
+
+// The spots above are built by hand; currentSpot() is what reads one from the
+// records before a message goes out. What it says about the bed comes from
+// the layout the way the app sums it up (pb_hooks/lib/beds.js), including what
+// a room or spot switched off (features_off, a superuser's call).
+describe('the spot as currentSpot reads it from the records', () => {
+	type Row = Record<string, unknown>;
+	/** A record like the JSVM's, over a plain row: only what currentSpot calls. */
+	const record = (row: Row) => ({
+		id: row.id as string,
+		get: (key: string) => row[key],
+		getString: (key: string) => String(row[key] ?? ''),
+		getInt: (key: string) => Number(row[key] ?? 0)
+	});
+	/** An app like the JSVM's, over rows per collection. */
+	function app(tables: Record<string, Row[]>) {
+		return {
+			findRecordsByFilter: (
+				collection: string,
+				_filter: string,
+				_sort: string,
+				_limit: number,
+				_offset: number,
+				params: Row
+			) => tables[collection].filter((row) => row.order === params.order).map(record),
+			findRecordById: (collection: string, id: string) => {
+				const row = tables[collection].find((r) => r.id === id);
+				if (!row) throw new Error(`${collection} ${id} not found`);
+				return record(row);
+			}
+		};
+	}
+	/** A heated, quiet Villa; the Dorm has a socket; B1 is the lower bunk under B2. */
+	const tables = (): Record<string, Row[]> => ({
+		houses: [{ id: 'house1', name: 'Villa', features: ['heated', 'quiet'] }],
+		rooms: [{ id: 'room1', house: 'house1', name: 'Dorm', room_number: 1, features: ['power'] }],
+		beds: [
+			{
+				id: 'bed1',
+				room: 'room1',
+				label: 'B1',
+				order: 'order1',
+				bed_type: 'bunk_lower',
+				bunk_partner: 'bed2',
+				features: []
+			},
+			{ id: 'bed2', room: 'room1', label: 'B2', order: '', bed_type: 'bunk_upper' }
+		]
+	});
+
+	it('sums the house, the room and the spot up, and knows tickets without a spot', () => {
+		expect(notify.currentSpot(app(tables()), 'order1')).toMatchObject({
+			bedId: 'bed1',
+			roomId: 'room1',
+			spot: 'B1',
+			room: 'Dorm #1',
+			house: 'Villa',
+			label: 'B1 · Dorm #1 · Villa',
+			bed: 'Lower bunk · below B2',
+			features: '🔥 Heated · 🤫 Quiet zone · 🔌 Power socket'
+		});
+		expect(notify.currentSpot(app(tables()), 'nobody')).toBeNull();
+	});
+
+	it('drops what the room or the spot switched off', () => {
+		const t = tables();
+		t.rooms[0].features_off = ['heated'];
+		expect(notify.currentSpot(app(t), 'order1').features).toBe('🤫 Quiet zone · 🔌 Power socket');
+		t.beds[0].features_off = ['quiet', 'power'];
+		expect(notify.currentSpot(app(t), 'order1').features).toBe('');
+	});
+});

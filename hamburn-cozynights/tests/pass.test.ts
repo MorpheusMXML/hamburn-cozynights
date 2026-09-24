@@ -30,6 +30,7 @@ import { load as houseLoad } from '../src/routes/house/[id]/+page.server';
 import { load as roomLoad } from '../src/routes/room/[id]/+page.server';
 import { load as mapLoad } from '../src/routes/map/+page.server';
 import { load as rouletteLoad } from '../src/routes/random-bed/+page.server';
+import { forgetAvailableFilters } from '../src/lib/server/wishes';
 
 const CODE = '7F3K9QXM2CWD';
 const notFound = Object.assign(new Error('not found'), { status: 404 });
@@ -223,6 +224,28 @@ describe('findPass', () => {
 			bed: 'Single bed',
 			features: '🚻 Toilets + showers inside · 🔥 Heated'
 		});
+
+		// What a room or spot switched off (features_off, a superuser's call) is
+		// gone from the pass: a room in a heated, quiet house that stays cold,
+		// and a spot in it that gives up the quiet as well.
+		const coldRoom = {
+			...STACKED,
+			expand: {
+				...STACKED.expand,
+				room: {
+					...BED.expand.room,
+					features_off: ['heated'],
+					expand: { house: { name: 'Brahmsee-Villa', features: ['heated', 'quiet'] } }
+				}
+			}
+		};
+		expect((await findPass(fakeAdminPb({ bed: coldRoom }), CODE))?.spot?.features).toBe(
+			'🤫 Quiet zone · 🔌 Power socket'
+		);
+		const loudSpot = { ...coldRoom, features_off: ['quiet'] };
+		expect((await findPass(fakeAdminPb({ bed: loudSpot }), CODE))?.spot?.features).toBe(
+			'🔌 Power socket'
+		);
 	});
 
 	it('dates the booking by booked_at, not by the last change of the spot', async () => {
@@ -277,7 +300,7 @@ function campWithGuest({ phase = 'closed', passCode = CODE } = {}) {
 		order_hash: createLookupHash('HB-2002'),
 		customer_name: 'Grace Hopper'
 	});
-	return { pb, huts, hut, order, bed };
+	return { pb, villa, blue, huts, hut, order, bed };
 }
 
 /** What the small ticket shows for HB-1001. */
@@ -489,6 +512,81 @@ describe("the roulette's own pass and name", () => {
 		quiet.mockRestore();
 		expect(page.userBed.id).toBe(c.bed.id);
 		expect(page.pass).toBeNull();
+	});
+});
+
+// A room or spot can switch an inherited feature off (features_off, a
+// superuser's call; src/lib/accommodation.ts). Every page that sums features
+// up must leave it out — otherwise a wish chip, the map, the house page or the
+// roulette would promise a heating the spot gave up.
+describe('what a room or spot switched off (features_off)', () => {
+	/** Both houses heated; the Blue Room stays cold, and so does the hut's only spot. */
+	function coldCamp() {
+		const c = campWithGuest({ phase: 'live' });
+		Object.assign(c.villa, { features: ['heated', 'quiet'] });
+		Object.assign(c.blue, { features_off: ['heated'] });
+		Object.assign(c.huts, { features: ['heated'] });
+		const h1 = c.pb.rows('beds').find((b) => b.label === 'H1')!;
+		Object.assign(h1, { features_off: ['heated'] });
+		// the wish chips are cached for a minute across requests
+		forgetAvailableFilters();
+		return { ...c, h1 };
+	}
+	const at = (path: string) => new URL(`http://test.local${path}`);
+
+	it('the room and house pages sum the house minus what the room switched off', async () => {
+		const c = coldCamp();
+		const room: any = await roomLoad({
+			url: at('/'),
+			params: { id: c.blue.id },
+			locals: guestLocals(c.pb),
+			cookies
+		} as any);
+		expect(room.room.features).toEqual(['quiet']);
+
+		// The hut inherits the heating; its only spot gave it up, so no free spot
+		// fits the wish "heated".
+		const house: any = await houseLoad({
+			url: at('/?w=heated'),
+			params: { id: c.huts.id },
+			locals: guestLocals(c.pb, 'HB-2002'),
+			cookies
+		} as any);
+		expect(house.rooms[0].features).toEqual(['heated']);
+		expect(house.rooms[0].fittingFree).toBe(0);
+	});
+
+	it('the wish chips, the map and the roulette skip a spot that gave a feature up', async () => {
+		const c = coldCamp();
+		const map: any = await mapLoad({
+			url: at('/map?w=heated'),
+			locals: guestLocals(c.pb, 'HB-2002')
+		} as any);
+		// no spot is heated anymore, so the chip is not offered
+		expect(map.availableFilters).toEqual(['quiet']);
+		expect(map.houses.map((h: any) => [h.name, h.fittingFree])).toEqual([
+			['Brahmsee-Villa', 0],
+			['Waldhütten', 0]
+		]);
+		expect(map.wishFit).toMatch(/^No house has a free spot that fits/);
+
+		const roulette = () =>
+			rouletteLoad({
+				url: at('/random-bed?w=heated'),
+				locals: guestLocals(c.pb, 'HB-2002'),
+				cookies
+			} as any) as Promise<any>;
+		const cold = await roulette();
+		expect(cold.freeBeds).toEqual([]);
+		expect(cold.wishFit).toBe('0 spots in the drum of 1 free');
+		expect(cold.availableFilters).toEqual(['quiet']);
+
+		// A superuser resets the spot: it is heated again, like its hut.
+		c.h1.features_off = [];
+		forgetAvailableFilters();
+		const reset = await roulette();
+		expect(reset.freeBeds.map((b: any) => b.label)).toEqual(['H1']);
+		expect(reset.availableFilters).toEqual(['heated', 'quiet']);
 	});
 });
 

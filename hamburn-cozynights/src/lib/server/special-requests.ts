@@ -99,11 +99,15 @@ export function toSpot(bed: BedWithRoom): SpotInfo {
 		special: !!bed.is_special,
 		locked: !!bed.is_locked,
 		bedType: bed.bed_type ?? '',
-		// What the room and the house say counts for the spot too.
+		// What the room and the house say counts for the spot too — minus what
+		// the room or the spot switched off (a superuser's call), so the ♿
+		// matching never offers a quiet the spot gave up.
 		features: effectiveFeatures({
 			house: building?.features,
 			room: room?.features,
 			spot: bed.features,
+			roomOff: room?.features_off,
+			spotOff: bed.features_off,
 			bedType: bed.bed_type
 		})
 	};

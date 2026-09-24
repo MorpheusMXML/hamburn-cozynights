@@ -10,14 +10,22 @@
 
 function cozyFeatureGuard(e) {
 	let problem = '';
+	let forbidden = '';
 	try {
+		const beds = require(`${__hooks}/lib/beds.js`);
 		const name = e.collection.name;
 		const level = name === 'houses' ? 'house' : name === 'rooms' ? 'room' : 'spot';
-		problem = require(`${__hooks}/lib/beds.js`).featureProblem(e.record, level);
+		problem = beds.featureProblem(e.record, level);
+		// features_off is a superuser's call (docs/admin/camp-layout.md): an
+		// admin token that changes it on the records API is refused, the way
+		// the app's own actions refuse it. A create starts from an empty list.
+		const before = e.record.isNew() ? [] : e.record.original().get('features_off');
+		forbidden = beds.overrideChangeProblem(e.auth, before, e.record.get('features_off'), level);
 	} catch (err) {
 		console.error('[cozy-features] guard: ' + err);
 	}
 	if (problem) throw new BadRequestError(problem);
+	if (forbidden) throw new ForbiddenError(forbidden);
 	e.next();
 }
 

@@ -14,7 +14,9 @@
 		bedTypeMix,
 		detailsSummary,
 		featureEntry,
-		readFeatures
+		inheritedFeatures,
+		readFeatures,
+		readFeaturesOff
 	} from '$lib/accommodation';
 	import { LOCK_SPOT_TIP, layoutLock, lockAttrs } from '$lib/layout-lock';
 	import {
@@ -455,6 +457,13 @@
 		canRename={!isLayoutLocked}
 		partnerLabel={partnerOf(sortedBeds, bed.id)?.label ?? ''}
 		level={levelOf(bed)}
+		inherited={inheritedFeatures('spot', {
+			house: house?.features,
+			room: room.features,
+			roomOff: room.features_off
+		})}
+		featuresOff={readFeaturesOff(bed.features_off, 'spot')}
+		canOverride={isSuperuser}
 	/>
 {/snippet}
 
@@ -561,6 +570,9 @@
 							description={room.description ?? ''}
 							name={isLayoutLocked ? undefined : room.name}
 							nameHint="Only in Staging Mode: the name belongs to the layout."
+							inherited={inheritedFeatures('room', { house: house?.features })}
+							featuresOff={readFeaturesOff(room.features_off, 'room')}
+							canOverride={isSuperuser}
 						/>
 					</div>
 				{/if}

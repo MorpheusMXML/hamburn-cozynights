@@ -129,6 +129,24 @@ function featureProblem(record, level) {
 	return '';
 }
 
+/**
+ * Why this request may not change features_off: only a superuser (the app's
+ * own superuser role, or PocketBase's) switches an inherited feature off or
+ * on again. An unchanged list passes, whoever writes; the app's actions apply
+ * the same rule before they write. Returns the reason, or ''.
+ */
+function overrideChangeProblem(auth, before, after, level) {
+	if (level !== 'room' && level !== 'spot') return '';
+	const was = readFeaturesOff(before, level).join(',');
+	const now = readFeaturesOff(after, level).join(',');
+	if (was === now) return '';
+	// PocketBase superusers (the dashboard, the service account) and the app's
+	// superusers may; every other admin token may not.
+	if (!auth || !auth.collection || auth.collection().name !== 'admins') return '';
+	if (auth.get('role') === 'superuser') return '';
+	return 'Only a superuser can switch an inherited feature off or on again.';
+}
+
 function addOwn(chosen, features) {
 	for (const value of features) {
 		const entry = featureEntry(value);
@@ -186,6 +204,7 @@ module.exports = {
 	offAllowed: offAllowed,
 	readFeaturesOff: readFeaturesOff,
 	featureProblem: featureProblem,
+	overrideChangeProblem: overrideChangeProblem,
 	effectiveFeatures: effectiveFeatures,
 	featureText: featureText,
 	bedRow: bedRow

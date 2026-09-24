@@ -205,19 +205,23 @@ export function bedRow(
 
 /**
  * "🔥 Heated · 🔌 Power socket": what is true at one spot, its room's and
- * house's features included (effectiveFeatures: the closer level wins, an
- * upper bunk is never ♿). '' when nobody wrote anything down.
+ * house's features included (effectiveFeatures: the closer level wins, what
+ * the room or the spot switched off is gone, an upper bunk is never ♿).
+ * '' when nobody wrote anything down.
  */
 export function spotFeatureText(
 	house: Pick<HousesResponse, 'features'> | undefined,
-	room: Pick<RoomsResponse, 'features'> | undefined,
-	bed: Pick<BedsResponse, 'features' | 'bed_type'>
+	room: Pick<RoomsResponse, 'features' | 'features_off'> | undefined,
+	bed: Pick<BedsResponse, 'features' | 'bed_type' | 'features_off'>
 ): string {
 	return featureText(
 		effectiveFeatures({
 			house: house?.features,
 			room: room?.features,
 			spot: bed.features,
+			// a superuser's call: the pass must not promise a heating the spot gave up
+			roomOff: room?.features_off,
+			spotOff: bed.features_off,
 			bedType: bed.bed_type
 		})
 	);

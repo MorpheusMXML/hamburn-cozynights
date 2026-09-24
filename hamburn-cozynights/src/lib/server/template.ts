@@ -44,10 +44,11 @@ export async function exportTemplate(pb: TypedPocketBase): Promise<LayoutTemplat
 	const [houses, rooms, beds] = await Promise.all([
 		pb.collection('houses').getFullList({ fields: 'id,name,x,y,kind,features,description' }),
 		pb.collection('rooms').getFullList({
-			fields: 'id,house,name,room_number,kind,features,description'
+			fields: 'id,house,name,room_number,kind,features,features_off,description'
 		}),
 		pb.collection('beds').getFullList({
-			fields: 'id,room,label,enabled,is_locked,is_special,bed_type,features,bunk_partner'
+			fields:
+				'id,room,label,enabled,is_locked,is_special,bed_type,features,features_off,bunk_partner'
 		})
 	]);
 	return buildTemplate({ houses, rooms, beds });
@@ -65,7 +66,7 @@ export async function loadCamp(pb: TypedPocketBase): Promise<CampRecords> {
 			requestKey: null
 		}),
 		pb.collection('rooms').getFullList({
-			fields: 'id,created,house,name,room_number,kind,features,description',
+			fields: 'id,created,house,name,room_number,kind,features,features_off,description',
 			requestKey: null
 		}),
 		pb.collection('beds').getFullList({ requestKey: null })
@@ -174,7 +175,9 @@ async function createAll(pb: TypedPocketBase, plan: LayoutPlan): Promise<LevelCo
 			if (!room) throw new Error('its room is missing');
 			// Every field the template knows about the spot, whatever they are —
 			// except the bunk partner, a label that syncBunks turns into the
-			// spot's id once every spot of the room exists.
+			// spot's id once every spot of the room exists. A list the file
+			// leaves out (features, features_off) is not sent, so the new spot
+			// starts empty there.
 			const { bunk_partner: _partner, ...fields } = spot.bed;
 			const record = await pb.collection('beds').create({ ...fields, occupied: false, room });
 			created.beds.push(record.id);

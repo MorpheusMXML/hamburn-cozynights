@@ -100,10 +100,11 @@
 	/**
 	 * "Lower bunk · 🔌 Power socket" under a spot's label. In a bunk bed the
 	 * level chip says "Upper bunk" already, so its half only adds where the
-	 * other level is: "above B1 · 🔌 Power socket".
+	 * other level is: "above B1 · 🔌 Power socket". What the spot lacks although
+	 * the room has it reads "no 🔌 Power socket".
 	 */
 	$: spotLine = (
-		bed: { id: string; bedType: string; features: string[] },
+		bed: { id: string; bedType: string; features: string[]; missing: string[] },
 		level: BunkLevel | null
 	) =>
 		[
@@ -111,6 +112,10 @@
 			...bed.features.map((feature) => {
 				const entry = featureEntry(feature);
 				return entry ? `${entry.icon} ${entry.label}` : '';
+			}),
+			...bed.missing.map((feature) => {
+				const entry = featureEntry(feature);
+				return entry ? `no ${entry.icon} ${entry.label}` : '';
 			})
 		]
 			.filter(Boolean)
@@ -137,8 +142,10 @@
 						? 'idle'
 						: 'open';
 	/** Whether a card has a detail line at all. */
-	const hasDetail = (bed: { bedType: string; features: string[] }, level: BunkLevel | null) =>
-		!!level || !!bedTypeEntry(bed.bedType) || bed.features.length > 0;
+	const hasDetail = (
+		bed: { bedType: string; features: string[]; missing: string[] },
+		level: BunkLevel | null
+	) => !!level || !!bedTypeEntry(bed.bedType) || bed.features.length > 0 || bed.missing.length > 0;
 
 	// The page behind an open modal must not scroll along on phones.
 	$: if (typeof document !== 'undefined') {

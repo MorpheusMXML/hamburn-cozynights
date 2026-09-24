@@ -26,7 +26,7 @@ const spot = (label: string, extra: Partial<TemplateBed> = {}): TemplateBed => (
 function template(houses: TemplateHouse[]): LayoutTemplate {
 	return {
 		format: 'cozynights-layout',
-		version: '2.1',
+		version: '2.2',
 		name: 'Test',
 		exported_at: '',
 		map: { image: '/map.png', width: 1000, height: 700 },
@@ -61,6 +61,7 @@ function camp(
 				room_number: room.room_number,
 				kind: room.kind,
 				features: room.features,
+				features_off: room.features_off,
 				description: room.description
 			});
 			room.beds.forEach((bed, b) => {
@@ -384,7 +385,8 @@ describe('planChanges', () => {
 					is_locked: true,
 					is_special: false,
 					bed_type: '',
-					features: []
+					features: [],
+					features_off: []
 				}
 			})
 		]);
@@ -480,9 +482,74 @@ describe('the details of a place', () => {
 		expect(plan.createRooms[0].details).toEqual({
 			kind: 'hut',
 			features: ['power'],
+			features_off: [],
 			description: ''
 		});
 		expect(plan.createSpots[0].bed).toMatchObject({ bed_type: 'bunk_lower' });
+	});
+});
+
+describe('switched-off features', () => {
+	/** A heated, quiet hut group; hut 1 stays cold, and B2 has no socket. */
+	const overridden = (): TemplateHouse => ({
+		name: 'Waldhuetten',
+		x: 100,
+		y: 200,
+		features: ['heated', 'quiet'],
+		rooms: [
+			{
+				name: 'Hut 1',
+				room_number: 1,
+				features: ['power'],
+				features_off: ['heated'],
+				beds: [spot('B1'), spot('B2', { features_off: ['quiet', 'power'] })]
+			}
+		]
+	});
+
+	it('finds nothing to do when the file matches the camp', () => {
+		const diff = diffLayout(camp([overridden()]), template([overridden()]));
+		expect(changeKeys(diff)).toEqual([]);
+		// the camp's list is read like a file's: order and junk don't matter
+		const records = camp([overridden()]);
+		records.rooms[0].features_off = ['heated', 'heated', 'power'];
+		records.beds[1].features_off = ['power', 'quiet'];
+		expect(changeKeys(diffLayout(records, template([overridden()])))).toEqual([]);
+	});
+
+	it('names a change of features_off with the words people read', () => {
+		const file = overridden();
+		delete file.rooms[0].features_off;
+		file.rooms[0].beds[1] = spot('B2', { features_off: ['quiet'] });
+		const diff = diffLayout(camp([overridden()]), template([file]));
+		const room = diff.houses[0].rooms[0];
+		expect(room.changes).toEqual([{ field: 'features_off', from: 'Heated', to: null }]);
+		expect(room.spots[1].changes).toEqual([
+			{ field: 'features_off', from: 'Quiet zone · Power socket', to: 'Quiet zone' }
+		]);
+		expect(diff.houses[0].own).toBeNull();
+	});
+
+	it('writes features_off for rooms and spots, and clears it when the file has none', () => {
+		const file = overridden();
+		delete file.rooms[0].features_off;
+		file.rooms[0].beds[1] = spot('B2');
+		const diff = diffLayout(camp([overridden()]), template([file]));
+		const plan = planChanges(diff, defaultSelection(diff));
+		expect(plan.updateRooms[0].details).toEqual({
+			kind: '',
+			features: ['power'],
+			features_off: [],
+			description: ''
+		});
+		expect(plan.updateSpots[0].fields).toMatchObject({ features_off: [] });
+
+		const fresh = diffLayout(camp([]), template([overridden()]));
+		const created = planChanges(fresh, defaultSelection(fresh));
+		// a house has nothing above it, so nothing is written there
+		expect(created.createHouses[0].details).not.toHaveProperty('features_off');
+		expect(created.createRooms[0].details).toMatchObject({ features_off: ['heated'] });
+		expect(created.createSpots[1].bed).toMatchObject({ features_off: ['quiet', 'power'] });
 	});
 });
 
