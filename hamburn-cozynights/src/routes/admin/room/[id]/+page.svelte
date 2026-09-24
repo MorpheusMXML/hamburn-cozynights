@@ -4,11 +4,18 @@
 	import AddBedForm from '$lib/components/admin/AddBedForm.svelte';
 	import BookingGuest from '$lib/components/admin/BookingGuest.svelte';
 	import DetailsPanel from '$lib/components/admin/DetailsPanel.svelte';
+	import FoldToggle from '$lib/components/admin/FoldToggle.svelte';
 	import LayoutLockNotice from '$lib/components/admin/LayoutLockNotice.svelte';
 	import SpotDetails from '$lib/components/admin/SpotDetails.svelte';
 	import LockGlyph from '$lib/components/LockGlyph.svelte';
 	import BunkLadder from '$lib/components/BunkLadder.svelte';
-	import { bedTypeEntry, bedTypeMix, featureEntry, readFeatures } from '$lib/accommodation';
+	import {
+		bedTypeEntry,
+		bedTypeMix,
+		detailsSummary,
+		featureEntry,
+		readFeatures
+	} from '$lib/accommodation';
 	import { LOCK_SPOT_TIP, layoutLock, lockAttrs } from '$lib/layout-lock';
 	import {
 		bunkOf,
@@ -20,7 +27,7 @@
 		type SpotUnit
 	} from '$lib/bunks';
 	import { compareNatural } from '$lib/template';
-	import { fade, fly, scale } from 'svelte/transition';
+	import { fade, fly, scale, slide } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
 	import { onMount, tick } from 'svelte';
 	import { enhance } from '$app/forms';
@@ -45,6 +52,11 @@
 
 	let deletingBedId: string | null = null;
 	let bedTypePattern = 'bunks';
+	// The three forms beside the spots fold away, so on a phone the spots are one
+	// short scroll down; folded, their title says what is set (FoldToggle).
+	let addOpen = false;
+	let detailsOpen = false;
+	let typesOpen = false;
 
 	$: bedMix = bedTypeMix(beds.map((bed) => bed.bed_type));
 
@@ -496,66 +508,100 @@
 				</div>
 			</div>
 
-			<section class="form-panel orange" class:locked={isLayoutLocked}>
+			<section class="form-panel orange" class:locked={isLayoutLocked} class:folded={!addOpen}>
 				<header class="panel-header">
 					<span class="laser-dot orange"></span>
-					<h3>ADD SPOT ➕</h3>
-					{#if isLayoutLocked}
-						<span class="lock-chip" transition:scale={{ start: 0.6, duration: 250 }}>
-							<LockGlyph size={11} /> STAGING ONLY
-						</span>
-					{/if}
+					<h3>
+						<FoldToggle
+							bind:open={addOpen}
+							controls="add-spot"
+							summary={isLayoutLocked
+								? 'Spots are added in Staging Mode only'
+								: `${beds.length} ${beds.length === 1 ? 'spot' : 'spots'} so far`}
+							>ADD SPOT ➕
+							{#if isLayoutLocked}
+								<span class="lock-chip" transition:scale={{ start: 0.6, duration: 250 }}>
+									<LockGlyph size={11} /> STAGING ONLY
+								</span>
+							{/if}
+						</FoldToggle>
+					</h3>
 				</header>
-				<p class="hint">Define spot label (e.g. "Upper Deck")</p>
-				<AddBedForm lock={lock?.('add spots') ?? null} />
+				{#if addOpen}
+					<div id="add-spot" transition:slide={{ duration: 180 }}>
+						<p class="hint">Define spot label (e.g. "Upper Deck")</p>
+						<AddBedForm lock={lock?.('add spots') ?? null} />
+					</div>
+				{/if}
 			</section>
 
-			<section class="form-panel turquoise">
+			<section class="form-panel turquoise" class:folded={!detailsOpen}>
 				<header class="panel-header">
 					<span class="laser-dot turquoise"></span>
-					<h3>ROOM DETAILS 🏷️</h3>
+					<h3>
+						<FoldToggle
+							bind:open={detailsOpen}
+							controls="room-details"
+							summary={detailsSummary('room', room.kind, room.features, room.description) ||
+								'Nothing set yet'}>ROOM DETAILS 🏷️</FoldToggle
+						>
+					</h3>
 				</header>
-				<p class="hint">
-					What this room is like. Guests see it, and the crew matches ♿ requests with it. Can be
-					changed in every phase.
-				</p>
-				<DetailsPanel
-					level="room"
-					action="?/saveRoom"
-					kind={room.kind ?? ''}
-					features={readFeatures(room.features, 'room')}
-					description={room.description ?? ''}
-					name={isLayoutLocked ? undefined : room.name}
-					nameHint="Only in Staging Mode: the name belongs to the layout."
-				/>
+				{#if detailsOpen}
+					<div id="room-details" transition:slide={{ duration: 180 }}>
+						<p class="hint">
+							What this room is like. Guests see it, and the crew matches ♿ requests with it. Can
+							be changed in every phase.
+						</p>
+						<DetailsPanel
+							level="room"
+							action="?/saveRoom"
+							kind={room.kind ?? ''}
+							features={readFeatures(room.features, 'room')}
+							description={room.description ?? ''}
+							name={isLayoutLocked ? undefined : room.name}
+							nameHint="Only in Staging Mode: the name belongs to the layout."
+						/>
+					</div>
+				{/if}
 			</section>
 
-			<section class="form-panel pink">
+			<section class="form-panel pink" class:folded={!typesOpen}>
 				<header class="panel-header">
 					<span class="laser-dot pink"></span>
-					<h3>SPOT TYPES 🛏️</h3>
+					<h3>
+						<FoldToggle
+							bind:open={typesOpen}
+							controls="spot-types"
+							summary={bedMix || 'Not specified yet'}>SPOT TYPES 🛏️</FoldToggle
+						>
+					</h3>
 				</header>
-				<p class="hint">
-					{bedMix || 'No spot of this room says what kind of bed it is yet.'}
-				</p>
-				<form
-					method="POST"
-					action="?/setBedTypes"
-					class="bulk-form"
-					use:enhance={toggleSpot('Spot types not changed')}
-				>
-					<label class="sr-only" for="bed-type-pattern">Set the bed of every spot</label>
-					<select id="bed-type-pattern" name="pattern" bind:value={bedTypePattern}>
-						<option value="bunks">Bunk beds: B1 + B2 stacked, B3 + B4, …</option>
-						<option value="single">All single beds</option>
-						<option value="clear">Not specified</option>
-					</select>
-					<button class="btn-apply" type="submit">APPLY TO ALL {beds.length} SPOTS</button>
-				</form>
-				<p class="hint">
-					In label order: B1 is the lower bunk, B2 the upper one above it, and the two are stacked
-					as one bed.
-				</p>
+				{#if typesOpen}
+					<div id="spot-types" transition:slide={{ duration: 180 }}>
+						<p class="hint">
+							{bedMix || 'No spot of this room says what kind of bed it is yet.'}
+						</p>
+						<form
+							method="POST"
+							action="?/setBedTypes"
+							class="bulk-form"
+							use:enhance={toggleSpot('Spot types not changed')}
+						>
+							<label class="sr-only" for="bed-type-pattern">Set the bed of every spot</label>
+							<select id="bed-type-pattern" name="pattern" bind:value={bedTypePattern}>
+								<option value="bunks">Bunk beds: B1 + B2 stacked, B3 + B4, …</option>
+								<option value="single">All single beds</option>
+								<option value="clear">Not specified</option>
+							</select>
+							<button class="btn-apply" type="submit">APPLY TO ALL {beds.length} SPOTS</button>
+						</form>
+						<p class="hint">
+							In label order: B1 is the lower bunk, B2 the upper one above it, and the two are
+							stacked as one bed.
+						</p>
+					</div>
+				{/if}
 			</section>
 		</aside>
 
@@ -885,7 +931,20 @@
 		gap: 10px;
 		margin-bottom: 1rem;
 	}
+	.form-panel + .form-panel {
+		margin-top: 1rem;
+	}
+	/* Folded, a panel is just its title bar (FoldToggle). */
+	.form-panel.folded {
+		padding-top: 1rem;
+		padding-bottom: 1rem;
+	}
+	.form-panel.folded .panel-header {
+		margin-bottom: 0;
+	}
 	.panel-header h3 {
+		flex: 1 1 auto;
+		min-width: 0;
 		margin: 0;
 		color: #eee;
 		font-size: 0.85rem;

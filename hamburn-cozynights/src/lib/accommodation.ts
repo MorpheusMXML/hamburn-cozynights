@@ -216,6 +216,27 @@ export function featureLabel(value: unknown): string {
 	return featureEntry(value)?.label ?? String(value ?? '');
 }
 
+/**
+ * One line for a folded details panel (admin house and room pages): the kind,
+ * the icons of the features, and whether a description is written, e.g.
+ * "🛖 Hut group · ♿ 🔥 · description". Empty when nothing is set.
+ */
+export function detailsSummary(
+	level: 'house' | 'room',
+	kind: unknown,
+	features: unknown,
+	description: unknown
+): string {
+	const entry = level === 'house' ? houseKindEntry(kind) : roomKindEntry(kind);
+	const icons = readFeatures(features, level).map((value) => featureEntry(value)?.icon ?? '');
+	const parts = [
+		entry ? `${entry.icon} ${entry.label}` : '',
+		icons.join(' '),
+		typeof description === 'string' && description.trim() ? 'description' : ''
+	];
+	return parts.filter(Boolean).join(' · ');
+}
+
 /** What one room of such a house is called: "room", "hut", "tent", "place". */
 export function roomWord(kind: unknown, plural = false): string {
 	const entry = houseKindEntry(kind) ?? HOUSE_KINDS[0];

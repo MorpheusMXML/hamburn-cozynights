@@ -11,6 +11,7 @@ import {
 	availableFilters,
 	bedTypeMix,
 	defaultRoomKind,
+	detailsSummary,
 	effectiveFeatures,
 	featuresFor,
 	isFeature,
@@ -227,5 +228,14 @@ describe('summaries', () => {
 		);
 		expect(bedTypeMix(['bunk_lower', '', undefined])).toBe('1 × lower bunk · 2 not specified');
 		expect(bedTypeMix(['', ''])).toBe('');
+	});
+
+	it('folds the details of a house or room into one line', () => {
+		expect(detailsSummary('house', 'hut_group', ['heated', 'wheelchair'], 'By the lake')).toBe(
+			'🛖 Hut group · ♿ 🔥 · description'
+		);
+		// a room-only feature on a house is dropped, blank text is no description
+		expect(detailsSummary('house', '', ['own_bathroom'], '  ')).toBe('');
+		expect(detailsSummary('room', 'tent', [], '')).toBe('⛺ Tent');
 	});
 });

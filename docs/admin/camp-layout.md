@@ -29,6 +29,8 @@ CozyNights creates the house, a first room called **Main Module** (#1), and spot
 
 **HOUSE DETAILS 🏷️** on the house page says what the place is like. Guests read it when they pick a spot, and the ♿ picker matches [special-needs requests](./special-needs) with it.
 
+The forms on the house and room pages (**HOUSE DETAILS**, **ADD ROOM**, **ADD SPOT**, **ROOM DETAILS**, **SPOT TYPES**) start folded, so the rooms and spots are right below them, on a phone too. A folded title shows what is set, e.g. *🛖 Hut group · ♿ 🔥 · description*, *3 rooms so far* or *4 × lower bunk · 4 × upper bunk*. Tap the title or <kbd>+</kbd> to open a form, <kbd>−</kbd> to fold it again.
+
 | Field | What it is |
 | --- | --- |
 | KIND | 🏠 House · 🛖 Hut group · ⛺ Tent area · 📍 Other. A **hut group** keeps one pin on the map and its huts are its rooms: the pin gets the 🛖 icon and the guest page says *Choose a hut*. |

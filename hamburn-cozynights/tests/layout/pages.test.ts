@@ -62,6 +62,21 @@ interface PageCase {
 /** The three phases, plus every armed timer (countdown box, countdown bar). */
 const ALL_PHASES: Phase[] = ['staging', 'live', 'closed', 'opening', 'closing', 'reopening'];
 
+/** Opens every folded form of an admin house or room page (FoldToggle). */
+async function unfoldAll(page: Page) {
+	const folded = page.locator('button.fold-toggle[aria-expanded="false"]');
+	while ((await folded.count()) > 0) await folded.first().click();
+	// The bodies slide open: measure them where they land.
+	await page.evaluate(() =>
+		Promise.all(
+			document
+				.getAnimations()
+				.filter((a) => a.effect?.getTiming().iterations !== Infinity)
+				.map((a) => a.finished.catch(() => undefined))
+		)
+	);
+}
+
 const PAGES: PageCase[] = [
 	{ name: 'start page', path: () => '/', as: 'anonymous', phases: ALL_PHASES },
 	{ name: 'booking rules', path: () => '/booking-rules', as: 'anonymous', phases: ['closing'] },
@@ -300,8 +315,17 @@ const PAGES: PageCase[] = [
 		as: 'superuser',
 		open: async (page) => {
 			await page.setViewportSize({ width: 390, height: 900 });
+			// A step through the drawer moves the marked entry with it (the menu
+			// once kept marking the page it was first opened on).
+			await page.getByRole('button', { name: 'Open the menu' }).click();
+			await page
+				.locator('#admin-menu.open')
+				.getByRole('link', { name: /Control Center/ })
+				.click();
+			await page.waitForURL(/\/admin$/);
 			await page.getByRole('button', { name: 'Open the menu' }).click();
 			await page.locator('#admin-menu.open').waitFor();
+			await expect(page.locator('#admin-menu a[aria-current="page"]')).toHaveText(/Control Center/);
 		}
 	},
 	{
@@ -317,16 +341,31 @@ const PAGES: PageCase[] = [
 	{
 		// Staging says the layout can be changed; Live locks it (notice, greyed
 		// controls with padlocks).
+		// The forms are folded; the titles carry a summary of what is set.
 		name: 'admin house',
 		path: (c) => `/admin/house/${c.houseId}`,
 		as: 'admin',
 		phases: ['staging', 'live']
 	},
 	{
+		name: 'admin house: forms unfolded',
+		path: (c) => `/admin/house/${c.houseId}`,
+		as: 'admin',
+		phases: ['staging', 'live'],
+		open: unfoldAll
+	},
+	{
 		name: 'admin room',
 		path: (c) => `/admin/room/${c.roomId}`,
 		as: 'admin',
 		phases: ['staging', 'live']
+	},
+	{
+		name: 'admin room: forms unfolded',
+		path: (c) => `/admin/room/${c.roomId}`,
+		as: 'admin',
+		phases: ['staging', 'live'],
+		open: unfoldAll
 	},
 	{ name: 'admin new house', path: () => '/admin/house/new', as: 'admin' },
 	{
@@ -387,6 +426,7 @@ const PAGES: PageCase[] = [
 		// Staging: Live and Closed lock the layout, and these forms with it.
 		phases: ['staging'],
 		open: async (page) => {
+			await unfoldAll(page);
 			await page.locator('#room-number').fill('x');
 			// A hut group's form says HUT (src/lib/accommodation.ts, roomWord).
 			await page.getByRole('button', { name: /IGNITE (ROOM|HUT|TENT|PLACE)/ }).click();

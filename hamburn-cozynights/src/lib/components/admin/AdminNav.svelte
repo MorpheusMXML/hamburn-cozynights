@@ -77,7 +77,9 @@
 		if (open && event.key === 'Escape') closeDrawer();
 	}
 
-	$: pathname = page.url.pathname;
+	// The active entry reads page.url in the markup. A `$:` line here would run
+	// once (this is not a runes component, and `page` from $app/state is never
+	// reassigned), so the menu kept marking the first page it was opened on.
 	$: roleLabel = isSuperuser ? 'SUPERUSER ⚡️' : 'ADMIN';
 </script>
 
@@ -132,7 +134,7 @@
 				<h2 id="nav-group-{group.key}" class="group-label">{group.label}</h2>
 				<ul>
 					{#each group.items as item (item.href)}
-						{@const active = isActive(item, pathname)}
+						{@const active = isActive(item, page.url.pathname)}
 						{@const badge = badgeFor(item.badge, counts, phase)}
 						<li>
 							<a

@@ -4,18 +4,20 @@
 	import BookingGuest from '$lib/components/admin/BookingGuest.svelte';
 	import DetailsPanel from '$lib/components/admin/DetailsPanel.svelte';
 	import FoldPanel from '$lib/components/admin/FoldPanel.svelte';
+	import FoldToggle from '$lib/components/admin/FoldToggle.svelte';
 	import { bookingsByRoom, countBookings } from '$lib/bookings';
 	import LayoutLockNotice from '$lib/components/admin/LayoutLockNotice.svelte';
 	import LockGlyph from '$lib/components/LockGlyph.svelte';
 	import { layoutLock, lockAttrs } from '$lib/layout-lock';
 	import {
+		detailsSummary,
 		featureEntry,
 		houseKindEntry,
 		readFeatures,
 		roomKindEntry,
 		roomWord
 	} from '$lib/accommodation';
-	import { fade, fly, scale } from 'svelte/transition';
+	import { fade, fly, scale, slide } from 'svelte/transition';
 	import { enhance } from '$app/forms';
 	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
 
@@ -31,6 +33,11 @@
 	$: bookingCounts = countBookings(data.bookings ?? []);
 
 	type RoomCard = PageData['rooms'][number];
+
+	// The two forms fold away so the rooms are one short scroll down, on a phone
+	// too; folded, their title says what is set (FoldToggle).
+	let detailsOpen = false;
+	let addOpen = false;
 
 	let deletingRoomId: string | null = null;
 
@@ -109,39 +116,67 @@
 		still="Spots can still be locked 🔒 and marked ♿ on the room pages."
 	/>
 
-	<section class="form-section" in:fade={{ delay: 150 }}>
+	<section class="form-section" class:folded={!detailsOpen} in:fade={{ delay: 150 }}>
 		<header class="section-header">
 			<span class="laser-dot turquoise"></span>
-			<h3>HOUSE DETAILS 🏷️</h3>
+			<h3>
+				<FoldToggle
+					bind:open={detailsOpen}
+					controls="house-details"
+					summary={detailsSummary('house', house.kind, house.features, house.description) ||
+						'Nothing set yet'}>HOUSE DETAILS 🏷️</FoldToggle
+				>
+			</h3>
 		</header>
-		<p class="section-hint">
-			What this house is like. Guests see it when they pick a spot, and the crew matches ♿ requests
-			with it. Every room and spot inside inherits these features. Can be changed in every phase.
-		</p>
-		<div class="form-wrapper">
-			<DetailsPanel
-				level="house"
-				action="?/saveHouse"
-				kind={house.kind ?? ''}
-				features={readFeatures(house.features, 'house')}
-				description={house.description ?? ''}
-			/>
-		</div>
+		{#if detailsOpen}
+			<div id="house-details" transition:slide={{ duration: 180 }}>
+				<p class="section-hint">
+					What this house is like. Guests see it when they pick a spot, and the crew matches ♿
+					requests with it. Every room and spot inside inherits these features. Can be changed in
+					every phase.
+				</p>
+				<div class="form-wrapper">
+					<DetailsPanel
+						level="house"
+						action="?/saveHouse"
+						kind={house.kind ?? ''}
+						features={readFeatures(house.features, 'house')}
+						description={house.description ?? ''}
+					/>
+				</div>
+			</div>
+		{/if}
 	</section>
 
-	<section class="form-section" in:fade={{ delay: 200 }} class:locked={isLayoutLocked}>
+	<section
+		class="form-section"
+		class:folded={!addOpen}
+		in:fade={{ delay: 200 }}
+		class:locked={isLayoutLocked}
+	>
 		<header class="section-header">
 			<span class="laser-dot turquoise"></span>
-			<h3>ADD {roomWord(house.kind).toUpperCase()} ➕</h3>
-			{#if isLayoutLocked}
-				<span class="lock-chip" transition:scale={{ start: 0.6, duration: 250 }}>
-					<LockGlyph size={11} /> STAGING ONLY
-				</span>
-			{/if}
+			<h3>
+				<FoldToggle
+					bind:open={addOpen}
+					controls="add-room"
+					summary={isLayoutLocked
+						? 'Rooms are added in Staging Mode only'
+						: `${rooms.length} ${roomWord(house.kind, rooms.length !== 1)} so far`}
+					>ADD {roomWord(house.kind).toUpperCase()} ➕
+					{#if isLayoutLocked}
+						<span class="lock-chip" transition:scale={{ start: 0.6, duration: 250 }}>
+							<LockGlyph size={11} /> STAGING ONLY
+						</span>
+					{/if}
+				</FoldToggle>
+			</h3>
 		</header>
-		<div class="form-wrapper">
-			<AddRoomForm lock={lock?.('add rooms') ?? null} word={roomWord(house.kind)} />
-		</div>
+		{#if addOpen}
+			<div id="add-room" class="form-wrapper" transition:slide={{ duration: 180 }}>
+				<AddRoomForm lock={lock?.('add rooms') ?? null} word={roomWord(house.kind)} />
+			</div>
+		{/if}
 	</section>
 
 	<header class="section-title-row">
@@ -457,7 +492,18 @@
 		white-space: nowrap;
 		--lock-glyph-hole: #1a120b;
 	}
+	/* Folded, a form is just its title bar (FoldToggle). */
+	.form-section.folded {
+		padding-top: 1rem;
+		padding-bottom: 1rem;
+		margin-bottom: 1.5rem;
+	}
+	.form-section.folded .section-header {
+		margin-bottom: 0;
+	}
 	.form-section h3 {
+		flex: 1 1 auto;
+		min-width: 0;
 		margin: 0;
 		color: #eee;
 		font-size: 0.9rem;
