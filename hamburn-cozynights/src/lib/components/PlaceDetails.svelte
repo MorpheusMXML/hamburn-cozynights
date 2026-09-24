@@ -47,6 +47,9 @@
 		min-width: 0;
 	}
 
+	/* The chips wrap with the same 0.35 rem gap in every direction. The list
+	   has no padding or margin of its own, so the card's padding is the only
+	   thing between a chip and the card edge, on house and room cards alike. */
 	.chips {
 		list-style: none;
 		margin: 0;
@@ -55,13 +58,18 @@
 		flex-wrap: wrap;
 		gap: 0.35rem;
 		min-width: 0;
+		max-width: 100%;
 	}
 
 	.chip {
+		box-sizing: border-box;
+		max-width: 100%;
+		min-width: 0;
 		border: 1px solid rgba(255, 255, 255, 0.18);
 		border-radius: 999px;
 		padding: 0.15rem 0.6rem;
 		font-size: 0.78rem;
+		line-height: 1.4;
 		color: #dbe3ea;
 		background: rgba(255, 255, 255, 0.04);
 		overflow-wrap: anywhere;

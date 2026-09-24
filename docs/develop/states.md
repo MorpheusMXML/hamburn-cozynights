@@ -11,15 +11,24 @@ holds the counting and the names. Nothing else should invent either.
 
 | State | Token | Colour | Means |
 | --- | --- | --- | --- |
-| `open` | `--state-open` | green `#4ade80` | free spots, nothing booked yet |
-| `filling` | `--state-filling` | orange `#fb923c` | booked and free side by side |
-| `full` | `--state-full` | red `#f87171` | nothing left to book |
-| `unconfigured` / `idle` | `--state-idle` | grey `#a3a3a3` | no active spots |
-| `checked-in` | `--state-checked-in` | turquoise `#2dd4bf` | guest checked in at arrival |
-| `special` | `--state-special` | pink `#f472b6` | ♿ spot, held for a request |
-| `locked` | `--state-locked` | violet `#a78bfa` | locked 🔒 by the crew |
-| `danger` | `--state-danger` | red `#f87171` | refused input, failed action |
-| `staging` / `live` / `closed` | `--state-staging` … | turquoise / pink / light grey | the booking phase |
+| `open` | `--state-open` | green `#4ade80` | free or open: a house with free spots and nothing booked yet, a free spot |
+| `filling` | `--state-filling` | orange `#fb923c` | booked and free side by side; `warning` maps to it too (not allowed right now) |
+| `full` | `--state-full` | red `#f87171` | occupied or booked: nothing left to book, a booked spot, a ticket that holds a spot |
+| `unconfigured` / `idle` | `--state-idle` | grey `#a3a3a3` | inactive or not now: no active spots, a spot that can't be booked yet or any more |
+| `checked-in` | `--state-checked-in` | turquoise `#2dd4bf` | mine or checked in: the guest's own spot, a guest checked in at arrival |
+| `special` | `--state-special` | pink `#f472b6` | ♿ special needs — and nothing else |
+| `locked` | `--state-locked` | violet `#a78bfa` | held by the crew: locked 🔒, *Reserved by the crew* |
+| `danger` | `--state-danger` | red `#f87171` | refused input, failed action, a missing address |
+| `staging` / `live` / `closed` | `--state-staging` … | turquoise / yellow `#facc15` / light grey | the booking phase |
+
+One colour, one meaning (decided 24 Sep): a status colour is never lent to a
+highlight. The ▲ Upper / ▼ Lower chip of a bunk bed is a neutral white
+outline, the phase Live has its own yellow so pink stays ♿ only, and *booked*
+rows on the admin pages are red, not pink. The guest room page's `spotState()`
+and the admin room page's `bed-status` put `data-state` on the card, so both
+sides read the same tokens; `PixelBunk.svelte` colours the two mattresses of a
+bunk bed with them, and `tests/layout` checks that the status line stays
+readable at 320 px.
 
 Put `data-state="…"` on an element and it gets `--state` and `--state-soft`.
 Add `class="state-ring"` and it gets a border in that colour that breathes:

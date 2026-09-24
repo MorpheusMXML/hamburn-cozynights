@@ -25,6 +25,10 @@ const PLACEHOLDERS = [
 	{ name: 'passCode', meaning: 'the code of the booking pass' },
 	{ name: 'passUrl', meaning: 'the link to the booking pass' },
 	{ name: 'appUrl', meaning: 'the address of the booking page' },
+	{
+		name: 'telegramUrl',
+		meaning: 'the page where a guest connects Telegram (sign-in with the ticket code first)'
+	},
 	{ name: 'status', meaning: 'the status of the special-needs request, in words' }
 ];
 
@@ -59,6 +63,10 @@ const TEXTS = [
 		text: 'Your booking pass (code {passCode}): {passUrl} — show it when you arrive, if the crew asks.' },
 	{ key: 'mail.fixed', group: 'mail.common', label: 'A spot the crew booked: how to change it', hint: 'Instead of the usual "to change or release it" line, when the crew booked the spot for a special-needs request.', placeholders: ['roomUrl'],
 		text: 'The crew picked this spot for you, so please contact the crew to change it. Your room: {roomUrl}' },
+	{ key: 'mail.wallet', group: 'mail.common', label: 'Wallet passes', hint: 'Below the booking pass, when Apple Wallet or Google Wallet passes are set up on the server.', placeholders: [],
+		text: 'Keep it in Apple Wallet or Google Wallet: open the pass and tap the button. The wallet pass updates itself when your spot changes.' },
+	{ key: 'mail.telegram', group: 'mail.common', label: 'Offer: updates on Telegram', hint: 'In every message that shows the spot, while the guest has no Telegram chat connected (and the bot is set up).', placeholders: ['telegramUrl'],
+		text: 'Want every change and your pass on Telegram as well? Connect here: {telegramUrl}' },
 
 	// --- e-mail: spot booked ----------------------------------------------------------
 	{ key: 'mail.booked.subject', group: 'mail.booked', label: 'Subject', hint: '', placeholders: ['spot'],
@@ -171,8 +179,8 @@ const TEXTS = [
 		text: 'approved' },
 	{ key: 'tg.status.declined', group: 'tg.connected', label: 'Request status: declined', hint: 'The words for {status}.', placeholders: [],
 		text: 'declined' },
-	{ key: 'tg.connected.stop', group: 'tg.connected', label: 'How to disconnect', hint: '', placeholders: [],
-		text: 'Send /stop to disconnect.' },
+	{ key: 'tg.connected.stop', group: 'tg.connected', label: 'What the guest can send', hint: 'The last line.', placeholders: [],
+		text: 'Send /pass to see your booking pass again, /stop to disconnect.' },
 
 	// --- Telegram: spot booked ------------------------------------------------------------
 	{ key: 'tg.booked.intro', group: 'tg.booked', label: 'The message', hint: '', placeholders: ['spot'],
@@ -223,14 +231,18 @@ const TEXTS = [
 		text: '✋ The crew could not offer you a special-needs spot.' },
 
 	// --- Telegram: replies of the bot ---------------------------------------------------------
-	{ key: 'bot.help', group: 'bot', label: 'Any other message to the bot', hint: 'Also the answer to /start without a connect link.', placeholders: ['appUrl'],
-		text: '👋 This bot sends updates about your CozyNights spot.\n\nTo connect: open {appUrl}, sign in with your ticket code, open your room or your special-needs request and tap “Get updates on Telegram”.' },
-	{ key: 'bot.link_expired', group: 'bot', label: 'The connect link has expired', hint: '', placeholders: [],
-		text: '⌛ This link has expired or was already used. Open your room on the booking page and tap “Get updates on Telegram” again.' },
+	{ key: 'bot.help', group: 'bot', label: 'Any other message to the bot', hint: 'Also the answer to /help, and to /start without a connect link.', placeholders: ['appUrl'],
+		text: '👋 This bot sends updates about your CozyNights spot, with your booking pass.\n\nTo connect: open {appUrl}/telegram, sign in with your ticket code and tap “Get updates on Telegram”.\n\nOnce connected: /pass shows your booking pass, /stop ends the updates.' },
+	{ key: 'bot.link_expired', group: 'bot', label: 'The connect link has expired', hint: '', placeholders: ['appUrl'],
+		text: '⌛ This link has expired or was already used. Open {appUrl}/telegram and tap “Get updates on Telegram” again.' },
 	{ key: 'bot.stopped', group: 'bot', label: '/stop', hint: '', placeholders: [],
 		text: '🔕 Disconnected. You won\'t get updates here anymore. You can connect again on the booking page.' },
-	{ key: 'bot.not_connected', group: 'bot', label: '/stop in a chat that is not connected', hint: '', placeholders: [],
-		text: 'This chat is not connected to a ticket.' }
+	{ key: 'bot.not_connected', group: 'bot', label: '/stop or /pass in a chat that is not connected', hint: '', placeholders: [],
+		text: 'This chat is not connected to a ticket.' },
+	{ key: 'bot.pass', group: 'bot', label: '/pass', hint: 'The booking pass on request, with its QR code as a picture. Once per ticket the chat follows.', placeholders: ['spot', 'passCode', 'passUrl'],
+		text: '🎫 Your booking pass {passCode}\n{spot}\n\nShow it when you arrive, if the crew asks: {passUrl}' },
+	{ key: 'bot.pass_no_spot', group: 'bot', label: '/pass without a spot', hint: 'When the ticket holds no spot right now.', placeholders: ['mapUrl'],
+		text: 'Your ticket holds no spot right now, so there is no pass to show. Pick one while booking is open: {mapUrl}' }
 ];
 
 module.exports = { PLACEHOLDERS: PLACEHOLDERS, GROUPS: GROUPS, TEXTS: TEXTS };

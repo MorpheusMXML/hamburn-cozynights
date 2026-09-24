@@ -116,6 +116,8 @@ git push origin integration/staging v0.18.1
 
 The script bumps `package.json` and `package-lock.json`, makes a signed commit and a signed tag `v0.18.1`, and pushes nothing; the push is yours. Pushing the tag runs [`.github/workflows/release.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/release.yml), which creates the **GitHub release** with the generated notes since the previous tag. A tag whose commit is not on `main` yet is a **pre-release** — that is every staging deploy. When the release PR lands on `main`, the same workflow turns those pre-releases into releases. The workflow refuses a tag that does not match `package.json`, so the badge, the health check and the release page can never disagree.
 
+The same push also runs [`.github/workflows/docs.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/docs.yml): the **public guide on GitHub Pages** is rebuilt from that tag, so it matches the version that was just deployed instead of waiting for the release PR. The app itself carries both guides in its image, built from the same commit — the admin guide behind the login at `/admin/docs/`, the public one at `/docs/`. See [Publishing](./docs#publishing).
+
 A one-off deploy script kept outside the repository does the same: it calls `scripts/release.sh` with the deploy number as the minor version as its last step before the push.
 
 ## Backups and where data lives
@@ -186,6 +188,21 @@ Booking confirmations and crew alerts are sent by PocketBase (`pb_hooks/cozy_not
 - **The mail password is stored twice.** PocketBase keeps its own copy of the SMTP settings in its database, so it is also in every database backup. Use credentials that can only send mail — an SMTP user of a sending service, one per environment — never the password of a mailbox.
 - **Check after setting it up**, on the server: `./scripts/cozy-admin.sh notify status` and `./scripts/cozy-admin.sh notify test --email <you>`.
 
+## Wallet passes per environment
+
+The booking pass can go into Apple Wallet and Google Wallet ([Wallet passes](../admin/passes#wallet-passes-apple-wallet-google-wallet)). Unlike the messages, this lives in the **app** container: the certificate and the service-account key never reach PocketBase, which only learns from the app which wallets exist (`app_settings.wallet_platforms`). All values are optional; the buttons appear when a wallet is complete.
+
+| Setting | For |
+| --- | --- |
+| `WALLET_APPLE_PASS_TYPE_ID`, `WALLET_APPLE_TEAM_ID`, `WALLET_APPLE_CERT`, `WALLET_APPLE_KEY`, `WALLET_APPLE_WWDR` | Apple Wallet: the pass type, and the certificate chain the pass file is signed with (base64 of the PEM, one line each). |
+| `WALLET_GOOGLE_ISSUER_ID`, `WALLET_GOOGLE_SERVICE_ACCOUNT` | Google Wallet: the issuer and the service account that writes its passes (base64 of the JSON key). |
+| `WALLET_EVENT_NAME`, `WALLET_EVENT_START`, `WALLET_EVENT_END`, `WALLET_VENUE_NAME`, `WALLET_VENUE_ADDRESS`, `WALLET_VENUE_LATITUDE`, `WALLET_VENUE_LONGITUDE`, `WALLET_ORGANIZATION` | What the pass says about the event. Times need a UTC offset (`2026-10-01T14:00:00+02:00`), or they are ignored. |
+
+- **One pass type and one issuer per event, the environment decides the rest.** Ids carry the environment's host, so staging and production never overwrite each other's passes even with the same accounts.
+- **Updates need HTTPS.** A pass made on a plain-HTTP origin carries no update service, so it never refreshes itself — fine for a test stack, not for a server.
+- **The log says what is on.** At startup the app prints which wallet is on, and for one that stays off, which value is missing or wrong.
+- **What a deploy must not break:** the pass type id and the issuer id. Change them and every pass already in a guest's wallet stops being updated.
+
 ## Adding an environment
 
 Production, for example:
@@ -203,4 +220,4 @@ Production, for example:
 
 ## Documentation site
 
-These docs are built and published by their own workflow. See [Working on these docs](./docs).
+These docs are built and published by their own workflow: the public guide to GitHub Pages with every version tag and every push to `main`, both guides into the app's image with every deploy. See [Working on these docs](./docs).

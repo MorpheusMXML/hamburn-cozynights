@@ -32,8 +32,8 @@
 //      cozy-admin tickets list                    ticket codes, sign-ins, booked beds, contacts
 //      cozy-admin tickets remove <code> [<code> ...]  delete tickets that hold no bed
 //      cozy-admin tickets forget-contacts --yes   after the event: delete all guest e-mail
-//                                                 addresses, Telegram links and
-//                                                 special-needs requests
+//                                                 addresses, Telegram links, special-needs
+//                                                 requests and wallet device registrations
 //
 //    Notifications (pb_hooks/cozy_notify.pb.js):
 //
@@ -898,12 +898,12 @@ cozyTickets.addCommand(
 		const forget = new Command({
 			use: 'forget-contacts',
 			short:
-				'After the event: delete every e-mail address, Telegram link and special-needs request of the tickets',
+				'After the event: delete every e-mail address, Telegram link, special-needs request and wallet device registration of the tickets',
 			run: (cmd, args) => {
 				if (args.length !== 0 || !cmd.flags().getBool('yes')) {
 					cozyFail(
 						cmd,
-						'this deletes the e-mail address of every ticket, every Telegram link and every special-needs request (ticket codes and bookings stay) — run it with --yes'
+						'this deletes the e-mail address of every ticket, every Telegram link, every special-needs request and every wallet device registration (ticket codes and bookings stay) — run it with --yes'
 					);
 				}
 				cozyCollection(cmd, 'guest_notify');
@@ -911,6 +911,7 @@ cozyTickets.addCommand(
 				let emails = 0;
 				let links = 0;
 				let requests = 0;
+				let devices = 0;
 				$app.runInTransaction((txApp) => {
 					for (const t of txApp.findRecordsByFilter('orders', "email != ''", '', 0, 0)) {
 						t.set('email', '');
@@ -926,15 +927,31 @@ cozyTickets.addCommand(
 						if (n.getString('tg_chat')) links++;
 						txApp.delete(n);
 					}
+					// The phones that registered an Apple Wallet pass for updates. The
+					// passes stay in the wallets as they are; they expire after the event.
+					let hasDevices = true;
+					try {
+						txApp.findCollectionByNameOrId('wallet_devices');
+					} catch (_) {
+						hasDevices = false; // a database from before the wallet passes
+					}
+					if (hasDevices) {
+						for (const d of txApp.findRecordsByFilter('wallet_devices', "id != ''", '', 0, 0)) {
+							txApp.delete(d);
+							devices++;
+						}
+					}
 				});
 				cmd.println(
 					'deleted ' +
 						emails +
 						' e-mail address(es), ' +
 						links +
-						' Telegram link(s) and ' +
+						' Telegram link(s), ' +
 						requests +
-						' special-needs request(s); the ticket codes and bookings are kept'
+						' special-needs request(s) and ' +
+						devices +
+						' wallet device registration(s); the ticket codes and bookings are kept'
 				);
 			}
 		});

@@ -75,12 +75,21 @@ function fakeAdminPb({ order = ORDER as any, bed = BED as any } = {}) {
 	} as any;
 }
 
+/** `pb` stand-in: the pass page reads the booking settings for its offers. */
+function settingsPb(fields: Record<string, unknown> = {}) {
+	return {
+		collection: () => ({
+			getOne: async () => ({ id: 'appsettings0123', telegram_bot: 'cozy_test_bot', ...fields })
+		})
+	} as any;
+}
+
 function passEvent(code: string, locals: Record<string, unknown>) {
 	const headers: Record<string, string> = {};
 	return {
 		event: {
 			params: { code },
-			locals,
+			locals: { pb: settingsPb(), ...locals },
 			url: new URL(`https://cozy.example/pass/${code}`),
 			setHeaders: (h: Record<string, string>) => Object.assign(headers, h),
 			getClientAddress: () => '203.0.113.7'

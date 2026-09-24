@@ -6,6 +6,7 @@ import {
 	formatBerlin,
 	formatDuration,
 	guestPhase,
+	mapCovered,
 	materialize,
 	nextTransition,
 	openingCountdownAt,
@@ -13,6 +14,7 @@ import {
 	quietReleaseByDefault,
 	saveTimesEdit,
 	showCountdownBar,
+	showTopBar,
 	splitDuration,
 	switchPhase,
 	windowFromRecord,
@@ -404,20 +406,69 @@ describe('what guests see of the window', () => {
 		);
 	});
 
-	it('shows the slim bar everywhere but where the page counts down itself', () => {
+	it('puts the top bar on the booking pages only', () => {
+		for (const path of [
+			'/map',
+			'/house/abc',
+			'/room/abc',
+			'/random-bed',
+			'/special-needs',
+			'/telegram'
+		]) {
+			expect(showTopBar(path), path).toBe(true);
+		}
+		// the start page counts down itself; legal texts, passes and the crew's pages have no bar
+		for (const path of [
+			'/',
+			'/booking-rules',
+			'/legal-notice',
+			'/privacy',
+			'/pass/ABCD-EFGH-IJKL',
+			'/admin',
+			'/admin/bookings',
+			'/mapping',
+			'/roommate'
+		]) {
+			expect(showTopBar(path), path).toBe(false);
+		}
+	});
+
+	it("shows the bar's countdown everywhere but where the map counts down itself", () => {
 		const opens = nextTransition(armed, NOW);
 		expect(showCountdownBar('staging', opens, '/map')).toBe(false);
 		expect(showCountdownBar('staging', opens, '/house/x')).toBe(true);
-		// closed with a later window armed: the map counts down in its own panel
+		expect(showCountdownBar('staging', opens, '/random-bed')).toBe(true);
+		// closed with a later window armed: the map counts down in its own panel …
 		expect(showCountdownBar('closed', opens, '/map')).toBe(false);
 		expect(showCountdownBar('closed', opens, '/house/x')).toBe(true);
+		// … until the guest puts the panel away to look around (Closed only)
+		expect(showCountdownBar('closed', opens, '/map', true)).toBe(true);
+		expect(showCountdownBar('staging', opens, '/map', true)).toBe(false);
 		const closes = nextTransition({ ...armed, basePhase: 'live', opensAt: at(-DAY) }, NOW);
 		expect(showCountdownBar('live', closes, '/map')).toBe(true);
 		expect(showCountdownBar('staging', null, '/house/x')).toBe(false);
-		// the start page shows the big countdown above the ticket-code field, both kinds
+		// pages without the bar, whatever is armed
 		expect(showCountdownBar('staging', opens, '/')).toBe(false);
 		expect(showCountdownBar('closed', opens, '/')).toBe(false);
 		expect(showCountdownBar('live', closes, '/')).toBe(false);
+		expect(showCountdownBar('live', closes, '/admin')).toBe(false);
+	});
+
+	it('knows when the phase panel covers the map', () => {
+		const opens = nextTransition(armed, NOW);
+		const closes = nextTransition({ ...armed, basePhase: 'live', opensAt: at(-DAY) }, NOW);
+		expect(mapCovered('staging', opens, '/map')).toBe(true);
+		expect(mapCovered('staging', null, '/map')).toBe(true);
+		expect(mapCovered('live', closes, '/map')).toBe(false);
+		expect(mapCovered('live', null, '/map')).toBe(false);
+		expect(mapCovered('closed', null, '/map')).toBe(true);
+		expect(mapCovered('closed', null, '/map', true)).toBe(false);
+		expect(mapCovered('closed', opens, '/map', true)).toBe(false);
+		// looking around is the map's panel only: Staging has no LOOK AROUND
+		expect(mapCovered('staging', opens, '/map', true)).toBe(true);
+		// other pages have no panel
+		expect(mapCovered('staging', opens, '/house/x')).toBe(false);
+		expect(mapCovered('closed', null, '/random-bed')).toBe(false);
 	});
 
 	it('words the own-spot note by phase', () => {

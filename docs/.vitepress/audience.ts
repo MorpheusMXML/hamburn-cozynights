@@ -46,19 +46,36 @@ const sections: Section[] = [
 		dir: 'admin',
 		audiences: ['admin'],
 		nav: { text: 'Admin', link: '/admin/', activeMatch: '^/admin/' },
+		// The sections follow the groups of the app's admin menu ($lib/admin-nav.ts).
 		sidebar: [
 			{
 				text: 'Admin guide',
 				items: [
 					{ text: 'The Control Center', link: '/admin/' },
+					{ text: 'Admin access & roles', link: '/admin/access' }
+				]
+			},
+			{
+				text: 'Guests',
+				items: [
+					{ text: 'Guests: every ticket', link: '/admin/guests' },
 					{ text: 'Bookings & check-ins', link: '/admin/bookings' },
-					{ text: 'Admin access & roles', link: '/admin/access' },
 					{ text: 'Tickets & e-mail addresses', link: '/admin/tickets' },
-					{ text: 'Notifications', link: '/admin/notifications' },
 					{ text: 'Booking passes & check-in', link: '/admin/passes' },
 					{ text: 'Special-needs requests', link: '/admin/special-needs' },
+					{ text: 'Notifications', link: '/admin/notifications' }
+				]
+			},
+			{
+				text: 'Camp',
+				items: [
 					{ text: 'Houses, rooms & spots', link: '/admin/camp-layout' },
-					{ text: 'Layout templates', link: '/admin/templates' },
+					{ text: 'Layout templates', link: '/admin/templates' }
+				]
+			},
+			{
+				text: 'Event',
+				items: [
 					{ text: 'Event checklist', link: '/admin/event-checklist' },
 					{ text: 'Legal pages', link: '/admin/legal' }
 				]

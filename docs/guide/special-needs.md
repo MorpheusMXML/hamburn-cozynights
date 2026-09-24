@@ -7,7 +7,7 @@ Some spots are kept for guests who need something special: a lower bunk or a bed
 <div class="steps">
 
 1. **Sign in** on the start page with your ticket code.
-2. **Open the request page from the map.** Before booking opens, the map shows ♿ **Need a special-needs spot? Ask the crew now**. During Live Booking and after it, the button ♿ **Special-needs spot** sits at the top of the map (on a phone it is just ♿). The link is there while the crew accepts requests.
+2. **Open the request page.** Before booking opens, the map shows ♿ **Need a special-needs spot? Ask the crew now**. During Live Booking and after it, the link ♿ **Special-needs spot** sits in the top bar of every booking page (on a phone it is just ♿). The link is there while the crew accepts requests.
 3. **Tick what you need**: a lower bunk or a bed without a ladder (a stacked bunk bed tells the crew by itself which of its two spots is the lower one), step-free access or the ground floor, close to a toilet, a quiet room, a power socket for a medical device, or *something else*. Then tell the crew in a few words what they should know (5 to 500 characters; the form counts for you). Describe *what* you need, not *why*: no diagnoses or medical details, the crew doesn't need them.
 4. Optionally enter the **burner name** for your spot (up to 80 characters). The crew's booking uses it unless your ticket already has a burner name; leave it empty and you get a random one.
 5. Tick the **consent** box and press <kbd>Send request</kbd>.
@@ -18,7 +18,7 @@ Some spots are kept for guests who need something special: a lower bunk or a bed
 
 If something is missing, the form says so right where it is: the part to fix gets a red border, the reason appears under it, and the cursor jumps to the first one. Tick at least one thing (or *Something else*), write at least a few words, and tick the consent box, because without it the crew may not use what you wrote. Sending the form more than ten times within an hour is refused for a while.
 
-Once it is sent, the page shows your request and its status, where messages about it go (the address of your ticket, shortened like `m•••@example.com`) and <kbd>Get updates on Telegram</kbd>. You get an e-mail that your request arrived, and another one when the crew has decided. The link on the map now reads ♿ **See your special-needs request** or ♿ **My request**, also when the crew no longer takes new requests.
+Once it is sent, the page shows your request and its status, where messages about it go (the address of your ticket, shortened like `m•••@example.com`) and <kbd>Get updates on Telegram</kbd>. You get an e-mail that your request arrived, and another one when the crew has decided. The link now reads ♿ **See your special-needs request** on the map's panel and ♿ **My request** in the top bar, also when the crew no longer takes new requests.
 
 ## What happens next
 

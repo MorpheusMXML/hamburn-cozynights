@@ -23,11 +23,15 @@ CozyNights couldn't reach its database for a moment. Your code is fine. Try agai
 :::
 
 ::: details A spot says nothing about its bed, or my wish finds no spot
-CozyNights only shows what the crew filled in: an empty spot card means *nobody said*, not *no bed*. The wishes above the map (**Looking for…**) are strict for the same reason — they only keep spots the crew actually described, so nothing is promised that isn't written down. Ask the crew if a detail matters to you, and use the [special-needs request](./special-needs) if you need a particular kind of spot.
+CozyNights only shows what the crew filled in: an empty spot card means *nobody said*, not *no bed*. The wish chips in the top bar (on the map and the roulette) are strict for the same reason — they only keep spots the crew actually described, so nothing is promised that isn't written down; a wish no spot answers isn't even offered as a chip. Ask the crew if a detail matters to you, and use the [special-needs request](./special-needs) if you need a particular kind of spot.
 :::
 
 ::: details The map is blurry and houses don't open ("Booking is not open yet…")
 Booking hasn't opened yet. Once the crew has armed the timer, a countdown shows when it starts, and the map unlocks by itself when it ends. Without a countdown the map says *Booking is not open yet. The crew is still setting up the houses. Check back soon.* <kbd>📡 RELOAD SENSORS</kbd> refreshes the page state.
+:::
+
+::: details Where is the countdown?
+In the top bar of every booking page, fused with the phase pill: *opens in …* before booking opens, *closes in …* while it is live (red in the last hour). Tap it for the exact Berlin time. The start page shows the same countdown big, and the map counts down on its panel while booking is not open yet — there the bar shows the phase alone. No countdown anywhere means the crew hasn't armed the timer yet.
 :::
 
 ::: details I can't book or change my spot any more ("Booking is closed")
@@ -51,7 +55,7 @@ Your browser has forgotten your ticket code, typically in a tab that was open fo
 :::
 
 ::: details How do I sign out on a shared device?
-On the start page, press <kbd>Not your ticket? Sign out</kbd>. The code is removed from that browser, your booking stays. See [Shared devices](./booking#shared-devices).
+Press <kbd>Sign out</kbd> (⏏ on a phone) in the top bar of any booking page, or <kbd>Not your ticket? Sign out</kbd> on the start page. The code is removed from that browser, your booking stays. See [Shared devices](./booking#shared-devices).
 :::
 
 ::: details How do I get back to my room and my booking pass?
@@ -59,7 +63,7 @@ Open the room link in your confirmation e-mail or Telegram message. During Live 
 :::
 
 ::: details "Something went wrong while booking…", "The booking system has a technical problem…", "This spot doesn't exist anymore…"
-First look at the room page: if the spot shows as **Your Spot**, all is fine. *Something went wrong* means the booking may or may not have gone through, so check before booking again. *Technical problem. Nothing was booked* is one for the crew. *This spot doesn't exist anymore* means the crew changed the layout meanwhile: pick another spot.
+First look at the room page: if the spot shows as **Yours**, all is fine. *Something went wrong* means the booking may or may not have gone through, so check before booking again. *Technical problem. Nothing was booked* is one for the crew. *This spot doesn't exist anymore* means the crew changed the layout meanwhile: pick another spot.
 :::
 
 ::: details Destiny Roulette says "Someone was faster", "The spin was incomplete" or "You already have a spot"
@@ -70,8 +74,8 @@ Spin again: another guest took that spot in the meantime, or the spin didn't fin
 The crew changed the camp layout while you had the page open, or the map data didn't arrive. Go back to the map and pick again; if the map itself won't load, try again in a minute.
 :::
 
-::: details I can't click a free spot, it says "Release your other spot first"
-Your ticket already holds a spot somewhere else. One ticket code = one spot. Release the old spot first, then book the new one. See [Changing your mind](./booking#changing-your-mind). In a tab that was open for a while you may instead read *Your ticket already holds spot B1. Release it first, then pick this one.*: same reason.
+::: details I can't click a green spot, it says "Release your other spot first"
+Your ticket already holds a spot somewhere else. One ticket code = one spot: the spot is free (green), but not for you until you release the old one. Release it first, then book the new one. See [Changing your mind](./booking#changing-your-mind). In a tab that was open for a while you may instead read *Your ticket already holds spot B1. Release it first, then pick this one.*: same reason.
 :::
 
 ::: details Someone grabbed the bed I wanted at the same moment
@@ -83,11 +87,11 @@ Enter your ticket code on the start page of the new device. Your booking is atta
 :::
 
 ::: details Can I book for a friend?
-Only with their ticket code. On a shared device, entering another code switches that browser to the other ticket: enter your own code again afterwards, or press <kbd>Not your ticket? Sign out</kbd> on the start page.
+Only with their ticket code. On a shared device, entering another code switches that browser to the other ticket: enter your own code again afterwards, or press <kbd>Sign out</kbd> in the top bar (or <kbd>Not your ticket? Sign out</kbd> on the start page).
 :::
 
 ::: details My spot shows no burner name (the ticket was handed to me)
-Open the room of your spot (the room link in your confirmation, or its house on the map), tap **Your Spot**, type a name and press <kbd>Save Spot</kbd>; leave the field empty and the slot machine rolls one. That works before booking opens too. Only once booking has closed is the name final, like the spot itself.
+Open the room of your spot (the room link in your confirmation, or its house on the map), tap **Yours**, type a name and press <kbd>Save Spot</kbd>; leave the field empty and the slot machine rolls one. That works before booking opens too. Only once booking has closed is the name final, like the spot itself.
 :::
 
 ::: details I didn't get a confirmation e-mail
@@ -107,19 +111,31 @@ The crew checked your booking pass when you arrived, so the spot is yours for th
 :::
 
 ::: details How do I stop the Telegram messages?
-Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page, or send `/stop` to the bot.
+Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page or on the page **Updates on Telegram**, or send `/stop` to the bot.
+:::
+
+::: details Can I keep my pass in Apple Wallet or Google Wallet?
+If the crew has set it up, yes: <kbd>Add to Apple Wallet</kbd> or <kbd>Add to Google Wallet</kbd> sits under your pass, on your room page and on the roulette card — your phone shows the one it has. The wallet pass updates itself when your spot changes, and expires after the event. No buttons? Then this camp doesn't offer it; the pass page and a screenshot work just as well.
+:::
+
+::: details Can I get my pass in the Telegram chat?
+Yes: send `/pass` to the bot and it sends your pass with its QR code as a picture. That works as soon as you have connected Telegram.
 :::
 
 ::: details I need a special spot (lower bunk, step-free, quiet, a socket for a medical device)
-Ask the crew for a special-needs spot, even before booking opens: sign in with your ticket code and follow the ♿ link on the map (*Need a special-needs spot? Ask the crew now* before booking opens, the ♿ **Special-needs spot** button after that) while the crew accepts requests. See [Special-needs spot](./special-needs).
+Ask the crew for a special-needs spot, even before booking opens: sign in with your ticket code and follow the ♿ link (*Need a special-needs spot? Ask the crew now* on the map before booking opens, ♿ **Special-needs spot** in the top bar of every booking page after that) while the crew accepts requests. See [Special-needs spot](./special-needs).
 :::
 
 ::: details My special-needs request won't send, or says the crew has already decided
 The form needs at least one ticked need (or *Something else*), a few words of text (5 to 500 characters) and the ticked consent box. *You sent your request 10 times within an hour* is a limit: it works again within the hour. *Special-needs requests are closed right now, so nothing was sent* means the crew stopped taking requests meanwhile: contact the crew. *The crew has already decided on your request* means it can't be changed anymore; the page shows the decision. If something changed, contact the crew. You can still withdraw the request.
 :::
 
-::: details A spot says "Not available · Reserved by the crew"
+::: details A spot says "Reserved by the crew" in violet
 The crew holds it back: the bed is broken, kept free on purpose, not in use, or kept for guests with special needs. Pick another spot.
+:::
+
+::: details What do the colours on the spot cards mean?
+One colour, one meaning, on every page: **green** free, **red** taken by another guest, **turquoise** yours, **violet** reserved by the crew, **grey** not bookable right now (booking hasn't opened, or has closed). Pink is only ever ♿ special needs. In a bunk bed each mattress carries its own colour, and each is its own button.
 :::
 
 ::: details The burning title is too much for me

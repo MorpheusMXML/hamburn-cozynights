@@ -1,6 +1,6 @@
 // src/hooks.server.ts
 import PocketBase from 'pocketbase';
-import { type Handle } from '@sveltejs/kit';
+import { type Handle, type ServerInit } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { TypedPocketBase } from '$lib/pocketbase-types';
 import { getAdminPb, PB_URL } from '$lib/server/pocketbase';
@@ -16,16 +16,26 @@ import {
 	toPendingAdmin
 } from '$lib/server/admin-auth';
 import { resolveGuestSession } from '$lib/server/guest-session';
+import { startWalletSync } from '$lib/server/wallet/sync';
 
 /**
  * Pages that act for a guest's ticket. The crew's area, the OAuth callback,
- * the health endpoint, the docs and the booking pass (its code is in the URL)
- * don't, and shouldn't pay for a ticket lookup.
+ * the health endpoint, the docs, the booking pass (its code is in the URL)
+ * and the wallets' web service (a token per pass) don't, and shouldn't pay
+ * for a ticket lookup.
  */
 function usesGuestSession(pathname: string): boolean {
 	if (isAdminPath(pathname)) return false;
-	return !/^\/(auth|api|docs|pass)(\/|$)/.test(pathname);
+	return !/^\/(auth|api|docs|pass|wallet)(\/|$)/.test(pathname);
 }
+
+/**
+ * Once, when the server starts: the wallet passes' sync (only when Apple or
+ * Google Wallet is set up, see $lib/server/wallet).
+ */
+export const init: ServerInit = () => {
+	startWalletSync();
+};
 
 // Fail fast: without a valid ENCRYPTION_KEY the app could neither find ticket
 // codes (lookup hashes) nor read names. A container that starts with a wrong

@@ -269,9 +269,11 @@
 		align-items: flex-start;
 		margin-bottom: 2rem;
 	}
+	/* "Booking is closed" / "not open yet": the closed phase's colour, the same
+	   as the room page's banner (state.css). Pink is for special needs only. */
 	.info-banner {
-		background: rgba(244, 114, 182, 0.08);
-		border: 1px solid #f472b6;
+		background: var(--state-closed-soft);
+		border: 1px solid var(--state-closed);
 	}
 	.booking-warning-banner {
 		background: rgba(248, 113, 113, 0.1);
@@ -289,7 +291,7 @@
 		font-weight: 900;
 	}
 	.info-banner h3 {
-		color: #f472b6;
+		color: var(--state-closed);
 	}
 	.booking-warning-banner h3 {
 		color: #f87171;
@@ -391,9 +393,9 @@
 	}
 	.fill {
 		height: 100%;
-		background: #4ade80;
+		background: var(--state-open);
 	}
 	.full .fill {
-		background: #ef4444;
+		background: var(--state-full);
 	}
 </style>

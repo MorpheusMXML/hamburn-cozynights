@@ -80,6 +80,11 @@ services:
 
   app:
     profiles: ['app']
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+      mocks:
+        condition: service_healthy
     build:
       # The repository root, like staging: the image also contains the docs site.
       context: ..
@@ -87,9 +92,6 @@ services:
       args:
         # Optional here; the version badge shows the commit when given.
         GIT_SHA: ${GIT_SHA:-}
-    depends_on:
-      pocketbase:
-        condition: service_healthy
     environment:
       PB_URL: http://pocketbase:8090
       # SvelteKit refuses form posts whose Origin header differs from this.
@@ -100,6 +102,24 @@ services:
       PB_ADMIN_EMAIL: ${PB_ADMIN_EMAIL:?run this stack through scripts/test-stack.sh}
       PB_ADMIN_PASSWORD: ${PB_ADMIN_PASSWORD:?run this stack through scripts/test-stack.sh}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?run this stack through scripts/test-stack.sh}
+      # Wallet passes with the throwaway credentials from scripts/test-stack.sh.
+      # Apple's push service and Google's API point at `mocks`, so a test can
+      # never reach the real ones (the pushes go nowhere: no device registers).
+      WALLET_APPLE_PASS_TYPE_ID: pass.test.cozynights
+      WALLET_APPLE_TEAM_ID: TESTTEAM01
+      WALLET_APPLE_CERT: ${WALLET_APPLE_CERT:-}
+      WALLET_APPLE_KEY: ${WALLET_APPLE_KEY:-}
+      WALLET_APPLE_WWDR: ${WALLET_APPLE_WWDR:-}
+      WALLET_APPLE_APNS_URL: http://mocks:8081/_mock/apns-not-implemented
+      WALLET_GOOGLE_ISSUER_ID: '3388000000012345678'
+      WALLET_GOOGLE_SERVICE_ACCOUNT: ${WALLET_GOOGLE_SERVICE_ACCOUNT:-}
+      WALLET_GOOGLE_API_URL: http://mocks:8081
+      WALLET_GOOGLE_TOKEN_URL: http://mocks:8081/oauth2/token
+      WALLET_EVENT_NAME: Hamburn Test
+      WALLET_EVENT_START: '2026-10-01T14:00:00+02:00'
+      WALLET_EVENT_END: '2026-10-04T12:00:00+02:00'
+      WALLET_VENUE_NAME: Brahmsee
+      WALLET_VENUE_ADDRESS: Am See 1, 24631 Langwedel
     ports:
       - '127.0.0.1:${TEST_APP_PORT:-3290}:3000'
     healthcheck:

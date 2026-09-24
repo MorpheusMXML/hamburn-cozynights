@@ -67,6 +67,12 @@ export const ADMIN_NAV: readonly NavGroup[] = [
 		label: 'Guests',
 		items: [
 			{
+				href: '/admin/guests',
+				icon: '👥',
+				label: 'Guests',
+				title: 'Every ticket with everything attached: spot, check-in, request, messages, wallet'
+			},
+			{
 				href: '/admin/bookings',
 				icon: '🛏️',
 				label: 'Bookings',

@@ -44,7 +44,7 @@ features:
     linkText: Confirmations
   - icon: 🎟️
     title: Booking pass
-    details: Every booking comes with a QR code and a short code. The crew checks it at arrival with a phone camera.
+    details: Every booking comes with a QR code and a short code — on the page, in Apple Wallet or Google Wallet, or in the Telegram chat. The crew checks it at arrival with a phone camera.
     link: /guide/booking#your-booking-pass
     linkText: The pass
   - icon: ♿
@@ -119,6 +119,7 @@ flowchart LR
 | 📋 **Organizing** the next burn | [Event checklist](./admin/event-checklist) from first layout to after the event. |
 | ♿ **Deciding special-needs requests** | [Special-needs requests](./admin/special-needs): mark spots, decide, book. |
 | 🎟️ **At the entrance**, checking guests in | [Booking passes & check-in](./admin/passes): phone camera, check-in page or USB scanner. |
+| 👥 **Looking for a guest** | [Guests](./admin/guests): every ticket with its spot, check-in, request state, messages and wallet passes. |
 | 💻 **A developer** | [Local development](./develop/) and [Architecture](./reference/architecture). |
 
 <!-- /audience -->

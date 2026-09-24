@@ -9,6 +9,14 @@
  * The ring is drawn by a ::after overlay and animates `opacity` alone: that
  * stays on the compositor, so a list of forty house cards costs no repaints
  * per frame (unlike animating box-shadow or border-color).
+ *
+ * What each colour means, everywhere (decided 24 Sep): green = free or open,
+ * red = occupied or booked, turquoise = mine or checked in, violet = held by
+ * the crew or locked, grey = inactive or not open yet, orange = filling up or
+ * a warning, pink = special needs (♿) and nothing else. The booking phases
+ * have colours of their own: turquoise for staging, yellow for live, light
+ * grey for closed. Highlight chips (a bunk's upper/lower level, a feature)
+ * never borrow a status colour.
  */
 :root {
 	--state-open: #4ade80;
@@ -31,8 +39,8 @@
 	/* Booking phases, as the status bar and the window panel show them. */
 	--state-staging: #2dd4bf;
 	--state-staging-soft: rgba(45, 212, 191, 0.08);
-	--state-live: #f472b6;
-	--state-live-soft: rgba(244, 114, 182, 0.08);
+	--state-live: #facc15;
+	--state-live-soft: rgba(250, 204, 21, 0.12);
 	--state-closed: #d4d4d4;
 	--state-closed-soft: rgba(255, 255, 255, 0.05);
 

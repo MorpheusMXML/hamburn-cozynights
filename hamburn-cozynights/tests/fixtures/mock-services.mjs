@@ -3,7 +3,9 @@
 // Plain Node, no dependencies. Never used outside tests.
 //
 // - Telegram Bot API:  POST /bot<token>/<method>  (getMe, sendMessage,
-//   getUpdates incl. long polling, getWebhookInfo)
+//   sendPhoto, setMyCommands, getUpdates incl. long polling, getWebhookInfo)
+// - Google Wallet API: POST /oauth2/token, /walletobjects/v1/eventTicket{Class,Object}
+//   (insert, replace, read) — the app's wallet passes without Google
 // - Google OAuth2:     POST /oauth/token, GET /oauth/userinfo — the admins'
 //   google provider is pointed here by the tests, so a real PocketBase
 //   OAuth2 sign-in (hooks and guard included) runs without Google.
@@ -22,6 +24,9 @@ function reset() {
 		updates: [], // pending getUpdates results
 		nextUpdateId: 1000,
 		blocked: new Set(),
+		commands: null, // the last setMyCommands payload
+		wallet: new Map(), // Google Wallet classes and objects by "kind/id"
+		walletCalls: [], // { method, path } of every Wallet API call
 		down: false,
 		slowMs: 0, // sendMessage takes this long (a slow Telegram)
 		unauthorized: false, // every Bot API call answers 401 (a revoked token)
@@ -63,7 +68,8 @@ async function telegram(method, body, res) {
 			});
 		case 'getWebhookInfo':
 			return json(res, 200, { ok: true, result: { url: '', pending_update_count: 0 } });
-		case 'sendMessage': {
+		case 'sendMessage':
+		case 'sendPhoto': {
 			if (state.slowMs) await sleep(state.slowMs);
 			const chat = String(body.chat_id);
 			if (state.blocked.has(chat)) {
@@ -73,9 +79,14 @@ async function telegram(method, body, res) {
 					description: 'Forbidden: bot was blocked by the user'
 				});
 			}
-			state.sent.push({ ...body, chat_id: chat, at: Date.now() });
+			// A photo's caption is its text, so a test can read both the same way.
+			const text = method === 'sendPhoto' ? String(body.caption || '') : String(body.text || '');
+			state.sent.push({ ...body, method, text, chat_id: chat, at: Date.now() });
 			return json(res, 200, { ok: true, result: { message_id: state.sent.length } });
 		}
+		case 'setMyCommands':
+			state.commands = body;
+			return json(res, 200, { ok: true, result: true });
 		case 'getUpdates': {
 			const offset = Number(body.offset || 0);
 			// Telegram forgets everything below the offset (= confirmed).
@@ -103,7 +114,40 @@ const server = http.createServer(async (req, res) => {
 		return telegram(bot[2], { ...Object.fromEntries(url.searchParams), ...body }, res);
 	}
 
-	// --- Google OAuth2 stand-in
+	// --- Google Wallet stand-in: an access token, then classes and objects
+	if (url.pathname === '/oauth2/token' && req.method === 'POST') {
+		return json(res, 200, { access_token: 'mock-wallet-token', expires_in: 3600 });
+	}
+	const wallet = /^\/walletobjects\/v1\/(eventTicketClass|eventTicketObject)(?:\/(.+))?$/.exec(
+		url.pathname
+	);
+	if (wallet) {
+		state.walletCalls.push({ method: req.method, path: url.pathname });
+		if (req.headers.authorization !== 'Bearer mock-wallet-token') {
+			return json(res, 401, { error: { status: 'UNAUTHENTICATED' } });
+		}
+		const [, kind, id] = wallet;
+		const key = (value) => `${kind}/${decodeURIComponent(String(value))}`;
+		if (req.method === 'POST') {
+			if (state.wallet.has(key(body.id))) {
+				return json(res, 409, { error: { status: 'ALREADY_EXISTS' } });
+			}
+			state.wallet.set(key(body.id), body);
+			return json(res, 200, body);
+		}
+		if (req.method === 'PUT') {
+			if (!state.wallet.has(key(id))) return json(res, 404, { error: { status: 'NOT_FOUND' } });
+			state.wallet.set(key(id), body);
+			return json(res, 200, body);
+		}
+		if (req.method === 'GET') {
+			const found = state.wallet.get(key(id));
+			return found ? json(res, 200, found) : json(res, 404, { error: { status: 'NOT_FOUND' } });
+		}
+		return json(res, 405, { error: { status: 'METHOD_NOT_ALLOWED' } });
+	}
+
+	// --- Google OAuth2 stand-in (the admins' sign-in)
 	if (url.pathname === '/oauth/token' && req.method === 'POST') {
 		if (!state.oauthUsers.has(body.code)) return json(res, 400, { error: 'invalid_grant' });
 		return json(res, 200, {
@@ -151,6 +195,13 @@ const server = http.createServer(async (req, res) => {
 		case 'POST /_mock/telegram/down':
 			state.down = !!body.down;
 			return json(res, 200, { ok: true });
+		case 'GET /_mock/telegram/commands':
+			return json(res, 200, state.commands);
+		case 'GET /_mock/wallet':
+			return json(res, 200, {
+				calls: state.walletCalls,
+				items: Object.fromEntries(state.wallet)
+			});
 		case 'GET /_mock/telegram/calls':
 			return json(res, 200, state.calls);
 		case 'POST /_mock/telegram/unauthorized':

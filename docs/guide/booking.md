@@ -5,7 +5,7 @@ All you need is the **ticket code** from your Hamburn ticket. There is no accoun
 Beds come with **Indoor memberships** only. Camper memberships (camper or tent) don't include a bed and don't need CozyNights.
 
 > [!NOTE] Booking opens and closes at set times
-> Before booking opens, the start page and the (still blurred) map count down to the start. You can already sign in with your code. While booking is open, a countdown on every page shows when it closes; after that, spots are final.
+> Before booking opens, the start page and the (still blurred) map count down to the start. You can already sign in with your code. While booking is open, the top bar of every booking page counts down to the close; after that, spots are final.
 
 ## At a glance
 
@@ -37,7 +37,7 @@ flowchart LR
 
    ![Camp map during Live Booking](../assets/screenshots/guest-map-live.webp)
 
-   The badge at the top shows the phase: 🎪 LIVE BOOKING, 🛠 STAGING MODE or 🔒 BOOKING CLOSED. Next to it are ♿ **Special-needs spot** (while the crew takes [special-needs requests](./special-needs)) and **Help & FAQ**. <kbd>🎰 DESTINY ROULETTE</kbd> at the bottom picks a spot for you (see [Destiny Roulette](#destiny-roulette)).
+   The **top bar** is the same on every booking page. **Hamburn** on the left takes you back to the map. The phase pill — 🛠 STAGING, 🎪 LIVE or 🔒 CLOSED — counts down to the next switch while a timer is armed (*opens in 1d 23:59:57*, *closes in …*, red in the last hour); tap it for the exact Berlin time. In the middle, the wish chips (see [Looking for something special?](#looking-for-something-special)). On the right: ♿ **Special-needs spot** (while the crew takes [special-needs requests](./special-needs)), **Help & FAQ**, <kbd>Sign out</kbd> and the version. On a phone the links shrink to their icons and the chips take a row of their own. <kbd>🎰 DESTINY ROULETTE</kbd> at the bottom picks a spot for you (see [Destiny Roulette](#destiny-roulette)).
 
 3. **Choose a room**
 
@@ -47,9 +47,9 @@ flowchart LR
 
 4. **Grab a free spot**
 
-   Inside the room every spot shows its state (see the table below). Click an **Available** spot.
+   Inside the room every spot card says what it is, in bold and in one colour with a dot in front: **green** it's free, **red** somebody has it, **turquoise** it's yours, **violet** the crew keeps it, **grey** it can't be booked right now (see the table below). Click an **Available** spot.
 
-   A **bunk bed** shows as one stacked card: the upper bunk on top, a small ladder, the lower bunk below. Each half is a spot of its own, with its own state, and is booked on its own. A chip next to the label says **Upper bunk** or **Lower bunk**, and the line under it where the other level is (*above B1*, *below B2*); the booking dialog repeats it: *Spot B2 — the upper bunk above B1.*
+   A **bunk bed** is drawn as neon pixel art: the frame posts, the bed ends and the ladder as glowing pixel lines, the two mattresses as edgy boxes — the upper bunk on top, the lower one below. Each mattress is a spot of its own, with its own state, and *is* its booking button: tap the mattress. A chip next to the label says **▲ Upper** or **▼ Lower**, and the line under it where the other level is (*above B1*, *below B2*); the booking dialog repeats it: *Spot B2 — the upper bunk above B1.*
 
    ![Room page with free, occupied and reserved spots](../assets/screenshots/guest-room-available.webp)
 
@@ -61,19 +61,22 @@ flowchart LR
 
 </div>
 
-That's it: fireworks go up from your new spot 🎆, and the spot now shows **Your Spot** with your burner name. Above the spots, a **Welcome Home!** box holds your [booking pass](#your-booking-pass), the address your [confirmations](#confirmations) go to and the Telegram option.
+That's it: fireworks go up from your new spot 🎆, and the spot now shows **Yours** in turquoise, with your burner name. Above the spots, a **Welcome Home!** box holds your [booking pass](#your-booking-pass), the address your [confirmations](#confirmations) go to and the Telegram option.
 
 ## What the spots mean
 
 | Spot card | Meaning |
 | --- | --- |
-| **Available** · *Grab it now!* | Free. Click it to book. |
-| **Your Spot** · *your burner name* | That's you. Click it to rename it (any time until booking closes) or to release it (during Live Booking). |
-| **Occupied** · *a burner name* | Taken by another guest. *Mystery Burner* means the spot has no name: the crew holds it, or its ticket changed hands. |
-| **Not available** · *Reserved by the crew* | Held back by the crew, for example a broken bed, a spot that isn't in use or one kept for [guests with special needs](./special-needs). |
-| **Unavailable** · *Release your other spot first* | You already have a spot somewhere else. One ticket code = one spot. |
-| **Not open yet** · *Booking opens soon* | Booking hasn't opened yet. |
-| **Booking closed** · *Spots are final* | The booking window is over. |
+| 🟢 **Available** · *Grab it now!* | Free. Click it to book. |
+| 🟢 **Available** · *Release your other spot first* | Free, but you already have a spot somewhere else, so it can't be clicked. One ticket code = one spot. |
+| 🩵 **Yours** · *your burner name* | That's you. Click it to rename it (any time until booking closes) or to release it (during Live Booking); the line under the name says which of the two it is right now. |
+| 🔴 **Occupied** · *a burner name* | Taken by another guest. *Mystery Burner* means the spot has no name: the crew holds it, or its ticket changed hands. |
+| 🟣 **Reserved by the crew** · *Not available* | Held back by the crew, for example a broken bed, a spot that isn't in use or one kept for [guests with special needs](./special-needs). |
+| ⚪️ **Not open yet** · *Booking opens soon* | Booking hasn't opened yet. |
+| ⚪️ **Booking closed** · *Spots are final* | The booking window is over. |
+
+> [!NOTE] One colour, one meaning
+> Green, red, turquoise, violet and grey mean the same on every spot card in CozyNights, and the crew sees the same colours on their side. Pink is kept for ♿ special needs alone: the ♿ link on the map, nothing else.
 
 ![A booked room: the Welcome Home box with the booking pass, the e-mail address and Telegram; your spot, other guests' burner names and spots reserved by the crew](../assets/screenshots/guest-room.webp)
 
@@ -97,11 +100,11 @@ A room shows what its house says too, and the crew can add a sentence of their o
 
 ## Looking for something special?
 
-Above the map, **Looking for…** turns your wishes on and off: <kbd>🛏️ No ladder</kbd>, <kbd>⬇️ Step-free</kbd>, <kbd>🚻 Toilets inside</kbd>, <kbd>🔥 Heated</kbd>, <kbd>🤫 Quiet</kbd>, <kbd>🔌 Power socket</kbd>.
+The chips in the top bar of the map turn your wishes on and off: <kbd>🛏️ No ladder</kbd>, <kbd>⬇️ Step-free</kbd>, <kbd>🚻 Toilets inside</kbd>, <kbd>🔥 Heated</kbd>, <kbd>🤫 Quiet</kbd>, <kbd>🔌 Power socket</kbd>. Only wishes some spot of the camp can answer are offered; if the crew described nothing, there is no chip row. On a phone the chips are their icons, and while the map's phase panel is up they wait.
 
-- Houses without a fitting free spot fade back, and the bar says how many houses are left.
+- Houses without a fitting free spot fade back, and the bar says *3 houses have a fitting free spot* — or that no house has one.
 - Open a house and each room tells you how many of its free spots fit.
-- The wishes are part of the address, so a filtered map can be shared or bookmarked. <kbd>Clear</kbd> shows everything again.
+- The wishes are part of the address, so a filtered map can be shared or bookmarked. <kbd>Clear</kbd> next to the chips shows everything again.
 
 Only spots the crew described can match, so a wish never promises more than the crew wrote down.
 
@@ -109,7 +112,7 @@ Only spots the crew described can match, so a wish never promises more than the 
 
 Can't decide? On the map press <kbd>🎰 DESTINY ROULETTE</kbd>. A neon slot machine waits with three reels, **House**, **Room** and **Spot**: grab its lever, pull it down and let go, or press <kbd>SPIN 🎰</kbd>. The reels stop one after the other on a random free spot anywhere in the camp. Every free spot has the same chance; how hard you pull only changes how long the reels run.
 
-**The reels respect…** on the machine, right under the reels, takes the same wishes as the map: tap <kbd>🛏️ No ladder</kbd> or <kbd>🔥 Heated</kbd> and only fitting spots go into the drum. The line next to the chips says how many that is. If none fits, the machine says so and offers <kbd>Spin without wishes</kbd>.
+The wish chips in the top bar work here too: tap <kbd>🛏️ No ladder</kbd> or <kbd>🔥 Heated</kbd> and only fitting spots go into the drum; the bar says *4 spots in the drum of 12 free*. If none fits, the machine says so and offers <kbd>Spin without wishes</kbd>. The chips show while you can spin: during Live Booking, until your ticket holds a spot.
 
 Then the burner name that goes with the spot:
 
@@ -136,7 +139,7 @@ The machine then shows your spot on its reels, with your booking pass below it, 
 ## Changing your mind
 
 ::: tip Rename
-Open your room, click **Your Spot**, change the burner name and press <kbd>Save Spot</kbd>. This works in every phase except Closed: before booking opens too, for example when a ticket was handed to you and its spot shows no name yet.
+Open your room, click **Yours**, change the burner name and press <kbd>Save Spot</kbd>. This works in every phase except Closed: before booking opens too, for example when a ticket was handed to you and its spot shows no name yet.
 :::
 
 ::: tip Move to another bed
@@ -166,9 +169,13 @@ Once you hold a spot, your room page shows <kbd>🎫 Show booking pass</kbd>, ev
 
 <kbd>Save QR code</kbd> stores the QR code as a picture (on a phone it goes to your photos), <kbd>Camp map</kbd> takes you back to the map. Before the check-in the pass stays valid when you move to another spot; the crew always sees the spot your ticket holds right now. Release your spot, and the same link says that your ticket holds no spot at the moment. The pass code is not your ticket code: it can only show your booking, never change it.
 
-::: tip Updates on Telegram
-Prefer Telegram? On your room page press <kbd>Get updates on Telegram</kbd>, then <kbd>START</kbd> in Telegram. The CozyNights bot confirms your spot right away and tells you about every change. The button's link works once and for 30 minutes; reload the room page afterwards, and it says *Updates on Telegram are on.* <kbd>Turn off</kbd> on the room page, or `/stop` in the chat, ends it.
-:::
+### In your wallet
+
+If the crew has set it up, the pass page, your room page and the roulette card also offer <kbd>Add to Apple Wallet</kbd> or <kbd>Add to Google Wallet</kbd> — your phone shows the one it has. The wallet pass carries the same QR code, and it **keeps itself up to date**: if the crew has to move you, the pass in your wallet follows by itself and tells you. It expires the day after the event, and you can delete it any time. If your ticket is passed on to someone else, the old pass says *No longer valid* and the new holder gets their own.
+
+### Updates on Telegram
+
+Prefer Telegram? Press <kbd>Get updates on Telegram</kbd> — on your room page, on the roulette card, on your booking pass, or on the page **Updates on Telegram** that your confirmation e-mail links to — and then <kbd>START</kbd> in Telegram. The CozyNights bot answers with your spot and your pass, QR code included, and tells you about every change from then on. Send <code>/pass</code> in the chat whenever you want the pass again; <code>/stop</code>, or <kbd>Turn off</kbd> on the page, ends it. The button's link works once and for 30 minutes, and it always asks for your ticket code first, so nobody else can subscribe to your booking.
 
 ## On your phone
 
@@ -178,7 +185,7 @@ CozyNights works in any mobile browser, no app needed. If you booked on your lap
 
 ## Shared devices
 
-Your ticket code stays on a device for 30 days. On a shared computer or somebody else's phone, sign out when you're done: on the start page, press <kbd>Not your ticket? Sign out</kbd>. The start page then says *Your ticket code was removed from this device.* Your booking stays; it belongs to the ticket, not to the device. Entering another code on the same device switches it to that ticket.
+Your ticket code stays on a device for 30 days. On a shared computer or somebody else's phone, sign out when you're done: press <kbd>Sign out</kbd> (⏏ on a phone) in the top bar of any booking page, or <kbd>Not your ticket? Sign out</kbd> on the start page. The start page then says *Your ticket code was removed from this device.* Your booking stays; it belongs to the ticket, not to the device. Entering another code on the same device switches it to that ticket.
 
 ## Privacy: what others see
 

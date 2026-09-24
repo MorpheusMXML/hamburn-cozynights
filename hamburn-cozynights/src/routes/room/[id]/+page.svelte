@@ -2,10 +2,11 @@
 	import PlaceDetails from '$lib/components/PlaceDetails.svelte';
 	import { bedTypeEntry, featureEntry } from '$lib/accommodation';
 	import { bunkNote, bunkOf, groupBunks, type BunkLevel } from '$lib/bunks';
-	import BunkLadder from '$lib/components/BunkLadder.svelte';
+	import PixelBunk from '$lib/components/PixelBunk.svelte';
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
+	import PassActions from '$lib/components/PassActions.svelte';
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
@@ -112,8 +113,30 @@
 		]
 			.filter(Boolean)
 			.join(' · ');
-	/** The level chip on a half of a bunk bed. */
-	const LEVEL_NAME: Record<BunkLevel, string> = { lower: 'Lower bunk', upper: 'Upper bunk' };
+	/** The level chip on a half of a bunk bed: what it shows, and what it says. */
+	const LEVEL_CHIP: Record<BunkLevel, { text: string; name: string }> = {
+		lower: { text: '▼ Lower', name: 'Lower bunk' },
+		upper: { text: '▲ Upper', name: 'Upper bunk' }
+	};
+
+	/**
+	 * A spot's state for the colours of src/routes/state.css (data-state):
+	 * 'full' someone else booked it, 'checked-in' it is mine, 'locked' the crew
+	 * holds it back, 'idle' booking is not open (yet or anymore), 'open' free
+	 * and bookable. A free spot stays green while I hold another one — the
+	 * spot is free, only the button is off.
+	 */
+	type SpotState = 'open' | 'full' | 'checked-in' | 'locked' | 'idle';
+	$: spotState = (bed: Spot): SpotState =>
+		bed.occupied && bed.id !== data.userBedId
+			? 'full'
+			: bed.id === data.userBedId
+				? 'checked-in'
+				: !bed.bookable
+					? 'locked'
+					: !data.isBookingActive
+						? 'idle'
+						: 'open';
 	/** Whether a card has a detail line at all. */
 	const hasDetail = (bed: { bedType: string; features: string[] }, level: BunkLevel | null) =>
 		!!level || !!bedTypeEntry(bed.bedType) || bed.features.length > 0;
@@ -331,6 +354,7 @@
 								<span class="notify-icon" aria-hidden="true">🎫</span> Show booking pass
 							</a>
 						</p>
+						<PassActions code={data.pass.code} wallet={data.wallet} />
 					{/if}
 					{#if data.notify && (data.notify.email || data.notify.telegram)}
 						<div class="notify-box">
@@ -382,8 +406,8 @@
 										<span class="notify-icon" aria-hidden="true">✈️</span> Get updates on Telegram
 									</button>
 									<small class="field-hint">
-										Optional. Opens Telegram — tap <strong>START</strong> there and the bot confirms your
-										spot. Reload this page afterwards.
+										Optional. Opens Telegram — tap <strong>START</strong> there and the bot sends your
+										spot and your pass, and every change from then on. Reload this page afterwards.
 									</small>
 								</form>
 							{/if}
@@ -401,20 +425,18 @@
 	<div class="beds-grid">
 		{#each units as unit (unit.kind === 'bunk' ? unit.lower.id : unit.spot.id)}
 			{#if unit.kind === 'bunk'}
-				<!-- One bed, two levels: the upper half on top, the ladder between,
-				     the lower half below. Each half books like a card of its own. -->
-				<div
-					class="bunk-tile"
-					class:state-ring={unit.lower.id === data.userBedId || unit.upper.id === data.userBedId}
-					in:fade={{ duration: reduceMotion ? 0 : 300 }}
-				>
-					{@render spotCard(unit.upper, 'upper')}
-					<div class="bunk-rail" aria-hidden="true">
-						<span class="rail-line"></span>
-						<BunkLadder height={26} rungs={3} />
-						<span class="rail-line"></span>
-					</div>
-					{@render spotCard(unit.lower, 'lower')}
+				<!-- One bed, two levels, drawn as a neon pixel bunk bed: the upper
+				     half on top, the frame and ladder around, the lower half below.
+				     Each half books like a card of its own. -->
+				<div class="bunk-unit" in:fade={{ duration: reduceMotion ? 0 : 300 }}>
+					<PixelBunk upperState={spotState(unit.upper)} lowerState={spotState(unit.lower)}>
+						{#snippet upper()}
+							{@render spotCard(unit.upper, 'upper')}
+						{/snippet}
+						{#snippet lower()}
+							{@render spotCard(unit.lower, 'lower')}
+						{/snippet}
+					</PixelBunk>
 				</div>
 			{:else}
 				{@render spotCard(unit.spot, null)}
@@ -423,8 +445,10 @@
 	</div>
 </div>
 
-<!-- A spot's card in its four states; `level` marks a half of a bunk bed. -->
+<!-- A spot's card in its four states; `level` marks a half of a bunk bed.
+     data-state picks the colour (state.css), the classes keep the layout. -->
 {#snippet spotCard(bed: Spot, level: BunkLevel | null)}
+	{@const state = spotState(bed)}
 	{@const isMyBed = bed.id === data.userBedId}
 	{@const someoneElseBooked = bed.occupied && !isMyBed}
 	{@const iHaveAnotherBooking = !!data.userBedId && !isMyBed}
@@ -433,17 +457,17 @@
 	{@const half = level ? `bunk-half ${level}` : ''}
 
 	{#if someoneElseBooked}
-		<div class="bed-card occupied {half}" data-bed-id={bed.id}>
+		<div class="bed-card occupied {half}" data-bed-id={bed.id} data-state={state}>
 			<div class="icon" aria-hidden="true">🛏️</div>
 			<span class="label">
 				{bed.label}
-				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
+				{#if level}{@render levelChip(level)}{/if}
 			</span>
 			{#if hasDetail(bed, level)}
 				<span class="bed-detail">{spotLine(bed, level)}</span>
 			{/if}
-			<div class="status-box occupied">
-				<span class="status-text">Occupied</span>
+			<div class="status-box">
+				<span class="status-text"><span class="state-dot" aria-hidden="true"></span>Occupied</span>
 				<span class="guest-name">
 					{bed.burnerName || 'Mystery Burner'}
 				</span>
@@ -455,19 +479,20 @@
 		<button
 			class="bed-card mine {nameFinal ? 'locked' : ''} {half}"
 			data-bed-id={bed.id}
+			data-state={state}
 			on:click={() => !nameFinal && openBookingModal(bed.id, bed.burnerName)}
 			disabled={nameFinal}
 		>
 			<div class="icon" aria-hidden="true">🛏️</div>
 			<span class="label">
 				{bed.label}
-				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
+				{#if level}{@render levelChip(level)}{/if}
 			</span>
 			{#if hasDetail(bed, level)}
 				<span class="bed-detail">{spotLine(bed, level)}</span>
 			{/if}
-			<div class="status-box my-status">
-				<span class="status-text">Your Spot</span>
+			<div class="status-box">
+				<span class="status-text"><span class="state-dot" aria-hidden="true"></span>Yours</span>
 				<span class="guest-name">{bed.burnerName}</span>
 				<small class="edit-hint"
 					>{nameFinal
@@ -481,46 +506,47 @@
 			</div>
 		</button>
 	{:else if !bed.bookable}
-		<div class="bed-card occupied {half}" data-bed-id={bed.id}>
+		<div class="bed-card occupied {half}" data-bed-id={bed.id} data-state={state}>
 			<div class="icon" aria-hidden="true">🔒</div>
 			<span class="label">
 				{bed.label}
-				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
+				{#if level}{@render levelChip(level)}{/if}
 			</span>
 			{#if hasDetail(bed, level)}
 				<span class="bed-detail">{spotLine(bed, level)}</span>
 			{/if}
-			<div class="status-box occupied">
-				<span class="status-text">Not available</span>
-				<span class="guest-name">Reserved by the crew</span>
+			<div class="status-box">
+				<span class="status-text"
+					><span class="state-dot" aria-hidden="true"></span>Reserved by the crew</span
+				>
+				<small class="edit-hint">Not available</small>
 			</div>
 		</div>
 	{:else}
 		<button
 			class="bed-card free {iHaveAnotherBooking || isLocked ? 'disabled' : ''} {half}"
 			data-bed-id={bed.id}
+			data-state={state}
 			on:click={() => !iHaveAnotherBooking && !isLocked && openBookingModal(bed.id)}
 			disabled={iHaveAnotherBooking || isLocked}
 		>
 			<div class="icon" aria-hidden="true">🛏️</div>
 			<span class="label">
 				{bed.label}
-				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
+				{#if level}{@render levelChip(level)}{/if}
 			</span>
 			{#if hasDetail(bed, level)}
 				<span class="bed-detail">{spotLine(bed, level)}</span>
 			{/if}
-			<div class="status-box free">
-				<span
-					>{isLocked
+			<div class="status-box">
+				<span class="status-text"
+					><span class="state-dot" aria-hidden="true"></span>{isLocked
 						? data.guestPhase === 'closed'
 							? 'Booking closed'
 							: 'Not open yet'
-						: iHaveAnotherBooking
-							? 'Unavailable'
-							: 'Available'}</span
+						: 'Available'}</span
 				>
-				<small
+				<small class="edit-hint"
 					>{isLocked
 						? data.guestPhase === 'closed'
 							? 'Spots are final'
@@ -532,6 +558,14 @@
 			</div>
 		</button>
 	{/if}
+{/snippet}
+
+<!-- "▲ Upper" / "▼ Lower" on a half of a bunk bed: a neutral outline, never a
+     status colour. -->
+{#snippet levelChip(level: BunkLevel)}
+	<span class="level-chip" role="img" aria-label={LEVEL_CHIP[level].name}
+		>{LEVEL_CHIP[level].text}</span
+	>
 {/snippet}
 
 {#if showModal}
@@ -765,7 +799,7 @@
 		gap: clamp(0.75rem, 4vw, 2rem);
 	}
 	.booking-locked-banner {
-		border-left: 4px solid #f472b6;
+		border-left: 4px solid var(--state-closed);
 	}
 	.booking-warning-banner {
 		border-left: 4px solid #fb923c;
@@ -791,7 +825,7 @@
 		font-weight: 900;
 	}
 	.locked-content h3 {
-		color: #f472b6;
+		color: var(--state-closed);
 	}
 	.warning-content h3 {
 		color: #fb923c;
@@ -918,9 +952,12 @@
 		text-align: center;
 		overflow-wrap: anywhere;
 	}
+	/* The card wears its state (data-state → --state, state.css): a 3 px
+	   coloured left edge, a soft border, and the status line below. */
 	.bed-card {
 		background: #111;
-		border: 1px solid #222;
+		border: 1px solid var(--state-soft, #222);
+		border-left: 3px solid var(--state, #222);
 		border-radius: 16px;
 		padding: clamp(1rem, 4vw, 1.5rem);
 		min-width: 0;
@@ -948,29 +985,27 @@
 		overflow: hidden;
 	}
 	.bed-card.mine {
-		border-color: #2dd4bf;
-		background: rgba(45, 212, 191, 0.05);
+		background: var(--state-soft);
 		cursor: pointer;
 	}
 	.bed-card.mine:hover {
 		transform: translateY(-3px);
-		box-shadow: 0 10px 20px rgba(45, 212, 191, 0.1);
+		box-shadow: 0 10px 20px var(--state-soft);
 	}
 	.bed-card.free {
 		cursor: pointer;
 	}
 	.bed-card.free:hover:not(.disabled) {
-		border-color: #f472b6;
+		border-color: var(--state);
 		transform: translateY(-3px);
-		box-shadow: 0 10px 20px rgba(244, 114, 182, 0.1);
+		box-shadow: 0 10px 20px var(--state-soft);
 	}
 	.bed-card.disabled {
-		opacity: 0.6;
+		opacity: 0.7;
 		cursor: not-allowed;
-		filter: grayscale(1);
 	}
 	.bed-card.occupied {
-		opacity: 0.8;
+		opacity: 0.85;
 	}
 	.bed-card.locked {
 		opacity: 0.7;
@@ -981,68 +1016,48 @@
 		outline-offset: 2px;
 	}
 
-	/* A bunk bed: one tile in the grid, the two halves stacked with the ladder
-	   between them. The halves keep the card look and colours of their state;
-	   the tile only frames them, and breathes (state-ring) when one is mine. */
-	.bunk-tile {
-		--state: var(--state-checked-in);
-		display: flex;
-		flex-direction: column;
+	/* A bunk bed: one tile in the grid (PixelBunk), the two halves stacked as
+	   its mattresses. A half is the whole mattress: the pixel border and the
+	   colour are drawn by the mattress box, so the card itself goes flat. */
+	.bunk-unit {
 		min-width: 0;
-		padding: 0.4rem;
-		border: 1px solid #222;
-		border-radius: 20px;
-		background:
-			radial-gradient(120% 90% at 50% 0%, rgba(45, 212, 191, 0.08), transparent 60%), #0b0b0b;
-		transition: border-color 0.2s;
 	}
-	.bunk-tile:hover {
-		border-color: #333;
+	.bed-card.bunk-half {
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		box-shadow: none;
 	}
-	.bunk-tile .bed-card {
-		border-radius: 14px;
-		flex: 1;
-	}
-	/* The hover lift would hide behind the neighbouring half. The selector
-	   must outrank `.bed-card.free:hover:not(.disabled)` above, so it names
+	/* The hover lift would hide behind the neighbouring half. The selectors
+	   must outrank `.bed-card.free:hover:not(.disabled)` above, so they name
 	   the half and the :not() too. */
-	.bunk-tile .bed-card.bunk-half:hover:not(.disabled) {
+	.bed-card.bunk-half.free:hover:not(.disabled),
+	.bed-card.bunk-half.mine:hover {
 		transform: none;
-	}
-	.bunk-rail {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.1rem 1rem;
-		pointer-events: none;
-	}
-	.rail-line {
-		flex: 1;
-		height: 0;
-		border-top: 1px dashed #2a2a2a;
-	}
-	.bunk-tile:hover .rail-line {
-		border-top-color: rgba(45, 212, 191, 0.4);
+		box-shadow: none;
+		border-color: transparent;
 	}
 
-	/* "Upper bunk" / "Lower bunk" next to the label, on the label's line
-	   while there is room and below it when there is not. */
+	/* "▲ Upper" / "▼ Lower" next to the label, on the label's line while there
+	   is room and below it when there is not. Neutral on purpose: a status
+	   colour on a chip would read as a state. */
 	.level-chip {
 		display: inline-block;
 		vertical-align: 0.2em;
 		margin-left: 0.35em;
-		--state-soft: rgba(45, 212, 191, 0.1);
-	}
-	.level-chip.upper {
-		--state: #2dd4bf;
-	}
-	.level-chip.lower {
-		--state: #f472b6;
-		--state-soft: rgba(244, 114, 182, 0.1);
+		padding: 4px 8px;
+		border: 1px solid rgba(255, 255, 255, 0.5);
+		border-radius: 6px;
+		font-size: 0.6rem;
+		font-weight: 900;
+		letter-spacing: 1px;
+		text-transform: uppercase;
+		white-space: nowrap;
+		color: #e5e5e5;
+		background: transparent;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.bunk-tile,
 		.bed-card {
 			transition: none;
 		}
@@ -1066,32 +1081,26 @@
 		grid-area: status;
 		display: flex;
 		flex-direction: column;
+		min-width: 0;
 		overflow-wrap: break-word;
 	}
+	/* The status line: bold, in the state colour, with the state's dot in
+	   front. The burner name under it stays white. */
 	.status-text {
-		font-size: 0.7rem;
+		display: flex;
+		align-items: center;
+		gap: 0.4em;
+		font-size: 0.85rem;
 		font-weight: 900;
+		line-height: 1.25;
 		text-transform: uppercase;
 		letter-spacing: 1px;
-		color: #9a9a9a;
+		color: var(--state, #9a9a9a);
 	}
 	.guest-name {
 		font-weight: bold;
 		font-size: 0.9rem;
 		color: #fff;
-	}
-	.my-status .status-text {
-		color: #2dd4bf;
-	}
-	/* Only the status: the spot label keeps its size on free spots too. */
-	.status-box.free span {
-		font-weight: 900;
-		color: #f472b6;
-		font-size: 0.85rem;
-	}
-	.status-box.free small {
-		font-size: 0.7rem;
-		color: #9a9a9a;
 	}
 
 	.edit-hint {

@@ -351,6 +351,7 @@ describe('guest delivery does not send twice when a send outlives the lock', () 
 		label: '',
 		mail: { enabled: true, replyTo: '' },
 		telegram: { token: '', chatId: '', threadId: '', apiBase: '', guests: false },
+		wallet: [],
 		mailsPerMinute: 20,
 		texts: {}
 	};
@@ -537,6 +538,7 @@ describe('a delivery that fails after its lease', () => {
 		label: '',
 		mail: { enabled: true, replyTo: '' },
 		telegram: { token: '', chatId: '', threadId: '', apiBase: '', guests: false },
+		wallet: [],
 		mailsPerMinute: 20,
 		texts: {}
 	};

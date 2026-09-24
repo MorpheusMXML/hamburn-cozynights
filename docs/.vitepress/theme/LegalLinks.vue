@@ -1,6 +1,8 @@
 <!--
 Links to the app's legal notice, privacy policy and booking rules under every
-doc page, plus the "made in Hamburg" credit (the same line as the app's footer).
+doc page, plus the "made in Hamburg" credit (the same line as the app's footer)
+and the note that the guide is rebuilt with every release: the Pages site with
+every version tag, the app's copy with every deploy (develop/docs.md).
 VitePress only shows its footer on pages without a sidebar, so doc pages get
 this instead (see index.ts). The addresses come from `themeConfig.legal` in
 config.mts. target="_self" keeps the VitePress router from treating them as
@@ -15,6 +17,10 @@ const { theme } = useData<CozyThemeConfig>();
 
 <template>
 	<footer class="doc-footer">
+		<p class="version-note">
+			This guide is rebuilt with every release, so it matches the latest deployed version of
+			CozyNights.
+		</p>
 		<nav v-if="theme.legal" class="legal-links" aria-label="Legal">
 			<a :href="theme.legal.notice" target="_self">Legal notice</a>
 			<span aria-hidden="true">·</span>
@@ -65,6 +71,11 @@ const { theme } = useData<CozyThemeConfig>();
 	color: var(--vp-c-text-3);
 	font-size: 0.8rem;
 	text-align: center;
+}
+
+.version-note {
+	margin: 0 0 0.5rem;
+	font-size: 0.75rem;
 }
 
 .legal-links {

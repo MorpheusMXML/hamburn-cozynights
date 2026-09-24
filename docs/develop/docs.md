@@ -9,7 +9,7 @@ This site is built with [VitePress](https://vitepress.dev) from the Markdown fil
 | For | guests, anyone | the crew: approved admins |
 | Contains | home page and the guide (booking, phases, guest FAQ) | everything: guide, admin guide, under the hood, develop |
 | In the app | `/docs/`, no sign-in | `/admin/docs/`, only with an admin session |
-| On GitHub Pages | **[morpheusmxml.github.io/hamburn-cozynights](https://morpheusmxml.github.io/hamburn-cozynights/)** | never |
+| On GitHub Pages | **[morpheusmxml.github.io/hamburn-cozynights](https://morpheusmxml.github.io/hamburn-cozynights/)**, rebuilt with every version tag | never |
 
 The environment variable `DOCS_AUDIENCE` (`public` or `admin`, default `admin`) selects the build. The public build leaves out the folders `admin/`, `reference/` and `develop/` completely: their pages are not rendered, not linked from navigation, sidebar or home page, and not part of the search index. Which section belongs to which audience is defined in one place, [`.vitepress/audience.ts`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/docs/.vitepress/audience.ts).
 
@@ -101,12 +101,15 @@ Screenshots show demo data only, never real guests or tickets. Take them from a 
 
 ## Publishing
 
-**GitHub Pages** gets the public build only. The workflow [`.github/workflows/docs.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/docs.yml) runs whenever something in `docs/` changes:
+Two copies, two purposes. **GitHub Pages** hosts the public guide for anyone, and is rebuilt on every [version tag](./deployment#versions-and-releases) as well as on every push to `main` that touches `docs/`, so it is as current as the version on staging. **The app** serves the admin guide behind the admin login at `/admin/docs/` — and, for now, the public guide at `/docs/` too — built into its Docker image with every deployment, so what an admin reads matches the version they are running. Both copies carry the line *this guide is rebuilt with every release* in their footer.
+
+**GitHub Pages** gets the public build only. The workflow [`.github/workflows/docs.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/docs.yml) runs whenever something in `docs/` changes, and for every version tag:
 
 - **Pull requests** build both audiences, so broken links or Markdown in either fail the check before merging.
 - **Pushes to `main`** build the public audience and deploy it to GitHub Pages.
+- **Version tags** (`v0.18.1`, made by `scripts/release.sh` on the state that is deployed) check out that tag, build the public audience from it and deploy it — so the Pages site describes the deployed state even while the release PR is still open. The paths filter doesn't apply to tags: every tag builds.
 
-The repository's Pages source has to be set to **GitHub Actions** (Settings → Pages) once.
+Two settings in the repository, once: the Pages source has to be **GitHub Actions** (Settings → Pages), and the `github-pages` environment has to allow deployments from tags (Settings → Environments → *github-pages* → *Deployment branches and tags* → add the tag pattern `v*`; the environment starts with `main` only, and a tag run would otherwise be refused with *not allowed to deploy to github-pages due to environment protection rules*).
 
 **The app** gets both builds with every [deployment](./deployment): the Docker image build runs `npm run build:app` and copies the result into the image, where the app serves it at `/docs/` and `/admin/docs/`. A docs change therefore reaches the app with the next deploy, not with the merge. "Last updated" dates only appear on GitHub Pages and in local builds, because the image is built without the git history.
 
@@ -121,7 +124,7 @@ Every page links the app's legal notice, privacy policy and booking rules: the h
   gh variable set DOCS_APP_URL --body "https://<production-domain>"
   ```
 
-  The next docs deploy (a push to `main` that touches `docs/`, or **Run workflow** on *Docs*) picks it up.
+  The next docs deploy (a version tag, a push to `main` that touches `docs/`, or **Run workflow** on *Docs*) picks it up.
 
 ## What doesn't belong here
 

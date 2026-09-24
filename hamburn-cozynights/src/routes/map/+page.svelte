@@ -15,22 +15,18 @@
 	import CountdownTimer from '$lib/components/CountdownTimer.svelte';
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
-	import { onMount } from 'svelte';
+	import { mapLookingAround } from '$lib/components/GuestTopBar.svelte';
+	import { onDestroy, onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { invalidateAll } from '$app/navigation';
-	import { SPOT_FILTERS, type SpotFilter } from '$lib/accommodation';
 
 	export let data: PageData;
 	$: ({ isBookingActive, phase, guestPhase, bookingUnlockAt } = data);
 
 	// What the guest is looking for. The wishes live in the URL, so the map can
-	// be shared, works without JavaScript and survives a reload.
-	$: wishes = data.wishes as SpotFilter[];
-	$: matchingHouses = data.houses?.filter((house) => (house.fittingFree ?? 0) > 0).length ?? 0;
-
-	const wishLink = (filter: SpotFilter, on: boolean) => {
-		const next = on ? wishes.filter((wish) => wish !== filter) : [...wishes, filter];
-		return next.length > 0 ? `/map?w=${next.join(',')}` : '/map';
-	};
+	// be shared, works without JavaScript and survives a reload; the chips to
+	// pick them are in the top bar (GuestTopBar, from the page data).
+	$: wishes = data.wishes;
 
 	// A panel covers the blurred map whenever guests can't book. It counts down
 	// while booking is not open yet — Staging, and Closed with an opening armed,
@@ -50,6 +46,12 @@
 		lookingAround = true;
 		lookedAroundIn = phase;
 	}
+	// Tells the top bar the map is usable again (countdown and chips), in the
+	// browser only: the store is a module, shared between requests on the server.
+	$: if (browser) mapLookingAround.set(lookingAround);
+	onDestroy(() => {
+		if (browser) mapLookingAround.set(false);
+	});
 
 	onMount(() => {
 		// Force a fresh fetch when entering the page
@@ -86,79 +88,9 @@
 	<title>Camp map · CozyNights</title>
 </svelte:head>
 
+<!-- The phase, the countdown, the wish chips and the quick access are in the
+     top bar over the page (GuestTopBar, rendered by the root layout). -->
 <div class="page-container">
-	<div class="header-overlay">
-		<div class="logo-box">
-			<span class="logo">Hamburn</span>
-			<span class="tagline">Interactive Map</span>
-		</div>
-
-		<!-- The words in .long go on the smallest phones: the header must stay one row. -->
-		{#if phase === 'live'}
-			<div class="phase-badge live">🎪 LIVE <span class="long">BOOKING</span></div>
-		{:else if phase === 'closed'}
-			<div class="phase-badge closed">🔒 <span class="long">BOOKING</span> CLOSED</div>
-		{:else}
-			<div class="phase-badge staging">🛠 STAGING <span class="long">MODE</span></div>
-		{/if}
-
-		<div class="header-right">
-			{#if phase !== 'staging' && (data.specialNeeds.open || data.specialNeeds.requestSent)}
-				<a
-					class="help-link special-link"
-					href="/special-needs"
-					aria-label={data.specialNeeds.requestSent
-						? 'My special-needs request'
-						: 'Ask for a special-needs spot'}
-				>
-					<span class="help-icon" aria-hidden="true">♿</span>
-					<span class="help-text"
-						>{data.specialNeeds.requestSent ? 'My request' : 'Special-needs spot'}</span
-					>
-				</a>
-			{/if}
-			<a
-				class="help-link"
-				href="/docs/guide/"
-				target="_blank"
-				rel="noopener"
-				aria-label="Help and FAQ (opens in a new tab)"
-			>
-				<span class="help-icon" aria-hidden="true">?</span>
-				<span class="help-text">Help &amp; FAQ</span>
-			</a>
-		</div>
-	</div>
-
-	<!-- The wishes only make sense over a map the guest can use, not under the phase panel. -->
-	{#if data.houses && !showPanel}
-		<nav class="wish-bar" aria-label="What are you looking for?">
-			<span class="wish-title">Looking for…</span>
-			{#each SPOT_FILTERS as filter}
-				{@const on = wishes.includes(filter.value)}
-				<a
-					class="wish"
-					class:on
-					href={wishLink(filter.value, on)}
-					data-sveltekit-noscroll
-					aria-current={on ? 'true' : undefined}
-					title={filter.hint ?? ''}
-				>
-					<span aria-hidden="true">{filter.icon}</span>
-					{filter.label}
-				</a>
-			{/each}
-			{#if wishes.length > 0}
-				<span class="wish-result" role="status">
-					{matchingHouses === 0
-						? 'No house has a free spot that fits — the crew may not have filled in every detail.'
-						: `${matchingHouses} ${matchingHouses === 1 ? 'house has' : 'houses have'} a fitting free spot`}
-				</span>
-				<a class="wish-clear" href="/map" data-sveltekit-noscroll>Clear</a>
-			{/if}
-		</nav>
-	{/if}
-
 	{#if data.houses}
 		<div class="map-container">
 			<Map
@@ -206,11 +138,11 @@
 					{/if}
 				{/if}
 
-				{#if data.specialNeeds.requestSent}
+				{#if data.specialNeeds?.requestSent}
 					<a class="special-needs-cta" href="/special-needs">
 						<span aria-hidden="true">♿</span> See your special-needs request
 					</a>
-				{:else if data.specialNeeds.open && notOpenYet}
+				{:else if data.specialNeeds?.open && notOpenYet}
 					<!-- Before booking opens only, as the guides say. Once it has closed the
 					     ♿ button at the top of the map is the way in, and the final panel with
 					     the pass ticket has no room left: with a line more, LOOK AROUND slid
@@ -262,70 +194,8 @@
 		overflow: hidden;
 		position: relative;
 		font-family: 'Inter', system-ui, sans-serif;
-		/* The wish bar (when shown) takes its row, the map the rest. */
 		display: flex;
 		flex-direction: column;
-	}
-
-	.header-overlay {
-		position: absolute;
-		top: 20px;
-		left: 20px;
-		right: 20px;
-		z-index: 100;
-		display: grid;
-		grid-template-columns: 1fr auto 1fr;
-		align-items: center;
-		gap: 0.75rem;
-		pointer-events: none;
-	}
-
-	.logo-box {
-		justify-self: start;
-	}
-
-	.header-right {
-		justify-self: end;
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-	}
-
-	.help-link {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		min-height: 44px;
-		padding: 0 0.9rem;
-		border-radius: 8px;
-		border: 1px solid #333;
-		background: rgba(10, 10, 10, 0.8);
-		color: #b5b5b5;
-		font-size: 0.7rem;
-		font-weight: 900;
-		letter-spacing: 1px;
-		text-transform: uppercase;
-		text-decoration: none;
-		white-space: nowrap;
-		pointer-events: auto;
-		backdrop-filter: blur(10px);
-	}
-
-	.help-link:hover,
-	.help-link:focus-visible {
-		color: #fff;
-		border-color: #2dd4bf;
-	}
-
-	.help-icon {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.4rem;
-		height: 1.4rem;
-		border-radius: 50%;
-		border: 1px solid currentColor;
-		font-size: 0.8rem;
 	}
 
 	.bottom-dock {
@@ -448,73 +318,9 @@
 		}
 	}
 
-	.logo-box {
-		background: rgba(10, 10, 10, 0.9);
-		padding: 1rem 1.5rem;
-		border-radius: 12px;
-		border: 1px solid #333;
-		display: flex;
-		flex-direction: column;
-		pointer-events: auto;
-		backdrop-filter: blur(10px);
-		box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-	}
-
-	.logo {
-		font-size: 1.5rem;
-		font-weight: 900;
-		letter-spacing: -1px;
-		background: linear-gradient(to right, #2dd4bf, #f472b6);
-		background-clip: text;
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		text-transform: uppercase;
-	}
-
-	.tagline {
-		font-size: 0.65rem;
-		font-weight: 900;
-		color: #8a8a8a;
-		letter-spacing: 2px;
-		text-transform: uppercase;
-	}
-
-	.phase-badge {
-		background: #111;
-		color: #666;
-		padding: 0.5rem 1rem;
-		border-radius: 8px;
-		font-weight: 900;
-		font-size: 0.7rem;
-		letter-spacing: 1px;
-		border: 1px solid #222;
-		white-space: nowrap;
-		pointer-events: auto;
-		backdrop-filter: blur(10px);
-	}
-
-	.phase-badge.live {
-		color: #f472b6;
-		border-color: #f472b633;
-		box-shadow: 0 0 15px rgba(244, 114, 182, 0.2);
-	}
-
-	.phase-badge.staging {
-		color: #2dd4bf;
-		border-color: #2dd4bf33;
-		box-shadow: 0 0 15px rgba(45, 212, 191, 0.2);
-	}
-
-	.phase-badge.closed {
-		color: #d4d4d4;
-		border-color: #ffffff26;
-		box-shadow: 0 0 15px rgba(255, 255, 255, 0.08);
-	}
-
 	.map-container {
 		width: 100%;
 		height: 100%;
-		/* As a flex child: the rest of the page under the wish bar. */
 		flex: 1 1 auto;
 		min-height: 0;
 		transition: filter 0.5s ease;
@@ -529,8 +335,8 @@
 		height: 100%;
 		z-index: 50;
 		display: flex;
-		/* Centred between the header and the legal links; scrolls on very short screens. */
-		padding: 6rem 1rem 5rem;
+		/* Centred above the legal links; scrolls on very short screens. */
+		padding: 2rem 1rem 5rem;
 		overflow-y: auto;
 		pointer-events: none;
 	}
@@ -563,58 +369,6 @@
 		color: #d4d4d4;
 	}
 
-	.wish-bar {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.4rem;
-		padding: 0.5rem clamp(0.5rem, 2vw, 1rem);
-		min-width: 0;
-		flex: none;
-		/* Below the header overlay (absolute, ~44 px tall from 20 px down):
-		   it must never sit under the logo box. */
-		margin-top: 72px;
-		position: relative;
-		z-index: 101;
-	}
-	.wish-title {
-		font-size: 0.72rem;
-		font-weight: 900;
-		letter-spacing: 0.08em;
-		color: #8a8f98;
-		text-transform: uppercase;
-	}
-	.wish {
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		border-radius: 999px;
-		padding: 0.2rem 0.65rem;
-		font-size: 0.78rem;
-		color: #dbe3ea;
-		text-decoration: none;
-		background: rgba(255, 255, 255, 0.04);
-		overflow-wrap: anywhere;
-	}
-	.wish:hover,
-	.wish:focus-visible {
-		border-color: rgba(0, 255, 224, 0.6);
-		color: #eafcff;
-	}
-	.wish.on {
-		background: rgba(0, 255, 224, 0.18);
-		border-color: rgba(0, 255, 224, 0.8);
-		color: #b8fff4;
-		font-weight: 700;
-	}
-	.wish-result {
-		font-size: 0.78rem;
-		color: #9fb3c8;
-		overflow-wrap: anywhere;
-	}
-	.wish-clear {
-		font-size: 0.78rem;
-		color: #00ffe0;
-	}
-
 	.special-needs-cta {
 		display: inline-flex;
 		align-items: center;
@@ -633,11 +387,6 @@
 	.special-needs-cta:focus-visible {
 		background: #f472b6;
 		color: #111;
-	}
-
-	.special-link {
-		border-color: #f472b6;
-		color: #f9a8d4;
 	}
 
 	.timer-wrapper {
@@ -739,58 +488,14 @@
 		}
 	}
 
-	/* The header boxes never wrap; below this width they don't fit next to
-	   each other any more (checked by tests/layout at every width): the links
-	   lose their text. */
-	@media (max-width: 920px) {
-		.help-text {
-			display: none;
-		}
-		.help-link {
-			width: 44px;
-			padding: 0;
-			justify-content: center;
-			border-radius: 50%;
-		}
-	}
-
-	/* Phones: the logo shrinks, the phase badge gets shorter. */
+	/* Phones: the buttons get shorter. */
 	@media (max-width: 640px) {
-		.header-overlay {
-			top: 12px;
-			left: 12px;
-			right: 12px;
-			gap: 0.5rem;
-			grid-template-columns: auto 1fr auto;
-		}
-		.logo-box {
-			padding: 0.5rem 0.75rem;
-		}
-		.logo {
-			font-size: 1.1rem;
-		}
-		.tagline {
-			display: none;
-		}
-		.phase-badge {
-			justify-self: center;
-			padding: 0.5rem 0.6rem;
-			font-size: 0.65rem;
-		}
 		.random-btn {
 			font-size: 0.8rem;
 			letter-spacing: 1.5px;
 		}
 		.panel-button {
 			padding: 1rem 1.25rem;
-		}
-	}
-	@media (max-width: 420px) {
-		.phase-badge .long {
-			display: none;
-		}
-		.header-right {
-			gap: 0.5rem;
 		}
 	}
 

@@ -35,7 +35,7 @@ flowchart TB
 | **Camp map** | The site plan of the venue. Every house is a pin on it. |
 | **House** | A building or sleeping area on the map, such as a lodge, a barn or a big tent. |
 | **Room** | A room inside a house, with a name and a room number. |
-| **Spot** | A single bed in a room ("B1", "Top Bunk"). A spot is free, taken, locked or inactive. |
+| **Spot** | A single bed in a room ("B1", "Top Bunk"), or one level of a bunk bed. Its card says what it is, in one colour everywhere: **green** free, **red** taken, **turquoise** yours, **violet** reserved by the crew, **grey** not bookable right now. |
 | **Ticket code** | The code on a guest's ticket. It is the guest's key to CozyNights, and it can hold **one** spot at a time. |
 | **Burner name** | The optional playa name shown on a booked spot. Other guests see this name, never the name on the ticket. |
 | **Phase** | *Staging* (the crew is building, guests can only look), *Live Booking* (guests book, the layout is frozen) or *Closed* (the booking window is over, spots are final). |
@@ -54,7 +54,7 @@ flowchart TB
 2. **Load the tickets.** The ticket list goes into the database, so every ticket code can sign in and confirmations reach the right address.
 3. **Special needs first.** Guests who need a particular spot ask the crew with their ticket code, and the crew books a fitting spot for them before booking opens. See [Special-needs spot](./special-needs).
 4. **Announce the booking window.** An admin plans when booking opens and when it closes, and arms the timer. Guests see a countdown.
-5. **Booking opens.** Guests pick their beds; the layout is now frozen. A countdown shows when booking closes: big on the start page, a slim bar on every other page. See [Staging, Live Booking & Closed](./phases).
+5. **Booking opens.** Guests pick their beds; the layout is now frozen. A countdown shows when booking closes: big on the start page, in the top bar of every booking page. See [Staging, Live Booking & Closed](./phases).
 6. **Booking closes.** At the closing time the spots are final. Guests keep their spot and their booking pass.
 7. **During the event.** The crew checks booking passes at arrival where needed, watches occupancy and locks single spots if something breaks.
 8. **After the burn.** Export the layout as a template; the guests' contact data is deleted, and a superuser switches back to staging, which frees every spot for next time.

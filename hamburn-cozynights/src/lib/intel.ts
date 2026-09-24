@@ -360,8 +360,8 @@ export function attentionItems(stats: LiveStats, phase: BookingPhase): Attention
 			tone: 'warning',
 			icon: '🎟',
 			text: `${plural(withoutSpot, 'ticket has', 'tickets have')} no spot, and booking is closed.`,
-			href: '/admin/tickets',
-			linkLabel: 'Tickets'
+			href: '/admin/guests?show=nospot',
+			linkLabel: 'Who'
 		});
 	}
 	if (positive(ops?.messages.retrying)) {
@@ -388,8 +388,8 @@ export function attentionItems(stats: LiveStats, phase: BookingPhase): Attention
 			tone: 'info',
 			icon: '🎟',
 			text: `${plural(withoutSpot, 'ticket has', 'tickets have')} no spot yet.`,
-			href: '/admin/tickets',
-			linkLabel: 'Tickets'
+			href: '/admin/guests?show=nospot',
+			linkLabel: 'Who'
 		});
 	}
 	const noEmail =
@@ -402,8 +402,8 @@ export function attentionItems(stats: LiveStats, phase: BookingPhase): Attention
 			tone: 'info',
 			icon: '📭',
 			text: `${plural(noEmail, 'ticket has', 'tickets have')} no e-mail address, so no booking e-mails.`,
-			href: '/admin/tickets',
-			linkLabel: 'Tickets'
+			href: '/admin/guests?show=noemail',
+			linkLabel: 'Which'
 		});
 	}
 	const waiting = waitingOf(stats.spots);

@@ -17,7 +17,7 @@ stateDiagram-v2
 ```
 
 - **🛠 Staging** is for building. Admins shape the camp; guests can sign in and look at the (blurred) map, but can't book.
-- **🎪 Live Booking** is for booking. Guests claim spots; the camp's structure is frozen so nothing moves under their feet. A countdown shows when booking closes: a big box on the start page, a slim bar at the top of every other page.
+- **🎪 Live Booking** is for booking. Guests claim spots; the camp's structure is frozen so nothing moves under their feet. A countdown shows when booking closes: a big box on the start page, the phase pill in the top bar of every booking page.
 - **🔒 Closed** follows the booking window. Spots are final: guests still see their spot and their booking pass, but can't book, change or release anything. The layout stays frozen, because it holds the bookings. As soon as a new opening time is armed, guests read the countdown to it instead of "spots are final" — nothing is final while booking is about to open again.
 
 ## Who can do what
@@ -47,7 +47,7 @@ During Live Booking and after booking closed, houses without any active spot don
 ![Staging map with the countdown](../assets/screenshots/guest-map-staging.webp)
 
 <!-- audience:public -->
-The crew plans when booking opens and when it closes. Guests see both moments as countdowns: **IGNITION IN** on the start page (right above the ticket-code field) and on the map before booking opens, and a slim bar at the top of every other page. Tap the bar for the exact time. While booking is live, the countdown runs to the closing time (big on the start page, slim on every other page), and it turns red in the last hour. When a countdown ends, the page opens or locks by itself; there's no need to reload. Until the crew has armed the timer there is no countdown: the map then says *Booking is not open yet. The crew is still setting up the houses. Check back soon.*
+The crew plans when booking opens and when it closes. Guests see both moments as countdowns: **IGNITION IN** on the start page (right above the ticket-code field) and on the map's panel before booking opens, and in the top bar of every other booking page, fused with the phase pill (*opens in 1d 23:59:57*). Tap the pill for the exact Berlin time. While booking is live, the countdown runs to the closing time (big on the start page, *closes in …* in the top bar everywhere else, the map included), and it turns red in the last hour. Under the map's panel the bar shows the phase alone, so nothing counts twice. When a countdown ends, the page opens or locks by itself; there's no need to reload. Until the crew has armed the timer there is no countdown: the map then says *Booking is not open yet. The crew is still setting up the houses. Check back soon.*
 <!-- /audience -->
 <!-- audience:admin -->
 Everything about the phase sits in one panel of the [Control Center](../admin/), right under the header: **🎟 BOOKING WINDOW**. Its summary line shows the phase, the next switch with a countdown, and whether the timer is armed. Click it to unfold:
@@ -97,7 +97,7 @@ A window planned for later (its opening time still ahead) stays armed when a sup
 
 ## During Live Booking
 
-Almost everything structural is locked. The exceptions: **locking and unlocking single spots**, so the crew can take a broken bed out of service mid-event (guests then see it as *Not available · Reserved by the crew*), everything around [special-needs spots](./special-needs): marking spots ♿ and booking a spot for a request, and what only *describes* a place: the details of houses, rooms and spots and stacking spots into bunk beds.
+Almost everything structural is locked. The exceptions: **locking and unlocking single spots**, so the crew can take a broken bed out of service mid-event (guests then see it as *Reserved by the crew*, in violet), everything around [special-needs spots](./special-needs): marking spots ♿ and booking a spot for a request, and what only *describes* a place: the details of houses, rooms and spots and stacking spots into bunk beds.
 
 ## After booking closed
 

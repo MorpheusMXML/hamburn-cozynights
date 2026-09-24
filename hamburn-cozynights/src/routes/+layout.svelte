@@ -5,8 +5,8 @@
 	import BurnerTrail from '$lib/components/BurnerTrail.svelte';
 	import DialogHost from '$lib/components/DialogHost.svelte';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
-	import BookingCountdownBar from '$lib/components/BookingCountdownBar.svelte';
-	import { showCountdownBar } from '$lib/booking-phase';
+	import GuestTopBar from '$lib/components/GuestTopBar.svelte';
+	import { showTopBar } from '$lib/booking-phase';
 	import { refreshOnReturn } from '$lib/refresh-on-return';
 	import { page } from '$app/state';
 
@@ -21,10 +21,16 @@
 	// to a QR code) for a while: no WebGL context and no 19 endless animations.
 	const PLAIN_PAGES = /^\/(legal-notice|privacy|booking-rules|pass|admin\/check)(\/|$)/;
 	let ambient = $derived(!PLAIN_PAGES.test(page.url.pathname));
-	// The start page always shows the big countdown itself, the map while it is Staging.
-	let bar = $derived(
-		showCountdownBar(data.booking?.phase ?? 'staging', data.booking?.next, page.url.pathname)
-	);
+
+	// The guest top bar (phase, countdown, wishes, quick access) sits over the
+	// booking pages only: not on the start page (it draws the big countdown
+	// itself), the legal texts, the booking pass, and never under /admin,
+	// where AdminNav is the bar (showTopBar lists the pages).
+	let bar = $derived(showTopBar(page.url.pathname) && !!data.booking);
+	// The bar's real height, which full-screen pages subtract; until it is
+	// measured (the server, the first paint) one row is assumed.
+	let barHeight = $state(0);
+	let barSpace = $derived(bar ? barHeight || 48 : 0);
 
 	// The pages that show the phase and the spots ask the server again when the
 	// guest comes back to a tab that sat in the background (see the module).
@@ -43,9 +49,15 @@
 	<BurnerTrail />
 {/if}
 
-<div class="app-root" class:has-booking-bar={bar}>
+<div class="app-root" style:--booking-bar-height="{barSpace}px">
 	{#if bar && data.booking}
-		<BookingCountdownBar phase={data.booking.phase} next={data.booking.next} />
+		<GuestTopBar
+			phase={data.booking.phase}
+			next={data.booking.next}
+			signedIn={data.signedIn}
+			specialNeeds={data.specialNeeds}
+			bind:height={barHeight}
+		/>
 	{/if}
 	{@render children()}
 	{#if footer}
@@ -59,10 +71,7 @@
 	.app-root {
 		position: relative;
 		z-index: 1;
-		/* Full-screen pages subtract it: calc(100dvh - var(--booking-bar-height)). */
-		--booking-bar-height: 0px;
-	}
-	.app-root.has-booking-bar {
-		--booking-bar-height: 40px;
+		/* Full-screen pages subtract it: calc(100dvh - var(--booking-bar-height));
+		   set inline from the bar's measured height, 0 where no bar shows. */
 	}
 </style>

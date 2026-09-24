@@ -3,19 +3,24 @@
 	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { ADMIN_NAV, badgeFor, isActive, type NavCounts } from '$lib/admin-nav';
-	import type { BookingPhase } from '$lib/booking-phase';
-	import VersionBadge from '../VersionBadge.svelte';
+	import type { BookingPhase, PhaseTransition } from '$lib/booking-phase';
+	import AdminStatus from './AdminStatus.svelte';
 
 	/**
-	 * The admin menu ($lib/admin-nav.ts). One <nav>, two shapes:
+	 * The admin menu ($lib/admin-nav.ts) and the status bar above the page.
+	 * One <nav>, two shapes:
 	 *  - from 1100 px: a sidebar next to the page, sticky, collapsible to its
 	 *    icons (remembered per browser);
-	 *  - below: a slim top bar whose ☰ slides the same list in as a drawer.
+	 *  - below: a drawer that the ☰ in the bar slides in.
+	 * The bar (AdminStatus) is the same at every width: phase, countdown,
+	 * version, quick access and the account. From 1100 px the layout places
+	 * it above the page next to the sidebar, and the ☰ goes.
 	 */
 	export let email: string;
 	export let isSuperuser = false;
 	export let counts: NavCounts;
 	export let phase: BookingPhase = 'staging';
+	export let next: PhaseTransition | null = null;
 
 	const STORAGE_KEY = 'cozy-admin-nav';
 	const WIDE = '(min-width: 1100px)';
@@ -72,13 +77,15 @@
 		if (open && event.key === 'Escape') closeDrawer();
 	}
 
-	$: pathname = page.url.pathname;
+	// The active entry reads page.url in the markup. A `$:` line here would run
+	// once (this is not a runes component, and `page` from $app/state is never
+	// reassigned), so the menu kept marking the first page it was opened on.
 	$: roleLabel = isSuperuser ? 'SUPERUSER ⚡️' : 'ADMIN';
 </script>
 
 <svelte:window on:keydown={onKeydown} />
 
-<!-- Phones and tablets: the bar above the page. -->
+<!-- The status bar above the page; the ☰ shows below 1100 px. -->
 <header class="admin-topbar">
 	<button
 		bind:this={burger}
@@ -91,15 +98,7 @@
 	>
 		<span class="burger-lines" aria-hidden="true"></span>
 	</button>
-	<a href="/admin" class="logo-link">
-		<span class="logo-text">Hamburn</span>
-		<span class="logo-badge">Admin</span>
-	</a>
-	<span class="topbar-version"><VersionBadge size="nav" /></span>
-	{#if isSuperuser}<span class="role-dot" title="Signed in as superuser">⚡️</span>{/if}
-	<form action="/admin/logout" method="POST" class="topbar-logout">
-		<button type="submit" class="logout-btn" title="Sign out {email}">Eject 🚀</button>
-	</form>
+	<AdminStatus {email} {isSuperuser} {counts} {phase} {next} />
 </header>
 
 {#if open}
@@ -121,7 +120,6 @@
 			<span class="logo-text">{collapsed && wide ? 'HB' : 'Hamburn'}</span>
 			{#if !(collapsed && wide)}<span class="logo-badge">Admin</span>{/if}
 		</a>
-		{#if !(collapsed && wide)}<VersionBadge size="nav" />{/if}
 		{#if !(collapsed && wide)}
 			<span class="badge-role" class:super={isSuperuser}>{roleLabel}</span>
 		{/if}
@@ -136,7 +134,7 @@
 				<h2 id="nav-group-{group.key}" class="group-label">{group.label}</h2>
 				<ul>
 					{#each group.items as item (item.href)}
-						{@const active = isActive(item, pathname)}
+						{@const active = isActive(item, page.url.pathname)}
 						{@const badge = badgeFor(item.badge, counts, phase)}
 						<li>
 							<a
@@ -152,7 +150,7 @@
 								<span class="nav-label">{item.label}</span>
 								{#if item.external}<span class="nav-external" aria-hidden="true">↗</span>{/if}
 								{#if badge}
-									<span class="nav-badge" data-tone={badge.tone}>
+									<span class="nav-badge" data-tone={badge.tone} data-badge={item.badge}>
 										<span class="sr-only">(</span>{badge.value}<span class="sr-only">)</span>
 									</span>
 								{/if}
@@ -164,16 +162,8 @@
 		{/each}
 	</div>
 
+	<!-- The account and Eject are in the bar; here only the sidebar's own switch. -->
 	<div class="sidebar-foot">
-		<div class="user-info" title={email}>
-			<span class="user-label">Burner</span>
-			<span class="user-email">{email}</span>
-		</div>
-		<form action="/admin/logout" method="POST" class="logout-form">
-			<button type="submit" class="logout-btn" title="Sign out {email}">
-				<span aria-hidden="true">🚀</span><span class="nav-label">Eject</span>
-			</button>
-		</form>
 		<button
 			type="button"
 			class="collapse-btn"
@@ -217,25 +207,6 @@
 		text-transform: uppercase;
 		font-weight: bold;
 	}
-	.logout-btn {
-		background: transparent;
-		border: 1px solid #f87171;
-		min-height: 40px;
-		white-space: nowrap;
-		padding: 0.4rem 0.9rem;
-		border-radius: 8px;
-		cursor: pointer;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 8px;
-		color: #f87171;
-		font-size: 0.85rem;
-		font-weight: bold;
-	}
-	.logout-btn:hover {
-		background: rgba(248, 113, 113, 0.1);
-	}
 	.sr-only {
 		position: absolute;
 		width: 1px;
@@ -245,43 +216,22 @@
 		white-space: nowrap;
 	}
 
-	/* ---- top bar (below 1100 px) ------------------------------------------ */
+	/* ---- the status bar ---------------------------------------------------- */
+	/* Two rows at most on a phone: ☰ with the phase and countdown, then the
+	   icons (AdminStatus pushes them right and lets them wrap as one). */
 	.admin-topbar {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0.5rem 1rem;
+		gap: 0.5rem 0.6rem;
+		padding: 0.5rem 0.75rem;
 		background: rgba(15, 15, 15, 0.92);
 		backdrop-filter: blur(12px);
 		border-bottom: 1px solid #222;
 		position: sticky;
-		/* below the booking countdown bar, if shown (+layout.svelte) */
+		/* The admin layout sets this to 0: the bar carries the countdown itself. */
 		top: var(--booking-bar-height, 0px);
 		z-index: 100;
-	}
-	.admin-topbar .logo-link {
-		flex: 1 1 auto;
-	}
-	.role-dot {
-		flex-shrink: 0;
-	}
-	.topbar-logout {
-		display: flex;
-		flex-shrink: 0;
-	}
-	/* Small phones: the ADMIN badge gives way to the ⚡ and Eject. */
-	@media (max-width: 420px) {
-		.admin-topbar {
-			gap: 0.5rem;
-			padding: 0.5rem 0.75rem;
-		}
-		.admin-topbar .logo-badge,
-		.admin-topbar .topbar-version {
-			display: none;
-		}
-		.admin-topbar .logo-text {
-			font-size: 1.15rem;
-		}
 	}
 	.burger {
 		flex-shrink: 0;
@@ -485,43 +435,23 @@
 		background: #262626;
 		color: #a3a3a3;
 	}
+	/* An accent badge asks for a hand: pink only for the ♿ requests, red for
+	   the booked guests still to arrive (booked = red, never pink). */
 	.nav-badge[data-tone='accent'] {
-		background: #f472b6;
+		background: var(--state-full);
 		color: #111;
 	}
+	.nav-badge[data-tone='accent'][data-badge='requests'] {
+		background: var(--state-special);
+	}
 
+	/* The foot only holds the sidebar's shrink switch, which a drawer has no use for. */
 	.sidebar-foot {
-		display: flex;
+		display: none;
 		flex-direction: column;
 		gap: 0.5rem;
 		padding: 0.75rem 0.5rem 0;
 		border-top: 1px solid #1c1c1c;
-	}
-	.user-info {
-		display: flex;
-		flex-direction: column;
-		min-width: 0;
-	}
-	.user-label {
-		font-size: 0.6rem;
-		color: #666;
-		text-transform: uppercase;
-		font-weight: bold;
-		letter-spacing: 1px;
-	}
-	.user-email {
-		font-size: 0.8rem;
-		color: #2dd4bf;
-		font-family: monospace;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.logout-form {
-		display: flex;
-	}
-	.logout-form .logout-btn {
-		flex: 1 1 auto;
 	}
 	.collapse-btn {
 		display: none;
@@ -529,16 +459,22 @@
 
 	/* ---- the menu: a sidebar from 1100 px ------------------------------------- */
 	@media (min-width: 1100px) {
-		.admin-topbar,
+		.burger,
 		.drawer-backdrop,
 		.drawer-close {
 			display: none;
 		}
+		.admin-topbar {
+			padding: 0.5rem 1.25rem;
+		}
+		.sidebar-foot {
+			display: flex;
+		}
 		.admin-sidebar {
 			position: sticky;
-			top: var(--booking-bar-height, 0px);
-			height: calc(100vh - var(--booking-bar-height, 0px));
-			height: calc(100dvh - var(--booking-bar-height, 0px));
+			top: 0;
+			height: 100vh;
+			height: 100dvh;
 			width: 15.5rem;
 			flex-shrink: 0;
 			transform: none;
@@ -587,10 +523,6 @@
 			clip: rect(0 0 0 0);
 			white-space: nowrap;
 		}
-		/* The account is in Eject's tooltip. */
-		.collapsed .user-info {
-			display: none;
-		}
 		.collapsed .nav-item {
 			justify-content: center;
 			position: relative;
@@ -605,7 +537,6 @@
 			font-size: 0.6rem;
 			line-height: 1.1rem;
 		}
-		.collapsed .logout-btn,
 		.collapsed .collapse-btn {
 			justify-content: center;
 			padding: 0;

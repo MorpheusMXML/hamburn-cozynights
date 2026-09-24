@@ -216,6 +216,27 @@ export function featureLabel(value: unknown): string {
 	return featureEntry(value)?.label ?? String(value ?? '');
 }
 
+/**
+ * One line for a folded details panel (admin house and room pages): the kind,
+ * the icons of the features, and whether a description is written, e.g.
+ * "🛖 Hut group · ♿ 🔥 · description". Empty when nothing is set.
+ */
+export function detailsSummary(
+	level: 'house' | 'room',
+	kind: unknown,
+	features: unknown,
+	description: unknown
+): string {
+	const entry = level === 'house' ? houseKindEntry(kind) : roomKindEntry(kind);
+	const icons = readFeatures(features, level).map((value) => featureEntry(value)?.icon ?? '');
+	const parts = [
+		entry ? `${entry.icon} ${entry.label}` : '',
+		icons.join(' '),
+		typeof description === 'string' && description.trim() ? 'description' : ''
+	];
+	return parts.filter(Boolean).join(' · ');
+}
+
 /** What one room of such a house is called: "room", "hut", "tent", "place". */
 export function roomWord(kind: unknown, plural = false): string {
 	const entry = houseKindEntry(kind) ?? HOUSE_KINDS[0];
@@ -540,6 +561,17 @@ export function spotMatchesFilter(filter: SpotFilter, facts: SpotFacts): boolean
 
 export function spotMatchesFilters(filters: readonly SpotFilter[], facts: SpotFacts): boolean {
 	return filters.every((filter) => spotMatchesFilter(filter, facts));
+}
+
+/**
+ * The wishes worth offering: the filters at least one of these spots answers,
+ * in the catalogue's order. A camp without a heated room offers no "Heated"
+ * chip, and a camp nobody described offers none at all.
+ */
+export function availableFilters(spots: readonly SpotFacts[]): SpotFilter[] {
+	return SPOT_FILTERS.filter((filter) =>
+		spots.some((spot) => spotMatchesFilter(filter.value, spot))
+	).map((filter) => filter.value);
 }
 
 /**

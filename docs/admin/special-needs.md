@@ -19,7 +19,7 @@ flowchart LR
 
 On a room page, <kbd>♿ SPECIAL</kbd> marks a spot as a special-needs spot; <kbd>♿ NORMAL</kbd> turns it back into a normal one. Works in Staging Mode, during Live Booking and after booking closed.
 
-- **Guests can't book it.** They see it like a locked spot, as *Not available · Reserved by the crew*, and never learn why. Once a guest has it, it shows as an ordinary occupied spot with their burner name: nobody can tell who has special needs.
+- **Guests can't book it.** They see it like a locked spot, as *Reserved by the crew* (violet, with *Not available* under it), and never learn why. Once a guest has it, it shows as an ordinary occupied spot with their burner name: nobody can tell who has special needs.
 - **It never counts as free**, like a locked spot.
 - **It comes first** in the list when you book a spot for a request.
 - **Templates keep it** (`"is_special": true` on the spot, see [Layout templates](./templates#file-format)).
@@ -34,7 +34,7 @@ Which spot fits which need comes from the layout: the **bed type** of a spot and
 
 Requests have their **own switch**, independent of Staging Mode and Live Booking: <kbd>Open requests</kbd> / <kbd>Close requests</kbd> in the row *♿ Special-needs requests: OPEN / CLOSED* right under the [🎟 BOOKING WINDOW](./#booking-window) panel in the Control Center, or the same button on the requests page (*Requests from guests: OPEN*).
 
-- **Open:** guests see a link on the map and can send a request, and change it while it waits. Before booking opens the link reads *♿ Need a special-needs spot? Ask the crew now*; during Live Booking and after it, it is the button *♿ Special-needs spot* at the top of the map.
+- **Open:** guests see a link on the map and can send a request, and change it while it waits. Before booking opens the link reads *♿ Need a special-needs spot? Ask the crew now*; during Live Booking and after it, it is the link *♿ Special-needs spot* in the top bar of every booking page.
 - **Closed:** no new requests and no changes. Waiting requests stay; guests still see theirs (the map link then reads *♿ See your special-needs request* or *♿ My request*) and can withdraw it.
 
 Every switch goes to the crew group with the admin's e-mail address.
@@ -52,6 +52,8 @@ Each request shows:
 - who **decided** and when, and the **spot** the ticket holds right now: *booked by the crew* (through this page) or *booked by the guest*.
 
 If a guest sends the form again right when you decide, the card says so: read it once more. Cards are colour-coded: **waiting** orange, **approved** green, **declined** grey and dimmed. On decided cards, what the guest wrote is folded away under *What the guest wrote*.
+
+The [guest list](./guests) shows for every ticket only *where* a request stands — ♿ *request waits for a decision*, *request approved*, *request declined*, and ♿ *assigned through a request* on the spot — with <kbd>Requests →</kbd> leading here. Reading and deciding happens on this page.
 
 | Button | What happens |
 | --- | --- |
@@ -102,7 +104,7 @@ Messages say what the crew decided, never what the guest wrote. On `/special-nee
 
 What guests write is often **health data**. The app treats it that way; please do too.
 
-- **Only admins can read it**, here and nowhere else. What guests tick and write is stored encrypted, so the PocketBase dashboard and backups only hold unreadable text. The pages are sent with `Cache-Control: no-store`.
+- **Only admins can read it**, here and nowhere else: the [guest list](./guests) and the bookings list show at most that a request exists and how it was decided, never what was written. What guests tick and write is stored encrypted, so the PocketBase dashboard and backups only hold unreadable text. The pages are sent with `Cache-Control: no-store`.
 - **It never leaves the admin area:** not in e-mails, Telegram messages, the crew group, logs or the audit log.
 - **Don't copy it** into chats, e-mails or spreadsheets. Talk about a request in person, and decide based on what the guest needs, not why.
 - **Guests give explicit consent** with a checkbox when they send a request (Art. 9(2)(a) GDPR); the time is stored. The privacy policy (`/privacy#special-needs`, section *Special-needs requests*) explains it; see [Legal pages](./legal). The checkbox reads: *I agree that the CozyNights crew uses what I write here to find a fitting spot for me. It may include information about my health. Only the crew's admins can read it; it is stored encrypted and deleted after the event at the latest. I can withdraw my request on this page at any time. Details: privacy policy.* (the link opens the policy's section). Keep the text, the policy and this page in step.

@@ -20,7 +20,7 @@ import type { PassSummary } from '$lib/pass';
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 
 export const load: PageServerLoad = async ({ params, locals, cookies, url }) => {
-	if (!locals.orderNumber) throw redirect(303, signInUrl(locals));
+	if (!locals.orderNumber) throw redirect(303, signInUrl(locals, `/house/${params.id}`));
 
 	const bookingService = new BookingService(locals.adminPb);
 	// hooks.server.ts read the ticket for this request already; it only looks it

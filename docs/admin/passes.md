@@ -40,6 +40,8 @@ The rules that keep the states consistent:
 - **In every confirmation:** the e-mail and the Telegram message link to the pass and show its code.
 - **The pass page** shows house, room, spot and burner name, the QR code and the code. <kbd>Save QR code</kbd> stores the QR code as an image named `cozynights-pass-<code>.gif` (on a phone it goes to the photos); a screenshot works just as well. <kbd>Camp map</kbd> leads back to the map. A link typed without dashes or in lower case works too. If the ticket holds no spot right now, the page says so instead: *This ticket holds no spot right now. Pick one on the map while booking is open.*
 - **One pass per ticket.** It stays the same when the guest moves to another spot or releases theirs: the check always shows the spot the ticket holds *right now*.
+- **In their wallet, if they want:** <kbd>Add to Apple Wallet</kbd> / <kbd>Add to Google Wallet</kbd>, see [Wallet passes](#wallet-passes-apple-wallet-google-wallet).
+- **On Telegram, if they want:** the bot sends the pass with its QR code as a picture and every change from then on; <code>/pass</code> shows it again. See [Notifications](./notifications#guests-booking-confirmations).
 
 <p align="center"><img src="../assets/screenshots/guest-pass.webp" alt="The booking pass as the guest sees it on a phone" width="300" /></p>
 
@@ -84,6 +86,7 @@ Checked in the wrong pass? The newest result on **Check-in** has <kbd>↩️ Und
 - **Room page:** a checked-in spot shows **✅ Checked in** with the time and the admin, next to the guest's name, and the room counts them.
 - **House page and Control Center:** *Checked in* per room and per house, and on the house page the guests room by room (**🛏️ Who is here**). On the Control Center: the *latest check-ins* after booking closed, and in the Intel panel the **CHECKED IN** tile with how many booked guests are still to come, the check-ins per hour in the chart, and *checked in / booked* for every house.
 - **Tickets:** a checked-in ticket shows **✅ Checked in** with the time.
+- **Guests** (<kbd>👥 Guests</kbd> in the menu): every ticket with its check-in next to its spot, messages and wallet passes; the *checked in* tile narrows the list to them. See [Guests](./guests).
 
 ## Who can check guests in
 
@@ -115,6 +118,33 @@ Admins and superusers, nobody else. A ticket code never can, whoever holds it:
 - **What is stored:** the time of the check-in and the e-mail of the admin, on the spot. Both go with the booking.
 - **The link stays private:** pass pages aren't indexed, aren't cached and don't send the link on to other sites. After 30 unknown codes from one connection within ten minutes, that connection is blocked for a while (requests for the QR image count too); signed-in admins are never blocked.
 
-## Wallet passes (Apple / Google)
+## Wallet passes (Apple Wallet, Google Wallet)
 
-Not built on purpose, for now. A real Wallet pass needs an Apple developer account (yearly fee) and a signing certificate, or a Google Wallet issuer account — accounts to run and renew for a nice-to-have. The pass page does the same job: save the QR code or take a screenshot. If it's wanted later, a Wallet pass can carry the same QR code, so the check stays the same.
+Guests can keep their pass in their phone's wallet: <kbd>Add to Apple Wallet</kbd> and <kbd>Add to Google Wallet</kbd> sit on the pass page, under the spot on the room page and on the roulette's *Destiny Fulfilled* card. An iPhone only sees the Apple button, an Android phone only the Google one, a computer both.
+
+- **The same QR code.** The wallet pass carries the pass link, so the check at arrival works exactly as before — camera, scanner or typed code.
+- **It keeps itself up to date.** Move a guest and their wallet pass follows within about a minute: the iPhone gets a push and fetches the new pass, a Google pass is written again. Nobody has to download anything twice, and a lock-screen note tells the guest their spot changed.
+- **A ticket that was [passed on](./tickets#a-ticket-passed-on-to-someone-else)** takes its pass with it: the old holder's wallet pass shows *No longer valid*, the Google one moves to the expired passes. The new holder adds their own.
+- **It shows what the pass page shows:** house, room, spot, burner name, the pass code, the event and its dates. Never the ticket code, the name on the ticket, the e-mail address or the check-in.
+- **It expires by itself** the day after the event, so nobody's wallet keeps a dead pass.
+
+> [!TIP] The guest deleted the pass?
+> Adding it again is enough: same pass, same code. A pass that is already in the wallet is simply updated, never doubled.
+
+### What it needs
+
+| Wallet | The account behind it | Without it |
+| --- | --- | --- |
+| **Apple Wallet** | A membership in the Apple Developer Program (99 US$ a year; non-profits can ask for a fee waiver), a Pass Type ID and its certificate. The certificate is renewed about once a year — passes already in a wallet keep working, but they can't be updated with an expired one. | No Apple button; the pass page works as before. |
+| **Google Wallet** | An issuer account in the Google Pay & Wallet Console (free) and a service account that may write its passes. New issuer accounts start in demo mode: only test accounts listed in the console can save a pass, and it is marked *[TEST ONLY]* until Google grants publishing access. | No Google button; the pass page works as before. |
+
+The values go into the server's `.env`; `deploy/staging.env.template` describes each one, and the operators' runbook has the setup step by step. When the server starts, its log says which wallet is on — and for a wallet that stays off, which value is missing.
+
+### When something doesn't work
+
+| What you see | Why | What to do |
+| --- | --- | --- |
+| No wallet buttons on the pass page | The server has no wallet credentials, or one of them is wrong. | Look at the app's log right after a deploy: it names the missing value. Guests can use the pass page meanwhile. |
+| *Google Wallet is not reachable right now.* | Google's API did not answer. | Try again in a minute. Nothing is lost; the pass page and the Apple button still work. |
+| A guest's wallet pass shows an old spot | The pass is updated within about a minute; a phone without a connection fetches it later. | Ask the guest to open the pass in the wallet and pull it down to refresh, or open the pass link. The check always reads the current booking, whatever the wallet shows. |
+| An iPhone says *This pass is already added to Wallet.* | The pass is already there (for example from a Telegram message). | Nothing to do: it updates itself. |

@@ -4,23 +4,28 @@ After signing in you land in the **Control Center** at `/admin`: the booking win
 
 ![The Control Center in staging, map view](../assets/screenshots/admin-control-center.webp)
 
-## The admin menu
+## The status bar and the admin menu
 
-Every admin page has the same menu. On a wide screen (from about 1100 px) it is a **sidebar** on the left; <kbd>« Shrink menu</kbd> at its foot shrinks it to its icons (pointing at an icon names it) and <kbd>»</kbd> brings the names back — the browser remembers your choice. On phones and tablets a slim bar sits on top instead: <kbd>☰</kbd> slides the same menu in, <kbd>✕</kbd>, <kbd>Esc</kbd> or a tap next to it closes it again, and so does following a link.
+Every admin page has the same **status bar** on top and the same **menu**.
+
+**The status bar** is the same at every width. On the left, the booking phase as a pill in its colour — 🛠 STAGING, 🎪 LIVE or 🔒 CLOSED — fused with the countdown: *OPENS IN 1d 23:59:57* while a timer is armed, *CLOSES IN …* during Live Booking (red in the last hour). Tap it for the exact time (*Booking opens … Berlin time*, or *Live Booking ends …*); <kbd>Esc</kbd> or a tap elsewhere closes it. Without an armed timer the pill alone leads to the [booking window](#booking-window). On the right: the app's version, e.g. `v0.18.1` (hover it for the build, click it for the release notes on GitHub; quote it when you report a problem), three quick links — 🎟 the [check-in desk](./passes#checking-guests-in), 💬 the [message texts](./notifications#message-texts) and ♿ the [special-needs requests](./special-needs) with the number waiting for a decision (pink) —, the account you're signed in with (a ⚡️ in front of it for superusers) and <kbd>Eject 🚀</kbd> to sign out. On a phone the bar takes two rows and keeps to the essentials: the account hides, Eject is its rocket, the pill its icon; pointing at them still names the account. The guests' top bar stays away from the admin area — the status bar carries the countdown itself.
+
+**The menu** holds the pages. On a wide screen (from about 1100 px) it is a **sidebar** on the left, with the *Admin* tag and your role (ADMIN or SUPERUSER ⚡️) at its head; <kbd>« Shrink menu</kbd> at its foot shrinks it to its icons (pointing at an icon names it) and <kbd>»</kbd> brings the names back — the browser remembers your choice. On phones and tablets the same menu is a drawer: <kbd>☰</kbd> at the left end of the status bar slides it in, <kbd>✕</kbd>, <kbd>Esc</kbd> or a tap next to it closes it again, and so does following a link.
 
 | Group | Entry | Opens |
 | --- | --- | --- |
 | **Overview** | <kbd>📊 Control Center</kbd> | This page. |
 | **Camp** | <kbd>🗺️ Map & houses</kbd> | The [camp editor](#map-houses-the-camp-editor): the map and the list of houses; the house and room pages belong to it. |
 | | <kbd>💾 Templates</kbd> | The **Burn Template Manager**: export the layout, compare a file with the camp, apply it. See [Layout templates](./templates). |
-| **Guests** | <kbd>🛏️ Bookings</kbd> | [Who booked which spot](./bookings), who is checked in, who is still to arrive. |
+| **Guests** | <kbd>👥 Guests</kbd> | [Every ticket at a glance](./guests): its spot, check-in, request state, messages and wallet passes — tickets without a spot included. |
+| | <kbd>🛏️ Bookings</kbd> | [Who booked which spot](./bookings), who is checked in, who is still to arrive. |
 | | <kbd>🎟️ Tickets</kbd> | Find a ticket, change its e-mail address, load the ticket list. See [Tickets & e-mail addresses](./tickets). |
 | | <kbd>♿ Special needs</kbd> | The requests. See [Special-needs requests](./special-needs). |
 | | <kbd>🎫 Check-in desk</kbd> | Check guests in with their booking pass. See [Booking passes & check-in](./passes). |
 | **Crew** | <kbd>✉️ Messages</kbd> | Every text guests get. See [Message texts](./notifications#message-texts). |
 | | <kbd>📖 Admin guide ↗</kbd> | This documentation, in a new tab, admin pages included. |
 
-Numbers next to an entry say what waits: at <kbd>♿ Special needs</kbd> the requests waiting for a decision (pink), at <kbd>🛏️ Bookings</kbd> how many spots are booked (grey) — and after booking closed, how many booked guests are still to arrive (pink). Below the entries: the account you're signed in with, a **SUPERUSER ⚡️** badge if you are one, and <kbd>🚀 Eject</kbd> to sign out (on phones: <kbd>Eject 🚀</kbd> in the top bar). Next to the *Admin* tag sits the app's version, e.g. `v0.18.1` (on phones in the top bar): hover it for the build, click it for the release notes on GitHub, and quote it when you report a problem. While a countdown runs, a slim bar above everything shows when booking opens or closes, the same one guests see.
+Numbers next to an entry say what waits: at <kbd>♿ Special needs</kbd> the requests waiting for a decision (pink — the same number sits on the ♿ quick link in the status bar), at <kbd>🛏️ Bookings</kbd> how many spots are booked (grey) — and after booking closed, how many booked guests are still to arrive (red). The account, the version and <kbd>Eject 🚀</kbd> live in the status bar, at every width.
 
 ## What's on this page
 
@@ -74,11 +79,11 @@ true:
 | 📣 *… crew alerts never reached the crew chat* | The crew chat refused alerts five times each, and none got through after them — the chat may be unreachable. The line goes away by itself with the next alert that arrives; the Crew card keeps counting the old failures. | [Notifications](./notifications) |
 | ♿ *… special-needs requests wait for a decision* | Requests are waiting. | *Special needs* |
 | 🔑 *… admin sign-ins wait for a superuser's approval* | Somebody signed in with Google without an invite. | [Admin access](./access) |
-| 🎟 *… tickets have no spot, and booking is closed* | After booking closed: guests with a ticket but no spot. | *Tickets* |
+| 🎟 *… tickets have no spot, and booking is closed* | After booking closed: guests with a ticket but no spot. | *Who* — the [Guests](./guests) page, tickets without a spot |
 | ⏳ *… guest messages are being retried* | A delivery failed and waits for its next try. | [Notifications](./notifications) |
 | 🛖 *… houses have no active spots* | Houses without spots (orange in Staging, where they can still be fixed). | – |
-| 🎟 *… tickets have no spot yet* | During Live Booking: guests who still have to book. | *Tickets* |
-| 📭 *… tickets have no e-mail address* | E-mail to guests is on, until booking closes. | *Tickets* |
+| 🎟 *… tickets have no spot yet* | During Live Booking: guests who still have to book. | *Who* — the [Guests](./guests) page, tickets without a spot |
+| 📭 *… tickets have no e-mail address* | E-mail to guests is on, until booking closes. | *Which* — the [Guests](./guests) page, tickets without an address |
 | 🚪 *… booked guests are not checked in yet* | After booking closed, once the first guest was checked in. | *Who* — the [bookings list](./bookings), still to arrive |
 
 ### Spots & bookings
@@ -89,7 +94,8 @@ per hour), <kbd>7 days</kbd> (one per day, where it starts) or <kbd>All</kbd>
 (every day since the first booking, every week once that would be more than 45
 days). Picking a house in the house table does the same as the House filter;
 <kbd>✕ Whole camp</kbd> goes back. <kbd>Who booked →</kbd> next to the block's
-title opens the [bookings list](./bookings) for the same house (or the whole camp).
+title opens the [bookings list](./bookings) for the same house (or the whole camp),
+<kbd>Guests →</kbd> the [guest list](./guests) for it.
 
 | Widget | Shows |
 | --- | --- |
@@ -146,20 +152,23 @@ not.
 
 ### The state colours
 
-The same colour means the same thing everywhere on this page — on the ring, on
-the tiles, on the house cards, on the map status bar. Anything in a state
-carries a slowly breathing border in its colour, so a glance at the screen is
-enough.
+The same colour means the same thing everywhere in the app — on the ring, on
+the tiles, on the house cards, on the map status bar, on the spot cards of the
+room pages, and on the spot cards guests see. Anything in a state carries a
+slowly breathing border in its colour, so a glance at the screen is enough. A
+status colour is never lent to a mere highlight: the ▲ Upper / ▼ Lower chip of
+a bunk bed is a neutral white outline.
 
 | Colour | State |
 | --- | --- |
-| 🟢 Green | **Open** — spots are free, nothing booked yet |
-| 🟠 Orange | **Filling** — booked and free spots side by side |
-| 🔴 Red | **Full** — nothing left to book |
-| 🟣 Violet | **Held back** — locked 🔒 by the crew, not bookable |
-| 🩷 Pink | **Reserved ♿** — kept for special-needs requests, and the colour of Live Booking |
-| 🩵 Turquoise | **Checked in**, and the colour of Staging Mode |
-| ⚪️ Grey | **Not set up** — no active spots at all |
+| 🟢 Green | **Open, free** — a house with free spots and nothing booked yet; a free spot (VACANT ✨, *Available* for guests) |
+| 🟠 Orange | **Filling** — booked and free spots side by side; also a warning, something not allowed right now |
+| 🔴 Red | **Full, booked, occupied** — a house with nothing left to book; a booked spot (CLAIMED 👥, *Occupied* for guests); a ticket that holds a spot |
+| 🩵 Turquoise | **Checked in**; a guest's own spot (*Yours*); and the colour of Staging Mode |
+| 🟣 Violet | **Held back** — locked 🔒 by the crew, *Reserved by the crew* for guests |
+| 🩷 Pink | **♿ Special needs, and nothing else** — spots kept for requests, the requests and their count, the ♿ links |
+| 🟡 Yellow | **Live Booking** — the phase pill and the countdown to the closing time |
+| ⚪️ Grey | **Not set up, inactive, not now** — a house without active spots; a switched-off spot (INACTIVE 🧊); a spot that can't be booked yet or any more; light grey for Closed |
 
 > [!NOTE]
 > A house with nothing but locked or ♿ spots left counts as **full**: a guest

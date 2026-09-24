@@ -1,6 +1,6 @@
 # Bookings & check-ins
 
-Who booked which spot, who is already on site, who is still on the road. Open it with <kbd>🛏️ Bookings</kbd> in the admin menu (group *Guests*). The same booking also shows on the spot itself: on the room page, on the house page and next to the map.
+Who booked which spot, who is already on site, who is still on the road. Open it with <kbd>🛏️ Bookings</kbd> in the admin menu (group *Guests*). The same booking also shows on the spot itself: on the room page, on the house page and next to the map. For the tickets that hold *no* spot, and for everything else attached to a ticket — messages, wallet passes, the state of a special-needs request — see [Guests: every ticket at a glance](./guests).
 
 ## At a glance
 
@@ -12,6 +12,7 @@ Who booked which spot, who is already on site, who is still on the road. Open it
 | House page, **🛏️ Who is here** | The house's bookings room by room (folds away). |
 | <kbd>🗺️ Map & houses</kbd>, a house's sidebar | **WHO IS HERE 🛏️**: the house's bookings room by room, short; point at one for the details. |
 | Intel panel | <kbd>Who booked →</kbd> next to *SPOTS & BOOKINGS* opens the list for the house you picked; *… booked guests are not checked in yet* leads to the ones still to arrive. |
+| <kbd>👥 Guests</kbd> (`/admin/guests`) | Every ticket, with or without a spot, and next to the spot its check-in, request state, messages and wallet passes. See [Guests](./guests). |
 
 ## What a booking shows
 
@@ -27,7 +28,7 @@ A booking is shown the way the [check-in desk](./passes#checking-guests-in) show
 | The check-in: when and by whom | *✅ Mon 21 Sep · 18:30 by crew@…* | |
 | ♿ *assigned through a request* | | What the guest wrote in the request |
 
-The colour says the state: **pink** 🎟 *Booked* (the ticket holds the spot), **teal** ✅ *Checked in*, **violet** 🛠 *Crew* — marked 🔄 TAKEN on the room page, without a ticket. A spot that is deactivated or 🔒 locked for guests but still holds a booking says so; the booking stands.
+The colour says the state, the same way as [everywhere else](./index#the-state-colours): **red** 🎟 *Booked* (the ticket holds the spot), **turquoise** ✅ *Checked in*, **violet** 🛠 *Crew* — marked 🔄 TAKEN on the room page, without a ticket. A spot that is deactivated or 🔒 locked for guests but still holds a booking says so; the booking stands.
 
 <kbd>Open ticket →</kbd> (<kbd>Ticket →</kbd> in the list) opens the full ticket card in [Tickets](./tickets): address, pass code, hand-over. The code stays hidden there too, like for a ticket found by its address — search for the code if you need it in full.
 
