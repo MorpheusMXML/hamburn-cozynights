@@ -15,9 +15,14 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 
 <script lang="ts">
 	import { MAP_WIDTH, MARKER_LABEL_GAP, MARKER_LABEL_HEIGHT } from '$lib/map-geometry';
+	import { houseKindEntry } from '$lib/accommodation';
 	import type { HouseMarkerStatus } from '$lib/occupancy';
 
 	export let name: string;
+	/** House, hut group, tent area…: a hut group carries its icon on the pin. */
+	export let kind = '';
+	/** No free spot here fits what the guest is looking for. */
+	export let faded = false;
 	export let status: HouseMarkerStatus | string = 'available';
 	export let labelPosition: 'top' | 'bottom' = 'bottom';
 	export let hovered = false;
@@ -37,6 +42,8 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 	/** Distance the label keeps from the map's left and right edge (map units). */
 	const EDGE_MARGIN = 4;
 
+	// A plain house needs no glyph; the other kinds say what they are.
+	$: kindIcon = kind && kind !== 'house' ? (houseKindEntry(kind)?.icon ?? '') : '';
 	$: isOccupied = status === 'full';
 	$: isEmpty = status === 'empty';
 	$: glowId = isOccupied ? 'full' : isEmpty ? 'empty' : 'available';
@@ -90,6 +97,7 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 	class:dragging
 	class:occupied={isOccupied}
 	class:empty={isEmpty}
+	class:faded
 >
 	<!-- The only hit target: big enough for a thumb, also where the label isn't. -->
 	<circle class="hit" r={hitRadius} fill="transparent" pointer-events="all" />
@@ -97,6 +105,18 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 	<circle class="glow" r="24" fill="url(#marker-glow-{glowId})" pointer-events="none" />
 	<circle class="pulse" r="12" pointer-events="none" />
 	<circle class="pin" r="9" pointer-events="none" />
+	{#if kindIcon}
+		<text
+			class="kind"
+			x="0"
+			y="0"
+			font-size="10"
+			text-anchor="middle"
+			dominant-baseline="central"
+			pointer-events="none"
+			aria-hidden="true">{kindIcon}</text
+		>
+	{/if}
 
 	<g class="label" transform="translate(0 {labelY})" pointer-events="none">
 		<rect x={labelX} y="0" width={labelWidth} height={LABEL_HEIGHT} rx="4" />
@@ -124,6 +144,10 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 
 	.hit {
 		cursor: pointer;
+	}
+
+	.marker.faded {
+		opacity: 0.3;
 	}
 
 	.glow {

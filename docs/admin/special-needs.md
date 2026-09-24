@@ -26,6 +26,10 @@ On a room page, <kbd>♿ SPECIAL</kbd> marks a spot as a special-needs spot; <kb
 
 Mark the spots before booking opens. Special-needs spots that nobody needs at the end: switch them back to <kbd>♿ NORMAL</kbd> one by one, and guests can book them.
 
+::: tip Fill in the details first
+Which spot fits which need comes from the layout: the **bed type** of a spot and the **features** of its room and house (see [Houses, rooms & spots](./camp-layout#house-details)). A lower bunk in a step-free room with toilets in the building is what a request asking for all three needs. Spots nobody described can still be assigned — the list just can't tell you what they answer.
+:::
+
 ## 2. Open requests
 
 Requests have their **own switch**, independent of Staging Mode and Live Booking: <kbd>Open requests</kbd> / <kbd>Close requests</kbd> in the row *♿ Special-needs requests: OPEN / CLOSED* right under the [🎟 BOOKING WINDOW](./#booking-window) panel in the Control Center, or the same button on the requests page (*Requests from guests: OPEN*).
@@ -52,13 +56,23 @@ If a guest sends the form again right when you decide, the card says so: read it
 | Button | What happens |
 | --- | --- |
 | <kbd>Approve</kbd> | The request is approved. A guest without a spot hears that the crew picks one; a guest who booked a spot themselves hears they keep it until you book a more fitting one. |
-| <kbd>Approve & book</kbd> · <kbd>Book</kbd> | Pick a free spot from the list (*♿ Special-needs spots* first, then *Other free spots*; 🔒 marks locked ones, deactivated spots never appear) and book it for the guest, right away, also in Staging Mode and after booking closed. A waiting request is approved on the way. The guest gets a message with the spot and the booking pass. If the guest already holds a spot, the field reads **Move to** and the dialog *Move the guest?* says which spot becomes free. |
+| <kbd>Approve & book</kbd> · <kbd>Book</kbd> | Pick a free spot from the list (*♿ Special-needs spots* first, then *Other free spots*; 🔒 marks locked ones, deactivated spots never appear) and book it for the guest, right away, also in Staging Mode and after booking closed. Each spot says what it answers of **this** request — `B1 · Room 2 · Wälderhaus — ✓ a lower bunk or a bed without a ladder, ✓ step-free access or the ground floor` — and the best fits come first; `✗` marks a clear mismatch, like an upper bunk for someone who needs a lower one. A waiting request is approved on the way. The guest gets a message with the spot and the booking pass. If the guest already holds a spot, the field reads **Move to** and the dialog *Move the guest?* says which spot becomes free. |
 | <kbd>Move</kbd> | Books another spot for the guest; the old one becomes free. |
 | <kbd>Release spot</kbd> | The spot becomes free again (a special-needs spot stays one); the request stays approved, so book another one. The guest gets a message. Also offered for a spot the guest booked themselves: the dialog warns that releasing takes it away from them. |
 | <kbd>Decline</kbd> | The guest gets a message that the crew can't offer a special-needs spot: they keep a spot they booked themselves, or book like everyone else once booking opens. To decline a request whose spot you booked, release the spot first. |
 | <kbd>⋯</kbd> → <kbd>Approve after all</kbd> | On a declined card only, deliberately out of the way (a declined card has no other buttons): the request is approved after all (the guest gets the *approved* message), and the spot list comes back so you can book one. |
 
 With no free spot left, the list says *No free spot left. Free or add one in the room editor.*
+
+### What the open requests need
+
+Above the requests, a box compares what the waiting requests (and approved ones without a spot) ticked with the free spots that fit:
+
+> **What the open requests need**
+> A lower bunk or a bed without a ladder — 4 asked · 6 free spots fit
+> Step-free access or the ground floor — 2 asked · 1 free spot fits ⚠️ not enough
+
+⚠️ means the camp has fewer fitting spots than requests: free one, mark more spots ♿, or fill in missing details in the room editor. *Something else* is left out — only a person can answer that one. The counts only see what the crew described, so a camp without details shows nothing here.
 
 Every decision and booking is in the audit log and goes to the crew group — **without the guest's name or what they wrote**.
 

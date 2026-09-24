@@ -161,7 +161,11 @@ describe('Room Load & Booking Logic', () => {
 		]); // beds list
 		mockAdminPb.update.mockResolvedValueOnce({}); // migration update
 
-		const result: any = await roomLoad({ params: { id: 'room1' }, locals: mockLocals } as any);
+		const result: any = await roomLoad({
+			url: new URL('http://test.local/'),
+			params: { id: 'room1' },
+			locals: mockLocals
+		} as any);
 
 		expect(result.room.id).toBe('room1');
 		expect(result.beds.length).toBe(2);
@@ -173,7 +177,10 @@ describe('Room Load & Booking Logic', () => {
 			label: 'A2',
 			occupied: true,
 			bookable: false,
-			burnerName: 'Dusty Nomad #123'
+			burnerName: 'Dusty Nomad #123',
+			// what kind of bed it is and what only this spot has; nobody said here
+			bedType: '',
+			features: []
 		});
 	});
 
@@ -194,7 +201,11 @@ describe('Room Load & Booking Logic', () => {
 			}
 		]);
 
-		const result: any = await roomLoad({ params: { id: 'room1' }, locals: mockLocals } as any);
+		const result: any = await roomLoad({
+			url: new URL('http://test.local/'),
+			params: { id: 'room1' },
+			locals: mockLocals
+		} as any);
 		const serialized = JSON.stringify(result);
 
 		expect(serialized).not.toContain('SECRET-CODE-42');
@@ -400,6 +411,8 @@ describe('Admin Management Actions', () => {
 
 	it('should create a room with active spots in staging mode', async () => {
 		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: false }); // Staging mode
+		// the house the room belongs to: its kind decides the new room's kind
+		mockPb.getOne.mockResolvedValueOnce({ id: 'house1', name: 'Villa', kind: 'house' });
 		mockPb.create.mockResolvedValueOnce({ id: 'room1' }); // Room created
 
 		const formData = new FormData();
@@ -415,7 +428,7 @@ describe('Admin Management Actions', () => {
 		} as any);
 
 		expect(mockPb.create).toHaveBeenCalledWith(
-			expect.objectContaining({ name: 'Villa Suite', house: 'house1' })
+			expect.objectContaining({ name: 'Villa Suite', house: 'house1', kind: 'room' })
 		);
 		expect(mockPb.create).toHaveBeenCalledWith(
 			expect.objectContaining({ label: 'Spot 1', room: 'room1', enabled: true })

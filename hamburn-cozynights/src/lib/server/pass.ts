@@ -1,5 +1,6 @@
 import encodeQR from 'qr';
 import { FailureRateLimiter } from '$lib/server/rate-limit';
+import { bedTypeLabel } from '$lib/accommodation';
 import type { ClientResponseError } from 'pocketbase';
 import type {
 	BedsResponse,
@@ -135,7 +136,7 @@ export function checkInOf(
 export async function passSummary(
 	adminPb: TypedPocketBase,
 	order: Pick<OrdersResponse, 'id' | 'pass_code' | 'burner_name'>,
-	bed: Pick<BedsResponse, 'room' | 'label'>
+	bed: Pick<BedsResponse, 'room' | 'label'> & { bed_type?: string }
 ): Promise<PassSummary> {
 	const [code, room] = await Promise.all([
 		ensurePassCode(adminPb, order),
@@ -148,7 +149,9 @@ export async function passSummary(
 		house: room.expand?.house?.name ?? '',
 		room: roomLabel(room),
 		spot: bed.label,
-		burnerName: burnerNameOf(order)
+		burnerName: burnerNameOf(order),
+		// Only when the crew wrote it down, like every other detail.
+		...(bedTypeLabel(bed.bed_type) ? { bed: bedTypeLabel(bed.bed_type) } : {})
 	};
 }
 

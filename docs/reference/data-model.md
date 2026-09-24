@@ -9,9 +9,9 @@ data lives and how it is backed up: [Backups and where data lives](../develop/de
 
 | Collection     | Holds                                                                                    | Personal data | Written by                                           | API rules                             |
 | :------------- | :--------------------------------------------------------------------------------------- | :------------ | :--------------------------------------------------- | :------------------------------------ |
-| `houses`       | `name`, `x`, `y` (map position)                                                          | no            | admins                                               | public read, admin write              |
+| `houses`       | `name`, `x`, `y` (map position), `kind` (house, hut group, tent area, other), `features`, `description` | no            | admins                                               | public read, admin write              |
 | `rooms`        | `name`, `room_number`, `house`, `amount_beds` (spots created with the room; an initial count only, not maintained: count the room's `beds`) | no            | admins                                               | public read, admin write              |
-| `beds`         | `label`, `room`, `occupied`, `order`, `is_locked`, `enabled`, `is_special` (special-needs spot), `booked_at` (when the spot got its ticket, set by PocketBase), `checked_in_at` and `checked_in_by` (the check-in at arrival: when, which admin) | no      | admins; guest bookings via the app's service account; a check-in with the checking admin's own session (the service account only moves it along or clears it) | admin read, admin write (guests see spots only through the app) |
+| `beds`         | `label`, `room`, `occupied`, `order`, `is_locked`, `enabled`, `is_special` (special-needs spot), `bed_type` (single bed, lower/upper bunk, half of a double bed, sofa, mattress, camp bed), `features`, `booked_at` (when the spot got its ticket, set by PocketBase), `checked_in_at` and `checked_in_by` (the check-in at arrival: when, which admin) | no      | admins; guest bookings via the app's service account; a check-in with the checking admin's own session (the service account only moves it along or clears it) | admin read, admin write (guests see spots only through the app) |
 | `orders`       | `order_number`, `order_hash`, `customer_name`, `burner_name` (encrypted), `email`, `pass_code` (booking pass, unique), `handed_over_at` (when the ticket was last passed on) | yes | the app's service account, `scripts/cozy-admin.sh tickets`; `pass_code` only by PocketBase | none (superusers only) |
 | `app_settings` | the phase set by hand: `is_booking_active` (live), `booking_closed` (closed); the booking window: `booking_unlock_at`, `booking_close_at`, `booking_timer_paused`; `notify_mail`, `telegram_bot`, `special_requests_open`, `guest_round` (the booking round guests are signed in for; released bookings count it up) (single record `appsettings0123`) | no | admins (a phase switch right now: superusers only); PocketBase keeps the two notification flags current | public read, admin write |
 | `admins`       | `email`, `name`, `role` (`pending`, `admin`, `superuser`), `last_sign_in`                | yes (email)   | Google sign-in, `scripts/cozy-admin.sh`              | none (sign-in creates `pending` only) |
@@ -74,10 +74,18 @@ write" means an approved `admins` record (see [Security & privacy](./security)).
 ## Location templates
 
 A template is the camp's structure as JSON: houses with their map positions,
-rooms and beds. It contains no personal data, so layouts can be kept in Git.
-The format is described in [Layout templates](../admin/templates#file-format)
-(`format` `cozynights-layout`, version `2.0`; version `1.0` files are still read).
+rooms, beds and what each place is like. It contains no personal data, so
+layouts can be kept in Git. The format is described in
+[Layout templates](../admin/templates#file-format) (`format`
+`cozynights-layout`, version `2.1`; version `2.0` and `1.0` files are still
+read).
 
+- **Details:** `kind`, `features` and `description` of a house or room and a
+  spot's `bed_type` travel with the layout. They are written only when they are
+  set, so a layout nobody described exports as it always did. The catalogue of
+  allowed values is `src/lib/accommodation.ts` — one fixed, venue-independent
+  list, because the ♿ matching, the map filters and the roulette wishes read
+  meaning out of it. Anything true for one venue only belongs in `description`.
 - **Export:** admin dashboard → TEMPLATES → download (any approved admin).
 - **Compare & import:** any admin can compare a file with the camp; superusers
   apply the chosen differences, only in Staging Mode. Houses are matched by

@@ -10,7 +10,8 @@ shown here and nowhere else.
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import type { ActionData, PageData } from './$types';
 	import { confirmDialog, toast } from '$lib/dialogs';
-	import { STATUS_LABELS, needLabel, type AdminRequestView } from '$lib/special-needs';
+	import { STATUS_LABELS, needLabel, type AdminRequestView, type SpotInfo } from '$lib/special-needs';
+	import { factsOf, matchNeeds, needShort } from '$lib/accommodation';
 
 	export let data: PageData;
 	// Without JavaScript a refused step comes back here (with it: a toast).
@@ -23,8 +24,29 @@ shown here and nowhere else.
 	$: waiting = data.requests.filter((r) => r.status === 'pending');
 	$: approved = data.requests.filter((r) => r.status === 'approved');
 	$: declined = data.requests.filter((r) => r.status === 'declined');
-	$: specialSpots = data.spots.filter((s) => s.special);
-	$: otherSpots = data.spots.filter((s) => !s.special);
+	/**
+	 * The free spots for one request: the ones that answer most of its needs
+	 * first, ♿ spots still in their own group. A spot says what it fits
+	 * ("✓ lower bunk") or where it clearly doesn't ("✗ upper bunk"), so the crew
+	 * reads the list instead of remembering the camp.
+	 */
+	function ranked(request: AdminRequestView, special: boolean) {
+		return data.spots
+			.filter((spot) => spot.special === special)
+			.map((spot) => ({ spot, match: matchNeeds(request.needs, factsOf(spot.bedType, spot.features)) }))
+			.sort((a, b) => b.match.score - a.match.score)
+			.map(({ spot, match }) => ({ spot, text: `${spotText(spot)}${fitText(match)}` }));
+	}
+
+	const spotText = (spot: SpotInfo) => `${spot.label}${spot.locked ? ' 🔒' : ''}`;
+
+	function fitText(match: ReturnType<typeof matchNeeds>): string {
+		const parts = [
+			...match.fits.map((need) => `✓ ${needShort(need)}`),
+			...match.conflicts.map((need) => `✗ ${needShort(need)}`)
+		];
+		return parts.length > 0 ? ` — ${parts.join(', ')}` : '';
+	}
 
 	const NO_CONNECTION = 'We could not reach the server, so nothing was changed. Try again.';
 
@@ -196,6 +218,27 @@ shown here and nowhere else.
 		</form>
 	</section>
 
+	{#if data.capacity.length > 0}
+		<section class="capacity" class:short={data.capacity.some((entry) => entry.short)}>
+			<h2>What the open requests need</h2>
+			<ul>
+				{#each data.capacity as entry}
+					<li class:short={entry.short}>
+						<span class="need">{entry.label}</span>
+						<span class="numbers">
+							{entry.asked} asked · {entry.fitting} free {entry.fitting === 1 ? 'spot' : 'spots'} fit
+						</span>
+						{#if entry.short}<span class="warn">⚠️ not enough</span>{/if}
+					</li>
+				{/each}
+			</ul>
+			<p class="hint">
+				Counted from the bed types and features of the free spots. A spot nobody described counts
+				for nothing here — fill the details in on the room page.
+			</p>
+		</section>
+	{/if}
+
 	<p class="privacy-note">
 		🔏 What guests write here may be about their health. Only admins can read it. Don't copy it into
 		chats or e-mails; talk about it in person. Everything is deleted after the event.
@@ -336,20 +379,16 @@ shown here and nowhere else.
 								<div class="row">
 									<select id="spot-{request.id}" name="bedId" bind:value={picked[request.id]}>
 										<option value="">Pick a free spot…</option>
-										{#if specialSpots.length > 0}
-											<optgroup label="♿ Special-needs spots">
-												{#each specialSpots as spot}
-													<option value={spot.bedId}>{spot.label}{spot.locked ? ' 🔒' : ''}</option>
-												{/each}
-											</optgroup>
-										{/if}
-										{#if otherSpots.length > 0}
-											<optgroup label="Other free spots">
-												{#each otherSpots as spot}
-													<option value={spot.bedId}>{spot.label}{spot.locked ? ' 🔒' : ''}</option>
-												{/each}
-											</optgroup>
-										{/if}
+										{#each [true, false] as special}
+											{@const group = ranked(request, special)}
+											{#if group.length > 0}
+												<optgroup label={special ? '♿ Special-needs spots' : 'Other free spots'}>
+													{#each group as entry}
+														<option value={entry.spot.bedId}>{entry.text}</option>
+													{/each}
+												</optgroup>
+											{/if}
+										{/each}
 									</select>
 									<button class="btn primary" disabled={!!busy}>
 										{request.status === 'pending'
@@ -405,6 +444,56 @@ shown here and nowhere else.
 		padding: 0.75rem 1rem;
 		border: 1px dashed #3f3f46;
 		border-radius: 12px;
+	}
+
+	.capacity {
+		padding: 0.85rem 1.1rem;
+		border: 1px solid #3f3f46;
+		border-radius: 14px;
+		min-width: 0;
+	}
+	.capacity.short {
+		border-color: #f59e0b;
+	}
+	.capacity h2 {
+		margin: 0 0 0.5rem;
+		font-size: 1rem;
+	}
+	.capacity ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+	}
+	.capacity li {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.5rem;
+		font-size: 0.9rem;
+		min-width: 0;
+	}
+	.capacity .need {
+		font-weight: 700;
+		overflow-wrap: anywhere;
+	}
+	.capacity .numbers {
+		color: #a1a1aa;
+		overflow-wrap: anywhere;
+	}
+	.capacity li.short .numbers {
+		color: #fbbf24;
+	}
+	.capacity .warn {
+		color: #fbbf24;
+		font-weight: 700;
+	}
+	.capacity .hint {
+		margin: 0.6rem 0 0;
+		font-size: 0.8rem;
+		color: #a1a1aa;
 	}
 
 	.switch-card {

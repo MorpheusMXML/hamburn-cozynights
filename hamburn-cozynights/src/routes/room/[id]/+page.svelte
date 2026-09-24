@@ -1,4 +1,6 @@
 <script lang="ts">
+	import PlaceDetails from '$lib/components/PlaceDetails.svelte';
+	import { bedTypeEntry, featureEntry } from '$lib/accommodation';
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
@@ -63,6 +65,18 @@
 
 	$: selectedBed = data.beds.find((b) => b.id === selectedBedId);
 	$: roomTitle = `${data.room.name || 'Room'} #${data.room.room_number}`;
+
+	/** "Lower bunk · 🔌 Power socket" under a spot's label. */
+	const spotLine = (bed: { bedType: string; features: string[] }) =>
+		[
+			bedTypeEntry(bed.bedType)?.label,
+			...bed.features.map((feature) => {
+				const entry = featureEntry(feature);
+				return entry ? `${entry.icon} ${entry.label}` : '';
+			})
+		]
+			.filter(Boolean)
+			.join(' · ');
 
 	// The page behind an open modal must not scroll along on phones.
 	$: if (typeof document !== 'undefined') {
@@ -155,6 +169,12 @@
 			<a href="/house/{data.room.house}" class="back-link">← Back to House</a>
 		</div>
 		<h1>{data.room.name || 'Room'} <small>#{data.room.room_number}</small></h1>
+		<PlaceDetails
+			level="room"
+			kind={data.room.kind}
+			features={data.room.features}
+			description={data.room.description}
+		/>
 	</header>
 
 	{#if data.guestPhase === 'closed'}
@@ -350,6 +370,9 @@
 				<div class="bed-card occupied" data-bed-id={bed.id}>
 					<div class="icon" aria-hidden="true">🛏️</div>
 					<span class="label">{bed.label}</span>
+					{#if bedTypeEntry(bed.bedType) || bed.features.length > 0}
+						<span class="bed-detail">{spotLine(bed)}</span>
+					{/if}
 					<div class="status-box occupied">
 						<span class="status-text">Occupied</span>
 						<span class="guest-name">
@@ -368,6 +391,9 @@
 				>
 					<div class="icon" aria-hidden="true">🛏️</div>
 					<span class="label">{bed.label}</span>
+					{#if bedTypeEntry(bed.bedType) || bed.features.length > 0}
+						<span class="bed-detail">{spotLine(bed)}</span>
+					{/if}
 					<div class="status-box my-status">
 						<span class="status-text">Your Spot</span>
 						<span class="guest-name">{bed.burnerName}</span>
@@ -386,6 +412,9 @@
 				<div class="bed-card occupied" data-bed-id={bed.id}>
 					<div class="icon" aria-hidden="true">🔒</div>
 					<span class="label">{bed.label}</span>
+					{#if bedTypeEntry(bed.bedType) || bed.features.length > 0}
+						<span class="bed-detail">{spotLine(bed)}</span>
+					{/if}
 					<div class="status-box occupied">
 						<span class="status-text">Not available</span>
 						<span class="guest-name">Reserved by the crew</span>
@@ -400,6 +429,9 @@
 				>
 					<div class="icon" aria-hidden="true">🛏️</div>
 					<span class="label">{bed.label}</span>
+					{#if bedTypeEntry(bed.bedType) || bed.features.length > 0}
+						<span class="bed-detail">{spotLine(bed)}</span>
+					{/if}
 					<div class="status-box free">
 						<span
 							>{isLocked
@@ -796,6 +828,12 @@
 		gap: clamp(0.75rem, 3vw, 1.5rem);
 	}
 
+	.bed-detail {
+		font-size: 0.75rem;
+		color: #9fb3c8;
+		text-align: center;
+		overflow-wrap: anywhere;
+	}
 	.bed-card {
 		background: #111;
 		border: 1px solid #222;

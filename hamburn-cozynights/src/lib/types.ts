@@ -13,6 +13,11 @@ export type HouseData = HousesResponse & {
 	occupiedBeds: number;
 	freeBeds: number;
 	isBookable?: boolean;
+	/**
+	 * Free spots that fit the wishes the guest picked on the map; only set while
+	 * the map is filtered (src/routes/map/+page.server.ts).
+	 */
+	fittingFree?: number;
 };
 
 /**

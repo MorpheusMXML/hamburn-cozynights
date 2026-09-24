@@ -1,8 +1,8 @@
 {
 	"format": "cozynights-layout",
-	"version": "2.0",
+	"version": "2.1",
 	"name": "Brahmsee starter layout (worked example: edit the houses, rooms and spots to match your camp)",
-	"exported_at": "2026-09-17T12:00:00.000Z",
+	"exported_at": "2026-09-21T12:00:00.000Z",
 	"map": {
 		"image": "/lageplan-brahmsee-2026-v2.jpg",
 		"width": 1000,
@@ -10,100 +10,756 @@
 	},
 	"houses": [
 		{
-			"name": "Haus am See",
-			"x": 425,
-			"y": 150,
+			"name": "Brahmsee-Buden",
+			"x": 353,
+			"y": 572,
+			"kind": "hut_group",
+			"features": [
+				"ground_floor"
+			],
+			"description": "Wooden huts along the path. Showers and toilets are in the wash house nearby, not in the huts.",
 			"rooms": [
 				{
-					"name": "Lake Room",
+					"name": "Hut 1",
 					"room_number": 1,
+					"kind": "hut",
 					"beds": [
-						{ "label": "B1", "enabled": true, "is_locked": false },
-						{ "label": "B2", "enabled": true, "is_locked": false },
-						{ "label": "B3", "enabled": true, "is_locked": false },
-						{ "label": "B4", "enabled": true, "is_locked": false }
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
 					]
 				},
 				{
-					"name": "Attic",
+					"name": "Hut 2",
 					"room_number": 2,
+					"kind": "hut",
 					"beds": [
-						{ "label": "B1", "enabled": true, "is_locked": false },
-						{ "label": "B2", "enabled": true, "is_locked": false },
-						{ "label": "Sofa", "enabled": true, "is_locked": true }
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 3",
+					"room_number": 3,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 4",
+					"room_number": 4,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 5",
+					"room_number": 5,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 6",
+					"room_number": 6,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 7",
+					"room_number": 7,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 8",
+					"room_number": 8,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 9",
+					"room_number": 9,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				}
+			]
+		},
+		{
+			"name": "Brahmsee-Butzen",
+			"x": 162,
+			"y": 544,
+			"kind": "hut_group",
+			"features": [
+				"ground_floor"
+			],
+			"description": "Wooden huts in the meadow. Showers and toilets are in the wash house nearby, not in the huts.",
+			"rooms": [
+				{
+					"name": "Hut 1",
+					"room_number": 1,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 2",
+					"room_number": 2,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 3",
+					"room_number": 3,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 4",
+					"room_number": 4,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 5",
+					"room_number": 5,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 6",
+					"room_number": 6,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 7",
+					"room_number": 7,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 8",
+					"room_number": 8,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
 					]
 				}
 			]
 		},
 		{
 			"name": "Brahmsee-Villa",
-			"x": 590,
-			"y": 330,
+			"x": 593,
+			"y": 350,
+			"kind": "house",
+			"features": [
+				"toilets_inside",
+				"heated",
+				"quiet"
+			],
+			"description": "The big house at the quiet zone, rooms on two floors. Toilets and showers are in the building.",
 			"rooms": [
 				{
-					"name": "Ground Floor",
+					"name": "Ground Floor 1",
 					"room_number": 1,
+					"kind": "room",
+					"features": [
+						"ground_floor",
+						"power"
+					],
 					"beds": [
-						{ "label": "B1", "enabled": true, "is_locked": false },
-						{ "label": "B2", "enabled": true, "is_locked": false },
-						{ "label": "B3", "enabled": true, "is_locked": false },
-						{ "label": "B4", "enabled": true, "is_locked": false },
-						{ "label": "B5", "enabled": true, "is_locked": false },
-						{ "label": "B6", "enabled": true, "is_locked": false }
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
 					]
 				},
 				{
-					"name": "First Floor",
+					"name": "Ground Floor 2",
 					"room_number": 2,
+					"kind": "room",
+					"features": [
+						"ground_floor",
+						"power"
+					],
 					"beds": [
-						{ "label": "B1", "enabled": true, "is_locked": false },
-						{ "label": "B2", "enabled": true, "is_locked": false },
-						{ "label": "B3", "enabled": true, "is_locked": false },
-						{ "label": "B4", "enabled": false, "is_locked": false }
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Ground Floor 3",
+					"room_number": 3,
+					"kind": "room",
+					"features": [
+						"ground_floor",
+						"power"
+					],
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Ground Floor 4",
+					"room_number": 4,
+					"kind": "room",
+					"features": [
+						"ground_floor",
+						"power"
+					],
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "First Floor 1",
+					"room_number": 11,
+					"kind": "room",
+					"features": [
+						"power"
+					],
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "First Floor 2",
+					"room_number": 12,
+					"kind": "room",
+					"features": [
+						"power"
+					],
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "First Floor 3",
+					"room_number": 13,
+					"kind": "room",
+					"features": [
+						"power"
+					],
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "First Floor 4",
+					"room_number": 14,
+					"kind": "room",
+					"features": [
+						"power"
+					],
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "First Floor 5",
+					"room_number": 15,
+					"kind": "room",
+					"features": [
+						"power"
+					],
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "First Floor 6",
+					"room_number": 16,
+					"kind": "room",
+					"features": [
+						"power"
+					],
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				}
+			]
+		},
+		{
+			"name": "Haus am See",
+			"x": 415,
+			"y": 140,
+			"kind": "house",
+			"features": [
+				"toilets_inside",
+				"heated"
+			],
+			"description": "Stone house by the lake, a short walk from the sauna beach. Toilets and showers are in the building.",
+			"rooms": [
+				{
+					"name": "Lake Room",
+					"room_number": 1,
+					"kind": "room",
+					"features": [
+						"ground_floor",
+						"power"
+					],
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Sunset Room",
+					"room_number": 2,
+					"kind": "room",
+					"features": [
+						"ground_floor",
+						"power"
+					],
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Attic",
+					"room_number": 11,
+					"kind": "room",
+					"features": [
+						"power"
+					],
+					"description": "Up a narrow staircase.",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "single" },
+						{ "label": "Sofa", "enabled": true, "is_locked": false, "bed_type": "sofa" }
 					]
 				}
 			]
 		},
 		{
 			"name": "Wälderhaus",
-			"x": 445,
-			"y": 385,
+			"x": 450,
+			"y": 372,
+			"kind": "house",
+			"features": [
+				"toilets_inside",
+				"heated"
+			],
+			"description": "The hostel calls the ground floor of this house barrier-free: step-free way in and an accessible bathroom. The first floor is reached by stairs.",
 			"rooms": [
 				{
-					"name": "Bunk Room",
+					"name": "Ground Floor 1",
 					"room_number": 1,
+					"kind": "room",
+					"features": [
+						"wheelchair",
+						"ground_floor",
+						"power"
+					],
 					"beds": [
-						{ "label": "B1", "enabled": true, "is_locked": false },
-						{ "label": "B2", "enabled": true, "is_locked": false },
-						{ "label": "B3", "enabled": true, "is_locked": false },
-						{ "label": "B4", "enabled": true, "is_locked": false },
-						{ "label": "B5", "enabled": true, "is_locked": false },
-						{ "label": "B6", "enabled": true, "is_locked": false },
-						{ "label": "B7", "enabled": true, "is_locked": false },
-						{ "label": "B8", "enabled": true, "is_locked": false }
+						{ "label": "B1", "enabled": true, "is_locked": false, "is_special": true, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "is_special": true, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Ground Floor 2",
+					"room_number": 2,
+					"kind": "room",
+					"features": [
+						"wheelchair",
+						"ground_floor",
+						"power"
+					],
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Ground Floor 3",
+					"room_number": 3,
+					"kind": "room",
+					"features": [
+						"wheelchair",
+						"ground_floor",
+						"power"
+					],
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Ground Floor 4",
+					"room_number": 4,
+					"kind": "room",
+					"features": [
+						"wheelchair",
+						"ground_floor",
+						"power"
+					],
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "First Floor 1",
+					"room_number": 11,
+					"kind": "room",
+					"features": [
+						"power"
+					],
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "First Floor 2",
+					"room_number": 12,
+					"kind": "room",
+					"features": [
+						"power"
+					],
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
 					]
 				}
 			]
 		},
 		{
 			"name": "Waldhütten",
-			"x": 880,
-			"y": 375,
+			"x": 867,
+			"y": 383,
+			"kind": "hut_group",
+			"features": [
+				"ground_floor"
+			],
+			"description": "Seven wooden huts at the forest edge. Showers and toilets are in the wash house nearby, not in the huts.",
 			"rooms": [
 				{
 					"name": "Hut 1",
 					"room_number": 1,
+					"kind": "hut",
 					"beds": [
-						{ "label": "B1", "enabled": true, "is_locked": false },
-						{ "label": "B2", "enabled": true, "is_locked": false }
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
 					]
 				},
 				{
 					"name": "Hut 2",
 					"room_number": 2,
+					"kind": "hut",
 					"beds": [
-						{ "label": "B1", "enabled": true, "is_locked": false },
-						{ "label": "B2", "enabled": true, "is_locked": false }
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 3",
+					"room_number": 3,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 4",
+					"room_number": 4,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 5",
+					"room_number": 5,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 6",
+					"room_number": 6,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
+					]
+				},
+				{
+					"name": "Hut 7",
+					"room_number": 7,
+					"kind": "hut",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B6", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" },
+						{ "label": "B7", "enabled": true, "is_locked": false, "bed_type": "bunk_lower" },
+						{ "label": "B8", "enabled": true, "is_locked": false, "bed_type": "bunk_upper" }
 					]
 				}
 			]

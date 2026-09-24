@@ -1,7 +1,13 @@
 // src/routes/room/[id]/+page.server.ts
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import type { RoomsResponse, BedsResponse, OrdersResponse } from '$lib/pocketbase-types';
+import type {
+	RoomsResponse,
+	BedsResponse,
+	HousesResponse,
+	OrdersResponse
+} from '$lib/pocketbase-types';
+import { effectiveFeatures, readFeatures, roomKind } from '$lib/accommodation';
 import { decrypt } from '$lib/server/crypto';
 import {
 	BookingService,
@@ -60,7 +66,9 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 		const [settings, userBed, room, beds] = await Promise.all([
 			getBookingSettings(locals.pb),
 			bookingService.getBedForOrder(order.id),
-			locals.pb.collection('rooms').getOne<RoomsResponse>(params.id),
+			locals.pb.collection('rooms').getOne<RoomsResponse<{ house?: HousesResponse }>>(params.id, {
+				expand: 'house'
+			}),
 			locals.adminPb.collection('beds').getFullList<BedsResponse<{ order?: OrdersResponse }>>({
 				filter: locals.adminPb.filter('room = {:roomId}', { roomId: params.id }),
 				sort: 'label',
@@ -86,7 +94,11 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				label: bed.label,
 				occupied: !!bed.occupied,
 				bookable: !bed.occupied && isBedBookable(bed, { allowLocked: !!locals.admin }),
-				burnerName
+				burnerName,
+				// What kind of bed it is and what only this spot has: the room's and
+				// the house's features are shown once, above the list.
+				bedType: bed.bed_type ?? '',
+				features: readFeatures(bed.features, 'spot')
 			};
 		});
 
@@ -118,7 +130,21 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			spotFixed,
 			// The crew checked the guest in at arrival: only the crew changes the spot now.
 			checkedIn: !!userBed?.checked_in_at,
-			room: { id: room.id, name: room.name, room_number: room.room_number, house: room.house },
+			room: {
+				id: room.id,
+				name: room.name,
+				room_number: room.room_number,
+				house: room.house,
+				houseName: room.expand?.house?.name ?? '',
+				houseKind: room.expand?.house?.kind ?? '',
+				kind: roomKind(room.kind),
+				description: room.description ?? '',
+				// The house's features count for this room too.
+				features: effectiveFeatures({
+					house: room.expand?.house?.features,
+					room: room.features
+				})
+			},
 			beds: safeBeds,
 			userBedId: userBed?.id || null,
 			isBookingActive: settings.isBookingActive,

@@ -249,7 +249,7 @@ describe('applying chosen template changes', () => {
 
 		const template: LayoutTemplate = {
 			format: 'cozynights-layout',
-			version: '2.0',
+			version: '2.1',
 			name: `Review ${uid()}`,
 			exported_at: '',
 			map: { image: '/map.png', width: 1000, height: 700 },

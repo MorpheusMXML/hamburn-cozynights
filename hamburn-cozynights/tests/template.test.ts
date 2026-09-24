@@ -113,7 +113,7 @@ describe('parseTemplate: accepted files', () => {
 			]
 		});
 		expect(template.format).toBe('cozynights-layout');
-		expect(template.version).toBe('2.0');
+		expect(template.version).toBe('2.1');
 		expect(template.name).toBe('Burn Location Template');
 		expect(template.exported_at).toBe('2026-09-17T15:04:05.000Z');
 		// amount_beds is derived from the spots that are listed, never the other way round.
@@ -201,6 +201,95 @@ describe('parseTemplate: accepted files', () => {
 	});
 });
 
+describe('parseTemplate: the details of a place', () => {
+	const detailed = () =>
+		v2([
+			{
+				name: 'Waldhuetten',
+				x: 100,
+				y: 200,
+				kind: 'hut_group',
+				features: ['ground_floor'],
+				description: 'Wash house 50 m away.',
+				rooms: [
+					{
+						name: 'Hut 1',
+						room_number: 1,
+						kind: 'hut',
+						features: ['power'],
+						beds: [
+							{ label: 'B1', bed_type: 'bunk_lower', features: ['power'] },
+							{ label: 'B2', bed_type: 'bunk_upper' }
+						]
+					}
+				]
+			}
+		]);
+
+	it('keeps kind, features, description and bed type', () => {
+		const { template } = accepted(detailed());
+		const house = template.houses[0];
+		expect(house.kind).toBe('hut_group');
+		expect(house.features).toEqual(['ground_floor']);
+		expect(house.description).toBe('Wash house 50 m away.');
+		expect(house.rooms[0]).toMatchObject({ kind: 'hut', features: ['power'] });
+		expect(house.rooms[0].beds.map((spot) => spot.bed_type)).toEqual([
+			'bunk_lower',
+			'bunk_upper'
+		]);
+		expect(house.rooms[0].beds[0].features).toEqual(['power']);
+	});
+
+	it('round-trips them through the export text', () => {
+		const { template } = accepted(detailed());
+		const again = parseTemplate(stringifyTemplate(template));
+		expect(again.ok).toBe(true);
+		if (again.ok) expect(again.template).toEqual(template);
+	});
+
+	it('leaves out what nobody filled in, so a plain layout stays plain', () => {
+		const { template } = accepted(v2([goodHouse()]));
+		const house = template.houses[0];
+		expect(house).not.toHaveProperty('kind');
+		expect(house).not.toHaveProperty('features');
+		expect(house).not.toHaveProperty('description');
+		expect(house.rooms[0].beds[0]).not.toHaveProperty('bed_type');
+		expect(stringifyTemplate(template)).not.toContain('bed_type');
+	});
+
+	it('refuses details it does not know', () => {
+		const kind = v2([{ ...goodHouse(), kind: 'castle' }]);
+		expect(errorsOf(kind).some((line) => /kind must be one of "house"/.test(line))).toBe(true);
+
+		const feature = v2([{ ...goodHouse(), features: ['sauna'] }]);
+		expect(errorsOf(feature).some((line) => /is not a feature a house can have/.test(line))).toBe(
+			true
+		);
+
+		const roomFeature = v2([{ ...goodHouse(), features: ['own_bathroom'] }]);
+		expect(
+			errorsOf(roomFeature).some((line) => /is not a feature a house can have/.test(line))
+		).toBe(true);
+
+		const bedType = v2([
+			house('Haus 1', 1, 2, [room('Main', 1, [bed('B1', { bed_type: 'hammock' })])])
+		]);
+		expect(errorsOf(bedType).some((line) => /bed_type must be one of "single"/.test(line))).toBe(
+			true
+		);
+	});
+
+	it('refuses two features that say the opposite', () => {
+		const data = v2([{ ...goodHouse(), features: ['heated', 'unheated'] }]);
+		expect(errorsOf(data).some((line) => /say the opposite of each other/.test(line))).toBe(true);
+	});
+
+	it('refuses a description that is too long', () => {
+		const data = v2([{ ...goodHouse(), description: 'x'.repeat(501) }]);
+		expect(errorsOf(data).some((line) => /description is too long/.test(line))).toBe(true);
+	});
+});
+
 describe('parseTemplate: refused files', () => {
 	const refused: [string, string, RegExp][] = [
 		['an empty file', '', /The file is empty/],
@@ -229,7 +318,7 @@ describe('parseTemplate: refused files', () => {
 		[
 			'a missing version',
 			{ houses: [goodHouse()] },
-			/^version: is missing\. Add "version": "2\.0"/
+			/^version: is missing\. Add "version": "2\.1"/
 		],
 		['an unknown version', v2([goodHouse()], { version: '99.0' }), /^version: .* got "99.0"/],
 		[
@@ -569,11 +658,11 @@ describe('buildTemplate', () => {
 		]
 	};
 
-	it('builds a sorted version 2.0 template and leaves out orphans', () => {
+	it('builds a sorted version 2.1 template and leaves out orphans', () => {
 		const template = buildTemplate(records, new Date('2026-09-17T12:00:00.000Z'));
 		expect(template).toEqual({
 			format: 'cozynights-layout',
-			version: '2.0',
+			version: '2.1',
 			name: 'CozyNights camp layout',
 			exported_at: '2026-09-17T12:00:00.000Z',
 			map: { image: MAP_IMAGE, width: MAP_WIDTH, height: MAP_HEIGHT },

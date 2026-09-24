@@ -8,6 +8,29 @@ import { getBookingSettings } from '$lib/server/settings';
 import { findRequest } from '$lib/server/special-requests';
 import { passSummary } from '$lib/server/pass';
 import { openingCountdownAt } from '$lib/booking-phase';
+import { readFilters, spotFacts, spotMatchesFilters, type SpotFilter } from '$lib/accommodation';
+
+/** Free spots of a house that answer every wish the guest picked. */
+function countFitting(house: { features?: string[]; rooms: any[] }, wishes: SpotFilter[]): number {
+	return house.rooms.reduce(
+		(sum, room) =>
+			sum +
+			room.beds.filter(
+				(bed: { occupied?: boolean; bed_type?: string; features?: string[] }) =>
+					!bed.occupied &&
+					spotMatchesFilters(
+						wishes,
+						spotFacts({
+							bedType: bed.bed_type,
+							house: house.features,
+							room: room.features,
+							spot: bed.features
+						})
+					)
+			).length,
+		0
+	);
+}
 
 /**
  * The signed-in ticket — read once per request in hooks.server.ts — and
@@ -35,7 +58,7 @@ async function closedPanelPass(locals: App.Locals, order: OrdersResponse) {
 	}
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	// The ticket list or the booking round ended this session: say so on the
 	// start page instead of showing the map as if nobody had ever signed in.
 	if (locals.guestSignOut) throw redirect(303, signInUrl(locals));
@@ -55,6 +78,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 			houses = houses.filter((h) => h.isBookable);
 		}
 
+		// What the guest is looking for. Strict on purpose: a spot nobody described
+		// never matches, so a wish never promises something the crew never wrote down.
+		const wishes = readFilters(url.searchParams.get('w'));
+		if (wishes.length > 0) {
+			houses = houses.map((house) => ({ ...house, fittingFree: countFitting(house, wishes) }));
+		}
+
 		// Closed: the panel over the map shows the guest's spot as a small booking pass.
 		const { pass, noSpot } =
 			phase === 'closed' && ticket
@@ -63,6 +93,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 		return {
 			houses,
+			wishes,
 			isBookingActive,
 			phase,
 			// what the boxes and banners say; the phase itself still decides what is allowed
