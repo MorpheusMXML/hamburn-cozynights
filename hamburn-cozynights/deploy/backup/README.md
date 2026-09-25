@@ -143,6 +143,14 @@ wird nie überschrieben, solange sie existiert.
 
 ### 4. Erster Lauf und Alarmtest
 
+Vorher kurz nachsehen, was groß ist. Eigene Backup-, Cache- und Log-Ordner von
+Apps (ein CMS legt gern mehrere GB ZIPs ab) gehören in `EXCLUDES`: Ein zu großer
+erster Snapshot bleibt sonst ein Jahr lang als Monats-Snapshot liegen.
+
+```bash
+du -xh --max-depth=2 /opt /etc /var/lib/docker/volumes 2>/dev/null | sort -h | tail -25
+```
+
 ```bash
 server-backup --check
 ```
@@ -390,44 +398,43 @@ In Stufe 1 geht das nur, wenn es eine Kopie **außerhalb** des Servers gibt
 
 Alles aus Stufe 1 bleibt, nur das Ziel ändert sich. Alles als `root`.
 
-### 1. Storage Box bestellen
+### 1. Storage Box bestellen und Sub-Account anlegen
 
 Hetzner Console → **Storage Box** → **BX11** (1 TB, rund 4 € im Monat),
-Standort Deutschland. Den Benutzernamen (`u123456`) und das Passwort sofort in
-den Passwortmanager **und** auf das Notfallblatt. Protokolle müssen nicht
-freigeschaltet werden: SFTP auf Port 22 ist immer aktiv.
+Standort Deutschland, am besten in einem eigenen Projekt. Benutzername
+(`u123456`) und Passwort sofort in den Passwortmanager **und** auf das
+Notfallblatt.
 
-### 2. SSH-Key und Verbindung
+Dann unter **Sub-Accounts** einen Zugang nur für diesen Server anlegen: eigenes
+Verzeichnis, SSH an, Samba/WebDAV aus. Auch sein Passwort in den
+Passwortmanager; es wird unten genau zweimal gebraucht. Das Hauptkonto kommt
+nie auf den Server.
+
+### 2. SSH-Key und Verbindung (Port 23)
+
+Die Box spricht auf **Port 23** OpenSSH: ed25519-Host-Key, normales
+`authorized_keys`. Port 22 ist ein anderer SFTP-Server (`mod_sftp`), der nur
+einen RSA-Host-Key anbietet; der ed25519-Abgleich unten findet dort nichts.
 
 ```bash
 install -d -m 700 /root/.ssh
 ssh-keygen -t ed25519 -N "" -C "server-backup@$(hostname)" -f /root/.ssh/storagebox_ed25519
-BOX=u123456   # ← Benutzername der Storage Box
-cat >> /root/.ssh/config <<EOF
-
-Host storagebox
-    HostName $BOX.your-storagebox.de
-    User $BOX
-    IdentityFile /root/.ssh/storagebox_ed25519
-    IdentitiesOnly yes
-    ServerAliveInterval 60
-EOF
+BOX=u123456-sub1   # ← Name des Sub-Accounts, nicht dieser Platzhalter
+printf '\nHost storagebox\n    HostName %s.your-storagebox.de\n    Port 23\n    User %s\n    IdentityFile /root/.ssh/storagebox_ed25519\n    IdentitiesOnly yes\n    ServerAliveInterval 60\n' "$BOX" "$BOX" >> /root/.ssh/config
 chmod 600 /root/.ssh/config
-ssh-keyscan -t ed25519 $BOX.your-storagebox.de 2>/dev/null > /tmp/storagebox.hostkey
-ssh-keygen -lf /tmp/storagebox.hostkey
+ssh-keyscan -p 23 $BOX.your-storagebox.de > /tmp/storagebox.keys
+ssh-keygen -lf /tmp/storagebox.keys
 ```
 
-Der Fingerprint **muss** `SHA256:XqONwb1S0zuj5A1CDxpOSuD2hnAArV1A3wKY7Z3sdgM`
-sein (Hetzner-Doku „Storage Box → Overview → SSH host keys“). Nur dann weiter.
-Die beiden `sftp`/`scp`-Befehle fragen nach dem Storage-Box-Passwort. Port 22
-braucht den Key im RFC4716-Format:
+Die ED25519-Zeile **muss** `SHA256:XqONwb1S0zuj5A1CDxpOSuD2hnAArV1A3wKY7Z3sdgM`
+zeigen (Hetzner-Doku „Storage Box → SSH host keys“). Nur dann weiter. Kommt gar
+nichts, stimmt der Name nicht oder die Box ist noch nicht fertig. Die beiden
+`sftp`/`scp`-Befehle fragen nach dem Passwort des Sub-Accounts:
 
 ```bash
-cat /tmp/storagebox.hostkey >> /root/.ssh/known_hosts && rm /tmp/storagebox.hostkey
-ssh-keygen -e -f /root/.ssh/storagebox_ed25519.pub > /tmp/storagebox_rfc4716.pub
+grep ' ssh-ed25519 ' /tmp/storagebox.keys >> /root/.ssh/known_hosts && rm /tmp/storagebox.keys
 echo "mkdir .ssh" | sftp -o PubkeyAuthentication=no storagebox
-scp -o PubkeyAuthentication=no /tmp/storagebox_rfc4716.pub storagebox:.ssh/authorized_keys
-rm /tmp/storagebox_rfc4716.pub
+scp -o PubkeyAuthentication=no /root/.ssh/storagebox_ed25519.pub storagebox:.ssh/authorized_keys
 echo "ls -la" | sftp -b - storagebox
 ```
 
@@ -465,7 +472,7 @@ In `/etc/server-backup/backup.conf`:
 - in Block A die Zeile `RESTIC_REPOSITORY=…` auskommentieren,
 - in Block B die Zeile `RESTIC_REPOSITORY="sftp:storagebox:restic/$(hostname)"`
   aktivieren,
-- `/root/.ssh/config` in `BACKUP_PATHS` aufnehmen.
+- `/root/.ssh/config` in `BACKUP_PATHS` aufnehmen (entfällt, wenn `/root` schon drinsteht).
 
 ```bash
 server-backup --check

@@ -17,8 +17,9 @@ MIN_FREE_GB=5
 MIN_FREE_PERCENT=15
 
 # --- B) Hetzner Storage Box (later; README „Stufe 2“) ------------------------
-# "storagebox" is the host alias from /root/.ssh/config; the path is relative
-# to the home directory of the Storage Box. To switch: comment out
+# "storagebox" is the host alias from /root/.ssh/config (port 23, see the
+# README); the path is relative to the home directory of the Storage Box
+# sub-account. To switch: comment out
 # RESTIC_REPOSITORY in A, activate this line and add /root/.ssh/config to
 # BACKUP_PATHS below. Nothing else changes.
 # RESTIC_REPOSITORY="sftp:storagebox:restic/$(hostname)"
