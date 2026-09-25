@@ -102,8 +102,10 @@
 
 /*
  * The breathing ring. `inset: 0` with `border-radius: inherit` follows any
- * card shape, and the element keeps a dimmed border of its own so the state is
- * readable while the animation is paused, off, or still starting.
+ * card shape. The ring alone carries the colour: a card's own border rule
+ * outranks the border-color below, which only colours an element that sets
+ * none of its own. It never fades out: it breathes down to 40 %, and with
+ * reduced motion it stands still at full strength.
  */
 .state-ring {
 	position: relative;
