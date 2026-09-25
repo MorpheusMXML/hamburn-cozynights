@@ -45,7 +45,7 @@ jobs:
           # Exact name, not expired, and only from runs whose head repository IS
           # this repository: a pull request from a fork runs its own (editable)
           # copy of ci.yml and could upload an artifact of any name.
-          runs="$(gh api "repos/$repo/actions/artifacts?name=verified-tree-$tree&per_page=100" --jq "
+          runs="$(gh api --paginate "repos/$repo/actions/artifacts?name=verified-tree-$tree&per_page=100" --jq "
             .artifacts[] | select(.expired == false)
             | select(.workflow_run.repository_id == $GITHUB_REPOSITORY_ID
                      and .workflow_run.head_repository_id == $GITHUB_REPOSITORY_ID)
@@ -53,10 +53,11 @@ jobs:
 
           # Prints nothing if the run can be trusted, otherwise why not.
           check() {
-            local run="$1" path event status conclusion head_repo head_sha relation
-            IFS=$'\t' read -r path event status conclusion head_repo head_sha < <(
-              gh api "repos/$repo/actions/runs/$run" --jq \
-                '[.path, .event, .status, .conclusion, .head_repository.full_name, .head_sha] | map(. // "none") | @tsv')
+            local run="$1" info path event status conclusion head_repo head_sha relation
+            info="$(gh api "repos/$repo/actions/runs/$run" --jq \
+              '[.path, .event, .status, .conclusion, .head_repository.full_name, .head_sha] | map(. // "none") | @tsv')" ||
+              { echo "API error reading the run"; return; }
+            IFS=$'\t' read -r path event status conclusion head_repo head_sha <<<"$info"
             [ "$path" = .github/workflows/ci.yml ] || { echo "workflow is $path"; return; }
             case "$event" in pull_request | push) ;; *) echo "event is $event"; return ;; esac
             [ "$head_repo" = "$repo" ] || { echo "head repository is $head_repo"; return; }
@@ -64,7 +65,8 @@ jobs:
             # Every job of that run is green, the secrets scan included.
             [ "$conclusion" = success ] || { echo "run concluded $conclusion"; return; }
             # The commit that run was about is part of what gets deployed.
-            relation="$(gh api "repos/$repo/compare/$head_sha...$GITHUB_SHA" --jq .status)"
+            relation="$(gh api "repos/$repo/compare/$head_sha...$GITHUB_SHA" --jq .status)" ||
+              { echo "API error comparing ${head_sha::7}...${GITHUB_SHA::7}"; return; }
             case "$relation" in identical | ahead) ;; *) echo "${GITHUB_SHA::7} vs tested ${head_sha::7}: $relation"; return ;; esac
           }
 

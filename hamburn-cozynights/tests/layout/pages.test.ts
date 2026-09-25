@@ -62,6 +62,8 @@ interface PageCase {
 	 * before every case, so no case depends on what an earlier one did.
 	 */
 	checkedIn?: boolean;
+	/** What a checked-in case must show, so it proves its state (default: the guest's note). */
+	checkedInText?: RegExp;
 }
 
 /** The three phases, plus every armed timer (countdown box, countdown bar). */
@@ -547,7 +549,8 @@ const PAGES: PageCase[] = [
 		name: 'booking pass (crew view)',
 		path: (c) => `/pass/${c.passCode}`,
 		as: 'admin',
-		checkedIn: true
+		checkedIn: true,
+		checkedInText: /CHECKED IN/
 	}
 ];
 
@@ -587,8 +590,9 @@ async function setCheckedIn(on: boolean) {
  * Paint-only decoration, switched off while measuring. None of it moves text,
  * but WebKit on Linux paints in software and redraws it at every width, which
  * made the WebKit run several times slower than Chromium:
- *  - the two ambient layers behind every guest page (fixed, pointer-events: none,
- *    no text of their own),
+ *  - the two decorative full-screen layers: the ambient background and the
+ *    cursor-trail canvas on top (fixed, pointer-events: none, no text shown
+ *    under reduced motion),
  *  - shadows (they never take up room),
  *  - CSS transitions, so the sweep measures where a box ends up, not a random
  *    point on its way there.
@@ -689,9 +693,7 @@ for (const pageCase of PAGES) {
 			if (pageCase.checkedIn) {
 				// The case shows what it says: the check-in reached the page.
 				await expect(
-					page
-						.getByText(pageCase.as === 'admin' ? /CHECKED IN/ : /The crew has checked you in/)
-						.first()
+					page.getByText(pageCase.checkedInText ?? /The crew has checked you in/).first()
 				).toBeVisible();
 			}
 			await pageCase.open?.(page);

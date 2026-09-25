@@ -25,7 +25,7 @@ Rules that follow from it:
 - **`integration/staging` takes pull requests only** (since 2026-09-24, same as `main`). Zero approvals are required and code-owner review is off, so you merge your own deploy PR — but the branch cannot be pushed to directly, and the deploy run must be dispatched **after** the merge, on the merge commit.
 - **Staging runs `integration/staging` and nothing else.** Deploying a feature branch alone drops every other feature from the server (it happened on 2026-09-18: notifications and booking passes vanished for an evening). New commits on a feature branch are merged into `integration/staging` and that branch is deployed.
 - **Every commit on `integration/staging` and `main` is GPG-signed.** The `main` ruleset refuses unsigned commits, so unsigned local checkpoints are re-signed before they are merged: `git rebase --force-rebase --gpg-sign <base>` on the feature branch, then the merge.
-- **Verify before you push** an integration state: `npm run check`, `npm test`, and `npm run verify` (integration + smoke on a throwaway Docker stack, see [Testing & release checks](./testing)), plus `npm run build:app` in `docs/`. On the server, the `verify` job runs the same checks again before anyone can approve the deploy.
+- **Verify before you push** an integration state: `npm run check`, `npm test`, and `npm run verify` (integration, smoke and layout tests on a throwaway Docker stack, see [Testing & release checks](./testing)), plus `npm run build:app` in `docs/`. Before anyone can approve a deploy, exactly the files being deployed have passed the same checks: normally in the pull request's CI run (the deploy's gate then only repeats the secrets scan), otherwise in the deploy's own `verify` job.
 - **Conflicts are resolved by hand and explained in the merge commit** when they change behaviour (which side won, what was combined). A trial merge on a throwaway branch is fine for finding them early; the trial branch is never merged.
 - **Feature branches stay until their PR or release is merged**, then they are deleted on GitHub. Archive branches from the history rewrite of 2026-09-17 are kept but never merged.
 
@@ -41,7 +41,7 @@ Rules that follow from it:
 
 The record of what each deployed state brought is the **GitHub release** of its tag (`v0.<deploy>.<fix>`, see [Versions and releases](./deployment#versions-and-releases)) and the merge commits on `integration/staging` themselves: every feature arrived as a signed merge commit whose message names the feature, the migrations it brought and the conflicts it resolved. The first integrated state (2026-09-19) merged app readiness, special-needs requests, the import review, the booking window, the 2026 map and the editable message texts on top of the readiness base `22455bb`; everything since has followed the same path.
 
-When a feature branch and the integration state touch the same files, resolve the conflict in the merge commit and say so in its message; the `verify` job runs against exactly the merged commit before anyone can approve a deploy.
+When a feature branch and the integration state touch the same files, resolve the conflict in the merge commit and say so in its message; the pull request's CI tests exactly that merged state, and the deploy tests everything again if the files it deploys differ from what CI tested.
 
 ### Release to main
 

@@ -8,8 +8,10 @@ bleiben erhalten, vor jedem Deploy wird automatisch ein Backup gezogen.
 
 ```text
 GitHub Actions „Deploy staging“ → Run workflow (Branch wählen)
-  1. verify: Typprüfung, Unit-, Integrations- und Smoke-Tests (npm run verify,
-     dieselbe Prüfung wie bei jedem Pull Request) – scheitert hier, nicht auf dem Server
+  0. gate: Hat genau dieser Stand (derselbe Git-Tree) schon eine grüne CI-Runde
+     dieses Repos, normalerweise die des Pull Requests? ja → 1. nur Secrets-Scan
+  1. verify: Typprüfung, Unit-, Integrations-, Smoke- und Layout-Tests (dieselbe
+     Prüfung wie bei jedem Pull Request) – scheitert hier, nicht auf dem Server
   2. deploy: SSH als `deploy` → Forced Command /usr/local/bin/deploy-cozynights-staging
      a) Commit-SHA auschecken (nur die SHA wird aus dem SSH-Befehl gelesen)
      b) App-Image bauen — alte Container laufen weiter

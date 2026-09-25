@@ -48,7 +48,7 @@ In `tests/smoke/`:
 - **Full flow (throwaway stack only):** guest login sets an httpOnly cookie, map and room pages render, booking is refused while closed, a booked bed can't be taken by the next guest, other guests never see ticket codes or customer names, the booking pass serves its QR images and a signed wallet pass while `/telegram` asks for the ticket code and comes back afterwards, admin area opens for approved admins only, a removed admin is out on the next request, a special-needs request sent while booking is closed gets a spot booked by an admin that the guest can't release, "clear all bookings" is superuser-only and keeps the tickets, admins find and change tickets while the ticket list import and applying a layout file are superuser-only.
 
 > [!NOTE] Why the log ends with `7 passed | 8 skipped` against a real site
-> The full-flow tests write data and need superuser access to the database, so they are skipped there on purpose. They have already run against the Docker image of the same commit in the `verify` job.
+> The full-flow tests write data and need superuser access to the database, so they are skipped there on purpose. They have already run against the Docker image of the same files in CI: in the pull request's `Smoke + layout` parts, or in the deploy's `verify` job when no green run for those files existed.
 
 ### What no automatic test covers
 

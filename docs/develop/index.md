@@ -91,7 +91,7 @@ Cookies belong to a host name, not to a port. Two CozyNights instances on `local
 | `npm run test:ui` | Vitest with its browser UI |
 | `npm run test:integration` | Integration tests against a real, empty PocketBase in Docker |
 | `npm run test:smoke` | Smoke tests against the staging Docker image, driven over HTTP |
-| `npm run verify` | Type check, unit, integration and smoke tests — everything CI runs |
+| `npm run verify` | Type check, unit, integration, smoke and layout tests — everything CI runs |
 | `scripts/release.sh 0.18.1 "…"` | Stamps the version into `package.json`, signed commit + signed tag `v0.18.1`; pushes nothing. See [Versions and releases](./deployment#versions-and-releases) |
 | `npm run smoke:remote` | The read-only smoke tests against a deployed site (`SMOKE_BASE_URL`) |
 | `npm run test:e2e` | Playwright end-to-end tests; starts the dev server if needed |
@@ -124,7 +124,7 @@ npm run test:e2e
 
 :::
 
-- **`npm run verify`** runs the type check and the unit, integration and smoke tests — the same checks GitHub runs on every pull request. It needs Docker and nothing else, and it never touches your dev database.
+- **`npm run verify`** runs the type check and the unit, integration, smoke and layout tests — the same checks GitHub runs on every pull request. It needs Docker and, for the layout test, the Playwright browsers once (`npx playwright install chromium webkit`), and it never touches your dev database.
 - **Vitest** (`tests/*.test.ts`) covers booking rules, the admin sign-in checks, encryption and hashing, UI helpers, the [start page title](./effigy-title) and the legal page settings. It runs without a database.
 - **Integration tests** (`tests/integration/`) start a real, empty PocketBase in Docker, apply the migrations and hooks, and check the schema, API rules, admin roles and the booking service.
 - **Smoke tests** (`tests/smoke/`) build the same Docker image staging builds and drive it over HTTP. `npm run smoke:remote` runs their read-only part against a deployed site.

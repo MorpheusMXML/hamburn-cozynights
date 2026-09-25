@@ -53,8 +53,9 @@ git switch -c deploy/23-bunk-cards
 scripts/release.sh 0.23.0 "Deploy Nr. 23: …"   # in hamburn-cozynights/, stamps the version
 git push origin deploy/23-bunk-cards v0.23.0
 gh pr create --base integration/staging --head deploy/23-bunk-cards --fill
-# one chain: the merge waits for the green checks, the dispatch for the merge
-gh pr checks deploy/23-bunk-cards --watch --fail-fast \
+# one chain: the merge waits for the pull request's CI run, the dispatch for the merge
+until run=$(gh run list --workflow ci.yml --commit "$(git rev-parse HEAD)" --json databaseId --jq '.[0].databaseId // empty') && [ -n "$run" ]; do sleep 5; done
+gh run watch "$run" --exit-status \
   && gh pr merge deploy/23-bunk-cards --merge \
   && gh workflow run deploy-staging.yml --ref integration/staging
 gh run watch
@@ -62,7 +63,7 @@ gh run watch
 
 :::
 
-**Dispatch after the merge, never before.** The workflow builds the tip of `integration/staging` at the moment it starts; started too early it deploys the state without your merge, and the run has to be cancelled. `gh pr merge` refuses while the required `Verify` check is still running, so run the three commands as one `&&` chain, as above, never one after the other.
+**Dispatch after the merge, never before.** The workflow builds the tip of `integration/staging` at the moment it starts; started too early it deploys the state without your merge, and the run has to be cancelled. `gh pr merge` refuses while the required `Verify` check is still running, so wait for the whole CI run and chain the rest with `&&`, as above, never one command after the other. (Waiting for `gh pr checks --watch` is not enough: the collecting `Verify` job only shows up once the other parts are done.)
 
 ```mermaid
 flowchart TD
