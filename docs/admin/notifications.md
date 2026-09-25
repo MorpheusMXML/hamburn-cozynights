@@ -131,7 +131,7 @@ Step by step:
 
 1. **Create the bot** with @BotFather in Telegram, one per environment (for example *CozyNights Staging*).
 2. **Create the crew group** as a private group, add the crew and the bot. The bot needs no admin rights.
-3. **Find the group's id.** Send `/start@<your bot>` in the group, then read the chat id from the Bot API's `getUpdates`. Group ids are negative; bigger groups start with `-100`. Do it before the server uses the bot: from then on the server fetches the updates itself. If the group later becomes a supergroup (for example when you turn on topics), its id changes; for a topic, also set `TELEGRAM_THREAD_ID`.
+3. **Find the group's id.** Send `/start@<your bot>` in the group, then read the chat id from the Bot API's `getUpdates`. Group ids are negative; bigger groups start with `-100`. Do it before the server uses the bot: from then on the server fetches the updates itself. If the group later becomes a supergroup, its id changes, see [below](#when-the-crew-group-becomes-a-supergroup); for a topic, also set `TELEGRAM_THREAD_ID`.
 4. **Close the bot for other groups:** @BotFather → *Bot Settings* → *Allow Groups?* → *Turn groups off*.
 5. **Fill in `.env`:** bot token and group id, the mail settings, and `LEGAL_MAIL_PROVIDER` so the privacy policy names the mail service (see [Legal pages](./legal)). Then deploy.
 6. **Check** it on the server, as below.
@@ -144,6 +144,31 @@ Then check on the server:
 ./scripts/cozy-admin.sh notify status                            # what is on, queued, the latest events
 ./scripts/cozy-admin.sh notify test --email you@mauersegler.art  # test message to the group + a test e-mail
 ```
+
+`notify status` also checks that the bot can still post in the group, without posting: the group shows *typing…* for a moment.
+
+### When the crew group becomes a supergroup
+
+A new Telegram group starts as a basic group. Some settings turn it into a **supergroup**, for example **chat history for new members** (*Visible*), **topics**, a public link, or more than 200 members. The group looks the same afterwards, but it has a **new id** (starting with `-100`), and the old one no longer works. The server keeps writing to the old id from `.env` until you change it: every crew message fails with *group chat was upgraded to a supergroup chat*, and after five attempts it is marked *failed*. The server never changes `TELEGRAM_CHAT_ID` by itself.
+
+The error names the new id. You find it in the audit log (`alert_error` of the failed `admin_events`), in the PocketBase log (`[cozy-notify] crew alert failed`), and in `notify test` and `notify status`:
+
+```text
+crew chat: FAILED — 400 Bad Request: group chat was upgraded to a supergroup chat — the group is now a supergroup, set TELEGRAM_CHAT_ID=-1001234567890
+  the crew group became a supergroup (e.g. "chat history for new members" or topics turned on) and has a new id:
+  set TELEGRAM_CHAT_ID=-1001234567890 in .env, recreate the PocketBase container, run notify test again
+  the bot must be a member of the new group: to add it again, @BotFather "Allow Groups" must be on (turn it off afterwards)
+```
+
+<div class="steps">
+
+1. **Check that the bot is in the group.** Open the members list of the group. If the bot is missing, turn groups back on for it in @BotFather (*Bot Settings* → *Allow Groups?* → *Turn groups on*), add it to the group, and turn groups off again. While groups are off, nobody can add the bot, not even to your own group.
+2. **Set the new id** in the server's `.env`: `TELEGRAM_CHAT_ID=-100…`, the id from the message. If you turned on topics, also set `TELEGRAM_THREAD_ID`, or messages go to the *General* topic.
+3. **Recreate PocketBase**, so it reads the new value (the command is in `deploy/README.md`, *Benachrichtigungen*; deploying again does it too), then run `notify test`. It must say *crew chat: sent*.
+
+</div>
+
+Crew messages still waiting are sent once the id is right. Those already marked *failed* are not sent again; they stay in the audit log, and `notify status` counts them.
 
 ## After the event
 
@@ -158,7 +183,8 @@ Deletes every guest address, every Telegram link and every [special-needs reques
 | What you see | Why | What to do |
 | --- | --- | --- |
 | `notify test`: *crew chat: FAILED — 401* | The bot token is wrong. | Check the token in `.env`. |
-| `notify test`: *403* or *chat not found* | The bot isn't in the group, or the group id is wrong. | Add the bot to the group; group ids are negative numbers. |
+| `notify test`: *403* or *chat not found* | The bot isn't in the group, or the group id is wrong. | Add the bot to the group (@BotFather *Allow Groups* must be on for that; turn it off afterwards); group ids are negative numbers. |
+| `notify test` or the audit log: *group chat was upgraded to a supergroup chat* | The crew group became a supergroup, for example after turning on chat history for new members, and has a new id. | Set `TELEGRAM_CHAT_ID` to the id in the message, make sure the bot is in the group, recreate PocketBase. See [When the crew group becomes a supergroup](#when-the-crew-group-becomes-a-supergroup). |
 | `notify status`: *WARNING: this bot has a webhook* | Something else registered a webhook for the bot, so the server can't read its messages. | Remove the webhook, or give this environment its own bot. |
 | Guests see no <kbd>Get updates on Telegram</kbd> | No bot is set up, or `TELEGRAM_GUEST_UPDATES=off`. The button also only shows once the guest holds a spot (room page) or has sent a special-needs request. | `notify status`. |
 | A guest sees *⌛ This link has expired or was already used* in Telegram | The link works once and for 30 minutes. | Press <kbd>Get updates on Telegram</kbd> on the room page again. |

@@ -255,11 +255,24 @@ function findOne(app, collection, filter, params) {
 
 /**
  * Calls the Bot API. Never throws; `description` is safe to log.
- * @returns {{ok: boolean, status: number, result: any, description: string, retryAfter: number}}
+ *
+ * A basic group that became a supergroup (turning on "chat history for new
+ * members" or topics does that) gets a new id, and every call to the old one
+ * fails with `migrate_to_chat_id`. That id is kept as `migrateTo` and named in
+ * `description`, so the log and admin_events.alert_error say what to set.
+ * TELEGRAM_CHAT_ID itself is never rewritten here: it comes from .env.
+ * @returns {{ok: boolean, status: number, result: any, description: string, retryAfter: number, migrateTo: string}}
  */
 function telegramCall(cfg, method, payload, timeoutSeconds) {
 	if (!cfg.telegram.token) {
-		return { ok: false, status: 0, result: null, description: 'no bot token', retryAfter: 0 };
+		return {
+			ok: false,
+			status: 0,
+			result: null,
+			description: 'no bot token',
+			retryAfter: 0,
+			migrateTo: ''
+		};
 	}
 	try {
 		const res = $http.send({
@@ -270,15 +283,33 @@ function telegramCall(cfg, method, payload, timeoutSeconds) {
 			timeout: timeoutSeconds || 10
 		});
 		const json = res.json || {};
+		const params = json.parameters || {};
+		const migrateTo = params.migrate_to_chat_id ? String(params.migrate_to_chat_id) : '';
+		let description = safeError(json.description || 'HTTP ' + res.statusCode);
+		if (migrateTo) {
+			// a chat id, not a secret; only the crew chat's comes from .env
+			description +=
+				payload && String(payload.chat_id) === cfg.telegram.chatId
+					? ' — the group is now a supergroup, set TELEGRAM_CHAT_ID=' + migrateTo
+					: ' — the group is now a supergroup with the id ' + migrateTo;
+		}
 		return {
 			ok: res.statusCode === 200 && json.ok === true,
 			status: res.statusCode,
 			result: json.result,
-			description: safeError(json.description || 'HTTP ' + res.statusCode),
-			retryAfter: (json.parameters && json.parameters.retry_after) || 0
+			description: description,
+			retryAfter: params.retry_after || 0,
+			migrateTo: migrateTo
 		};
 	} catch (err) {
-		return { ok: false, status: 0, result: null, description: safeError(err), retryAfter: 0 };
+		return {
+			ok: false,
+			status: 0,
+			result: null,
+			description: safeError(err),
+			retryAfter: 0,
+			migrateTo: ''
+		};
 	}
 }
 
@@ -335,18 +366,50 @@ function legacyWebhookSend(url, text) {
 	}
 }
 
-/** Posts one message to the crew chat. Never throws. */
+/** The Bot API target of the crew chat: the group, and its topic if set. */
+function crewTarget(cfg) {
+	const target = { chat_id: cfg.telegram.chatId };
+	const thread = parseInt(cfg.telegram.threadId, 10);
+	if (thread > 0) target.message_thread_id = thread;
+	return target;
+}
+
+/**
+ * Posts one message to the crew chat. Never throws. `migrateTo`: the group's
+ * new id when it became a supergroup (see telegramCall), else ''.
+ */
 function crewSend(cfg, text) {
 	const full = prefixed(cfg, text);
 	if (cfg.telegram.token && cfg.telegram.chatId) {
-		const payload = { chat_id: cfg.telegram.chatId, text: full, disable_web_page_preview: true };
-		const thread = parseInt(cfg.telegram.threadId, 10);
-		if (thread > 0) payload.message_thread_id = thread;
+		const payload = crewTarget(cfg);
+		payload.text = full;
+		payload.disable_web_page_preview = true;
 		const r = telegramCall(cfg, 'sendMessage', payload, 10);
-		return r.ok ? { ok: true, error: '' } : { ok: false, error: r.status + ' ' + r.description };
+		return r.ok
+			? { ok: true, error: '', migrateTo: '' }
+			: { ok: false, error: r.status + ' ' + r.description, migrateTo: r.migrateTo };
 	}
 	if (cfg.legacyWebhook) return legacyWebhookSend(cfg.legacyWebhook, full);
 	return { ok: false, error: 'no crew chat configured' };
+}
+
+/**
+ * Whether the bot can post in the crew chat, without posting (notify status).
+ * sendChatAction needs the same rights as sendMessage, so it fails the same
+ * way the alerts would: upgraded group, bot not a member, wrong topic. The
+ * group sees "typing…" for a few seconds.
+ * @returns {{ok: boolean, error: string, migrateTo: string}}
+ */
+function crewCheck(cfg) {
+	if (!cfg.telegram.token || !cfg.telegram.chatId) {
+		return { ok: false, error: 'no crew chat configured', migrateTo: '' };
+	}
+	const payload = crewTarget(cfg);
+	payload.action = 'typing';
+	const r = telegramCall(cfg, 'sendChatAction', payload, 10);
+	return r.ok
+		? { ok: true, error: '', migrateTo: '' }
+		: { ok: false, error: r.status + ' ' + r.description, migrateTo: r.migrateTo };
 }
 
 /**
@@ -2288,6 +2351,7 @@ module.exports = {
 	telegramCall: telegramCall,
 	botUsername: botUsername,
 	crewSend: crewSend,
+	crewCheck: crewCheck,
 	logEvent: logEvent,
 	eventText: eventText,
 	currentSpot: currentSpot,

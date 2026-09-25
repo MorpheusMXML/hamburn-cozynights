@@ -3,15 +3,16 @@
 // Plain Node, no dependencies. Never used outside tests.
 //
 // - Telegram Bot API:  POST /bot<token>/<method>  (getMe, sendMessage,
-//   sendPhoto, setMyCommands, getUpdates incl. long polling, getWebhookInfo)
+//   sendPhoto, setMyCommands, sendChatAction, getUpdates incl. long polling, getWebhookInfo)
 // - Google Wallet API: POST /oauth2/token, /walletobjects/v1/eventTicket{Class,Object}
 //   (insert, replace, read) — the app's wallet passes without Google
 // - Google OAuth2:     POST /oauth/token, GET /oauth/userinfo — the admins'
 //   google provider is pointed here by the tests, so a real PocketBase
 //   OAuth2 sign-in (hooks and guard included) runs without Google.
 // - Test control:      /_mock/... (read what was sent and how often the Bot
-//   API was called, inject bot updates, block a chat, take Telegram down,
-//   slow it down or revoke the token, register OAuth users, reset)
+//   API was called, inject bot updates, block a chat, upgrade a group to a
+//   supergroup, take Telegram down, slow it down or revoke the token,
+//   register OAuth users, reset)
 import http from 'node:http';
 
 const PORT = Number(process.env.PORT || 8081);
@@ -27,6 +28,7 @@ function reset() {
 		commands: null, // the last setMyCommands payload
 		wallet: new Map(), // Google Wallet classes and objects by "kind/id"
 		walletCalls: [], // { method, path } of every Wallet API call
+		migrated: new Map(), // group id → the id of the supergroup it became
 		down: false,
 		slowMs: 0, // sendMessage takes this long (a slow Telegram)
 		unauthorized: false, // every Bot API call answers 401 (a revoked token)
@@ -58,6 +60,28 @@ async function readBody(req) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** What Telegram answers for a chat the bot can't write to: [status, body], or null. */
+function chatRefusal(chat) {
+	if (state.blocked.has(chat)) {
+		return [
+			403,
+			{ ok: false, error_code: 403, description: 'Forbidden: bot was blocked by the user' }
+		];
+	}
+	if (state.migrated.has(chat)) {
+		return [
+			400,
+			{
+				ok: false,
+				error_code: 400,
+				description: 'Bad Request: group chat was upgraded to a supergroup chat',
+				parameters: { migrate_to_chat_id: Number(state.migrated.get(chat)) }
+			}
+		];
+	}
+	return null;
+}
+
 async function telegram(method, body, res) {
 	if (state.down) return json(res, 502, { ok: false, error_code: 502, description: 'Bad Gateway' });
 	switch (method) {
@@ -72,13 +96,10 @@ async function telegram(method, body, res) {
 		case 'sendPhoto': {
 			if (state.slowMs) await sleep(state.slowMs);
 			const chat = String(body.chat_id);
-			if (state.blocked.has(chat)) {
-				return json(res, 403, {
-					ok: false,
-					error_code: 403,
-					description: 'Forbidden: bot was blocked by the user'
-				});
-			}
+			// Blocked by the user, or a group that became a supergroup: the same
+			// answers the real API gives (chatRefusal).
+			const refused = chatRefusal(chat);
+			if (refused) return json(res, ...refused);
 			// A photo's caption is its text, so a test can read both the same way.
 			const text = method === 'sendPhoto' ? String(body.caption || '') : String(body.text || '');
 			state.sent.push({ ...body, method, text, chat_id: chat, at: Date.now() });
@@ -87,6 +108,10 @@ async function telegram(method, body, res) {
 		case 'setMyCommands':
 			state.commands = body;
 			return json(res, 200, { ok: true, result: true });
+		case 'sendChatAction': {
+			const refused = chatRefusal(String(body.chat_id));
+			return refused ? json(res, ...refused) : json(res, 200, { ok: true, result: true });
+		}
 		case 'getUpdates': {
 			const offset = Number(body.offset || 0);
 			// Telegram forgets everything below the offset (= confirmed).
@@ -191,6 +216,11 @@ const server = http.createServer(async (req, res) => {
 			return json(res, 200, state.updates);
 		case 'POST /_mock/telegram/block':
 			state.blocked.add(String(body.chat_id));
+			return json(res, 200, { ok: true });
+		case 'POST /_mock/telegram/migrate':
+			// { chat_id, to }: the group became supergroup `to`; to '' undoes it
+			if (body.to) state.migrated.set(String(body.chat_id), String(body.to));
+			else state.migrated.delete(String(body.chat_id));
 			return json(res, 200, { ok: true });
 		case 'POST /_mock/telegram/down':
 			state.down = !!body.down;

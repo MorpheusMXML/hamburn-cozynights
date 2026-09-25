@@ -631,6 +631,46 @@ describe('crew alerts', () => {
 		expect((await telegramTo(CREW_CHAT)).some((m) => m.text.includes(pending.email))).toBe(true);
 	});
 
+	it('name the new id when the crew group became a supergroup', async () => {
+		// Turning on "chat history for new members" upgrades a basic group, and
+		// Telegram gives it a new id. TELEGRAM_CHAT_ID stays as it is in .env.
+		const supergroup = '-1009876543210';
+		const hint = `set TELEGRAM_CHAT_ID=${supergroup}`;
+		await mock('/_mock/telegram/migrate', { chat_id: CREW_CHAT, to: supergroup });
+		let pending;
+		try {
+			pending = await createAdmin(su, 'pending');
+			await flush();
+			const [event] = await adminEvents('access_request', pending.email);
+			expect(event.alert_status).toBe('pending');
+			expect(event.alert_error).toBe(
+				`400 Bad Request: group chat was upgraded to a supergroup chat — the group is now a supergroup, ${hint}`
+			);
+
+			const status = cozyAdmin(['notify', 'status']);
+			expect(status).toContain('CREW CHAT          Telegram chat ' + CREW_CHAT);
+			expect(status).toContain(`WARNING: the bot cannot post there: 400 Bad Request`);
+			expect(status).toContain(`${hint} in .env`);
+
+			let output = '';
+			try {
+				cozyAdmin(['notify', 'test']);
+			} catch (err) {
+				output = String((err as Error).message);
+			}
+			expect(output).toContain(`crew chat: FAILED — 400 Bad Request`);
+			expect(output).toContain(`${hint} in .env, recreate the PocketBase container`);
+			expect(output).toContain('@BotFather "Allow Groups" must be on');
+		} finally {
+			await mock('/_mock/telegram/migrate', { chat_id: CREW_CHAT, to: '' });
+		}
+		expect(cozyAdmin(['notify', 'status'])).not.toContain('WARNING: the bot cannot post there');
+		await flush();
+		const [event] = await adminEvents('access_request', pending.email);
+		expect(event.alert_status).toBe('sent');
+		expect(event.alert_error).toBe('');
+	});
+
 	it('record every Google sign-in of an admin (and when it happened)', async () => {
 		// Point the admins' Google provider at the stand-in (the PocketBase
 		// container reaches it as http://mocks:8081).
