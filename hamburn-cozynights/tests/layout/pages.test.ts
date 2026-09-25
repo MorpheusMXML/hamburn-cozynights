@@ -57,6 +57,11 @@ interface PageCase {
 	phases?: Phase[];
 	/** Optional step after loading, e.g. open a dialog; its result is checked too. */
 	open?: (page: Page) => Promise<void>;
+	/**
+	 * The stress guest's spot is checked in (the crew scanned the pass). Set
+	 * before every case, so no case depends on what an earlier one did.
+	 */
+	checkedIn?: boolean;
 }
 
 /** The three phases, plus every armed timer (countdown box, countdown bar). */
@@ -179,23 +184,59 @@ const PAGES: PageCase[] = [
 		name: 'random spot: leave no trace',
 		path: () => '/random-bed',
 		as: 'guestWithSpot',
+		// Not checked in (the default): a checked-in guest has no such button.
 		open: async (page) => {
-			// "admin pass check: results" checks this guest in, and a checked-in
-			// guest can't give the spot up (no button). The second engine runs
-			// after the first one's pass check: undo the check-in first.
-			const order = await pb
-				.collection('orders')
-				.getFirstListItem(pb.filter('pass_code = {:code}', { code: camp.passCode }));
-			const bed = await pb
-				.collection('beds')
-				.getFirstListItem(pb.filter('order = {:order}', { order: order.id }));
-			if (bed.checked_in_at) {
-				await pb.collection('beds').update(bed.id, { checked_in_at: '', checked_in_by: '' });
-				await page.reload({ waitUntil: 'networkidle' });
-			}
 			await page.getByRole('button', { name: /Leave No Trace/ }).click();
 			await page.getByRole('alertdialog').waitFor();
 		}
+	},
+	// Checked in at arrival: the spot is final, the pages say so instead of
+	// offering a release (src/lib/check-in.ts, CHECKED_IN_NOTE).
+	{
+		name: 'house: checked in',
+		path: (c) => `/house/${c.houseId}`,
+		as: 'guestWithSpot',
+		phases: ['live'],
+		checkedIn: true
+	},
+	{
+		name: 'house without my spot: checked in',
+		path: (c) => `/house/${c.otherHouseIds[0]}`,
+		as: 'guestWithSpot',
+		phases: ['live'],
+		checkedIn: true
+	},
+	{
+		name: 'room with my spot: checked in',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithSpot',
+		phases: ['live'],
+		checkedIn: true
+	},
+	{
+		name: 'room without my spot: checked in',
+		path: (c) => `/room/${c.otherRoomIds[0]}`,
+		as: 'guestWithSpot',
+		phases: ['live'],
+		checkedIn: true
+	},
+	{
+		name: 'room: rename dialog, checked in',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithSpot',
+		phases: ['staging'],
+		checkedIn: true,
+		open: async (page) => {
+			await page.locator('button.bed-card.mine').click();
+			await page.getByRole('dialog').waitFor();
+		}
+	},
+	{
+		name: 'random spot: my spot, checked in',
+		path: () => '/random-bed',
+		as: 'guestWithSpot',
+		phases: ['live'],
+		checkedIn: true
 	},
 	{ name: 'special needs: request sent', path: () => '/special-needs', as: 'guestWithRequest' },
 	{ name: 'special needs: new request', path: () => '/special-needs', as: 'guestWithoutSpot' },
@@ -501,7 +542,13 @@ const PAGES: PageCase[] = [
 			}
 		}
 	},
-	{ name: 'booking pass (crew view)', path: (c) => `/pass/${c.passCode}`, as: 'admin' }
+	// Checked in, like right after the pass check above: arrival time and crew address.
+	{
+		name: 'booking pass (crew view)',
+		path: (c) => `/pass/${c.passCode}`,
+		as: 'admin',
+		checkedIn: true
+	}
 ];
 
 let pb: PocketBase;
@@ -512,9 +559,57 @@ test.beforeAll(async () => {
 	pb = await superuser(PB_URL, process.env.PB_ADMIN_EMAIL!, process.env.PB_ADMIN_PASSWORD!);
 });
 
+/**
+ * Checks the stress guest in, or takes the check-in back, straight in the
+ * database, as the admin's pass check would. Every case sets it, so no case
+ * depends on what an earlier one left behind (the run is split into shards).
+ */
+async function setCheckedIn(on: boolean) {
+	const order = await pb
+		.collection('orders')
+		.getFirstListItem(pb.filter('pass_code = {:code}', { code: camp.passCode }));
+	const bed = await pb
+		.collection('beds')
+		.getFirstListItem(pb.filter('order = {:order}', { order: order.id }));
+	if (!!bed.checked_in_at === on) return;
+	await pb.collection('beds').update(
+		bed.id,
+		on
+			? {
+					checked_in_at: new Date().toISOString(),
+					checked_in_by: camp.adminEmail
+				}
+			: { checked_in_at: '', checked_in_by: '' }
+	);
+}
+
+/**
+ * Paint-only decoration, switched off while measuring. None of it moves text,
+ * but WebKit on Linux paints in software and redraws it at every width, which
+ * made the WebKit run several times slower than Chromium:
+ *  - the two ambient layers behind every guest page (fixed, pointer-events: none,
+ *    no text of their own),
+ *  - shadows (they never take up room),
+ *  - CSS transitions, so the sweep measures where a box ends up, not a random
+ *    point on its way there.
+ * The failure screenshot is taken with it too: it shows what was measured.
+ */
+const MEASURE_CSS = `
+.fairy-container, .burner-trail { display: none !important; }
+*, *::before, *::after { transition: none !important; text-shadow: none !important; box-shadow: none !important; }
+`;
+
 /** A browser signed in the way `who` is: guests by ticket code, admins by session. */
 async function openAs(browser: Browser, who: Who) {
 	const context = await browser.newContext({ baseURL: BASE, reducedMotion: 'reduce' });
+	await context.addInitScript((css) => {
+		const add = () =>
+			document.head.appendChild(
+				Object.assign(document.createElement('style'), { id: 'layout-measure', textContent: css })
+			);
+		if (document.head) add();
+		else document.addEventListener('DOMContentLoaded', add);
+	}, MEASURE_CSS);
 	const session =
 		who === 'anonymous'
 			? []
@@ -585,11 +680,20 @@ for (const pageCase of PAGES) {
 		const title = pageCase.phases ? `${pageCase.name} (${phase})` : pageCase.name;
 		test(title, async ({ browser }, testInfo) => {
 			await setPhase(pb, phase);
+			await setCheckedIn(!!pageCase.checkedIn);
 			const context = await openAs(browser, pageCase.as);
 			const page = await context.newPage();
 			await page.setViewportSize({ width: 1280, height: 900 });
 			const response = await page.goto(pageCase.path(camp), { waitUntil: 'networkidle' });
 			expect(response?.status(), 'the page loads').toBeLessThan(400);
+			if (pageCase.checkedIn) {
+				// The case shows what it says: the check-in reached the page.
+				await expect(
+					page
+						.getByText(pageCase.as === 'admin' ? /CHECKED IN/ : /The crew has checked you in/)
+						.first()
+				).toBeVisible();
+			}
 			await pageCase.open?.(page);
 			await page.evaluate(() => document.fonts.ready);
 

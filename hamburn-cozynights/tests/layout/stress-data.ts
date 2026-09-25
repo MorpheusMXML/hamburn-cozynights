@@ -89,6 +89,8 @@ export interface StressCamp {
 	/** The booking round those codes were signed in for (cookie bookingRound). */
 	guestRound: string;
 	passCode: string;
+	/** The admin behind adminAuth: the crew address a check-in shows. */
+	adminEmail: string;
 	adminAuth: string;
 	superuserAuth: string;
 }
@@ -335,6 +337,7 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		form.append('needs', need);
 	await post(base, '/special-needs?/save', form, requester.header);
 
+	const adminEmail = `layout-admin-${tag}@mauersegler.art`;
 	return {
 		houseId: house.id,
 		houseName: house.name as string,
@@ -347,7 +350,8 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		// Nothing in the seed releases bookings, so every sign-in above got the same round.
 		guestRound: mine.round,
 		passCode,
-		adminAuth: await adminSession(pb, 'admin', `layout-admin-${tag}@mauersegler.art`),
+		adminEmail,
+		adminAuth: await adminSession(pb, 'admin', adminEmail),
 		superuserAuth: await adminSession(
 			pb,
 			'superuser',
