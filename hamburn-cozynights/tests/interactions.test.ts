@@ -5,6 +5,7 @@ import { load as roomLoad, actions as roomActions } from '../src/routes/room/[id
 import { actions as adminActions } from '../src/routes/admin/room/[id]/+page.server';
 import { actions as houseAdminActions } from '../src/routes/admin/house/[id]/+page.server';
 import { APP_SETTINGS_ID } from '../src/lib/server/constants';
+import { overrideProblem } from '../src/lib/accommodation';
 import { FakePb } from './fake-pb';
 
 // Mock environment variables
@@ -183,7 +184,8 @@ describe('Room Load & Booking Logic', () => {
 			bedType: '',
 			features: [],
 			// the other spot of a bunk bed; this one stands alone
-			bunkPartner: ''
+			bunkPartner: '',
+			missing: []
 		});
 	});
 
@@ -640,6 +642,123 @@ describe('Admin Management Actions', () => {
 			});
 			expect(saved).toEqual({ success: true });
 			expect(spot('B1')).toMatchObject({ bed_type: 'bunk_lower', features: ['power'] });
+		});
+	});
+
+	describe('Inherited features switched off (features_off)', () => {
+		/** A browser's form post with these fields; an array repeats the field. */
+		const form = (fields: Record<string, string | string[]>) => {
+			const data = new FormData();
+			for (const [key, value] of Object.entries(fields)) {
+				for (const one of Array.isArray(value) ? value : [value]) data.append(key, one);
+			}
+			return { formData: async () => data } as any;
+		};
+
+		/**
+		 * A heated, quiet house with one room and one spot in the fake PocketBase,
+		 * and the room page's actions posted to it as an admin or as a superuser.
+		 * The stored overrides are given, so a test can see whether a post changed them.
+		 */
+		function seedHeatedHouse(roomOff: string[], spotOff: string[]) {
+			const pb = new FakePb();
+			const house = pb.seed('houses', { name: 'Villa', features: ['heated', 'quiet'] });
+			const room = pb.seed('rooms', {
+				name: 'Dorm',
+				house: house.id,
+				kind: 'room',
+				features: ['own_bathroom'],
+				features_off: roomOff
+			});
+			const bed = pb.seed('beds', {
+				label: 'B1',
+				room: room.id,
+				enabled: true,
+				occupied: false,
+				bed_type: '',
+				bunk_partner: '',
+				features: [],
+				features_off: spotOff
+			});
+			const superuser = {
+				...mockLocals.admin,
+				email: 'max@mauersegler.art',
+				role: 'superuser',
+				isSuperuser: true
+			};
+			const as =
+				(admin: Record<string, unknown>) =>
+				async (action: string, fields: Record<string, string | string[]>) =>
+					(await adminActions[action]({
+						request: form(fields),
+						params: { id: room.id },
+						locals: { pb, admin }
+					} as any)) as any;
+			const stored = () => ({
+				room: pb.rows('rooms').find((row) => row.id === room.id)!,
+				spot: pb.rows('beds').find((row) => row.id === bed.id)!
+			});
+			return { bed, asAdmin: as(mockLocals.admin), asSuperuser: as(superuser), stored };
+		}
+
+		it("an admin's save never changes what is switched off, even when the form claims it", async () => {
+			const { bed, asAdmin, stored } = seedHeatedHouse(['heated'], ['quiet']);
+
+			const room = await asAdmin('saveRoom', {
+				kind: 'room',
+				features: ['own_bathroom'],
+				features_off: ['quiet']
+			});
+			const spot = await asAdmin('saveSpot', { id: bed.id, features_off: ['heated'] });
+
+			expect(room).toEqual({ success: true });
+			expect(spot).toEqual({ success: true });
+			// The details were saved, the stored overrides are as they were.
+			expect(stored().room).toMatchObject({ features: ['own_bathroom'], features_off: ['heated'] });
+			expect(stored().spot).toMatchObject({ features: [], features_off: ['quiet'] });
+		});
+
+		it('a superuser switches a feature off, and a save without the boxes resets it', async () => {
+			const { bed, asSuperuser, stored } = seedHeatedHouse([], []);
+
+			expect(await asSuperuser('saveRoom', { kind: 'room', features_off: ['heated'] })).toEqual({
+				success: true
+			});
+			expect(await asSuperuser('saveSpot', { id: bed.id, features_off: ['heated'] })).toEqual({
+				success: true
+			});
+			expect(stored().room.features_off).toEqual(['heated']);
+			expect(stored().spot.features_off).toEqual(['heated']);
+
+			// The form always posts its features_off boxes for a superuser, so a
+			// save with none ticked (nothing posted) is the reset.
+			expect(await asSuperuser('saveRoom', { kind: 'room' })).toEqual({ success: true });
+			expect(await asSuperuser('saveSpot', { id: bed.id })).toEqual({ success: true });
+			expect(stored().room.features_off).toEqual([]);
+			expect(stored().spot.features_off).toEqual([]);
+		});
+
+		it('refuses a superuser who switches a feature off and ticks it at once', async () => {
+			const { bed, asSuperuser, stored } = seedHeatedHouse([], []);
+
+			const room = await asSuperuser('saveRoom', {
+				kind: 'room',
+				features: ['heated'],
+				features_off: ['heated']
+			});
+			const spot = await asSuperuser('saveSpot', {
+				id: bed.id,
+				features: ['power'],
+				features_off: ['power']
+			});
+
+			expect(room.status).toBe(400);
+			expect(room.data.message).toBe(overrideProblem(['heated'], ['heated']));
+			expect(spot.status).toBe(400);
+			expect(spot.data.message).toBe(overrideProblem(['power'], ['power']));
+			// Nothing was written.
+			expect(stored().room).toMatchObject({ features: ['own_bathroom'], features_off: [] });
+			expect(stored().spot).toMatchObject({ features: [], features_off: [] });
 		});
 	});
 });

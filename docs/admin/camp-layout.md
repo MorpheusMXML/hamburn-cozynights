@@ -34,7 +34,7 @@ The forms on the house and room pages (**HOUSE DETAILS**, **ADD ROOM**, **ADD SP
 | Field | What it is |
 | --- | --- |
 | KIND | 🏠 House · 🛖 Hut group · ⛺ Tent area · 📍 Other. A **hut group** keeps one pin on the map and its huts are its rooms: the pin gets the 🛖 icon and the guest page says *Choose a hut*. |
-| FEATURES | ♿ Wheelchair accessible · ⬇️ Ground floor · 🚻 Toilets + showers inside · 🔥 Heated · ❄️ No heating · 🤫 Quiet zone. Everything inside the house inherits them — except that an [upper bunk](#bunk-beds) never inherits ♿. 🔥 Heated and ❄️ No heating rule each other out: ticking one clears the other (a hint under the boxes says so), and the server refuses a house that claims both. |
+| FEATURES | ♿ Wheelchair accessible · ⬇️ Ground floor · 🚻 Toilets + showers inside · 🔥 Heated · ❄️ No heating · 🤫 Quiet zone. Everything inside the house inherits them: a heated quiet house makes its rooms heated and quiet, and their spots too — except that an [upper bunk](#bunk-beds) never inherits ♿, and a room can switch one of them off for itself (a superuser's call, see [Room details](#room-details)). 🔥 Heated and ❄️ No heating rule each other out: ticking one clears the other (a hint under the boxes says so), and the server refuses a house that claims both. |
 | DESCRIPTION | Up to 500 characters of your own, shown to guests: *"Showers and toilets in the wash house, 50 m along the path."* |
 
 Press <kbd>SAVE DETAILS 🏷️</kbd>. Details can be changed **in every phase** — they describe the place, they don't move a booking.
@@ -75,6 +75,7 @@ Press <kbd>IGNITE ROOM ✨</kbd>.
 | NAME | Only in Staging Mode: the name belongs to the layout. The field is gone while booking is live or closed. |
 | KIND | Room · Hut · Tent · Other. A room added to a hut group starts as a **hut** (and in a tent area as a tent), so you rarely have to set it. |
 | FEATURES | ♿ Wheelchair accessible · ⬇️ Ground floor · 🛁 Own bathroom · 🔥 Heated · ❄️ No heating · 🤫 Quiet zone · 🔌 Power socket. They come **on top of** the house's: a heated room in an unheated hut group counts as heated. 🔥 Heated and ❄️ No heating rule each other out here too, and an [upper bunk](#bunk-beds) never inherits ♿ from its room either. |
+| FROM THE HOUSE | The block **From the house** shows, as greyed chips, what the room inherits from its house right now, e.g. *🔥 Heated · 🤫 Quiet zone* — every admin sees it. **Superusers** also get an **off here** box on each chip and <kbd>RESET TO HOUSE</kbd>. Tick *off here* on 🔥 Heated and this room stays cold in a heated house: the chip is gone for the room and its spots, on the guest pages, in the wish chips and in the ♿ picker, while the house and its other rooms keep it. <kbd>RESET TO HOUSE</kbd> clears every *off here* box, so the room inherits everything again. A feature can't be switched off and ticked under FEATURES at the same time: ticking one box clears the other, and the server refuses a room that claims both, also on the records API. Only superusers switch off and reset; an admin's save never changes what is switched off. |
 | DESCRIPTION | Up to 500 characters, shown to guests. |
 
 ### Room cards
@@ -99,7 +100,7 @@ Open a room by clicking its card on the house page.
 | All single beds | Every spot a single bed. Bunk beds are taken apart. |
 | Not specified | Clears the bed type again. Bunk beds are taken apart. |
 
-<kbd>🏷️ DETAILS</kbd> on a spot card opens its own editor: the **BED** (single bed, lower or upper bunk, one half of a double bed, sofa, mattress, camp bed), a **🔌 power socket** at that spot, and in Staging Mode its **LABEL**. Guests see the bed under the spot's label, and the ♿ picker uses it: *a lower bunk or a bed without a ladder* fits every bed but an upper bunk, and an upper bunk is never ♿ wheelchair accessible, whatever its room says (see [Bunk beds](#bunk-beds)). A spot that is part of a [bunk bed](#bunk-beds) gets its bed from the stacking: the **BED** field is greyed out there and says so.
+<kbd>🏷️ DETAILS</kbd> on a spot card opens its own editor: the **BED** (single bed, lower or upper bunk, one half of a double bed, sofa, mattress, camp bed), a **🔌 power socket** at that spot, in Staging Mode its **LABEL**, and the block **From the room and house**: greyed chips of what the spot inherits, i.e. the house's features minus what the room switched off, plus the room's own. Superusers get the same **off here** boxes and a <kbd>RESET</kbd> button as on a [room](#room-details) and may switch off anything that comes from the house or the room — say 🔌 Power socket on the beds the room's one socket doesn't reach — and here too a feature can't be switched off and ticked at once: one box clears the other, and the server refuses a spot that claims both. Admins see the chips, superusers switch off and reset. Guests see the bed under the spot's label, and the ♿ picker uses it: *a lower bunk or a bed without a ladder* fits every bed but an upper bunk, and an upper bunk is never ♿ wheelchair accessible, whatever its room says (see [Bunk beds](#bunk-beds)). A spot that is part of a [bunk bed](#bunk-beds) gets its bed from the stacking: the **BED** field is greyed out there and says so.
 
 ### Bunk beds 🪜 {#bunk-beds}
 
@@ -143,7 +144,7 @@ The status of a spot is written in [its state colour](./index#the-state-colours)
 | ♿ SPECIAL / NORMAL | Keep the spot for [special-needs requests](./special-needs), or give it back to all guests | <span class="yes">✓</span> allowed |
 | ❄️ DEACTIVATE / ⚡️ ACTIVATE | Take the spot out of use / back in | <span class="no">✗</span> |
 | 🔄 TAKEN / FREE | Mark the spot as taken without a ticket, or free it | <span class="no">✗</span> |
-| 🏷️ DETAILS | Bed type and 🔌 socket of this spot (its label only in Staging Mode) | <span class="yes">✓</span> allowed |
+| 🏷️ DETAILS | Bed type and 🔌 socket of this spot, inherited features switched off (superusers), its label only in Staging Mode | <span class="yes">✓</span> allowed |
 | 🪜 STACK · ⇅ SWAP · UNSTACK ⤴ | Stack two spots into a [bunk bed](#bunk-beds), swap its levels, take it apart | <span class="yes">✓</span> allowed |
 | 🗑 DELETE | Delete the spot (its bunk partner, if any, stays as a spot on its own) | <span class="no">✗</span> |
 

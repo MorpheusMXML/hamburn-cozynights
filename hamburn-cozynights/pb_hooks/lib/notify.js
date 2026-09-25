@@ -654,11 +654,14 @@ function currentSpot(app, orderId) {
 	spot.house = '';
 	let roomFeatures = [];
 	let houseFeatures = [];
+	// What the room switched off of the house's features (a superuser's call).
+	let roomOff = [];
 	try {
 		const room = app.findRecordById('rooms', spot.roomId);
 		const number = room.getInt('room_number');
 		spot.room = (room.getString('name') || 'Room') + (number ? ' #' + number : '');
 		roomFeatures = room.get('features');
+		roomOff = room.get('features_off');
 		const house = app.findRecordById('houses', room.getString('house'));
 		spot.house = house.getString('name');
 		houseFeatures = house.get('features');
@@ -679,8 +682,17 @@ function currentSpot(app, orderId) {
 		}
 	}
 	spot.bed = kinds.bedRow(bedType, partnerLabel);
+	// The same sum the app shows: what the room or the spot switched off
+	// (features_off) is gone, so the message never promises it.
 	spot.features = kinds.featureText(
-		kinds.effectiveFeatures(houseFeatures, roomFeatures, bed.get('features'), bedType)
+		kinds.effectiveFeatures(
+			houseFeatures,
+			roomFeatures,
+			bed.get('features'),
+			bedType,
+			roomOff,
+			bed.get('features_off')
+		)
 	);
 	spot.label = clip([spot.spot, spot.room, spot.house].filter((s) => !!s).join(' · '), LABEL_MAX);
 	return spot;

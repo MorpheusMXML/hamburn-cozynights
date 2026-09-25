@@ -118,9 +118,20 @@ export function contentHash(
 
 type Bed = Pick<
 	BedsResponse,
-	'id' | 'order' | 'label' | 'room' | 'updated' | 'bed_type' | 'bunk_partner' | 'features'
+	| 'id'
+	| 'order'
+	| 'label'
+	| 'room'
+	| 'updated'
+	| 'bed_type'
+	| 'bunk_partner'
+	| 'features'
+	| 'features_off'
 >;
-type Room = Pick<RoomsResponse, 'id' | 'name' | 'room_number' | 'house' | 'features'>;
+type Room = Pick<
+	RoomsResponse,
+	'id' | 'name' | 'room_number' | 'house' | 'features' | 'features_off'
+>;
 type House = Pick<HousesResponse, 'id' | 'name' | 'features'>;
 
 /**
@@ -128,7 +139,8 @@ type House = Pick<HousesResponse, 'id' | 'name' | 'features'>;
  * instead of two per pass. The same rules as findPass: a ticket's spot is its
  * most recently changed bed, its bed row names the other level of a bunk bed
  * (which may be free, so every spot is read, not only the booked ones) and
- * its features are the spot's, the room's and the house's together.
+ * its features are the spot's, the room's and the house's together, minus
+ * what the room or the spot switched off (`features_off`).
  */
 export async function loadContents(
 	adminPb: TypedPocketBase,
@@ -148,11 +160,11 @@ export async function loadContents(
 				requestKey: null
 			}),
 		adminPb.collection('beds').getFullList<Bed>({
-			fields: 'id,order,label,room,updated,bed_type,bunk_partner,features',
+			fields: 'id,order,label,room,updated,bed_type,bunk_partner,features,features_off',
 			requestKey: null
 		}),
 		adminPb.collection('rooms').getFullList<Room>({
-			fields: 'id,name,room_number,house,features',
+			fields: 'id,name,room_number,house,features,features_off',
 			requestKey: null
 		}),
 		adminPb.collection('houses').getFullList<House>({

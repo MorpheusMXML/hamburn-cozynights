@@ -47,7 +47,17 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			})
 		]);
 
-		return { room, beds, bookings, isLayoutLocked, phase };
+		// The room comes with its house (expand), so the page can show what the
+		// room inherits; the beds carry features_off (no field list narrows them).
+		// Only a superuser gets the "off here" boxes (DetailsPanel, SpotDetails).
+		return {
+			room,
+			beds,
+			bookings,
+			isLayoutLocked,
+			phase,
+			isSuperuser: !!locals.admin?.isSuperuser
+		};
 	} catch (err) {
 		console.error('Error fetching house spots:', err);
 		throw error(404, 'House room lost in the dust.');
@@ -216,16 +226,28 @@ export const actions: Actions = {
 	/**
 	 * What the room is like: kind, features and description. Allowed in every
 	 * phase — details describe the place, they don't move a booking. The name is
-	 * part of the layout, so the form only sends it in Staging Mode.
+	 * part of the layout, so the form only sends it in Staging Mode. What the
+	 * room switches off of its house's features (features_off) is a superuser's
+	 * call: only their form is read for it, so an admin's save never changes it.
 	 */
 	saveRoom: async ({ request, params, locals }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can change rooms.' });
 
 		const data = await request.formData();
-		const details = parseDetailsForm(data, 'room');
+		const canOverride = !!locals.admin.isSuperuser;
+		const details = parseDetailsForm(data, 'room', { canOverride });
 		if (!details.ok) return fail(400, { message: details.error });
 
+		// features_off is part of the value only when a superuser posted
+		// (parseDetailsForm); an empty list then resets the room to its house.
 		const patch: Record<string, unknown> = { ...details.value };
+		if (details.value.features_off) {
+			console.log(
+				`[Action:saveRoom] Superuser: ${locals.admin.email}, Room: ${params.id}, off: ${
+					details.value.features_off.join(', ') || '(reset, inherits everything)'
+				}`
+			);
+		}
 		const { isLayoutLocked } = await getBookingSettings(locals.pb);
 		if (data.has('name') && !isLayoutLocked) {
 			const name = String(data.get('name') ?? '').trim();
@@ -247,7 +269,11 @@ export const actions: Actions = {
 		}
 	},
 
-	/** What one spot is like: its bed type, a socket at the bed, and its label in Staging Mode. */
+	/**
+	 * What one spot is like: its bed type, a socket at the bed, and its label in
+	 * Staging Mode. What it switches off of what it inherits (features_off) is a
+	 * superuser's call, read from their form only, like on the room.
+	 */
 	saveSpot: async ({ request, params, locals }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
 
@@ -255,10 +281,20 @@ export const actions: Actions = {
 		const id = String(data.get('id') ?? '');
 		if (!id) return fail(400, { message: 'No spot was selected. Reload the page and try again.' });
 
-		const spot = parseSpotForm(data);
+		const canOverride = !!locals.admin.isSuperuser;
+		const spot = parseSpotForm(data, { canOverride });
 		if (!spot.ok) return fail(400, { message: spot.error });
 
+		// features_off is part of the value only when a superuser posted
+		// (parseSpotForm); an empty list then resets the spot to its room.
 		const patch: Record<string, unknown> = { ...spot.value };
+		if (spot.value.features_off) {
+			console.log(
+				`[Action:saveSpot] Superuser: ${locals.admin.email}, Spot: ${id}, off: ${
+					spot.value.features_off.join(', ') || '(reset, inherits everything)'
+				}`
+			);
+		}
 
 		// The level of a stacked spot comes from the stacking, not from the form.
 		// Features and the label may still change.

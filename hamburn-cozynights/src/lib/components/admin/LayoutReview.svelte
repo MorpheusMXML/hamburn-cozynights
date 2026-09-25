@@ -99,6 +99,7 @@ takes its rooms and spots along).
 		label: 'label',
 		kind: 'kind',
 		bed_type: 'bed',
+		features_off: 'features off',
 		bunk_partner: 'bunk partner',
 		features: 'features',
 		description: 'description'

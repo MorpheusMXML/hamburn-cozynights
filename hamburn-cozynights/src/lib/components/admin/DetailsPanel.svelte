@@ -7,12 +7,17 @@
 	 * Details can be changed in every phase — they describe the place, they don't
 	 * move a booking. The name is part of the layout, so the field is only shown
 	 * (and only sent) while the layout is unlocked.
+	 *
+	 * A room also shows what it inherits from its house ("From the house"). A
+	 * superuser can switch an inherited feature off for this room alone
+	 * (`features_off`, src/lib/accommodation.ts); admins only see the chips.
 	 */
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { enhance } from '$app/forms';
 	import { toast } from '$lib/dialogs';
 	import {
 		DESCRIPTION_MAX,
+		FEATURES,
 		HOUSE_KINDS,
 		ROOM_KINDS,
 		featureLabel,
@@ -30,6 +35,12 @@
 	export let name: string | undefined = undefined;
 	export let nameHint = '';
 	export let nameMax = 100;
+	/** What a room inherits from its house (inheritedFeatures); a house has nothing above it. */
+	export let inherited: Feature[] = [];
+	/** What this room switched off of that (`rooms.features_off`, cleaned with readFeaturesOff). */
+	export let featuresOff: Feature[] = [];
+	/** A superuser may switch inherited features off and reset them; admins only look. */
+	export let canOverride = false;
 
 	let error = '';
 	let submitting = false;
@@ -42,20 +53,57 @@
 	$: pairs = available
 		.filter((feature) => feature.opposite && feature.value < feature.opposite)
 		.map((feature) => `${feature.label} / ${featureLabel(feature.opposite)}`);
+	$: inheritedSet = new Set(inherited);
+	$: offSet = new Set(featuresOff);
+	// The chips: what comes from the house, plus an override whose feature the
+	// house no longer has — it would otherwise be invisible and impossible to
+	// reset. Catalogue order, like every other list of features.
+	$: fromAbove = FEATURES.filter(
+		(feature) => inheritedSet.has(feature.value) || offSet.has(feature.value)
+	);
 
 	/**
 	 * Two features that say the opposite ("Heated", "No heating") can't both
 	 * be true: ticking one clears the other, so the form can never send both.
 	 * The server refuses such a pair anyway (parseDetailsForm); this keeps the
-	 * boxes honest before anything is sent.
+	 * boxes honest before anything is sent. Ticking a feature also clears its
+	 * "off here" box: a room can't claim a feature and switch it off at once.
 	 */
 	function tickOne(event: Event, feature: FeatureEntry) {
 		const box = event.currentTarget as HTMLInputElement;
-		if (!box.checked || !feature.opposite) return;
-		const other = box.form?.querySelector<HTMLInputElement>(
-			`input[name="features"][value="${feature.opposite}"]`
+		if (!box.checked) return;
+		if (feature.opposite) {
+			const other = box.form?.querySelector<HTMLInputElement>(
+				`input[name="features"][value="${feature.opposite}"]`
+			);
+			if (other) other.checked = false;
+		}
+		const off = box.form?.querySelector<HTMLInputElement>(
+			`input[name="features_off"][value="${feature.value}"]`
 		);
-		if (other) other.checked = false;
+		if (off) off.checked = false;
+	}
+
+	/** The other way round: "off here" clears the room's own box of the same feature. */
+	function offOne(event: Event, feature: FeatureEntry) {
+		const box = event.currentTarget as HTMLInputElement;
+		if (!box.checked) return;
+		const own = box.form?.querySelector<HTMLInputElement>(
+			`input[name="features"][value="${feature.value}"]`
+		);
+		if (own) own.checked = false;
+	}
+
+	/**
+	 * Unticks every "off here" box. Nothing is sent until SAVE: an empty
+	 * features_off list then means "inherit everything again" (the action
+	 * always writes the list a superuser posts, also an empty one).
+	 */
+	function resetOff(event: Event) {
+		const form = (event.currentTarget as HTMLButtonElement).form;
+		form
+			?.querySelectorAll<HTMLInputElement>('input[name="features_off"]')
+			.forEach((box) => (box.checked = false));
 	}
 
 	const handleSubmit: SubmitFunction = () => {
@@ -106,6 +154,57 @@
 			<p class="hint">{kinds.find((entry) => entry.value === kind)?.hint}</p>
 		{/if}
 	</div>
+
+	{#if level === 'room'}
+		<fieldset class="features inherited">
+			<legend>FROM THE HOUSE</legend>
+			{#if fromAbove.length === 0}
+				<p class="hint">The house says nothing yet, so this room inherits nothing.</p>
+			{:else}
+				<ul class="chips" aria-label="Inherited from the house">
+					{#each fromAbove as feature (feature.value)}
+						<li
+							class="chip"
+							class:off={!canOverride && offSet.has(feature.value)}
+							class:stale={!inheritedSet.has(feature.value)}
+							title={feature.hint ?? ''}
+						>
+							<span class="chip-icon" aria-hidden="true">{feature.icon}</span>
+							<span class="chip-label">{feature.label}</span>
+							{#if canOverride}
+								<label class="off-box">
+									<input
+										type="checkbox"
+										name="features_off"
+										value={feature.value}
+										checked={offSet.has(feature.value)}
+										on:change={(event) => offOne(event, feature)}
+									/>
+									off here
+								</label>
+							{:else if offSet.has(feature.value)}
+								<span class="off-tag">off here</span>
+							{/if}
+							{#if !inheritedSet.has(feature.value)}
+								<span class="stale-tag">not from the house now</span>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+				{#if canOverride}
+					<div class="inherited-actions">
+						<button type="button" class="btn-reset" on:click={resetOff}>RESET TO HOUSE</button>
+						<p class="hint">
+							Superusers only: "off here" switches a feature off for this room and its spots. Reset
+							unticks them all; save to apply.
+						</p>
+					</div>
+				{:else}
+					<p class="hint">A superuser can switch one of these off for this room alone.</p>
+				{/if}
+			{/if}
+		</fieldset>
+	{/if}
 
 	<fieldset class="features">
 		<legend>FEATURES</legend>
@@ -235,6 +334,109 @@
 	.check-label {
 		min-width: 0;
 		overflow-wrap: anywhere;
+	}
+
+	/* What comes from the house: read-only chips, greyed so they don't look like boxes to tick. */
+	.inherited {
+		border-style: dashed;
+	}
+
+	.chips {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		flex-wrap: wrap;
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 999px;
+		padding: 0.25rem 0.65rem;
+		font-size: 0.78rem;
+		font-weight: 600;
+		color: #aab3bd;
+		min-width: 0;
+	}
+
+	.chip-label {
+		overflow-wrap: anywhere;
+	}
+
+	/* Switched off here: struck through, whether stored (.off) or just ticked (:has). */
+	.chip.off .chip-label,
+	.chip:has(.off-box input:checked) .chip-label {
+		text-decoration: line-through;
+		opacity: 0.55;
+	}
+
+	.chip.stale {
+		border-style: dotted;
+	}
+
+	.off-box {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		font-size: 0.68rem;
+		font-weight: 700;
+		letter-spacing: 0;
+		text-transform: none;
+		color: #ffb86b;
+		cursor: pointer;
+	}
+
+	.off-box input {
+		accent-color: #ffb86b;
+		width: 0.9rem;
+		height: 0.9rem;
+		flex: none;
+	}
+
+	.off-tag,
+	.stale-tag {
+		font-size: 0.66rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.off-tag {
+		color: #ffb86b;
+	}
+
+	.stale-tag {
+		color: #8a8f98;
+	}
+
+	.inherited-actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 0.8rem;
+	}
+
+	.btn-reset {
+		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid rgba(255, 184, 107, 0.5);
+		border-radius: 8px;
+		padding: 0.35rem 0.6rem;
+		color: #ffb86b;
+		font-size: 0.66rem;
+		font-weight: 800;
+		letter-spacing: 0.08em;
+		cursor: pointer;
+	}
+
+	.btn-reset:hover {
+		border-color: #ffb86b;
+		color: #ffd9b3;
 	}
 
 	.hint {

@@ -10,13 +10,22 @@ import { passSummary } from '$lib/server/pass';
 import { openingCountdownAt } from '$lib/booking-phase';
 import { readFilters, spotFacts, spotMatchesFilters, type SpotFilter } from '$lib/accommodation';
 
-/** Free spots of a house that answer every wish the guest picked. */
+/**
+ * Free spots of a house that answer every wish the guest picked. The tree
+ * comes from InventoryService.getFullTree (whole records, so `features_off`
+ * is there): what a room or spot switched off is gone from its sum.
+ */
 function countFitting(house: { features?: string[]; rooms: any[] }, wishes: SpotFilter[]): number {
 	return house.rooms.reduce(
 		(sum, room) =>
 			sum +
 			room.beds.filter(
-				(bed: { occupied?: boolean; bed_type?: string; features?: string[] }) =>
+				(bed: {
+					occupied?: boolean;
+					bed_type?: string;
+					features?: string[];
+					features_off?: string[];
+				}) =>
 					!bed.occupied &&
 					spotMatchesFilters(
 						wishes,
@@ -24,7 +33,9 @@ function countFitting(house: { features?: string[]; rooms: any[] }, wishes: Spot
 							bedType: bed.bed_type,
 							house: house.features,
 							room: room.features,
-							spot: bed.features
+							spot: bed.features,
+							roomOff: room.features_off,
+							spotOff: bed.features_off
 						})
 					)
 			).length,

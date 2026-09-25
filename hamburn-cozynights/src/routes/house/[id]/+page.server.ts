@@ -64,19 +64,27 @@ export const load: PageServerLoad = async ({ params, locals, cookies, url }) => 
 		const roomsWithStats = rooms.map((room) => {
 			const roomBeds = beds.filter((b) => b.room === room.id && b.enabled !== false);
 			const free = roomBeds.filter((b) => !b.occupied && isBedBookable(b, { allowLocked }));
+			// What the room or the spot switched off (a superuser's call) is gone
+			// from the sum, so a wish never counts a heating the spot gave up.
 			const facts = (bed: (typeof roomBeds)[number]) =>
 				spotFacts({
 					bedType: bed.bed_type,
 					house: houseFeatures,
 					room: room.features,
-					spot: bed.features
+					spot: bed.features,
+					roomOff: room.features_off,
+					spotOff: bed.features_off
 				});
 			return {
 				...room,
 				freeCount: free.length,
 				totalCount: roomBeds.length,
 				kind: room.kind ?? '',
-				features: effectiveFeatures({ house: houseFeatures, room: room.features }),
+				features: effectiveFeatures({
+					house: houseFeatures,
+					room: room.features,
+					roomOff: room.features_off
+				}),
 				description: room.description ?? '',
 				bedMix: bedTypeMix(roomBeds.map((bed) => bed.bed_type)),
 				// Only counted when the guest brought wishes along from the map.

@@ -267,6 +267,9 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		amount_beds: BED_LABELS.length,
 		kind: 'hut',
 		features: ['wheelchair', 'ground_floor', 'own_bathroom', 'heated', 'quiet', 'power'],
+		// A superuser switched one house feature off for this room: the form
+		// shows it struck through under "From the house".
+		features_off: ['toilets_inside'],
 		description: TEXTS.descriptionLong
 	});
 	const beds: Record<string, string> = {};
@@ -291,7 +294,10 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 			is_special: label.startsWith('Doppelbett'),
 			// A socket at the longest label.
 			bed_type: levels[label] ?? otherKinds[kind++ % otherKinds.length],
-			features: label.startsWith('Doppelbett') ? ['power'] : []
+			features: label.startsWith('Doppelbett') ? ['power'] : [],
+			// The locked upper bunk lost the room's socket and the house's quiet:
+			// the longest possible "off here" list on a spot.
+			features_off: label === 'Upper 1' ? ['quiet', 'power'] : []
 		});
 		beds[label] = bed.id;
 	}

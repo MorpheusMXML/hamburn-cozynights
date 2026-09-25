@@ -410,6 +410,15 @@ const PAGES: PageCase[] = [
 		phases: ['staging', 'live'],
 		open: unfoldAll
 	},
+	{
+		// A superuser sees the "off here" boxes and "Reset to house" under the
+		// inherited chips of the room and of every spot; an admin only the chips.
+		name: 'admin room: forms unfolded, superuser overrides',
+		path: (c) => `/admin/room/${c.roomId}`,
+		as: 'superuser',
+		phases: ['staging'],
+		open: unfoldAll
+	},
 	{ name: 'admin new house', path: () => '/admin/house/new', as: 'admin' },
 	{
 		// A typed key in a locked field answers with the lock hint next to it.
