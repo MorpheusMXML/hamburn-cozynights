@@ -45,36 +45,46 @@ summary,
 
 /* Laser Glass Effect for the large surfaces. The card grids (one card per
    room or spot) get the same look with a flat colour: a backdrop blur per
-   card is one compositing layer each, which phones feel. */
+   card is one compositing layer each, which phones feel.
+   Only the panels' fill and blur are forced. Everything else is a default:
+   :where() gives it no weight, so a page's own card rules win without
+   !important — a spot's state edge, a dashed deactivated spot, a panel's
+   coloured top edge. Until 25 Sep all of it was !important and hid them. */
 .house-card,
-.intel-card,
 .form-section,
 .status-card,
 .form-panel {
 	position: relative;
 	background: rgba(15, 15, 15, 0.7) !important;
 	backdrop-filter: blur(10px) !important;
-	border: 1px solid rgba(255, 255, 255, 0.1) !important;
 	overflow: hidden;
 }
+:where(.house-card, .form-section, .status-card, .form-panel) {
+	border: 1px solid rgba(255, 255, 255, 0.1);
+}
 
-.room-card,
-.bed-card {
+:where(.room-card, .bed-card) {
 	position: relative;
-	background: rgba(18, 18, 18, 0.88) !important;
-	border: 1px solid rgba(255, 255, 255, 0.1) !important;
+	background: rgba(18, 18, 18, 0.88);
+	border: 1px solid rgba(255, 255, 255, 0.1);
 	overflow: hidden;
 }
 
-/* Hover scales for all cards */
-.house-card:hover,
-.room-card:hover,
-.bed-card:hover {
+/* Hover scales for all cards. A room or spot card takes its page's hover
+   colours where the page has some; a house card always glows turquoise. */
+.house-card:hover {
 	transform: translateY(-2px) scale(1.01);
 	border-color: rgba(45, 212, 191, 0.4) !important;
 	box-shadow:
 		0 10px 30px rgba(0, 0, 0, 0.5),
 		0 0 20px rgba(45, 212, 191, 0.1) !important;
+}
+:where(.room-card, .bed-card):hover {
+	transform: translateY(-2px) scale(1.01);
+	border-color: rgba(45, 212, 191, 0.4);
+	box-shadow:
+		0 10px 30px rgba(0, 0, 0, 0.5),
+		0 0 20px rgba(45, 212, 191, 0.1);
 }
 
 /* Button pulse: the glow sits on a pseudo-element whose opacity animates

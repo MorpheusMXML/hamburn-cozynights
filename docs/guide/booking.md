@@ -47,9 +47,9 @@ flowchart LR
 
 4. **Grab a free spot**
 
-   Inside the room every spot card says what it is, in bold and in one colour with a dot in front: **green** it's free, **red** somebody has it, **turquoise** it's yours, **violet** the crew keeps it, **grey** it can't be booked right now (see the table below). Click an **Available** spot.
+   Inside the room every spot card says what it is, in bold and in one colour with a dot in front, and wears the same colour on its left edge: **green** it's free, **red** somebody has it, **turquoise** it's yours, **violet** the crew keeps it, **grey** it can't be booked right now (see the table below). Click an **Available** spot.
 
-   A **bunk bed** is one tile: the upper bunk's card on top, a short dashed rail with a small turquoise ladder between, the lower bunk's card below. Each half is a spot of its own, in its own colour and with its own booking button. A coloured chip next to the label says **Upper bunk** (turquoise) or **Lower bunk** (blue), and the line under it where the other level is (*above B1*, *below B2*); the booking dialog repeats it: *Spot B2 — the upper bunk above B1.*
+   A **bunk bed** is one tile: the upper bunk's card on top, the lower bunk's card below, and a small turquoise ladder on a bar between them. One outline holds both cards, turquoise at the top and blue at the bottom, so the pair stands out from the single spots around it. Each half is a spot of its own, in its own colour and with its own booking button. A coloured chip next to the label says **Upper bunk** (turquoise) or **Lower bunk** (blue), and the line under it where the other level is (*above B1*, *below B2*); the booking dialog repeats it: *Spot B2 — the upper bunk above B1.*
 
    ![Room page with free, occupied and reserved spots](../assets/screenshots/guest-room-available.webp)
 
