@@ -48,7 +48,7 @@ In `tests/smoke/`:
 - **Full flow (throwaway stack only):** guest login sets an httpOnly cookie, map and room pages render, booking is refused while closed, a booked bed can't be taken by the next guest, other guests never see ticket codes or customer names, the booking pass serves its QR images and a signed wallet pass while `/telegram` asks for the ticket code and comes back afterwards, admin area opens for approved admins only, a removed admin is out on the next request, a special-needs request sent while booking is closed gets a spot booked by an admin that the guest can't release, "clear all bookings" is superuser-only and keeps the tickets, admins find and change tickets while the ticket list import and applying a layout file are superuser-only.
 
 > [!NOTE] Why the log ends with `7 passed | 8 skipped` against a real site
-> The full-flow tests write data and need superuser access to the database, so they are skipped there on purpose. They have already run against the Docker image of the same commit in the `verify` job.
+> The full-flow tests write data and need superuser access to the database, so they are skipped there on purpose. They have already run against the Docker image of the same files in CI: in the pull request's `Smoke + layout` parts, or in the deploy's `verify` job when no green run for those files existed.
 
 ### What no automatic test covers
 
@@ -78,9 +78,9 @@ SMOKE_BASE_URL=https://test-cozynights.hamburn.de SMOKE_EXPECT_GOOGLE=1 npm run 
 
 1. **Branch + pull request.** Never commit to `main` directly.
 2. **`npm run verify` locally** before pushing (or at least `npm test` while working, `verify` before the pull request).
-3. **CI must be green.** [`.github/workflows/ci.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/ci.yml) runs the same verification on every pull request and on `main`; its `Verify` check is required before a pull request can merge. Its `Secrets` job scans the whole git history with gitleaks (`.gitleaks.toml`), the same rules the pre-commit hook applies locally.
+3. **CI must be green.** [`.github/workflows/ci.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/ci.yml) runs the same verification on every pull request and on `main`, in parts side by side: `Checks` (type check, unit, integration), `Smoke + layout` split into six parts (see [Layout](./layout#the-layout-test)) and `Secrets`, which scans the whole git history with gitleaks (`.gitleaks.toml`), the same rules the pre-commit hook applies locally. The job `Verify` collects them; it is the check required before a pull request can merge.
 4. **Stamp the version.** On the state you are about to deploy: `scripts/release.sh 0.<deploy>.<fix> "one line what it brings"`, then push the branch and the tag together. The tag makes the GitHub release; the app shows the version next to its title. See [Versions and releases](./deployment#versions-and-releases).
-5. **Deploy to staging** (Actions → "Deploy staging"). The workflow runs the verification again for exactly the commit it deploys, deploys with backup and rollback, then smoke-tests the live site from the outside. See [Environments & deployment](./deployment#deploying-to-staging).
+5. **Deploy to staging** (Actions → "Deploy staging"). The workflow makes sure exactly the files it deploys passed the verification: normally the pull request's run already tested them, and only the secrets scan runs again; otherwise it runs the full verification first. Then it deploys with backup and rollback and smoke-tests the live site from the outside. See [Environments & deployment](./deployment#deploying-to-staging).
 6. **Look at it yourself** on staging — and sign in with Google if the login was touched.
 7. **Merge** once staging is fine.
 

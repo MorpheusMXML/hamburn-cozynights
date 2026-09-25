@@ -13,16 +13,97 @@ permissions:
   contents: read
 
 jobs:
+  # Nothing is deployed that did not pass CI — but a pull request into
+  # integration/staging has to pass CI before it can be merged, and its merge
+  # commit holds exactly the files that CI tested (the test merge
+  # refs/pull/N/merge). Testing them again took 20–30 min and proved nothing
+  # new. The gate looks for the marker a green CI run leaves for the git tree
+  # it tested (ci.yml, job "Verify"); without one, the full CI runs as before.
+  gate:
+    name: Already verified?
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read # artifacts and workflow runs
+      contents: read # commit → tree, compare
+    outputs:
+      verified: ${{ steps.lookup.outputs.verified }}
+    steps:
+      - name: Green CI run for these files
+        id: lookup
+        # Any API trouble → no output → full verification.
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          tree="$(gh api "repos/$repo/git/commits/$GITHUB_SHA" --jq .tree.sha)"
+          echo "${GITHUB_SHA::7} has tree $tree"
+
+          # Exact name, not expired, and only from runs whose head repository IS
+          # this repository: a pull request from a fork runs its own (editable)
+          # copy of ci.yml and could upload an artifact of any name.
+          runs="$(gh api --paginate "repos/$repo/actions/artifacts?name=verified-tree-$tree&per_page=100" --jq "
+            .artifacts[] | select(.expired == false)
+            | select(.workflow_run.repository_id == $GITHUB_REPOSITORY_ID
+                     and .workflow_run.head_repository_id == $GITHUB_REPOSITORY_ID)
+            | .workflow_run.id" | sort -u)"
+
+          # Prints nothing if the run can be trusted, otherwise why not.
+          check() {
+            local run="$1" info path event status conclusion head_repo head_sha relation
+            info="$(gh api "repos/$repo/actions/runs/$run" --jq \
+              '[.path, .event, .status, .conclusion, .head_repository.full_name, .head_sha] | map(. // "none") | @tsv')" ||
+              { echo "API error reading the run"; return; }
+            IFS=$'\t' read -r path event status conclusion head_repo head_sha <<<"$info"
+            [ "$path" = .github/workflows/ci.yml ] || { echo "workflow is $path"; return; }
+            case "$event" in pull_request | push) ;; *) echo "event is $event"; return ;; esac
+            [ "$head_repo" = "$repo" ] || { echo "head repository is $head_repo"; return; }
+            [ "$status" = completed ] || { echo "PENDING $status"; return; }
+            # Every job of that run is green, the secrets scan included.
+            [ "$conclusion" = success ] || { echo "run concluded $conclusion"; return; }
+            # The commit that run was about is part of what gets deployed.
+            relation="$(gh api "repos/$repo/compare/$head_sha...$GITHUB_SHA" --jq .status)" ||
+              { echo "API error comparing ${head_sha::7}...${GITHUB_SHA::7}"; return; }
+            case "$relation" in identical | ahead) ;; *) echo "${GITHUB_SHA::7} vs tested ${head_sha::7}: $relation"; return ;; esac
+          }
+
+          verified=false
+          for run in $runs; do
+            # The marker is uploaded in the run's last job; the run completes a
+            # few seconds later. Wait up to 3 min rather than test again.
+            for _ in $(seq 12); do
+              why="$(check "$run")"
+              case "$why" in PENDING*) echo "run $run: ${why#PENDING }, waiting"; sleep 15 ;; *) break ;; esac
+            done
+            if [ -z "$why" ]; then
+              verified=true
+              echo "::notice title=Tests not repeated::these files passed CI in $GITHUB_SERVER_URL/$repo/actions/runs/$run"
+              break
+            fi
+            echo "run $run not trusted: $why"
+          done
+          [ "$verified" = true ] || echo "::notice title=Full verification::no green CI run of this repository for tree $tree"
+          echo "verified=$verified" >> "$GITHUB_OUTPUT"
+
   # The same verification every pull request gets (type check, unit,
-  # integration and smoke tests incl. the Docker build) — fail here, not on
-  # the server.
+  # integration, smoke and layout tests incl. the Docker build) — fail here,
+  # not on the server. If the gate found a green run for these files, only the
+  # secrets scan runs again.
   verify:
+    needs: gate
     uses: ./.github/workflows/ci.yml
+    with:
+      secrets_only: ${{ needs.gate.outputs.verified == 'true' }}
 
   deploy:
     name: Deploy ${{ github.ref_name }}@${{ github.sha }}
     needs: verify
     runs-on: ubuntu-latest
+    # Counted from the approval on. The server's own limit is command_timeout.
+    timeout-minutes: 25
     environment:
       name: staging
       url: https://test-cozynights.hamburn.de
@@ -47,6 +128,7 @@ jobs:
     name: Smoke test staging
     needs: deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: hamburn-cozynights

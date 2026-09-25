@@ -23,7 +23,7 @@ npm run dev            # http://localhost:5173
 | `npm test`                 | Vitest unit and security tests                                    |
 | `npm run test:integration` | Integration tests against a real, empty PocketBase (Docker)       |
 | `npm run test:smoke`       | Smoke tests against the staging Docker image (Docker)             |
-| `npm run verify`           | Everything CI runs: type check, unit, integration and smoke tests |
+| `npm run verify`           | Everything CI runs: type check, unit, integration, smoke, layout  |
 | `npm run smoke:remote`     | Read-only smoke tests against a deployed site                     |
 | `npm run test:e2e`         | Playwright end-to-end tests                                       |
 | `npm run build`            | Production build (`adapter-node`)                                 |
