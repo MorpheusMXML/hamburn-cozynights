@@ -37,7 +37,8 @@
 //
 //    Notifications (pb_hooks/cozy_notify.pb.js):
 //
-//      cozy-admin notify status                   what is configured, what is queued
+//      cozy-admin notify status                   what is configured, what is queued,
+//                                                 whether the bot can post in the crew chat
 //      cozy-admin notify test [--email <address>] crew chat test message (+ test e-mail)
 //
 // 2. On every start, sync the Google OAuth client of the `admins` collection
@@ -1152,6 +1153,28 @@ function cozyCount(collection, filter) {
 	}
 }
 
+/** What to do about a failed crew chat send ({error, migrateTo} from notify.js). */
+function cozyCrewChatHints(r) {
+	if (r.migrateTo) {
+		// TELEGRAM_CHAT_ID stays the operator's: the server never rewrites it
+		return [
+			'the crew group became a supergroup (e.g. "chat history for new members" or topics turned on) and has a new id:',
+			'set TELEGRAM_CHAT_ID=' +
+				r.migrateTo +
+				' in .env, recreate the PocketBase container, run notify test again',
+			'the bot must be a member of the new group: to add it again, @BotFather "Allow Groups" must be on (turn it off afterwards)'
+		];
+	}
+	if (/^401\b/.test(r.error)) return ['the bot token is wrong (TELEGRAM_BOT_TOKEN)'];
+	if (/chat not found|^403\b/.test(r.error)) {
+		return [
+			'the bot is not a member of that chat, or TELEGRAM_CHAT_ID is wrong',
+			'to add the bot to a group again, @BotFather "Allow Groups" must be on (turn it off afterwards)'
+		];
+	}
+	return [];
+}
+
 const cozyNotify = new Command({
 	use: 'notify',
 	short: 'Notifications (guest e-mail, Telegram): status and test messages',
@@ -1163,7 +1186,8 @@ const cozyNotify = new Command({
 cozyNotify.addCommand(
 	new Command({
 		use: 'status',
-		short: 'Show what is configured, what is queued and the latest admin events',
+		short:
+			'Show what is configured, whether the bot can post in the crew chat, what is queued and the latest admin events',
 		run: (cmd, args) => {
 			const notify = cozyNotifyModule();
 			const cfg = notify.config($app);
@@ -1192,6 +1216,13 @@ cozyNotify.addCommand(
 				crew = 'webhook COZY_ADMIN_WEBHOOK_URL';
 			}
 			cmd.println('CREW CHAT          ' + crew);
+			if (cfg.telegram.token && cfg.telegram.chatId) {
+				const check = notify.crewCheck(cfg);
+				if (!check.ok) {
+					cmd.println('  WARNING: the bot cannot post there: ' + check.error);
+					for (const hint of cozyCrewChatHints(check)) cmd.println('  ' + hint);
+				}
+			}
 			if (cfg.telegram.token) {
 				const me = notify.telegramCall(cfg, 'getMe', {}, 10);
 				cmd.println(
@@ -1269,11 +1300,7 @@ const cozyNotifyTest = new Command({
 			} else {
 				failed++;
 				cmd.println('crew chat: FAILED — ' + r.error);
-				if (/^401\b/.test(r.error)) {
-					cmd.println('  the bot token is wrong (TELEGRAM_BOT_TOKEN)');
-				} else if (/chat not found|^403\b/.test(r.error)) {
-					cmd.println('  the bot is not a member of that chat, or TELEGRAM_CHAT_ID is wrong');
-				}
+				for (const hint of cozyCrewChatHints(r)) cmd.println('  ' + hint);
 			}
 		} else {
 			cmd.println('crew chat: not configured (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)');
