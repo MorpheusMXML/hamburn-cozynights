@@ -126,7 +126,7 @@ Two spots of a room can be **stacked** into one bunk bed: a lower bunk and an up
 
 ### Spot states
 
-The status of a spot is written in [its state colour](./index#the-state-colours) on both sides, the admin card and the guest's card: green free, red claimed, violet held by the crew, grey inactive or not bookable right now, turquoise the guest's own spot; pink marks ♿ special needs and nothing else.
+The status of a spot is written in [its state colour](./index#the-state-colours) on both sides, the admin card and the guest's card: green free, red claimed, violet held by the crew, grey inactive or not bookable right now, turquoise the guest's own spot; pink marks ♿ special needs and nothing else. The guest's card also wears the colour as its left edge; on the admin card a claimed spot is dark red and an inactive one dashed.
 
 | Admin card | Guests see |
 | --- | --- |

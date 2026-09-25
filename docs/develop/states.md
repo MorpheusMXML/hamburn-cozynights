@@ -38,6 +38,13 @@ Add `class="state-ring"` and it gets a border in that colour that breathes:
 <a class="house-card state-ring" data-state={houseState(house)}>…</a>
 ```
 
+A card's own colours belong to its page: the spot cards' state edge, a dashed
+inactive spot, a panel's coloured top edge. The Laser Glass look in
+`layout.css` (`.room-card`, `.bed-card` and the large panels) is only a
+default, wrapped in `:where()` so it has no weight; only the panels' fill and
+blur are `!important`. A page rule wins without `!important` of its own — until
+25 Sep the whole glass look was `!important` and hid every page's card colours.
+
 Three helpers come with it: `.state-dot` (the 8 px legend dot), `.state-chip`
 (a small uppercase badge) and `.state-ring-alert` (three quick beats, then
 still — for something that just went wrong, see the form fields).
