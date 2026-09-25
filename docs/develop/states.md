@@ -22,13 +22,16 @@ holds the counting and the names. Nothing else should invent either.
 | `staging` / `live` / `closed` | `--state-staging` … | turquoise / yellow `#facc15` / light grey | the booking phase |
 
 One colour, one meaning (decided 24 Sep): a status colour is never lent to a
-highlight. The ▲ Upper / ▼ Lower chip of a bunk bed is a neutral white
-outline, the phase Live has its own yellow so pink stays ♿ only, and *booked*
-rows on the admin pages are red, not pink. The guest room page's `spotState()`
-and the admin room page's `bed-status` put `data-state` on the card, so both
-sides read the same tokens; the bunk tile on the guest room page gives each
-half its own `data-state`, and the tile itself wears `state-ring` in
-`--state-checked-in` (the *mine* turquoise) when one half is yours.
+highlight. The ▲ Upper / ▼ Lower chip on the admin room page is a neutral
+white outline, the phase Live has its own yellow so pink stays ♿ only, and
+*booked* rows on the admin pages are red, not pink. The guest room page's
+`spotState()` and the admin room page's `bed-status` put `data-state` on the
+card, so both sides read the same tokens; the bunk tile on the guest room page
+gives each half its own `data-state`, and the tile itself wears `state-ring`
+in `--state-checked-in` (the *mine* turquoise) when one half is yours. Its
+level chips (*Upper bunk* turquoise, *Lower bunk* blue `#60a5fa`) and its
+outline, which runs from the one colour down to the other (25 Sep), mark the
+bed, not a state; the admin tile's outline is the ladder's turquoise at 35 %.
 `tests/layout` checks that the status line stays readable at 320 px.
 
 Put `data-state="…"` on an element and it gets `--state` and `--state-soft`.

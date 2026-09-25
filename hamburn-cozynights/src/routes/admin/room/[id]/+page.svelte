@@ -1231,7 +1231,10 @@
 			opacity 0.5s ease;
 	}
 
-	/* The bunk tile: upper half, the rung strip, lower half, in one column. */
+	/* The bunk tile: upper half, the rung strip, lower half, in one column.
+	   Its outline has the rung strip's turquoise, booked or not, so the two
+	   halves read as one bed: these rules weigh the same as the .occupied
+	   ones above and come later, so a booked half doesn't turn the frame red. */
 	.bed-card.bunk {
 		flex-direction: column;
 		flex-wrap: nowrap;
@@ -1241,14 +1244,10 @@
 		border-color: rgba(45, 212, 191, 0.35);
 	}
 	.bed-card.bunk.occupied {
-		border-color: #311;
 		background: #111;
 	}
 	.bed-card.bunk:hover:not(.disabled) {
 		border-color: #2dd4bf;
-	}
-	.bed-card.bunk.occupied:hover:not(.disabled) {
-		border-color: #ef4444;
 	}
 	.bunk-half {
 		position: relative;

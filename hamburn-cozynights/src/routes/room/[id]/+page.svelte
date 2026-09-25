@@ -1001,22 +1001,33 @@
 
 	/* A bunk bed: one tile in the grid, the two halves stacked with the ladder
 	   between them. The halves keep the card look and the colour of their own
-	   state (data-state); the tile only frames them, and breathes (state-ring,
-	   in my colour) when one of them is mine. */
+	   state (data-state); the tile frames them, and breathes (state-ring, in my
+	   colour) when one of them is mine. The frame ties the two cards into one
+	   bed: its outline runs from the "Upper bunk" chip's turquoise down to the
+	   "Lower bunk" chip's blue, and the bar through the ladder meets it on both
+	   sides (Max's pick of four outlines, 25 Sep). */
 	.bunk-tile {
 		--state: var(--state-checked-in);
+		--bunk-top: rgba(45, 212, 191, 0.6);
+		--bunk-bottom: rgba(96, 165, 250, 0.6);
+		--bunk-pad: 0.4rem;
 		display: flex;
 		flex-direction: column;
 		min-width: 0;
-		padding: 0.4rem;
-		border: 1px solid #222;
+		padding: var(--bunk-pad);
+		/* A border can't be a gradient: it stays transparent, and the last
+		   background layer (border-box) shows through it. The layers above
+		   stop at the padding box. */
+		border: 1px solid transparent;
 		border-radius: 20px;
 		background:
-			radial-gradient(120% 90% at 50% 0%, rgba(45, 212, 191, 0.08), transparent 60%), #0b0b0b;
-		transition: border-color 0.2s;
+			radial-gradient(120% 90% at 50% 0%, rgba(45, 212, 191, 0.08), transparent 60%) padding-box,
+			linear-gradient(#0b0b0b, #0b0b0b) padding-box,
+			linear-gradient(var(--bunk-top), var(--bunk-bottom)) border-box;
 	}
 	.bunk-tile:hover {
-		border-color: #333;
+		--bunk-top: rgba(45, 212, 191, 0.9);
+		--bunk-bottom: rgba(96, 165, 250, 0.9);
 	}
 	.bunk-tile .bed-card {
 		border-radius: 14px;
@@ -1029,20 +1040,20 @@
 	.bunk-tile .bed-card.bunk-half.mine:hover {
 		transform: none;
 	}
+	/* The bar reaches through the tile's padding to the outline on either
+	   side, in the colour the outline has halfway down. */
 	.bunk-rail {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.1rem 1rem;
+		margin: 0 calc(-1 * var(--bunk-pad));
+		padding: 0.1rem 0;
 		pointer-events: none;
 	}
 	.rail-line {
 		flex: 1;
 		height: 0;
-		border-top: 1px dashed #2a2a2a;
-	}
-	.bunk-tile:hover .rail-line {
-		border-top-color: rgba(45, 212, 191, 0.4);
+		border-top: 1px solid color-mix(in srgb, var(--bunk-top), var(--bunk-bottom));
 	}
 
 	/* "Upper bunk" / "Lower bunk" next to the label, on the label's line
@@ -1064,7 +1075,6 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.bunk-tile,
 		.bed-card {
 			transition: none;
 		}
