@@ -60,10 +60,13 @@ frame. Animating `border-color` or `box-shadow` instead — as the older
 `pulse-glow` in `layout.css` still does (a leftover to replace) — repaints every frame
 for every element.
 
-The element also keeps a static border in its state colour, so the state is
-readable while the animation is paused, off or still starting. Two rules
-switch it off: `prefers-reduced-motion: reduce`, and the landing page's pause
-button (`:root[data-motion='paused']`, WCAG 2.2.2).
+The ring alone carries the colour. The element keeps its own border: every
+card that wears the ring sets one (`.house-card`, `.bunk-tile`, the admin
+`.bed-card`, the Intel tiles), and a page's scoped rule outranks
+`.state-ring`. The ring needs no help: it breathes between 95 % and 40 %
+opacity, and `prefers-reduced-motion: reduce` stops it at full strength. The
+landing page's pause button (`:root[data-motion='paused']`, WCAG 2.2.2) holds
+it wherever it is.
 
 ### The four states of a house
 

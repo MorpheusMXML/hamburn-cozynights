@@ -1156,7 +1156,7 @@
 		flex: 1;
 	}
 
-	/* Stacking mode: the source breathes pink, the targets turquoise (the
+	/* Stacking mode: the source breathes yellow, the targets turquoise (the
 	   state ring from state.css), and bunk beds step back — they are no targets. */
 	.stacking .bed-card.bunk {
 		opacity: 0.45;
