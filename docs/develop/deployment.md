@@ -53,20 +53,26 @@ git switch -c deploy/23-bunk-cards
 scripts/release.sh 0.23.0 "Deploy Nr. 23: …"   # in hamburn-cozynights/, stamps the version
 git push origin deploy/23-bunk-cards v0.23.0
 gh pr create --base integration/staging --head deploy/23-bunk-cards --fill
-gh pr merge --merge                             # the merge commit is what the server will build
-gh workflow run deploy-staging.yml --ref integration/staging
+# one chain: the merge waits for the green checks, the dispatch for the merge
+gh pr checks deploy/23-bunk-cards --watch --fail-fast \
+  && gh pr merge deploy/23-bunk-cards --merge \
+  && gh workflow run deploy-staging.yml --ref integration/staging
 gh run watch
 ```
 
 :::
 
-**Dispatch after the merge, never before.** The workflow builds the tip of `integration/staging` at the moment it starts; started too early it deploys the state without your merge, and the run has to be cancelled.
+**Dispatch after the merge, never before.** The workflow builds the tip of `integration/staging` at the moment it starts; started too early it deploys the state without your merge, and the run has to be cancelled. `gh pr merge` refuses while the required `Verify` check is still running, so run the three commands as one `&&` chain, as above, never one after the other.
 
 ```mermaid
 flowchart TD
-  run(["▶ Run workflow on a branch"]) --> verify["🧪 verify — the same checks as every pull request:<br/>type check · unit tests<br/>integration tests against an empty PocketBase<br/>smoke tests against the staging Docker image"]
+  run(["▶ Run workflow on a branch"]) --> gate{"gate — did exactly these files<br/>pass CI already?"}
+  gate -- "yes: the pull request's run" --> secrets["🔑 secrets scan only"]
+  gate -- no --> verify["🧪 verify — the same checks as every pull request:<br/>type check · unit tests<br/>integration tests against an empty PocketBase<br/>smoke and layout tests against the staging Docker image"]
   verify -- fails --> stop1["❌ Server untouched"]
+  secrets -- fails --> stop1
   verify --> approve{"Reviewer<br/>approval"}
+  secrets --> approve
   approve --> server["🖥️ deploy — on the server, via a key that can only start the deploy script:<br/>check out the commit · build the image · back up PocketBase · restart"]
   server --> health{"Health check<br/>within 60 s"}
   health -- fails --> rollback["↩ Previous commit restarted,<br/>job turns red"]
@@ -77,7 +83,8 @@ flowchart TD
 
 The old containers keep serving while the new image builds.
 
-- **`verify`** reuses [`.github/workflows/ci.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/ci.yml), the workflow behind the `Verify` check on every pull request, for exactly the commit being deployed. What it runs is described in [Testing & release checks](./testing).
+- **`gate`** looks for a green CI run that already tested exactly the files being deployed. A pull request into `integration/staging` can only be merged with a green `Verify`, and its merge commit holds the very files that run tested (GitHub tests the pull request merged into its base). So the green `Verify` job leaves a marker named after the git tree it tested (`verified-tree-<tree>`, kept 7 days), and the gate trusts it only after checking that run through the API: `ci.yml`, a pull request or push of this repository (never a fork), completed with every job green, and its commit part of the one being deployed. Anything else — no marker, another tree because the branch moved on in between, an API error — means the full verification, as before.
+- **`verify`** reuses [`.github/workflows/ci.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/ci.yml), the workflow behind the `Verify` check on every pull request: all of it for a commit the gate found no green run for, otherwise the secrets scan only. What it runs is described in [Testing & release checks](./testing).
 - **`deploy`** waits for approval in the `staging` GitHub environment, then runs the deploy script on the server.
 - **`smoke`** runs `npm run smoke:remote` against the live site: pages are served, `/api/health` confirms the service account, a ticket lookup reaches the database, the admin login page offers Google sign-in, the admin area is closed, the security headers are present and PocketBase is not reachable from outside. Read-only, no credentials.
 - The script **refuses to deploy** and changes nothing if the server checkout has local changes, the build fails, or the backup can't be written.

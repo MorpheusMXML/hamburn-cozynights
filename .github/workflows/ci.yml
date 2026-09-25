@@ -2,13 +2,21 @@ name: CI
 
 # Every pull request and every push to main runs the full verification
 # (docs/develop/testing.md, "Testing & release checks" on the docs site). The
-# staging deploy calls this workflow too (workflow_call), so nothing is
-# deployed that did not pass here.
+# staging deploy calls this workflow too (workflow_call): in full when the
+# files it deploys have not passed here yet, otherwise only the secrets scan.
+#
+# The parts run side by side, each on its own runner. The job named "Verify"
+# collects them: that is the check the rulesets require.
 on:
   pull_request:
   push:
     branches: [main]
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      secrets_only:
+        description: Only the secrets scan — a green run of this repository already tested exactly these files.
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -19,10 +27,13 @@ permissions:
   contents: read
 
 jobs:
-  verify:
-    name: Verify
+  # (On pull_request and push `inputs` is empty, so `!inputs.secrets_only` is
+  # true there and everything runs.)
+  checks:
+    name: Checks
+    if: ${{ !inputs.secrets_only }}
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: hamburn-cozynights
@@ -46,15 +57,61 @@ jobs:
       - name: Integration tests (real PocketBase)
         run: npm run test:integration
 
-      - name: Browsers for the layout test
-        run: npx playwright install --with-deps chromium webkit
+  # The app image, built from the same Dockerfile the server builds: the smoke
+  # tests drive it over HTTP (guest login, booking, admin protection), then the
+  # layout test opens every page with awkward names at every width from 320 to
+  # 1440 px (docs/develop/layout.md). The layout test is split into parts, each
+  # on its own runner with its own stack; every part runs the smoke tests first,
+  # because the pages show what they leave in the database.
+  layout:
+    name: Smoke + layout (${{ matrix.project }} ${{ matrix.shard }})
+    if: ${{ !inputs.secrets_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      # One red part must not cancel the others: all findings at once.
+      fail-fast: false
+      matrix:
+        include:
+          - { project: chromium, shard: 1/2 }
+          - { project: chromium, shard: 2/2 }
+          - { project: webkit, shard: 1/4 }
+          - { project: webkit, shard: 2/4 }
+          - { project: webkit, shard: 3/4 }
+          - { project: webkit, shard: 4/4 }
+    defaults:
+      run:
+        working-directory: hamburn-cozynights
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hamburn-cozynights/package-lock.json
+      - run: npm ci
 
-      # One app image, built from the same Dockerfile the server builds, for
-      # both suites: the smoke tests drive it over HTTP (guest login, booking,
-      # admin protection), the layout test opens every page with awkward names
-      # at every width from 320 to 1440 px (docs/develop/layout.md).
+      - name: Browser for this part
+        run: npx playwright install --with-deps ${{ matrix.project }}
+
       - name: Smoke and layout tests (app image + PocketBase)
+        env:
+          LAYOUT_ARGS: --project=${{ matrix.project }} --shard=${{ matrix.shard }}
         run: bash scripts/test-stack.sh smoke layout
+
+      # The report holds a screenshot of every failing page with the problems
+      # outlined — the Linux fonts are not the Mac's, so this is often the only
+      # way to see what broke.
+      - name: Layout report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: layout-report-${{ matrix.project }}-${{ strategy.job-index }}
+          path: |
+            hamburn-cozynights/playwright-report
+            hamburn-cozynights/test-results/layout
+          retention-days: 7
+          if-no-files-found: ignore
 
   # The repository is public: a committed secret is published. gitleaks scans
   # the whole history with the rules in .gitleaks.toml; the same rules run
@@ -76,3 +133,48 @@ jobs:
           sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
       - name: Scan the whole history
         run: gitleaks git --redact --no-banner --config .gitleaks.toml .
+
+  # The check the rulesets require: green only when every part above is green.
+  verify:
+    name: Verify
+    # always(), not !cancelled(): a skipped required check would count as passed.
+    if: ${{ always() }}
+    needs: [checks, layout, secrets]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every part passed
+        env:
+          CHECKS: ${{ needs.checks.result }}
+          LAYOUT: ${{ needs.layout.result }}
+          SECRETS: ${{ needs.secrets.result }}
+          SECRETS_ONLY: ${{ inputs.secrets_only == true }}
+        run: |
+          echo "checks: $CHECKS · smoke + layout: $LAYOUT · secrets: $SECRETS"
+          [ "$SECRETS" = success ]
+          [ "$SECRETS_ONLY" = true ] || { [ "$CHECKS" = success ] && [ "$LAYOUT" = success ]; }
+
+      # "These files passed": the staging deploy looks for this marker
+      # (deploy-staging.yml, job "gate") instead of testing the same files a
+      # second time. Only from pull requests and pushes of this repository;
+      # the name is the git tree, i.e. the exact content that was tested.
+      # Best effort: without a marker the deploy simply tests again.
+      - name: The tested tree
+        id: tree
+        if: ${{ !inputs.secrets_only && (github.event_name == 'pull_request' || github.event_name == 'push') }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$GITHUB_SHA" --jq .tree.sha)"
+          echo "tree=$tree" >> "$GITHUB_OUTPUT"
+          printf 'tree %s\ncommit %s\nrun %s\n' "$tree" "$GITHUB_SHA" "$GITHUB_RUN_ID" > "$RUNNER_TEMP/verified-tree.txt"
+      - name: Marker for the deploy
+        if: ${{ steps.tree.outputs.tree != '' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verified-tree-${{ steps.tree.outputs.tree }}
+          path: ${{ runner.temp }}/verified-tree.txt
+          retention-days: 7
+          if-no-files-found: error
