@@ -5,6 +5,7 @@ import { getBookingSettings } from '$lib/server/settings';
 import { bedTypeMix, defaultRoomKind, parseDetailsForm } from '$lib/accommodation';
 import { countSpots } from '$lib/occupancy';
 import { readBookings } from '$lib/server/bookings';
+import { NAMES_LOCKED, checkHouseName } from '$lib/server/names';
 import { TEMPLATE_LIMITS } from '$lib/template';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -68,6 +69,32 @@ function parseWholeNumber(value: string): number | null {
 }
 
 export const actions: Actions = {
+	/**
+	 * A new name for the house, from a click on the page's title (InlineRename):
+	 * only in Staging Mode, and once in the camp — the rules of creating one
+	 * ($lib/server/names).
+	 */
+	renameHouse: async ({ request, params, locals }) => {
+		if (!locals.admin) return fail(403, { message: 'Only admins can rename houses.' });
+
+		const { isLayoutLocked } = await getBookingSettings(locals.pb);
+		if (isLayoutLocked) return fail(403, { message: NAMES_LOCKED });
+
+		const data = await request.formData();
+		try {
+			const name = await checkHouseName(locals.pb, params.id, data.get('name'));
+			if (!name.ok) return fail(400, { message: name.message });
+			await locals.pb.collection('houses').update(params.id, { name: name.value });
+			console.log(`[Action:renameHouse] Admin: ${locals.admin.email}, House: ${params.id}`);
+			return { success: true };
+		} catch (err) {
+			console.error('[Action:renameHouse] FAILED:', err);
+			return fail(500, {
+				message: 'The server could not rename the house. Reload the page and try again.'
+			});
+		}
+	},
+
 	/**
 	 * What the house is like: kind, features and description (src/lib/accommodation.ts).
 	 * Allowed in every phase, like the room details: they describe the place.

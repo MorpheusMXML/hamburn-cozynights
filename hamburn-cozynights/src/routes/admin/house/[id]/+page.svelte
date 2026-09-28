@@ -5,6 +5,8 @@
 	import DetailsPanel from '$lib/components/admin/DetailsPanel.svelte';
 	import FoldPanel from '$lib/components/admin/FoldPanel.svelte';
 	import FoldToggle from '$lib/components/admin/FoldToggle.svelte';
+	import InlineRename from '$lib/components/admin/InlineRename.svelte';
+	import { TEMPLATE_LIMITS } from '$lib/template';
 	import { bookingsByRoom, countBookings } from '$lib/bookings';
 	import LayoutLockNotice from '$lib/components/admin/LayoutLockNotice.svelte';
 	import LockGlyph from '$lib/components/LockGlyph.svelte';
@@ -98,7 +100,16 @@
 		</nav>
 		<h1>
 			<span class="house-icon">🛖</span>
-			<span class="house-name">{house.name}</span>
+			<!-- In Staging Mode a click on the name renames the house. -->
+			<InlineRename
+				value={house.name}
+				action="?/renameHouse"
+				what="house"
+				editable={!isLayoutLocked}
+				maxLength={TEMPLATE_LIMITS.houseNameLength}
+			>
+				<span class="house-name">{house.name}</span>
+			</InlineRename>
 			<span class="subtitle">SANCTUARY OVERSIGHT</span>
 		</h1>
 	</div>
@@ -112,7 +123,7 @@
 		{phase}
 		{isSuperuser}
 		next={booking?.next}
-		blocks="Rooms can't be added or deleted."
+		blocks="Names can't be changed, and rooms can't be added or deleted."
 		still="Spots can still be locked 🔒 and marked ♿ on the room pages."
 	/>
 

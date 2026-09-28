@@ -13,6 +13,7 @@ import { defaultSelection } from '$lib/template-diff';
 import { applyTemplate, compareTemplate, TemplateImportError } from '$lib/server/template';
 import { logAdminEvent } from '$lib/server/admin-events';
 import { crewBookedBeds } from '$lib/server/special-requests';
+import { checkHouseName } from '$lib/server/names';
 
 /** Keys of the chosen changes; a real layout has far fewer. */
 const MAX_SELECTED_CHANGES = 20000;
@@ -564,8 +565,11 @@ export const actions: Actions = {
 				console.warn(`[Action:renameHouse] BLOCKED: ${phase} — structure is locked.`);
 				return fail(403, { error: `House names are locked ${lockedDuring(phase)}. 🔒` });
 			}
+			// The rules of creating a house: not too long, once in the camp.
+			const checked = await checkHouseName(locals.pb, id, name);
+			if (!checked.ok) return fail(400, { error: checked.message });
 
-			await locals.pb.collection('houses').update(id, { name });
+			await locals.pb.collection('houses').update(id, { name: checked.value });
 			console.log(`[Action:renameHouse] SUCCESS for ${id}`);
 			return { success: true };
 		} catch (err) {

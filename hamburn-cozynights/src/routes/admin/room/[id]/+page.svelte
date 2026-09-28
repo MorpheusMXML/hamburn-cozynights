@@ -5,6 +5,7 @@
 	import BookingGuest from '$lib/components/admin/BookingGuest.svelte';
 	import DetailsPanel from '$lib/components/admin/DetailsPanel.svelte';
 	import FoldToggle from '$lib/components/admin/FoldToggle.svelte';
+	import InlineRename from '$lib/components/admin/InlineRename.svelte';
 	import LayoutLockNotice from '$lib/components/admin/LayoutLockNotice.svelte';
 	import SpotDetails from '$lib/components/admin/SpotDetails.svelte';
 	import LockGlyph from '$lib/components/LockGlyph.svelte';
@@ -27,7 +28,7 @@
 		type BunkLevel,
 		type SpotUnit
 	} from '$lib/bunks';
-	import { compareNatural } from '$lib/template';
+	import { TEMPLATE_LIMITS, compareNatural } from '$lib/template';
 	import { fade, fly, scale, slide } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
 	import { onMount, tick } from 'svelte';
@@ -293,7 +294,18 @@
 		{/if}
 	</div>
 	<div class="bed-info">
-		<span class="bed-label">{bed.label || 'Unnamed Spot'}</span>
+		<!-- In Staging Mode a click on the label renames the spot. -->
+		<InlineRename
+			value={bed.label ?? ''}
+			action="?/renameSpot"
+			what="spot"
+			id={bed.id}
+			field="label"
+			editable={!isLayoutLocked}
+			maxLength={TEMPLATE_LIMITS.bedLabelLength}
+		>
+			<span class="bed-label">{bed.label || 'Unnamed Spot'}</span>
+		</InlineRename>
 		<!-- The status colour comes from state.css: claimed is red, vacant green,
 		     locked violet, inactive grey — the same tokens the guests see. -->
 		<span
@@ -467,8 +479,19 @@
 
 		<h1>
 			<span class="room-icon">🛌</span>
-			<span class="room-title">{roomTitle}</span>
-			<span class="badge turquoise">#{room.room_number}</span>
+			<!-- In Staging Mode a click on the name renames the room, number included. -->
+			<InlineRename
+				value={room.name ?? ''}
+				action="?/renameRoom"
+				what="room"
+				editable={!isLayoutLocked}
+				maxLength={TEMPLATE_LIMITS.roomNameLength}
+				number={room.room_number}
+				numberMax={TEMPLATE_LIMITS.roomNumber}
+			>
+				<span class="room-title">{roomTitle}</span>
+				<span class="badge turquoise">#{room.room_number}</span>
+			</InlineRename>
 		</h1>
 	</div>
 
@@ -481,7 +504,7 @@
 		{phase}
 		{isSuperuser}
 		next={booking?.next}
-		blocks="Spots can't be added, deleted, deactivated or marked taken or free."
+		blocks="Names can't be changed, and spots can't be added, deleted, deactivated or marked taken or free."
 		still="Locking 🔒 and unlocking 🔓 spots and marking them ♿ special or normal still work."
 	/>
 

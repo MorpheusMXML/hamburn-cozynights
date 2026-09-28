@@ -5,6 +5,18 @@ The camp is a simple tree: **houses** on the map contain **rooms**, and rooms co
 > [!IMPORTANT] Staging only
 > All structural changes need Staging Mode. During Live Booking and after booking closed the server refuses them. Only locking/unlocking 🔒, marking spots ♿ special or normal, the **details** below and [bunk beds](#bunk-beds) 🪜 still work. The pages show it: a line on top says whether the layout can be changed, and every locked button or field is greyed out with a padlock and [says why](./index#locked-not-now) when you try it. See [Staging, Live Booking & Closed](../guide/phases).
 
+## Renaming ✏️ {#renaming}
+
+In Staging Mode every name can be changed after it was saved: **click it**. The house's name on its page, the room's name on its page and a spot's label on its card turn into a field with <kbd>✓</kbd> (save) and <kbd>✕</kbd> (cancel); <kbd>Enter</kbd> saves too, <kbd>Esc</kbd> cancels. A faint ✏️ after a name shows that it can be clicked.
+
+| What | Click | Rules |
+| --- | --- | --- |
+| House | its name on the house page (or the house on the map, see [Move, rename, delete](#move-rename-delete)) | up to 100 characters, each name once in the camp — *Villa* and *villa* count as the same |
+| Room | its name on the room page; the field has the **room number** next to it | up to 100 characters; the number is a whole number from 1 to 9999, once per house |
+| Spot | its label on its card on the room page | up to 50 characters, each label once per room |
+
+A name that breaks a rule is refused with the reason under the field, and nothing changes. While booking is live or closed the names are plain text: they belong to the layout, and the layout holds the guests' bookings then. A booked spot keeps its guest when it is renamed; the pass and the next messages show the new name. [Templates](./templates) find houses by name, rooms by number and spots by label, so export a fresh one after renaming.
+
 ## Houses
 
 ### Create a house
@@ -19,7 +31,7 @@ CozyNights creates the house, a first room called **Main Module** (#1), and spot
 | Task | How |
 | --- | --- |
 | Move | Drag the pin in map view, or move a selected pin with the arrow keys (<kbd>Shift</kbd> for bigger steps). For an exact place, type the **MAP POSITION 📍** in the sidebar (X 0–1000, Y 0–700) and press <kbd>MOVE PIN</kbd>. Every move is saved right away. Houses keep a small distance from each other. |
-| Rename | Click the house in map view, or <kbd>RENAME ✏️</kbd> on its card in list view → change the name → <kbd>SYNC MODULE ✨</kbd>. |
+| Rename | Click the house's name on its own page (see [Renaming](#renaming)). On *Map & houses*: click the house in map view, or <kbd>RENAME ✏️</kbd> on its card in list view, change the name and press <kbd>SYNC MODULE ✨</kbd>. The same rules apply everywhere. |
 | Delete | <kbd>VANISH FROM PLAYA 🌪️</kbd> in the sidebar or <kbd>VANISH 🌪️</kbd> on the card, then confirm. |
 
 > [!CAUTION] Deleting is final
@@ -72,7 +84,7 @@ Press <kbd>IGNITE ROOM ✨</kbd>.
 
 | Field | What it is |
 | --- | --- |
-| NAME | Only in Staging Mode: the name belongs to the layout. The field is gone while booking is live or closed. |
+| NAME | Only in Staging Mode: the name belongs to the layout. The field is gone while booking is live or closed. Clicking the room's name at the top of the page does the same, with the room number next to it (see [Renaming](#renaming)). |
 | KIND | Room · Hut · Tent · Other. A room added to a hut group starts as a **hut** (and in a tent area as a tent), so you rarely have to set it. |
 | FEATURES | ♿ Wheelchair accessible · ⬇️ Ground floor · 🛁 Own bathroom · 🔥 Heated · ❄️ No heating · 🤫 Quiet zone. They come **on top of** the house's: a heated room in an unheated hut group counts as heated. 🔥 Heated and ❄️ No heating rule each other out here too, and an [upper bunk](#bunk-beds) never inherits ♿ from its room either. |
 | FROM THE HOUSE | The block **From the house** shows, as greyed chips, what the room inherits from its house right now, e.g. *🔥 Heated · 🤫 Quiet zone* — every admin sees it. **Superusers** also get an **off here** box on each chip and <kbd>RESET TO HOUSE</kbd>. Tick *off here* on 🔥 Heated and this room stays cold in a heated house: the chip is gone for the room and its spots, on the guest pages, in the wish chips and in the ♿ picker, while the house and its other rooms keep it. <kbd>RESET TO HOUSE</kbd> clears every *off here* box, so the room inherits everything again. A feature can't be switched off and ticked under FEATURES at the same time: ticking one box clears the other, and the server refuses a room that claims both, also on the records API. Only superusers switch off and reset; an admin's save never changes what is switched off. |
@@ -100,7 +112,7 @@ Open a room by clicking its card on the house page.
 | All single beds | Every spot a single bed. Bunk beds are taken apart. |
 | Not specified | Clears the bed type again. Bunk beds are taken apart. |
 
-<kbd>🏷️ DETAILS</kbd> on a spot card opens its own editor: the **BED** (single bed, lower or upper bunk, one half of a double bed, sofa, mattress, camp bed), in Staging Mode its **LABEL**, and the block **From the room and house**: greyed chips of what the spot inherits, i.e. the house's features minus what the room switched off, plus the room's own. A spot has no features of its own — everything it has comes from its room and house. Superusers get the same **off here** boxes and a <kbd>RESET</kbd> button as on a [room](#room-details) and may switch off anything that comes from the house or the room — say 🤫 Quiet zone on the bed by the door. Admins see the chips, superusers switch off and reset. On an **upper bunk** the room's ♿ Wheelchair accessible chip is struck through and says *never on an upper bunk*, with no *off here* box: the ladder rules it out, whatever the room says. The chip follows the **BED** field as you change it, before you save. Guests see the bed under the spot's label, and the ♿ picker uses it: *a lower bunk or a bed without a ladder* fits every bed but an upper bunk, and an upper bunk is never ♿ wheelchair accessible, whatever its room says (see [Bunk beds](#bunk-beds)). A spot that is part of a [bunk bed](#bunk-beds) gets its bed from the stacking: the **BED** field is greyed out there and says so.
+<kbd>🏷️ DETAILS</kbd> on a spot card opens its own editor: the **BED** (single bed, lower or upper bunk, one half of a double bed, sofa, mattress, camp bed), in Staging Mode its **LABEL** (clicking the label on the card does the same, see [Renaming](#renaming)), and the block **From the room and house**: greyed chips of what the spot inherits, i.e. the house's features minus what the room switched off, plus the room's own. A spot has no features of its own — everything it has comes from its room and house. Superusers get the same **off here** boxes and a <kbd>RESET</kbd> button as on a [room](#room-details) and may switch off anything that comes from the house or the room — say 🤫 Quiet zone on the bed by the door. Admins see the chips, superusers switch off and reset. On an **upper bunk** the room's ♿ Wheelchair accessible chip is struck through and says *never on an upper bunk*, with no *off here* box: the ladder rules it out, whatever the room says. The chip follows the **BED** field as you change it, before you save. Guests see the bed under the spot's label, and the ♿ picker uses it: *a lower bunk or a bed without a ladder* fits every bed but an upper bunk, and an upper bunk is never ♿ wheelchair accessible, whatever its room says (see [Bunk beds](#bunk-beds)). A spot that is part of a [bunk bed](#bunk-beds) gets its bed from the stacking: the **BED** field is greyed out there and says so.
 
 ### Bunk beds 🪜 {#bunk-beds}
 
