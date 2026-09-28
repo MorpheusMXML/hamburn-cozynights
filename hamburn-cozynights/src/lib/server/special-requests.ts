@@ -105,7 +105,6 @@ export function toSpot(bed: BedWithRoom): SpotInfo {
 		features: effectiveFeatures({
 			house: building?.features,
 			room: room?.features,
-			spot: bed.features,
 			roomOff: room?.features_off,
 			spotOff: bed.features_off,
 			bedType: bed.bed_type

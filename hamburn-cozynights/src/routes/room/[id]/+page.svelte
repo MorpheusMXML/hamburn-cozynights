@@ -98,21 +98,18 @@
 	});
 
 	/**
-	 * "Lower bunk · 🔌 Power socket" under a spot's label. In a bunk bed the
-	 * level chip says "Upper bunk" already, so its half only adds where the
-	 * other level is: "above B1 · 🔌 Power socket". What the spot lacks although
-	 * the room has it reads "no 🔌 Power socket".
+	 * "Single bed" under a spot's label. In a bunk bed the level chip says
+	 * "Upper bunk" already, so its half only adds where the other level is:
+	 * "above B1". What the spot lacks although the room has it reads
+	 * "no ♿ Wheelchair accessible" — an upper bunk in a ♿ room, or a feature a
+	 * superuser switched off for this spot.
 	 */
 	$: spotLine = (
-		bed: { id: string; bedType: string; features: string[]; missing: string[] },
+		bed: { id: string; bedType: string; missing: string[] },
 		level: BunkLevel | null
 	) =>
 		[
 			level ? bunkNote(spots, bed.id) : bedTypeEntry(bed.bedType)?.label,
-			...bed.features.map((feature) => {
-				const entry = featureEntry(feature);
-				return entry ? `${entry.icon} ${entry.label}` : '';
-			}),
 			...bed.missing.map((feature) => {
 				const entry = featureEntry(feature);
 				return entry ? `no ${entry.icon} ${entry.label}` : '';
@@ -142,10 +139,8 @@
 						? 'idle'
 						: 'open';
 	/** Whether a card has a detail line at all. */
-	const hasDetail = (
-		bed: { bedType: string; features: string[]; missing: string[] },
-		level: BunkLevel | null
-	) => !!level || !!bedTypeEntry(bed.bedType) || bed.features.length > 0 || bed.missing.length > 0;
+	const hasDetail = (bed: { bedType: string; missing: string[] }, level: BunkLevel | null) =>
+		!!level || !!bedTypeEntry(bed.bedType) || bed.missing.length > 0;
 
 	// The page behind an open modal must not scroll along on phones.
 	$: if (typeof document !== 'undefined') {
@@ -950,7 +945,7 @@
 		   squeezed the label down to a letter per line ("U / pp / er / 1"). */
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr);
-		/* The detail line ("above B1 · 🔌") has a row of its own: placed by
+		/* The detail line ("above B1 · no ♿") has a row of its own: placed by
 		   auto-flow it would land in the icon column and widen it until the
 		   label had no room left. */
 		grid-template-areas:

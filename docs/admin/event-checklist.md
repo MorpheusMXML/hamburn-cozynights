@@ -26,7 +26,7 @@ timeline
 - [ ] **Spot states checked.** New spots are active right away. Deactivate ❄️ the ones that aren't in use; after a template import, look for ⚪️ INACTIVE spots that should be bookable.
 - [ ] **Red alert gone.** *Map & houses* shows no **RED ALERT: THE CAMP LAYOUT IS INCOMPLETE** panel (and the Control Center no red line under *Needs attention*) (no house without rooms, no room without spots). See [Red alert](./index#red-alert-sanity-checks).
 - [ ] **Crew beds locked.** Beds that guests shouldn't book are locked 🔒.
-- [ ] **Special-needs spots marked.** Spots that suit guests with special needs (lower bunks, step-free, quiet, near a toilet, with a socket) are marked ♿ on their room pages. See [Special-needs requests](./special-needs).
+- [ ] **Special-needs spots marked.** Spots that suit guests with special needs (lower bunks, step-free, quiet, near a toilet) are marked ♿ on their room pages. See [Special-needs requests](./special-needs).
 - [ ] **Special-needs requests opened** in the Control Center, once the tickets are loaded, and announced to guests together with the booking date.
 - [ ] **Backup.** Export a template of the finished layout.
 

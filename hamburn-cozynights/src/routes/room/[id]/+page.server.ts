@@ -7,13 +7,7 @@ import type {
 	HousesResponse,
 	OrdersResponse
 } from '$lib/pocketbase-types';
-import {
-	effectiveFeatures,
-	inheritedFeatures,
-	readFeatures,
-	readFeaturesOff,
-	roomKind
-} from '$lib/accommodation';
+import { effectiveFeatures, missingAtSpot, roomKind } from '$lib/accommodation';
 import { compareNatural } from '$lib/template';
 import { decrypt } from '$lib/server/crypto';
 import {
@@ -107,18 +101,20 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				occupied: !!bed.occupied,
 				bookable: !bed.occupied && isBedBookable(bed, { allowLocked: !!locals.admin }),
 				burnerName,
-				// What kind of bed it is and what only this spot has: the room's and
-				// the house's features are shown once, above the list.
+				// What kind of bed it is: the room's and the house's features are
+				// shown once, above the list.
 				bedType: bed.bed_type ?? '',
-				features: readFeatures(bed.features, 'spot'),
-				// What this spot does NOT have although the room or house has it (a
-				// superuser switched it off): the card says "no 🔌 Power socket", so
+				// What this spot does NOT have although the room or house has it: a
+				// superuser switched it off here, or the bed rules it out (an upper
+				// bunk is never ♿). The card says "no ♿ Wheelchair accessible", so
 				// the room's chips above don't promise it for this bed.
-				missing: inheritedFeatures('spot', {
+				missing: missingAtSpot({
 					house: room.expand?.house?.features,
 					room: room.features,
-					roomOff: room.features_off
-				}).filter((feature) => readFeaturesOff(bed.features_off, 'spot').includes(feature)),
+					roomOff: room.features_off,
+					spotOff: bed.features_off,
+					bedType: bed.bed_type
+				}),
 				// The other spot of a bunk bed (a record id, not personal data): the
 				// page stacks the two into one tile.
 				bunkPartner: bed.bunk_partner ?? ''

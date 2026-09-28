@@ -13,7 +13,6 @@
 		bedTypeEntry,
 		bedTypeMix,
 		detailsSummary,
-		featureEntry,
 		inheritedFeatures,
 		readFeatures,
 		readFeaturesOff
@@ -324,13 +323,8 @@
 			</span>
 		{/if}
 		<!-- The level chip already says "upper bunk": no need to repeat it here. -->
-		{#if (!level && bedTypeEntry(bed.bed_type)) || readFeatures(bed.features, 'spot').length > 0}
-			<span class="bed-detail">
-				{level ? '' : (bedTypeEntry(bed.bed_type)?.label ?? '')}
-				{#each readFeatures(bed.features, 'spot') as feature}
-					<span title={featureEntry(feature)?.label}>{featureEntry(feature)?.icon}</span>
-				{/each}
-			</span>
+		{#if !level && bedTypeEntry(bed.bed_type)}
+			<span class="bed-detail">{bedTypeEntry(bed.bed_type)?.label}</span>
 		{/if}
 	</div>
 
@@ -448,12 +442,7 @@
 	</div>
 
 	<SpotDetails
-		bed={{
-			id: bed.id,
-			label: bed.label,
-			bed_type: bed.bed_type,
-			features: bed.features
-		}}
+		bed={{ id: bed.id, label: bed.label, bed_type: bed.bed_type }}
 		canRename={!isLayoutLocked}
 		partnerLabel={partnerOf(sortedBeds, bed.id)?.label ?? ''}
 		level={levelOf(bed)}

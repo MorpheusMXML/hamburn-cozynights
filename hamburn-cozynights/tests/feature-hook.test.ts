@@ -19,20 +19,26 @@ describe('features on the records API', () => {
 		).toMatch(/say the opposite/);
 	});
 
-	it('refuses a room or spot that switches a feature off and claims it at once', () => {
+	it('refuses a room that switches a feature off and claims it at once', () => {
 		expect(
 			beds.featureProblem(record({ features: ['heated'], features_off: ['heated'] }), 'room')
 		).toMatch(/"Heated" is switched off here and ticked here/);
-		expect(
-			beds.featureProblem(record({ features: 'power', features_off: ['quiet', 'power'] }), 'spot')
-		).toMatch(/"Power socket" is switched off/);
 		// switching off something else is fine, and a house has no off list
 		expect(
-			beds.featureProblem(record({ features: ['power'], features_off: ['quiet'] }), 'spot')
+			beds.featureProblem(record({ features: ['own_bathroom'], features_off: ['quiet'] }), 'room')
 		).toBe('');
 		expect(
 			beds.featureProblem(record({ features: ['heated'], features_off: ['heated'] }), 'house')
 		).toBe('');
+	});
+
+	it('lets every spot through: a spot has no features of its own to clash with', () => {
+		// a leftover value from before the power socket went, or anything else
+		expect(
+			beds.featureProblem(record({ features: 'power', features_off: ['quiet', 'power'] }), 'spot')
+		).toBe('');
+		expect(beds.featureProblem(record({ features_off: ['heated', 'unheated'] }), 'spot')).toBe('');
+		expect(beds.featureProblem(record({}), 'spot')).toBe('');
 	});
 
 	it('lets every other list through, including one that is empty or a single value', () => {
@@ -40,8 +46,10 @@ describe('features on the records API', () => {
 		expect(beds.featureProblem(record({ features: 'unheated' }), 'house')).toBe('');
 		expect(beds.featureProblem(record({ features: [] }), 'house')).toBe('');
 		expect(beds.featureProblem(record({}), 'room')).toBe('');
-		// a feature the level may not have is not the hook's business: it is ignored
-		expect(beds.featureProblem(record({ features: ['power', 'heated'] }), 'house')).toBe('');
+		// a feature the level may not have is not the hook's business: it is ignored,
+		// and so is one the catalogue has dropped (the power socket)
+		expect(beds.featureProblem(record({ features: ['own_bathroom', 'heated'] }), 'house')).toBe('');
+		expect(beds.featureProblem(record({ features: ['power', 'heated'] }), 'room')).toBe('');
 	});
 });
 
@@ -89,18 +97,21 @@ describe('what a message says about the bed', () => {
 
 	it('sums up the features around a spot the way the app does, ladder rule included', () => {
 		expect(
-			beds.effectiveFeatures(['unheated', 'wheelchair'], ['heated'], ['power'], 'single')
-		).toEqual(['wheelchair', 'heated', 'power']);
-		expect(beds.effectiveFeatures(['wheelchair'], [], [], 'bunk_upper')).toEqual([]);
-		expect(beds.effectiveFeatures(['wheelchair'], [], [], 'bunk_lower')).toEqual(['wheelchair']);
-		// what a room or spot switched off is gone before its own features count
-		expect(beds.effectiveFeatures(['heated', 'quiet'], [], [], 'single', ['heated'])).toEqual([
+			beds.effectiveFeatures(['unheated', 'wheelchair'], ['heated', 'own_bathroom'], 'single')
+		).toEqual(['wheelchair', 'own_bathroom', 'heated']);
+		expect(beds.effectiveFeatures(['wheelchair'], [], 'bunk_upper')).toEqual([]);
+		expect(beds.effectiveFeatures(['wheelchair'], [], 'bunk_lower')).toEqual(['wheelchair']);
+		// what the room or the spot switched off is gone
+		expect(beds.effectiveFeatures(['heated', 'quiet'], [], 'single', ['heated'])).toEqual([
 			'quiet'
 		]);
 		expect(
-			beds.effectiveFeatures(['quiet'], ['power'], [], 'single', [], ['power', 'quiet'])
+			beds.effectiveFeatures(['quiet'], ['own_bathroom'], 'single', [], ['own_bathroom', 'quiet'])
 		).toEqual([]);
-		expect(beds.featureText(['heated', 'power'])).toBe('🔥 Heated · 🔌 Power socket');
+		// a power socket stored before it was dropped says nothing any more
+		expect(beds.effectiveFeatures(['quiet'], ['power'], 'single')).toEqual(['quiet']);
+		expect(beds.featureText(['heated', 'quiet'])).toBe('🔥 Heated · 🤫 Quiet zone');
+		expect(beds.featureText(['power'])).toBe('');
 		expect(beds.featureText([])).toBe('');
 	});
 });

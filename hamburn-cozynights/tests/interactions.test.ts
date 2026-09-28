@@ -180,13 +180,48 @@ describe('Room Load & Booking Logic', () => {
 			occupied: true,
 			bookable: false,
 			burnerName: 'Dusty Nomad #123',
-			// what kind of bed it is and what only this spot has; nobody said here
+			// what kind of bed it is; nobody said here
 			bedType: '',
-			features: [],
 			// the other spot of a bunk bed; this one stands alone
 			bunkPartner: '',
 			missing: []
 		});
+	});
+
+	it('tells guests that the upper bunk of a ♿ room is not wheelchair accessible', async () => {
+		mockLocals.order = { id: 'order1', order_number: 'TEST-CODE' };
+		mockPb.getOne.mockImplementation(async (id: string) => {
+			if (id === APP_SETTINGS_ID) return { is_booking_active: true };
+			if (id === 'room1') {
+				return {
+					id: 'room1',
+					name: 'Ground Floor 1',
+					room_number: 1,
+					house: 'house1',
+					features: ['ground_floor'],
+					expand: { house: { id: 'house1', name: 'Villa', features: ['wheelchair', 'heated'] } }
+				};
+			}
+			throw new Error('Not found');
+		});
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce(null); // no spot of their own yet
+		mockAdminPb.getFullList.mockResolvedValueOnce([
+			{ id: 'b1', label: 'B1', enabled: true, bed_type: 'bunk_lower', bunk_partner: 'b2' },
+			{ id: 'b2', label: 'B2', enabled: true, bed_type: 'bunk_upper', bunk_partner: 'b1' }
+		]);
+
+		const result: any = await roomLoad({
+			url: new URL('http://test.local/'),
+			params: { id: 'room1' },
+			locals: mockLocals
+		} as any);
+
+		// the room is accessible, and says so once, above the spots
+		expect(result.room.features).toEqual(['wheelchair', 'ground_floor', 'heated']);
+		// the lower bunk lacks nothing; the upper bunk's card says "no ♿ Wheelchair accessible"
+		const byLabel = (label: string) => result.beds.find((bed: any) => bed.label === label);
+		expect(byLabel('B1').missing).toEqual([]);
+		expect(byLabel('B2').missing).toEqual(['wheelchair']);
 	});
 
 	it("never sends other guests' order data (ticket codes, names) to the browser", async () => {
@@ -525,8 +560,7 @@ describe('Admin Management Actions', () => {
 					enabled: true,
 					occupied: false,
 					bed_type: '',
-					bunk_partner: '',
-					features: []
+					bunk_partner: ''
 				}).id;
 			}
 			const locals = { pb, admin: mockLocals.admin };
@@ -625,7 +659,7 @@ describe('Admin Management Actions', () => {
 			}
 		});
 
-		it('refuses a bed change on a stacked spot, but still saves its features', async () => {
+		it('refuses a bed change on a stacked spot, but still saves the form', async () => {
 			const { ids, post, spot } = seedRoom(['B1', 'B2']);
 			await post('stackBunk', { lower: ids.B1, upper: ids.B2 });
 
@@ -635,13 +669,9 @@ describe('Admin Management Actions', () => {
 			expect(spot('B1')).toMatchObject({ bunk_partner: ids.B2, bed_type: 'bunk_lower' });
 
 			// The details editor sends the stored level back (its select is disabled).
-			const saved = await post('saveSpot', {
-				id: ids.B1,
-				bed_type: 'bunk_lower',
-				features: ['power']
-			});
+			const saved = await post('saveSpot', { id: ids.B1, bed_type: 'bunk_lower' });
 			expect(saved).toEqual({ success: true });
-			expect(spot('B1')).toMatchObject({ bed_type: 'bunk_lower', features: ['power'] });
+			expect(spot('B1')).toMatchObject({ bunk_partner: ids.B2, bed_type: 'bunk_lower' });
 		});
 	});
 
@@ -677,7 +707,6 @@ describe('Admin Management Actions', () => {
 				occupied: false,
 				bed_type: '',
 				bunk_partner: '',
-				features: [],
 				features_off: spotOff
 			});
 			const superuser = {
@@ -715,7 +744,7 @@ describe('Admin Management Actions', () => {
 			expect(spot).toEqual({ success: true });
 			// The details were saved, the stored overrides are as they were.
 			expect(stored().room).toMatchObject({ features: ['own_bathroom'], features_off: ['heated'] });
-			expect(stored().spot).toMatchObject({ features: [], features_off: ['quiet'] });
+			expect(stored().spot).toMatchObject({ features_off: ['quiet'] });
 		});
 
 		it('a superuser switches a feature off, and a save without the boxes resets it', async () => {
@@ -738,27 +767,34 @@ describe('Admin Management Actions', () => {
 			expect(stored().spot.features_off).toEqual([]);
 		});
 
-		it('refuses a superuser who switches a feature off and ticks it at once', async () => {
-			const { bed, asSuperuser, stored } = seedHeatedHouse([], []);
+		it('refuses a superuser who switches a room feature off and ticks it at once', async () => {
+			const { asSuperuser, stored } = seedHeatedHouse([], []);
 
 			const room = await asSuperuser('saveRoom', {
 				kind: 'room',
 				features: ['heated'],
 				features_off: ['heated']
 			});
-			const spot = await asSuperuser('saveSpot', {
-				id: bed.id,
-				features: ['power'],
-				features_off: ['power']
-			});
 
 			expect(room.status).toBe(400);
 			expect(room.data.message).toBe(overrideProblem(['heated'], ['heated']));
-			expect(spot.status).toBe(400);
-			expect(spot.data.message).toBe(overrideProblem(['power'], ['power']));
 			// Nothing was written.
 			expect(stored().room).toMatchObject({ features: ['own_bathroom'], features_off: [] });
-			expect(stored().spot).toMatchObject({ features: [], features_off: [] });
+		});
+
+		it('writes no features for a spot: it has none of its own, whatever the form says', async () => {
+			const { bed, asSuperuser, stored } = seedHeatedHouse([], []);
+
+			const spot = await asSuperuser('saveSpot', {
+				id: bed.id,
+				features: ['quiet', 'power'],
+				features_off: ['quiet', 'power']
+			});
+
+			expect(spot).toEqual({ success: true });
+			// the retired power socket is not a feature a spot can switch off either
+			expect(stored().spot.features_off).toEqual(['quiet']);
+			expect(stored().spot).not.toHaveProperty('features');
 		});
 	});
 });

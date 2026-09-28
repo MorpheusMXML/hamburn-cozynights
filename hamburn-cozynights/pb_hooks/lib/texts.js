@@ -21,7 +21,7 @@ const PLACEHOLDERS = [
 	{
 		name: 'bed',
 		meaning:
-			'the bed, when the crew wrote it down: its kind, the other level of a bunk bed and what is at it, like "Upper bunk · above B1 · 🔌 Power socket"'
+			'the bed, when the crew wrote it down: its kind, the other level of a bunk bed and what is at it, like "Upper bunk · above B1 · 🔥 Heated"'
 	},
 	{ name: 'before', meaning: 'the spot the ticket held before' },
 	{ name: 'roomUrl', meaning: "the link to the guest's room (to the map while they have no spot)" },

@@ -11,7 +11,7 @@ data lives and how it is backed up: [Backups and where data lives](../develop/de
 | :------------- | :--------------------------------------------------------------------------------------- | :------------ | :--------------------------------------------------- | :------------------------------------ |
 | `houses`       | `name`, `x`, `y` (map position), `kind` (house, hut group, tent area, other), `features`, `description` | no            | admins                                               | public read, admin write              |
 | `rooms`        | `name`, `room_number`, `house`, `amount_beds` (spots created with the room; an initial count only, not maintained: count the room's `beds`), `kind`, `features`, `description` (like a house), `features_off` (house features this room switches off for itself; superusers only) | no            | admins                                               | public read, admin write              |
-| `beds`         | `label`, `room`, `occupied`, `order`, `is_locked`, `enabled`, `is_special` (special-needs spot), `bed_type` (single bed, lower/upper bunk, half of a double bed, sofa, mattress, camp bed), `bunk_partner` (the other spot of a bunk bed, set on both spots), `features`, `features_off` (house or room features this spot switches off for itself; superusers only), `booked_at` (when the spot got its ticket, set by PocketBase), `checked_in_at` and `checked_in_by` (the check-in at arrival: when, which admin) | no      | admins; guest bookings via the app's service account; a check-in with the checking admin's own session (the service account only moves it along or clears it) | admin read, admin write (guests see spots only through the app) |
+| `beds`         | `label`, `room`, `occupied`, `order`, `is_locked`, `enabled`, `is_special` (special-needs spot), `bed_type` (single bed, lower/upper bunk, half of a double bed, sofa, mattress, camp bed), `bunk_partner` (the other spot of a bunk bed, set on both spots), `features_off` (house or room features this spot switches off for itself; superusers only; a spot has no `features` of its own since `1760200000_no_power_socket.js`), `booked_at` (when the spot got its ticket, set by PocketBase), `checked_in_at` and `checked_in_by` (the check-in at arrival: when, which admin) | no      | admins; guest bookings via the app's service account; a check-in with the checking admin's own session (the service account only moves it along or clears it) | admin read, admin write (guests see spots only through the app) |
 | `orders`       | `order_number`, `order_hash`, `customer_name`, `burner_name` (encrypted), `email`, `pass_code` (booking pass, unique), `handed_over_at` (when the ticket was last passed on) | yes | the app's service account, `scripts/cozy-admin.sh tickets`; `pass_code` only by PocketBase | none (superusers only) |
 | `app_settings` | the phase set by hand: `is_booking_active` (live), `booking_closed` (closed); the booking window: `booking_unlock_at`, `booking_close_at`, `booking_timer_paused`; `notify_mail`, `telegram_bot`, `wallet_platforms` (which wallets the app offers), `special_requests_open`, `guest_round` (the booking round guests are signed in for; released bookings count it up) (single record `appsettings0123`) | no | admins (a phase switch right now: superusers only); PocketBase keeps the notification flags current, the app the wallet one | public read, admin write |
 | `admins`       | `email`, `name`, `role` (`pending`, `admin`, `superuser`), `last_sign_in`                | yes (email)   | Google sign-in, `scripts/cozy-admin.sh`              | none (sign-in creates `pending` only) |
@@ -76,11 +76,16 @@ write" means an approved `admins` record (see [Security & privacy](./security)).
 - **Features add up from the house down, and the closer level wins:** what
   is true for one spot is the house's `features`, minus what the room
   switched off (`rooms.features_off`), plus the room's own, minus what the
-  spot switched off (`beds.features_off`), plus the spot's own — so a heated
-  room in an unheated hut group counts as heated, and a room with `heated` in
-  its off list stays cold in a heated house (`effectiveFeatures` in
-  `src/lib/accommodation.ts`, mirrored in `pb_hooks/lib/beds.js`). An off
-  list drops a feature before the level's own features count, may name any
+  spot switched off (`beds.features_off`) — so a heated room in an unheated
+  hut group counts as heated, and a room with `heated` in its off list stays
+  cold in a heated house (`effectiveFeatures` in `src/lib/accommodation.ts`,
+  mirrored in `pb_hooks/lib/beds.js`). A spot has no features of its own:
+  the only one it had, the 🔌 power socket (`power`), left the catalogue on
+  2026-09-28 because nobody knows where the sockets are, and
+  `pb_migrations/1760200000_no_power_socket.js` removed it from
+  `rooms.features` and `beds.features_off` and dropped `beds.features`
+  (`RETIRED_FEATURES`; an older template that names it imports without it).
+  An off list drops a feature before the level's own features count, may name any
   feature a level above can have (a room: the house's; a spot: the house's
   and the room's; `offAllowed`), is set and reset by superusers only (the
   app's actions check for a superuser session; an admin's form never carries
@@ -88,13 +93,20 @@ write" means an approved `admins` record (see [Security & privacy](./security)).
   the opposite of each other, `heated` and `unheated`, are never both set on
   one house or room: the forms clear the other box, the template import
   refuses the file, and PocketBase refuses the write on the records API. A
-  room or spot never switches a feature off that it ticks itself either: the
-  forms clear the other box, the template import refuses the file, and the
-  same hook refuses the write — it guards `houses`, `rooms` and `beds`
-  (`pb_hooks/cozy_features.pb.js`, logic in `pb_hooks/lib/beds.js`). An upper bunk is never `wheelchair`, however
-  accessible its room or house is: a bed with a ladder loses ♿ wherever a
-  spot's features are summed up, so the ♿ picker, the map wishes, the guest
-  pages, the messages and the passes never show it for one.
+  room never switches a feature off that it ticks itself either: the form
+  clears the other box, the template import refuses the file, and the same
+  hook refuses the write — it guards `houses`, `rooms` and `beds`
+  (`pb_hooks/cozy_features.pb.js`, logic in `pb_hooks/lib/beds.js`; for
+  `beds` only who may change `features_off`). An upper bunk is never
+  `wheelchair`, however accessible its room or house is: a bed with a ladder
+  loses ♿ wherever a spot's features are summed up (`NOT_UP_A_LADDER`), so
+  the ♿ picker, the map wishes, the guest pages, the messages and the passes
+  never show it for one, and the admin spot editor strikes the room's ♿
+  through (`bedRulesOut`). Nor is it ever step-free: the need *step-free
+  access or the ground floor* and the wish *⬇️ Step-free* rule out a bed with
+  a ladder even on the ground floor, which stays a fact about its room.
+  Two needs of the ♿ form are matched by hand only (`MATCHED_BY_HAND`): a
+  power socket for a medical device and *something else*.
 - **While booking is live or closed**, the structure is locked on the server:
   houses and rooms can't be added, moved, renamed or deleted, beds can't be
   added or deleted, and templates can't be imported (see

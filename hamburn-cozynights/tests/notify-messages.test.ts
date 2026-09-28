@@ -20,7 +20,7 @@ const spot = {
 	label: 'B1 · Dorm #1 · Villa',
 	// what the crew wrote down about the bed (pb_hooks/lib/beds.js)
 	bed: 'Lower bunk · below B2',
-	features: '🔥 Heated · 🔌 Power socket'
+	features: '🔥 Heated · 🤫 Quiet zone'
 };
 const pass = { code: 'AAAA-BBBB-CCCC', url: 'https://cozy.test/pass/AAAA-BBBB-CCCC' };
 
@@ -60,7 +60,7 @@ describe('spot messages without a request stay as they were', () => {
 // the spot: two more rows in the e-mail, one 🛏 line under the spot on
 // Telegram — only when the crew wrote them down on the layout.
 describe('the bed and what is at it', () => {
-	const BED_LINE = '🛏 Lower bunk · below B2 · 🔥 Heated · 🔌 Power socket';
+	const BED_LINE = '🛏 Lower bunk · below B2 · 🔥 Heated · 🤫 Quiet zone';
 	// the same spot on a layout where nobody wrote the bed down
 	const plain = {
 		bedId: spot.bedId,
@@ -74,18 +74,18 @@ describe('the bed and what is at it', () => {
 	it('has its rows in the e-mail, text and HTML, lined up with the others', () => {
 		const m = notify.guestMail(cfg, 'booked', spot, '', 'Ada', pass, none);
 		expect(m.text).toContain(
-			'\n  House:    Villa\n  Room:     Dorm #1\n  Spot:     B1\n  Bed:      Lower bunk · below B2\n  Features: 🔥 Heated · 🔌 Power socket\n'
+			'\n  House:    Villa\n  Room:     Dorm #1\n  Spot:     B1\n  Bed:      Lower bunk · below B2\n  Features: 🔥 Heated · 🤫 Quiet zone\n'
 		);
 		const cell = (name: string, value: string) =>
 			`<td style="padding:4px 16px 4px 0;color:#6b6478">${name}</td><td style="padding:4px 0;font-weight:bold">${value}</td>`;
 		expect(m.html).toContain(cell('Bed', 'Lower bunk · below B2'));
-		expect(m.html).toContain(cell('Features', '🔥 Heated · 🔌 Power socket'));
+		expect(m.html).toContain(cell('Features', '🔥 Heated · 🤫 Quiet zone'));
 		// in the messages that show the spot as well
 		for (const kind of ['changed', 'handed_over']) {
 			expect(mail(kind, true, none, 'B9').text).toContain('Bed:      Lower bunk · below B2');
 		}
 		expect(mail('', true, { kind: 'approved', status: 'approved', fixed: true }).text).toContain(
-			'Features: 🔥 Heated · 🔌 Power socket'
+			'Features: 🔥 Heated · 🤫 Quiet zone'
 		);
 	});
 
@@ -107,7 +107,7 @@ describe('the bed and what is at it', () => {
 		const passReply = preview.bot.find((m: { id: string }) => m.id === 'pass');
 		expect(passReply.text).toContain(pass.url + '\n🛏 Lower bunk · below B2 · 🔥 Heated');
 		expect(preview.telegram.find((m: { id: string }) => m.id === 'booked').text).toContain(
-			'🛏 Lower bunk · below B2 · 🔥 Heated · 🔌 Power socket'
+			'🛏 Lower bunk · below B2 · 🔥 Heated · 🤫 Quiet zone'
 		);
 	});
 
@@ -126,16 +126,16 @@ describe('the bed and what is at it', () => {
 		expect(notify.guestTelegram(cfg, 'booked', onlyBed, '', pass, none)).toContain(
 			'\n🛏 Single bed\n\n'
 		);
-		const onlyFeatures = { ...plain, features: '🔌 Power socket' };
+		const onlyFeatures = { ...plain, features: '🤫 Quiet zone' };
 		const text = notify.guestMail(cfg, 'booked', onlyFeatures, '', 'Ada', pass, none).text;
-		expect(text).toContain('  Spot:     B1\n  Features: 🔌 Power socket\n');
+		expect(text).toContain('  Spot:     B1\n  Features: 🤫 Quiet zone\n');
 		expect(text).not.toContain('Bed:');
 	});
 
 	it('is a text the crew can change, with the bed as its placeholder', () => {
 		const custom = { ...cfg, texts: { 'tg.bed': 'Dein Bett: {bed}' } };
 		expect(notify.guestTelegram(custom, 'booked', spot, '', pass, none)).toContain(
-			'\nDein Bett: Lower bunk · below B2 · 🔥 Heated · 🔌 Power socket\n'
+			'\nDein Bett: Lower bunk · below B2 · 🔥 Heated · 🤫 Quiet zone\n'
 		);
 	});
 });
@@ -479,10 +479,15 @@ describe('the spot as currentSpot reads it from the records', () => {
 			}
 		};
 	}
-	/** A heated, quiet Villa; the Dorm has a socket; B1 is the lower bunk under B2. */
+	/**
+	 * A heated, quiet, wheelchair-accessible Villa; the Dorm has its own
+	 * bathroom; B1 is the lower bunk under B2.
+	 */
 	const tables = (): Record<string, Row[]> => ({
-		houses: [{ id: 'house1', name: 'Villa', features: ['heated', 'quiet'] }],
-		rooms: [{ id: 'room1', house: 'house1', name: 'Dorm', room_number: 1, features: ['power'] }],
+		houses: [{ id: 'house1', name: 'Villa', features: ['wheelchair', 'heated', 'quiet'] }],
+		rooms: [
+			{ id: 'room1', house: 'house1', name: 'Dorm', room_number: 1, features: ['own_bathroom'] }
+		],
 		beds: [
 			{
 				id: 'bed1',
@@ -490,14 +495,20 @@ describe('the spot as currentSpot reads it from the records', () => {
 				label: 'B1',
 				order: 'order1',
 				bed_type: 'bunk_lower',
-				bunk_partner: 'bed2',
-				features: []
+				bunk_partner: 'bed2'
 			},
-			{ id: 'bed2', room: 'room1', label: 'B2', order: '', bed_type: 'bunk_upper' }
+			{
+				id: 'bed2',
+				room: 'room1',
+				label: 'B2',
+				order: 'order2',
+				bed_type: 'bunk_upper',
+				bunk_partner: 'bed1'
+			}
 		]
 	});
 
-	it('sums the house, the room and the spot up, and knows tickets without a spot', () => {
+	it('sums the house and the room up, and knows tickets without a spot', () => {
 		expect(notify.currentSpot(app(tables()), 'order1')).toMatchObject({
 			bedId: 'bed1',
 			roomId: 'room1',
@@ -506,16 +517,33 @@ describe('the spot as currentSpot reads it from the records', () => {
 			house: 'Villa',
 			label: 'B1 · Dorm #1 · Villa',
 			bed: 'Lower bunk · below B2',
-			features: '🔥 Heated · 🤫 Quiet zone · 🔌 Power socket'
+			features: '♿ Wheelchair accessible · 🛁 Own bathroom · 🔥 Heated · 🤫 Quiet zone'
 		});
 		expect(notify.currentSpot(app(tables()), 'nobody')).toBeNull();
 	});
 
+	it('never promises ♿ on the upper bunk', () => {
+		expect(notify.currentSpot(app(tables()), 'order2')).toMatchObject({
+			spot: 'B2',
+			bed: 'Upper bunk · above B1',
+			features: '🛁 Own bathroom · 🔥 Heated · 🤫 Quiet zone'
+		});
+	});
+
 	it('drops what the room or the spot switched off', () => {
 		const t = tables();
-		t.rooms[0].features_off = ['heated'];
-		expect(notify.currentSpot(app(t), 'order1').features).toBe('🤫 Quiet zone · 🔌 Power socket');
-		t.beds[0].features_off = ['quiet', 'power'];
+		t.rooms[0].features_off = ['heated', 'wheelchair'];
+		expect(notify.currentSpot(app(t), 'order1').features).toBe('🛁 Own bathroom · 🤫 Quiet zone');
+		t.beds[0].features_off = ['quiet', 'own_bathroom'];
 		expect(notify.currentSpot(app(t), 'order1').features).toBe('');
+	});
+
+	it('ignores a power socket stored before it was dropped', () => {
+		const t = tables();
+		t.rooms[0].features = ['power'];
+		t.beds[0].features = 'power';
+		expect(notify.currentSpot(app(t), 'order1').features).toBe(
+			'♿ Wheelchair accessible · 🔥 Heated · 🤫 Quiet zone'
+		);
 	});
 });

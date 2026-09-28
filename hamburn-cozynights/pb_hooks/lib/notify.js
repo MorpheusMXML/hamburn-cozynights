@@ -748,14 +748,7 @@ function currentSpot(app, orderId) {
 	// The same sum the app shows: what the room or the spot switched off
 	// (features_off) is gone, so the message never promises it.
 	spot.features = kinds.featureText(
-		kinds.effectiveFeatures(
-			houseFeatures,
-			roomFeatures,
-			bed.get('features'),
-			bedType,
-			roomOff,
-			bed.get('features_off')
-		)
+		kinds.effectiveFeatures(houseFeatures, roomFeatures, bedType, roomOff, bed.get('features_off'))
 	);
 	spot.label = clip([spot.spot, spot.room, spot.house].filter((s) => !!s).join(' · '), LABEL_MAX);
 	return spot;
@@ -987,7 +980,7 @@ function ticketLabel(order) {
 /**
  * The rows of an e-mail that shows the spot: House, Room, Spot and, when the
  * crew wrote them down, Bed ("Upper bunk · above B1") and Features
- * ("🔥 Heated · 🔌 Power socket"). Empty rows are left out.
+ * ("🔥 Heated · 🤫 Quiet zone"). Empty rows are left out.
  */
 function spotLines(spot) {
 	return [
@@ -1367,7 +1360,7 @@ function previewMessages(cfg) {
 		house: 'Villa',
 		label: 'B1 · Dorm #2 · Villa',
 		bed: 'Lower bunk · below B2',
-		features: '🔥 Heated · 🔌 Power socket'
+		features: '🔥 Heated · 🤫 Quiet zone'
 	};
 	const before = 'B7 · Loft #1 · Hut';
 	const pass = { code: 'AAAA-BBBB-CCCC', url: cfg.appUrl + '/pass/AAAA-BBBB-CCCC' };

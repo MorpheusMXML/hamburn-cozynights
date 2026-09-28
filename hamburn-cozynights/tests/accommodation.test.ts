@@ -6,10 +6,13 @@ import {
 	BED_TYPES,
 	FEATURES,
 	HOUSE_KINDS,
+	MATCHED_BY_HAND,
 	NOT_UP_A_LADDER,
+	RETIRED_FEATURES,
 	ROOM_KINDS,
 	SPOT_FILTERS,
 	availableFilters,
+	bedRulesOut,
 	bedTypeMix,
 	defaultRoomKind,
 	detailsSummary,
@@ -25,6 +28,8 @@ import {
 	featuresFor,
 	isFeature,
 	matchNeeds,
+	missingAtSpot,
+	needCapacity,
 	needFit,
 	readFeatures,
 	readFilters,
@@ -32,15 +37,15 @@ import {
 	spotFacts,
 	spotMatchesFilter,
 	spotMatchesFilters,
-	spotSummary,
 	type Feature,
 	type SpotFacts
 } from '../src/lib/accommodation';
 import { SPECIAL_NEEDS, type SpecialNeed } from '../src/lib/special-needs';
 import { loadHookModule } from './hook-module';
 
+// Each feature on the level that may carry it: a house one on the house, a room one on the room.
 const facts = (bedType: string, features: Feature[] = []): SpotFacts =>
-	spotFacts({ bedType, spot: features.filter((f) => isFeature(f, 'spot')), room: features });
+	spotFacts({ bedType, house: features, room: features });
 
 describe('the catalogue', () => {
 	it('has unique values everywhere', () => {
@@ -64,29 +69,34 @@ describe('the catalogue', () => {
 		expect(withLadder).toEqual(['bunk_upper']);
 	});
 
-	it('keeps the PocketBase migration in step with it', () => {
-		const migration = readFileSync('pb_migrations/1759900000_accommodation.js', 'utf8');
-		const list = (name: string) =>
-			(new RegExp(`const ${name} = \\[([^\\]]*)\\]`).exec(migration)?.[1] ?? '')
-				.split(',')
-				.map((value) => value.trim().replace(/^'|'$/g, ''))
-				.filter(Boolean);
+	it('keeps the PocketBase migrations in step with it', () => {
+		const listsIn = (file: string) => {
+			const migration = readFileSync(file, 'utf8');
+			return (name: string) =>
+				(new RegExp(`const ${name} = \\[([^\\]]*)\\]`).exec(migration)?.[1] ?? '')
+					.split(',')
+					.map((value) => value.trim().replace(/^'|'$/g, ''))
+					.filter(Boolean);
+		};
+		const values = (entries: { value: string }[]) => entries.map((entry) => entry.value);
 
-		expect(list('HOUSE_KINDS')).toEqual(HOUSE_KINDS.map((kind) => kind.value));
-		expect(list('ROOM_KINDS')).toEqual(ROOM_KINDS.map((kind) => kind.value));
-		expect(list('BED_TYPES')).toEqual(BED_TYPES.map((type) => type.value));
-		expect(list('HOUSE_FEATURES')).toEqual(featuresFor('house').map((f) => f.value));
-		expect(list('ROOM_FEATURES')).toEqual(featuresFor('room').map((f) => f.value));
-		expect(list('BED_FEATURES')).toEqual(featuresFor('spot').map((f) => f.value));
+		const first = listsIn('pb_migrations/1759900000_accommodation.js');
+		expect(first('HOUSE_KINDS')).toEqual(values(HOUSE_KINDS));
+		expect(first('ROOM_KINDS')).toEqual(values(ROOM_KINDS));
+		expect(first('BED_TYPES')).toEqual(values(BED_TYPES));
+		expect(first('HOUSE_FEATURES')).toEqual(values(featuresFor('house')));
 
-		const overrides = readFileSync('pb_migrations/1760100000_feature_overrides.js', 'utf8');
-		const offList = (name: string) =>
-			(new RegExp(`const ${name} = \\[([^\\]]*)\\]`).exec(overrides)?.[1] ?? '')
-				.split(',')
-				.map((value) => value.trim().replace(/^'|'$/g, ''))
-				.filter(Boolean);
-		expect(offList('HOUSE_FEATURES')).toEqual(offAllowed('room').map((f) => f.value));
-		expect(offList('ABOVE_A_SPOT')).toEqual(offAllowed('spot').map((f) => f.value));
+		const overrides = listsIn('pb_migrations/1760100000_feature_overrides.js');
+		expect(overrides('HOUSE_FEATURES')).toEqual(values(offAllowed('room')));
+
+		// 1760200000 took the power socket out: its lists are what the database has now
+		const latest = listsIn('pb_migrations/1760200000_no_power_socket.js');
+		expect(latest('ROOM_FEATURES')).toEqual(values(featuresFor('room')));
+		expect(latest('ABOVE_A_SPOT')).toEqual(values(offAllowed('spot')));
+		// and what it dropped is exactly what the catalogue calls retired
+		const dropped = first('ROOM_FEATURES').filter((v) => !latest('ROOM_FEATURES').includes(v));
+		expect(dropped).toEqual([...RETIRED_FEATURES]);
+		expect(first('BED_FEATURES')).toEqual([...RETIRED_FEATURES]);
 	});
 
 	it('keeps the labels PocketBase sends in step with it', () => {
@@ -112,16 +122,17 @@ describe('the catalogue', () => {
 		);
 		expect(beds.NOT_UP_A_LADDER).toEqual(NOT_UP_A_LADDER);
 		expect(
-			beds.effectiveFeatures(['wheelchair', 'unheated'], ['heated'], ['power'], 'bunk_upper')
+			beds.effectiveFeatures(['wheelchair', 'unheated'], ['heated', 'quiet'], 'bunk_upper')
 		).toEqual(
 			effectiveFeatures({
 				house: ['wheelchair', 'unheated'],
-				room: ['heated'],
-				spot: ['power'],
+				room: ['heated', 'quiet'],
 				bedType: 'bunk_upper'
 			})
 		);
-		expect(beds.featureText(['heated', 'power'])).toBe(featureText(['heated', 'power']));
+		expect(beds.featureText(['heated', 'quiet'])).toBe(featureText(['heated', 'quiet']));
+		// a stored value the catalogue dropped is no feature there either
+		expect(beds.featureText(['power', 'quiet'])).toBe(featureText(['power', 'quiet']));
 		expect(beds.offAllowed('room').map((f: { value: string }) => f.value)).toEqual(
 			offAllowed('room').map((f) => f.value)
 		);
@@ -129,13 +140,19 @@ describe('the catalogue', () => {
 			offAllowed('spot').map((f) => f.value)
 		);
 		expect(
-			beds.effectiveFeatures(['heated', 'quiet'], ['power'], [], 'single', ['quiet'], ['power'])
+			beds.effectiveFeatures(
+				['heated', 'quiet'],
+				['own_bathroom'],
+				'single',
+				['quiet'],
+				['own_bathroom']
+			)
 		).toEqual(
 			effectiveFeatures({
 				house: ['heated', 'quiet'],
-				room: ['power'],
+				room: ['own_bathroom'],
 				roomOff: ['quiet'],
-				spotOff: ['power'],
+				spotOff: ['own_bathroom'],
 				bedType: 'single'
 			})
 		);
@@ -156,10 +173,20 @@ describe('reading features', () => {
 			'wheelchair',
 			'quiet'
 		]);
-		// own_bathroom is a room feature, power belongs to rooms and spots
-		expect(readFeatures(['own_bathroom', 'power'], 'house')).toEqual([]);
-		expect(readFeatures(['own_bathroom', 'power'], 'room')).toEqual(['own_bathroom', 'power']);
-		expect(readFeatures(['own_bathroom', 'power'], 'spot')).toEqual(['power']);
+		// own_bathroom is a room feature, toilets_inside a house one
+		expect(readFeatures(['own_bathroom', 'toilets_inside'], 'house')).toEqual(['toilets_inside']);
+		expect(readFeatures(['own_bathroom', 'toilets_inside'], 'room')).toEqual(['own_bathroom']);
+	});
+
+	it('knows the power socket no more: an old stored value is simply dropped', () => {
+		expect(RETIRED_FEATURES).toEqual(['power']);
+		expect(isFeature('power')).toBe(false);
+		expect(FEATURES.some((feature) => (feature.value as string) === 'power')).toBe(false);
+		expect(readFeatures(['power', 'quiet'], 'room')).toEqual(['quiet']);
+		expect(readFeaturesOff(['power', 'quiet'], 'spot')).toEqual(['quiet']);
+		expect(SPOT_FILTERS.some((filter) => (filter.value as string) === 'power')).toBe(false);
+		// an old link with the 🔌 wish still works, without it
+		expect(readFilters('power,quiet')).toEqual(['quiet']);
 	});
 
 	it('ignores anything that is not a feature', () => {
@@ -170,14 +197,10 @@ describe('reading features', () => {
 });
 
 describe('what a spot inherits', () => {
-	it('adds up house, room and spot', () => {
+	it('adds up house and room', () => {
 		expect(
-			effectiveFeatures({
-				house: ['toilets_inside', 'heated'],
-				room: ['ground_floor'],
-				spot: ['power']
-			})
-		).toEqual(['ground_floor', 'toilets_inside', 'heated', 'power']);
+			effectiveFeatures({ house: ['toilets_inside', 'heated'], room: ['ground_floor'] })
+		).toEqual(['ground_floor', 'toilets_inside', 'heated']);
 	});
 
 	it('lets the closer level win when two say the opposite', () => {
@@ -186,7 +209,7 @@ describe('what a spot inherits', () => {
 	});
 
 	it('drops what a level may not set', () => {
-		expect(effectiveFeatures({ house: ['own_bathroom'], spot: ['quiet'] })).toEqual([]);
+		expect(effectiveFeatures({ house: ['own_bathroom'], room: ['toilets_inside'] })).toEqual([]);
 	});
 
 	it('lets a room or spot switch an inherited feature off, before its own features count', () => {
@@ -198,12 +221,16 @@ describe('what a spot inherits', () => {
 		expect(
 			effectiveFeatures({ house: ['heated'], roomOff: ['heated'], room: ['own_bathroom'] })
 		).toEqual(['own_bathroom']);
-		// a spot without the socket its room has, and without the house's quiet
+		// a spot without the bathroom its room has, and without the house's quiet
 		expect(
-			effectiveFeatures({ house: ['quiet'], room: ['power'], spotOff: ['power', 'quiet'] })
+			effectiveFeatures({
+				house: ['quiet'],
+				room: ['own_bathroom'],
+				spotOff: ['own_bathroom', 'quiet']
+			})
 		).toEqual([]);
 		// an off list only knows what the level may inherit; nonsense is ignored
-		expect(effectiveFeatures({ house: ['quiet'], roomOff: ['power', 'nonsense'] })).toEqual([
+		expect(effectiveFeatures({ house: ['quiet'], roomOff: ['own_bathroom', 'nonsense'] })).toEqual([
 			'quiet'
 		]);
 		// PocketBase's single-value shape works too
@@ -221,15 +248,18 @@ describe('what a spot inherits', () => {
 			'own_bathroom',
 			'heated',
 			'unheated',
-			'quiet',
-			'power'
+			'quiet'
 		]);
-		expect(readFeaturesOff(['power', 'quiet', 'quiet'], 'room')).toEqual(['quiet']);
-		expect(readFeaturesOff(['power', 'quiet'], 'spot')).toEqual(['quiet', 'power']);
+		expect(readFeaturesOff(['own_bathroom', 'quiet', 'quiet'], 'room')).toEqual(['quiet']);
+		expect(readFeaturesOff(['quiet', 'own_bathroom'], 'spot')).toEqual(['own_bathroom', 'quiet']);
 		expect(inheritedFeatures('room', { house: ['heated', 'quiet'] })).toEqual(['heated', 'quiet']);
 		expect(
-			inheritedFeatures('spot', { house: ['heated', 'quiet'], room: ['power'], roomOff: ['quiet'] })
-		).toEqual(['heated', 'power']);
+			inheritedFeatures('spot', {
+				house: ['heated', 'quiet'],
+				room: ['own_bathroom'],
+				roomOff: ['quiet']
+			})
+		).toEqual(['own_bathroom', 'heated']);
 		expect(overrideProblem(['heated'], ['heated'])).toMatch(/switched off here and ticked here/);
 		expect(overrideProblem(['heated'], ['quiet'])).toBe('');
 	});
@@ -239,7 +269,7 @@ describe('what a spot inherits', () => {
 		form.append('kind', 'room');
 		form.append('features', 'own_bathroom');
 		form.append('features_off', 'heated');
-		form.append('features_off', 'power'); // not a house feature: ignored
+		form.append('features_off', 'own_bathroom'); // not a house feature: ignored
 		// an admin's form never carries features_off
 		const admin = parseDetailsForm(form, 'room');
 		expect(admin.ok).toBe(true);
@@ -261,23 +291,28 @@ describe('what a spot inherits', () => {
 		const spot = new FormData();
 		spot.append('bed_type', 'single');
 		spot.append('features_off', 'quiet');
-		spot.append('features_off', 'power');
+		spot.append('features_off', 'own_bathroom');
+		spot.append('features_off', 'power'); // dropped from the catalogue: ignored
 		const adminSpot = parseSpotForm(spot);
 		expect(adminSpot.ok).toBe(true);
 		if (adminSpot.ok) expect('features_off' in adminSpot.value).toBe(false);
 		const suSpot = parseSpotForm(spot, { canOverride: true });
 		expect(suSpot.ok).toBe(true);
-		if (suSpot.ok) expect(suSpot.value.features_off).toEqual(['quiet', 'power']);
-		spot.append('features', 'power');
-		expect(parseSpotForm(spot, { canOverride: true }).ok).toBe(false);
+		if (suSpot.ok) expect(suSpot.value.features_off).toEqual(['own_bathroom', 'quiet']);
+		// a spot has no features of its own: a stray field is not read at all
+		spot.append('features', 'quiet');
+		const stray = parseSpotForm(spot, { canOverride: true });
+		expect(stray).toEqual({
+			ok: true,
+			value: { bed_type: 'single', features_off: ['own_bathroom', 'quiet'] }
+		});
 	});
 
 	it('never calls an upper bunk wheelchair accessible, however accessible its room is', () => {
-		const around = { house: ['wheelchair', 'heated'], room: ['ground_floor'], spot: ['power'] };
+		const around = { house: ['wheelchair', 'heated'], room: ['ground_floor'] };
 		expect(effectiveFeatures({ ...around, bedType: 'bunk_upper' })).toEqual([
 			'ground_floor',
-			'heated',
-			'power'
+			'heated'
 		]);
 		// the lower bunk and every other bed keep the room's accessibility
 		expect(effectiveFeatures({ ...around, bedType: 'bunk_lower' })).toContain('wheelchair');
@@ -289,13 +324,44 @@ describe('what a spot inherits', () => {
 			'wheelchair',
 			'quiet'
 		]);
-		// so an upper bunk never answers "step-free" through the ♿ mark alone
-		expect(needFit('step_free', spotFacts({ bedType: 'bunk_upper', room: ['wheelchair'] }))).toBe(
-			'unknown'
-		);
+		// the rule and what it takes away from a spot the room describes
+		expect(bedRulesOut('bunk_upper')).toEqual(['wheelchair']);
+		expect(bedRulesOut('bunk_lower')).toEqual([]);
+		expect(bedRulesOut('')).toEqual([]);
+		expect(missingAtSpot({ house: ['wheelchair', 'heated'], bedType: 'bunk_upper' })).toEqual([
+			'wheelchair'
+		]);
+		expect(missingAtSpot({ house: ['wheelchair', 'heated'], bedType: 'bunk_lower' })).toEqual([]);
+		// together with what a superuser switched off, in catalogue order
 		expect(
-			spotMatchesFilter('step_free', spotFacts({ bedType: 'bunk_upper', room: ['wheelchair'] }))
-		).toBe(false);
+			missingAtSpot({
+				house: ['heated'],
+				room: ['wheelchair', 'quiet'],
+				spotOff: ['quiet'],
+				bedType: 'bunk_upper'
+			})
+		).toEqual(['wheelchair', 'quiet']);
+		expect(missingAtSpot({ house: ['heated'], spotOff: ['heated'], bedType: 'single' })).toEqual([
+			'heated'
+		]);
+	});
+
+	it('never calls an upper bunk step-free, not even on the ground floor', () => {
+		const upper = (room: Feature[]) => spotFacts({ bedType: 'bunk_upper', room });
+		for (const room of [['wheelchair'], ['ground_floor'], ['wheelchair', 'ground_floor']]) {
+			expect(needFit('step_free', upper(room as Feature[]))).toBe('conflict');
+			expect(spotMatchesFilter('step_free', upper(room as Feature[]))).toBe(false);
+		}
+		// it still stands on the ground floor: that is a fact about its room
+		expect(upper(['ground_floor']).features).toEqual(['ground_floor']);
+		// a lower bunk there is step-free, and so is a bed nobody described
+		for (const bedType of ['bunk_lower', '']) {
+			const spot = spotFacts({ bedType, room: ['ground_floor'] });
+			expect(needFit('step_free', spot)).toBe('fits');
+			expect(spotMatchesFilter('step_free', spot)).toBe(true);
+		}
+		// an upper bunk the room says nothing about is still a clear no
+		expect(needFit('step_free', facts('bunk_upper'))).toBe('conflict');
 	});
 });
 
@@ -317,7 +383,14 @@ describe('how a spot answers a need', () => {
 		expect(needFit('step_free', facts('', ['wheelchair']))).toBe('fits');
 		expect(needFit('near_toilet', facts('', ['own_bathroom']))).toBe('fits');
 		expect(needFit('quiet', facts('', ['quiet']))).toBe('fits');
-		expect(needFit('power', facts('', ['power']))).toBe('fits');
+		expect(needFit('near_toilet', facts('', ['toilets_inside']))).toBe('fits');
+	});
+
+	it('leaves a power socket and "something else" to the crew', () => {
+		expect(MATCHED_BY_HAND).toEqual(['power', 'other']);
+		// nobody knows where the sockets are: no spot fits, none conflicts
+		const everything = facts('single', ['wheelchair', 'own_bathroom', 'heated', 'quiet']);
+		expect(needFit('power', everything)).toBe('unknown');
 		// what the guest wrote themselves is for a human to read
 		expect(needFit('other', facts('bunk_lower', ['quiet']))).toBe('unknown');
 	});
@@ -328,10 +401,29 @@ describe('how a spot answers a need', () => {
 		expect(good.fits).toEqual(needs);
 		expect(good.score).toBe(3);
 
+		// an upper bunk is neither a lower bunk nor step-free
 		const bad = matchNeeds(needs, facts('bunk_upper'));
-		expect(bad.conflicts).toEqual(['lower_bunk']);
-		expect(bad.unknown).toEqual(['step_free', 'quiet']);
-		expect(bad.score).toBe(-1);
+		expect(bad.conflicts).toEqual(['lower_bunk', 'step_free']);
+		expect(bad.unknown).toEqual(['quiet']);
+		expect(bad.score).toBe(-2);
+	});
+
+	it('counts free fitting spots per need, but not the needs the crew matches by hand', () => {
+		const open = [
+			{ needs: ['step_free', 'power'] as SpecialNeed[] },
+			{ needs: ['step_free', 'other'] as SpecialNeed[] }
+		];
+		// a hut on the ground floor: two lower bunks, two upper ones
+		const hut = ['bunk_lower', 'bunk_lower', 'bunk_upper', 'bunk_upper'].map((bedType) => ({
+			bedType,
+			features: ['ground_floor']
+		}));
+		expect(needCapacity(open, hut)).toEqual([
+			{ need: 'step_free', label: expect.any(String), asked: 2, fitting: 2, short: false }
+		]);
+		expect(needCapacity(open, hut.slice(1))).toEqual([
+			{ need: 'step_free', label: expect.any(String), asked: 2, fitting: 1, short: true }
+		]);
 	});
 });
 
@@ -351,27 +443,27 @@ describe('wishes on the map and at the roulette', () => {
 	});
 
 	it('asks for all wishes at once', () => {
-		const spot = facts('bunk_lower', ['quiet', 'power']);
-		expect(spotMatchesFilters(['no_ladder', 'quiet', 'power'], spot)).toBe(true);
+		const spot = facts('bunk_lower', ['quiet', 'heated']);
+		expect(spotMatchesFilters(['no_ladder', 'quiet', 'heated'], spot)).toBe(true);
 		expect(spotMatchesFilters(['no_ladder', 'step_free'], spot)).toBe(false);
 		expect(spotMatchesFilters([], facts(''))).toBe(true);
 	});
 
 	it('offers only the wishes some spot answers, in the catalogue order', () => {
-		// a heated hut with a lower bunk and a socket, and an upper bunk nobody described
-		const spots = [facts('bunk_lower', ['heated', 'power']), facts('bunk_upper')];
-		expect(availableFilters(spots)).toEqual(['no_ladder', 'heated', 'power']);
+		// a heated, quiet hut with a lower bunk, and an upper bunk nobody described
+		const spots = [facts('bunk_lower', ['heated', 'quiet']), facts('bunk_upper')];
+		expect(availableFilters(spots)).toEqual(['no_ladder', 'heated', 'quiet']);
 		// the order is the catalogue's, whatever the spots' order
-		expect(availableFilters([...spots].reverse())).toEqual(['no_ladder', 'heated', 'power']);
+		expect(availableFilters([...spots].reverse())).toEqual(['no_ladder', 'heated', 'quiet']);
 		// a camp nobody described offers nothing; an empty camp neither
 		expect(availableFilters([facts(''), facts('bunk_upper')])).toEqual([]);
 		expect(availableFilters([])).toEqual([]);
 		// every filter, once some spot answers it
 		expect(
-			availableFilters([
-				facts('single', ['wheelchair', 'own_bathroom', 'heated', 'quiet', 'power'])
-			])
+			availableFilters([facts('single', ['wheelchair', 'own_bathroom', 'heated', 'quiet'])])
 		).toEqual(SPOT_FILTERS.map((filter) => filter.value));
+		// upper bunks on the ground floor offer no "Step-free"
+		expect(availableFilters([facts('bunk_upper', ['ground_floor'])])).toEqual([]);
 	});
 
 	it('answers a need with the filter that stands for it', () => {
@@ -385,18 +477,11 @@ describe('wishes on the map and at the roulette', () => {
 
 describe('summaries', () => {
 	it('writes a list of features as words with their icons', () => {
-		expect(featureText(['heated', 'power'])).toBe('🔥 Heated · 🔌 Power socket');
+		expect(featureText(['heated', 'quiet'])).toBe('🔥 Heated · 🤫 Quiet zone');
 		expect(featureText(['nonsense', 'quiet'])).toBe('🤫 Quiet zone');
+		expect(featureText(['power'])).toBe('');
 		expect(featureText([])).toBe('');
 		expect(featureText(undefined)).toBe('');
-	});
-
-	it('names the bed type and the features of the spot itself', () => {
-		expect(spotSummary(facts('bunk_lower'), [])).toBe('Lower bunk');
-		expect(spotSummary(facts('bunk_lower', ['power']), ['power'])).toBe(
-			'Lower bunk · Power socket'
-		);
-		expect(spotSummary(facts(''), [])).toBe('');
 	});
 
 	it('counts the beds of a room', () => {

@@ -270,9 +270,10 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * What one spot is like: its bed type, a socket at the bed, and its label in
-	 * Staging Mode. What it switches off of what it inherits (features_off) is a
-	 * superuser's call, read from their form only, like on the room.
+	 * What one spot is like: its bed type, and its label in Staging Mode. What
+	 * it switches off of what it inherits (features_off) is a superuser's call,
+	 * read from their form only, like on the room. A spot has no features of
+	 * its own: it inherits its room's and house's.
 	 */
 	saveSpot: async ({ request, params, locals }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
@@ -297,7 +298,7 @@ export const actions: Actions = {
 		}
 
 		// The level of a stacked spot comes from the stacking, not from the form.
-		// Features and the label may still change.
+		// What it switches off and the label may still change.
 		try {
 			const stored = await locals.pb.collection('beds').getOne<BedsResponse>(id, {
 				fields: 'id,bed_type,bunk_partner'

@@ -54,14 +54,13 @@ const BED = {
 		room: { name: 'Blue Room', room_number: 2, expand: { house: { name: 'Brahmsee-Villa' } } }
 	}
 };
-/** B1 as the lower bunk under B2, in a heated room, with a socket at the bed. */
+/** B1 as the lower bunk under B2, in a heated room with its own bathroom. */
 const STACKED = {
 	...BED,
 	bed_type: 'bunk_lower',
 	bunk_partner: 'bed2',
-	features: ['power'],
 	expand: {
-		room: { ...BED.expand.room, features: ['heated'] },
+		room: { ...BED.expand.room, features: ['heated', 'own_bathroom'] },
 		bunk_partner: { id: 'bed2', label: 'B2' }
 	}
 };
@@ -183,7 +182,7 @@ describe('findPass', () => {
 		const pb = fakeAdminPb({ bed: STACKED });
 		expect((await findPass(pb, CODE))?.spot).toMatchObject({
 			bed: 'Lower bunk · below B2',
-			features: '🔥 Heated · 🔌 Power socket'
+			features: '🛁 Own bathroom · 🔥 Heated'
 		});
 		expect(pb.collection('beds').getFirstListItem).toHaveBeenCalledWith(
 			expect.any(String),
@@ -240,12 +239,10 @@ describe('findPass', () => {
 			}
 		};
 		expect((await findPass(fakeAdminPb({ bed: coldRoom }), CODE))?.spot?.features).toBe(
-			'🤫 Quiet zone · 🔌 Power socket'
+			'🤫 Quiet zone'
 		);
 		const loudSpot = { ...coldRoom, features_off: ['quiet'] };
-		expect((await findPass(fakeAdminPb({ bed: loudSpot }), CODE))?.spot?.features).toBe(
-			'🔌 Power socket'
-		);
+		expect((await findPass(fakeAdminPb({ bed: loudSpot }), CODE))?.spot?.features).toBe('');
 	});
 
 	it('dates the booking by booked_at, not by the last change of the spot', async () => {
@@ -630,7 +627,7 @@ describe('pass page', () => {
 			room: 'Blue Room #2',
 			spot: 'B1',
 			bed: 'Lower bunk · below B2',
-			features: '🔥 Heated · 🔌 Power socket'
+			features: '🛁 Own bathroom · 🔥 Heated'
 		});
 	});
 

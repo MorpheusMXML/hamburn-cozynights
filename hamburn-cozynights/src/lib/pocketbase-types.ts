@@ -144,12 +144,10 @@ export type BedsRecord = {
 	/** The other spot of a bunk bed, set on both spots (src/lib/bunks.ts); empty = stands alone. */
 	bunk_partner?: RecordIdString;
 	/**
-	 * What is true for this spot itself; it inherits its room's and house's
-	 * features. PocketBase returns a single value rather than a list while the
-	 * catalogue allows only one spot feature — read it with `readFeatures`.
+	 * What this spot switches off of what it inherits from its room and house
+	 * (a superuser's call); see src/lib/accommodation.ts. A spot has no
+	 * features of its own (pb_migrations/1760200000_no_power_socket.js).
 	 */
-	features?: string[] | string;
-	/** What this spot switches off of what it inherits (a superuser's call); see src/lib/accommodation.ts. */
 	features_off?: string[];
 };
 

@@ -47,8 +47,7 @@ export async function exportTemplate(pb: TypedPocketBase): Promise<LayoutTemplat
 			fields: 'id,house,name,room_number,kind,features,features_off,description'
 		}),
 		pb.collection('beds').getFullList({
-			fields:
-				'id,room,label,enabled,is_locked,is_special,bed_type,features,features_off,bunk_partner'
+			fields: 'id,room,label,enabled,is_locked,is_special,bed_type,features_off,bunk_partner'
 		})
 	]);
 	return buildTemplate({ houses, rooms, beds });
@@ -176,8 +175,8 @@ async function createAll(pb: TypedPocketBase, plan: LayoutPlan): Promise<LevelCo
 			// Every field the template knows about the spot, whatever they are —
 			// except the bunk partner, a label that syncBunks turns into the
 			// spot's id once every spot of the room exists. A list the file
-			// leaves out (features, features_off) is not sent, so the new spot
-			// starts empty there.
+			// leaves out (features_off) is not sent, so the new spot starts
+			// empty there.
 			const { bunk_partner: _partner, ...fields } = spot.bed;
 			const record = await pb.collection('beds').create({ ...fields, occupied: false, room });
 			created.beds.push(record.id);

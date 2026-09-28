@@ -35,8 +35,8 @@ export interface PassSpot {
 	 */
 	bed: string;
 	/**
-	 * "🔥 Heated · 🔌 Power socket": what is true at the spot — its own
-	 * features and its room's and house's (src/lib/accommodation.ts); '' for none.
+	 * "🔥 Heated · 🤫 Quiet zone": what is true at the spot — its room's and
+	 * house's features (src/lib/accommodation.ts); '' for none.
 	 */
 	features: string;
 	enabled: boolean;
@@ -204,21 +204,20 @@ export function bedRow(
 }
 
 /**
- * "🔥 Heated · 🔌 Power socket": what is true at one spot, its room's and
- * house's features included (effectiveFeatures: the closer level wins, what
- * the room or the spot switched off is gone, an upper bunk is never ♿).
+ * "🔥 Heated · 🤫 Quiet zone": what is true at one spot — its room's and
+ * house's features (effectiveFeatures: the room wins an argument, what the
+ * room or the spot switched off is gone, an upper bunk is never ♿).
  * '' when nobody wrote anything down.
  */
 export function spotFeatureText(
 	house: Pick<HousesResponse, 'features'> | undefined,
 	room: Pick<RoomsResponse, 'features' | 'features_off'> | undefined,
-	bed: Pick<BedsResponse, 'features' | 'bed_type' | 'features_off'>
+	bed: Pick<BedsResponse, 'bed_type' | 'features_off'>
 ): string {
 	return featureText(
 		effectiveFeatures({
 			house: house?.features,
 			room: room?.features,
-			spot: bed.features,
 			// a superuser's call: the pass must not promise a heating the spot gave up
 			roomOff: room?.features_off,
 			spotOff: bed.features_off,

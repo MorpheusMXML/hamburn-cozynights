@@ -266,7 +266,10 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		house: house.id,
 		amount_beds: BED_LABELS.length,
 		kind: 'hut',
-		features: ['wheelchair', 'ground_floor', 'own_bathroom', 'heated', 'quiet', 'power'],
+		// Every room feature but "No heating": the longest chip row. Wheelchair
+		// accessible, so its upper bunks show what they are not (struck through
+		// in the admin editor, "no ♿ …" on the guest cards).
+		features: ['wheelchair', 'ground_floor', 'own_bathroom', 'heated', 'quiet'],
 		// A superuser switched one house feature off for this room: the form
 		// shows it struck through under "From the house".
 		features_off: ['toilets_inside'],
@@ -292,12 +295,10 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 			occupied: false,
 			is_locked: label === 'Upper 1',
 			is_special: label.startsWith('Doppelbett'),
-			// A socket at the longest label.
 			bed_type: levels[label] ?? otherKinds[kind++ % otherKinds.length],
-			features: label.startsWith('Doppelbett') ? ['power'] : [],
-			// The locked upper bunk lost the room's socket and the house's quiet:
-			// the longest possible "off here" list on a spot.
-			features_off: label === 'Upper 1' ? ['quiet', 'power'] : []
+			// The locked upper bunk lost the room's own bathroom and the house's
+			// quiet: a long "off here" list on a spot, next to its struck-out ♿.
+			features_off: label === 'Upper 1' ? ['own_bathroom', 'quiet'] : []
 		});
 		beds[label] = bed.id;
 	}

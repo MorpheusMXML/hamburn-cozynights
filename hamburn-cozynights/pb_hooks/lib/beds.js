@@ -10,9 +10,10 @@
 // The rules (the same as in accommodation.ts):
 // - Two features that say the opposite (heated / unheated) can't both be set
 //   on one house or room: featureProblem() refuses such a write.
-// - A spot's features are its own plus its room's and house's; the closer
-//   level wins an argument, and a bed with a ladder is never wheelchair
-//   accessible (NOT_UP_A_LADDER).
+// - A spot has no features of its own (the 🔌 power socket, the only one it
+//   had, was dropped on 2026-09-28): its features are its room's and house's,
+//   the room winning an argument, minus what the room or spot switched off —
+//   and a bed with a ladder is never wheelchair accessible (NOT_UP_A_LADDER).
 //
 // A CommonJS module for PocketBase's JSVM, like texts.js.
 
@@ -44,8 +45,7 @@ const FEATURES = [
 		levels: ['house', 'room'],
 		opposite: 'heated'
 	},
-	{ value: 'quiet', label: 'Quiet zone', icon: '🤫', levels: ['house', 'room'] },
-	{ value: 'power', label: 'Power socket', icon: '🔌', levels: ['room', 'spot'] }
+	{ value: 'quiet', label: 'Quiet zone', icon: '🤫', levels: ['house', 'room'] }
 ];
 
 /** What a bed with a ladder can never be. */
@@ -91,11 +91,13 @@ function readFeaturesOff(raw, level) {
 }
 
 /**
- * Why a house, room or spot record can't be written: two of its features say
- * the opposite of each other, or (rooms and spots) it switches a feature off
- * that it claims itself. Returns the reason, or '' when it is fine.
+ * Why a house or room record can't be written: two of its features say the
+ * opposite of each other, or (a room) it switches a feature off that it
+ * claims itself. A spot has no features of its own, so it always passes
+ * here. Returns the reason, or '' when it is fine.
  */
 function featureProblem(record, level) {
+	if (level !== 'house' && level !== 'room') return '';
 	const features = readFeatures(record.get('features'), level);
 	for (const entry of FEATURES) {
 		if (
@@ -113,7 +115,7 @@ function featureProblem(record, level) {
 			);
 		}
 	}
-	if (level === 'room' || level === 'spot') {
+	if (level === 'room') {
 		const off = readFeaturesOff(record.get('features_off'), level);
 		for (const value of off) {
 			if (features.indexOf(value) >= 0) {
@@ -156,25 +158,24 @@ function addOwn(chosen, features) {
 }
 
 /**
- * What is true for one spot: house, room and spot features together, the
- * closer level winning an argument, what a room or spot switched off gone
- * before its own features count, and nothing a ladder rules out. The same
- * as effectiveFeatures() in src/lib/accommodation.ts.
+ * What is true for one spot: house and room features together, the room
+ * winning an argument, what the room or the spot switched off gone, and
+ * nothing a ladder rules out. The same as effectiveFeatures() in
+ * src/lib/accommodation.ts.
  */
-function effectiveFeatures(house, room, spot, bedType, roomOff, spotOff) {
+function effectiveFeatures(house, room, bedType, roomOff, spotOff) {
 	const chosen = {};
 	addOwn(chosen, readFeatures(house, 'house'));
 	for (const value of readFeaturesOff(roomOff, 'room')) delete chosen[value];
 	addOwn(chosen, readFeatures(room, 'room'));
 	for (const value of readFeaturesOff(spotOff, 'spot')) delete chosen[value];
-	addOwn(chosen, readFeatures(spot, 'spot'));
 	if (LADDER_TYPES.indexOf(bedType) >= 0) {
 		for (const value of NOT_UP_A_LADDER) delete chosen[value];
 	}
 	return FEATURES.filter((entry) => chosen[entry.value]).map((entry) => entry.value);
 }
 
-/** "🔥 Heated · 🔌 Power socket", or '' for none. */
+/** "🔥 Heated · 🤫 Quiet zone", or '' for none. */
 function featureText(features) {
 	return (features || [])
 		.map((value) => featureEntry(value))

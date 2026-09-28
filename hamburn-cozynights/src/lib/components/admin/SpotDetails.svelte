@@ -1,32 +1,25 @@
 <script lang="ts">
 	/**
 	 * The details of one spot, folded away until the crew needs them: what kind
-	 * of bed it is, whether there is a socket at it, and its label while the
-	 * layout is unlocked. For a whole room of bunk beds, SPOT TYPES 🛏️ in the
-	 * room panel is faster.
+	 * of bed it is, and its label while the layout is unlocked. For a whole room
+	 * of bunk beds, SPOT TYPES 🛏️ in the room panel is faster.
 	 *
-	 * The spot also shows what it inherits from its room and house ("From the
-	 * room and house"). A superuser can switch one of those off for this spot
-	 * alone (`features_off`, src/lib/accommodation.ts); admins only see the chips.
+	 * A spot has no features of its own: it shows what it inherits from its
+	 * room and house ("From the room and house"). A superuser can switch one of
+	 * those off for this spot alone (`features_off`, src/lib/accommodation.ts);
+	 * admins only see the chips. What the bed itself rules out — an upper bunk
+	 * is never ♿ wheelchair accessible — is struck through, whoever looks.
 	 */
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { enhance } from '$app/forms';
 	import { toast } from '$lib/dialogs';
-	import {
-		BED_TYPES,
-		FEATURES,
-		featuresFor,
-		readFeatures,
-		type Feature,
-		type FeatureEntry
-	} from '$lib/accommodation';
+	import { BED_TYPES, FEATURES, bedRulesOut, type Feature } from '$lib/accommodation';
 	import { TEMPLATE_LIMITS } from '$lib/template';
 
 	export let bed: {
 		id: string;
 		label?: string;
 		bed_type?: string;
-		features?: string[] | string;
 	};
 	/** The label belongs to the layout: only in Staging Mode. */
 	export let canRename = false;
@@ -45,11 +38,23 @@
 	let error = '';
 	let submitting = false;
 
-	$: spotFeatures = featuresFor('spot');
-	$: chosen = new Set(readFeatures(bed.features, 'spot'));
+	/**
+	 * The bed the BED field shows: the stored one, until the crew picks another
+	 * — so an ♿ chip is struck through as soon as "Upper bunk" is picked, not
+	 * only after SAVE. A stored change (SAVE, stacking, swapping) wins again.
+	 */
+	let shownType = bed.bed_type ?? '';
+	let storedType = shownType;
+	$: if ((bed.bed_type ?? '') !== storedType) {
+		storedType = bed.bed_type ?? '';
+		shownType = storedType;
+	}
+
 	$: name = bed.label || 'this spot';
 	$: inheritedSet = new Set(inherited);
 	$: offSet = new Set(featuresOff);
+	// What this bed can never be, whatever the room says: ♿ on an upper bunk.
+	$: ruledOut = new Set(bedRulesOut(shownType));
 	// The chips: what comes from above, plus an override whose feature the room
 	// and house no longer have — otherwise it could never be seen or reset.
 	$: fromAbove = FEATURES.filter(
@@ -57,30 +62,11 @@
 	);
 
 	/**
-	 * A spot can't claim a feature and switch it off at once (the server
-	 * refuses that, parseSpotForm): ticking one box clears the other. The
-	 * boxes are plain form fields, like in DetailsPanel, so the reset can
-	 * simply untick them all — nothing is stored until SAVE.
+	 * Unticks every "off here" box; saved, an empty list means "inherit
+	 * everything again". The boxes are plain form fields, like in DetailsPanel,
+	 * so nothing is stored until SAVE — the hidden box behind a struck-through
+	 * ♿ chip included, so a reset clears that too.
 	 */
-	function tickOwn(event: Event, feature: FeatureEntry) {
-		const box = event.currentTarget as HTMLInputElement;
-		if (!box.checked) return;
-		const off = box.form?.querySelector<HTMLInputElement>(
-			`input[name="features_off"][value="${feature.value}"]`
-		);
-		if (off) off.checked = false;
-	}
-
-	function offOne(event: Event, feature: FeatureEntry) {
-		const box = event.currentTarget as HTMLInputElement;
-		if (!box.checked) return;
-		const own = box.form?.querySelector<HTMLInputElement>(
-			`input[name="features"][value="${feature.value}"]`
-		);
-		if (own) own.checked = false;
-	}
-
-	/** Unticks every "off here" box; saved, an empty list means "inherit everything again". */
 	function resetOff(event: Event) {
 		const form = (event.currentTarget as HTMLButtonElement).form;
 		form
@@ -149,7 +135,7 @@
 				<select
 					id="bed-type-{bed.id}"
 					name="bed_type"
-					value={bed.bed_type ?? ''}
+					bind:value={shownType}
 					disabled={stacked}
 					aria-describedby={stacked ? `bed-type-note-${bed.id}` : undefined}
 				>
@@ -174,29 +160,36 @@
 				{:else}
 					<ul class="chips" aria-label="Inherited from the room and house">
 						{#each fromAbove as feature (feature.value)}
+							{@const never = ruledOut.has(feature.value)}
 							<li
 								class="chip"
 								class:off={!canOverride && offSet.has(feature.value)}
+								class:never
 								class:stale={!inheritedSet.has(feature.value)}
-								title={feature.hint ?? ''}
+								title={never
+									? 'An upper bunk is never wheelchair accessible.'
+									: (feature.hint ?? '')}
 							>
 								<span aria-hidden="true">{feature.icon}</span>
 								<span class="chip-label">{feature.label}</span>
 								{#if canOverride}
-									<label class="off-box">
+									<!-- Hidden behind a struck-through chip, the box still carries what is
+									     stored, so saving an upper bunk never changes its overrides. -->
+									<label class="off-box" hidden={never}>
 										<input
 											type="checkbox"
 											name="features_off"
 											value={feature.value}
 											checked={offSet.has(feature.value)}
-											on:change={(event) => offOne(event, feature)}
 										/>
 										off here
 									</label>
-								{:else if offSet.has(feature.value)}
+								{:else if offSet.has(feature.value) && !never}
 									<span class="off-tag">off here</span>
 								{/if}
-								{#if !inheritedSet.has(feature.value)}
+								{#if never}
+									<span class="never-tag">never on an upper bunk</span>
+								{:else if !inheritedSet.has(feature.value)}
 									<span class="stale-tag">not inherited now</span>
 								{/if}
 							</li>
@@ -213,20 +206,6 @@
 					{/if}
 				{/if}
 			</div>
-
-			{#each spotFeatures as feature}
-				<label class="check" title={feature.hint ?? ''}>
-					<input
-						type="checkbox"
-						name="features"
-						value={feature.value}
-						checked={chosen.has(feature.value)}
-						on:change={(event) => tickOwn(event, feature)}
-					/>
-					<span aria-hidden="true">{feature.icon}</span>
-					{feature.label}
-				</label>
-			{/each}
 
 			{#if error}<p class="field-error" role="alert">⚠️ {error}</p>{/if}
 
@@ -306,26 +285,6 @@
 		font-size: 0.85rem;
 	}
 
-	.check {
-		display: flex;
-		align-items: center;
-		gap: 0.45rem;
-		font-size: 0.8rem;
-		font-weight: 600;
-		letter-spacing: 0;
-		text-transform: none;
-		color: #ddd;
-		cursor: pointer;
-		overflow-wrap: anywhere;
-	}
-
-	.check input {
-		accent-color: #00ffe0;
-		width: 1rem;
-		height: 1rem;
-		flex: none;
-	}
-
 	.field-error {
 		margin: 0;
 		font-size: 0.78rem;
@@ -378,7 +337,8 @@
 
 	/* Switched off here: struck through, whether stored (.off) or just ticked (:has). */
 	.chip.off .chip-label,
-	.chip:has(.off-box input:checked) .chip-label {
+	.chip:has(.off-box input:checked) .chip-label,
+	.chip.never .chip-label {
 		text-decoration: line-through;
 		opacity: 0.55;
 	}
@@ -406,7 +366,13 @@
 		flex: none;
 	}
 
+	/* The display above would win over the hidden attribute. */
+	.off-box[hidden] {
+		display: none;
+	}
+
 	.off-tag,
+	.never-tag,
 	.stale-tag {
 		font-size: 0.62rem;
 		font-weight: 700;
@@ -420,6 +386,10 @@
 
 	.stale-tag {
 		color: #8a8f98;
+	}
+
+	.never-tag {
+		color: #cfd6dd;
 	}
 
 	.inherited-actions {
