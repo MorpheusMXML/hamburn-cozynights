@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-# Staging deploy. Runs on the server as the restricted `deploy` user, installed
-# at /usr/local/bin/deploy-cozynights-staging and used as the SSH forced command
-# (see deploy/README.md). GitHub Actions sends "deploy <commit-sha>"; only that
-# 40-char SHA is taken from the request, everything else is ignored.
+# Server deploy for every stack (staging, production). Runs on the server as
+# the restricted `deploy` user and is used as the SSH forced command (see
+# deploy/README.md). One copy per environment, and the copy's name picks the
+# configuration:
+#   /usr/local/bin/deploy-cozynights-staging     → /etc/cozynights/deploy-staging.conf
+#   /usr/local/bin/deploy-cozynights-production  → /etc/cozynights/deploy-production.conf
+# (any other name, e.g. this file in the checkout, means staging). GitHub
+# Actions sends "deploy <commit-sha>"; only that 40-char SHA is taken from the
+# request, everything else is ignored.
 #
 # Steps: checkout SHA → build app image (old containers keep serving) →
 # stop PocketBase → back up its volume → up -d → health check (/api/health:
@@ -11,16 +16,30 @@
 # the database is NOT rolled back (see the warning below).
 set -euo pipefail
 
-CONFIG=/etc/cozynights/deploy-staging.conf
+self="$(basename "$0")"
+env_name="${self#deploy-cozynights-}"
+if [[ "$env_name" == "$self" || ! "$env_name" =~ ^[a-z]+$ ]]; then
+	env_name=staging
+fi
+CONFIG="/etc/cozynights/deploy-${env_name}.conf"
 # shellcheck source=/dev/null
 source "$CONFIG"
 : "${APP_DIR:?APP_DIR missing in $CONFIG}"
 : "${COMPOSE_PROJECT_NAME:?COMPOSE_PROJECT_NAME missing in $CONFIG}"
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.staging.yml}"
-BACKUP_DIR="${BACKUP_DIR:-/var/backups/cozynights-staging}"
+if [[ "$env_name" == staging ]]; then
+	# Staging's values, for its config from before there was a second stack.
+	COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.staging.yml}"
+	BACKUP_DIR="${BACKUP_DIR:-/var/backups/cozynights-staging}"
+	HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3001/api/health}"
+	PB_CONTAINER="${PB_CONTAINER:-cozynights-staging-pocketbase}"
+fi
+# Every other stack names all four: a staging default there would stop and
+# archive the wrong database.
+: "${COMPOSE_FILE:?COMPOSE_FILE missing in $CONFIG}"
+: "${BACKUP_DIR:?BACKUP_DIR missing in $CONFIG}"
+: "${HEALTH_URL:?HEALTH_URL missing in $CONFIG}"
+: "${PB_CONTAINER:?PB_CONTAINER missing in $CONFIG}"
 BACKUP_KEEP="${BACKUP_KEEP:-10}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3001/api/health}"
-PB_CONTAINER="${PB_CONTAINER:-cozynights-staging-pocketbase}"
 export COMPOSE_PROJECT_NAME
 
 log() { printf '[deploy %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
@@ -54,6 +73,12 @@ git fetch --prune --quiet origin '+refs/heads/*:refs/remotes/origin/*'
 if ! git cat-file -e "${sha}^{commit}" 2>/dev/null; then
 	echo "commit $sha not found on origin" >&2
 	exit 5
+fi
+# Production (REQUIRE_BRANCH=main in its config): only released code, even if
+# the workflow or the GitHub environment were ever set up to allow more.
+if [[ -n "${REQUIRE_BRANCH:-}" ]] && ! git merge-base --is-ancestor "$sha" "origin/$REQUIRE_BRANCH"; then
+	echo "refusing to deploy: $sha is not on origin/$REQUIRE_BRANCH" >&2
+	exit 10
 fi
 
 compose() { docker compose -f "$APP_DIR/hamburn-cozynights/$COMPOSE_FILE" "$@"; }
@@ -125,7 +150,9 @@ log "starting stack"
 compose up -d --remove-orphans
 
 if healthy; then
-	docker image prune -f >/dev/null
+	# Only this stack's old images: both stacks share one Docker daemon, and
+	# compose labels every image it builds with its project.
+	docker image prune -f --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" >/dev/null
 	log "deployed $sha"
 	exit 0
 fi
