@@ -75,6 +75,17 @@ write" means an approved `admins` record (see [Security & privacy](./security)).
   (`pb_hooks/cozy_bunks.pb.js`, logic in `pb_hooks/lib/bunks.js`). Stacking
   works in every phase, like 🔒 and ♿: it moves no booking (see
   [Bunk beds](../admin/camp-layout#bunk-beds)).
+- **The house generator writes whole trees.** IGNITE HOUSE and ADD ROOMS
+  (`src/lib/server/house-generator.ts`; the size rows, room numbers and
+  checks are pure code in `src/lib/house-plan.ts`) create each room with the
+  next free `room_number` (skipping the ones the house has), a rolled `name`
+  (`src/lib/place-names.ts`, never one the house has), the `kind` its house
+  implies and `amount_beds`, then its spots `B1 … Bn`, `enabled` and not
+  `occupied`; with 🪜 each pair gets `bunk_lower` / `bunk_upper` and
+  `bunk_partner` on both spots. PocketBase has no transaction across
+  requests: when a write fails, the rooms created so far are deleted again
+  (their spots go with them) and a new house goes too, so nothing half-made
+  stays. See [Create a house](../admin/camp-layout#create-a-house).
 - **Features add up from the house down, and the closer level wins:** what
   is true for one spot is the house's `features`, minus what the room
   switched off (`rooms.features_off`), plus the room's own, minus what the
