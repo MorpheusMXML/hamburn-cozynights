@@ -20,9 +20,13 @@ flowchart LR
 
    You need a spot of your own: a swap trades yours for theirs. Open the room with the spot you'd like. While booking is live, every spot another guest holds says **⇄ Ask to swap** under the burner name. Tap it.
 
+   ![A room during Live Booking: your spot, and the taken spots with ⇄ Ask to swap; one says ⏳ Asked — waiting](../assets/screenshots/guest-swap-room.webp)
+
 2. **Say hi (optional)**
 
    The swap sheet shows the deal as two tickets: **You give** (your spot, turquoise) and **You get** (theirs, sky blue). Pick a vibe if you like — <kbd>👯 My crew sleeps nearby</kbd>, <kbd>🤫 Quiet corner, please</kbd>, <kbd>🌅 Early bird</kbd>, <kbd>🌙 Night owl</kbd>, <kbd>🪜 The other bunk level</kbd>, <kbd>🎁 Just asking nicely</kbd> — and write a few words, up to 140 characters. Links can't go in, and there is no need to explain why: a friendly word is enough.
+
+   ![The swap sheet: You give B3, You get B1 (the lower bunk of Disco Owl), the vibe Night owl and a few words](../assets/screenshots/guest-swap-sheet.webp)
 
 3. **Send it**
 
@@ -40,7 +44,13 @@ The other guest gets an e-mail (and a Telegram message, if they turned Telegram 
 - **No:** <kbd>No thanks</kbd>. They get a kind *No swap this time*, and both of you keep your spots. Under **More** you can also say no and pause swap requests to you in one go.
 - Or just let it run out: nothing happens then.
 
+![Swap requests: a request with its vibe, the few words, both spots as tickets, the time left, Hold to swap and No thanks](../assets/screenshots/guest-swaps.webp)
+
+<p align="center"><img src="../assets/screenshots/guest-swaps-mobile.webp" alt="Swap requests on a phone: the tickets stacked, the badge on the 🔁 icon in the top bar" width="300" /></p>
+
 ## After the swap
+
+![Swapped! The new spot is yours now, the old one theirs, with Go to my new room and the booking pass](../assets/screenshots/guest-swap-done.webp)
 
 Both spots change hands in one step — there is no moment in which one of you has no spot or two. Your **burner name** comes along to your new spot, your [booking pass](./booking#your-booking-pass) keeps its code and shows the new spot, a wallet pass updates itself, and you both get **🔁 Swap done!** by e-mail (and on Telegram) instead of the usual *spot changed*.
 

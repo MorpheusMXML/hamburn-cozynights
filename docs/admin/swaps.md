@@ -11,6 +11,8 @@ During **Live Booking** guests can ask each other to swap spots: a guest who hol
 | **ON** (the default) | During Live Booking every taken spot offers *⇄ Ask to swap*, and requests can be answered. Outside Live Booking nothing can be asked or accepted anyway (*ON IN LIVE BOOKING*). |
 | **PAUSED** | No new requests, no yes. Waiting requests stay and keep running out; guests read *The crew paused swaps for a moment.* Use it if something goes wrong — spam, a bug, a layout change in the middle of Live Booking. |
 
+![The Control Center: the ♿ requests row and, below it, Swap requests between guests: ON · 2 open · 3 swapped with Pause swaps](../assets/screenshots/admin-swaps-switch.webp)
+
 Every flip goes to the crew chat: *🔁 Swap requests turned OFF by …* / *turned on again by …*.
 
 **The numbers.** *open* are requests waiting for an answer, *swapped* the swaps that went through. That is all the crew sees on purpose: who asked whom and what they wrote stays between the two guests (see [Privacy](#privacy)). The spots themselves show the result like any booking: [Bookings & check-ins](./bookings) and the room pages name the guest who holds a spot now.
