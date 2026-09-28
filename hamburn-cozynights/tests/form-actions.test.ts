@@ -16,6 +16,12 @@ const ROUTES = path.join(SRC, 'routes');
 /** `?/name` or `/path?/name` as a whole string literal: action=, formaction=, fetch, submitAction. */
 const ACTION_URL = /(["'`])((?:\/[\w-]+)*\/?)\?\/(\w+)\1/g;
 const SVELTE_IMPORT = /from\s+['"]([^'"]+\.svelte)['"]/g;
+/** HTML, block and whole-line comments: an example there ("e.g. \"?/renameRoom\"") posts nothing. */
+const COMMENTS = /<!--[\s\S]*?-->|\/\*[\s\S]*?\*\/|^[ \t]*\/\/.*$/gm;
+
+/** A file's text with its comments blanked out, line breaks kept, so line numbers stay right. */
+const code = (file: string) =>
+	readFileSync(file, 'utf8').replace(COMMENTS, (comment) => comment.replace(/[^\n]/g, ' '));
 
 const svelteFiles = readdirSync(SRC, { recursive: true, encoding: 'utf8' })
 	.filter((file) => file.endsWith('.svelte'))
@@ -71,7 +77,7 @@ const route = (dir: string) => '/' + path.relative(ROUTES, dir).split(path.sep).
 type Post = { at: string; url: string; name: string; lands: string | 'a layout' };
 
 const posts: Post[] = svelteFiles.flatMap((file) => {
-	const text = readFileSync(file, 'utf8');
+	const text = code(file);
 	return [...text.matchAll(ACTION_URL)].flatMap((match) => {
 		const [, , target, name] = match;
 		const at = `src/${path.relative(SRC, file)}:${text.slice(0, match.index).split('\n').length}`;
