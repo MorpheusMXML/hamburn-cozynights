@@ -385,7 +385,6 @@ describe('planChanges', () => {
 					is_locked: true,
 					is_special: false,
 					bed_type: '',
-					features: [],
 					features_off: []
 				}
 			})
@@ -424,7 +423,7 @@ describe('the details of a place', () => {
 				name: 'Hut 1',
 				room_number: 1,
 				kind: 'hut',
-				features: ['power'],
+				features: ['own_bathroom'],
 				beds: [spot('B1', { bed_type: 'bunk_lower' }), spot('B2', { bed_type: 'bunk_upper' })]
 			}
 		]
@@ -450,7 +449,7 @@ describe('the details of a place', () => {
 			{ field: 'features', from: 'Ground floor', to: 'Heated' },
 			{ field: 'description', from: 'Wash house 50 m away.', to: 'Now with heating.' }
 		]);
-		expect(house.rooms[0].changes).toEqual([{ field: 'features', from: 'Power socket', to: null }]);
+		expect(house.rooms[0].changes).toEqual([{ field: 'features', from: 'Own bathroom', to: null }]);
 		expect(house.rooms[0].spots[1].changes).toEqual([
 			{ field: 'bed_type', from: 'Upper bunk', to: 'Lower bunk' }
 		]);
@@ -468,7 +467,9 @@ describe('the details of a place', () => {
 			features: ['ground_floor'],
 			description: ''
 		});
-		expect(plan.updateSpots[0].fields).toMatchObject({ bed_type: '', features: [] });
+		expect(plan.updateSpots[0].fields).toMatchObject({ bed_type: '' });
+		// a spot has no features of its own, so none are written
+		expect(plan.updateSpots[0].fields).not.toHaveProperty('features');
 	});
 
 	it('creates a new house with its details', () => {
@@ -481,7 +482,7 @@ describe('the details of a place', () => {
 		});
 		expect(plan.createRooms[0].details).toEqual({
 			kind: 'hut',
-			features: ['power'],
+			features: ['own_bathroom'],
 			features_off: [],
 			description: ''
 		});
@@ -490,7 +491,10 @@ describe('the details of a place', () => {
 });
 
 describe('switched-off features', () => {
-	/** A heated, quiet hut group; hut 1 stays cold, and B2 has no socket. */
+	/**
+	 * A heated, quiet hut group; hut 1 has its own bathroom but stays cold, and
+	 * B2 by the door is neither quiet nor close to that bathroom.
+	 */
 	const overridden = (): TemplateHouse => ({
 		name: 'Waldhuetten',
 		x: 100,
@@ -500,9 +504,9 @@ describe('switched-off features', () => {
 			{
 				name: 'Hut 1',
 				room_number: 1,
-				features: ['power'],
+				features: ['own_bathroom'],
 				features_off: ['heated'],
-				beds: [spot('B1'), spot('B2', { features_off: ['quiet', 'power'] })]
+				beds: [spot('B1'), spot('B2', { features_off: ['own_bathroom', 'quiet'] })]
 			}
 		]
 	});
@@ -512,8 +516,9 @@ describe('switched-off features', () => {
 		expect(changeKeys(diff)).toEqual([]);
 		// the camp's list is read like a file's: order and junk don't matter
 		const records = camp([overridden()]);
-		records.rooms[0].features_off = ['heated', 'heated', 'power'];
-		records.beds[1].features_off = ['power', 'quiet'];
+		records.rooms[0].features_off = ['heated', 'heated', 'own_bathroom'];
+		// "power" is stored nowhere after the migration; if it were, it would mean nothing
+		records.beds[1].features_off = ['quiet', 'power', 'own_bathroom'];
 		expect(changeKeys(diffLayout(records, template([overridden()])))).toEqual([]);
 	});
 
@@ -525,7 +530,7 @@ describe('switched-off features', () => {
 		const room = diff.houses[0].rooms[0];
 		expect(room.changes).toEqual([{ field: 'features_off', from: 'Heated', to: null }]);
 		expect(room.spots[1].changes).toEqual([
-			{ field: 'features_off', from: 'Quiet zone · Power socket', to: 'Quiet zone' }
+			{ field: 'features_off', from: 'Own bathroom · Quiet zone', to: 'Quiet zone' }
 		]);
 		expect(diff.houses[0].own).toBeNull();
 	});
@@ -538,7 +543,7 @@ describe('switched-off features', () => {
 		const plan = planChanges(diff, defaultSelection(diff));
 		expect(plan.updateRooms[0].details).toEqual({
 			kind: '',
-			features: ['power'],
+			features: ['own_bathroom'],
 			features_off: [],
 			description: ''
 		});
@@ -549,7 +554,7 @@ describe('switched-off features', () => {
 		// a house has nothing above it, so nothing is written there
 		expect(created.createHouses[0].details).not.toHaveProperty('features_off');
 		expect(created.createRooms[0].details).toMatchObject({ features_off: ['heated'] });
-		expect(created.createSpots[1].bed).toMatchObject({ features_off: ['quiet', 'power'] });
+		expect(created.createSpots[1].bed).toMatchObject({ features_off: ['own_bathroom', 'quiet'] });
 	});
 });
 

@@ -33,6 +33,8 @@ export interface BookingSettings {
 	telegramBot: string;
 	/** Guests can send special-needs requests (own switch, independent of the phase). */
 	requestsOpen: boolean;
+	/** The crew turned swap requests off (they only ever run during Live Booking). */
+	swapsOff: boolean;
 }
 
 /**
@@ -68,6 +70,7 @@ export async function getBookingSettings(pb: TypedPocketBase): Promise<BookingSe
 		notifyMail: !!settings?.notify_mail,
 		// Telegram usernames: 5–32 letters, digits and underscores
 		telegramBot: /^[A-Za-z0-9_]{5,32}$/.test(telegramBot) ? telegramBot : '',
-		requestsOpen: !!settings?.special_requests_open
+		requestsOpen: !!settings?.special_requests_open,
+		swapsOff: !!settings?.swaps_off
 	};
 }

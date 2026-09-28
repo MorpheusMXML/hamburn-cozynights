@@ -99,7 +99,6 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 							bedType: bed.bed_type,
 							house: bed.expand?.room?.expand?.house?.features,
 							room: bed.expand?.room?.features,
-							spot: bed.features,
 							roomOff: bed.expand?.room?.features_off,
 							spotOff: bed.features_off
 						})

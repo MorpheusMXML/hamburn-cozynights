@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import type { RoomsResponse, BedsResponse, HousesResponse } from '$lib/pocketbase-types';
 import { getBookingSettings } from '$lib/server/settings';
 import { readBookings } from '$lib/server/bookings';
+import { NAMES_LOCKED, checkRoomName, checkSpotLabel } from '$lib/server/names';
 import { TEMPLATE_LIMITS, compareNatural } from '$lib/template';
 import { parseDetailsForm, parseSpotForm, type BedType } from '$lib/accommodation';
 import {
@@ -270,9 +271,69 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * What one spot is like: its bed type, a socket at the bed, and its label in
-	 * Staging Mode. What it switches off of what it inherits (features_off) is a
-	 * superuser's call, read from their form only, like on the room.
+	 * A new name and number for the room, from a click on the page's title
+	 * (InlineRename): only in Staging Mode, the number once in its house
+	 * ($lib/server/names).
+	 */
+	renameRoom: async ({ request, params, locals }) => {
+		if (!locals.admin) return fail(403, { message: 'Only admins can rename rooms.' });
+
+		const { isLayoutLocked } = await getBookingSettings(locals.pb);
+		if (isLayoutLocked) return fail(403, { message: NAMES_LOCKED });
+
+		const data = await request.formData();
+		try {
+			const room = await locals.pb
+				.collection('rooms')
+				.getOne<RoomsResponse>(params.id, { fields: 'id,house' });
+			const next = await checkRoomName(locals.pb, room, data.get('name'), data.get('room_number'));
+			if (!next.ok) return fail(400, { message: next.message });
+			await locals.pb.collection('rooms').update(params.id, next.value);
+			console.log(`[Action:renameRoom] Admin: ${locals.admin.email}, Room: ${params.id}`);
+			return { success: true };
+		} catch (err) {
+			console.error('[Action:renameRoom] FAILED:', err);
+			return fail(500, { message: SERVER_ERROR });
+		}
+	},
+
+	/**
+	 * A new label for one spot of this room, from a click on it (InlineRename):
+	 * only in Staging Mode, the label once in the room. The spot's details
+	 * (bed type, what it switches off) are not touched — saveSpot writes those.
+	 */
+	renameSpot: async ({ request, params, locals }) => {
+		if (!locals.admin) return fail(403, { message: 'Only admins can rename spots.' });
+
+		const { isLayoutLocked } = await getBookingSettings(locals.pb);
+		if (isLayoutLocked) return fail(403, { message: NAMES_LOCKED });
+
+		const data = await request.formData();
+		const id = String(data.get('id') ?? '');
+		if (!id) return fail(400, { message: 'No spot was selected. Reload the page and try again.' });
+		try {
+			const spot = await locals.pb
+				.collection('beds')
+				.getOne<BedsResponse>(id, { fields: 'id,room' });
+			// The room of the page, not one the form claims: a label is unique per room.
+			if (spot.room !== params.id) {
+				return fail(400, { message: 'This spot is not in this room. Reload the page.' });
+			}
+			const label = await checkSpotLabel(locals.pb, spot, data.get('label'));
+			if (!label.ok) return fail(400, { message: label.message });
+			await locals.pb.collection('beds').update(id, { label: label.value });
+			return { success: true };
+		} catch (err) {
+			console.error('[Action:renameSpot] FAILED:', err);
+			return fail(500, { message: SERVER_ERROR });
+		}
+	},
+
+	/**
+	 * What one spot is like: its bed type, and its label in Staging Mode. What
+	 * it switches off of what it inherits (features_off) is a superuser's call,
+	 * read from their form only, like on the room. A spot has no features of
+	 * its own: it inherits its room's and house's.
 	 */
 	saveSpot: async ({ request, params, locals }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
@@ -297,7 +358,7 @@ export const actions: Actions = {
 		}
 
 		// The level of a stacked spot comes from the stacking, not from the form.
-		// Features and the label may still change.
+		// What it switches off and the label may still change.
 		try {
 			const stored = await locals.pb.collection('beds').getOne<BedsResponse>(id, {
 				fields: 'id,bed_type,bunk_partner'

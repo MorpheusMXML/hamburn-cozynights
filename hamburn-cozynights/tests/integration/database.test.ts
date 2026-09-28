@@ -4,7 +4,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type PocketBase from 'pocketbase';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
-import { readFeatures } from '../../src/lib/accommodation';
 import {
 	anonymous,
 	createAdmin,
@@ -73,7 +72,10 @@ describe('the details of a place (pb_migrations/1759900000_accommodation.js)', (
 		expect(await fieldsOf('rooms')).toEqual(
 			expect.arrayContaining(['kind', 'features', 'description'])
 		);
-		expect(await fieldsOf('beds')).toEqual(expect.arrayContaining(['bed_type', 'features']));
+		// A spot has no features of its own since pb_migrations/1760200000_no_power_socket.js,
+		// only what it switches off of its room's and house's (1760100000).
+		expect(await fieldsOf('beds')).toEqual(expect.arrayContaining(['bed_type', 'features_off']));
+		expect(await fieldsOf('beds')).not.toContain('features');
 		// pb_migrations/1759970000_bunk_beds.js: the other spot of a bunk bed.
 		expect(await fieldsOf('beds')).toEqual(expect.arrayContaining(['bunk_partner']));
 	});
@@ -91,15 +93,16 @@ describe('the details of a place (pb_migrations/1759900000_accommodation.js)', (
 
 		const savedRoom = await su
 			.collection('rooms')
-			.update(room.id, { kind: 'hut', features: ['own_bathroom', 'power'] });
-		expect(savedRoom.features).toEqual(['own_bathroom', 'power']);
+			.update(room.id, { kind: 'hut', features: ['own_bathroom', 'quiet'] });
+		expect(savedRoom.features).toEqual(['own_bathroom', 'quiet']);
 
 		const savedBed = await su
 			.collection('beds')
-			.update(beds[0].id, { bed_type: 'bunk_lower', features: ['power'] });
+			.update(beds[0].id, { bed_type: 'bunk_lower', features_off: ['quiet'] });
 		expect(savedBed.bed_type).toBe('bunk_lower');
-		// A select that allows one value comes back as that value, not as a list.
-		expect(readFeatures(savedBed.features, 'spot')).toEqual(['power']);
+		expect(savedBed.features_off).toEqual(['quiet']);
+		// a spot has no features of its own (1760200000_no_power_socket.js)
+		expect(savedBed).not.toHaveProperty('features');
 	});
 
 	it('refuses values the catalogue does not know, and features of another level', async () => {
@@ -109,7 +112,9 @@ describe('the details of a place (pb_migrations/1759900000_accommodation.js)', (
 		await expectRefused(su.collection('houses').update(house.id, { features: ['own_bathroom'] }));
 		await expectRefused(su.collection('rooms').update(room.id, { features: ['toilets_inside'] }));
 		await expectRefused(su.collection('beds').update(beds[0].id, { bed_type: 'hammock' }));
-		await expectRefused(su.collection('beds').update(beds[0].id, { features: ['quiet'] }));
+		// the power socket is gone from the catalogue, on every level
+		await expectRefused(su.collection('rooms').update(room.id, { features: ['power'] }));
+		await expectRefused(su.collection('beds').update(beds[0].id, { features_off: ['power'] }));
 	});
 
 	it('leaves a place that nobody described empty', async () => {
@@ -120,7 +125,7 @@ describe('the details of a place (pb_migrations/1759900000_accommodation.js)', (
 		expect(fresh.description).toBe('');
 		const bed = await su.collection('beds').getOne(beds[0].id);
 		expect(bed.bed_type).toBe('');
-		expect(readFeatures(bed.features, 'spot')).toEqual([]);
+		expect(bed.features_off).toEqual([]);
 	});
 });
 

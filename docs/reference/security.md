@@ -50,6 +50,16 @@ What a guest writes about their needs is often health data (Art. 9 GDPR), so it 
 - **No hint for other guests.** Guest pages and their data never say why a spot is taken or reserved (special-needs, locked or booked all look alike); a booked special-needs spot shows the burner name like any other.
 - **Deleted after the event** with `tickets forget-contacts`.
 
+### Swap requests
+
+Guests can ask each other to swap spots during Live Booking. Details: [Swap requests](../admin/swaps#privacy).
+
+- **What guests write to each other is encrypted** (AES-256-GCM, like burner names) and decrypted only for the two guests' own pages, sent with `Cache-Control: no-store`. Never part of e-mails, Telegram messages, the crew group, logs or the audit log; no admin page shows it. Links are refused in it.
+- **No hint about special spots.** Every taken spot offers a swap. A request for a spot that can't be swapped (🔒, ♿, crew-picked, checked in) or to a guest who paused requests is stored *quiet*: never shown or sent to that guest, it runs out like an unanswered one. A failed yes never says which spot was the problem.
+- **Only between the two tickets involved**, taken from the guests' sessions; guests see each other's burner names and spots as on the room pages, never codes, list names or addresses. The swap itself is one PocketBase transaction that only the app's service account can ask for.
+- **Limits against pestering:** three open requests per ticket, ten new ones a day, one "no" is final for that spot, and every guest can pause requests to them.
+- **Deleted** with the ticket's hand-over and after the event with `tickets forget-contacts`.
+
 ### Booking passes
 
 - **A separate, random code.** The pass code (12 characters) can only show a booking; the ticket code, which can change bookings, never appears on a pass, in a QR code or in a message.

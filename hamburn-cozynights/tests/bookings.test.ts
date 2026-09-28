@@ -144,7 +144,8 @@ describe('describeBookings', () => {
 		expect(byId('b3').guest).toBeNull();
 		expect(byId('b3').bookedAt).toBe('');
 		expect(bookingState(byId('b3'))).toBe('crew');
-		expect(guestLabel(null)).toBe('Crew reservation');
+		// the words guests see on such a spot too
+		expect(guestLabel(null)).toBe('Blocked by admin');
 		expect(byId('b5')).toMatchObject({ viaRequest: true, special: true, locked: true });
 	});
 });
@@ -191,7 +192,7 @@ describe('the bookings list', () => {
 		expect(ids('place')).toEqual(['b5', 'b1', 'b2', 'b3']);
 		expect(ids('newest')).toEqual(['b2', 'b1', 'b5', 'b3']);
 		expect(ids('checkin')[0]).toBe('b1');
-		// Crew reservations last when sorted by name.
+		// Spots blocked by admin (no guest) last when sorted by name.
 		expect(ids('guest').at(-1)).toBe('b3');
 	});
 

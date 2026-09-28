@@ -66,7 +66,8 @@ export function signInUrl(locals: App.Locals, next?: string): string {
 
 // The guest pages a sign-in may return to. Nothing else: `next` comes from the
 // URL, and a free-form target would make the start page an open redirect.
-const RETURN_PATH = /^\/(?:map|random-bed|special-needs|telegram|(?:room|house)\/[a-z0-9]{1,32})$/;
+const RETURN_PATH =
+	/^\/(?:map|random-bed|special-needs|telegram|swaps|(?:room|house)\/[a-z0-9]{1,32})$/;
 
 /** A page to return to after signing in, or null for anything that isn't one. */
 export function safeReturnPath(value: unknown): string | null {

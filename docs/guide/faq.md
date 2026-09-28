@@ -130,12 +130,12 @@ Ask the crew for a special-needs spot, even before booking opens: sign in with y
 The form needs at least one ticked need (or *Something else*), a few words of text (5 to 500 characters) and the ticked consent box. *You sent your request 10 times within an hour* is a limit: it works again within the hour. *Special-needs requests are closed right now, so nothing was sent* means the crew stopped taking requests meanwhile: contact the crew. *The crew has already decided on your request* means it can't be changed anymore; the page shows the decision. If something changed, contact the crew. You can still withdraw the request.
 :::
 
-::: details A spot says "Reserved by the crew" in violet
-The crew holds it back: the bed is broken, kept free on purpose, not in use, or kept for guests with special needs. Pick another spot.
+::: details A spot says "Blocked by admin" in violet
+The crew holds it back: the bed is broken, kept free on purpose, taken by the crew, not in use, or kept for guests with special needs. Pick another spot.
 :::
 
 ::: details What do the colours on the spot cards mean?
-One colour, one meaning, on every page: **green** free, **red** taken by another guest, **turquoise** yours, **violet** reserved by the crew, **grey** not bookable right now (booking hasn't opened, or has closed). Pink is only ever ♿ special needs. In a bunk bed each half carries its own colour, and each is its own button.
+One colour, one meaning, on every page: **green** free, **red** taken by another guest, **turquoise** yours, **violet** blocked by admin, **grey** not bookable right now (booking hasn't opened, or has closed). Pink is only ever ♿ special needs. In a bunk bed each half carries its own colour, and each is its own button.
 :::
 
 ::: details The burning title is too much for me
@@ -151,6 +151,32 @@ Every page of CozyNights links the **legal notice** (who runs it and how to reac
 :::
 
 <!-- audience:admin -->
+
+### Swapping spots
+
+::: details I don't see "⇄ Ask to swap" on the taken spots
+You need a spot of your own (a swap trades yours for theirs), booking has to be live, and the crew may have paused swaps for a moment (**Swap requests** says so). If the crew picked your spot for you, set it aside or checked you in, your spot can't be swapped — your room page says so. See [Swapping spots](./swaps).
+:::
+
+::: details I asked, but nobody answers
+The other guest has three days. Some guests don't answer, some paused swap requests, and some spots can't be swapped at all — CozyNights never says which, so nobody learns why a spot is special. After three days the request shows *No answer — it ran out*. Ask for another spot, or ask again.
+:::
+
+::: details "This swap isn't possible any more"
+One of the two spots changed hands in the meantime (somebody moved or released it), or booking closed. Nothing changed: you both keep your spots. Reload **Swap requests**.
+:::
+
+::: details "You have 3 open swap requests" · "They said no to this swap already"
+At most three requests can wait at a time: take one back on **Swap requests**, or wait for an answer. A no is final for that spot and its guest — ask somebody else.
+:::
+
+::: details Can I undo a swap?
+Not with a button, but you can ask for your old spot back the same way. The other guest decides.
+:::
+
+::: details Who sees why I want to swap?
+Only the guest you ask sees your vibe and your few words, in the app. They are never in an e-mail or on Telegram, and the crew doesn't read them. No need to explain why: a friendly word is enough.
+:::
 
 ## For admins
 
@@ -180,6 +206,8 @@ First the phase: guests book only during 🎪 Live Booking. Then check the spot 
 
 ::: details A house won't move when I drag it
 Either the layout is locked (Live Booking, or booking closed: the pin shakes its head and a small bubble next to it says so), or you are pushing it right on top of another house: houses keep a small distance from each other. Wait for Staging, or drop it a little further away.
+
+If the pin moves but jumps back with *The new position was not saved: …*, the server refused the move, and the text after the colon says why. Usually the phase changed while the page was open (*Map layout is locked during Live Booking*): reload the page. A refused rename or delete gives its reason in a dialog, *House not renamed* or *House not deleted*.
 :::
 
 ::: details I can't find "Clear all bookings", or I can't apply a template

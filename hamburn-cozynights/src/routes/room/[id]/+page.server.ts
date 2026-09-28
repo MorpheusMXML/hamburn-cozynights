@@ -7,13 +7,7 @@ import type {
 	HousesResponse,
 	OrdersResponse
 } from '$lib/pocketbase-types';
-import {
-	effectiveFeatures,
-	inheritedFeatures,
-	readFeatures,
-	readFeaturesOff,
-	roomKind
-} from '$lib/accommodation';
+import { effectiveFeatures, missingAtSpot, roomKind } from '$lib/accommodation';
 import { compareNatural } from '$lib/template';
 import { decrypt } from '$lib/server/crypto';
 import {
@@ -37,6 +31,8 @@ import {
 import { passSummary } from '$lib/server/pass';
 import { walletPlatforms } from '$lib/server/wallet/config';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
+import { roomSwaps, type RoomSwaps } from '$lib/server/swaps';
+import { askSwapAction, withdrawSwapAction } from '$lib/server/swap-actions';
 import type { PassSummary } from '$lib/pass';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
@@ -92,6 +88,9 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 		// guests' ticket codes and customer names and must never be serialized.
 		// `bookable` only matters for free spots: for a taken one it would tell
 		// whether it is locked or a special-needs spot, next to the burner name.
+		// `blocked` is a spot taken without a ticket (TAKEN on the admin page):
+		// no guest is behind it, so the card says "Blocked by admin" like every
+		// other crew hold. A guest's booking — a ♿ one included — never is.
 		const safeBeds = beds.map((bed) => {
 			let burnerName = '';
 			if (bed.occupied && bed.expand?.order?.burner_name) {
@@ -106,32 +105,37 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				label: bed.label,
 				occupied: !!bed.occupied,
 				bookable: !bed.occupied && isBedBookable(bed, { allowLocked: !!locals.admin }),
+				blocked: !!bed.occupied && !bed.order,
 				burnerName,
-				// What kind of bed it is and what only this spot has: the room's and
-				// the house's features are shown once, above the list.
+				// What kind of bed it is: the room's and the house's features are
+				// shown once, above the list.
 				bedType: bed.bed_type ?? '',
-				features: readFeatures(bed.features, 'spot'),
-				// What this spot does NOT have although the room or house has it (a
-				// superuser switched it off): the card says "no 🔌 Power socket", so
+				// What this spot does NOT have although the room or house has it: a
+				// superuser switched it off here, or the bed rules it out (an upper
+				// bunk is never ♿). The card says "no ♿ Wheelchair accessible", so
 				// the room's chips above don't promise it for this bed.
-				missing: inheritedFeatures('spot', {
+				missing: missingAtSpot({
 					house: room.expand?.house?.features,
 					room: room.features,
-					roomOff: room.features_off
-				}).filter((feature) => readFeaturesOff(bed.features_off, 'spot').includes(feature)),
+					roomOff: room.features_off,
+					spotOff: bed.features_off,
+					bedType: bed.bed_type
+				}),
 				// The other spot of a bunk bed (a record id, not personal data): the
 				// page stacks the two into one tile.
 				bunkPartner: bed.bunk_partner ?? ''
 			};
 		});
 
-		// Where confirmations go, the booking pass, and whether the crew picked the
-		// spot (special-needs request). Optional: the page works without them.
+		// Where confirmations go, the booking pass, whether the crew picked the
+		// spot (special-needs request), and what swaps the guest can ask for.
+		// Optional: the page works without them.
 		let notify: GuestNotifyStatus | null = null;
 		let pass: PassSummary | null = null;
 		let spotFixed = false;
+		let swap: RoomSwaps | null = null;
 		if (userBed) {
-			[notify, pass, spotFixed] = await Promise.all([
+			[notify, pass, spotFixed, swap] = await Promise.all([
 				getGuestNotifyStatus(locals.adminPb, order, settings).catch((err) => {
 					console.error('[Room] Notification status failed:', (err as Error)?.message);
 					return null;
@@ -143,6 +147,10 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				isSpotFixed(locals.adminPb, order.id, userBed.id).catch((err) => {
 					console.error('[Room] Special-needs request lookup failed:', (err as Error)?.message);
 					return false;
+				}),
+				roomSwaps(locals.adminPb, settings, order, userBed).catch((err) => {
+					console.error('[Room] Swap requests lookup failed:', (err as Error)?.message);
+					return null;
 				})
 			]);
 		}
@@ -153,6 +161,8 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			// the wallet buttons under the pass (none until a wallet is set up)
 			wallet: walletPlatforms(),
 			spotFixed,
+			// Taken spots offer a swap when this is set and has `mine` (docs/guide/booking.md).
+			swap,
 			// The crew checked the guest in at arrival: only the crew changes the spot now.
 			checkedIn: !!userBed?.checked_in_at,
 			room: {
@@ -308,6 +318,12 @@ export const actions: Actions = {
 			return fail(500, { error: 'Telegram updates could not be turned off. Please try again.' });
 		}
 	},
+
+	/** Asks the guest of a taken spot to swap (the swap sheet). */
+	askSwap: async ({ request, locals }) => askSwapAction(locals, request),
+
+	/** Takes an open swap request back. */
+	withdrawSwap: async ({ request, locals }) => withdrawSwapAction(locals, request),
 
 	unbookBed: async ({ locals }) => {
 		if (!locals.adminPb.authStore.isValid) {

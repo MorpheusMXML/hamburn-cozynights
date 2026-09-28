@@ -12,12 +12,13 @@
 //    changes, deleted rooms/houses, template import) marks the ticket as due.
 //    So does a new e-mail address on a ticket, and a special-needs request
 //    that is sent, decided or withdrawn.
-// 3. Crew: admin access changes, admin sign-ins, booking phase changes and
-//    opening/closing special-needs requests become admin_events; their
-//    Telegram alerts go out with the next run.
+// 3. Crew: admin access changes, admin sign-ins, booking phase changes,
+//    opening/closing special-needs requests and turning swap requests off or
+//    on become admin_events; their Telegram alerts go out with the next run.
 //    (last_sign_in for the weekly re-sign-in: pb_hooks/admins_oauth_guard.pb.js)
-// 4. A cron job delivers: e-mail, Telegram messages, crew alerts, and reads
-//    the bot's incoming messages (guests linking their chat).
+// 4. A cron job delivers: e-mail, Telegram messages (spots, special-needs
+//    requests, swap requests), crew alerts, and reads the bot's incoming
+//    messages (guests linking their chat).
 // 5. POST /api/cozy/notify/flush (superusers only): one run right now, for
 //    the tests. POST /api/cozy/notify/quiet (superusers only): mutes guest
 //    messages for a moment, e.g. around the release when switching back to
@@ -244,8 +245,9 @@ onRecordUpdateRequest((e) => {
 	try {
 		const old = e.record.original();
 		before = require(`${__hooks}/lib/phase.js`).windowOf(old);
-		// the special-needs switch lives in the same record (its own alert below)
+		// the special-needs and swap switches live in the same record (own alerts below)
 		before.requests = old.getBool('special_requests_open');
+		before.swapsOff = old.getBool('swaps_off');
 	} catch (err) {
 		console.error('[cozy-notify] booking phase alert: ' + err);
 	}
@@ -257,6 +259,7 @@ onRecordUpdateRequest((e) => {
 		const now = Date.now();
 		const after = phase.windowOf(e.record);
 		after.requests = e.record.getBool('special_requests_open');
+		after.swapsOff = e.record.getBool('swaps_off');
 		const actor = e.auth ? e.auth.email() : 'unknown';
 		const was = phase.effectivePhase(before, now);
 		const is = phase.effectivePhase(after, now);
@@ -287,6 +290,9 @@ onRecordUpdateRequest((e) => {
 			notify.logEvent(e.app, after.requests ? 'requests_opened' : 'requests_closed', {
 				actor: actor
 			});
+		}
+		if (before.swapsOff !== after.swapsOff) {
+			notify.logEvent(e.app, after.swapsOff ? 'swaps_off' : 'swaps_on', { actor: actor });
 		}
 	} catch (err) {
 		console.error('[cozy-notify] booking phase alert: ' + err);

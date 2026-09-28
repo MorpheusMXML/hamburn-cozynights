@@ -28,7 +28,7 @@ A booking is shown the way the [check-in desk](./passes#checking-guests-in) show
 | The check-in: when and by whom | *✅ Mon 21 Sep · 18:30 by crew@…* | |
 | ♿ *assigned through a request* | | What the guest wrote in the request |
 
-The colour says the state, the same way as [everywhere else](./index#the-state-colours): **red** 🎟 *Booked* (the ticket holds the spot), **turquoise** ✅ *Checked in*, **violet** 🛠 *Crew* — marked 🔄 TAKEN on the room page, without a ticket. A spot that is deactivated or 🔒 locked for guests but still holds a booking says so; the booking stands.
+The colour says the state, the same way as [everywhere else](./index#the-state-colours): **red** 🎟 *Booked* (the ticket holds the spot), **turquoise** ✅ *Checked in*, **violet** 🛠 *Blocked* · *Blocked by admin* — marked 🔄 TAKEN on the room page, without a ticket (guests see *Blocked by admin* on it too). A spot that is deactivated or 🔒 locked for guests but still holds a booking says so; the booking stands.
 
 <kbd>Open ticket →</kbd> (<kbd>Ticket →</kbd> in the list) opens the full ticket card in [Tickets](./tickets): address, pass code, hand-over. The code stays hidden there too, like for a ticket found by its address — search for the code if you need it in full.
 

@@ -37,7 +37,7 @@ flowchart LR
 
    ![Camp map during Live Booking](../assets/screenshots/guest-map-live.webp)
 
-   The **top bar** is the same on every booking page. **Hamburn** on the left takes you back to the map. The phase pill — 🛠 STAGING, 🎪 LIVE or 🔒 CLOSED — counts down to the next switch while a timer is armed (*opens in 1d 23:59:57*, *closes in …*, red in the last hour); tap it for the exact Berlin time. In the middle, the wish chips (see [Looking for something special?](#looking-for-something-special)). On the right: ♿ **Special-needs spot** (while the crew takes [special-needs requests](./special-needs)), **Help & FAQ**, <kbd>Sign out</kbd> and the version. On a phone the links shrink to their icons and the chips take a row of their own. <kbd>🎰 DESTINY ROULETTE</kbd> at the bottom picks a spot for you (see [Destiny Roulette](#destiny-roulette)).
+   The **top bar** is the same on every booking page. **Hamburn** on the left takes you back to the map. The phase pill — 🛠 STAGING, 🎪 LIVE or 🔒 CLOSED — counts down to the next switch while a timer is armed (*opens in 1d 23:59:57*, *closes in …*, red in the last hour); tap it for the exact Berlin time. In the middle, the wish chips (see [Looking for something special?](#looking-for-something-special)). On the right: 🔁 **Swaps** (during Live Booking: your [swap requests](./swaps), with a badge when someone would like to swap with you), ♿ **Special-needs spot** (while the crew takes [special-needs requests](./special-needs)), **Help & FAQ**, <kbd>Sign out</kbd> and the version. On a phone the links shrink to their icons and the chips take a row of their own. <kbd>🎰 DESTINY ROULETTE</kbd> at the bottom picks a spot for you (see [Destiny Roulette](#destiny-roulette)).
 
 3. **Choose a room**
 
@@ -70,15 +70,15 @@ That's it: fireworks go up from your new spot 🎆, and the spot now shows **You
 | 🟢 **Available** · *Grab it now!* | Free. Click it to book. |
 | 🟢 **Available** · *Release your other spot first* | Free, but you already have a spot somewhere else, so it can't be clicked. One ticket code = one spot. |
 | 🩵 **Yours** · *your burner name* | That's you. Click it to rename it (any time until booking closes) or to release it (during Live Booking); the line under the name says which of the two it is right now. |
-| 🔴 **Occupied** · *a burner name* | Taken by another guest. *Mystery Burner* means the spot has no name: the crew holds it, or its ticket changed hands. |
-| 🟣 **Reserved by the crew** · *Not available* | Held back by the crew, for example a broken bed, a spot that isn't in use or one kept for [guests with special needs](./special-needs). |
+| 🔴 **Occupied** · *a burner name* | Taken by another guest. *Mystery Burner* means the booking has no name, for example because its ticket changed hands. During Live Booking, while you hold a spot, it adds *⇄ Ask to swap*: tap it to ask its guest for a [swap](./swaps) (*⏳ Asked — waiting* once you did). |
+| 🟣 **Blocked by admin** · *Not available* | Held back by the crew, for example a broken bed, a spot that isn't in use, one the crew took for itself or one kept for [guests with special needs](./special-needs). |
 | ⚪️ **Not open yet** · *Booking opens soon* | Booking hasn't opened yet. |
 | ⚪️ **Booking closed** · *Spots are final* | The booking window is over. |
 
 > [!NOTE] One colour, one meaning
 > Green, red, turquoise, violet and grey mean the same on every spot card in CozyNights, and the crew sees the same colours on their side. Pink is kept for ♿ special needs alone: the ♿ link on the map, nothing else.
 
-![A booked room: the Welcome Home box with the booking pass, the e-mail address and Telegram; your spot, other guests' burner names and spots reserved by the crew](../assets/screenshots/guest-room.webp)
+![A booked room: the Welcome Home box with the booking pass, the e-mail address and Telegram; your spot, other guests' burner names and spots blocked by admin](../assets/screenshots/guest-room.webp)
 
 ## What a place is like
 
@@ -87,26 +87,26 @@ Houses and rooms can carry a few details, and spots say what kind of bed they ar
 | You see | Meaning |
 | --- | --- |
 | 🏠 House · 🛖 Hut group · ⛺ Tent area | What the place on the map is. A hut group is one pin with several huts; the map pin carries the icon, and the house page then asks you to choose a **hut**. |
-| ♿ Wheelchair accessible · ⬇️ Ground floor | A step-free way in with an accessible bathroom, or no stairs to the bed. An upper bunk never shows ♿, however accessible its room is: the ladder is in the way. |
+| ♿ Wheelchair accessible · ⬇️ Ground floor | A step-free way in with an accessible bathroom, or no stairs to the bed. An upper bunk is never ♿, however accessible its room is — the ladder is in the way — so its card says *no ♿ Wheelchair accessible* in such a room. |
 | 🚻 Toilets + showers inside · 🛁 Own bathroom | In the building itself, or in the room. Nothing written means the toilets are somewhere else on the site — the description usually says where. |
 | 🔥 Heated · ❄️ No heating | Late October nights are cold; this is worth reading. |
-| 🤫 Quiet zone · 🔌 Power socket | A calm corner of the camp; a socket in the room or at the bed. |
+| 🤫 Quiet zone | A calm corner of the camp. |
 | *Lower bunk · Upper bunk · Single bed · Double bed (shared) · Sofa · Mattress · Camp bed* | What you actually sleep in, under the spot's label. In a stacked bunk bed the level is on the chip next to the label, and the line says *above B1* or *below B2* instead. |
 
-A room shows what its house says too, and the crew can add a sentence of their own ("Showers in the wash house, 50 m along the path"). The crew can also switch a feature off for one room or spot — a cold room in a heated house, a bed the room's socket doesn't reach — so a chip the house shows may be missing on one room or spot on purpose.
+A room shows what its house says too, and the crew can add a sentence of their own ("Showers in the wash house, 50 m along the path"). The crew can also switch a feature off for one room or spot — a cold room in a heated house, a bed by the door of a quiet room — so a chip the house shows may be missing on one room or spot on purpose; the spot's card then says *no …*. Whether there is a power socket near a bed is not recorded: if you need one for a medical device, [ask the crew](./special-needs).
 
 > [!NOTE] Nothing is invented
 > The app only shows what the crew filled in. An empty spot card means *nobody said*, not *no* — ask the crew if a detail matters to you. If you need a particular kind of spot, [ask for a special-needs spot](./special-needs) instead of guessing.
 
 ## Looking for something special?
 
-The chips in the top bar of the map turn your wishes on and off: <kbd>🛏️ No ladder</kbd>, <kbd>⬇️ Step-free</kbd>, <kbd>🚻 Toilets inside</kbd>, <kbd>🔥 Heated</kbd>, <kbd>🤫 Quiet</kbd>, <kbd>🔌 Power socket</kbd>. Only wishes some spot of the camp can answer are offered; if the crew described nothing, there is no chip row. On a phone the chips are their icons, and while the map's phase panel is up they wait.
+The chips in the top bar of the map turn your wishes on and off: <kbd>🛏️ No ladder</kbd>, <kbd>⬇️ Step-free</kbd>, <kbd>🚻 Toilets inside</kbd>, <kbd>🔥 Heated</kbd>, <kbd>🤫 Quiet</kbd>. Only wishes some spot of the camp can answer are offered; if the crew described nothing, there is no chip row. On a phone the chips are their icons, and while the map's phase panel is up they wait.
 
 - Houses without a fitting free spot fade back, and the bar says *3 houses have a fitting free spot* — or that no house has one.
 - Open a house and each room tells you how many of its free spots fit.
 - The wishes are part of the address, so a filtered map can be shared or bookmarked. <kbd>Clear</kbd> next to the chips shows everything again.
 
-Only spots the crew described can match, so a wish never promises more than the crew wrote down. An upper bunk in a ♿ wheelchair-accessible room is not step-free — the ladder is in the way — so <kbd>⬇️ Step-free</kbd> offers it only when the room is on the ⬇️ ground floor, and <kbd>🛏️ No ladder</kbd> never.
+Only spots the crew described can match, so a wish never promises more than the crew wrote down. An upper bunk is never step-free — the ladder is a step, even on the ground floor of a ♿ house — so neither <kbd>⬇️ Step-free</kbd> nor <kbd>🛏️ No ladder</kbd> ever offers it.
 
 ## Destiny Roulette
 
@@ -144,6 +144,10 @@ Open your room, click **Yours**, change the burner name and press <kbd>Save Spot
 
 ::: tip Move to another bed
 One ticket holds one spot, so release your current spot first: <kbd>Release</kbd> in the spot dialog or <kbd>Release Current Spot</kbd> on a house or room page. Then book the new one. Or leave it to fate: <kbd>✨ Leave No Trace & Respin</kbd> on the roulette page deletes your booking and spins a new spot right away.
+:::
+
+::: tip Swap with someone
+Your dream spot is taken? Ask its guest to swap: tap the taken spot, say hi, send. Nothing moves until they say yes, and then both spots change at once — no release, no race. See [Swapping spots](./swaps).
 :::
 
 ![Another house while you hold a spot: the note with your spot as a small ticket, and Release Current Spot](../assets/screenshots/guest-house-own-spot.webp)

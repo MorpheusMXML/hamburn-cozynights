@@ -237,7 +237,6 @@ const spotWrite = (bed: TemplateBed): Record<string, WriteValue> => ({
 	is_locked: bed.is_locked,
 	is_special: bed.is_special === true,
 	bed_type: bed.bed_type ?? '',
-	features: bed.features ?? [],
 	features_off: bed.features_off ?? []
 });
 
@@ -262,11 +261,6 @@ function spotChanges(before: TemplateBed, after: TemplateBed): FieldChange[] {
 			from: bedTypeLabel(before.bed_type) || null,
 			to: bedTypeLabel(after.bed_type) || null
 		});
-	}
-	const fromFeatures = featureList(before.features);
-	const toFeatures = featureList(after.features);
-	if (fromFeatures !== toFeatures) {
-		changes.push({ field: 'features', from: fromFeatures, to: toFeatures });
 	}
 	const fromOff = featureList(before.features_off);
 	const toOff = featureList(after.features_off);

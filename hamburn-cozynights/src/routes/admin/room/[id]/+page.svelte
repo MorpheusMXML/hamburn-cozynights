@@ -5,6 +5,7 @@
 	import BookingGuest from '$lib/components/admin/BookingGuest.svelte';
 	import DetailsPanel from '$lib/components/admin/DetailsPanel.svelte';
 	import FoldToggle from '$lib/components/admin/FoldToggle.svelte';
+	import InlineRename from '$lib/components/admin/InlineRename.svelte';
 	import LayoutLockNotice from '$lib/components/admin/LayoutLockNotice.svelte';
 	import SpotDetails from '$lib/components/admin/SpotDetails.svelte';
 	import LockGlyph from '$lib/components/LockGlyph.svelte';
@@ -13,7 +14,6 @@
 		bedTypeEntry,
 		bedTypeMix,
 		detailsSummary,
-		featureEntry,
 		inheritedFeatures,
 		readFeatures,
 		readFeaturesOff
@@ -28,7 +28,7 @@
 		type BunkLevel,
 		type SpotUnit
 	} from '$lib/bunks';
-	import { compareNatural } from '$lib/template';
+	import { TEMPLATE_LIMITS, compareNatural } from '$lib/template';
 	import { fade, fly, scale, slide } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
 	import { onMount, tick } from 'svelte';
@@ -294,12 +294,25 @@
 		{/if}
 	</div>
 	<div class="bed-info">
-		<span class="bed-label">{bed.label || 'Unnamed Spot'}</span>
+		<!-- In Staging Mode a click on the label renames the spot. -->
+		<InlineRename
+			value={bed.label ?? ''}
+			action="?/renameSpot"
+			what="spot"
+			id={bed.id}
+			field="label"
+			editable={!isLayoutLocked}
+			maxLength={TEMPLATE_LIMITS.bedLabelLength}
+		>
+			<span class="bed-label">{bed.label || 'Unnamed Spot'}</span>
+		</InlineRename>
 		<!-- The status colour comes from state.css: claimed is red, vacant green,
-		     locked violet, inactive grey — the same tokens the guests see. -->
+		     locked violet, inactive grey — the same tokens the guests see. A spot
+		     taken without a ticket is a crew hold, violet: guests read "Blocked by
+		     admin" on it. -->
 		<span
 			class="bed-status"
-			data-state={bed.is_locked
+			data-state={bed.is_locked || (bed.occupied && !bed.order)
 				? 'locked'
 				: bed.enabled === false
 					? 'idle'
@@ -311,8 +324,10 @@
 				LOCKED 🔒
 			{:else if bed.enabled === false}
 				INACTIVE 🧊
+			{:else if bed.occupied}
+				{bed.order ? 'CLAIMED 👥' : 'BLOCKED 🛠'}
 			{:else}
-				{bed.occupied ? 'CLAIMED 👥' : 'VACANT ✨'}
+				VACANT ✨
 			{/if}
 		</span>
 		{#if bed.is_special}
@@ -324,13 +339,8 @@
 			</span>
 		{/if}
 		<!-- The level chip already says "upper bunk": no need to repeat it here. -->
-		{#if (!level && bedTypeEntry(bed.bed_type)) || readFeatures(bed.features, 'spot').length > 0}
-			<span class="bed-detail">
-				{level ? '' : (bedTypeEntry(bed.bed_type)?.label ?? '')}
-				{#each readFeatures(bed.features, 'spot') as feature}
-					<span title={featureEntry(feature)?.label}>{featureEntry(feature)?.icon}</span>
-				{/each}
-			</span>
+		{#if !level && bedTypeEntry(bed.bed_type)}
+			<span class="bed-detail">{bedTypeEntry(bed.bed_type)?.label}</span>
 		{/if}
 	</div>
 
@@ -398,7 +408,9 @@
 			<input type="hidden" name="occupied" value={bed.occupied.toString()} />
 			<button
 				class="btn-icon turquoise"
-				title={bed.occupied ? 'Free this spot' : 'Mark this spot as taken without a ticket'}
+				title={bed.occupied
+					? 'Free this spot'
+					: 'Block this spot: taken without a ticket, guests see "Blocked by admin"'}
 				disabled={!lock && bed.enabled === false}
 				class:disabled={!lock && bed.enabled === false}
 				{...lockAttrs(
@@ -448,12 +460,7 @@
 	</div>
 
 	<SpotDetails
-		bed={{
-			id: bed.id,
-			label: bed.label,
-			bed_type: bed.bed_type,
-			features: bed.features
-		}}
+		bed={{ id: bed.id, label: bed.label, bed_type: bed.bed_type }}
 		canRename={!isLayoutLocked}
 		partnerLabel={partnerOf(sortedBeds, bed.id)?.label ?? ''}
 		level={levelOf(bed)}
@@ -478,8 +485,19 @@
 
 		<h1>
 			<span class="room-icon">🛌</span>
-			<span class="room-title">{roomTitle}</span>
-			<span class="badge turquoise">#{room.room_number}</span>
+			<!-- In Staging Mode a click on the name renames the room, number included. -->
+			<InlineRename
+				value={room.name ?? ''}
+				action="?/renameRoom"
+				what="room"
+				editable={!isLayoutLocked}
+				maxLength={TEMPLATE_LIMITS.roomNameLength}
+				number={room.room_number}
+				numberMax={TEMPLATE_LIMITS.roomNumber}
+			>
+				<span class="room-title">{roomTitle}</span>
+				<span class="badge turquoise">#{room.room_number}</span>
+			</InlineRename>
 		</h1>
 	</div>
 
@@ -492,7 +510,7 @@
 		{phase}
 		{isSuperuser}
 		next={booking?.next}
-		blocks="Spots can't be added, deleted, deactivated or marked taken or free."
+		blocks="Names can't be changed, and spots can't be added, deleted, deactivated or marked taken or free."
 		still="Locking 🔒 and unlocking 🔓 spots and marking them ♿ special or normal still work."
 	/>
 
@@ -1138,7 +1156,7 @@
 		flex: 1;
 	}
 
-	/* Stacking mode: the source breathes pink, the targets turquoise (the
+	/* Stacking mode: the source breathes yellow, the targets turquoise (the
 	   state ring from state.css), and bunk beds step back — they are no targets. */
 	.stacking .bed-card.bunk {
 		opacity: 0.45;

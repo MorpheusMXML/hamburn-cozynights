@@ -20,12 +20,7 @@ function countFitting(house: { features?: string[]; rooms: any[] }, wishes: Spot
 		(sum, room) =>
 			sum +
 			room.beds.filter(
-				(bed: {
-					occupied?: boolean;
-					bed_type?: string;
-					features?: string[];
-					features_off?: string[];
-				}) =>
+				(bed: { occupied?: boolean; bed_type?: string; features_off?: string[] }) =>
 					!bed.occupied &&
 					spotMatchesFilters(
 						wishes,
@@ -33,7 +28,6 @@ function countFitting(house: { features?: string[]; rooms: any[] }, wishes: Spot
 							bedType: bed.bed_type,
 							house: house.features,
 							room: room.features,
-							spot: bed.features,
 							roomOff: room.features_off,
 							spotOff: bed.features_off
 						})

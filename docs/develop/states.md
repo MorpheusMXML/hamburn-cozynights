@@ -17,7 +17,7 @@ holds the counting and the names. Nothing else should invent either.
 | `unconfigured` / `idle` | `--state-idle` | grey `#a3a3a3` | inactive or not now: no active spots, a spot that can't be booked yet or any more |
 | `checked-in` | `--state-checked-in` | turquoise `#2dd4bf` | mine or checked in: the guest's own spot, a guest checked in at arrival |
 | `special` | `--state-special` | pink `#f472b6` | ♿ special needs — and nothing else |
-| `locked` | `--state-locked` | violet `#a78bfa` | held by the crew: locked 🔒, *Reserved by the crew* |
+| `locked` | `--state-locked` | violet `#a78bfa` | held by the crew: locked 🔒, taken without a ticket (BLOCKED 🛠), *Blocked by admin* |
 | `danger` | `--state-danger` | red `#f87171` | refused input, failed action, a missing address |
 | `staging` / `live` / `closed` | `--state-staging` … | turquoise / yellow `#facc15` / light grey | the booking phase |
 
@@ -60,10 +60,13 @@ frame. Animating `border-color` or `box-shadow` instead — as the older
 `pulse-glow` in `layout.css` still does (a leftover to replace) — repaints every frame
 for every element.
 
-The element also keeps a static border in its state colour, so the state is
-readable while the animation is paused, off or still starting. Two rules
-switch it off: `prefers-reduced-motion: reduce`, and the landing page's pause
-button (`:root[data-motion='paused']`, WCAG 2.2.2).
+The ring alone carries the colour. The element keeps its own border: every
+card that wears the ring sets one (`.house-card`, `.bunk-tile`, the admin
+`.bed-card`, the Intel tiles), and a page's scoped rule outranks
+`.state-ring`. The ring needs no help: it breathes between 95 % and 40 %
+opacity, and `prefers-reduced-motion: reduce` stops it at full strength. The
+landing page's pause button (`:root[data-motion='paused']`, WCAG 2.2.2) holds
+it wherever it is.
 
 ### The four states of a house
 

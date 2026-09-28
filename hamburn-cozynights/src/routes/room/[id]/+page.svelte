@@ -18,6 +18,8 @@
 	import SuccessFireworks from '$lib/components/SuccessFireworks.svelte';
 	import type { Point } from '$lib/fx/fireworks';
 	import { confirmDialog, dialogQueue, toast } from '$lib/dialogs';
+	import SwapSheet from '$lib/components/swaps/SwapSheet.svelte';
+	import type { SwapSpot } from '$lib/swaps';
 
 	export let data: PageData;
 	export let form: ActionData;
@@ -98,21 +100,18 @@
 	});
 
 	/**
-	 * "Lower bunk · 🔌 Power socket" under a spot's label. In a bunk bed the
-	 * level chip says "Upper bunk" already, so its half only adds where the
-	 * other level is: "above B1 · 🔌 Power socket". What the spot lacks although
-	 * the room has it reads "no 🔌 Power socket".
+	 * "Single bed" under a spot's label. In a bunk bed the level chip says
+	 * "Upper bunk" already, so its half only adds where the other level is:
+	 * "above B1". What the spot lacks although the room has it reads
+	 * "no ♿ Wheelchair accessible" — an upper bunk in a ♿ room, or a feature a
+	 * superuser switched off for this spot.
 	 */
 	$: spotLine = (
-		bed: { id: string; bedType: string; features: string[]; missing: string[] },
+		bed: { id: string; bedType: string; missing: string[] },
 		level: BunkLevel | null
 	) =>
 		[
 			level ? bunkNote(spots, bed.id) : bedTypeEntry(bed.bedType)?.label,
-			...bed.features.map((feature) => {
-				const entry = featureEntry(feature);
-				return entry ? `${entry.icon} ${entry.label}` : '';
-			}),
 			...bed.missing.map((feature) => {
 				const entry = featureEntry(feature);
 				return entry ? `no ${entry.icon} ${entry.label}` : '';
@@ -126,26 +125,27 @@
 	/**
 	 * A spot's state for the colours of src/routes/state.css (data-state):
 	 * 'full' someone else booked it, 'checked-in' it is mine, 'locked' the crew
-	 * holds it back, 'idle' booking is not open (yet or anymore), 'open' free
-	 * and bookable. A free spot stays green while I hold another one — the
-	 * spot is free, only the button is off.
+	 * holds it back (locked, ♿, inactive, or taken without a ticket: "Blocked
+	 * by admin"), 'idle' booking is not open (yet or anymore), 'open' free and
+	 * bookable. A free spot stays green while I hold another one — the spot is
+	 * free, only the button is off.
 	 */
 	type SpotState = 'open' | 'full' | 'checked-in' | 'locked' | 'idle';
 	$: spotState = (bed: Spot): SpotState =>
-		bed.occupied && bed.id !== data.userBedId
-			? 'full'
-			: bed.id === data.userBedId
-				? 'checked-in'
-				: !bed.bookable
-					? 'locked'
-					: !data.isBookingActive
-						? 'idle'
-						: 'open';
+		bed.blocked
+			? 'locked'
+			: bed.occupied && bed.id !== data.userBedId
+				? 'full'
+				: bed.id === data.userBedId
+					? 'checked-in'
+					: !bed.bookable
+						? 'locked'
+						: !data.isBookingActive
+							? 'idle'
+							: 'open';
 	/** Whether a card has a detail line at all. */
-	const hasDetail = (
-		bed: { bedType: string; features: string[]; missing: string[] },
-		level: BunkLevel | null
-	) => !!level || !!bedTypeEntry(bed.bedType) || bed.features.length > 0 || bed.missing.length > 0;
+	const hasDetail = (bed: { bedType: string; missing: string[] }, level: BunkLevel | null) =>
+		!!level || !!bedTypeEntry(bed.bedType) || bed.missing.length > 0;
 
 	// The page behind an open modal must not scroll along on phones.
 	$: if (typeof document !== 'undefined') {
@@ -213,6 +213,29 @@
 
 	function failureMessage(result: { data?: Record<string, unknown> }, fallback: string) {
 		return typeof result.data?.error === 'string' ? result.data.error : fallback;
+	}
+
+	// Swap requests (docs/guide/booking.md "Swap spots"): while booking is live,
+	// a guest whose own spot can be swapped taps any taken spot to ask its
+	// guest for a trade. Every taken spot offers it, whatever it is.
+	$: canSwap = !!data.swap && !data.swap.pause && !!data.swap.mine && !data.swap.why;
+	$: swapAsked = data.swap?.asked ?? {};
+	let swapTarget: Spot | null = null;
+	/** A taken spot of this room as the swap sheet shows it. */
+	function swapSpotOf(bed: Spot): SwapSpot {
+		const bunk = bunkOf(spots, bed.id);
+		const level: BunkLevel | null = bunk ? (bunk.lower.id === bed.id ? 'lower' : 'upper') : null;
+		return {
+			bedId: bed.id,
+			roomId: data.room.id,
+			spot: bed.label,
+			room: roomTitle,
+			house: data.room.houseName,
+			label: [bed.label, roomTitle, data.room.houseName].filter(Boolean).join(' · '),
+			bed: level
+				? `${LEVEL_NAME[level]} · ${bunkNote(spots, bed.id)}`
+				: (bedTypeEntry(bed.bedType)?.label ?? '')
+		};
 	}
 </script>
 
@@ -352,6 +375,29 @@
 						</p>
 						<PassActions code={data.pass.code} wallet={data.wallet} />
 					{/if}
+					{#if (data.swaps?.incoming ?? 0) > 0}
+						<p class="swap-line news">
+							<span class="notify-icon" aria-hidden="true">🔁</span>
+							{data.swaps?.incoming === 1
+								? 'Someone would like to swap spots with you.'
+								: `${data.swaps?.incoming} guests would like to swap spots with you.`}
+							<a href="/swaps">Answer →</a>
+						</p>
+					{:else if canSwap}
+						<p class="swap-line">
+							<span class="notify-icon" aria-hidden="true">🔁</span>
+							Fancy another spot? Tap a taken one to ask its guest for a swap.
+							{#if data.swap?.openCount}
+								<a href="/swaps">Your requests ({data.swap.openCount}) →</a>
+							{/if}
+						</p>
+					{:else if data.swap?.why && !data.swap.pause && !data.spotFixed && !data.checkedIn}
+						<!-- the guest's own spot can't be offered (the crew set it aside): say why -->
+						<p class="swap-line">
+							<span class="notify-icon" aria-hidden="true">🔁</span>
+							{data.swap.why}
+						</p>
+					{/if}
 					{#if data.notify && (data.notify.email || data.notify.telegram)}
 						<div class="notify-box">
 							{#if data.notify.email}
@@ -445,17 +491,47 @@
 </div>
 
 <!-- A spot's card in its four states; `level` marks a half of a bunk bed.
-     data-state picks the colour (state.css), the classes keep the layout. -->
+     data-state picks the colour (state.css), the classes keep the layout.
+     A spot taken without a ticket is a crew hold, not someone's booking: it
+     says "Blocked by admin", like a locked, ♿ or inactive spot. -->
 {#snippet spotCard(bed: Spot, level: BunkLevel | null)}
 	{@const state = spotState(bed)}
 	{@const isMyBed = bed.id === data.userBedId}
-	{@const someoneElseBooked = bed.occupied && !isMyBed}
+	{@const someoneElseBooked = bed.occupied && !isMyBed && !bed.blocked}
 	{@const iHaveAnotherBooking = !!data.userBedId && !isMyBed}
 	{@const isLocked = !data.isBookingActive}
 	{@const nameFinal = data.phase === 'closed'}
 	{@const half = level ? `bunk-half ${level}` : ''}
 
-	{#if someoneElseBooked}
+	{#if someoneElseBooked && canSwap}
+		<!-- A taken spot while the guest could offer theirs: tap to ask for a swap. -->
+		<button
+			class="bed-card occupied swappable {half}"
+			class:asked={!!swapAsked[bed.id]}
+			data-bed-id={bed.id}
+			data-state={state}
+			on:click={() => (swapTarget = bed)}
+			aria-haspopup="dialog"
+		>
+			<div class="icon" aria-hidden="true">🛏️</div>
+			<span class="label">
+				{bed.label}
+				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
+			</span>
+			{#if hasDetail(bed, level)}
+				<span class="bed-detail">{spotLine(bed, level)}</span>
+			{/if}
+			<div class="status-box">
+				<span class="status-text"><span class="state-dot" aria-hidden="true"></span>Occupied</span>
+				<span class="guest-name">
+					{bed.burnerName || 'Mystery Burner'}
+				</span>
+				<small class="edit-hint swap-hint"
+					>{swapAsked[bed.id] ? '⏳ Asked — waiting' : '⇄ Ask to swap'}</small
+				>
+			</div>
+		</button>
+	{:else if someoneElseBooked}
 		<div class="bed-card occupied {half}" data-bed-id={bed.id} data-state={state}>
 			<div class="icon" aria-hidden="true">🛏️</div>
 			<span class="label">
@@ -516,7 +592,7 @@
 			{/if}
 			<div class="status-box">
 				<span class="status-text"
-					><span class="state-dot" aria-hidden="true"></span>Reserved by the crew</span
+					><span class="state-dot" aria-hidden="true"></span>Blocked by admin</span
 				>
 				<small class="edit-hint">Not available</small>
 			</div>
@@ -706,6 +782,17 @@
 			</form>
 		</div>
 	</div>
+{/if}
+
+{#if swapTarget && data.swap?.mine}
+	<SwapSheet
+		mine={data.swap.mine}
+		target={swapSpotOf(swapTarget)}
+		name={swapTarget.burnerName}
+		askedId={swapAsked[swapTarget.id] ?? ''}
+		openCount={data.swap.openCount}
+		onclose={() => (swapTarget = null)}
+	/>
 {/if}
 
 {#if triggerFireworks}
@@ -946,11 +1033,11 @@
 		min-width: 0;
 		min-height: 72px;
 		/* The spot label gets the whole width next to the icon, the status goes
-		   underneath: side by side, a long burner name or "Reserved by the crew"
+		   underneath: side by side, a long burner name or "Blocked by admin"
 		   squeezed the label down to a letter per line ("U / pp / er / 1"). */
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr);
-		/* The detail line ("above B1 · 🔌") has a row of its own: placed by
+		/* The detail line ("above B1 · no ♿") has a row of its own: placed by
 		   auto-flow it would land in the icon column and widen it until the
 		   label had no room left. */
 		grid-template-areas:
@@ -989,6 +1076,48 @@
 	}
 	.bed-card.occupied {
 		opacity: 0.85;
+	}
+	/* A taken spot that can be asked for: it lifts like a free one, in the
+	   swap colour, and says so under the name. */
+	.bed-card.occupied.swappable {
+		cursor: pointer;
+		opacity: 0.92;
+	}
+	.bed-card.occupied.swappable:hover {
+		opacity: 1;
+		border-color: var(--swap);
+		transform: translateY(-3px);
+		box-shadow: 0 10px 20px var(--swap-soft);
+	}
+	.bed-card.occupied.swappable:hover .edit-hint.swap-hint {
+		color: #bae6fd;
+	}
+	/* two classes: .edit-hint's grey comes later in this file */
+	.edit-hint.swap-hint {
+		color: #7dd3fc;
+		transition: color 0.2s;
+	}
+	.bed-card.occupied.asked {
+		border-color: color-mix(in srgb, var(--swap) 55%, transparent);
+	}
+	.bunk-tile .bed-card.bunk-half.occupied.swappable:hover {
+		transform: none;
+	}
+	.success-content .swap-line {
+		margin-top: 0.9rem;
+		font-size: 0.9rem;
+	}
+	.swap-line a {
+		color: #7dd3fc;
+		font-weight: 800;
+		white-space: nowrap;
+	}
+	.success-content .swap-line.news {
+		padding: 0.6rem 0.8rem;
+		border-radius: 12px;
+		border: 1px solid rgba(56, 189, 248, 0.45);
+		background: var(--swap-soft);
+		color: #e0f2fe;
 	}
 	.bed-card.locked {
 		opacity: 0.7;

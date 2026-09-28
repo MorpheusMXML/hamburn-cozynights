@@ -19,14 +19,14 @@ timeline
 ## Weeks before: build the camp
 
 - [ ] **Admin access sorted.** Everyone on the crew has signed in once and been approved. See [Admin access & roles](./access).
-- [ ] **Start from last year.** A superuser drops last year's template on *Compare & Import* and applies it, or you build from scratch. See [Layout templates](./templates).
+- [ ] **Start from last year.** A superuser drops last year's template on *Compare & Import* and applies it, or you build from scratch: the [house generator](./camp-layout#create-a-house) makes a house with all its rooms and beds in one go. See [Layout templates](./templates).
 - [ ] **Map current.** A redrawn site plan for this year goes in first: a developer swaps the map image (see [The map image](../develop/#the-map-image)). The pins keep their positions, so check them afterwards.
 - [ ] **Houses on the map.** Every house is placed where it really is. See [Houses, rooms & spots](./camp-layout).
-- [ ] **Rooms and spots complete.** Room names and numbers match the signs on the doors.
+- [ ] **Rooms and spots complete.** Room names and numbers match the signs on the doors — click a name to [change it](./camp-layout#renaming).
 - [ ] **Spot states checked.** New spots are active right away. Deactivate ❄️ the ones that aren't in use; after a template import, look for ⚪️ INACTIVE spots that should be bookable.
 - [ ] **Red alert gone.** *Map & houses* shows no **RED ALERT: THE CAMP LAYOUT IS INCOMPLETE** panel (and the Control Center no red line under *Needs attention*) (no house without rooms, no room without spots). See [Red alert](./index#red-alert-sanity-checks).
 - [ ] **Crew beds locked.** Beds that guests shouldn't book are locked 🔒.
-- [ ] **Special-needs spots marked.** Spots that suit guests with special needs (lower bunks, step-free, quiet, near a toilet, with a socket) are marked ♿ on their room pages. See [Special-needs requests](./special-needs).
+- [ ] **Special-needs spots marked.** Spots that suit guests with special needs (lower bunks, step-free, quiet, near a toilet) are marked ♿ on their room pages. See [Special-needs requests](./special-needs).
 - [ ] **Special-needs requests opened** in the Control Center, once the tickets are loaded, and announced to guests together with the booking date.
 - [ ] **Backup.** Export a template of the finished layout.
 
@@ -34,7 +34,7 @@ timeline
 
 - [ ] **Ticket codes created.** Test codes for a trial run with testers, the real roster for the event, **with the ticket holders' e-mail addresses** for the confirmations. A superuser loads the ticket shop's list on the [Tickets](./tickets) page; test codes come from the server, see [Ticket codes](#ticket-codes).
 - [ ] **Notifications checked.** `./scripts/cozy-admin.sh notify test --email you@mauersegler.art` reaches the crew group and your inbox; one booking with a test code brings a confirmation. See [Notifications](./notifications).
-- [ ] **Wallet passes checked** (if they are set up): book with a test code, open the pass and add it to a phone's wallet; move the spot in the admin area and watch the pass follow. See [Wallet passes](./passes#wallet-passes-apple-wallet-google-wallet).
+- [ ] **Wallet passes checked** (if they are set up): book with a test code, open the pass and add it to a phone's wallet. Then give the ticket another spot — as the guest (release it and book another while booking is live), or with <kbd>Move</kbd> on a [special-needs request](./special-needs) — and watch the wallet pass follow within about a minute. Without the wallet accounts, no wallet button shows anywhere. See [Wallet passes](./passes#wallet-passes-apple-wallet-google-wallet).
 - [ ] **Test run.** Sign in with a real test ticket code in a private browser window. The map shows the countdown (once the timer is armed), rooms show the right spots.
 - [ ] **Test bookings removed.** Bookings from a trial round go when a superuser switches back to Staging (see [Reset between rounds](#reset-between-rounds)); spots marked 🔄 TAKEN in Staging afterwards are freed with 🔄 FREE on their room page or with <kbd>🧨 Clear all bookings</kbd>.
 - [ ] **Legal pages complete.** The legal notice, the privacy policy and the booking rules show no red note. See [Legal pages](./legal).
@@ -63,7 +63,7 @@ timeline
 In this order. Once booking has closed, the switch back to Staging releases the bookings **without telling the guests**: its dialog has a *Don't notify the guests* box, and after the closing time (or while booking is 🔒 Closed) it starts ticked, because a *your spot was released* message only confuses people the day after the burn. The crew alert goes out either way. Forgetting the contacts first is still the safer order: it is part of the wrap-up anyway (the [privacy policy](./legal) promises it), and without addresses nothing can go out even if the box gets unticked by mistake.
 
 - [ ] **Export the final layout** as a template for next year.
-- [ ] **Forget the guests' contacts.** `./scripts/cozy-admin.sh tickets forget-contacts --yes` deletes every guest e-mail address, Telegram link, special-needs request and wallet device registration; the ticket codes, the names from the ticket list and the bookings stay. Wallet passes in guests' phones expire by themselves the day after the event.
+- [ ] **Forget the guests' contacts.** `./scripts/cozy-admin.sh tickets forget-contacts --yes` deletes every guest e-mail address, Telegram link, special-needs request, swap request and wallet device registration; the ticket codes, the names from the ticket list and the bookings stay. Wallet passes in guests' phones expire by themselves the day after the event.
 - [ ] **Switch back to staging** (superuser: ⚡ Switch right now → 🛠 Staging). Leave *Don't notify the guests* ticked and choose <kbd>Switch & release …</kbd>; the timer is paused and **every booking is released**, spots marked 🔄 TAKEN included (spots free, burner names forgotten, ticket codes stay), and every guest's browser is signed out. The confirmation says *guests not notified*. With the requests gone, the spots the crew booked for special-needs requests are ordinary bookings now and go too, so <kbd>🧨 Clear all bookings</kbd> next to the switch stays greyed out: nothing is left to clear.
 - [ ] **Delete the ticket list** within the period the [privacy policy](./legal) promises (default: four weeks after the event). An operator removes the codes on the server, see [Check and tidy up](#check-and-tidy-up).
 - [ ] **No timer left armed**, so booking doesn't open again by accident: the panel's summary shows NO TIMER or NOT ARMED.

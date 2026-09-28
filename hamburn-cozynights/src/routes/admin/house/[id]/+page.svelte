@@ -1,10 +1,12 @@
 <script lang="ts">
 	import type { PageData, SubmitFunction } from './$types';
-	import AddRoomForm from '$lib/components/admin/AddRoomForm.svelte';
+	import AddRoomsForm from '$lib/components/admin/AddRoomsForm.svelte';
 	import BookingGuest from '$lib/components/admin/BookingGuest.svelte';
 	import DetailsPanel from '$lib/components/admin/DetailsPanel.svelte';
 	import FoldPanel from '$lib/components/admin/FoldPanel.svelte';
 	import FoldToggle from '$lib/components/admin/FoldToggle.svelte';
+	import InlineRename from '$lib/components/admin/InlineRename.svelte';
+	import { TEMPLATE_LIMITS } from '$lib/template';
 	import { bookingsByRoom, countBookings } from '$lib/bookings';
 	import LayoutLockNotice from '$lib/components/admin/LayoutLockNotice.svelte';
 	import LockGlyph from '$lib/components/LockGlyph.svelte';
@@ -28,6 +30,8 @@
 	// Live Booking and Closed: adding and deleting rooms is locked, the buttons
 	// stay and explain themselves ($lib/layout-lock.ts).
 	$: lock = isLayoutLocked ? layoutLock(phase, isSuperuser) : null;
+	// "rooms", "huts", "tents": what the house's kind calls its rooms.
+	$: roomsWord = roomWord(house.kind, true);
 	// Who holds which spot, room by room (docs/admin/bookings.md).
 	$: bookingRooms = bookingsByRoom(data.bookings ?? [], house.id);
 	$: bookingCounts = countBookings(data.bookings ?? []);
@@ -35,9 +39,10 @@
 	type RoomCard = PageData['rooms'][number];
 
 	// The two forms fold away so the rooms are one short scroll down, on a phone
-	// too; folded, their title says what is set (FoldToggle).
+	// too; folded, their title says what is set (FoldToggle). A house without
+	// rooms opens ADD ROOMS right away: that is the next step.
 	let detailsOpen = false;
-	let addOpen = false;
+	let addOpen = data.rooms.length === 0 && !data.isLayoutLocked;
 
 	let deletingRoomId: string | null = null;
 
@@ -98,7 +103,16 @@
 		</nav>
 		<h1>
 			<span class="house-icon">🛖</span>
-			<span class="house-name">{house.name}</span>
+			<!-- In Staging Mode a click on the name renames the house. -->
+			<InlineRename
+				value={house.name}
+				action="?/renameHouse"
+				what="house"
+				editable={!isLayoutLocked}
+				maxLength={TEMPLATE_LIMITS.houseNameLength}
+			>
+				<span class="house-name">{house.name}</span>
+			</InlineRename>
 			<span class="subtitle">SANCTUARY OVERSIGHT</span>
 		</h1>
 	</div>
@@ -112,7 +126,7 @@
 		{phase}
 		{isSuperuser}
 		next={booking?.next}
-		blocks="Rooms can't be added or deleted."
+		blocks="Names can't be changed, and rooms can't be added or deleted."
 		still="Spots can still be locked 🔒 and marked ♿ on the room pages."
 	/>
 
@@ -163,7 +177,7 @@
 					summary={isLayoutLocked
 						? 'Rooms are added in Staging Mode only'
 						: `${rooms.length} ${roomWord(house.kind, rooms.length !== 1)} so far`}
-					>ADD {roomWord(house.kind).toUpperCase()} ➕
+					>ADD {roomsWord.toUpperCase()} ➕
 					{#if isLayoutLocked}
 						<span class="lock-chip" transition:scale={{ start: 0.6, duration: 250 }}>
 							<LockGlyph size={11} /> STAGING ONLY
@@ -174,7 +188,17 @@
 		</header>
 		{#if addOpen}
 			<div id="add-room" class="form-wrapper" transition:slide={{ duration: 180 }}>
-				<AddRoomForm lock={lock?.('add rooms') ?? null} word={roomWord(house.kind)} />
+				<p class="section-hint">
+					One row per size: how many {roomsWord}, how many beds each, 🪜 for bunk beds. Numbers
+					continue after the last {roomWord(house.kind)}, names are rolled.
+				</p>
+				<AddRoomsForm
+					lock={lock?.('add rooms') ?? null}
+					word={roomWord(house.kind)}
+					plural={roomsWord}
+					existing={rooms.map((room) => room.room_number)}
+					suggested={data.suggestedSize}
+				/>
 			</div>
 		{/if}
 	</section>
@@ -255,8 +279,8 @@
 
 		{#if rooms.length === 0}
 			<div class="empty-state">
-				This house has no rooms yet. Add the first one with the form above; guests can only book
-				spots inside rooms.
+				This house has no {roomsWord} yet. Add them with ADD {roomsWord.toUpperCase()} above; guests can
+				only book spots inside {roomsWord}.
 			</div>
 		{/if}
 	</div>

@@ -22,9 +22,12 @@
 		ROOM_KINDS,
 		featureLabel,
 		featuresFor,
+		roomKind,
 		type Feature,
 		type FeatureEntry
 	} from '$lib/accommodation';
+	import { rollRoomNames } from '$lib/place-names';
+	import RollButton from './RollButton.svelte';
 
 	export let level: 'house' | 'room';
 	export let action: string;
@@ -130,14 +133,23 @@
 	{#if name !== undefined}
 		<div class="form-group">
 			<label for="{level}-name">NAME</label>
-			<input
-				type="text"
-				id="{level}-name"
-				name="name"
-				bind:value={name}
-				autocomplete="off"
-				maxlength={nameMax}
-			/>
+			<div class="name-row">
+				<input
+					type="text"
+					id="{level}-name"
+					name="name"
+					bind:value={name}
+					autocomplete="off"
+					maxlength={nameMax}
+				/>
+				{#if level === 'room'}
+					<!-- A funny name like the house generator rolls ($lib/place-names); saved with the details. -->
+					<RollButton
+						label="Roll a new name"
+						on:click={() => (name = rollRoomNames(1, roomKind(kind), [name ?? ''])[0])}
+					/>
+				{/if}
+			</div>
 			{#if nameHint}<p class="hint">{nameHint}</p>{/if}
 		</div>
 	{/if}
@@ -273,6 +285,16 @@
 		letter-spacing: 0.1em;
 		color: #9aa;
 		text-transform: uppercase;
+	}
+
+	.name-row {
+		display: flex;
+		gap: 0.5rem;
+		min-width: 0;
+	}
+	.name-row input {
+		flex: 1 1 auto;
+		min-width: 0;
 	}
 
 	input[type='text'],

@@ -20,12 +20,16 @@
 	import { bookingsByRoom, countBookings } from '$lib/bookings';
 	import { createBookingsFeed } from '$lib/live-bookings';
 	import { relativeTime } from '$lib/time';
+	import { roomWord } from '$lib/accommodation';
+	import { appendPlan } from '$lib/house-plan';
 
 	export let data: PageData;
 
 	// The camp editor (docs/admin/camp-layout.md): the map and the list of
 	// houses. Only admins reach this page (hooks + layout). Its writes are
 	// Control Center actions (/admin?/…), where they lived before the split.
+	// Always with the full path: a bare `?/…` posts to /admin/camp, which has
+	// no actions, and SvelteKit answers 405 Method Not Allowed.
 	$: ({ sanityWarnings, isSuperuser, phase, isLayoutLocked } = data);
 	// Locked (Live Booking, Closed): the structural controls stay in place,
 	// greyed out, and explain themselves when tried ($lib/layout-lock.ts).
@@ -150,7 +154,7 @@
 		formData.append('x', x.toString());
 		formData.append('y', y.toString());
 
-		const result = await submitAction('?/updateHouseCoords', formData);
+		const result = await submitAction('/admin?/updateHouseCoords', formData);
 
 		if (result.type === 'success') {
 			toast(`📍 ${house.name} moved to X ${x} / Y ${y}. Saved.`, 'success', 3000);
@@ -265,7 +269,7 @@
 		const formData = new FormData();
 		formData.append('id', house.id);
 
-		const result = await submitAction('?/deleteHouse', formData);
+		const result = await submitAction('/admin?/deleteHouse', formData);
 
 		if (result.type === 'success') {
 			toast(`🌪️ "${house.name}" was deleted.`, 'success');
@@ -293,15 +297,19 @@
 
 		const formData = new FormData();
 		formData.append('name', name);
+		// Read once: the sidebar may change while the request runs.
+		const renameId = editingHouse?.id;
 
 		let result: ActionResult;
 		if (editingHouse?.id) {
 			formData.append('id', editingHouse.id);
-			result = await submitAction('?/renameHouse', formData);
+			result = await submitAction('/admin?/renameHouse', formData);
 		} else {
 			formData.append('x', editingHouse?.x.toString() || '0');
 			formData.append('y', editingHouse?.y.toString() || '0');
-			formData.append('bedCount', String(event.detail.bedCount || 0));
+			// The house generator: kind and size rows (docs/admin/camp-layout.md).
+			formData.append('kind', event.detail.kind ?? '');
+			if (event.detail.plan) appendPlan(formData, event.detail.plan);
 			result = await submitAction('/admin/house/new?/create', formData);
 		}
 
@@ -309,16 +317,44 @@
 			// Keep the sidebar open so the entry can be corrected.
 			await alertDialog(
 				`${actionErrorMessage(result) || 'The server could not be reached.'} Nothing was saved. Check your entry and try again.`,
-				{ title: editingHouse?.id ? 'House not renamed' : 'House not created', tone: 'danger' }
+				{ title: renameId ? 'House not renamed' : 'House not created', tone: 'danger' }
 			);
 			invalidateAll();
 			return;
 		}
 
-		toast(editingHouse?.id ? `✏️ Renamed to "${name}".` : `🛖 "${name}" was created.`, 'success');
-		editingHouse = null;
-		selectedHouseId = null;
-		invalidateAll();
+		if (renameId) {
+			toast(`✏️ Renamed to "${name}".`, 'success');
+			editingHouse = null;
+			selectedHouseId = null;
+			invalidateAll();
+			return;
+		}
+
+		// The new pin stays selected: its sidebar leads on to the rooms, which
+		// carry rolled names the crew can change there.
+		const made = (result.data ?? {}) as { houseId?: string; rooms?: number; spots?: number };
+		const rooms = made.rooms ?? 0;
+		const word = roomWord(event.detail.kind, rooms !== 1);
+		toast(
+			rooms > 0
+				? `🛖 "${name}" is up: ${rooms} ${word}, ${made.spots ?? 0} spots. Rename anything on its page.`
+				: `🛖 "${name}" was created. Add its ${roomWord(event.detail.kind, true)} on its page.`,
+			'success',
+			7000
+		);
+		await invalidateAll();
+		await tick();
+		const created = made.houseId
+			? data.houses.find((house) => house.id === made.houseId)
+			: undefined;
+		if (created) {
+			selectedHouseId = created.id;
+			editingHouse = { id: created.id, x: created.x, y: created.y, name: created.name };
+		} else {
+			editingHouse = null;
+			selectedHouseId = null;
+		}
 	}
 
 	async function handleDeleteActiveHouse() {
@@ -338,7 +374,7 @@
 
 		await new Promise((resolve) => setTimeout(resolve, 500));
 
-		const result = await submitAction('?/deleteHouse', formData);
+		const result = await submitAction('/admin?/deleteHouse', formData);
 
 		if (result.type !== 'success') {
 			if (sidebar) sidebar.classList.remove('disintegrating');
@@ -445,6 +481,8 @@
 									y={activeHouse.y}
 									name={activeHouse.name}
 									houseId={selectedHouseId || undefined}
+									kind={'kind' in activeHouse ? String(activeHouse.kind ?? '') : ''}
+									takenNames={houses.map((house) => house.name)}
 									flat={true}
 									{lock}
 									on:save={handleSaveHouse}

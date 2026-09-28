@@ -63,9 +63,13 @@ export function placeLabel(row: Pick<BookingRow, 'spot' | 'room' | 'house'>): st
 	return [row.spot, row.room, row.house].filter(Boolean).join(' · ');
 }
 
-/** The guest's name for a list line: holder, else burner name, else the masked ticket. */
+/**
+ * The guest's name for a list line: holder, else burner name, else the masked
+ * ticket. A spot taken without a ticket has no guest: it is "Blocked by admin",
+ * the words guests see on it too.
+ */
 export function guestLabel(guest: BookingGuest | null): string {
-	if (!guest) return 'Crew reservation';
+	if (!guest) return 'Blocked by admin';
 	return guest.name || guest.burnerName || `Ticket ${guest.ticket}`;
 }
 

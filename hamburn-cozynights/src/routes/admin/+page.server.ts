@@ -13,6 +13,8 @@ import { defaultSelection } from '$lib/template-diff';
 import { applyTemplate, compareTemplate, TemplateImportError } from '$lib/server/template';
 import { logAdminEvent } from '$lib/server/admin-events';
 import { crewBookedBeds } from '$lib/server/special-requests';
+import { checkHouseName } from '$lib/server/names';
+import { setSwapsOff, swapCounts } from '$lib/server/swaps';
 
 /** Keys of the chosen changes; a real layout has far fewer. */
 const MAX_SELECTED_CHANGES = 20000;
@@ -395,6 +397,25 @@ export const actions: Actions = {
 		if (!locals.admin) return fail(403, { error: 'Unauthorized' });
 		return editWindow(locals, 'pauseTimer', (w) => ({ ...w, paused: true }));
 	},
+	/**
+	 * Swap requests off or on again for every guest (docs/admin/swaps.md).
+	 * Any approved admin: it only pauses, nothing is lost. The admin's own
+	 * connection writes it, so PocketBase tells the crew chat who did it.
+	 */
+	toggleSwaps: async ({ locals, request }) => {
+		if (!locals.admin) return fail(403, { error: 'Only admins can turn swap requests off or on.' });
+		const off = (await request.formData()).get('off') === 'true';
+		try {
+			await setSwapsOff(locals.pb, off);
+			console.log(
+				`[Admin:Swaps] ${locals.admin.email} turned swap requests ${off ? 'off' : 'on'}.`
+			);
+			return { success: true, swapsOff: off };
+		} catch (err) {
+			console.error('[Admin:Swaps] Switch failed:', (err as Error)?.message);
+			return fail(500, { error: 'The switch could not be saved. Reload the page and try again.' });
+		}
+	},
 	clearAllBookings: async ({ locals }) => {
 		if (!locals.admin?.isSuperuser) {
 			return fail(403, { error: 'Only superusers can clear all bookings.' });
@@ -564,8 +585,11 @@ export const actions: Actions = {
 				console.warn(`[Action:renameHouse] BLOCKED: ${phase} — structure is locked.`);
 				return fail(403, { error: `House names are locked ${lockedDuring(phase)}. 🔒` });
 			}
+			// The rules of creating a house: not too long, once in the camp.
+			const checked = await checkHouseName(locals.pb, id, name);
+			if (!checked.ok) return fail(400, { error: checked.message });
 
-			await locals.pb.collection('houses').update(id, { name });
+			await locals.pb.collection('houses').update(id, { name: checked.value });
 			console.log(`[Action:renameHouse] SUCCESS for ${id}`);
 			return { success: true };
 		} catch (err) {
@@ -683,10 +707,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// Runs in parallel with the layout load, so it guards itself too.
 	if (!locals.admin) throw redirect(303, '/admin/login');
 
-	const [camp, bookings] = await Promise.all([
+	const [camp, bookings, swapNumbers] = await Promise.all([
 		readCamp(locals),
 		readBookings(locals.adminPb).catch((err) => {
 			console.error('[Admin] Bookings could not be read:', (err as Error)?.message);
+			return null;
+		}),
+		swapCounts(locals.adminPb).catch((err) => {
+			console.error('[Admin] Swap requests could not be counted:', (err as Error)?.message);
 			return null;
 		})
 	]);
@@ -704,6 +732,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		isBookingActive: settings.isBookingActive,
 		bookingUnlockAt: settings.bookingUnlockAt,
 		requestsOpen: settings.requestsOpen,
+		// Swap requests between guests: the crew's switch and the numbers.
+		swapsOff: settings.swapsOff,
+		swapNumbers,
 		isLayoutLocked: settings.isLayoutLocked,
 		bookingWindow: settings.window
 	};

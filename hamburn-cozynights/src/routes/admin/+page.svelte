@@ -77,6 +77,32 @@
 	$: openRequests = data.openRequests;
 	let requestsSaving = false;
 
+	// Swap requests between guests (docs/admin/swaps.md): on by default during
+	// Live Booking; the switch pauses them for everyone.
+	$: swapsOff = data.swapsOff;
+	let swapsSaving = false;
+	const handleToggleSwaps: SubmitFunction = () => {
+		swapsSaving = true;
+		return async ({ result, update }) => {
+			swapsSaving = false;
+			if (result.type === 'success') {
+				const off = (result.data as { swapsOff?: boolean } | undefined)?.swapsOff;
+				toast(
+					off
+						? '🔁 Swap requests are paused: nobody can ask or say yes until you turn them on.'
+						: '🔁 Swap requests are on again.',
+					'success'
+				);
+			} else {
+				await alertDialog(
+					`${actionErrorMessage(result) || 'The server could not be reached.'} Swap requests were not switched. Reload the page and try again.`,
+					{ title: 'Switch not changed', tone: 'danger' }
+				);
+			}
+			await update();
+		};
+	};
+
 	const handleToggleRequests: SubmitFunction = () => {
 		requestsSaving = true;
 		return async ({ result, update }) => {
@@ -134,6 +160,21 @@
 			</button>
 		</form>
 		<a class="requests-review" href="/admin/requests">Review requests →</a>
+	</section>
+
+	<section class="requests-panel swaps-panel" class:open={!swapsOff && phase === 'live'}>
+		<span class="requests-icon" aria-hidden="true">🔁</span>
+		<span class="requests-text">
+			Swap requests between guests:
+			<strong>{swapsOff ? 'PAUSED' : phase === 'live' ? 'ON' : 'ON IN LIVE BOOKING'}</strong>
+			{#if data.swapNumbers}· {data.swapNumbers.open} open · {data.swapNumbers.swapped} swapped{/if}
+		</span>
+		<form method="POST" action="?/toggleSwaps" use:enhance={handleToggleSwaps}>
+			<input type="hidden" name="off" value={String(!swapsOff)} />
+			<button type="submit" class="btn-requests" disabled={swapsSaving}>
+				{swapsOff ? 'Turn swaps on' : 'Pause swaps'}
+			</button>
+		</form>
 	</section>
 
 	<section class="panel attention-panel">
@@ -314,6 +355,21 @@
 	.btn-requests:disabled {
 		opacity: 0.5;
 		cursor: progress;
+	}
+	/* Swaps wear the swap colour (state.css --swap), not the ♿ pink. */
+	.swaps-panel.open {
+		background: var(--swap-soft);
+		border-color: rgba(56, 189, 248, 0.35);
+	}
+	.swaps-panel strong {
+		color: var(--swap);
+	}
+	.swaps-panel .btn-requests {
+		border-color: var(--swap);
+		color: var(--swap);
+	}
+	.swaps-panel .btn-requests:hover {
+		background: var(--swap-soft);
 	}
 	.requests-review {
 		display: inline-flex;

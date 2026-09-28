@@ -148,6 +148,31 @@ const PAGES: PageCase[] = [
 			await page.getByRole('dialog').waitFor();
 		}
 	},
+	// Swap requests (docs/guide/booking.md "Swap spots"): the sheet on a taken
+	// spot, and /swaps with a request at the limits for "me" and one of mine.
+	{
+		name: 'room: swap sheet',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithSpot',
+		phases: ['live'],
+		open: async (page) => {
+			await page
+				.locator('button.bed-card.swappable', { hasText: TEXTS.burnerLong.slice(0, 30) })
+				.click();
+			await page.getByRole('dialog').waitFor();
+			// The sheet and its tickets fly in: measure them where they land.
+			await page.evaluate(() =>
+				Promise.all(
+					document
+						.getAnimations()
+						.filter((a) => a.effect?.getTiming().iterations !== Infinity)
+						.map((a) => a.finished.catch(() => undefined))
+				)
+			);
+		}
+	},
+	{ name: 'swap requests', path: () => '/swaps', as: 'guestWithSpot', phases: ['live', 'closed'] },
+	{ name: 'swap requests without a spot', path: () => '/swaps', as: 'guestWithoutSpot' },
 	{
 		name: 'start page: refused ticket code',
 		path: () => '/',
@@ -419,6 +444,37 @@ const PAGES: PageCase[] = [
 		phases: ['staging'],
 		open: unfoldAll
 	},
+	{
+		// A click on a name opens its field with ✓ and ✕ (InlineRename): the
+		// room's long title with its number, and the spot with the longest label.
+		name: 'admin room: renaming',
+		path: (c) => `/admin/room/${c.roomId}`,
+		as: 'admin',
+		phases: ['staging'],
+		open: async (page) => {
+			await page.locator('h1 .rename-title').click();
+			await page
+				.locator('.bed-info .rename-title', { hasText: 'Kuschelzeltplatzverwaltungsbett' })
+				.click();
+			await page.locator('.rename').nth(1).waitFor();
+		}
+	},
+	{
+		// The details of the locked upper bunk in the ♿ room: the room's ♿ is
+		// struck through ("never on an upper bunk", no box), next to a
+		// superuser's "off here" boxes and the spot's own list of them.
+		name: 'admin room: upper bunk details',
+		path: (c) => `/admin/room/${c.roomId}`,
+		as: 'superuser',
+		phases: ['staging'],
+		open: async (page) => {
+			const upper = page.locator('.bunk-half', {
+				has: page.locator('.bed-label', { hasText: /^Upper 1$/ })
+			});
+			await upper.locator('.spot-details .btn-toggle').click();
+			await upper.locator('.chip.never').waitFor();
+		}
+	},
 	{ name: 'admin new house', path: () => '/admin/house/new', as: 'admin' },
 	{
 		// A typed key in a locked field answers with the lock hint next to it.
@@ -466,23 +522,52 @@ const PAGES: PageCase[] = [
 		// Staging: Live and Closed lock the layout, and these forms with it.
 		phases: ['staging'],
 		open: async (page) => {
-			await page.locator('#bedCount').fill('999');
+			// More rooms than a house holds: the generator's check answers.
+			await page.locator('#new-house-rooms-0').fill('99');
 			await page.getByRole('button', { name: 'Save House' }).click();
-			await page.locator('#bedcount-error').waitFor();
+			await page.locator('.room-sizes [role="alert"]').waitFor();
 		}
 	},
 	{
-		name: 'admin house: refused room',
+		// The house generator next to the map (below it on a phone): the rolled
+		// name, the kind chips, two size rows and the live count with numbers.
+		name: 'admin camp: house generator',
+		path: () => '/admin/camp?view=list',
+		as: 'admin',
+		phases: ['staging'],
+		open: async (page) => {
+			await page.getByRole('button', { name: /Ignite New House/ }).click();
+			const sidebar = page.locator('.details-sidebar');
+			await sidebar.locator('#house-gen-rooms-0').waitFor();
+			await sidebar.getByRole('button', { name: /ANOTHER ROOM SIZE/ }).click();
+			await sidebar.getByRole('button', { name: 'Bunk beds in size 2' }).click();
+			await sidebar.getByRole('button', { name: /FLOOR BLOCKS/ }).click();
+			await sidebar.locator('.ranges', { hasText: '#11' }).waitFor();
+			// The sidebar flies in (Svelte transitions ignore reduced motion):
+			// measure it where it lands, not on its way.
+			await sidebar.evaluate((el) =>
+				Promise.all(
+					el
+						.getAnimations({ subtree: true })
+						.filter((a) => a.effect?.getTiming().iterations !== Infinity)
+						.map((a) => a.finished)
+				)
+			);
+			await page.evaluate(() => window.scrollTo(0, 0));
+		}
+	},
+	{
+		name: 'admin house: refused rooms',
 		path: (c) => `/admin/house/${c.houseId}`,
 		as: 'admin',
 		// Staging: Live and Closed lock the layout, and these forms with it.
 		phases: ['staging'],
 		open: async (page) => {
 			await unfoldAll(page);
-			await page.locator('#room-number').fill('x');
-			// A hut group's form says HUT (src/lib/accommodation.ts, roomWord).
-			await page.getByRole('button', { name: /IGNITE (ROOM|HUT|TENT|PLACE)/ }).click();
-			await page.locator('#room-number-error').waitFor();
+			await page.locator('#add-rooms-first').fill('0');
+			// A hut group's form says HUTS (src/lib/accommodation.ts, roomWord).
+			await page.getByRole('button', { name: /IGNITE \d* ?(ROOM|HUT|TENT|PLACE)S?/ }).click();
+			await page.locator('.room-sizes [role="alert"]').waitFor();
 		}
 	},
 	{ name: 'admin tickets', path: () => '/admin/tickets', as: 'superuser' },

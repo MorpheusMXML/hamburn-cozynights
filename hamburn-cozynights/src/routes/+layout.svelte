@@ -35,7 +35,7 @@
 	// The pages that show the phase and the spots ask the server again when the
 	// guest comes back to a tab that sat in the background (see the module).
 	// The crew's pages have their own live numbers and open forms, so they don't.
-	const REFRESH_ON_RETURN = /^\/(map|house\/|room\/|random-bed)/;
+	const REFRESH_ON_RETURN = /^\/(map|house\/|room\/|random-bed|swaps)/;
 	$effect(() => {
 		if (!REFRESH_ON_RETURN.test(page.url.pathname)) return;
 		return refreshOnReturn();
@@ -56,6 +56,7 @@
 			next={data.booking.next}
 			signedIn={data.signedIn}
 			specialNeeds={data.specialNeeds}
+			swaps={data.swaps}
 			bind:height={barHeight}
 		/>
 	{/if}

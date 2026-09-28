@@ -28,6 +28,7 @@ const sections: Section[] = [
 				items: [
 					{ text: 'What is CozyNights?', link: '/guide/' },
 					{ text: 'Booking a bed', link: '/guide/booking' },
+					{ text: 'Swapping spots', link: '/guide/swaps' },
 					{ text: 'Special-needs spot', link: '/guide/special-needs' },
 					{ text: 'Staging, Live & Closed', link: '/guide/phases' },
 					{ text: 'FAQ & troubleshooting', link: '/guide/faq' }
@@ -63,6 +64,7 @@ const sections: Section[] = [
 					{ text: 'Tickets & e-mail addresses', link: '/admin/tickets' },
 					{ text: 'Booking passes & check-in', link: '/admin/passes' },
 					{ text: 'Special-needs requests', link: '/admin/special-needs' },
+					{ text: 'Swap requests', link: '/admin/swaps' },
 					{ text: 'Notifications', link: '/admin/notifications' }
 				]
 			},

@@ -1,9 +1,13 @@
 <script lang="ts" module>
+	import type { HouseKind } from '$lib/accommodation';
+	import type { RoomPlan } from '$lib/house-plan';
+
 	/** What "IGNITE HOUSE" / "SYNC MODULE" hands to the parent, which creates or renames the house. */
 	export interface HouseSave {
 		name: string;
-		/** Initial spots of a new house (0 when editing). */
-		bedCount: number;
+		/** A new house: its kind and its rooms (the generator's size rows). Not set when renaming. */
+		kind?: HouseKind | '';
+		plan?: RoomPlan;
 	}
 </script>
 
@@ -13,12 +17,22 @@
 	import { fade } from 'svelte/transition';
 	import { revealInvalid } from '$lib/field-alert';
 	import { lockAttrs, type LockFor } from '$lib/layout-lock';
+	import { houseKind, roomWord } from '$lib/accommodation';
+	import { DEFAULT_SIZE, type PlanProblem, type RoomSize } from '$lib/house-plan';
+	import { rollHouseName } from '$lib/place-names';
 	import LockGlyph from './LockGlyph.svelte';
+	import RollButton from './admin/RollButton.svelte';
+	import HouseKindChips from './admin/HouseKindChips.svelte';
+	import RoomSizes from './admin/RoomSizes.svelte';
 
 	export let x: number;
 	export let y: number;
 	export let name = '';
 	export let houseId: string | undefined = undefined;
+	/** The kind of the house being renamed, for the 🎲. */
+	export let kind: string | undefined = '';
+	/** Names other houses use: a rolled name is never one of them. */
+	export let takenNames: string[] = [];
 	export let flat = false;
 	/**
 	 * Hints of the locked layout (Live Booking, Closed), or null while it can
@@ -32,13 +46,49 @@
 		cancel: void;
 	}>();
 
-	let bedCount = 4;
+	// The generator of a new house: kind chips and size rows.
+	let newKind: HouseKind | '' = '';
+	let sizes: RoomSize[] = [{ ...DEFAULT_SIZE }];
+	let floors = false;
+	let firstNumber = '';
+	let plan: RoomPlan;
+	let problem: PlanProblem | null = null;
+	let refusal = '';
+
 	let showValidationError = false;
 	let container: HTMLElement;
 
 	$: isEditing = !!houseId;
 	$: nameLock = lock?.(isEditing ? 'rename houses' : 'add houses');
 	$: moveLock = lock?.('move houses');
+
+	/** The name the 🎲 put in last: while the field still holds it, a new kind rolls again. */
+	let rolled = '';
+
+	function rollName() {
+		if (nameLock) return;
+		name = rollHouseName(isEditing ? houseKind(kind) : newKind, [...takenNames, name]);
+		rolled = name;
+		showValidationError = false;
+	}
+
+	// A new house opens with a rolled name — once, not every time the field is
+	// emptied to type an own one.
+	let openedAsNew = false;
+	$: if (isEditing) openedAsNew = false;
+	$: if (!isEditing && !openedAsNew) {
+		openedAsNew = true;
+		if (!name.trim() && !lock) rollName();
+	}
+
+	let lastKind: HouseKind | '' = '';
+	$: kindChanged(newKind);
+
+	function kindChanged(next: HouseKind | '') {
+		if (next === lastKind) return;
+		lastKind = next;
+		if (!isEditing && name === rolled) rollName();
+	}
 
 	// Typed coordinates: follow the pin (drag, arrow keys, another house) until
 	// the admin edits them, then "MOVE PIN" sends them to the parent.
@@ -70,13 +120,16 @@
 
 	function handleSave() {
 		if (lock) return;
-		if (!name || name.trim() === '') {
-			showValidationError = true;
+		showValidationError = !name || name.trim() === '';
+		if (!isEditing && problem) refusal = problem.message;
+		if (showValidationError || (!isEditing && problem)) {
 			revealInvalid(container);
 			return;
 		}
-		showValidationError = false;
-		dispatch('save', { name: name.trim(), bedCount: isEditing ? 0 : bedCount });
+		dispatch(
+			'save',
+			isEditing ? { name: name.trim() } : { name: name.trim(), kind: newKind, plan }
+		);
 	}
 </script>
 
@@ -106,36 +159,42 @@
 
 		<div class="input-group">
 			<label for="house-name">UNIT DESIGNATION</label>
-			<input
-				id="house-name"
-				bind:value={name}
-				placeholder="e.g. Neon Cave"
-				aria-invalid={showValidationError}
-				aria-describedby={showValidationError ? 'house-name-error' : undefined}
-				on:input={() => (showValidationError = false)}
-				readonly={!!nameLock}
-				{...lockAttrs(nameLock)}
-			/>
+			<div class="name-row">
+				<input
+					id="house-name"
+					bind:value={name}
+					placeholder="e.g. Neon Cave"
+					maxlength="100"
+					autocomplete="off"
+					aria-invalid={showValidationError}
+					aria-describedby={showValidationError ? 'house-name-error' : undefined}
+					on:input={() => (showValidationError = false)}
+					readonly={!!nameLock}
+					{...lockAttrs(nameLock)}
+				/>
+				<RollButton label="Roll a new house name" lock={nameLock} on:click={rollName} />
+			</div>
 			{#if showValidationError}
 				<p class="field-error" id="house-name-error" role="alert">Enter a name for the house.</p>
 			{/if}
 		</div>
 
 		{#if !isEditing}
-			<div class="input-group" in:fade>
-				<label for="bed-count">INITIAL CAPACITY (BEDS) 🛌</label>
-				<div class="number-input-wrapper">
-					<input
-						id="bed-count"
-						type="number"
-						bind:value={bedCount}
-						min="1"
-						readonly={!!nameLock}
-						{...lockAttrs(nameLock)}
-					/>
-					<div class="laser-accent"></div>
-				</div>
-				<p class="hint">Base occupancy for the first module.</p>
+			<div class="generator" in:fade>
+				<HouseKindChips bind:kind={newKind} lock={nameLock} />
+				<RoomSizes
+					bind:sizes
+					bind:floors
+					bind:firstNumber
+					bind:plan
+					bind:problem
+					bind:refusal
+					allowEmpty
+					word={roomWord(newKind)}
+					plural={roomWord(newKind, true)}
+					lock={nameLock}
+					idPrefix="house-gen"
+				/>
 			</div>
 		{:else}
 			<div class="input-group position-group" in:fade>
@@ -318,7 +377,7 @@
 	label {
 		font-size: 0.7rem;
 		font-weight: 900;
-		color: #444;
+		color: #888;
 		letter-spacing: 1px;
 	}
 
@@ -356,7 +415,7 @@
 	.group-label {
 		font-size: 0.7rem;
 		font-weight: 900;
-		color: #444;
+		color: #888;
 		letter-spacing: 1px;
 	}
 	.position-row {
@@ -389,20 +448,19 @@
 		cursor: not-allowed;
 	}
 
-	.number-input-wrapper {
-		position: relative;
+	.name-row {
+		display: flex;
+		gap: 0.5rem;
+		min-width: 0;
 	}
-	.laser-accent {
-		position: absolute;
-		bottom: 0;
-		left: 0;
-		width: 0%;
-		height: 2px;
-		background: #f472b6;
-		transition: width 0.3s ease;
+	.name-row input {
+		flex: 1 1 auto;
+		min-width: 0;
 	}
-	input:focus + .laser-accent {
-		width: 100%;
+	.generator {
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
 	}
 
 	.actions {

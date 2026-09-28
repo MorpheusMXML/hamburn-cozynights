@@ -27,11 +27,15 @@ export type Feature =
 	| 'own_bathroom'
 	| 'heated'
 	| 'unheated'
-	| 'quiet'
-	| 'power';
+	| 'quiet';
 
-/** Where a feature can be set. A spot has its own and inherits the others. */
-export type FeatureLevel = 'house' | 'room' | 'spot';
+/**
+ * Where a feature can be set: on a house or a room. A spot has none of its
+ * own — it inherits its room's and its house's and may switch some of them
+ * off (`features_off`, offAllowed). The only spot feature there was, the 🔌
+ * power socket, went on 2026-09-28 (RETIRED_FEATURES).
+ */
+export type FeatureLevel = 'house' | 'room';
 
 export const DESCRIPTION_MAX = 500;
 
@@ -106,7 +110,10 @@ export interface FeatureEntry extends KindEntry<Feature> {
 	opposite?: Feature;
 }
 
-/** Keep in sync with the `features` fields in pb_migrations/1759900000_accommodation.js. */
+/**
+ * Keep in sync with the `features` fields in pb_migrations/1759900000_accommodation.js
+ * and pb_migrations/1760200000_no_power_socket.js.
+ */
 export const FEATURES: FeatureEntry[] = [
 	{
 		value: 'wheelchair',
@@ -144,22 +151,29 @@ export const FEATURES: FeatureEntry[] = [
 		icon: '🤫',
 		levels: ['house', 'room'],
 		hint: 'A calm corner of the camp, away from the sound systems.'
-	},
-	{
-		value: 'power',
-		label: 'Power socket',
-		icon: '🔌',
-		levels: ['room', 'spot'],
-		hint: 'A socket at the bed or in the room.'
 	}
 ];
+
+/**
+ * Values the catalogue once had and dropped. `power` (🔌 Power socket) went
+ * on 2026-09-28: the crew doesn't know where the sockets are, so the app
+ * neither offers nor shows it any more, and
+ * pb_migrations/1760200000_no_power_socket.js removed what was stored. An
+ * older layout file may still name it: the import leaves it out with a note
+ * instead of refusing the file (src/lib/template.ts). A guest can still ask
+ * for a socket on the ♿ form — the crew answers that by hand (MATCHED_BY_HAND).
+ */
+export const RETIRED_FEATURES: readonly string[] = ['power'];
 
 /**
  * What a bed with a ladder can never be, whatever its room and house say: an
  * upper bunk is never wheelchair accessible — whoever needs the ♿ can't get
  * up the ladder. The room stays accessible; the bed is not. Applied wherever
  * a spot's features are summed up (effectiveFeatures, factsOf), so the ♿
- * picker, the map filters, the guest pages and the messages all agree.
+ * picker, the map filters, the guest pages and the messages all agree; the
+ * admin spot editor shows the room's ♿ struck through there (bedRulesOut).
+ * An upper bunk isn't step-free either (needFit, spotMatchesFilter), though
+ * it keeps ⬇️ Ground floor: that is a fact about its room.
  */
 export const NOT_UP_A_LADDER: readonly Feature[] = ['wheelchair'];
 
@@ -193,7 +207,7 @@ const LEVELS_ABOVE: Record<'room' | 'spot', FeatureLevel[]> = {
 /**
  * What a room or spot may switch OFF for itself: any feature a level above
  * it can have (`features_off`). A room in a heated house that stays cold, a
- * spot without the socket the room has. Only superusers set it (the actions
+ * bed by the door of a quiet room. Only superusers set it (the actions
  * check), and "reset" simply empties the list, so the place inherits again.
  */
 export function offAllowed(level: 'room' | 'spot'): FeatureEntry[] {
@@ -380,12 +394,14 @@ export function parseDetailsForm(
 
 export interface SpotInput {
 	bed_type: BedType | '';
-	features: Feature[];
 	/** Only when the caller may override (a superuser): what the spot switches off. */
 	features_off?: Feature[];
 }
 
-/** The same for one spot: its bed type, the features of the spot itself and, for a superuser, its overrides. */
+/**
+ * The same for one spot: its bed type and, for a superuser, what it switches
+ * off. A spot has no features of its own, so nothing can clash with that list.
+ */
 export function parseSpotForm(
 	form: FormData,
 	options: ParseOptions = {}
@@ -394,29 +410,22 @@ export function parseSpotForm(
 	if (raw && !isBedType(raw)) {
 		return { ok: false, error: 'Pick a bed from the list, or leave it open.' };
 	}
-	const value: SpotInput = {
-		bed_type: raw as BedType | '',
-		features: readFeatures(form.getAll('features'), 'spot')
-	};
+	const value: SpotInput = { bed_type: raw as BedType | '' };
 	if (options.canOverride) {
 		value.features_off = readFeaturesOff(form.getAll('features_off'), 'spot');
-		const problem = overrideProblem(value.features, value.features_off);
-		if (problem) return { ok: false, error: problem };
 	}
 	return { ok: true, value };
 }
 
 export interface SpotFacts {
 	bedType: BedType | '';
-	/** House, room and spot features together. */
+	/** House and room features together, minus what the spot switched off or its bed rules out. */
 	features: Feature[];
 }
 
 export interface FeatureSource {
 	house?: readonly string[] | string | null;
 	room?: readonly string[] | string | null;
-	/** PocketBase returns a single value for a select that allows only one. */
-	spot?: readonly string[] | string | null;
 	/** What the room switched off of the house's features (`rooms.features_off`). */
 	roomOff?: readonly string[] | string | null;
 	/** What the spot switched off of what it would inherit (`beds.features_off`). */
@@ -428,8 +437,12 @@ export interface FeatureSource {
 	bedType?: unknown;
 }
 
-/** The features a bed of this type can't have, whatever is around it. */
-function droppedForBed(type: unknown): readonly Feature[] {
+/**
+ * The features a bed of this type can't have, whatever is around it: ♿ for
+ * an upper bunk (NOT_UP_A_LADDER), nothing for any other bed. The admin spot
+ * editor strikes these through among the inherited chips.
+ */
+export function bedRulesOut(type: unknown): readonly Feature[] {
 	return bedTypeEntry(type)?.ladder ? NOT_UP_A_LADDER : [];
 }
 
@@ -443,12 +456,11 @@ function addOwn(chosen: Set<Feature>, features: readonly Feature[]): void {
 }
 
 /**
- * What is true for one spot: its own features plus those of its room and
- * house. Where two levels say the opposite ("heated" in an "unheated" hut
- * group), the closer one wins; what a room or spot switched off for itself
- * (`features_off`, a superuser's call) is gone before its own features count.
- * An upper bunk is never wheelchair accessible, however accessible its room
- * is (NOT_UP_A_LADDER).
+ * What is true for one spot: the features of its room and house. Where the
+ * two say the opposite ("heated" in an "unheated" hut group), the room wins;
+ * what the room or the spot switched off for itself (`features_off`, a
+ * superuser's call) is gone. An upper bunk is never wheelchair accessible,
+ * however accessible its room is (NOT_UP_A_LADDER).
  */
 export function effectiveFeatures(source: FeatureSource): Feature[] {
 	const chosen = new Set<Feature>();
@@ -456,16 +468,17 @@ export function effectiveFeatures(source: FeatureSource): Feature[] {
 	for (const feature of readFeaturesOff(source.roomOff, 'room')) chosen.delete(feature);
 	addOwn(chosen, readFeatures(source.room, 'room'));
 	for (const feature of readFeaturesOff(source.spotOff, 'spot')) chosen.delete(feature);
-	addOwn(chosen, readFeatures(source.spot, 'spot'));
-	for (const feature of droppedForBed(source.bedType)) chosen.delete(feature);
+	for (const feature of bedRulesOut(source.bedType)) chosen.delete(feature);
 	return FEATURES.filter((feature) => chosen.has(feature.value)).map((feature) => feature.value);
 }
 
 /**
  * What a room or spot inherits from the levels above it, before its own
- * features and its own overrides: what the admin forms show greyed out as
- * "from the house" / "from the room and house", and what a superuser may
- * switch off there.
+ * overrides (and, for a room, its own features): what the admin forms show
+ * greyed out as "from the house" / "from the room and house", what a
+ * superuser may switch off there, and what the guest room page shows as the
+ * room's chips. The bed's rule (an upper bunk is never ♿) is not applied
+ * here; bedRulesOut and missingAtSpot say what it takes away.
  */
 export function inheritedFeatures(
 	level: 'room' | 'spot',
@@ -476,18 +489,30 @@ export function inheritedFeatures(
 		: effectiveFeatures({ house: source.house, room: source.room, roomOff: source.roomOff });
 }
 
+/**
+ * What the room's chips promise but this spot doesn't have: what the spot
+ * switched off (`features_off`, a superuser's call) and what its bed rules
+ * out (an upper bunk is never ♿). The guest room page writes these under the
+ * spot as "no ♿ Wheelchair accessible", so the chips above don't promise
+ * them for this bed.
+ */
+export function missingAtSpot(source: FeatureSource): Feature[] {
+	const spot = effectiveFeatures(source);
+	return inheritedFeatures('spot', source).filter((feature) => !spot.includes(feature));
+}
+
 export function spotFacts(source: FeatureSource): SpotFacts {
 	return { bedType: bedType(source.bedType), features: effectiveFeatures(source) };
 }
 
 /**
- * The same from a list that is already the sum of house, room and spot (what a
- * page or the ♿ picker was given), so no level filter narrows it again — only
- * the bed's own rule still applies (an upper bunk is never ♿).
+ * The same from a list that is already the sum of house and room (what a page
+ * or the ♿ picker was given), so no level filter narrows it again — only the
+ * bed's own rule still applies (an upper bunk is never ♿).
  */
 export function factsOf(type: unknown, features: readonly string[] | undefined): SpotFacts {
 	const chosen = new Set((features ?? []).filter((value): value is Feature => isFeature(value)));
-	for (const feature of droppedForBed(type)) chosen.delete(feature);
+	for (const feature of bedRulesOut(type)) chosen.delete(feature);
 	return {
 		bedType: bedType(type),
 		features: FEATURES.filter((feature) => chosen.has(feature.value)).map(
@@ -506,6 +531,14 @@ export function hasFeature(facts: SpotFacts, feature: Feature): boolean {
  */
 export type NeedFit = 'fits' | 'conflict' | 'unknown';
 
+/**
+ * Needs the layout can't answer, so only the crew can match them: a power
+ * socket (the app doesn't know where the sockets are, RETIRED_FEATURES) and
+ * "Something else", which is what the guest wrote. The ♿ picker shows no ✓
+ * or ✗ for them, and the capacity line on the requests page leaves them out.
+ */
+export const MATCHED_BY_HAND: readonly SpecialNeed[] = ['power', 'other'];
+
 export function needFit(need: SpecialNeed, facts: SpotFacts): NeedFit {
 	switch (need) {
 		case 'lower_bunk': {
@@ -514,6 +547,9 @@ export function needFit(need: SpecialNeed, facts: SpotFacts): NeedFit {
 			return entry.ladder ? 'conflict' : 'fits';
 		}
 		case 'step_free':
+			// The ladder is a step: an upper bunk is never step-free, not even
+			// on the ground floor of a wheelchair-accessible house.
+			if (bedTypeEntry(facts.bedType)?.ladder) return 'conflict';
 			return hasFeature(facts, 'wheelchair') || hasFeature(facts, 'ground_floor')
 				? 'fits'
 				: 'unknown';
@@ -523,9 +559,8 @@ export function needFit(need: SpecialNeed, facts: SpotFacts): NeedFit {
 				: 'unknown';
 		case 'quiet':
 			return hasFeature(facts, 'quiet') ? 'fits' : 'unknown';
+		// MATCHED_BY_HAND: nothing in the layout answers these.
 		case 'power':
-			return hasFeature(facts, 'power') ? 'fits' : 'unknown';
-		// "Something else" is what the guest wrote: only a human can match that.
 		case 'other':
 			return 'unknown';
 	}
@@ -571,14 +606,15 @@ export interface NeedCapacity {
 
 /**
  * What the open requests need and what the camp still has free for them.
- * "Something else" is left out: only a human can answer it.
+ * The needs only a human can answer (MATCHED_BY_HAND) are left out: no spot
+ * could ever count as fitting them.
  */
 export function needCapacity(
 	open: readonly { needs: readonly SpecialNeed[] }[],
 	spots: readonly { bedType: string; features: readonly string[] }[]
 ): NeedCapacity[] {
 	const facts = spots.map((spot) => factsOf(spot.bedType, spot.features));
-	return SPECIAL_NEEDS.filter((need) => need.value !== 'other')
+	return SPECIAL_NEEDS.filter((need) => !MATCHED_BY_HAND.includes(need.value))
 		.map(({ value }) => {
 			const asked = open.filter((request) => request.needs.includes(value)).length;
 			const fitting = facts.filter((spot) => needFit(value, spot) === 'fits').length;
@@ -592,7 +628,7 @@ export function needCapacity(
  * Strict on purpose: a spot whose detail nobody filled in does not match, so
  * a filter never promises something the crew never wrote down.
  */
-export type SpotFilter = 'no_ladder' | 'step_free' | 'toilets' | 'heated' | 'quiet' | 'power';
+export type SpotFilter = 'no_ladder' | 'step_free' | 'toilets' | 'heated' | 'quiet';
 
 export interface SpotFilterEntry extends KindEntry<SpotFilter> {
 	/** The need this filter answers, if it answers one. */
@@ -611,7 +647,7 @@ export const SPOT_FILTERS: SpotFilterEntry[] = [
 		value: 'step_free',
 		label: 'Step-free',
 		icon: '⬇️',
-		hint: 'Ground floor or wheelchair accessible.',
+		hint: 'Ground floor or wheelchair accessible, and no ladder to climb.',
 		need: 'step_free'
 	},
 	{
@@ -628,13 +664,6 @@ export const SPOT_FILTERS: SpotFilterEntry[] = [
 		icon: '🤫',
 		hint: 'In a quiet corner of the camp.',
 		need: 'quiet'
-	},
-	{
-		value: 'power',
-		label: 'Power socket',
-		icon: '🔌',
-		hint: 'A socket at the bed or in the room.',
-		need: 'power'
 	}
 ];
 
@@ -658,15 +687,17 @@ export function spotMatchesFilter(filter: SpotFilter, facts: SpotFacts): boolean
 			return !!entry && !entry.ladder;
 		}
 		case 'step_free':
-			return hasFeature(facts, 'wheelchair') || hasFeature(facts, 'ground_floor');
+			// Never an upper bunk: the ladder is a step (needFit says the same).
+			return (
+				!bedTypeEntry(facts.bedType)?.ladder &&
+				(hasFeature(facts, 'wheelchair') || hasFeature(facts, 'ground_floor'))
+			);
 		case 'toilets':
 			return hasFeature(facts, 'toilets_inside') || hasFeature(facts, 'own_bathroom');
 		case 'heated':
 			return hasFeature(facts, 'heated');
 		case 'quiet':
 			return hasFeature(facts, 'quiet');
-		case 'power':
-			return hasFeature(facts, 'power');
 	}
 }
 
@@ -698,7 +729,7 @@ export function filterLabel(value: unknown): string {
 }
 
 /**
- * "🔥 Heated · 🔌 Power socket": a list of features as words with their icons,
+ * "🔥 Heated · 🤫 Quiet zone": a list of features as words with their icons,
  * for the booking pass, the wallet passes and the messages. Empty when the
  * list is.
  */
@@ -708,15 +739,6 @@ export function featureText(features: readonly string[] | undefined): string {
 		.filter((entry): entry is FeatureEntry => !!entry)
 		.map((entry) => `${entry.icon} ${entry.label}`)
 		.join(' · ');
-}
-
-/** "Lower bunk · 🔌 Power socket" for a spot card, empty when nothing is known. */
-export function spotSummary(facts: SpotFacts, own: readonly Feature[] = []): string {
-	const parts: string[] = [];
-	const type = bedTypeEntry(facts.bedType);
-	if (type) parts.push(type.label);
-	for (const feature of readFeatures(own, 'spot')) parts.push(featureLabel(feature));
-	return parts.join(' · ');
 }
 
 /** How many spots of each bed type: "4 lower bunks · 4 upper bunks". */

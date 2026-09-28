@@ -82,7 +82,7 @@ The ticket list holds the ticket codes and the buyers' e-mail addresses, so the 
 - [ ] **Deletion after the event is planned** within the period the privacy policy names. See [After the burn](./event-checklist#after-the-burn).
 - [ ] **Membership terms published** with the ticket shop and linked with `LEGAL_TERMS_URL`. The booking rules must not contradict them.
 - [ ] **Texts checked** with a generator or by someone qualified.
-- [ ] **Docs on GitHub Pages link the right app.** Set the repository variable `DOCS_APP_URL` to the production address once it exists (see [Working on these docs](../develop/docs)). Until then they link the staging app.
+- [ ] **Docs on GitHub Pages link the right app.** Set the repository variable `DOCS_APP_URL` to `https://cozynights.hamburn.de` when production goes public, i.e. when its pre-launch gate is switched off (see [Working on these docs](../develop/docs)). Until then they link the staging app.
 
 ## Keeping the privacy policy true
 

@@ -6,8 +6,10 @@ root layout. Left, the Hamburn wordmark (the way back to the map) and the
 booking phase pill fused with the countdown ("opens in 1d 23:59:57",
 "closes in …"): one button, tap for the exact Berlin time. Middle, the wish
 chips of the map and the roulette — only the wishes some spot in the camp
-answers (the page's `availableFilters`) — with what they found. Right, the ♿
-special-needs link, Help & FAQ, Sign out and the version badge.
+answers (the page's `availableFilters`) — with what they found. Right, the 🔁
+swap link during Live Booking (with a badge while requests wait for this
+guest's answer), the ♿ special-needs link, Help & FAQ, Sign out and the
+version badge.
 
 The bar reports its height (`height`), so a full-screen page can subtract
 it. On a phone the right group is icons, the chips take a row of their own
@@ -56,6 +58,7 @@ chips, unless the guest put the panel away to look around.
 		next = null,
 		signedIn = false,
 		specialNeeds = null,
+		swaps = null,
 		height = $bindable(0)
 	}: {
 		phase?: BookingPhase;
@@ -64,6 +67,8 @@ chips, unless the guest put the panel away to look around.
 		signedIn?: boolean;
 		/** Requests are open, and whether this ticket sent one: the ♿ link. */
 		specialNeeds?: { open: boolean; requestSent: boolean } | null;
+		/** During Live Booking: swap requests waiting for this guest's answer (the 🔁 link). */
+		swaps?: { incoming: number; off: boolean } | null;
 		/** The bar's rendered height in px, for the layout's --booking-bar-height. */
 		height?: number;
 	} = $props();
@@ -160,6 +165,15 @@ chips, unless the guest put the panel away to look around.
 		specialNeeds?.requestSent ? 'My special-needs request' : 'Ask for a special-needs spot'
 	);
 	let specialShort = $derived(specialNeeds?.requestSent ? 'My request' : 'Special-needs spot');
+
+	// Swap requests (/swaps): only while booking is live, for a signed-in ticket.
+	let swapLink = $derived(signedIn && phase === 'live' && !!swaps);
+	let swapCount = $derived(swaps?.incoming ?? 0);
+	let swapLabel = $derived(
+		swapCount > 0
+			? `Swap requests: ${swapCount} waiting for your answer`
+			: 'Swap spots with another guest'
+	);
 </script>
 
 <svelte:window onclick={closeOnOutside} onkeydown={closeOnEscape} />
@@ -269,6 +283,22 @@ chips, unless the guest put the panel away to look around.
 	{/if}
 
 	<div class="bar-quick">
+		{#if swapLink}
+			<a
+				class="quick-link swaps"
+				class:news={swapCount > 0}
+				href="/swaps"
+				aria-current={pathname === '/swaps' ? 'page' : undefined}
+				aria-label={swapLabel}
+				title={swapLabel}
+			>
+				<span class="quick-icon" aria-hidden="true">🔁</span>
+				<span class="quick-text">Swaps</span>
+				{#if swapCount > 0}
+					<span class="swap-badge" aria-hidden="true">{swapCount > 9 ? '9+' : swapCount}</span>
+				{/if}
+			</a>
+		{/if}
 		{#if special}
 			<a
 				class="quick-link special"
@@ -584,6 +614,62 @@ chips, unless the guest put the panel away to look around.
 		background: var(--state-special-soft);
 		color: #fff;
 	}
+	/* Swaps wear their own sky blue (state.css --swap); a waiting request
+	   gives the link a badge that pops in and then breathes gently. */
+	.quick-link.swaps {
+		position: relative;
+		border-color: rgba(56, 189, 248, 0.45);
+		color: #bae6fd;
+	}
+	.quick-link.swaps:hover,
+	.quick-link.swaps:focus-visible {
+		border-color: var(--swap);
+		background: var(--swap-soft);
+		color: #fff;
+	}
+	.quick-link.swaps.news {
+		border-color: var(--swap);
+		background: var(--swap-soft);
+	}
+	.swap-badge {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 1.15rem;
+		height: 1.15rem;
+		padding: 0 0.3rem;
+		border-radius: 999px;
+		background: var(--swap);
+		color: #04121c;
+		font-size: 0.65rem;
+		font-weight: 900;
+		letter-spacing: 0;
+		box-shadow: 0 0 0 2px #0f0f0f;
+		animation:
+			swap-badge-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+			swap-badge-breathe 2.4s ease-in-out 0.6s infinite;
+	}
+	@keyframes swap-badge-pop {
+		from {
+			transform: scale(0);
+		}
+		to {
+			transform: scale(1);
+		}
+	}
+	@keyframes swap-badge-breathe {
+		0%,
+		100% {
+			box-shadow:
+				0 0 0 2px #0f0f0f,
+				0 0 0 2px rgba(56, 189, 248, 0);
+		}
+		50% {
+			box-shadow:
+				0 0 0 2px #0f0f0f,
+				0 0 0 6px rgba(56, 189, 248, 0.25);
+		}
+	}
 	.quick-link.signout {
 		border-color: rgba(248, 113, 113, 0.5);
 		color: #f5a3a3;
@@ -631,6 +717,12 @@ chips, unless the guest put the panel away to look around.
 		}
 		.bar-quick {
 			gap: 0.3rem;
+		}
+		/* the icon-only link keeps its count, on its corner */
+		.swap-badge {
+			position: absolute;
+			top: -0.4rem;
+			right: -0.4rem;
 		}
 	}
 	/* Phones and small tablets: the chips take a row of their own, below. */
@@ -685,6 +777,9 @@ chips, unless the guest put the panel away to look around.
 		.phase-btn,
 		.chevron {
 			transition: none;
+		}
+		.swap-badge {
+			animation: none;
 		}
 	}
 </style>

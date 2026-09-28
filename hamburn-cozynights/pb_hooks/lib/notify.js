@@ -553,6 +553,12 @@ function eventText(ev, cfg) {
 			return '🧡 Special-needs requests OPENED' + by + ' — guests see a link on the map';
 		case 'requests_closed':
 			return '🧡 Special-needs requests closed' + by;
+		case 'swaps_off':
+			return (
+				'🔁 Swap requests turned OFF' + by + " — guests can't ask or answer until they are on again"
+			);
+		case 'swaps_on':
+			return '🔁 Swap requests turned on again' + by;
 		case 'template_imported': {
 			if (!d.created && !d.updated && !d.removed) {
 				// events from before the review import (the whole layout was replaced)
@@ -709,8 +715,22 @@ function currentSpot(app, orderId) {
 	const beds = app.findRecordsByFilter('beds', 'order = {:order}', '-updated', 1, 0, {
 		order: orderId
 	});
-	if (beds.length === 0) return null;
-	const bed = beds[0];
+	return beds.length === 0 ? null : describeBed(app, beds[0]);
+}
+
+/** A spot by its record id, described like currentSpot; null when it is gone. */
+function spotOfBed(app, bedId) {
+	let bed;
+	try {
+		bed = app.findRecordById('beds', bedId);
+	} catch (_) {
+		return null;
+	}
+	return describeBed(app, bed);
+}
+
+/** A bed record as the messages show it: label, room, house, bed and features. */
+function describeBed(app, bed) {
 	const kinds = require(`${__hooks}/lib/beds.js`);
 	const spot = { bedId: bed.id, roomId: bed.getString('room'), spot: bed.getString('label') };
 	spot.room = '';
@@ -748,14 +768,7 @@ function currentSpot(app, orderId) {
 	// The same sum the app shows: what the room or the spot switched off
 	// (features_off) is gone, so the message never promises it.
 	spot.features = kinds.featureText(
-		kinds.effectiveFeatures(
-			houseFeatures,
-			roomFeatures,
-			bed.get('features'),
-			bedType,
-			roomOff,
-			bed.get('features_off')
-		)
+		kinds.effectiveFeatures(houseFeatures, roomFeatures, bedType, roomOff, bed.get('features_off'))
 	);
 	spot.label = clip([spot.spot, spot.room, spot.house].filter((s) => !!s).join(' · '), LABEL_MAX);
 	return spot;
@@ -987,7 +1000,7 @@ function ticketLabel(order) {
 /**
  * The rows of an e-mail that shows the spot: House, Room, Spot and, when the
  * crew wrote them down, Bed ("Upper bunk · above B1") and Features
- * ("🔥 Heated · 🔌 Power socket"). Empty rows are left out.
+ * ("🔥 Heated · 🤫 Quiet zone"). Empty rows are left out.
  */
 function spotLines(spot) {
 	return [
@@ -1015,9 +1028,9 @@ function bedLine(cfg, spot) {
 
 /**
  * Subject, plain text and HTML of a guest e-mail. kind: booked | changed |
- * released | handed_over (the ticket was passed on, and this address hears
- * about its spot for the first time), or '' when only the special-needs
- * request changed. pass: { code,
+ * swapped (changed by a swap the guest agreed to) | released | handed_over
+ * (the ticket was passed on, and this address hears about its spot for the
+ * first time), or '' when only the special-needs request changed. pass: { code,
  * url } of the ticket's booking pass, or null. request (optional): { kind:
  * received | approved | declined | '' (what to tell about the request),
  * status: its current status, fixed: the ticket's spot is the one the crew
@@ -1119,6 +1132,16 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) 
 		if (passUrl) after.push(T('mail.handed_over.pass'));
 		if (walletLine) after.push(walletLine);
 		after.push(req.fixed ? fixedLine : T('mail.booked.change'));
+	} else if (kind === 'swapped') {
+		// A swap both guests agreed to: their own doing, so no "maybe the crew
+		// moved you" — and the old spot is the other guest's now.
+		subject = T('mail.swapped.subject');
+		intro = T('mail.swapped.intro');
+		if (alsoRequest) after.push(alsoRequest);
+		if (previousLabel) after.push(T('mail.swapped.before'));
+		if (passLine) after.push(passLine);
+		if (walletLine) after.push(walletLine);
+		after.push(req.fixed ? fixedLine : T('mail.booked.change'));
 	} else {
 		subject = kind === 'changed' ? T('mail.changed.subject') : T('mail.booked.subject');
 		intro = kind === 'changed' ? T('mail.changed.intro') : T('mail.booked.intro');
@@ -1132,7 +1155,28 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) 
 		after.push(req.fixed ? fixedLine : T('mail.booked.change'));
 	}
 	if (telegramLine) after.push(telegramLine);
-	const rows = showSpot ? spotLines(spot) : [];
+	return composeMail(cfg, vars, {
+		subject: subject,
+		hello: hello,
+		intro: intro,
+		rows: showSpot ? spotLines(spot) : [],
+		after: after,
+		urls: [passUrl, roomUrl, mapUrl, requestUrl, telegramLine ? telegramUrl : '']
+	});
+}
+
+/**
+ * The e-mail itself, as text and HTML: greeting, first line, the rows of a
+ * table (House, Room, …), the lines after it, signature and small print. The
+ * first of `urls` in a line becomes a link in the HTML. Every guest e-mail
+ * looks like this, the spot messages and the swap requests alike.
+ */
+function composeMail(cfg, vars, parts) {
+	const T = (key) => t(cfg, key, vars);
+	const hello = parts.hello;
+	const intro = parts.intro;
+	const rows = parts.rows;
+	const after = parts.after;
 	const signature = T('mail.signature');
 	const footer = T('mail.footer');
 
@@ -1145,9 +1189,7 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) 
 
 	const link = (url) => '<a href="' + esc(url) + '" style="color:#7a3cff">' + esc(url) + '</a>';
 	// Each line holds at most one link; link its first URL once.
-	const urls = [passUrl, roomUrl, mapUrl, requestUrl, telegramLine ? telegramUrl : ''].filter(
-		(u) => !!u
-	);
+	const urls = parts.urls.filter((u) => !!u);
 	const linkify = (line) => {
 		let at = -1;
 		let url = '';
@@ -1196,7 +1238,7 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) 
 		para(footer) +
 		'</p></div></body></html>';
 
-	return { subject: prefixed(cfg, subject), text: text, html: html };
+	return { subject: prefixed(cfg, parts.subject), text: text, html: html };
 }
 
 const REQUEST_STATUS_KEY = {
@@ -1206,8 +1248,8 @@ const REQUEST_STATUS_KEY = {
 };
 
 /**
- * kind: connected | booked | changed | released, or '' when only the
- * special-needs request changed; pass: { code, url } or null; request
+ * kind: connected | booked | changed | swapped | released, or '' when only
+ * the special-needs request changed; pass: { code, url } or null; request
  * (optional): { kind, status, fixed } like guestMail.
  */
 function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
@@ -1288,6 +1330,16 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 				'\n\n' +
 				(req.fixed ? T('tg.changed.by_crew') : T('tg.changed.maybe_crew')) +
 				passLine;
+		} else if (kind === 'swapped') {
+			// a swap both guests agreed to: no "maybe the crew moved you"
+			text =
+				news +
+				T('tg.swapped.intro') +
+				bed +
+				(previousLabel ? '\n' + T('tg.swapped.before') : '') +
+				'\n\n' +
+				(req.fixed ? T('tg.booked.by_crew') : T('tg.booked.change')) +
+				passLine;
 		} else {
 			text =
 				news +
@@ -1333,7 +1385,8 @@ function sendGuestTelegram(cfg, chatId, text, extras) {
 	const plain = { chat_id: chatId, text: text, disable_web_page_preview: true };
 	const refusedExtras = (r) => !r.ok && r.status === 400 && !telegramChatGone(r);
 	if (extras) {
-		if (text.length <= TG_CAPTION_MAX) {
+		// a message with buttons but without a picture (a swap request) skips the photo
+		if (extras.photo && text.length <= TG_CAPTION_MAX) {
 			const photo = telegramCall(
 				cfg,
 				'sendPhoto',
@@ -1367,7 +1420,7 @@ function previewMessages(cfg) {
 		house: 'Villa',
 		label: 'B1 · Dorm #2 · Villa',
 		bed: 'Lower bunk · below B2',
-		features: '🔥 Heated · 🔌 Power socket'
+		features: '🔥 Heated · 🤫 Quiet zone'
 	};
 	const before = 'B7 · Loft #1 · Hut';
 	const pass = { code: 'AAAA-BBBB-CCCC', url: cfg.appUrl + '/pass/AAAA-BBBB-CCCC' };
@@ -1496,6 +1549,14 @@ function previewMessages(cfg) {
 			kind: 'released',
 			before: before,
 			req: req('', 'approved')
+		},
+		{
+			id: 'swapped',
+			title: 'Swap done: both guests get this after a yes',
+			kind: 'swapped',
+			spot: true,
+			before: before,
+			req: none
 		}
 	];
 	const name = (c) => (c.name === undefined ? 'Ada' : c.name);
@@ -1518,6 +1579,27 @@ function previewMessages(cfg) {
 		);
 		return { id: c.id, title: c.title, subject: m.subject, text: m.text, html: m.html };
 	});
+	// Swap requests: someone offers Ada the upper bunk B7 for her B1, or Ada
+	// asked for B7 and heard a no. The asker's own words never go out.
+	const offered = {
+		bedId: 'sample2',
+		roomId: 'sample2',
+		spot: 'B7',
+		room: 'Loft #1',
+		house: 'Hut',
+		label: before,
+		bed: 'Upper bunk · above B6',
+		features: ''
+	};
+	const until = 'Thu 1 Oct 18:00 (Berlin)';
+	const swapCases = [
+		{ id: 'swap_ask', title: 'Swap request: someone would like to swap', kind: 'ask' },
+		{ id: 'swap_no', title: 'Swap request: the other guest said no', kind: 'no' }
+	];
+	for (const c of swapCases) {
+		const m = swapMail(cfg, c.kind, spot, offered, 'Ada', until);
+		mail.push({ id: c.id, title: c.title, subject: m.subject, text: m.text, html: m.html });
+	}
 	const connected = [
 		{
 			id: 'connected',
@@ -1548,6 +1630,13 @@ function previewMessages(cfg) {
 		title: c.title,
 		text: guestTelegram(cfg, c.kind || '', c.spot ? spot : null, c.before || '', pass, c.req)
 	}));
+	for (const c of swapCases) {
+		telegram.push({
+			id: c.id,
+			title: c.title,
+			text: swapTelegram(cfg, c.kind, spot, offered, until)
+		});
+	}
 	const bot = [
 		{ id: 'help', title: 'Any other message to the bot', text: helpText(cfg) },
 		{
@@ -1638,6 +1727,30 @@ function kindOf(lastKey, key) {
 }
 
 /**
+ * Whether the ticket's move from spot `before` to spot `now` was a swap it
+ * agreed to or asked for (an accepted swap request with exactly these two
+ * spots): the message then says so instead of "maybe the crew moved you".
+ */
+function swappedFrom(app, orderId, before, now) {
+	if (!before || !now) return false;
+	try {
+		const rows = app.findRecordsByFilter(
+			'swap_requests',
+			"status = 'accepted' && (" +
+				'(from_order = {:order} && from_bed = {:before} && to_bed = {:now}) || ' +
+				'(to_order = {:order} && to_bed = {:before} && from_bed = {:now}))',
+			'',
+			1,
+			0,
+			{ order: orderId, before: before, now: now }
+		);
+		return rows.length > 0;
+	} catch (_) {
+		return false; // a database from before swap requests
+	}
+}
+
+/**
  * One delivery run for one guest_notify record. Decides from the record as
  * it was read, sends, then writes back only what it decided (updateNotify):
  * if the ticket was marked again meanwhile, that newer mark stays and the next
@@ -1718,6 +1831,9 @@ function deliverOne(app, cfg, rec, force, keepAlive) {
 		const handedOver = !known && !!handover && rec.getString('mail_handover') !== handover;
 		let kind = kindOf(known ? rec.getString('mail_spot') : '', key);
 		if (handedOver && kind === 'booked') kind = 'handed_over';
+		if (kind === 'changed' && swappedFrom(app, order.id, rec.getString('mail_spot'), key)) {
+			kind = 'swapped';
+		}
 		const lastReq = known ? rec.getString('mail_req') : '';
 		const reqKind = requestKindOf(lastReq, request);
 		if (!known && !key && !reqKind) {
@@ -1777,7 +1893,10 @@ function deliverOne(app, cfg, rec, force, keepAlive) {
 	const chat = rec.getString('tg_chat');
 	if (chat && cfg.telegram.guests) {
 		const isNew = rec.getBool('tg_new');
-		const kind = isNew ? 'connected' : kindOf(rec.getString('tg_spot'), key);
+		let kind = isNew ? 'connected' : kindOf(rec.getString('tg_spot'), key);
+		if (kind === 'changed' && swappedFrom(app, order.id, rec.getString('tg_spot'), key)) {
+			kind = 'swapped';
+		}
 		// "connected" tells the request's status itself
 		const reqKind = isNew ? '' : requestKindOf(rec.getString('tg_req'), request);
 		if (kind || reqKind) {
@@ -1789,6 +1908,7 @@ function deliverOne(app, cfg, rec, force, keepAlive) {
 				(kind === 'connected' ||
 					kind === 'booked' ||
 					kind === 'changed' ||
+					kind === 'swapped' ||
 					(reqKind === 'approved' && fixed));
 			const r = sendGuestTelegram(
 				cfg,
@@ -1895,6 +2015,270 @@ function deliverDue(app, cfg, force, deadline, keepAlive) {
 					if (fresh.getString('due') !== rec.getString('due')) return false;
 					fresh.set('due', pbDate(Date.now() + 5 * 60000));
 					fresh.set('last_error', ('run: ' + safeError(err)).slice(0, 1000));
+				});
+			} catch (_) {
+				// the database itself is in trouble; the next run tries again
+			}
+			result = 'other';
+		}
+		if (result === 'done') outcome.done++;
+		else if (result === 'retry') outcome.retry++;
+		else outcome.other++;
+	}
+	return outcome;
+}
+
+// --- swap requests (docs/admin/swaps.md) -------------------------------------
+//
+// A request is news for two guests: the one it is addressed to hears that
+// someone would like to swap (the "ask"), and the one who asked hears a "no".
+// A "yes" swaps the spots, and both tickets get the usual message about their
+// new spot, worded as a swap (deliverOne, kind 'swapped'). Nothing about an
+// ended, withdrawn or quiet request goes out: the app shows those. The app
+// sets swap_requests.notify_due when there is something to tell;
+// ask_mail/ask_tg/answer_mail/answer_tg remember what went out where. What
+// the asker wrote never leaves the app — the messages link to it.
+
+// Retry after 1, 5, 15 minutes, 1 and 4 hours, then give up and alert the crew.
+const SWAP_RETRY_MINUTES = [1, 5, 15, 60, 240];
+// The button under a Telegram swap request (the bot's interface, not a text).
+const SWAP_BUTTON = '🔁 Answer the swap request';
+
+/**
+ * Subject, text and HTML of a swap e-mail. kind 'ask': to the guest the
+ * request is addressed to — `mine` is their spot, `other` the one offered.
+ * kind 'no': to the guest who asked — `mine` is their spot, `other` the one
+ * they asked for. until: when the request runs out, in words.
+ */
+function swapMail(cfg, kind, mine, other, name, until) {
+	const vars = {
+		name: name || '',
+		spot: mine ? mine.label : '',
+		other: other ? other.label : '',
+		bed: bedText(other),
+		until: until || '',
+		swapUrl: cfg.appUrl + '/swaps',
+		mapUrl: cfg.appUrl + '/map'
+	};
+	const T = (key) => t(cfg, key, vars);
+	const hello = name ? T('mail.greeting') : T('mail.greeting_anonymous');
+	if (kind === 'ask') {
+		const after = [T('mail.swap_ask.offer')];
+		if (vars.bed) after.push(T('mail.swap_ask.bed'));
+		after.push(T('mail.swap_ask.yours'), T('mail.swap_ask.answer'), T('mail.swap_ask.nothing'));
+		return composeMail(cfg, vars, {
+			subject: T('mail.swap_ask.subject'),
+			hello: hello,
+			intro: T('mail.swap_ask.intro'),
+			rows: [],
+			after: after,
+			urls: [vars.swapUrl]
+		});
+	}
+	return composeMail(cfg, vars, {
+		subject: T('mail.swap_no.subject'),
+		hello: hello,
+		intro: T('mail.swap_no.intro'),
+		rows: [],
+		after: [T('mail.swap_no.keep')],
+		urls: [vars.mapUrl]
+	});
+}
+
+/** A Telegram swap message, kind 'ask' or 'no' like swapMail. */
+function swapTelegram(cfg, kind, mine, other, until) {
+	const vars = {
+		spot: mine ? mine.label : '',
+		other: other ? other.label : '',
+		until: until || '',
+		swapUrl: cfg.appUrl + '/swaps'
+	};
+	const T = (key) => t(cfg, key, vars);
+	if (kind === 'ask') {
+		return prefixed(
+			cfg,
+			T('tg.swap_ask.intro') +
+				bedLine(cfg, other) +
+				'\n' +
+				T('tg.swap_ask.yours') +
+				'\n\n' +
+				T('tg.swap_ask.answer')
+		);
+	}
+	return prefixed(cfg, T('tg.swap_no'));
+}
+
+/** Like updateNotify, for a swap request: re-read in a transaction, save what `change` decided. */
+function updateSwap(app, id, change) {
+	let saved = false;
+	app.runInTransaction((tx) => {
+		let fresh;
+		try {
+			fresh = tx.findRecordById('swap_requests', id);
+		} catch (_) {
+			return; // deleted meanwhile (hand-over, forget-contacts, ticket removed)
+		}
+		if (change(fresh) === false) return;
+		tx.save(fresh);
+		saved = true;
+	});
+	return saved;
+}
+
+/**
+ * One delivery for one swap request whose notify_due has come: the ask while
+ * it is open (and can still happen), or the "no" after a decline. Leased like
+ * deliverOne, so a slow send is never delivered twice; each channel is sent
+ * once (ask_mail, ask_tg, …), a failed one is retried on its own.
+ */
+function deliverSwap(app, cfg, rec, keepAlive) {
+	const now = Date.now();
+	const loadedDue = rec.getString('notify_due');
+	const status = rec.getString('status');
+	const ask = status === 'pending';
+	let tell = ask || status === 'declined';
+	if (ask) {
+		// A quiet request is never told; one that can't happen any more (a spot
+		// moved on, booking closed, the other guest's spot can't be swapped)
+		// isn't either — the app shows how it ended.
+		const SWAP = require(`${__hooks}/lib/swap.js`);
+		if (rec.getBool('quiet') || SWAP.requestProblem(app, rec, now)) tell = false;
+	}
+	if (!tell) {
+		updateSwap(app, rec.id, (fresh) => {
+			if (fresh.getString('notify_due') !== loadedDue) return false;
+			fresh.set('notify_due', '');
+		});
+		return 'skipped';
+	}
+
+	if (keepAlive && !keepAlive()) return 'lock-lost';
+	const lease = pbDate(now + LEASE_SECONDS * 1000);
+	const leased = updateSwap(app, rec.id, (fresh) => {
+		if (fresh.getString('notify_due') !== loadedDue) return false; // another run has it
+		fresh.set('notify_due', lease);
+	});
+	if (!leased) return 'skipped';
+
+	// the guest to tell: the one asked (ask), or the one who asked (no)
+	const orderId = rec.getString(ask ? 'to_order' : 'from_order');
+	let order;
+	try {
+		order = app.findRecordById('orders', orderId);
+	} catch (_) {
+		return 'gone'; // the ticket went, and took the request along (cascade)
+	}
+	const mine = spotOfBed(app, rec.getString(ask ? 'to_bed' : 'from_bed'));
+	const other = spotOfBed(app, rec.getString(ask ? 'from_bed' : 'to_bed'));
+	const until = berlinTime(rec.getString('expires_at'));
+	const kind = ask ? 'ask' : 'no';
+	const mailField = ask ? 'ask_mail' : 'answer_mail';
+	const tgField = ask ? 'ask_tg' : 'answer_tg';
+	const problems = [];
+	const channels = [];
+	let deferred = false;
+	let mailDone = '';
+	let tgDone = '';
+
+	const email = order.getString('email');
+	if (email && cfg.mail.enabled && !rec.getString(mailField)) {
+		if (!takeMailSlot(app, cfg)) {
+			deferred = true;
+		} else {
+			try {
+				sendMail(app, cfg, email, swapMail(cfg, kind, mine, other, greetingName(order), until));
+				mailDone = pbDate(now);
+			} catch (err) {
+				problems.push('mail: ' + safeError(err));
+				channels.push('e-mail ' + maskEmail(email));
+			}
+		}
+	}
+
+	const notifyRec = findOne(app, 'guest_notify', 'order = {:order}', { order: orderId });
+	const chat = notifyRec ? notifyRec.getString('tg_chat') : '';
+	if (chat && cfg.telegram.guests && !rec.getString(tgField)) {
+		const extras = ask
+			? {
+					photo: '',
+					markup: { inline_keyboard: [[{ text: SWAP_BUTTON, url: cfg.appUrl + '/swaps' }]] }
+				}
+			: null;
+		const r = sendGuestTelegram(cfg, chat, swapTelegram(cfg, kind, mine, other, until), extras);
+		// A chat that is gone (blocked the bot, deleted) counts as done here; the
+		// next spot message unlinks it (deliverOne).
+		if (r.ok || telegramChatGone(r)) {
+			tgDone = pbDate(now);
+		} else {
+			problems.push('telegram: ' + r.status + ' ' + r.description);
+			channels.push('Telegram');
+		}
+	}
+
+	const attempts = rec.getInt('notify_attempts') + 1;
+	const error = problems.join(' | ').slice(0, 1000);
+	let gaveUp = false;
+	updateSwap(app, rec.id, (fresh) => {
+		if (mailDone) fresh.set(mailField, mailDone);
+		if (tgDone) fresh.set(tgField, tgDone);
+		if (fresh.getString('notify_due') !== lease) return; // marked again meanwhile
+		if (problems.length > 0) {
+			gaveUp = attempts > SWAP_RETRY_MINUTES.length;
+			fresh.set('notify_attempts', attempts);
+			fresh.set('notify_error', error);
+			fresh.set('notify_due', gaveUp ? '' : pbDate(now + SWAP_RETRY_MINUTES[attempts - 1] * 60000));
+		} else if (deferred) {
+			fresh.set('notify_due', pbDate(now + 30000));
+		} else {
+			fresh.set('notify_due', '');
+			fresh.set('notify_attempts', 0);
+			fresh.set('notify_error', '');
+		}
+	});
+
+	if (gaveUp) {
+		logEvent(app, 'guest_notice_failed', {
+			actor: 'server',
+			subject: ticketLabel(order),
+			details: {
+				channels: channels.join(', ') + (ask ? ' (swap request)' : ' (swap answer)'),
+				attempts: attempts,
+				error: maskEmailsIn(error)
+			}
+		});
+	}
+	if (problems.length > 0) return 'retry';
+	return deferred ? 'deferred' : 'done';
+}
+
+/** Swap requests with news whose time has come. keepAlive() renews the loop's lock. */
+function deliverSwaps(app, cfg, force, deadline, keepAlive) {
+	const outcome = { done: 0, retry: 0, other: 0 };
+	let rows;
+	try {
+		rows = app.findRecordsByFilter(
+			'swap_requests',
+			force ? "notify_due != ''" : "notify_due != '' && notify_due <= @now",
+			'notify_due',
+			50,
+			0
+		);
+	} catch (_) {
+		return outcome; // a database from before swap requests
+	}
+	for (const rec of rows) {
+		if (deadline && Date.now() > deadline) break;
+		if (keepAlive && !keepAlive()) break;
+		let result;
+		try {
+			result = deliverSwap(app, cfg, rec, keepAlive);
+		} catch (err) {
+			console.error('[cozy-notify] swap request ' + rec.id + ' failed: ' + safeError(err));
+			try {
+				updateSwap(app, rec.id, (fresh) => {
+					if (fresh.getString('notify_due') !== rec.getString('notify_due')) return false;
+					fresh.set('notify_due', pbDate(Date.now() + 5 * 60000));
+					fresh.set('notify_error', ('run: ' + safeError(err)).slice(0, 1000));
 				});
 			} catch (_) {
 				// the database itself is in trouble; the next run tries again
@@ -2274,9 +2658,9 @@ function releaseLock(app, owner) {
 		);
 }
 
-/** One pass: bot updates, due guest messages, crew alerts, timer. */
+/** One pass: bot updates, due guest messages, swap requests, crew alerts, timer. */
 function runPass(app, cfg, pollSeconds, force, deadline, keepAlive) {
-	const result = { updates: 0, guests: null, alerts: 0 };
+	const result = { updates: 0, guests: null, swaps: null, alerts: 0 };
 	const store = app.store();
 	const paused = !force && Date.now() < (store.get('cozy_tg_pause_until') || 0);
 	if (cfg.telegram.guests && !paused) {
@@ -2291,6 +2675,7 @@ function runPass(app, cfg, pollSeconds, force, deadline, keepAlive) {
 	}
 	announceTimer(app);
 	result.guests = deliverDue(app, cfg, force, deadline, keepAlive);
+	result.swaps = deliverSwaps(app, cfg, force, deadline, keepAlive);
 	result.alerts = sendPendingAlerts(app, cfg, force);
 	return result;
 }
@@ -2355,9 +2740,11 @@ module.exports = {
 	logEvent: logEvent,
 	eventText: eventText,
 	currentSpot: currentSpot,
+	spotOfBed: spotOfBed,
 	currentRequest: currentRequest,
 	requestKindOf: requestKindOf,
 	kindOf: kindOf,
+	swappedFrom: swappedFrom,
 	markDue: markDue,
 	isQuiet: isQuiet,
 	setQuiet: setQuiet,
@@ -2365,6 +2752,10 @@ module.exports = {
 	deliverDue: deliverDue,
 	guestMail: guestMail,
 	guestTelegram: guestTelegram,
+	swapMail: swapMail,
+	swapTelegram: swapTelegram,
+	deliverSwap: deliverSwap,
+	deliverSwaps: deliverSwaps,
 	passAttachments: passAttachments,
 	sendGuestTelegram: sendGuestTelegram,
 	handleUpdate: handleUpdate,

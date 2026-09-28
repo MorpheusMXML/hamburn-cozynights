@@ -157,7 +157,7 @@ Guests and admins see one picture of the camp, `static/lageplan-brahmsee-<year>.
 1. **Export it as a JPEG** in A4 landscape proportions, 1754 to 2000 px wide (the 2026 map is 1754 × 1241 px, 0.4 MB). Keep the framing of the previous year, so the houses stay under their pins. The picture carries no house names: the app draws those next to its own pins, so a name baked into the artwork would only be a second, outdated label.
 2. **Save it under a new name,** `static/lageplan-brahmsee-<year>.jpg`, delete the previous year's file and point `MAP_IMAGE` in `src/lib/map-geometry.ts` to the new one. The new name matters: browsers may keep the old picture under the old address. A new drawing for a year that already had one gets a suffix instead, `…-<year>-v2.jpg`, for the same reason.
 3. **Put the same name into `map.image`** of `static/templates/brahmsee-starter.json` and of the example in [Layout templates](../admin/templates#file-format); `npm test` checks the starter template.
-4. **Check the pins** on staging in the Control Center's map view and drag any that no longer sit on their house. Templates exported before the swap carry the old name in `map.image`; importing them shows a warning to check the pins, nothing else changes.
+4. **Check the pins** on staging in the map view of *Map & houses* (`/admin/camp`) and drag any that no longer sit on their house. Templates exported before the swap carry the old name in `map.image`; importing them shows a warning to check the pins, nothing else changes.
 
 ## Conventions
 
@@ -166,5 +166,6 @@ Guests and admins see one picture of the camp, `static/lageplan-brahmsee-<year>.
 - Format with Prettier and satisfy ESLint: `npm run lint` must pass.
 - Server-only code goes to `src/lib/server/`; it must never be imported by client components.
 - Every read of ticket data happens on the server, and page data is trimmed to what the page shows. See [Security & privacy](../reference/security).
+- A form or script that uses another page's form actions writes that page's path in front: the camp editor posts to `/admin?/updateHouseCoords`. A bare `?/name` goes to the page that is open, and a page without actions answers *405 Method Not Allowed* — after the Control Center split that stopped every move, rename and delete on the map. `tests/form-actions.test.ts` checks every post in `npm test`.
 - Document exported functions with JSDoc (`@param`, `@returns`) and give complex modules a short overview comment.
 - The event runs in Europe/Berlin: use the helpers in `src/lib/time.ts` for anything admins enter as a date or time.

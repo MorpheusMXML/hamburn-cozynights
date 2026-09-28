@@ -29,7 +29,7 @@ Numbers next to an entry say what waits: at <kbd>♿ Special needs</kbd> the req
 
 ## What's on this page
 
-From top to bottom: the [🎟 BOOKING WINDOW](#booking-window) with the ♿ requests switch below it, [NEEDS ATTENTION](#needs-attention) — with a red line when the camp layout is incomplete, see [Red alert](#red-alert-sanity-checks) —, [BOOKINGS & CHECK-INS](#bookings-check-ins), and the [Intel panel](#intel-panel-the-live-picture).
+From top to bottom: the [🎟 BOOKING WINDOW](#booking-window) with the ♿ requests switch and the 🔁 swap switch below it, [NEEDS ATTENTION](#needs-attention) — with a red line when the camp layout is incomplete, see [Red alert](#red-alert-sanity-checks) —, [BOOKINGS & CHECK-INS](#bookings-check-ins), and the [Intel panel](#intel-panel-the-live-picture).
 
 ## Booking window
 
@@ -46,6 +46,8 @@ Right under the header, the **🎟 BOOKING WINDOW** panel holds everything about
 Times are Europe/Berlin (CET/CEST). The rules and what each switch does to the timer are in [The booking window](../guide/phases#the-booking-window).
 
 Below it, the row **♿ Special-needs requests: OPEN** (or **CLOSED**, with *· n waiting for a decision* while requests wait) opens or closes requests for guests with <kbd>Open requests</kbd> / <kbd>Close requests</kbd>, independent of the phase. <kbd>Review requests →</kbd> leads to the requests. See [Special-needs requests](./special-needs#_2-open-requests).
+
+Under it, **🔁 Swap requests between guests: ON** (with *· n open · n swapped*) says whether guests can ask each other to [swap spots](./swaps) during Live Booking. <kbd>Pause swaps</kbd> stops new requests and every yes for all guests until <kbd>Turn swaps on</kbd>; waiting requests stay. Any admin can flip it, and the crew chat hears who did.
 
 ## Bookings & check-ins
 
@@ -165,7 +167,7 @@ a bunk bed is a neutral white outline.
 | 🟠 Orange | **Filling** — booked and free spots side by side; also a warning, something not allowed right now |
 | 🔴 Red | **Full, booked, occupied** — a house with nothing left to book; a booked spot (CLAIMED 👥, *Occupied* for guests); a ticket that holds a spot |
 | 🩵 Turquoise | **Checked in**; a guest's own spot (*Yours*); and the colour of Staging Mode |
-| 🟣 Violet | **Held back** — locked 🔒 by the crew, *Reserved by the crew* for guests |
+| 🟣 Violet | **Held back** — locked 🔒 or marked 🔄 TAKEN by the crew (BLOCKED 🛠), *Blocked by admin* for guests |
 | 🩷 Pink | **♿ Special needs, and nothing else** — spots kept for requests, the requests and their count, the ♿ links |
 | 🟡 Yellow | **Live Booking** — the phase pill and the countdown to the closing time |
 | ⚪️ Grey | **Not set up, inactive, not now** — a house without active spots; a switched-off spot (INACTIVE 🧊); a spot that can't be booked yet or any more; light grey for Closed |
@@ -238,10 +240,10 @@ Pins are teal while a house has free spots, red when none is left, and grey whil
 
 | Gesture | Result |
 | --- | --- |
-| **Click an empty place** | Sidebar *GENERATE SANCTUARY*: name the new house and set its initial number of beds, then <kbd>IGNITE HOUSE ✨</kbd>. |
+| **Click an empty place** | Sidebar *GENERATE SANCTUARY*, the [house generator](./camp-layout#create-a-house): a rolled name, the kind, and the rooms as size rows (*4 rooms × 6 beds 🪜*), then <kbd>IGNITE HOUSE ✨</kbd>. |
 | **Drag a house** | Moves it. The new position is saved when you let go. |
 | **Arrow keys** on a selected pin | Move it one unit per press (with <kbd>Shift</kbd>: ten), saved when you let go of the key. |
-| **Click a house** | Sidebar *HOUSE INTEL*: rename it (<kbd>SYNC MODULE ✨</kbd>), type an exact **MAP POSITION 📍** (X 0–1000, Y 0–700) and press <kbd>MOVE PIN</kbd>, see **WHO IS HERE 🛏️** (the house's bookings room by room, see [Bookings & check-ins](./bookings)), <kbd>MANAGE ROOMS ⚙️</kbd>, or <kbd>VANISH FROM PLAYA 🌪️</kbd> to delete it. Moves are saved right away. |
+| **Click a house** | Sidebar *HOUSE INTEL*: rename it (<kbd>SYNC MODULE ✨</kbd>; or click its name on the house page, see [Renaming](./camp-layout#renaming)), type an exact **MAP POSITION 📍** (X 0–1000, Y 0–700) and press <kbd>MOVE PIN</kbd>, see **WHO IS HERE 🛏️** (the house's bookings room by room, see [Bookings & check-ins](./bookings)), <kbd>MANAGE ROOMS ⚙️</kbd>, or <kbd>VANISH FROM PLAYA 🌪️</kbd> to delete it. Moves are saved right away. |
 
 ![A selected house with the House Intel sidebar](../assets/screenshots/admin-house-selected.webp)
 
@@ -260,7 +262,7 @@ Every house as a card with its occupancy badge (*n spots free*, *Fully booked* o
 
 ![Control Center during Live Booking](../assets/screenshots/admin-live.webp)
 
-The Control Center, the camp editor and the bookings list stay fully usable for watching: statistics, occupancy, who is where, template export. Structural buttons and fields stay in place, greyed out with a padlock, and [explain themselves](#locked-not-now) when you try them; the server refuses those changes too. The house, room and new-house pages say at the top whether the layout can be changed right now. What you can still change: on the [room page](./camp-layout#spots), lock or unlock single spots and mark spots ♿ special or normal; the [details](./camp-layout#house-details) of houses, rooms and spots (kind, features, description, bed type and 🔌 socket — names and labels belong to the layout and stay locked); [bunk beds](./camp-layout#bunk-beds), stacked, swapped or taken apart; on ♿ **Special needs**, decide requests and book spots for them.
+The Control Center, the camp editor and the bookings list stay fully usable for watching: statistics, occupancy, who is where, template export. Structural buttons and fields stay in place, greyed out with a padlock, and [explain themselves](#locked-not-now) when you try them; the server refuses those changes too. The house, room and new-house pages say at the top whether the layout can be changed right now. What you can still change: on the [room page](./camp-layout#spots), lock or unlock single spots and mark spots ♿ special or normal; the [details](./camp-layout#house-details) of houses, rooms and spots (kind, features, description and bed type — names and labels belong to the layout and stay locked); [bunk beds](./camp-layout#bunk-beds), stacked, swapped or taken apart; on ♿ **Special needs**, decide requests and book spots for them.
 
 ## Next
 

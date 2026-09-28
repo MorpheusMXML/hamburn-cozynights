@@ -69,6 +69,10 @@ describe('any deployment (read-only)', () => {
 		const request = await get('/special-needs');
 		expect(request.status).toBe(303);
 		expect(request.headers.get('location')).toBe('/?login=required&next=%2Fspecial-needs');
+
+		const swaps = await get('/swaps');
+		expect(swaps.status).toBe(303);
+		expect(swaps.headers.get('location')).toBe('/?login=required&next=%2Fswaps');
 	});
 
 	it('shows the admin login page, with the backend reachable', async () => {
@@ -498,7 +502,7 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 			expect(await (await get('/special-needs', cookie)).text()).toContain('Waiting for the crew');
 			const otherGuest = await guestLogin((await seedTicket(su)).code);
 			const roomHtml = await (await get(`/room/${room.id}`, otherGuest)).text();
-			expect(roomHtml).toContain('Reserved by the crew');
+			expect(roomHtml).toContain('Blocked by admin');
 			expect(roomHtml).not.toContain('is_special');
 
 			const admin = await createAdmin(su, 'admin');
@@ -633,6 +637,60 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 			cookie
 		);
 		expect(renamed.status).toBe(200);
+	});
+
+	it('lets two guests swap spots: ask on the room page, say yes on /swaps', async () => {
+		const { room, beds } = await seedHouse(su, 2);
+		const ada = await seedTicket(su);
+		const bo = await seedTicket(su);
+		const adaCookie = await guestLogin(ada.code);
+		const boCookie = await guestLogin(bo.code);
+		await setBookingOpen(true);
+		await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[0].id, guestName: 'Swap Ada' },
+			adaCookie
+		);
+		await post(`/room/${room.id}?/bookBed`, { bedId: beds[1].id, guestName: 'Swap Bo' }, boCookie);
+
+		// nobody signed in: the action refuses and the page sends the visitor to the login
+		for (const [path, fields] of [
+			[`/room/${room.id}?/askSwap`, { bedId: beds[1].id }],
+			['/swaps?/accept', { id: 'abc' }]
+		] as const) {
+			const refused = await post(path, fields);
+			expect(refused.status, path).toBe(303);
+			expect(refused.headers.get('location'), path).toMatch(/^\/\?login=required/);
+		}
+		expect(
+			await su.collection('swap_requests').getFullList({
+				filter: su.filter('from_order = {:o} || to_order = {:o}', { o: bo.order.id })
+			})
+		).toHaveLength(0);
+
+		const asked = await post(
+			`/room/${room.id}?/askSwap`,
+			{ bedId: beds[1].id, vibe: 'crew', note: 'Smoke says hi — swap?' },
+			adaCookie
+		);
+		expect(asked.status).toBe(200);
+		const [request] = await su.collection('swap_requests').getFullList({
+			filter: su.filter('from_order = {:o}', { o: ada.order.id })
+		});
+		expect(request).toMatchObject({ status: 'pending', to_order: bo.order.id });
+
+		// Bo reads the note and Ada's burner name — never her ticket
+		const boPage = await (await get('/swaps', boCookie)).text();
+		expect(boPage).toContain('Smoke says hi — swap?');
+		expect(boPage).toContain('Swap Ada');
+		expect(boPage).not.toContain(ada.code);
+		// only Bo can answer it
+		expect((await post('/swaps?/accept', { id: request.id }, adaCookie)).status).toBe(404);
+
+		expect((await post('/swaps?/accept', { id: request.id }, boCookie)).status).toBe(200);
+		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(bo.order.id);
+		expect((await su.collection('beds').getOne(beds[1].id)).order).toBe(ada.order.id);
+		expect((await su.collection('swap_requests').getOne(request.id)).status).toBe('accepted');
 	});
 
 	it('sweeps a spot away for the roulette only as confirmed, then books a new random one', async () => {

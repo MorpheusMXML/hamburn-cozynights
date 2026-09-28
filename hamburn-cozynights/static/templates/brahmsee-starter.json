@@ -305,8 +305,7 @@
 					"room_number": 1,
 					"kind": "room",
 					"features": [
-						"ground_floor",
-						"power"
+						"ground_floor"
 					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
@@ -322,8 +321,7 @@
 					"room_number": 2,
 					"kind": "room",
 					"features": [
-						"ground_floor",
-						"power"
+						"ground_floor"
 					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
@@ -339,8 +337,7 @@
 					"room_number": 3,
 					"kind": "room",
 					"features": [
-						"ground_floor",
-						"power"
+						"ground_floor"
 					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
@@ -356,8 +353,7 @@
 					"room_number": 4,
 					"kind": "room",
 					"features": [
-						"ground_floor",
-						"power"
+						"ground_floor"
 					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
@@ -372,9 +368,6 @@
 					"name": "First Floor 1",
 					"room_number": 11,
 					"kind": "room",
-					"features": [
-						"power"
-					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
 						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper", "bunk_partner": "B1" },
@@ -388,9 +381,6 @@
 					"name": "First Floor 2",
 					"room_number": 12,
 					"kind": "room",
-					"features": [
-						"power"
-					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
 						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper", "bunk_partner": "B1" },
@@ -404,9 +394,6 @@
 					"name": "First Floor 3",
 					"room_number": 13,
 					"kind": "room",
-					"features": [
-						"power"
-					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
 						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper", "bunk_partner": "B1" },
@@ -420,9 +407,6 @@
 					"name": "First Floor 4",
 					"room_number": 14,
 					"kind": "room",
-					"features": [
-						"power"
-					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
 						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper", "bunk_partner": "B1" },
@@ -436,9 +420,6 @@
 					"name": "First Floor 5",
 					"room_number": 15,
 					"kind": "room",
-					"features": [
-						"power"
-					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
 						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper", "bunk_partner": "B1" },
@@ -452,9 +433,6 @@
 					"name": "First Floor 6",
 					"room_number": 16,
 					"kind": "room",
-					"features": [
-						"power"
-					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
 						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper", "bunk_partner": "B1" },
@@ -482,8 +460,7 @@
 					"room_number": 1,
 					"kind": "room",
 					"features": [
-						"ground_floor",
-						"power"
+						"ground_floor"
 					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
@@ -497,8 +474,7 @@
 					"room_number": 2,
 					"kind": "room",
 					"features": [
-						"ground_floor",
-						"power"
+						"ground_floor"
 					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
@@ -511,9 +487,6 @@
 					"name": "Attic",
 					"room_number": 11,
 					"kind": "room",
-					"features": [
-						"power"
-					],
 					"description": "Up a narrow staircase.",
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
@@ -543,8 +516,7 @@
 					"kind": "room",
 					"features": [
 						"wheelchair",
-						"ground_floor",
-						"power"
+						"ground_floor"
 					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "is_special": true, "bed_type": "bunk_lower", "bunk_partner": "B2" },
@@ -561,8 +533,7 @@
 					"kind": "room",
 					"features": [
 						"wheelchair",
-						"ground_floor",
-						"power"
+						"ground_floor"
 					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
@@ -579,8 +550,7 @@
 					"kind": "room",
 					"features": [
 						"wheelchair",
-						"ground_floor",
-						"power"
+						"ground_floor"
 					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
@@ -597,8 +567,7 @@
 					"kind": "room",
 					"features": [
 						"wheelchair",
-						"ground_floor",
-						"power"
+						"ground_floor"
 					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
@@ -613,9 +582,6 @@
 					"name": "First Floor 1",
 					"room_number": 11,
 					"kind": "room",
-					"features": [
-						"power"
-					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
 						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper", "bunk_partner": "B1" },
@@ -631,9 +597,6 @@
 					"name": "First Floor 2",
 					"room_number": 12,
 					"kind": "room",
-					"features": [
-						"power"
-					],
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
 						{ "label": "B2", "enabled": true, "is_locked": false, "bed_type": "bunk_upper", "bunk_partner": "B1" },

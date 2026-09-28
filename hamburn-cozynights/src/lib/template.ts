@@ -9,6 +9,7 @@ import {
 	BED_TYPES,
 	DESCRIPTION_MAX,
 	HOUSE_KINDS,
+	RETIRED_FEATURES,
 	ROOM_KINDS,
 	cleanDescription,
 	featuresFor,
@@ -35,7 +36,9 @@ export const TEMPLATE_FORMAT = 'cozynights-layout';
 /**
  * The version an export of the running app carries. 2.0 added the details
  * of a place, 2.1 the bunk partner, 2.2 `features_off` (what a room or spot
- * does not take over from the levels above it).
+ * does not take over from the levels above it). Since 2026-09-28 a spot has
+ * no `features` of its own and nothing names "power" any more; a file that
+ * still does is read without them (RETIRED_FEATURES), still as 2.2.
  */
 export const TEMPLATE_VERSION = '2.2';
 /** Older exports this app still reads. */
@@ -67,8 +70,6 @@ export interface TemplateBed {
 	is_special?: true;
 	/** What kind of bed it is (src/lib/accommodation.ts); left out when unknown. */
 	bed_type?: BedType;
-	/** What is true for this spot itself; left out when empty. */
-	features?: Feature[];
 	/**
 	 * What this spot does not take over from its room and house (a superuser's
 	 * call in the app, src/lib/accommodation.ts offAllowed); left out when empty.
@@ -180,8 +181,6 @@ export interface LayoutRecords {
 		is_locked?: boolean;
 		is_special?: boolean;
 		bed_type?: string;
-		/** A list, or the single value PocketBase returns for a one-value select. */
-		features?: string[] | string;
 		features_off?: string[];
 		/** The record id of the other spot of a bunk bed. */
 		bunk_partner?: string;
@@ -259,7 +258,6 @@ export function buildTemplate(records: LayoutRecords, exportedAt = new Date()): 
 					...overrides('room', room),
 					beds: (bedsByRoom.get(room.id) ?? [])
 						.map((bed, _index, roomBeds): TemplateBed => {
-							const features = readFeatures(bed.features, 'spot');
 							const partner = bunkPartnerLabel(bed, roomBeds);
 							return {
 								label: bed.label ?? '',
@@ -267,7 +265,6 @@ export function buildTemplate(records: LayoutRecords, exportedAt = new Date()): 
 								is_locked: bed.is_locked === true,
 								...(bed.is_special === true ? { is_special: true } : {}),
 								...(isBedType(bed.bed_type) ? { bed_type: bed.bed_type } : {}),
-								...(features.length > 0 ? { features } : {}),
 								...overrides('spot', bed),
 								...(partner ? { bunk_partner: partner } : {})
 							};
@@ -374,6 +371,44 @@ function capped(problems: string[]): string[] {
 	return [...problems.slice(0, MAX_REPORTED_PROBLEMS), `… and ${hidden} more of the same kind.`];
 }
 
+/**
+ * An older file may still name a feature the app has dropped since
+ * (RETIRED_FEATURES: "power"). Those entries are taken out of every
+ * `features` and `features_off` list before the file is read, so the rest
+ * imports as it is and one note says what was left out. Works on copies:
+ * the caller's data stays as it was.
+ */
+function dropRetired(houses: unknown[]): {
+	houses: unknown[];
+	dropped: { count: number; values: string[] };
+} {
+	const dropped = { count: 0, values: [] as string[] };
+	const retired = (value: unknown): boolean => {
+		if (typeof value !== 'string' || !RETIRED_FEATURES.includes(value)) return false;
+		dropped.count += 1;
+		if (!dropped.values.includes(value)) dropped.values.push(value);
+		return true;
+	};
+	const clean = (entry: unknown, children?: 'rooms' | 'beds'): unknown => {
+		if (!isObject(entry)) return entry;
+		const copy: Json = { ...entry };
+		for (const field of ['features', 'features_off']) {
+			const list = copy[field];
+			// a hand-written file may name a single value without the list around it
+			if (retired(list)) delete copy[field];
+			else if (Array.isArray(list)) copy[field] = list.filter((value) => !retired(value));
+		}
+		const nested = children ? copy[children] : undefined;
+		if (children && Array.isArray(nested)) {
+			copy[children] = nested.map((child) =>
+				clean(child, children === 'rooms' ? 'beds' : undefined)
+			);
+		}
+		return copy;
+	};
+	return { houses: houses.map((house) => clean(house, 'rooms')), dropped };
+}
+
 /** Validates already parsed JSON and normalises it to a template of the current version. */
 export function validateTemplate(data: unknown): TemplateParseResult {
 	const errors: string[] = [];
@@ -440,8 +475,14 @@ export function validateTemplate(data: unknown): TemplateParseResult {
 			`houses: ${data.houses.length} houses are too many, the limit is ${TEMPLATE_LIMITS.houses}.`
 		);
 	} else {
+		const { houses: entries, dropped } = dropRetired(data.houses);
+		if (dropped.count > 0) {
+			warnings.push(
+				`The file names ${listed(dropped.values)}, which the app doesn't know any more (it no longer records power sockets): left out ${dropped.count === 1 ? 'once' : `${dropped.count} times`}, everything else is read as it is.`
+			);
+		}
 		const firstUse = new Map<string, string>();
-		data.houses.forEach((entry, index) => {
+		entries.forEach((entry, index) => {
 			const house = readHouse(entry, `houses[${index}]`, errors, warnings);
 			if (!house) return;
 			const key = house.name.toLowerCase();
@@ -639,6 +680,19 @@ function readOffFeatures(
 	return off.length > 0 ? off : undefined;
 }
 
+/**
+ * A spot's own `features`: a spot has none any more (the 🔌 power socket was
+ * the only one, RETIRED_FEATURES), it inherits its room's and house's. An
+ * empty list is fine; anything else is refused, so nothing a file says about
+ * a single bed is lost without a word.
+ */
+function readSpotFeatures(value: unknown, where: string, errors: string[]): void {
+	if (isMissing(value) || (Array.isArray(value) && value.length === 0)) return;
+	errors.push(
+		`${where}: a spot has no features of its own, it takes them from its room and house (got features ${show(value)}). Put them on the room, or leave "features" out here.`
+	);
+}
+
 function readDescription(value: unknown, where: string, errors: string[]): string | undefined {
 	if (isMissing(value) || value === '') return undefined;
 	if (typeof value !== 'string') {
@@ -662,7 +716,7 @@ function readDescription(value: unknown, where: string, errors: string[]): strin
 function readDetails<K extends string>(
 	entry: Json,
 	where: string,
-	level: Exclude<FeatureLevel, 'spot'>,
+	level: FeatureLevel,
 	isKind: (candidate: unknown) => candidate is K,
 	allowed: readonly K[],
 	errors: string[]
@@ -837,9 +891,8 @@ function readBeds(room: Json, where: string, errors: string[], warnings: string[
 		if (readFlag(entry.is_special, bedWhere, 'is_special', false, errors)) bed.is_special = true;
 		const type = readKind(entry.bed_type, bedWhere, 'bed_type', isBedType, BED_TYPE_VALUES, errors);
 		if (type) bed.bed_type = type;
-		const bedFeatures = readDetailFeatures(entry.features, bedWhere, 'spot', errors);
-		if (bedFeatures) bed.features = bedFeatures;
-		const bedOff = readOffFeatures(entry.features_off, bedWhere, 'spot', bedFeatures ?? [], errors);
+		readSpotFeatures(entry.features, bedWhere, errors);
+		const bedOff = readOffFeatures(entry.features_off, bedWhere, 'spot', [], errors);
 		if (bedOff) bed.features_off = bedOff;
 		if (!isMissing(entry.bunk_partner)) {
 			const partner = readText(

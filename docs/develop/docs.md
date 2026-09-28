@@ -118,10 +118,10 @@ Two settings in the repository, once: the Pages source has to be **GitHub Action
 Every page links the app's legal notice, privacy policy and booking rules: the home page in its footer, doc pages under their content (`.vitepress/theme/LegalLinks.vue`, because VitePress shows its footer only on pages without a sidebar). The pages themselves belong to the app, see [Legal pages](../admin/legal).
 
 - **Served by the app** (`/docs/`, `/admin/docs/`), the links point to `/legal-notice`, `/privacy` and `/booking-rules` on the same domain.
-- **On GitHub Pages** they need the app's address. The Pages build reads it from the repository variable `DOCS_APP_URL`; without it they point to staging. Once production has its domain:
+- **On GitHub Pages** they need the app's address. The Pages build reads it from the repository variable `DOCS_APP_URL`; without it they point to staging. Once production is public (its [pre-launch gate](./deployment#pre-launch-gate) is off; before that, the links would end at the Google sign-in):
 
   ```bash
-  gh variable set DOCS_APP_URL --body "https://<production-domain>"
+  gh variable set DOCS_APP_URL --body "https://cozynights.hamburn.de"
   ```
 
   The next docs deploy (a version tag, a push to `main` that touches `docs/`, or **Run workflow** on *Docs*) picks it up.

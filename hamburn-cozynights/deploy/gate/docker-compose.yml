@@ -1,0 +1,65 @@
+# Pre-launch gate for production (https://cozynights.hamburn.de).
+#
+# oauth2-proxy answers nginx's auth_request (deploy/nginx/cozynights-gate-on.conf)
+# until launch day: only Google accounts of mauersegler.art get through. It is
+# not part of the app stack on purpose: deploys never touch it, and the app
+# runs exactly as it will after the launch.
+#
+# Installed by hand, outside the checkout, as /opt/cozynights-gate/docker-compose.yml
+# next to its .env (root, 600; deploy/gate/gate.env.template). Started and
+# stopped by `cozynights-gate on|off` (deploy/gate/cozynights-gate); runbook:
+# deploy/README.md, "Produktion".
+name: cozynights-gate
+
+services:
+  oauth2-proxy:
+    # Pinned by digest: v7.15.4 (2026-08-20).
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.4@sha256:b1b2021fe8f4004573e8d690dec6c7bb29cc44364572cf8510a05bf3a0ae2ded
+    container_name: cozynights-gate
+    restart: unless-stopped
+    # Only the secrets: OAUTH2_PROXY_CLIENT_ID, OAUTH2_PROXY_CLIENT_SECRET,
+    # OAUTH2_PROXY_COOKIE_SECRET.
+    env_file: .env
+    command:
+      - --provider=google
+      # Who gets through: every Google account of the Workspace domain. With an
+      # "Internal" consent screen Google itself already refuses everyone else.
+      - --email-domain=mauersegler.art
+      - --redirect-url=https://cozynights.hamburn.de/oauth2/callback
+      - --whitelist-domain=cozynights.hamburn.de
+      - --http-address=0.0.0.0:4180
+      # nginx asks /oauth2/auth and proxies the app itself: nothing to forward.
+      - --upstream=static://202
+      - --reverse-proxy=true
+      # Only nginx reaches this port (published on the host's loopback); it
+      # arrives through Docker's bridge, so the private ranges are trusted.
+      - --trusted-proxy-ip=127.0.0.1/32
+      - --trusted-proxy-ip=10.0.0.0/8
+      - --trusted-proxy-ip=172.16.0.0/12
+      - --trusted-proxy-ip=192.168.0.0/16
+      - --set-xauthrequest=true
+      # Straight to Google, no page with a button in between; Google shows its
+      # account chooser (not the consent screen every time).
+      - --skip-provider-button=true
+      - --prompt=select_account
+      # One sign-in a week, like the app's admin re-sign-in.
+      - --cookie-name=__Host-cozynights-gate
+      - --cookie-secure=true
+      - --cookie-samesite=lax
+      - --cookie-expire=168h
+      # No version on error pages; no line per request in the log (every page
+      # load asks /oauth2/auth ~25 times), sign-ins are still logged.
+      - --footer=-
+      - --request-logging=false
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      - '127.0.0.1:4180:4180'
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'

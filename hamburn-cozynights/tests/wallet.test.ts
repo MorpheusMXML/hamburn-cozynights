@@ -62,7 +62,7 @@ const STACKED = {
 	room: 'Dorm #2',
 	spot: 'B1',
 	bed: 'Lower bunk · below B2',
-	features: '🔥 Heated · 🔌 Power socket'
+	features: '🔥 Heated · 🤫 Quiet zone'
 };
 
 function content(overrides: Partial<WalletContent> = {}): WalletContent {
@@ -329,7 +329,7 @@ describe('Apple Wallet pass', () => {
 		expect(back[2]).toEqual({
 			key: 'features',
 			label: 'At your spot',
-			value: '🔥 Heated · 🔌 Power socket'
+			value: '🔥 Heated · 🤫 Quiet zone'
 		});
 		// the front stays as it was: the spot, the room, the house, the burner
 		expect(pass.eventTicket.headerFields[0].value).toBe('B1');
@@ -543,7 +543,7 @@ describe('Google Wallet pass', () => {
 		expect(object.textModulesData[1]).toEqual({
 			id: 'bed',
 			header: 'Your bed',
-			body: 'Lower bunk · below B2 · 🔥 Heated · 🔌 Power socket'
+			body: 'Lower bunk · below B2 · 🔥 Heated · 🤫 Quiet zone'
 		});
 		// the seat stays the spot's label
 		expect(object.seatInfo.seat.defaultValue.value).toBe('B1');
@@ -556,7 +556,7 @@ describe('Google Wallet pass', () => {
 		) as any;
 		expect(featuresOnly.textModulesData[1]).toMatchObject({
 			id: 'bed',
-			body: '🔥 Heated · 🔌 Power socket'
+			body: '🔥 Heated · 🤫 Quiet zone'
 		});
 
 		const plain = googleObject(config.google!, content(), config, extras) as any;
@@ -628,8 +628,8 @@ describe('Apple pushes', () => {
 // --- the records and the sync ------------------------------------------------------
 
 /**
- * One quiet house with one heated room and a bunk bed: B1 below (with a
- * socket), B2 above. The ticket sleeps in B1.
+ * One quiet house with one heated room that has its own bathroom, and a bunk
+ * bed in it: B1 below, B2 above. The ticket sleeps in B1.
  */
 function seedCamp(pb: FakePb) {
 	const house = pb.seed('houses', { name: 'Villa', features: ['quiet'] });
@@ -637,10 +637,10 @@ function seedCamp(pb: FakePb) {
 		name: 'Dorm',
 		room_number: 2,
 		house: house.id,
-		features: ['heated']
+		features: ['heated', 'own_bathroom']
 	});
 	const beds = ['B1', 'B2'].map((label) => pb.seed('beds', { label, room: room.id, order: '' }));
-	Object.assign(beds[0], { bed_type: 'bunk_lower', bunk_partner: beds[1].id, features: 'power' });
+	Object.assign(beds[0], { bed_type: 'bunk_lower', bunk_partner: beds[1].id });
 	Object.assign(beds[1], { bed_type: 'bunk_upper', bunk_partner: beds[0].id });
 	const order = pb.seed('orders', {
 		order_number: 'HB-1',
@@ -736,10 +736,10 @@ describe('the wallet sync', () => {
 				house: 'Villa',
 				room: 'Dorm #2',
 				spot: 'B1',
-				// the other level of the bunk bed, and the house's, the room's and the
-				// spot's features together, in the catalogue's order
+				// the other level of the bunk bed, and the house's and the room's
+				// features together, in the catalogue's order
 				bed: 'Lower bunk · below B2',
-				features: '🔥 Heated · 🤫 Quiet zone · 🔌 Power socket'
+				features: '🛁 Own bathroom · 🔥 Heated · 🤫 Quiet zone'
 			},
 			burnerName: 'Sunny'
 		});
@@ -759,11 +759,11 @@ describe('the wallet sync', () => {
 		const pb = new FakePb();
 		const { room, beds } = seedCamp(pb);
 		// A superuser's call (features_off): the Dorm gives up the Villa's quiet,
-		// B1 the Dorm's heating. Only the socket at the bed is left.
+		// B1 the Dorm's heating. Only the Dorm's own bathroom is left.
 		Object.assign(room, { features_off: ['quiet'] });
 		Object.assign(beds[0], { features_off: ['heated'] });
 		const contents = await loadContents(pb as any, ['AAAABBBBCCCC'], 'https://cozy.test');
-		expect(contents.get('AAAABBBBCCCC')?.spot?.features).toBe('🔌 Power socket');
+		expect(contents.get('AAAABBBBCCCC')?.spot?.features).toBe('🛁 Own bathroom');
 		expect(contents.get('AAAABBBBCCCC')).toEqual(
 			contentFromLookup(
 				'AAAABBBBCCCC',
@@ -843,7 +843,7 @@ describe('the wallet sync', () => {
 		expect(movedObject.seatInfo.seat.defaultValue.value).toBe('B2');
 		// the upper bunk now, above a B1 nobody holds: the free partner is still named
 		expect(movedObject.textModulesData.find((m: any) => m.id === 'bed')).toMatchObject({
-			body: 'Upper bunk · above B1 · 🔥 Heated · 🤫 Quiet zone'
+			body: 'Upper bunk · above B1 · 🛁 Own bathroom · 🔥 Heated · 🤫 Quiet zone'
 		});
 		expect(pb.rows('wallet_passes')[0].changed_at).toBe(new Date(now + 60_000).toISOString());
 	});
