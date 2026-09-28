@@ -419,6 +419,37 @@ const PAGES: PageCase[] = [
 		phases: ['staging'],
 		open: unfoldAll
 	},
+	{
+		// A click on a name opens its field with ✓ and ✕ (InlineRename): the
+		// room's long title with its number, and the spot with the longest label.
+		name: 'admin room: renaming',
+		path: (c) => `/admin/room/${c.roomId}`,
+		as: 'admin',
+		phases: ['staging'],
+		open: async (page) => {
+			await page.locator('h1 .rename-title').click();
+			await page
+				.locator('.bed-info .rename-title', { hasText: 'Kuschelzeltplatzverwaltungsbett' })
+				.click();
+			await page.locator('.rename').nth(1).waitFor();
+		}
+	},
+	{
+		// The details of the locked upper bunk in the ♿ room: the room's ♿ is
+		// struck through ("never on an upper bunk", no box), next to a
+		// superuser's "off here" boxes and the spot's own list of them.
+		name: 'admin room: upper bunk details',
+		path: (c) => `/admin/room/${c.roomId}`,
+		as: 'superuser',
+		phases: ['staging'],
+		open: async (page) => {
+			const upper = page.locator('.bunk-half', {
+				has: page.locator('.bed-label', { hasText: /^Upper 1$/ })
+			});
+			await upper.locator('.spot-details .btn-toggle').click();
+			await upper.locator('.chip.never').waitFor();
+		}
+	},
 	{ name: 'admin new house', path: () => '/admin/house/new', as: 'admin' },
 	{
 		// A typed key in a locked field answers with the lock hint next to it.
