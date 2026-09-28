@@ -123,10 +123,16 @@ Every deploy carries a version in the shape **`0.<deploy number>.<fix>`**: Deplo
 - as a small badge next to the title on the start page, in the footer of every other page and in the admin menu — hover it for the build (commit and day), click it for the release notes on GitHub;
 - in `GET /api/health`, as `version` and `commit`, so the [deploy runbook](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md) can compare it with the release that was just approved.
 
-The version lives in `package.json` and is baked into the build together with the commit (`build-info.ts`; the deploy script passes the commit as the Docker build argument `GIT_SHA`). The script that does that is the installed copy the deploy key's forced command runs — `/usr/local/bin/deploy-cozynights-staging` and `/usr/local/bin/deploy-cozynights-production` on the server — **not** the one in the checkout: after changing `deploy/deploy-staging.sh`, install it again, otherwise the server keeps running the old one (an image built without `GIT_SHA`, for example, shows the version with an empty commit).
+The version lives in `package.json` and is baked into the build together with the commit (`build-info.ts`; the deploy script passes the commit as the Docker build argument `GIT_SHA`). The script that does that is the installed copy the deploy key's forced command runs — `/usr/local/bin/deploy-cozynights-staging` and `/usr/local/bin/deploy-cozynights-production` on the server — **not** the one in the checkout, and never a copy under another path: after changing `deploy/deploy-staging.sh`, install it again, otherwise the server keeps running the old one (an image built without `GIT_SHA`, for example, shows the version with an empty commit). Each copy comes from the branch its stack deploys: staging's from `integration/staging`, so a changed script runs on staging first, production's from `main` once the change is released (commands for both in the runbook, section *Wartung*). For staging:
 
 ```bash
-ssh -t mauersegler 'sudo install -o root -g root -m 755 /opt/hamburn-cozynights-staging/hamburn-cozynights/deploy/deploy-staging.sh /usr/local/bin/deploy-cozynights-staging && grep -c GIT_SHA /usr/local/bin/deploy-cozynights-staging'
+# on the server as root, the install step of the runbook's one-time setup
+APP_DIR=/opt/hamburn-cozynights-staging
+sudo -u deploy git -C "$APP_DIR" fetch origin &&
+  sudo -u deploy git -C "$APP_DIR" show origin/integration/staging:hamburn-cozynights/deploy/deploy-staging.sh > /tmp/deploy-staging.sh &&
+  install -o root -g root -m 755 /tmp/deploy-staging.sh /usr/local/bin/deploy-cozynights-staging &&
+  rm /tmp/deploy-staging.sh &&
+  grep -c GIT_SHA /usr/local/bin/deploy-cozynights-staging   # must not print 0
 ```
 
 Stamp the version on the state that is about to be deployed, **before** the deploy run:
@@ -240,7 +246,7 @@ Production runs on the same server as staging, as a stack of its own. The one-ti
 | `.env` template | `deploy/staging.env.template` | `deploy/production.env.template` |
 
 - **Only released code.** Three independent locks keep everything but `main` out: the workflow refuses any other ref, the GitHub environment `production` admits only `main` and waits for a reviewer, and the server's deploy script refuses a commit that is not on `origin/main` (`REQUIRE_BRANCH=main` in its config). The release PR from `integration/staging` to `main` decides *what* can go live; the deploy run, approved separately, decides *when*.
-- **One deploy script, one copy per stack.** `deploy/deploy-staging.sh` is installed as `/usr/local/bin/deploy-cozynights-<env>` and reads `/etc/cozynights/deploy-<env>.conf`, so each stack's forced-command key can only ever deploy that stack. Every stack except staging has to name its compose file, backup folder, health URL and PocketBase container, or the script refuses to start: a staging default there would stop the wrong database. Old images are pruned per compose project, because both stacks share one Docker daemon.
+- **One deploy script, one copy per stack.** `deploy/deploy-staging.sh` is installed as `/usr/local/bin/deploy-cozynights-<env>`, from the branch that stack deploys (see [Versions and releases](#versions-and-releases)), and reads `/etc/cozynights/deploy-<env>.conf`, so each stack's forced-command key can only ever deploy that stack. Every stack except staging has to name its compose file, backup folder, health URL and PocketBase container, or the script refuses to start: a staging default there would stop the wrong database. Old images are pruned per compose project, because both stacks share one Docker daemon.
 - **Smoke test.** After the deploy the workflow checks from outside that `/api/health` answers with the deployed commit. The full read-only smoke test (`npm run smoke:remote`) runs once the site is public; while the pre-launch gate is on, the workflow only checks that the gate sends visitors to Google.
 
 ### Pre-launch gate
@@ -262,7 +268,7 @@ Production is the pattern for any further stack:
 1. **Compose file.** A copy of `docker-compose.production.yml` with its own top-level `name:`, `container_name`s, ports, network and fixed volume name, so nothing collides with the other stacks; `ORIGIN` and `COZY_APP_URL` set to its address, `COZY_ENV_LABEL` for a marker in messages (staging: `STAGING`).
 2. **Configuration.** The environment's `.env` on the server, following `deploy/production.env.template`, with keys of its own. Never commit it. It also holds the operator details for the Impressum and the privacy policy (`LEGAL_*`, see [Legal pages](../admin/legal)).
 3. **Domain.** An nginx vhost (see `deploy/nginx/`), a certificate, and the environment's own Google OAuth client with its redirect URI.
-4. **Pipeline.** A workflow like `deploy-production.yml` with its own GitHub environment and required approval; the deploy script installed once more as `/usr/local/bin/deploy-cozynights-<env>` with `/etc/cozynights/deploy-<env>.conf` and its own backup folder, reached through another forced-command key of the `deploy` user.
+4. **Pipeline.** A workflow like `deploy-production.yml` with its own GitHub environment and required approval; the deploy script installed once more as `/usr/local/bin/deploy-cozynights-<env>` from the branch the stack deploys, with `/etc/cozynights/deploy-<env>.conf` and its own backup folder, reached through another forced-command key of the `deploy` user.
 5. **First admins.** Run the admin tool from that stack's checkout with its deploy config: `COZY_DEPLOY_CONF=/etc/cozynights/deploy-<env>.conf scripts/cozy-admin.sh …` takes compose file and project from there and refuses to run from another stack's checkout, because a recreate from there would start the containers with the wrong `.env`. See [Admin access & roles](../admin/access#managing-admins).
 
 </div>

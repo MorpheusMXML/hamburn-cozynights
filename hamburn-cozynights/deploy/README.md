@@ -78,8 +78,9 @@ COMPOSE_PROJECT_NAME=$PROJECT
 EOF
 install -d -o deploy -g deploy -m 750 /var/backups/cozynights-staging
 
-# Skript aus main installieren (root-owned, außerhalb des Checkouts)
-sudo -u deploy git -C "$APP_DIR" show origin/main:hamburn-cozynights/deploy/deploy-staging.sh > /tmp/deploy-staging.sh
+# Skript aus integration/staging installieren, dem Branch, den Staging deployt
+# (root-owned, außerhalb des Checkouts, genau der Pfad des Forced Command aus Schritt 3)
+sudo -u deploy git -C "$APP_DIR" show origin/integration/staging:hamburn-cozynights/deploy/deploy-staging.sh > /tmp/deploy-staging.sh
 install -o root -g root -m 755 /tmp/deploy-staging.sh /usr/local/bin/deploy-cozynights-staging
 rm /tmp/deploy-staging.sh
 ```
@@ -246,12 +247,31 @@ docker logs cozynights-staging-pocketbase 2>&1 | grep 'cozy-'
 
 ## Wartung
 
-- Ändert sich `deploy-staging.sh` im Repo, Schritt 1 („Skript aus main
-  installieren“) wiederholen, für Produktion ebenso (Abschnitt „Produktion“,
-  P6). Das Skript liegt bewusst außerhalb des Checkouts, damit ein Deploy
-  nicht den eigenen Befehl umschreiben kann. Welche Config es liest, ergibt
-  sich aus dem Namen der Kopie: `deploy-cozynights-<umgebung>` →
-  `/etc/cozynights/deploy-<umgebung>.conf`.
+- Ändert sich `deploy-staging.sh` im Repo, die Kopie jedes Stacks neu
+  installieren, jeweils aus dem Branch, den der Stack deployt: Staging aus
+  `integration/staging` (so läuft ein geändertes Skript zuerst auf Staging),
+  Produktion aus `main`, sobald die Änderung released ist. Das Skript liegt
+  bewusst außerhalb des Checkouts, damit ein Deploy nicht den eigenen Befehl
+  umschreiben kann. Welche Config es liest, ergibt sich aus dem Namen der
+  Kopie: `deploy-cozynights-<umgebung>` →
+  `/etc/cozynights/deploy-<umgebung>.conf`. Ausgeführt wird nur der Pfad im
+  Forced Command des Deploy-Keys
+  (`grep -o 'command="[^"]*"' ~deploy/.ssh/authorized_keys`); eine Kopie
+  unter anderem Namen ruft niemand auf.
+
+```bash
+# Staging, wie Schritt 1
+sudo -u deploy git -C /opt/hamburn-cozynights-staging fetch origin &&
+  sudo -u deploy git -C /opt/hamburn-cozynights-staging show origin/integration/staging:hamburn-cozynights/deploy/deploy-staging.sh > /tmp/deploy-staging.sh &&
+  install -o root -g root -m 755 /tmp/deploy-staging.sh /usr/local/bin/deploy-cozynights-staging &&
+  rm /tmp/deploy-staging.sh
+# Produktion, erst nach dem Release nach main (Abschnitt „Produktion“, P6)
+sudo -u deploy git -C /opt/hamburn-cozynights-production fetch origin &&
+  sudo -u deploy git -C /opt/hamburn-cozynights-production show origin/main:hamburn-cozynights/deploy/deploy-staging.sh > /tmp/deploy-production.sh &&
+  install -o root -g root -m 755 /tmp/deploy-production.sh /usr/local/bin/deploy-cozynights-production &&
+  rm /tmp/deploy-production.sh
+```
+
 - Logs eines Deploys: im GitHub-Actions-Run. App-Logs:
   `docker logs --tail 100 cozynights-staging-app`.
 
