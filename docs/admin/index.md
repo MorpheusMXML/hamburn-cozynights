@@ -29,7 +29,7 @@ Numbers next to an entry say what waits: at <kbd>♿ Special needs</kbd> the req
 
 ## What's on this page
 
-From top to bottom: the [🎟 BOOKING WINDOW](#booking-window) with the ♿ requests switch below it, [NEEDS ATTENTION](#needs-attention) — with a red line when the camp layout is incomplete, see [Red alert](#red-alert-sanity-checks) —, [BOOKINGS & CHECK-INS](#bookings-check-ins), and the [Intel panel](#intel-panel-the-live-picture).
+From top to bottom: the [🎟 BOOKING WINDOW](#booking-window) with the ♿ requests switch and the 🔁 swap switch below it, [NEEDS ATTENTION](#needs-attention) — with a red line when the camp layout is incomplete, see [Red alert](#red-alert-sanity-checks) —, [BOOKINGS & CHECK-INS](#bookings-check-ins), and the [Intel panel](#intel-panel-the-live-picture).
 
 ## Booking window
 
@@ -46,6 +46,8 @@ Right under the header, the **🎟 BOOKING WINDOW** panel holds everything about
 Times are Europe/Berlin (CET/CEST). The rules and what each switch does to the timer are in [The booking window](../guide/phases#the-booking-window).
 
 Below it, the row **♿ Special-needs requests: OPEN** (or **CLOSED**, with *· n waiting for a decision* while requests wait) opens or closes requests for guests with <kbd>Open requests</kbd> / <kbd>Close requests</kbd>, independent of the phase. <kbd>Review requests →</kbd> leads to the requests. See [Special-needs requests](./special-needs#_2-open-requests).
+
+Under it, **🔁 Swap requests between guests: ON** (with *· n open · n swapped*) says whether guests can ask each other to [swap spots](./swaps) during Live Booking. <kbd>Pause swaps</kbd> stops new requests and every yes for all guests until <kbd>Turn swaps on</kbd>; waiting requests stay. Any admin can flip it, and the crew chat hears who did.
 
 ## Bookings & check-ins
 

@@ -42,6 +42,7 @@ Ticket holders pick their own bed on the Hamburn camp map. The crew builds the c
 | 🎟️  | **Booking pass**             | A QR code and a short code per booking; the crew checks it with a phone camera, a PC or a USB scanner. |
 | 👛  | **In the wallet**            | The pass goes into Apple Wallet or Google Wallet and follows the booking: move a guest and their pass updates itself. |
 | ♿   | **Special-needs spots**      | Guests ask with their ticket code, even before booking opens; the crew books a fitting spot.           |
+| 🔁  | **Swapping spots**           | During Live Booking a guest asks another for a swap, with a vibe and a few words; hold to swap, both spots change at once. |
 | ✉️  | **Message texts**            | Every sentence guests get by e-mail, on Telegram or from the bot is editable in the admin area, with a live preview. |
 
 ## 🧭 How it works

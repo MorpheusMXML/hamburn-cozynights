@@ -152,6 +152,32 @@ Every page of CozyNights links the **legal notice** (who runs it and how to reac
 
 <!-- audience:admin -->
 
+### Swapping spots
+
+::: details I don't see "⇄ Ask to swap" on the taken spots
+You need a spot of your own (a swap trades yours for theirs), booking has to be live, and the crew may have paused swaps for a moment (**Swap requests** says so). If the crew picked your spot for you, set it aside or checked you in, your spot can't be swapped — your room page says so. See [Swapping spots](./swaps).
+:::
+
+::: details I asked, but nobody answers
+The other guest has three days. Some guests don't answer, some paused swap requests, and some spots can't be swapped at all — CozyNights never says which, so nobody learns why a spot is special. After three days the request shows *No answer — it ran out*. Ask for another spot, or ask again.
+:::
+
+::: details "This swap isn't possible any more"
+One of the two spots changed hands in the meantime (somebody moved or released it), or booking closed. Nothing changed: you both keep your spots. Reload **Swap requests**.
+:::
+
+::: details "You have 3 open swap requests" · "They said no to this swap already"
+At most three requests can wait at a time: take one back on **Swap requests**, or wait for an answer. A no is final for that spot and its guest — ask somebody else.
+:::
+
+::: details Can I undo a swap?
+Not with a button, but you can ask for your old spot back the same way. The other guest decides.
+:::
+
+::: details Who sees why I want to swap?
+Only the guest you ask sees your vibe and your few words, in the app. They are never in an e-mail or on Telegram, and the crew doesn't read them. No need to explain why: a friendly word is enough.
+:::
+
 ## For admins
 
 ::: details I'm stuck on "ACCESS REQUESTED"
