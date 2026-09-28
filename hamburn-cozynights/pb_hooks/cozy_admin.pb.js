@@ -33,7 +33,8 @@
 //      cozy-admin tickets remove <code> [<code> ...]  delete tickets that hold no bed
 //      cozy-admin tickets forget-contacts --yes   after the event: delete all guest e-mail
 //                                                 addresses, Telegram links, special-needs
-//                                                 requests and wallet device registrations
+//                                                 requests, swap requests and wallet device
+//                                                 registrations
 //
 //    Notifications (pb_hooks/cozy_notify.pb.js):
 //
@@ -899,19 +900,21 @@ cozyTickets.addCommand(
 		const forget = new Command({
 			use: 'forget-contacts',
 			short:
-				'After the event: delete every e-mail address, Telegram link, special-needs request and wallet device registration of the tickets',
+				'After the event: delete every e-mail address, Telegram link, special-needs request, swap request and wallet device registration of the tickets',
 			run: (cmd, args) => {
 				if (args.length !== 0 || !cmd.flags().getBool('yes')) {
 					cozyFail(
 						cmd,
-						'this deletes the e-mail address of every ticket, every Telegram link, every special-needs request and every wallet device registration (ticket codes and bookings stay) — run it with --yes'
+						'this deletes the e-mail address of every ticket, every Telegram link, every special-needs request, every swap request and every wallet device registration (ticket codes and bookings stay) — run it with --yes'
 					);
 				}
 				cozyCollection(cmd, 'guest_notify');
 				cozyCollection(cmd, 'special_requests');
+				cozyCollection(cmd, 'swap_requests');
 				let emails = 0;
 				let links = 0;
 				let requests = 0;
+				let swaps = 0;
 				let devices = 0;
 				$app.runInTransaction((txApp) => {
 					for (const t of txApp.findRecordsByFilter('orders', "email != ''", '', 0, 0)) {
@@ -923,6 +926,11 @@ cozyTickets.addCommand(
 					for (const r of txApp.findRecordsByFilter('special_requests', "id != ''", '', 0, 0)) {
 						txApp.delete(r);
 						requests++;
+					}
+					// Swap requests, with what guests wrote to each other.
+					for (const r of txApp.findRecordsByFilter('swap_requests', "id != ''", '', 0, 0)) {
+						txApp.delete(r);
+						swaps++;
 					}
 					for (const n of txApp.findRecordsByFilter('guest_notify', "id != ''", '', 0, 0)) {
 						if (n.getString('tg_chat')) links++;
@@ -950,7 +958,9 @@ cozyTickets.addCommand(
 						links +
 						' Telegram link(s), ' +
 						requests +
-						' special-needs request(s) and ' +
+						' special-needs request(s), ' +
+						swaps +
+						' swap request(s) and ' +
 						devices +
 						' wallet device registration(s); the ticket codes and bookings are kept'
 				);

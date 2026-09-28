@@ -44,6 +44,11 @@
 	--state-closed: #d4d4d4;
 	--state-closed-soft: rgba(255, 255, 255, 0.05);
 
+	/* Swap requests (28 Sep): sky blue is the trade itself — the 🔁 link,
+	   the swap sheet, the /swaps page. Not a state of a spot. */
+	--swap: #38bdf8;
+	--swap-soft: rgba(56, 189, 248, 0.12);
+
 	/* One beat for the whole app. Live booking breathes a touch faster. */
 	--state-beat: 2.8s;
 }

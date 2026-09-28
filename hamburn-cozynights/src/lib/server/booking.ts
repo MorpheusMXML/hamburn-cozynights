@@ -1,5 +1,10 @@
 import type { ClientResponseError } from 'pocketbase';
-import type { TypedPocketBase, OrdersResponse, BedsResponse } from '$lib/pocketbase-types';
+import type {
+	TypedPocketBase,
+	OrdersResponse,
+	BedsResponse,
+	SwapRequestsResponse
+} from '$lib/pocketbase-types';
 import { createLookupHash, encrypt } from '$lib/server/crypto';
 import { CHECKED_IN_NOTE } from '$lib/check-in';
 import { APP_SETTINGS_ID } from '$lib/server/constants';
@@ -37,6 +42,29 @@ export class CheckedInError extends Error {
 }
 
 /**
+ * Why PocketBase refused a swap (pb_hooks/lib/swap.js REFUSALS): the request
+ * isn't open any more, ran out, booking or swaps are closed, a spot changed
+ * hands, a spot can't be swapped, or it isn't addressed to this ticket.
+ */
+export type SwapRefusal = 'answered' | 'expired' | 'closed' | 'moved' | 'fixed' | 'mismatch';
+const SWAP_REFUSALS: readonly string[] = [
+	'answered',
+	'expired',
+	'closed',
+	'moved',
+	'fixed',
+	'mismatch'
+];
+
+/** PocketBase refused the swap; nothing changed. */
+export class SwapRefusedError extends Error {
+	constructor(public reason: SwapRefusal) {
+		super(`swap refused: ${reason}`);
+		this.name = 'SwapRefusedError';
+	}
+}
+
+/**
  * What a check-in (or its undo) found and did:
  * - checkedin: checked in just now
  * - already: checked in before; nothing changed
@@ -69,6 +97,11 @@ function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
 		run.catch(() => {})
 	);
 	return run;
+}
+
+/** Several locks, taken in the order given. */
+function withLocks<T>(keys: string[], fn: () => Promise<T>): Promise<T> {
+	return keys.reduceRight<() => Promise<T>>((inner, key) => () => withLock(key, inner), fn)();
 }
 
 function isNotFound(err: unknown): boolean {
@@ -304,6 +337,42 @@ export class BookingService {
 				}
 			})
 		);
+	}
+
+	/**
+	 * Swaps two guests' spots for a swap request the other guest said yes to.
+	 * PocketBase does it in one transaction (POST /api/cozy/swap,
+	 * pb_hooks/lib/swap.js): both spots change tickets, the request becomes
+	 * accepted and every other open request about either spot or ticket ends,
+	 * after PocketBase's own last checks. This runs in both tickets' and both
+	 * spots' queues, so no booking, move or release of either guest can run
+	 * in between. The locks are taken tickets first, then spots, each sorted —
+	 * the same order everywhere, so two swaps never wait on each other.
+	 * @throws {SwapRefusedError} when PocketBase refused it; nothing changed
+	 */
+	async swapSpots(
+		request: Pick<SwapRequestsResponse, 'id' | 'from_order' | 'to_order' | 'from_bed' | 'to_bed'>
+	): Promise<void> {
+		const keys = [
+			...[request.from_order, request.to_order].map((id) => `order:${id}`).sort(),
+			...[request.from_bed, request.to_bed].map((id) => `bed:${id}`).sort()
+		];
+		await withLocks(keys, async () => {
+			try {
+				await this.adminPb.send('/api/cozy/swap', {
+					method: 'POST',
+					body: { request: request.id, order: request.to_order },
+					requestKey: null
+				});
+			} catch (err) {
+				const refused = err as ClientResponseError | undefined;
+				const reason = refused?.response?.reason;
+				if (refused?.status === 409 && SWAP_REFUSALS.includes(reason)) {
+					throw new SwapRefusedError(reason as SwapRefusal);
+				}
+				throw err;
+			}
+		});
 	}
 
 	/**

@@ -31,6 +31,8 @@ import {
 import { passSummary } from '$lib/server/pass';
 import { walletPlatforms } from '$lib/server/wallet/config';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
+import { roomSwaps, type RoomSwaps } from '$lib/server/swaps';
+import { askSwapAction, withdrawSwapAction } from '$lib/server/swap-actions';
 import type { PassSummary } from '$lib/pass';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
@@ -125,13 +127,15 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			};
 		});
 
-		// Where confirmations go, the booking pass, and whether the crew picked the
-		// spot (special-needs request). Optional: the page works without them.
+		// Where confirmations go, the booking pass, whether the crew picked the
+		// spot (special-needs request), and what swaps the guest can ask for.
+		// Optional: the page works without them.
 		let notify: GuestNotifyStatus | null = null;
 		let pass: PassSummary | null = null;
 		let spotFixed = false;
+		let swap: RoomSwaps | null = null;
 		if (userBed) {
-			[notify, pass, spotFixed] = await Promise.all([
+			[notify, pass, spotFixed, swap] = await Promise.all([
 				getGuestNotifyStatus(locals.adminPb, order, settings).catch((err) => {
 					console.error('[Room] Notification status failed:', (err as Error)?.message);
 					return null;
@@ -143,6 +147,10 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				isSpotFixed(locals.adminPb, order.id, userBed.id).catch((err) => {
 					console.error('[Room] Special-needs request lookup failed:', (err as Error)?.message);
 					return false;
+				}),
+				roomSwaps(locals.adminPb, settings, order, userBed).catch((err) => {
+					console.error('[Room] Swap requests lookup failed:', (err as Error)?.message);
+					return null;
 				})
 			]);
 		}
@@ -153,6 +161,8 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			// the wallet buttons under the pass (none until a wallet is set up)
 			wallet: walletPlatforms(),
 			spotFixed,
+			// Taken spots offer a swap when this is set and has `mine` (docs/guide/booking.md).
+			swap,
 			// The crew checked the guest in at arrival: only the crew changes the spot now.
 			checkedIn: !!userBed?.checked_in_at,
 			room: {
@@ -308,6 +318,12 @@ export const actions: Actions = {
 			return fail(500, { error: 'Telegram updates could not be turned off. Please try again.' });
 		}
 	},
+
+	/** Asks the guest of a taken spot to swap (the swap sheet). */
+	askSwap: async ({ request, locals }) => askSwapAction(locals, request),
+
+	/** Takes an open swap request back. */
+	withdrawSwap: async ({ request, locals }) => withdrawSwapAction(locals, request),
 
 	unbookBed: async ({ locals }) => {
 		if (!locals.adminPb.authStore.isValid) {

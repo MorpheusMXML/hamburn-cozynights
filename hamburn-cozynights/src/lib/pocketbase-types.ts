@@ -23,7 +23,8 @@ export enum Collections {
 	MessageTexts = 'message_texts',
 	SpecialRequests = 'special_requests',
 	WalletPasses = 'wallet_passes',
-	WalletDevices = 'wallet_devices'
+	WalletDevices = 'wallet_devices',
+	SwapRequests = 'swap_requests'
 }
 
 // Alias types for improved usability
@@ -175,6 +176,8 @@ export type OrdersRecord = {
 	email?: string;
 	handed_over_at?: IsoDateString;
 	id: string;
+	/** The guest paused swap requests to them (pb_migrations/1760500000_swap_requests.js). */
+	no_swap_requests?: boolean;
 	order_number: string;
 	pass_code?: string;
 	order_hash?: string;
@@ -226,6 +229,8 @@ export type AppSettingsRecord = {
 	special_requests_open?: boolean;
 	guest_round?: number;
 	wallet_platforms?: string;
+	/** The crew's switch: no swap requests right now (unset = on during Live Booking). */
+	swaps_off?: boolean;
 	updated: IsoAutoDateString;
 };
 
@@ -291,6 +296,44 @@ export type SpecialRequestsRecord = {
 	reason?: string;
 	status: SpecialRequestsStatusOptions;
 	updated: IsoAutoDateString;
+};
+
+export enum SwapRequestsStatusOptions {
+	pending = 'pending',
+	accepted = 'accepted',
+	declined = 'declined',
+	withdrawn = 'withdrawn',
+	expired = 'expired',
+	void = 'void'
+}
+/** A guest asks another guest to swap spots (pb_migrations/1760500000_swap_requests.js). */
+export type SwapRequestsRecord = {
+	answer_mail?: IsoDateString;
+	answer_tg?: IsoDateString;
+	answered_at?: IsoDateString;
+	ask_mail?: IsoDateString;
+	ask_tg?: IsoDateString;
+	created: IsoAutoDateString;
+	/** Why it ended without a yes or no (status void), see SwapEnd in src/lib/swaps.ts. */
+	ended?: string;
+	expires_at: IsoDateString;
+	/** The spot the asker offers (theirs when they asked). */
+	from_bed: RecordIdString;
+	from_order: RecordIdString;
+	id: string;
+	/** Ciphertext of the asker's note (src/lib/server/crypto.ts). */
+	note?: string;
+	notify_attempts?: number;
+	notify_due?: IsoDateString;
+	notify_error?: string;
+	/** Never shown to the other guest nor sent to them; runs out like an unanswered request. */
+	quiet?: boolean;
+	status: SwapRequestsStatusOptions;
+	/** The spot the asker would like (the other guest's when asked). */
+	to_bed: RecordIdString;
+	to_order: RecordIdString;
+	updated: IsoAutoDateString;
+	vibe?: string;
 };
 
 export type MessageTextsRecord = {
@@ -361,6 +404,8 @@ export type WalletPassesResponse<Texpand = unknown> = Required<WalletPassesRecor
 	BaseSystemFields<Texpand>;
 export type WalletDevicesResponse<Texpand = unknown> = Required<WalletDevicesRecord> &
 	BaseSystemFields<Texpand>;
+export type SwapRequestsResponse<Texpand = unknown> = Required<SwapRequestsRecord> &
+	BaseSystemFields<Texpand>;
 
 // Types containing all Records and Responses, useful for creating typing helper functions
 
@@ -383,6 +428,7 @@ export type CollectionRecords = {
 	message_texts: MessageTextsRecord;
 	wallet_passes: WalletPassesRecord;
 	wallet_devices: WalletDevicesRecord;
+	swap_requests: SwapRequestsRecord;
 };
 
 export type CollectionResponses = {
@@ -404,6 +450,7 @@ export type CollectionResponses = {
 	message_texts: MessageTextsResponse;
 	wallet_passes: WalletPassesResponse;
 	wallet_devices: WalletDevicesResponse;
+	swap_requests: SwapRequestsResponse;
 };
 
 // Utility types for create/update operations

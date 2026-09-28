@@ -34,7 +34,17 @@ const PLACEHOLDERS = [
 		name: 'telegramUrl',
 		meaning: 'the page where a guest connects Telegram (sign-in with the ticket code first)'
 	},
-	{ name: 'status', meaning: 'the status of the special-needs request, in words' }
+	{ name: 'status', meaning: 'the status of the special-needs request, in words' },
+	{
+		name: 'other',
+		meaning:
+			'the other spot of a swap request: the one offered to the guest, or the one they asked for'
+	},
+	{ name: 'until', meaning: 'when a swap request runs out, in Berlin time' },
+	{
+		name: 'swapUrl',
+		meaning: "the page with the guest's swap requests (sign-in with the ticket code first)"
+	}
 ];
 
 const GROUPS = [
@@ -44,12 +54,14 @@ const GROUPS = [
 	{ id: 'mail.changed', channel: 'mail', title: 'E-mail · spot changed' },
 	{ id: 'mail.released', channel: 'mail', title: 'E-mail · spot released' },
 	{ id: 'mail.request', channel: 'mail', title: 'E-mail · special-needs request' },
+	{ id: 'mail.swap', channel: 'mail', title: 'E-mail · swap requests' },
 	{ id: 'tg.common', channel: 'telegram', title: 'Telegram · in several messages' },
 	{ id: 'tg.connected', channel: 'telegram', title: 'Telegram · chat connected' },
 	{ id: 'tg.booked', channel: 'telegram', title: 'Telegram · spot booked' },
 	{ id: 'tg.changed', channel: 'telegram', title: 'Telegram · spot changed' },
 	{ id: 'tg.released', channel: 'telegram', title: 'Telegram · spot released' },
 	{ id: 'tg.request', channel: 'telegram', title: 'Telegram · special-needs request' },
+	{ id: 'tg.swap', channel: 'telegram', title: 'Telegram · swap requests' },
 	{ id: 'bot', channel: 'bot', title: 'Telegram · replies of the bot' }
 ];
 
@@ -161,6 +173,34 @@ const TEXTS = [
 	{ key: 'mail.also.declined', group: 'mail.request', label: 'Spot booked or changed while the request is declined', hint: 'Added to the "spot booked" or "spot changed" e-mail.', placeholders: [],
 		text: 'The crew could not offer you a special-needs spot; you keep this spot.' },
 
+	// --- e-mail: swap requests ------------------------------------------------------
+	{ key: 'mail.swap_ask.subject', group: 'mail.swap', label: 'Someone would like to swap · subject', hint: 'To the guest a swap request is addressed to. What the asker wrote is never in the e-mail, only in the app.', placeholders: ['spot'],
+		text: '🔁 Swap request for your spot {spot}' },
+	{ key: 'mail.swap_ask.intro', group: 'mail.swap', label: 'Someone would like to swap · first line', hint: 'After the greeting.', placeholders: [],
+		text: 'a fellow burner would love to swap spots with you.' },
+	{ key: 'mail.swap_ask.offer', group: 'mail.swap', label: 'Someone would like to swap · the spot offered', hint: '', placeholders: ['other'],
+		text: 'You would get: {other}' },
+	{ key: 'mail.swap_ask.bed', group: 'mail.swap', label: 'Someone would like to swap · the bed offered', hint: 'Right below, when the crew wrote down what kind of bed it is or what is at it.', placeholders: ['bed'],
+		text: '🛏 {bed}' },
+	{ key: 'mail.swap_ask.yours', group: 'mail.swap', label: 'Someone would like to swap · the spot they would get', hint: '', placeholders: ['spot'],
+		text: 'They would get your spot: {spot}' },
+	{ key: 'mail.swap_ask.answer', group: 'mail.swap', label: 'Someone would like to swap · how to answer', hint: '', placeholders: ['swapUrl', 'until'],
+		text: 'They left you a few words. Read them and answer in the app (sign in with your ticket code): {swapUrl} — the request is open until {until}.' },
+	{ key: 'mail.swap_ask.nothing', group: 'mail.swap', label: 'Someone would like to swap · nothing changes', hint: 'The last line.', placeholders: [],
+		text: 'Nothing changes unless you say yes. Not for you? Tap “No thanks”, or let it run out.' },
+	{ key: 'mail.swap_no.subject', group: 'mail.swap', label: 'No swap · subject', hint: 'To the guest who asked, when the other guest said no.', placeholders: [],
+		text: 'No swap this time' },
+	{ key: 'mail.swap_no.intro', group: 'mail.swap', label: 'No swap · first line', hint: 'After the greeting.', placeholders: ['other'],
+		text: 'the guest in {other} would rather keep their spot, so nothing changed.' },
+	{ key: 'mail.swap_no.keep', group: 'mail.swap', label: 'No swap · what now', hint: '', placeholders: ['spot', 'mapUrl'],
+		text: 'You keep your spot, {spot}. Other spots may be free or up for a swap: {mapUrl}' },
+	{ key: 'mail.swapped.subject', group: 'mail.swap', label: 'Swap done · subject', hint: 'Both guests get it after a yes, instead of "spot changed". House, room and spot follow like in "spot booked".', placeholders: ['spot'],
+		text: '🔁 Swap done! Your CozyNights spot: {spot}' },
+	{ key: 'mail.swapped.intro', group: 'mail.swap', label: 'Swap done · first line', hint: 'After the greeting; house, room and spot follow.', placeholders: [],
+		text: 'your swap went through — this is your spot now:' },
+	{ key: 'mail.swapped.before', group: 'mail.swap', label: 'Swap done · the old spot', hint: '', placeholders: ['before'],
+		text: 'Your old spot, {before}, belongs to the other guest now.' },
+
 	// --- Telegram: in several messages ------------------------------------------------
 	{ key: 'tg.pass', group: 'tg.common', label: 'Booking pass', hint: 'Below every message that shows the spot.', placeholders: ['passCode', 'passUrl'],
 		text: '🎫 Booking pass {passCode}:\n{passUrl}' },
@@ -236,6 +276,20 @@ const TEXTS = [
 		text: '✅ Your special-needs request was approved. You keep this spot until the crew books a more fitting one; you\'ll get a message here when they do.' },
 	{ key: 'tg.news.declined', group: 'tg.request', label: 'Spot booked, changed or released while the request is declined', hint: 'Added above the spot message.', placeholders: [],
 		text: '✋ The crew could not offer you a special-needs spot.' },
+
+	// --- Telegram: swap requests ------------------------------------------------------------
+	{ key: 'tg.swap_ask.intro', group: 'tg.swap', label: 'Someone would like to swap · the spot offered', hint: 'To the guest a swap request is addressed to, with a button to answer. The 🛏 line of the offered bed follows when the crew wrote it down.', placeholders: ['other'],
+		text: '🔁 Swap request! A fellow burner would love to trade spots with you.\n\nYou would get: {other}' },
+	{ key: 'tg.swap_ask.yours', group: 'tg.swap', label: 'Someone would like to swap · the spot they would get', hint: '', placeholders: ['spot'],
+		text: 'They would get your spot: {spot}' },
+	{ key: 'tg.swap_ask.answer', group: 'tg.swap', label: 'Someone would like to swap · how to answer', hint: 'What the asker wrote is never sent here, only shown in the app.', placeholders: ['until', 'swapUrl'],
+		text: 'Read their few words and answer in the app — open until {until}:\n{swapUrl}\n\nNothing changes unless you say yes.' },
+	{ key: 'tg.swap_no', group: 'tg.swap', label: 'No swap', hint: 'To the guest who asked, when the other guest said no.', placeholders: ['other', 'spot'],
+		text: '🔁 No swap this time: the guest in {other} keeps their spot. You keep yours, {spot}.' },
+	{ key: 'tg.swapped.intro', group: 'tg.swap', label: 'Swap done', hint: 'Both guests get it after a yes, instead of "spot changed"; the 🛏 line and the old spot follow.', placeholders: ['spot'],
+		text: '🔁 Swap done! Your CozyNights spot now:\n{spot}' },
+	{ key: 'tg.swapped.before', group: 'tg.swap', label: 'Swap done · the old spot', hint: '', placeholders: ['before'],
+		text: 'Your old spot, {before}, is theirs now.' },
 
 	// --- Telegram: replies of the bot ---------------------------------------------------------
 	{ key: 'bot.help', group: 'bot', label: 'Any other message to the bot', hint: 'Also the answer to /help, and to /start without a connect link.', placeholders: ['appUrl'],

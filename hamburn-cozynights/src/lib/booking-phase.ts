@@ -170,7 +170,7 @@ export function openingCountdownAt(
  * the big countdown itself, the legal texts and the booking pass are read
  * quietly, and the crew's pages have their own bar (AdminNav).
  */
-const TOP_BAR_PAGES = /^\/(map|house|room|random-bed|special-needs|telegram)(\/|$)/;
+const TOP_BAR_PAGES = /^\/(map|house|room|random-bed|special-needs|telegram|swaps)(\/|$)/;
 
 export function showTopBar(pathname: string): boolean {
 	return TOP_BAR_PAGES.test(pathname);

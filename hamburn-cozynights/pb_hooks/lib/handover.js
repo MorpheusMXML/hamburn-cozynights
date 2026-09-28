@@ -9,7 +9,8 @@
 //
 // What goes with the old holder: their booking pass (PocketBase makes a new
 // code on demand), their burner name, their Telegram chat, their special-needs
-// request — that one holds health data — and their check-in. The spot stays
+// request — that one holds health data — their swap requests (with what they
+// wrote) and the pause they set on swap requests, and their check-in. The spot stays
 // with the ticket, and so does the ticket code. `handed_over_at` tells the
 // delivery run to send the new address its own message instead of confirming a
 // booking it never made (pb_hooks/lib/notify.js).
@@ -27,7 +28,7 @@ function firstRecord(app, collection, filter, params) {
  * PocketBase's date format; the caller saves the record.
  */
 function orderFields(at) {
-	return { pass_code: '', burner_name: '', handed_over_at: at };
+	return { pass_code: '', burner_name: '', no_swap_requests: false, handed_over_at: at };
 }
 
 /**
@@ -66,10 +67,11 @@ function describeState(state) {
 /**
  * Removes what belonged to the old holder outside the ticket record: the
  * Telegram chat first (no update about the new holder may reach the old chat),
- * then the special-needs request, then the check-in. Returns what was there.
+ * then the special-needs request, the swap requests and the check-in. Returns
+ * what was there.
  */
 function stripOldHolder(app, order) {
-	const removed = { telegram: false, request: false, checkIn: false };
+	const removed = { telegram: false, request: false, swaps: 0, checkIn: false };
 
 	const notify = firstRecord(app, 'guest_notify', 'order = {:order}', { order: order.id });
 	if (notify && notify.getString('tg_chat')) {
@@ -89,6 +91,24 @@ function stripOldHolder(app, order) {
 		app.delete(request);
 		removed.request = true;
 	}
+
+	// Asked by or of the old holder, with what they wrote: none of it is the
+	// new holder's. (A database from before swap requests has none.)
+	let swaps = [];
+	try {
+		swaps = app.findRecordsByFilter(
+			'swap_requests',
+			'from_order = {:order} || to_order = {:order}',
+			'',
+			0,
+			0,
+			{ order: order.id }
+		);
+	} catch (_) {
+		swaps = [];
+	}
+	for (const swap of swaps) app.delete(swap);
+	removed.swaps = swaps.length;
 
 	const arrived = app.findRecordsByFilter(
 		'beds',

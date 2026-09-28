@@ -128,8 +128,8 @@ variables in the server's .env (`$lib/server/legal`).
 		are strictly necessary (§ 25(2) no. 2 TDDDG).
 	</p>
 	<p>
-		We delete bookings, burner names, special-needs requests and the ticket list with its email
-		addresses{#if notify.telegram}, linked Telegram chats{/if}{#if wallet.length > 0}
+		We delete bookings, burner names, special-needs requests, swap requests and the ticket list with
+		its email addresses{#if notify.telegram}, linked Telegram chats{/if}{#if wallet.length > 0}
 			and the devices that registered for a wallet pass{/if} as soon as we no longer need them, {legal.deletionPeriod}.
 	</p>
 
@@ -168,6 +168,29 @@ variables in the server's .env (`$lib/server/legal`).
 		You can withdraw your request, and with it your consent, at any time on the same page; we then
 		delete it right away. A spot the crew already booked for you stays yours. All other requests are
 		deleted after the event, {legal.deletionPeriod}.
+	</p>
+
+	<h2 id="swaps">Swapping beds with another guest</h2>
+	<p>
+		While booking is open you can ask another guest to swap beds with you. For a swap request we
+		process which two beds would be swapped, when you asked and until when the request runs, the
+		<strong>reason</strong> you may pick from a short list, the <strong>few words</strong> you may
+		add, and how the other guest answered. The guest you ask sees your burner name, your bed, your
+		reason and your words, in the app only.{#if notify.mail || notify.telegram}
+			They get {#if notify.mail}an email{/if}{#if notify.mail && notify.telegram}
+				and
+			{/if}{#if notify.telegram}a Telegram message, if they asked for Telegram updates,{/if}
+			saying that someone would like to swap, with both beds, but without your name and without your words.{/if}
+		Nothing changes unless they say yes; then both beds change at once, and you both get the usual message
+		about your new bed.
+	</p>
+	<p>
+		We process this so guests can rearrange the beds among themselves (Art. 6(1)(b) GDPR); the
+		reason and the words are voluntary (Art. 6(1)(a) GDPR). Please keep your words short and
+		friendly, there is no need to explain why. Your words are stored encrypted, the crew doesn't
+		read them, and they never leave the app. On the page <a href="/swaps">Swap requests</a> you can
+		take a waiting request back and pause requests to you. Swap requests are deleted when your
+		ticket goes to someone else, and after the event, {legal.deletionPeriod}.
 	</p>
 
 	{#if notify.mail || notify.telegram}
