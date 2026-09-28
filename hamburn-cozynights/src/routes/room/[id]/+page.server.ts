@@ -86,6 +86,9 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 		// guests' ticket codes and customer names and must never be serialized.
 		// `bookable` only matters for free spots: for a taken one it would tell
 		// whether it is locked or a special-needs spot, next to the burner name.
+		// `blocked` is a spot taken without a ticket (TAKEN on the admin page):
+		// no guest is behind it, so the card says "Blocked by admin" like every
+		// other crew hold. A guest's booking — a ♿ one included — never is.
 		const safeBeds = beds.map((bed) => {
 			let burnerName = '';
 			if (bed.occupied && bed.expand?.order?.burner_name) {
@@ -100,6 +103,7 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				label: bed.label,
 				occupied: !!bed.occupied,
 				bookable: !bed.occupied && isBedBookable(bed, { allowLocked: !!locals.admin }),
+				blocked: !!bed.occupied && !bed.order,
 				burnerName,
 				// What kind of bed it is: the room's and the house's features are
 				// shown once, above the list.

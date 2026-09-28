@@ -144,9 +144,12 @@ The status of a spot is written in [its state colour](./index#the-state-colours)
 | --- | --- |
 | 🟢 **VACANT ✨** | 🟢 *Available*: they can book it. |
 | 🔴 **CLAIMED 👥** | 🔴 *Occupied* with the guest's burner name — 🩵 *Yours* for the guest who holds it. |
-| 🟣 **LOCKED 🔒** | 🟣 *Reserved by the crew* · *Not available*. It still counts as a spot, but never as a free one. The label hides whether it is also claimed or inactive; the dot still shows it. |
-| 🩷 **SPECIAL NEEDS ♿** | Like a locked spot: 🟣 *Reserved by the crew* while it's free, never counted as free. The crew books it for approved [special-needs requests](./special-needs). Once booked, guests see the burner name, not the mark. |
-| ⚪️ **INACTIVE 🧊** | 🟣 *Reserved by the crew* in its room. It isn't counted in any occupancy numbers (map, Control Center, house pages), the roulette never picks it, and nobody can book it. |
+| 🟣 **BLOCKED 🛠** | 🟣 *Blocked by admin* · *Not available*: marked 🔄 TAKEN without a ticket. It counts as taken. |
+| 🟣 **LOCKED 🔒** | 🟣 *Blocked by admin* · *Not available*. It still counts as a spot, but never as a free one. The label hides whether it is also claimed or inactive; the dot still shows it. |
+| 🩷 **SPECIAL NEEDS ♿** | Like a locked spot: 🟣 *Blocked by admin* while it's free, never counted as free. The crew books it for approved [special-needs requests](./special-needs). Once booked, guests see the burner name, not the mark. |
+| ⚪️ **INACTIVE 🧊** | 🟣 *Blocked by admin* in its room. It isn't counted in any occupancy numbers (map, Control Center, house pages), the roulette never picks it, and nobody can book it. |
+
+Whatever the crew holds back — 🔄 TAKEN without a ticket, 🔒 locked, ♿ kept for requests, 🧊 inactive — reads the same to guests: *Blocked by admin*.
 
 ### Spot actions
 
@@ -155,19 +158,19 @@ The status of a spot is written in [its state colour](./index#the-state-colours)
 | 🔒 LOCK / 🔓 UNLOCK | Block guests / let them book again | <span class="yes">✓</span> allowed |
 | ♿ SPECIAL / NORMAL | Keep the spot for [special-needs requests](./special-needs), or give it back to all guests | <span class="yes">✓</span> allowed |
 | ❄️ DEACTIVATE / ⚡️ ACTIVATE | Take the spot out of use / back in | <span class="no">✗</span> |
-| 🔄 TAKEN / FREE | Mark the spot as taken without a ticket, or free it | <span class="no">✗</span> |
+| 🔄 TAKEN / FREE | Mark the spot as taken without a ticket (BLOCKED 🛠, *Blocked by admin* for guests), or free it | <span class="no">✗</span> |
 | 🏷️ DETAILS | Bed type of this spot, inherited features switched off (superusers), its label only in Staging Mode | <span class="yes">✓</span> allowed |
 | 🪜 STACK · ⇅ SWAP · UNSTACK ⤴ | Stack two spots into a [bunk bed](#bunk-beds), swap its levels, take it apart | <span class="yes">✓</span> allowed |
 | 🗑 DELETE | Delete the spot (its bunk partner, if any, stays as a spot on its own) | <span class="no">✗</span> |
 
 ::: tip Lock or deactivate?
-**Lock** a spot that exists but must not be booked by guests: a broken bed, or a bed kept for the crew. Guests see it as reserved. An admin who is signed in can still book a locked (or ♿) spot during Live Booking through the normal booking pages with a ticket code.
+**Lock** a spot that exists but must not be booked by guests: a broken bed, or a bed kept for the crew. Guests see it as *Blocked by admin*. An admin who is signed in can still book a locked (or ♿) spot during Live Booking through the normal booking pages with a ticket code.
 
 **Deactivate** a spot that isn't in use at all (yet). It no longer counts as a spot anywhere, and not even an admin can book it.
 :::
 
 ::: details Marking a spot as taken without a ticket
-🔄 TAKEN marks a free spot as taken without attaching a ticket, for example to hold a bed during testing. Guests see it as *Occupied* by a *Mystery Burner*. **Clear all bookings** and a superuser's switch back to Staging free these spots too. For beds that should stay unavailable, locking is the better choice.
+🔄 TAKEN marks a free spot as taken without attaching a ticket, for example to hold a bed during testing. The admin card says **BLOCKED 🛠** (violet), the booking lists show *🛠 Blocked · Blocked by admin*, and guests see *Blocked by admin* · *Not available*, like a locked spot. **Clear all bookings** and a superuser's switch back to Staging free these spots too. For beds that should stay unavailable, locking is the better choice.
 
 🔄 FREE on a spot that a guest booked cancels that booking: the dialog *Cancel this guest's booking?* asks first (<kbd>Free the spot</kbd> / <kbd>Keep booking</kbd>), the guest gets a *spot was released* message, and their ticket code stays valid.
 :::

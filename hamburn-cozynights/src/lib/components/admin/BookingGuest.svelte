@@ -21,7 +21,7 @@
 	const STATE_ATTR = { crew: 'locked', booked: 'full', checkedin: 'checked-in' } as const;
 
 	$: state = bookingState(row);
-	$: chip = state === 'checkedin' ? '✅ Checked in' : state === 'booked' ? '🎟 Booked' : '🛠 Crew';
+	$: chip = state === 'checkedin' ? '✅ Checked in' : state === 'booked' ? '🎟 Booked' : '🛠 Blocked';
 	$: name = guestLabel(row.guest);
 	$: burner = row.guest && row.guest.name && row.guest.burnerName ? row.guest.burnerName : '';
 	$: booked = row.bookedAt ? formatBerlin(row.bookedAt, { year: false }) : '';
@@ -62,7 +62,7 @@
 			</p>
 		{:else}
 			<p class="guest-meta">
-				<span>Marked taken by the crew, without a ticket</span>
+				<span>No ticket: blocked with TAKEN on the room page</span>
 			</p>
 		{/if}
 		{#if row.checkIn}

@@ -165,7 +165,7 @@ a bunk bed is a neutral white outline.
 | 🟠 Orange | **Filling** — booked and free spots side by side; also a warning, something not allowed right now |
 | 🔴 Red | **Full, booked, occupied** — a house with nothing left to book; a booked spot (CLAIMED 👥, *Occupied* for guests); a ticket that holds a spot |
 | 🩵 Turquoise | **Checked in**; a guest's own spot (*Yours*); and the colour of Staging Mode |
-| 🟣 Violet | **Held back** — locked 🔒 by the crew, *Reserved by the crew* for guests |
+| 🟣 Violet | **Held back** — locked 🔒 or marked 🔄 TAKEN by the crew (BLOCKED 🛠), *Blocked by admin* for guests |
 | 🩷 Pink | **♿ Special needs, and nothing else** — spots kept for requests, the requests and their count, the ♿ links |
 | 🟡 Yellow | **Live Booking** — the phase pill and the countdown to the closing time |
 | ⚪️ Grey | **Not set up, inactive, not now** — a house without active spots; a switched-off spot (INACTIVE 🧊); a spot that can't be booked yet or any more; light grey for Closed |

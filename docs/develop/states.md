@@ -17,7 +17,7 @@ holds the counting and the names. Nothing else should invent either.
 | `unconfigured` / `idle` | `--state-idle` | grey `#a3a3a3` | inactive or not now: no active spots, a spot that can't be booked yet or any more |
 | `checked-in` | `--state-checked-in` | turquoise `#2dd4bf` | mine or checked in: the guest's own spot, a guest checked in at arrival |
 | `special` | `--state-special` | pink `#f472b6` | ♿ special needs — and nothing else |
-| `locked` | `--state-locked` | violet `#a78bfa` | held by the crew: locked 🔒, *Reserved by the crew* |
+| `locked` | `--state-locked` | violet `#a78bfa` | held by the crew: locked 🔒, taken without a ticket (BLOCKED 🛠), *Blocked by admin* |
 | `danger` | `--state-danger` | red `#f87171` | refused input, failed action, a missing address |
 | `staging` / `live` / `closed` | `--state-staging` … | turquoise / yellow `#facc15` / light grey | the booking phase |
 

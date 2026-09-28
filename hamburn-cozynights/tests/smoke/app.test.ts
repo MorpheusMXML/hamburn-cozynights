@@ -498,7 +498,7 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 			expect(await (await get('/special-needs', cookie)).text()).toContain('Waiting for the crew');
 			const otherGuest = await guestLogin((await seedTicket(su)).code);
 			const roomHtml = await (await get(`/room/${room.id}`, otherGuest)).text();
-			expect(roomHtml).toContain('Reserved by the crew');
+			expect(roomHtml).toContain('Blocked by admin');
 			expect(roomHtml).not.toContain('is_special');
 
 			const admin = await createAdmin(su, 'admin');

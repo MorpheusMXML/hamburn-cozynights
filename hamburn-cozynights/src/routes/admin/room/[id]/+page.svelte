@@ -307,10 +307,12 @@
 			<span class="bed-label">{bed.label || 'Unnamed Spot'}</span>
 		</InlineRename>
 		<!-- The status colour comes from state.css: claimed is red, vacant green,
-		     locked violet, inactive grey — the same tokens the guests see. -->
+		     locked violet, inactive grey — the same tokens the guests see. A spot
+		     taken without a ticket is a crew hold, violet: guests read "Blocked by
+		     admin" on it. -->
 		<span
 			class="bed-status"
-			data-state={bed.is_locked
+			data-state={bed.is_locked || (bed.occupied && !bed.order)
 				? 'locked'
 				: bed.enabled === false
 					? 'idle'
@@ -322,8 +324,10 @@
 				LOCKED 🔒
 			{:else if bed.enabled === false}
 				INACTIVE 🧊
+			{:else if bed.occupied}
+				{bed.order ? 'CLAIMED 👥' : 'BLOCKED 🛠'}
 			{:else}
-				{bed.occupied ? 'CLAIMED 👥' : 'VACANT ✨'}
+				VACANT ✨
 			{/if}
 		</span>
 		{#if bed.is_special}
@@ -404,7 +408,9 @@
 			<input type="hidden" name="occupied" value={bed.occupied.toString()} />
 			<button
 				class="btn-icon turquoise"
-				title={bed.occupied ? 'Free this spot' : 'Mark this spot as taken without a ticket'}
+				title={bed.occupied
+					? 'Free this spot'
+					: 'Block this spot: taken without a ticket, guests see "Blocked by admin"'}
 				disabled={!lock && bed.enabled === false}
 				class:disabled={!lock && bed.enabled === false}
 				{...lockAttrs(

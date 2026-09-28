@@ -179,6 +179,8 @@ describe('Room Load & Booking Logic', () => {
 			label: 'A2',
 			occupied: true,
 			bookable: false,
+			// a guest's booking, not a crew hold
+			blocked: false,
 			burnerName: 'Dusty Nomad #123',
 			// what kind of bed it is; nobody said here
 			bedType: '',
@@ -186,6 +188,41 @@ describe('Room Load & Booking Logic', () => {
 			bunkPartner: '',
 			missing: []
 		});
+	});
+
+	it('tells guests a spot taken without a ticket is blocked by admin, not booked', async () => {
+		mockLocals.order = { id: 'order1', order_number: 'TEST-CODE' };
+		mockPb.getOne.mockImplementation(async (id: string) => {
+			if (id === APP_SETTINGS_ID) return { is_booking_active: true };
+			if (id === 'room1') return { id: 'room1', name: 'Dorm', room_number: 1, house: 'house1' };
+			throw new Error('Not found');
+		});
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce(null); // no spot of their own yet
+		mockAdminPb.getFullList.mockResolvedValueOnce([
+			// TAKEN on the admin page: occupied, no ticket
+			{ id: 'b1', label: 'B1', enabled: true, occupied: true, order: '' },
+			// another guest's booking
+			{
+				id: 'b2',
+				label: 'B2',
+				enabled: true,
+				occupied: true,
+				order: 'other-order',
+				expand: { order: { burner_name: 'Dusty Nomad #123' } }
+			},
+			{ id: 'b3', label: 'B3', enabled: true, occupied: false }
+		]);
+
+		const result: any = await roomLoad({
+			url: new URL('http://test.local/'),
+			params: { id: 'room1' },
+			locals: mockLocals
+		} as any);
+
+		const byLabel = (label: string) => result.beds.find((bed: any) => bed.label === label);
+		expect(byLabel('B1')).toMatchObject({ occupied: true, blocked: true, burnerName: '' });
+		expect(byLabel('B2')).toMatchObject({ occupied: true, blocked: false });
+		expect(byLabel('B3')).toMatchObject({ occupied: false, blocked: false, bookable: true });
 	});
 
 	it('tells guests that the upper bunk of a ♿ room is not wheelchair accessible', async () => {

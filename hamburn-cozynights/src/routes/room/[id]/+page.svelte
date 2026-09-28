@@ -123,21 +123,24 @@
 	/**
 	 * A spot's state for the colours of src/routes/state.css (data-state):
 	 * 'full' someone else booked it, 'checked-in' it is mine, 'locked' the crew
-	 * holds it back, 'idle' booking is not open (yet or anymore), 'open' free
-	 * and bookable. A free spot stays green while I hold another one — the
-	 * spot is free, only the button is off.
+	 * holds it back (locked, ♿, inactive, or taken without a ticket: "Blocked
+	 * by admin"), 'idle' booking is not open (yet or anymore), 'open' free and
+	 * bookable. A free spot stays green while I hold another one — the spot is
+	 * free, only the button is off.
 	 */
 	type SpotState = 'open' | 'full' | 'checked-in' | 'locked' | 'idle';
 	$: spotState = (bed: Spot): SpotState =>
-		bed.occupied && bed.id !== data.userBedId
-			? 'full'
-			: bed.id === data.userBedId
-				? 'checked-in'
-				: !bed.bookable
-					? 'locked'
-					: !data.isBookingActive
-						? 'idle'
-						: 'open';
+		bed.blocked
+			? 'locked'
+			: bed.occupied && bed.id !== data.userBedId
+				? 'full'
+				: bed.id === data.userBedId
+					? 'checked-in'
+					: !bed.bookable
+						? 'locked'
+						: !data.isBookingActive
+							? 'idle'
+							: 'open';
 	/** Whether a card has a detail line at all. */
 	const hasDetail = (bed: { bedType: string; missing: string[] }, level: BunkLevel | null) =>
 		!!level || !!bedTypeEntry(bed.bedType) || bed.missing.length > 0;
@@ -440,11 +443,13 @@
 </div>
 
 <!-- A spot's card in its four states; `level` marks a half of a bunk bed.
-     data-state picks the colour (state.css), the classes keep the layout. -->
+     data-state picks the colour (state.css), the classes keep the layout.
+     A spot taken without a ticket is a crew hold, not someone's booking: it
+     says "Blocked by admin", like a locked, ♿ or inactive spot. -->
 {#snippet spotCard(bed: Spot, level: BunkLevel | null)}
 	{@const state = spotState(bed)}
 	{@const isMyBed = bed.id === data.userBedId}
-	{@const someoneElseBooked = bed.occupied && !isMyBed}
+	{@const someoneElseBooked = bed.occupied && !isMyBed && !bed.blocked}
 	{@const iHaveAnotherBooking = !!data.userBedId && !isMyBed}
 	{@const isLocked = !data.isBookingActive}
 	{@const nameFinal = data.phase === 'closed'}
@@ -511,7 +516,7 @@
 			{/if}
 			<div class="status-box">
 				<span class="status-text"
-					><span class="state-dot" aria-hidden="true"></span>Reserved by the crew</span
+					><span class="state-dot" aria-hidden="true"></span>Blocked by admin</span
 				>
 				<small class="edit-hint">Not available</small>
 			</div>
@@ -941,7 +946,7 @@
 		min-width: 0;
 		min-height: 72px;
 		/* The spot label gets the whole width next to the icon, the status goes
-		   underneath: side by side, a long burner name or "Reserved by the crew"
+		   underneath: side by side, a long burner name or "Blocked by admin"
 		   squeezed the label down to a letter per line ("U / pp / er / 1"). */
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr);

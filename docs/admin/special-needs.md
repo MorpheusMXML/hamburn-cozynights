@@ -19,7 +19,7 @@ flowchart LR
 
 On a room page, <kbd>♿ SPECIAL</kbd> marks a spot as a special-needs spot; <kbd>♿ NORMAL</kbd> turns it back into a normal one. Works in Staging Mode, during Live Booking and after booking closed.
 
-- **Guests can't book it.** They see it like a locked spot, as *Reserved by the crew* (violet, with *Not available* under it), and never learn why. Once a guest has it, it shows as an ordinary occupied spot with their burner name: nobody can tell who has special needs.
+- **Guests can't book it.** They see it like a locked spot, as *Blocked by admin* (violet, with *Not available* under it), and never learn why. Once a guest has it, it shows as an ordinary occupied spot with their burner name: nobody can tell who has special needs.
 - **It never counts as free**, like a locked spot.
 - **It comes first** in the list when you book a spot for a request.
 - **Templates keep it** (`"is_special": true` on the spot, see [Layout templates](./templates#file-format)).

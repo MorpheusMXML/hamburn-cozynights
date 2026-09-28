@@ -177,7 +177,7 @@
 		</div>
 		{#if spots.deactivated > 0 || crewTaken > 0}
 			<p class="intel-footnote">
-				{#if crewTaken > 0}{crewTaken} taken without a ticket (marked by the crew).{/if}
+				{#if crewTaken > 0}{crewTaken} blocked by admin (taken without a ticket).{/if}
 				{#if spots.deactivated > 0}{spots.deactivated} switched off, counted nowhere.{/if}
 			</p>
 		{/if}

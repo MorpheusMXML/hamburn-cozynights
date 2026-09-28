@@ -70,15 +70,15 @@ That's it: fireworks go up from your new spot 🎆, and the spot now shows **You
 | 🟢 **Available** · *Grab it now!* | Free. Click it to book. |
 | 🟢 **Available** · *Release your other spot first* | Free, but you already have a spot somewhere else, so it can't be clicked. One ticket code = one spot. |
 | 🩵 **Yours** · *your burner name* | That's you. Click it to rename it (any time until booking closes) or to release it (during Live Booking); the line under the name says which of the two it is right now. |
-| 🔴 **Occupied** · *a burner name* | Taken by another guest. *Mystery Burner* means the spot has no name: the crew holds it, or its ticket changed hands. |
-| 🟣 **Reserved by the crew** · *Not available* | Held back by the crew, for example a broken bed, a spot that isn't in use or one kept for [guests with special needs](./special-needs). |
+| 🔴 **Occupied** · *a burner name* | Taken by another guest. *Mystery Burner* means the booking has no name, for example because its ticket changed hands. |
+| 🟣 **Blocked by admin** · *Not available* | Held back by the crew, for example a broken bed, a spot that isn't in use, one the crew took for itself or one kept for [guests with special needs](./special-needs). |
 | ⚪️ **Not open yet** · *Booking opens soon* | Booking hasn't opened yet. |
 | ⚪️ **Booking closed** · *Spots are final* | The booking window is over. |
 
 > [!NOTE] One colour, one meaning
 > Green, red, turquoise, violet and grey mean the same on every spot card in CozyNights, and the crew sees the same colours on their side. Pink is kept for ♿ special needs alone: the ♿ link on the map, nothing else.
 
-![A booked room: the Welcome Home box with the booking pass, the e-mail address and Telegram; your spot, other guests' burner names and spots reserved by the crew](../assets/screenshots/guest-room.webp)
+![A booked room: the Welcome Home box with the booking pass, the e-mail address and Telegram; your spot, other guests' burner names and spots blocked by admin](../assets/screenshots/guest-room.webp)
 
 ## What a place is like
 

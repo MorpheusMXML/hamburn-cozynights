@@ -78,7 +78,7 @@ function isNotFound(err: unknown): boolean {
 /**
  * Whether a guest may book this bed at all (independent of occupancy).
  * Locked spots and special-needs spots are for the crew to hand out: guests
- * see both as "Reserved by the crew".
+ * see both as "Blocked by admin".
  */
 export function isBedBookable(
 	bed: Pick<BedsResponse, 'enabled' | 'is_locked'> & { is_special?: boolean },

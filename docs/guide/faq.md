@@ -130,12 +130,12 @@ Ask the crew for a special-needs spot, even before booking opens: sign in with y
 The form needs at least one ticked need (or *Something else*), a few words of text (5 to 500 characters) and the ticked consent box. *You sent your request 10 times within an hour* is a limit: it works again within the hour. *Special-needs requests are closed right now, so nothing was sent* means the crew stopped taking requests meanwhile: contact the crew. *The crew has already decided on your request* means it can't be changed anymore; the page shows the decision. If something changed, contact the crew. You can still withdraw the request.
 :::
 
-::: details A spot says "Reserved by the crew" in violet
-The crew holds it back: the bed is broken, kept free on purpose, not in use, or kept for guests with special needs. Pick another spot.
+::: details A spot says "Blocked by admin" in violet
+The crew holds it back: the bed is broken, kept free on purpose, taken by the crew, not in use, or kept for guests with special needs. Pick another spot.
 :::
 
 ::: details What do the colours on the spot cards mean?
-One colour, one meaning, on every page: **green** free, **red** taken by another guest, **turquoise** yours, **violet** reserved by the crew, **grey** not bookable right now (booking hasn't opened, or has closed). Pink is only ever ♿ special needs. In a bunk bed each half carries its own colour, and each is its own button.
+One colour, one meaning, on every page: **green** free, **red** taken by another guest, **turquoise** yours, **violet** blocked by admin, **grey** not bookable right now (booking hasn't opened, or has closed). Pink is only ever ♿ special needs. In a bunk bed each half carries its own colour, and each is its own button.
 :::
 
 ::: details The burning title is too much for me
