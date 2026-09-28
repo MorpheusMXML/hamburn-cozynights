@@ -26,6 +26,8 @@
 	// The camp editor (docs/admin/camp-layout.md): the map and the list of
 	// houses. Only admins reach this page (hooks + layout). Its writes are
 	// Control Center actions (/admin?/…), where they lived before the split.
+	// Always with the full path: a bare `?/…` posts to /admin/camp, which has
+	// no actions, and SvelteKit answers 405 Method Not Allowed.
 	$: ({ sanityWarnings, isSuperuser, phase, isLayoutLocked } = data);
 	// Locked (Live Booking, Closed): the structural controls stay in place,
 	// greyed out, and explain themselves when tried ($lib/layout-lock.ts).
@@ -150,7 +152,7 @@
 		formData.append('x', x.toString());
 		formData.append('y', y.toString());
 
-		const result = await submitAction('?/updateHouseCoords', formData);
+		const result = await submitAction('/admin?/updateHouseCoords', formData);
 
 		if (result.type === 'success') {
 			toast(`📍 ${house.name} moved to X ${x} / Y ${y}. Saved.`, 'success', 3000);
@@ -265,7 +267,7 @@
 		const formData = new FormData();
 		formData.append('id', house.id);
 
-		const result = await submitAction('?/deleteHouse', formData);
+		const result = await submitAction('/admin?/deleteHouse', formData);
 
 		if (result.type === 'success') {
 			toast(`🌪️ "${house.name}" was deleted.`, 'success');
@@ -297,7 +299,7 @@
 		let result: ActionResult;
 		if (editingHouse?.id) {
 			formData.append('id', editingHouse.id);
-			result = await submitAction('?/renameHouse', formData);
+			result = await submitAction('/admin?/renameHouse', formData);
 		} else {
 			formData.append('x', editingHouse?.x.toString() || '0');
 			formData.append('y', editingHouse?.y.toString() || '0');
@@ -338,7 +340,7 @@
 
 		await new Promise((resolve) => setTimeout(resolve, 500));
 
-		const result = await submitAction('?/deleteHouse', formData);
+		const result = await submitAction('/admin?/deleteHouse', formData);
 
 		if (result.type !== 'success') {
 			if (sidebar) sidebar.classList.remove('disintegrating');
