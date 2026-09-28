@@ -14,6 +14,7 @@ import { BURNER_NAME_MAX } from '../../src/lib/special-needs';
 import { TEMPLATE_LIMITS } from '../../src/lib/template';
 import { BED_TYPES, DESCRIPTION_MAX, type BedType } from '../../src/lib/accommodation';
 import { TICKET_LIMITS } from '../../src/lib/tickets';
+import { SWAP_NOTE_MAX } from '../../src/lib/swaps';
 
 export const TEXTS = {
 	houseLong:
@@ -32,7 +33,10 @@ export const TEXTS = {
 	descriptionLong:
 		'Die Waldhüttengruppe liegt hinter dem Wäscherei- und Sanitärgebäude, etwa fünfzig Meter den Waldweg hinauf: Duschen und Toiletten sind im Waschhaus, nicht in den Hütten selbst. Der Weg ist geschottert und bei Regen rutschig, eine Taschenlampe ist abends unbedingt zu empfehlen. Die Hütten werden nicht geheizt; bitte einen warmen Schlafsack mitbringen, in den Nächten Ende Oktober wird es am Brahmsee empfindlich kalt. Steckdosen gibt es nur im Gemeinschaftsraum des Haupthauses.',
 	requestText:
-		'I use a wheelchair, so I need step-free access from the parking area to the room and to a toilet. A lower bed would be great, too — thank you so much for sorting this out!'
+		'I use a wheelchair, so I need step-free access from the parking area to the room and to a toilet. A lower bed would be great, too — thank you so much for sorting this out!',
+	// A swap note at the limit, with a compound word that may only break inside itself.
+	swapNote:
+		'Hey! Meine ganze Crew schläft im Kuschelzeltplatzverwaltungsgebäude nebenan – tauschen wir? Danke dir tausendmal!!! 🙏✨🦄 Glitter & Liebe!'
 };
 
 /** Spot labels of the stress room, in the order of its beds. */
@@ -64,6 +68,7 @@ for (const [what, value, max] of [
 	['room name', TEXTS.roomLong, TEMPLATE_LIMITS.roomNameLength],
 	['burner name', TEXTS.burnerLong, BURNER_NAME_MAX],
 	['customer name', TEXTS.customerLong, TICKET_LIMITS.nameLength],
+	['swap note', TEXTS.swapNote, SWAP_NOTE_MAX],
 	['e-mail', TEXTS.emailLong, TICKET_LIMITS.emailLength],
 	...BED_LABELS.map((label) => ['spot label', label, TEMPLATE_LIMITS.bedLabelLength] as const)
 ] as const) {
@@ -322,12 +327,30 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		);
 		return { ...t, cookie: session.code, round: session.round };
 	};
-	await book('Upper 2', TEXTS.burnerLong);
+	const captain = await book('Upper 2', TEXTS.burnerLong);
 	await book('Lower 1', TEXTS.burnerWord);
 	await book('Kuschelzeltplatzverwaltungsbett', 'Ö');
 	await book('1', TEXTS.burnerEmoji);
 	const mine = await book('Lower 2', TEXTS.burnerMine, TEXTS.customerLong, TEXTS.emailLong);
 	const passCode = (await pb.collection('orders').getOne(mine.order.id)).pass_code as string;
+
+	// Swap requests (docs/guide/booking.md "Swap spots"), through the app like a
+	// guest asks: the longest burner name asks "me" with a note at the limit,
+	// and "I" ask for the spot with the longest single word.
+	const session = (guest: { cookie: string; round: string }) =>
+		`bookingCode=${guest.cookie}; bookingRound=${guest.round}`;
+	await post(
+		base,
+		`/room/${room.id}?/askSwap`,
+		{ bedId: beds['Lower 2'], vibe: 'bunk', note: TEXTS.swapNote },
+		session(captain)
+	);
+	await post(
+		base,
+		`/room/${room.id}?/askSwap`,
+		{ bedId: beds['Kuschelzeltplatzverwaltungsbett'], vibe: 'crew', note: TEXTS.swapNote },
+		session(mine)
+	);
 
 	const guestWithoutSpot = (await guestLogin(base, (await ticket(pb)).code)).code;
 

@@ -148,6 +148,31 @@ const PAGES: PageCase[] = [
 			await page.getByRole('dialog').waitFor();
 		}
 	},
+	// Swap requests (docs/guide/booking.md "Swap spots"): the sheet on a taken
+	// spot, and /swaps with a request at the limits for "me" and one of mine.
+	{
+		name: 'room: swap sheet',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithSpot',
+		phases: ['live'],
+		open: async (page) => {
+			await page
+				.locator('button.bed-card.swappable', { hasText: TEXTS.burnerLong.slice(0, 30) })
+				.click();
+			await page.getByRole('dialog').waitFor();
+			// The sheet and its tickets fly in: measure them where they land.
+			await page.evaluate(() =>
+				Promise.all(
+					document
+						.getAnimations()
+						.filter((a) => a.effect?.getTiming().iterations !== Infinity)
+						.map((a) => a.finished.catch(() => undefined))
+				)
+			);
+		}
+	},
+	{ name: 'swap requests', path: () => '/swaps', as: 'guestWithSpot', phases: ['live', 'closed'] },
+	{ name: 'swap requests without a spot', path: () => '/swaps', as: 'guestWithoutSpot' },
 	{
 		name: 'start page: refused ticket code',
 		path: () => '/',

@@ -13,7 +13,8 @@ const RELATIONS: Record<string, Record<string, string>> = {
 	special_requests: { order: 'orders' },
 	guest_notify: { order: 'orders' },
 	wallet_passes: { order: 'orders' },
-	wallet_devices: { pass: 'wallet_passes' }
+	wallet_devices: { pass: 'wallet_passes' },
+	swap_requests: { from_order: 'orders', to_order: 'orders', from_bed: 'beds', to_bed: 'beds' }
 };
 
 const UNIQUE: Record<string, string[]> = {
