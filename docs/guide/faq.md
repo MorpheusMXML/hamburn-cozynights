@@ -180,6 +180,8 @@ First the phase: guests book only during 🎪 Live Booking. Then check the spot 
 
 ::: details A house won't move when I drag it
 Either the layout is locked (Live Booking, or booking closed: the pin shakes its head and a small bubble next to it says so), or you are pushing it right on top of another house: houses keep a small distance from each other. Wait for Staging, or drop it a little further away.
+
+If the pin moves but jumps back with *The new position was not saved: …*, the server refused the move, and the text after the colon says why. Usually the phase changed while the page was open (*Map layout is locked during Live Booking*): reload the page. A refused rename or delete gives its reason in a dialog, *House not renamed* or *House not deleted*.
 :::
 
 ::: details I can't find "Clear all bookings", or I can't apply a template
