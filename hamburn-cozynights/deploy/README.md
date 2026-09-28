@@ -282,9 +282,38 @@ COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME docker compose -f docker-compose.stag
 - Tickets mit E-Mail-Adressen laden: `./scripts/cozy-admin.sh tickets import liste.csv --dry-run`,
   danach ohne `--dry-run`. Nach dem Event: `./scripts/cozy-admin.sh tickets forget-contacts --yes`.
 
+## Wallet-Pässe (optional)
+
+Der Buchungsnachweis in Apple Wallet und Google Wallet (Doku:
+`docs/admin/passes.md`, „Wallet passes“). Die Werte stehen in der `.env` des
+Checkouts (`deploy/staging.env.template`, Abschnitt 4b). Wie die Konten, das
+Pass-Zertifikat und der Dienstkonto-Schlüssel entstehen, steht im privaten
+Betriebs-Runbook, nicht in diesem öffentlichen Repo.
+
+- **Die App liest die Werte, nicht PocketBase.** Nach einer Änderung der `.env`
+  also den App-Container neu erzeugen (ein Deploy tut es auch). PocketBase
+  erfährt von der App, welche Wallets es gibt, und bietet sie dann in Mails und
+  Telegram-Nachrichten an.
+- **Nie mehr ändern, sobald ein Pass in einer Wallet liegt:**
+  `WALLET_APPLE_PASS_TYPE_ID`, `WALLET_GOOGLE_ISSUER_ID` und `ENCRYPTION_KEY`
+  (daraus leitet die App das Token ab, mit dem iPhones nach Updates fragen).
+  Sonst aktualisieren sich die Pässe in den Wallets nicht mehr.
+
+```bash
+source /etc/cozynights/deploy-staging.conf
+cd "$APP_DIR/hamburn-cozynights"
+COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME docker compose -f docker-compose.staging.yml up -d --no-deps --force-recreate app
+sleep 20; docker logs --since 2m cozynights-staging-app 2>&1 | grep -F '[Wallet]'
+```
+
+Erwartet: `[Wallet] apple + google wallet passes on; sync every 30 s` (oder nur
+`apple` bzw. `google`). Bleibt ein Wallet aus, nennt die Zeile den Grund, z. B.
+`[Wallet] Apple Wallet off: missing or invalid: WALLET_APPLE_WWDR`. Gar keine
+`[Wallet]`-Zeile: Es ist kein Wallet-Wert gesetzt.
+
 ## Staging testen: Benachrichtigungen und Buchungsnachweis
 
-Nach einem Deploy mit gesetzten `.env`-Werten (Abschnitt oben), auf dem Server:
+Nach einem Deploy mit gesetzten `.env`-Werten (Abschnitte oben), auf dem Server:
 
 ```bash
 source /etc/cozynights/deploy-staging.conf
@@ -294,16 +323,31 @@ cd "$APP_DIR/hamburn-cozynights"
 ./scripts/cozy-admin.sh tickets add TEST-PASS-1 --email du@mauersegler.art --name "Test"
 ```
 
-Dann im Browser (Live Booking muss an sein):
+Dann im Browser, als Gast am besten im privaten Fenster (dort spielt die
+Admin-Anmeldung nicht mit). Gäste buchen nur während **Live Booking**: Steht die
+Phase auf 🛠 Staging, schaltet ein Superuser im Control Center unter
+🎟 BOOKING WINDOW → „⚡ Switch right now“ → „Live Booking“ um, und die
+Crew-Gruppe meldet es. Beim Zurückschalten auf 🛠 Staging fragt der Dialog, ob
+die Gastbuchungen freigegeben werden.
 
 1. `https://test-cozynights.hamburn.de` → Code `TEST-PASS-1` → einen Platz buchen.
-2. Mail kommt nach ca. 15 s (Betreff mit `[STAGING]`, Link zum Buchungsnachweis).
-3. Im Zimmer „Get updates on Telegram“ → im Bot START → der Bot bestätigt den Platz.
-4. „🎫 Show booking pass“ → QR-Code und Code.
+2. Die Mail kommt innerhalb etwa einer Minute (Betreff mit `[STAGING]`, Link zum
+   Buchungsnachweis).
+3. Im Zimmer „✈️ Get updates on Telegram“ → im Bot START → „✅ Connected! …“ mit dem
+   Platz, dem QR-Code als Bild und dem Knopf „Show booking pass“. `/pass` schickt den
+   Pass noch einmal, das Bot-Menü zeigt /pass, /stop und /help. Verbinden geht auch
+   über `/telegram`, dort auch ohne Platz.
+4. „🎫 Show booking pass“ → QR-Code und Code. Mit eingerichteten Wallets (Abschnitt
+   oben) darunter „Add to Apple Wallet“ (iPhone) bzw. „Add to Google Wallet“
+   (Android), am Rechner beide; ohne Wallet-Werte gibt es keinen Wallet-Knopf.
 5. Als Admin: den QR-Code mit der Handy-Kamera scannen (im selben Browser bei `/admin`
-   angemeldet) oder im Admin-Kopf „🎫 Check passes“ → Code eintippen → ✅ VALID.
-6. Platz wechseln → eine Mail „changed“; Platz freigeben → Mail „released“, der Pass zeigt
-   ⚠️ NO SPOT.
+   angemeldet) → „✅ Check in“, oder im Admin-Menü „🎫 Check-in“ → Code eintippen →
+   ✅ CHECKED IN. Das checkt den Gast wirklich ein, und danach kann er seinen Platz
+   nicht mehr freigeben: für Schritt 6 erst „↩️ Undo check-in“.
+6. Platz wechseln (freigeben und innerhalb einer Minute einen anderen buchen) →
+   **eine** Nachricht „changed“ per Mail und Telegram; ein Wallet-Pass zeigt den neuen
+   Platz nach etwa einer Minute von selbst. Platz freigeben → „released“, die
+   Pass-Seite sagt „This ticket holds no spot right now“, der Check-in ⚠️ NO SPOT.
 7. Die Crew-Gruppe hat Meldungen zu Anmeldungen und Phasenwechseln bekommen.
 
 Nach den Tests: Testbuchungen freigeben und `./scripts/cozy-admin.sh tickets remove TEST-PASS-1`.
