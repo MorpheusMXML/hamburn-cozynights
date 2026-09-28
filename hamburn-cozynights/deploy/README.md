@@ -117,7 +117,9 @@ install -d -o deploy -g deploy -m 700 "$DEPLOY_HOME/.ssh"
 echo "command=\"/usr/local/bin/deploy-cozynights-staging\",restrict $PUBKEY" >> "$DEPLOY_HOME/.ssh/authorized_keys"
 chown deploy:deploy "$DEPLOY_HOME/.ssh/authorized_keys"
 chmod 600 "$DEPLOY_HOME/.ssh/authorized_keys"
-ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub   # Fingerprint für Schritt 4
+# Fingerprint für Schritt 4: der ECDSA-Hostkey. Die SSH-Action handelt ECDSA
+# vor ED25519 aus; ein ED25519-Fingerprint scheitert mit "fingerprint mismatch".
+ssh-keygen -lf /etc/ssh/ssh_host_ecdsa_key.pub
 ```
 
 Test vom Mac. Der Key darf **nur** das Skript starten, hier ohne SHA, also
@@ -245,8 +247,11 @@ docker logs cozynights-staging-pocketbase 2>&1 | grep 'cozy-'
 ## Wartung
 
 - Ändert sich `deploy-staging.sh` im Repo, Schritt 1 („Skript aus main
-  installieren“) wiederholen. Das Skript liegt bewusst außerhalb des
-  Checkouts, damit ein Deploy nicht den eigenen Befehl umschreiben kann.
+  installieren“) wiederholen, für Produktion ebenso (Abschnitt „Produktion“,
+  P6). Das Skript liegt bewusst außerhalb des Checkouts, damit ein Deploy
+  nicht den eigenen Befehl umschreiben kann. Welche Config es liest, ergibt
+  sich aus dem Namen der Kopie: `deploy-cozynights-<umgebung>` →
+  `/etc/cozynights/deploy-<umgebung>.conf`.
 - Logs eines Deploys: im GitHub-Actions-Run. App-Logs:
   `docker logs --tail 100 cozynights-staging-app`.
 
@@ -257,9 +262,12 @@ Crew-Gruppe (Doku: `docs/admin/notifications.md`). Einstellungen stehen in der
 `.env` des Checkouts (Beschreibung jedes Werts: `deploy/staging.env.template`,
 Abschnitt 4); `docker-compose.staging.yml` reicht sie an PocketBase weiter.
 
-- **Ein eigener Telegram-Bot nur für Staging.** Der Server liest die
-  Nachrichten an den Bot selbst ab (kein Webhook); zwei Server mit demselben
-  Bot stehlen sich gegenseitig die Nachrichten.
+- **Ein Bot, aber nur ein Server liest ihn ab.** Der Server liest die
+  Nachrichten an den Bot selbst ab (kein Webhook); zwei Server, die denselben
+  Bot abfragen, stehlen sich gegenseitig die Nachrichten. Staging und
+  Produktion teilen sich Bot und Crew-Gruppe; der jeweils andere Server läuft
+  mit `TELEGRAM_GUEST_UPDATES=off` (Crew-Meldungen schickt er weiter). Bis zum
+  Livegang liest Staging ab, danach Produktion.
 - Nach einer Änderung der `.env` PocketBase neu erzeugen (die Variablen werden
   nur beim Anlegen des Containers gelesen), dann prüfen:
 
@@ -299,3 +307,180 @@ Dann im Browser (Live Booking muss an sein):
 7. Die Crew-Gruppe hat Meldungen zu Anmeldungen und Phasenwechseln bekommen.
 
 Nach den Tests: Testbuchungen freigeben und `./scripts/cozy-admin.sh tickets remove TEST-PASS-1`.
+
+## Produktion (https://cozynights.hamburn.de)
+
+Ein eigener Stack auf demselben Server, getrennt in allem, was Daten hält oder
+auf einem Port lauscht. Staging bleibt, wie es ist.
+
+| | Staging | Produktion |
+| --- | --- | --- |
+| Checkout | `/opt/hamburn-cozynights-staging` | `/opt/hamburn-cozynights-production` |
+| Compose-Datei · Projekt | `docker-compose.staging.yml` · `hamburn-cozynights` | `docker-compose.production.yml` · `cozynights-production` |
+| Container | `cozynights-staging-app`, `-pocketbase` | `cozynights-production-app`, `-pocketbase` |
+| Ports (nur 127.0.0.1) | App 3001, PocketBase 8091 | App 3002, PocketBase 8092 |
+| Volume | `hamburn-cozynights_pb_data_staging` | `cozynights-production_pb_data` |
+| Config · Deploy-Skript | `/etc/cozynights/deploy-staging.conf` · `/usr/local/bin/deploy-cozynights-staging` | `/etc/cozynights/deploy-production.conf` · `/usr/local/bin/deploy-cozynights-production` |
+| Deploy-Archive | `/var/backups/cozynights-staging` | `/var/backups/cozynights-production` |
+| Workflow · Environment | „Deploy staging“ · `staging` | „Deploy production“ · `production` (nur `main`) |
+
+Produktion bekommt nur freigegebenen Code, dreifach geprüft: der Workflow
+verweigert jeden Ref außer `main`, das GitHub-Environment `production` lässt nur
+`main` zu und wartet auf die Freigabe, und das Deploy-Skript verweigert einen
+Commit, der nicht auf `origin/main` liegt (`REQUIRE_BRANCH=main`).
+
+Bis zum Livegang steht vor der ganzen Seite die **Schranke**: eine
+Google-Anmeldung, die nur Konten der Workspace `mauersegler.art` durchlässt
+(Abschnitt „Die Schranke“ unten).
+
+### Einrichtung (einmalig, als root)
+
+Vorher erledigt: DNS für `cozynights.hamburn.de` (A und AAAA wie der Server),
+zwei eigene Google-OAuth-Clients (Typ „Web application“, Consent-Screen
+„Internal“) — Admin-Login mit Redirect-URI
+`https://cozynights.hamburn.de/auth/callback/google`, Schranke mit
+`https://cozynights.hamburn.de/oauth2/callback` —, und die Produktions-Dateien
+sind auf `main`.
+
+**P1. Checkout** (gehört `deploy`, steht auf `main`):
+
+```bash
+P=/opt/hamburn-cozynights-production
+install -d -o deploy -g deploy -m 755 "$P"
+sudo -u deploy git clone -q https://github.com/MorpheusMXML/hamburn-cozynights.git "$P"
+sudo -u deploy git -C "$P" checkout -q --detach origin/main
+sudo -u deploy git -C "$P" log --oneline -1
+```
+
+**P2. Die Schranke zuerst**, damit die Seite nie offen ist. Client-ID und
+Secret des Schranken-Clients in die `.env` eintragen (`nano`):
+
+```bash
+R=/opt/hamburn-cozynights-production/hamburn-cozynights
+install -d -m 750 /opt/cozynights-gate
+install -m 644 "$R/deploy/gate/docker-compose.yml" /opt/cozynights-gate/docker-compose.yml
+install -m 600 "$R/deploy/gate/gate.env.template" /opt/cozynights-gate/.env
+sed -i "s|^OAUTH2_PROXY_COOKIE_SECRET=.*|OAUTH2_PROXY_COOKIE_SECRET=$(openssl rand -base64 32 | tr -- '+/' '-_')|" /opt/cozynights-gate/.env
+nano /opt/cozynights-gate/.env
+install -m 644 "$R/deploy/nginx/cozynights-gate-on.conf" "$R/deploy/nginx/cozynights-gate-off.conf" /etc/nginx/snippets/
+install -o root -g root -m 755 "$R/deploy/gate/cozynights-gate" /usr/local/sbin/cozynights-gate
+cozynights-gate on
+```
+
+Erwartet: `gate ON`, dazu der Hinweis, dass noch kein vhost die Seite ausliefert.
+
+**P3. Zertifikat und vhost.** Erst ein vhost nur für Port 80, damit certbot
+das Zertifikat holen kann, dann der echte aus dem Repo:
+
+```bash
+R=/opt/hamburn-cozynights-production/hamburn-cozynights
+V=/etc/nginx/sites-available/cozynights.hamburn.de
+printf 'server {\n    listen 80;\n    listen [::]:80;\n    server_name cozynights.hamburn.de;\n    location / { return 404; }\n}\n' > "$V"
+ln -s "$V" /etc/nginx/sites-enabled/cozynights.hamburn.de
+nginx -t && systemctl reload nginx
+certbot certonly --nginx -d cozynights.hamburn.de --deploy-hook "systemctl reload nginx"
+install -m 644 "$R/deploy/nginx/cozynights.hamburn.de.conf" "$V"
+nginx -t && systemctl reload nginx
+cozynights-gate status
+```
+
+Erwartet: `GET https://cozynights.hamburn.de/ → 302 https://accounts.google.com/…`.
+
+**P4. Config und `.env`.** Eigene Schlüssel, `LEGAL_*` aus der Staging-`.env`;
+danach den Google-Client des Admin-Logins eintragen (`nano`) und die `.env` als
+sichere Notiz in Vaultwarden ablegen, beide Schlüssel aufs Notfallblatt:
+
+```bash
+P=/opt/hamburn-cozynights-production
+R=$P/hamburn-cozynights
+cat > /etc/cozynights/deploy-production.conf <<CONF
+APP_DIR=$P
+COMPOSE_PROJECT_NAME=cozynights-production
+COMPOSE_FILE=docker-compose.production.yml
+BACKUP_DIR=/var/backups/cozynights-production
+HEALTH_URL=http://127.0.0.1:3002/api/health
+PB_CONTAINER=cozynights-production-pocketbase
+REQUIRE_BRANCH=main
+CONF
+install -d -o deploy -g deploy -m 750 /var/backups/cozynights-production
+install -o deploy -g deploy -m 600 "$R/deploy/production.env.template" "$R/.env"
+sed -i "s|^ENCRYPTION_KEY=.*|ENCRYPTION_KEY=$(openssl rand -hex 32)|; s|^PB_ENCRYPTION_KEY=.*|PB_ENCRYPTION_KEY=$(openssl rand -hex 16)|" "$R/.env"
+sed -i '/^LEGAL_/d' "$R/.env" && grep '^LEGAL_' /opt/hamburn-cozynights-staging/hamburn-cozynights/.env >> "$R/.env"
+nano "$R/.env"
+chown deploy:deploy "$R/.env" && chmod 600 "$R/.env"
+```
+
+**P5. Erststart von Hand.** Image bauen, PocketBase starten, dann mit
+`scripts/cozy-admin.sh` das Service-Konto der App und den ersten Superuser
+anlegen und die Crew einladen (`cozy-admin.sh --help`). Das Werkzeug nimmt
+Compose-Datei und Projekt aus der Deploy-Config:
+
+```bash
+R=/opt/hamburn-cozynights-production/hamburn-cozynights
+cd "$R"
+GIT_SHA=$(sudo -u deploy git -C /opt/hamburn-cozynights-production rev-parse HEAD) docker compose -f docker-compose.production.yml build app
+docker compose -f docker-compose.production.yml up -d pocketbase
+export COZY_DEPLOY_CONF=/etc/cozynights/deploy-production.conf
+./scripts/cozy-admin.sh --help
+```
+
+Erwartet danach: `curl -s http://127.0.0.1:3002/api/health` antwortet mit
+`"status":"ok"`, Version und Commit.
+
+**P6. Deploy-Skript, Probelauf, Deploy-Key.** Dasselbe Skript wie für Staging,
+unter dem Namen der Produktion installiert; der Probelauf deployt den laufenden
+Commit neu (Backup, Build, Health-Check):
+
+```bash
+R=/opt/hamburn-cozynights-production/hamburn-cozynights
+install -o root -g root -m 755 "$R/deploy/deploy-staging.sh" /usr/local/bin/deploy-cozynights-production
+sudo -u deploy /usr/local/bin/deploy-cozynights-production "deploy $(sudo -u deploy git -C /opt/hamburn-cozynights-production rev-parse HEAD)"
+ls -lh /var/backups/cozynights-production/
+```
+
+Deploy-Key wie in Schritt 3/4 oben, aber als zweiter Key mit eigenem Forced
+Command `command="/usr/local/bin/deploy-cozynights-production",restrict` und
+den Secrets `PRODUCTION_SSH_HOST`, `PRODUCTION_DEPLOY_SSH_KEY`,
+`PRODUCTION_SSH_FINGERPRINT` (derselbe ECDSA-Fingerprint) im Environment
+`production`. Das Environment: Required reviewers, Deployment branches nur
+`main`, keine Umgehung für Admins.
+
+**P7. Erster Deploy über GitHub:** Actions → **Deploy production** → Run
+workflow auf `main` (oder `gh workflow run deploy-production.yml --ref main`),
+freigeben. Hinter der Schranke prüft der Smoke-Job nur `/api/health` (der
+deployte Commit) und die Umleitung zu Google.
+
+**P8. Backups:** Die Produktions-Datenbank in das Server-Backup aufnehmen
+(`deploy/backup/README.md`, „Neue Umgebung“), dann die Prüfung des Backups
+laufen lassen.
+
+### Die Schranke
+
+```bash
+cozynights-gate status   # nginx an/aus, oauth2-proxy, was ein Besucher bekommt
+cozynights-gate on       # zu: jeder Besuch braucht ein mauersegler.art-Google-Konto
+cozynights-gate off      # LIVEGANG: öffentlich
+```
+
+- nginx fragt oauth2-proxy (`/opt/cozynights-gate`, Port 4180, nur lokal)
+  per `auth_request`; `/etc/nginx/snippets/cozynights-gate.conf` zeigt auf
+  `cozynights-gate-on.conf` oder `cozynights-gate-off.conf`. Das Skript
+  schaltet in der sicheren Reihenfolge, testet nginx und stellt bei einem
+  Fehler den alten Zustand wieder her.
+- Einzige Ausnahme: `/api/health`. Fällt oauth2-proxy bei eingeschalteter
+  Schranke aus, antwortet nginx mit 500 — die Seite bleibt zu.
+- Anmeldung an der Schranke gilt 7 Tage; Logs: `docker logs cozynights-gate`.
+- Nach dem Livegang installiert lassen: `cozynights-gate on` schließt die
+  Seite in Sekunden wieder (Notfall, nach dem Event).
+
+### Wartung Produktion
+
+- Admin-Werkzeug immer aus dem Produktions-Checkout mit ihrer Config:
+  `COZY_DEPLOY_CONF=/etc/cozynights/deploy-production.conf /opt/hamburn-cozynights-production/hamburn-cozynights/scripts/cozy-admin.sh list`
+  (aus dem Staging-Checkout verweigert es das).
+- Nach einer Änderung der `.env`:
+  `cd /opt/hamburn-cozynights-production/hamburn-cozynights && docker compose -f docker-compose.production.yml up -d --no-deps --force-recreate pocketbase`
+  (bzw. `app`).
+- PocketBase-Dashboard: `ssh -N -L 8092:127.0.0.1:8092 <server>`, dann `http://127.0.0.1:8092/_/`.
+- Rollback und Schlüssel-Themen wie oben bei Staging, mit den Namen aus der
+  Tabelle.

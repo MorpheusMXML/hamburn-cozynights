@@ -6,9 +6,9 @@
 | --- | --- | --- | --- |
 | **Local** | `http://localhost:5173` | Development on your machine | Your own `pb_data/`, never shared |
 | **Staging** | [test-cozynights.hamburn.de](https://test-cozynights.hamburn.de) | Testing with real Google sign-ins before anything goes live | Separate and disposable |
-| **Production** | the event's address | The live event | Real tickets and bookings |
+| **Production** | [cozynights.hamburn.de](https://cozynights.hamburn.de) | The live event | Real tickets and bookings |
 
-Staging behaves exactly like production: no extra login gate in front of it, guests use ticket codes, admins use Google.
+Staging behaves exactly like production after its launch: no extra login in front of it, guests use ticket codes, admins use Google. Until launch day production has one more lock: a Google sign-in for `mauersegler.art` accounts in front of the whole site (see [Pre-launch gate](#pre-launch-gate)).
 
 ### How environments stay apart
 
@@ -24,12 +24,12 @@ flowchart LR
     papp["app"] --> ppb[("PocketBase")]
   end
   nginx -- "test-cozynights.…" --> sapp
-  nginx -- "event domain" --> papp
+  nginx -- "cozynights.…" --> papp
 ```
 
 - Containers bind to the server's **loopback interface only**; nginx is the single public entry point and terminates TLS.
 - **PocketBase is never public.** The app reaches it over the stack's internal network.
-- **No secrets in git.** Each environment's `.env` exists only on its server (plus a copy in the team's password manager). The staging layout of that file is described in `deploy/staging.env.template`.
+- **No secrets in git.** Each environment's `.env` exists only on its server (plus a copy in the team's password manager). Its layout is described in `deploy/staging.env.template` and `deploy/production.env.template`.
 
 ## Deploying to staging
 
@@ -123,11 +123,13 @@ Every deploy carries a version in the shape **`0.<deploy number>.<fix>`**: Deplo
 - as a small badge next to the title on the start page, in the footer of every other page and in the admin menu — hover it for the build (commit and day), click it for the release notes on GitHub;
 - in `GET /api/health`, as `version` and `commit`, so the [deploy runbook](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md) can compare it with the release that was just approved.
 
-The version lives in `package.json` and is baked into the build together with the commit (`build-info.ts`; the deploy script passes the commit as the Docker build argument `GIT_SHA`). The script that does that is the copy in `/usr/local/sbin/deploy-staging.sh` on the server, **not** the one in the checkout: after changing `deploy/deploy-staging.sh`, install it again, otherwise the image is built without `GIT_SHA` and the badge shows the version with an empty commit.
+The version lives in `package.json` and is baked into the build together with the commit (`build-info.ts`; the deploy script passes the commit as the Docker build argument `GIT_SHA`). The script that does that is the installed copy the deploy key's forced command runs — `/usr/local/bin/deploy-cozynights-staging` and `/usr/local/bin/deploy-cozynights-production` on the server — **not** the one in the checkout: after changing `deploy/deploy-staging.sh`, install it again, otherwise the server keeps running the old one (an image built without `GIT_SHA`, for example, shows the version with an empty commit).
 
 ```bash
-ssh -t mauersegler 'sudo install -o root -g root -m 755 /opt/hamburn-cozynights-staging/hamburn-cozynights/deploy/deploy-staging.sh /usr/local/sbin/deploy-staging.sh && grep -c GIT_SHA /usr/local/sbin/deploy-staging.sh'
-``` Stamp it on the state that is about to be deployed, **before** the deploy run:
+ssh -t mauersegler 'sudo install -o root -g root -m 755 /opt/hamburn-cozynights-staging/hamburn-cozynights/deploy/deploy-staging.sh /usr/local/bin/deploy-cozynights-staging && grep -c GIT_SHA /usr/local/bin/deploy-cozynights-staging'
+```
+
+Stamp the version on the state that is about to be deployed, **before** the deploy run:
 
 ```bash
 # from hamburn-cozynights/, on the deploy branch with a clean tree
@@ -205,7 +207,7 @@ Booking confirmations and crew alerts are sent by PocketBase (`pb_hooks/cozy_not
 | `COZY_APP_URL`, `COZY_ENV_LABEL` | Links in messages and the `[STAGING]` marker. Set in the compose file, not in `.env`. |
 | `PB_HIDE_CONTROLS`, `PB_LOGS_DAYS` | PocketBase settings applied on every start (`pb_hooks/cozy_settings.pb.js`): the dashboard's schema editors hidden (`on`, the default on servers), and the request log kept for that many days (default 2, never with IPs). |
 
-- **One Telegram bot per environment.** The server reads the bot's messages by polling; two environments with the same bot would steal each other's messages.
+- **One server polls a bot.** The server reads the bot's messages (guests connecting their chat, `/pass`) by polling; two servers polling the same bot would steal each other's messages. Staging and production share one bot and crew group, so exactly one of them polls it: the other runs with `TELEGRAM_GUEST_UPDATES=off` and still sends crew alerts. Until the launch staging polls; at the launch the switch goes the other way.
 - **The mail password is stored twice.** PocketBase keeps its own copy of the SMTP settings in its database, so it is also in every database backup. Use credentials that can only send mail — an SMTP user of a sending service, one per environment — never the password of a mailbox.
 - **Check after setting it up**, on the server: `./scripts/cozy-admin.sh notify status` and `./scripts/cozy-admin.sh notify test --email <you>`.
 
@@ -224,18 +226,44 @@ The booking pass can go into Apple Wallet and Google Wallet ([Wallet passes](../
 - **The log says what is on.** At startup the app prints which wallet is on, and for one that stays off, which value is missing or wrong.
 - **What a deploy must not break:** the pass type id and the issuer id. Change them and every pass already in a guest's wallet stops being updated.
 
+## Production
+
+Production runs on the same server as staging, as a stack of its own. The one-time server setup and the switch commands are in the operator runbook [`hamburn-cozynights/deploy/README.md`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md), section *Produktion* (German).
+
+| | Staging | Production |
+| --- | --- | --- |
+| Address | `test-cozynights.hamburn.de` | `cozynights.hamburn.de` |
+| Deploys | any branch, in practice `integration/staging` | `main` only |
+| Compose file | `docker-compose.staging.yml` | `docker-compose.production.yml` |
+| Workflow · GitHub environment | `deploy-staging.yml` · `staging` | `deploy-production.yml` · `production` |
+| Server config | `/etc/cozynights/deploy-staging.conf` | `/etc/cozynights/deploy-production.conf` |
+| `.env` template | `deploy/staging.env.template` | `deploy/production.env.template` |
+
+- **Only released code.** Three independent locks keep everything but `main` out: the workflow refuses any other ref, the GitHub environment `production` admits only `main` and waits for a reviewer, and the server's deploy script refuses a commit that is not on `origin/main` (`REQUIRE_BRANCH=main` in its config). The release PR from `integration/staging` to `main` decides *what* can go live; the deploy run, approved separately, decides *when*.
+- **One deploy script, one copy per stack.** `deploy/deploy-staging.sh` is installed as `/usr/local/bin/deploy-cozynights-<env>` and reads `/etc/cozynights/deploy-<env>.conf`, so each stack's forced-command key can only ever deploy that stack. Every stack except staging has to name its compose file, backup folder, health URL and PocketBase container, or the script refuses to start: a staging default there would stop the wrong database. Old images are pruned per compose project, because both stacks share one Docker daemon.
+- **Smoke test.** After the deploy the workflow checks from outside that `/api/health` answers with the deployed commit. The full read-only smoke test (`npm run smoke:remote`) runs once the site is public; while the pre-launch gate is on, the workflow only checks that the gate sends visitors to Google.
+
+### Pre-launch gate
+
+Until launch day nginx puts a Google sign-in in front of the whole production site: [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) answers nginx's `auth_request`, and only accounts of the `mauersegler.art` Google Workspace get through (with an *Internal* consent screen Google turns everyone else away already). The app knows nothing about it and runs exactly as it will after the launch; the crew signs in at the gate once a week and in the app's own admin login as usual.
+
+- **One switch.** `/etc/nginx/snippets/cozynights-gate.conf` is a symlink to `cozynights-gate-on.conf` or `cozynights-gate-off.conf` (`deploy/nginx/`). `cozynights-gate on|off|status` (`deploy/gate/cozynights-gate`) swaps it, tests and reloads nginx and starts or stops oauth2-proxy in the order that never opens the site by accident. It takes seconds and no deploy.
+- **Fails closed.** If oauth2-proxy is down while the gate is on, nginx answers `500` instead of letting anyone through.
+- **One exception:** `/api/health` (status, version, commit) stays public, for the post-deploy check and uptime monitoring.
+- **Apart from the app stack.** oauth2-proxy is its own small compose project (`deploy/gate/docker-compose.yml`, image pinned by digest) with its own Google OAuth client (redirect URI `https://cozynights.hamburn.de/oauth2/callback`); deploys never touch it.
+- **After the launch** it stays installed and switched off: `cozynights-gate on` closes the site again within seconds, during an incident or once the event is over.
+
 ## Adding an environment
 
-Production, for example:
+Production is the pattern for any further stack:
 
 <div class="steps">
 
-1. **Compose file.** Copy `docker-compose.staging.yml` to `docker-compose.<env>.yml` and give containers, ports, volume and `ORIGIN` their own values, so nothing collides with other environments. Also set `COZY_APP_URL` (the links in guest messages) and `COZY_ENV_LABEL` (empty for production: no `[STAGING]` marker).
-2. **Configuration.** Create the environment's `.env` on the server, following `deploy/staging.env.template`. Never commit it. It also holds the operator details for the Impressum and the privacy policy (`LEGAL_*`, see [Legal pages](../admin/legal)).
-3. **Domain.** Add an nginx vhost for the domain (see `deploy/nginx/`), issue a certificate, and add the redirect URI to the Google OAuth client.
-4. **Pipeline.** Add a workflow mirroring `deploy-staging.yml`, with its own GitHub environment and required approval, and a deploy user scoped to that environment only.
-5. **First admins.** Invite the crew with the admin tool, pointed at the new stack: `COZY_COMPOSE_FILE=docker-compose.<env>.yml COMPOSE_PROJECT_NAME=<project of that stack>` (or `COZY_DEPLOY_CONF=/etc/cozynights/<env>.conf`), plus `COZY_ENV_FILE` if that stack's `.env` isn't next to the compose file. The tool refuses to guess the project name (*COZY_COMPOSE_FILE is set but COMPOSE_PROJECT_NAME is not*), because a guess would silently target the staging containers. See [Admin access & roles](../admin/access#managing-admins).
-6. **Keep the stacks apart.** Give the new compose file a fixed volume name and its own `container_name`s and ports; the deploy script gets its own config in `/etc/cozynights/` and its own backup folder; the forced-command deploy key is a second key. Both stacks share one Docker daemon, so never prune images while the other stack builds.
+1. **Compose file.** A copy of `docker-compose.production.yml` with its own top-level `name:`, `container_name`s, ports, network and fixed volume name, so nothing collides with the other stacks; `ORIGIN` and `COZY_APP_URL` set to its address, `COZY_ENV_LABEL` for a marker in messages (staging: `STAGING`).
+2. **Configuration.** The environment's `.env` on the server, following `deploy/production.env.template`, with keys of its own. Never commit it. It also holds the operator details for the Impressum and the privacy policy (`LEGAL_*`, see [Legal pages](../admin/legal)).
+3. **Domain.** An nginx vhost (see `deploy/nginx/`), a certificate, and the environment's own Google OAuth client with its redirect URI.
+4. **Pipeline.** A workflow like `deploy-production.yml` with its own GitHub environment and required approval; the deploy script installed once more as `/usr/local/bin/deploy-cozynights-<env>` with `/etc/cozynights/deploy-<env>.conf` and its own backup folder, reached through another forced-command key of the `deploy` user.
+5. **First admins.** Run the admin tool from that stack's checkout with its deploy config: `COZY_DEPLOY_CONF=/etc/cozynights/deploy-<env>.conf scripts/cozy-admin.sh …` takes compose file and project from there and refuses to run from another stack's checkout, because a recreate from there would start the containers with the wrong `.env`. See [Admin access & roles](../admin/access#managing-admins).
 
 </div>
 
