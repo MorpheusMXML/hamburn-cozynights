@@ -471,7 +471,7 @@ describe('Admin Management Actions', () => {
 		const request = { formData: async () => formData } as any;
 
 		const results = [
-			await houseAdminActions.createRoom({ request, params: { id: 'h' }, locals: noAdmin } as any),
+			await houseAdminActions.createRooms({ request, params: { id: 'h' }, locals: noAdmin } as any),
 			await houseAdminActions.deleteRoom({ request, locals: noAdmin } as any),
 			await adminActions.createBed({ request, params: { id: 'r' }, locals: noAdmin } as any),
 			await adminActions.deleteBed({ request, locals: noAdmin } as any),
@@ -489,35 +489,6 @@ describe('Admin Management Actions', () => {
 		expect(mockPb.create).not.toHaveBeenCalled();
 		expect(mockPb.update).not.toHaveBeenCalled();
 		expect(mockPb.delete).not.toHaveBeenCalled();
-	});
-
-	it('should create a room with active spots in staging mode', async () => {
-		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: false }); // Staging mode
-		// the house the room belongs to: its kind decides the new room's kind
-		mockPb.getOne.mockResolvedValueOnce({ id: 'house1', name: 'Villa', kind: 'house' });
-		mockPb.create.mockResolvedValueOnce({ id: 'room1' }); // Room created
-
-		const formData = new FormData();
-		formData.append('name', 'Villa Suite');
-		formData.append('room_number', '101');
-		formData.append('amount_beds', '2');
-		const request = { formData: async () => formData } as any;
-
-		await houseAdminActions.createRoom({
-			request,
-			params: { id: 'house1' },
-			locals: mockLocals
-		} as any);
-
-		expect(mockPb.create).toHaveBeenCalledWith(
-			expect.objectContaining({ name: 'Villa Suite', house: 'house1', kind: 'room' })
-		);
-		expect(mockPb.create).toHaveBeenCalledWith(
-			expect.objectContaining({ label: 'Spot 1', room: 'room1', enabled: true })
-		);
-		expect(mockPb.create).toHaveBeenCalledWith(
-			expect.objectContaining({ label: 'Spot 2', room: 'room1', enabled: true })
-		);
 	});
 
 	it('should delete a room in staging mode', async () => {

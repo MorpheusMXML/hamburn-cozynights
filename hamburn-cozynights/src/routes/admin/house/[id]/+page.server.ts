@@ -2,11 +2,12 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
 import { getBookingSettings } from '$lib/server/settings';
-import { bedTypeMix, defaultRoomKind, parseDetailsForm } from '$lib/accommodation';
+import { bedTypeMix, parseDetailsForm } from '$lib/accommodation';
 import { countSpots } from '$lib/occupancy';
 import { readBookings } from '$lib/server/bookings';
 import { NAMES_LOCKED, checkHouseName } from '$lib/server/names';
-import { TEMPLATE_LIMITS } from '$lib/template';
+import { formatSizes, readPlanForm, suggestSize } from '$lib/house-plan';
+import { GeneratorError, generateRooms } from '$lib/server/house-generator';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	// Security check 🛡️ (runs in parallel with the layout load)
@@ -50,6 +51,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		return {
 			house,
 			rooms: roomsWithStats,
+			// ADD ROOMS starts with one more room like the ones the house has most of.
+			suggestedSize: suggestSize(
+				rooms.map((room) => {
+					const own = beds.filter((b) => b.room === room.id);
+					return { spots: own.length, bunks: own.some((b) => !!b.bunk_partner) };
+				})
+			),
 			bookings,
 			isLayoutLocked: settings.isLayoutLocked,
 			phase: settings.phase
@@ -62,11 +70,6 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 const LOCKED_MESSAGE =
 	"Rooms are locked while booking is live or closed: the layout holds the guests' bookings. A superuser can switch back to Staging Mode in the Control Center.";
-
-/** "12" -> 12; anything that is not a plain whole number -> null. */
-function parseWholeNumber(value: string): number | null {
-	return /^\d{1,6}$/.test(value) ? Number(value) : null;
-}
 
 export const actions: Actions = {
 	/**
@@ -116,95 +119,43 @@ export const actions: Actions = {
 		}
 	},
 
-	createRoom: async ({ request, locals, params }) => {
+	/**
+	 * ADD ROOMS: the size rows of the house generator ($lib/house-plan) —
+	 * "3 rooms × 4 beds", numbers after the house's last room, rolled names,
+	 * spots B1 … Bn (stacked in pairs with 🪜). All or nothing.
+	 */
+	createRooms: async ({ request, locals, params }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can create rooms.' });
 
 		const { isLayoutLocked } = await getBookingSettings(locals.pb);
 		if (isLayoutLocked) return fail(403, { message: LOCKED_MESSAGE });
 
-		console.log(`[Action:createRoom] Admin: ${locals.admin.email}, House: ${params.id}`);
+		const form = readPlanForm(await request.formData());
+		if (!form.ok) return fail(400, { message: form.error });
 
-		const data = await request.formData();
-		const houseId = params.id;
-		const name = String(data.get('name') ?? '').trim();
-		const numberInput = String(data.get('room_number') ?? '').trim();
-		const bedsInput = String(data.get('amount_beds') ?? '').trim();
-
-		// Same limits as the template import, so an exported layout can always be
-		// imported again.
-		const errors: { name?: string; room_number?: string; amount_beds?: string } = {};
-		if (!name) {
-			errors.name = 'Enter a name for the room.';
-		} else if (name.length > TEMPLATE_LIMITS.roomNameLength) {
-			errors.name = `The name is too long. Use at most ${TEMPLATE_LIMITS.roomNameLength} characters.`;
-		}
-
-		const roomNumber = parseWholeNumber(numberInput);
-		if (roomNumber === null || roomNumber < 1 || roomNumber > TEMPLATE_LIMITS.roomNumber) {
-			errors.room_number = `Enter a whole number from 1 to ${TEMPLATE_LIMITS.roomNumber}.`;
-		}
-
-		const amountBeds = bedsInput === '' ? 0 : parseWholeNumber(bedsInput);
-		if (amountBeds === null || amountBeds > TEMPLATE_LIMITS.bedsPerRoom) {
-			errors.amount_beds = `Enter a whole number from 0 to ${TEMPLATE_LIMITS.bedsPerRoom}, or leave it empty.`;
-		}
-
-		if (Object.keys(errors).length > 0 || roomNumber === null || amountBeds === null) {
-			return fail(400, { message: 'The room was not added. Check the marked fields.', errors });
-		}
-
+		let house: HousesResponse;
 		try {
-			const siblings = await locals.pb.collection('rooms').getFullList<RoomsResponse>({
-				filter: locals.pb.filter('house = {:id}', { id: houseId })
-			});
-			if (siblings.length >= TEMPLATE_LIMITS.roomsPerHouse) {
-				return fail(400, {
-					message: `This house already has ${siblings.length} rooms, the limit is ${TEMPLATE_LIMITS.roomsPerHouse}. Add the room to another house.`
-				});
-			}
-			const sameNumber = siblings.find((room) => room.room_number === roomNumber);
-			if (sameNumber) {
-				return fail(400, {
-					message: 'The room was not added. Check the marked fields.',
-					errors: {
-						room_number: `Room number ${roomNumber} is already used by "${sameNumber.name}" in this house. Pick another number.`
-					}
-				});
-			}
-
-			// A hut group's rooms are huts, a tent area's are tents: the crew can
-			// still change the kind in the room's details. A house that can't be
-			// read right now only costs the default, not the room.
-			const house = await locals.pb
-				.collection('houses')
-				.getOne<HousesResponse>(houseId)
-				.catch(() => null);
-			const room = await locals.pb.collection('rooms').create({
-				name,
-				room_number: roomNumber,
-				amount_beds: amountBeds,
-				kind: defaultRoomKind(house?.kind),
-				house: houseId
-			});
-
-			// Automatically create the room's spots. Like every new spot they are
-			// active, i.e. bookable once booking opens.
-			for (let i = 1; i <= amountBeds; i++) {
-				await locals.pb.collection('beds').create({
-					label: `Spot ${i}`,
-					room: room.id,
-					enabled: true,
-					occupied: false
-				});
-			}
-
-			console.log('[Action:createRoom] SUCCESS.');
-			return { success: true };
+			house = await locals.pb.collection('houses').getOne<HousesResponse>(params.id);
 		} catch (err) {
-			console.error('[Action:createRoom] FAILED:', err);
+			console.error('[Action:createRooms] House not found:', err);
+			return fail(404, {
+				message: 'This house is gone. Reload the Control Center to see the camp as it is.'
+			});
+		}
+
+		console.log(
+			`[Action:createRooms] Admin: ${locals.admin.email}, House: ${params.id}, sizes ${formatSizes(form.plan.sizes)}${form.plan.floors ? ', floor blocks' : ''}`
+		);
+		try {
+			const built = await generateRooms(locals.pb, house, form.plan);
+			console.log(`[Action:createRooms] SUCCESS: ${built.rooms} rooms, ${built.spots} spots.`);
+			return { success: true, rooms: built.rooms, spots: built.spots, names: built.names };
+		} catch (err) {
+			if (err instanceof GeneratorError) return fail(err.status, { message: err.full });
+			console.error('[Action:createRooms] FAILED:', err);
 			return fail(500, {
 				message:
-					'The server could not save the room. Reload the page to see what was created, then try again.'
+					'The server could not save the rooms. Reload the page to see what was created, then try again.'
 			});
 		}
 	},

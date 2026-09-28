@@ -81,7 +81,8 @@ export async function compareTemplate(
 	return diffLayout(await loadCamp(pb), template);
 }
 
-function describeError(err: unknown): string {
+/** What PocketBase said about a refused write, in one line for the admin. */
+export function describeError(err: unknown): string {
 	const failure = err as {
 		status?: number;
 		message?: string;

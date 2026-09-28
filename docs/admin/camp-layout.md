@@ -21,10 +21,28 @@ A name that breaks a rule is refused with the reason under the field, and nothin
 
 ### Create a house
 
-- **Map view:** click an empty place on the map. In the *GENERATE SANCTUARY* sidebar enter a name (**UNIT DESIGNATION**) and the **INITIAL CAPACITY (BEDS)**, then press <kbd>IGNITE HOUSE ✨</kbd>.
+- **Map view:** click an empty place on the map. The *GENERATE SANCTUARY* sidebar opens.
 - **List view:** click **Ignite New House**. CozyNights switches to the map view and opens the same sidebar. The house starts in the middle of the map; drag it into place afterwards.
 
-CozyNights creates the house, a first room called **Main Module** (#1), and spots **B1 … Bn** for the capacity you entered. Like every new spot, they are **active right away**. Every house needs a name of its own; a camp holds up to 200 houses.
+The sidebar is a **house generator**: it builds the whole house in one go, rooms and spots included.
+
+![The house generator: rolled name, kind, two room sizes and the live count](../assets/screenshots/admin-house-generator.webp)
+
+| Field | What it does |
+| --- | --- |
+| UNIT DESIGNATION | The house's name, already rolled for you: *Snoozy Sloth Lodge*, *Velvet Villa*. Keep it, roll again with <kbd>🎲</kbd> or type your own. Every house needs a name of its own. |
+| KIND | 🏠 House · 🛖 Hut group · ⛺ Tent area, or none (tap the chosen chip again). It sets the words (*4 huts × 8 beds*), the kind of the new rooms and the pin's icon, and a rolled name follows it (*Marmot Village*). *Other* is in [House details](#house-details). |
+| ROOMS & BEDS | One row per room size: **rooms** × **beds**, with <kbd>−</kbd> and <kbd>+</kbd>. The numbers can be typed too; <kbd>↑</kbd> / <kbd>↓</kbd> step by one, with <kbd>Shift</kbd> by five. <kbd>🪜</kbd> makes the rooms of that size bunk-bed rooms. <kbd>+ ANOTHER ROOM SIZE</kbd> adds a row, a copy of the one above (often the next floor); <kbd>✕</kbd> removes one. Without any row the house starts empty, and you add its rooms on its page later. |
+| NUMBERS FROM # | The first room number. Empty: 1. |
+| 🏢 FLOOR BLOCKS | Every size row starts its own block of numbers: 1–4, then 11–16, then 21–…; from three digits on, blocks of a hundred (101…, 201…). Off: 1, 2, 3 … straight through. |
+
+A line under the rows counts what <kbd>IGNITE HOUSE ✨</kbd> will build, with the room numbers: *= 12 rooms · 76 spots · 20 bunk beds #1–4 · #11–16 · #21–22*. When something is out of range it says what instead, and IGNITE refuses: a house holds up to 50 rooms, a room up to 50 beds, and one go makes at most 500 spots.
+
+- **Beds are sleeping places,** one spot each: a 6-bed room gets the spots **B1 … B6**. With <kbd>🪜</kbd> they are stacked in pairs right away, B1 + B2, B3 + B4, …, as [bunk beds](#bunk-beds); an odd last spot stays on its own. Without it the bed type stays open, as on any new spot, and [SPOT TYPES](#what-kind-of-bed-a-spot-is) sets it later.
+- **Every room gets a rolled name,** in the style of the burner names: *Glitter Grotto*, *Snoozy Sloth Suite*; huts *Wobbly Wombat Hideout*, tents *Starry Yurt*. No name twice in a house. Change whatever you like afterwards: click a name ([Renaming](#renaming)), or roll a new one with <kbd>🎲</kbd> in the house's sidebar or in a room's [ROOM DETAILS](#room-details).
+- **Every new spot is active right away.**
+
+After IGNITE the new pin stays selected; <kbd>MANAGE ROOMS ⚙️</kbd> in its sidebar leads to the rooms. If the database refuses any part, the half-made house is removed again: nothing is left over. A camp holds up to 200 houses.
 
 ### Move, rename, delete
 
@@ -41,7 +59,7 @@ CozyNights creates the house, a first room called **Main Module** (#1), and spot
 
 **HOUSE DETAILS 🏷️** on the house page says what the place is like. Guests read it when they pick a spot, and the ♿ picker matches [special-needs requests](./special-needs) with it.
 
-The forms on the house and room pages (**HOUSE DETAILS**, **ADD ROOM**, **ADD SPOT**, **ROOM DETAILS**, **SPOT TYPES**) start folded, so the rooms and spots are right below them, on a phone too. A folded title shows what is set, e.g. *🛖 Hut group · ♿ 🔥 · description*, *3 rooms so far* or *4 × lower bunk · 4 × upper bunk*. Tap the title or <kbd>+</kbd> to open a form, <kbd>−</kbd> to fold it again.
+The forms on the house and room pages (**HOUSE DETAILS**, **ADD ROOMS**, **ADD SPOT**, **ROOM DETAILS**, **SPOT TYPES**) start folded, so the rooms and spots are right below them, on a phone too. A folded title shows what is set, e.g. *🛖 Hut group · ♿ 🔥 · description*, *3 rooms so far* or *4 × lower bunk · 4 × upper bunk*. Tap the title or <kbd>+</kbd> to open a form, <kbd>−</kbd> to fold it again.
 
 | Field | What it is |
 | --- | --- |
@@ -59,21 +77,17 @@ An empty field means *not specified*, and the app never guesses. A spot the crew
 
 Open a house with <kbd>MANAGE ROOMS ⚙️</kbd>, by clicking its card, or via <kbd>ADD ROOMS ➕</kbd> in the red alert panel.
 
-![House page with the add-room form and room cards](../assets/screenshots/admin-house.webp)
+![House page with the add-rooms form and room cards](../assets/screenshots/admin-house.webp)
 
-### Add a room
+### Add rooms
 
-Fill in **ADD ROOM ➕**:
+**ADD ROOMS ➕** on the house page has the size rows of the [house generator](#create-a-house): **rooms** × **beds**, <kbd>🪜</kbd> for bunk beds, <kbd>+ ANOTHER ROOM SIZE</kbd>, **NUMBERS FROM #**, **🏢 FLOOR BLOCKS** and the same live count. It starts with one room like the ones the house has most of, in a hut group of 8-bed bunk huts *1 hut × 8 beds* with 🪜 on. A house without rooms opens the form by itself.
 
-| Field | Example | Note |
-| --- | --- | --- |
-| ROOM DESIGNATION (NAME) | *Skyline Sanctuary* | Shown to guests. Required. |
-| ROOM # | *101* | Required: a whole number from 1 to 9999, used only once in the house. Rooms are sorted by this number. |
-| BED CAPACITY 🛌 | *4* | Creates spots *Spot 1 … Spot 4* right away. |
+- **Numbers** continue after the house's highest room number; with floor blocks at the next block (21 after 1–4 and 11–16). A number typed into NUMBERS FROM # is where they start; numbers the house uses already are skipped. Rooms are sorted by their number.
+- **Names** are rolled, never one the house has already. The toast after IGNITE names the new rooms.
+- **Spots** are **B1 … Bn**, stacked in pairs with 🪜.
 
-A house holds up to 50 rooms, a room up to 50 spots. In a hut group the form asks for a *hut designation* and ignites a hut — the house's kind decides the wording.
-
-Press <kbd>IGNITE ROOM ✨</kbd>.
+A house holds up to 50 rooms, a room up to 50 spots. In a hut group the form says *ADD HUTS* and <kbd>IGNITE 2 HUTS ✨</kbd>: the house's kind decides the wording. The rooms are created all together or not at all.
 
 > [!NOTE] New spots are active
 > Every new spot, whether it comes with a house, with a room or on its own, is **active**: guests can book it as soon as booking opens. Lock 🔒 or deactivate ❄️ the spots that shouldn't be booked, see [Spot actions](#spot-actions).
@@ -84,7 +98,7 @@ Press <kbd>IGNITE ROOM ✨</kbd>.
 
 | Field | What it is |
 | --- | --- |
-| NAME | Only in Staging Mode: the name belongs to the layout. The field is gone while booking is live or closed. Clicking the room's name at the top of the page does the same, with the room number next to it (see [Renaming](#renaming)). |
+| NAME | Only in Staging Mode: the name belongs to the layout. The field is gone while booking is live or closed. Clicking the room's name at the top of the page does the same, with the room number next to it (see [Renaming](#renaming)). <kbd>🎲</kbd> next to the field rolls a new name like the generator's (fitting the KIND); <kbd>SAVE DETAILS</kbd> keeps it. |
 | KIND | Room · Hut · Tent · Other. A room added to a hut group starts as a **hut** (and in a tent area as a tent), so you rarely have to set it. |
 | FEATURES | ♿ Wheelchair accessible · ⬇️ Ground floor · 🛁 Own bathroom · 🔥 Heated · ❄️ No heating · 🤫 Quiet zone. They come **on top of** the house's: a heated room in an unheated hut group counts as heated. 🔥 Heated and ❄️ No heating rule each other out here too, and an [upper bunk](#bunk-beds) never inherits ♿ from its room either. |
 | FROM THE HOUSE | The block **From the house** shows, as greyed chips, what the room inherits from its house right now, e.g. *🔥 Heated · 🤫 Quiet zone* — every admin sees it. **Superusers** also get an **off here** box on each chip and <kbd>RESET TO HOUSE</kbd>. Tick *off here* on 🔥 Heated and this room stays cold in a heated house: the chip is gone for the room and its spots, on the guest pages, in the wish chips and in the ♿ picker, while the house and its other rooms keep it. <kbd>RESET TO HOUSE</kbd> clears every *off here* box, so the room inherits everything again. A feature can't be switched off and ticked under FEATURES at the same time: ticking one box clears the other, and the server refuses a room that claims both, also on the records API. Only superusers switch off and reset; an admin's save never changes what is switched off. |

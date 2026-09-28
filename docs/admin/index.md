@@ -238,7 +238,7 @@ Pins are teal while a house has free spots, red when none is left, and grey whil
 
 | Gesture | Result |
 | --- | --- |
-| **Click an empty place** | Sidebar *GENERATE SANCTUARY*: name the new house and set its initial number of beds, then <kbd>IGNITE HOUSE ✨</kbd>. |
+| **Click an empty place** | Sidebar *GENERATE SANCTUARY*, the [house generator](./camp-layout#create-a-house): a rolled name, the kind, and the rooms as size rows (*4 rooms × 6 beds 🪜*), then <kbd>IGNITE HOUSE ✨</kbd>. |
 | **Drag a house** | Moves it. The new position is saved when you let go. |
 | **Arrow keys** on a selected pin | Move it one unit per press (with <kbd>Shift</kbd>: ten), saved when you let go of the key. |
 | **Click a house** | Sidebar *HOUSE INTEL*: rename it (<kbd>SYNC MODULE ✨</kbd>), type an exact **MAP POSITION 📍** (X 0–1000, Y 0–700) and press <kbd>MOVE PIN</kbd>, see **WHO IS HERE 🛏️** (the house's bookings room by room, see [Bookings & check-ins](./bookings)), <kbd>MANAGE ROOMS ⚙️</kbd>, or <kbd>VANISH FROM PLAYA 🌪️</kbd> to delete it. Moves are saved right away. |
