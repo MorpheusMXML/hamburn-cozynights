@@ -5,6 +5,7 @@
 	import { onMount } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
 	import { countdownKind } from '$lib/booking-phase';
+	import { EVENT_YEAR } from '$lib/event';
 	import CountdownTimer from '$lib/components/CountdownTimer.svelte';
 	import EffigyTitle from '$lib/components/EffigyTitle.svelte';
 	import LegalLinks from '$lib/components/LegalLinks.svelte';
@@ -126,6 +127,12 @@
 
 		<div class="title-container">
 			<EffigyTitle bind:paused={motionPaused} />
+			<!-- The event year, glowing under the title, in the space below it. -->
+			<p class="event-year">
+				<span class="event-year-rule" aria-hidden="true"></span>
+				<span class="event-year-text">{EVENT_YEAR}</span>
+				<span class="event-year-rule" aria-hidden="true"></span>
+			</p>
 		</div>
 
 		{#if countdown && data.booking.next}
@@ -339,6 +346,47 @@
 		position: relative;
 		width: 100%;
 		margin: clamp(0.5rem, 4vw, 2.5rem) 0 clamp(3.75rem, 9vh, 5.5rem);
+	}
+
+	/* The event year: centred right under the effigy, in the space the title
+	   box keeps below it. The side insets leave the pause button (bottom right,
+	   44 px) alone at every width. */
+	.event-year {
+		position: absolute;
+		top: 100%;
+		left: 56px;
+		right: 56px;
+		margin: 0.35rem 0 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.75rem;
+		pointer-events: none;
+	}
+	.event-year-text {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: clamp(1.4rem, 6vw, 2.2rem);
+		font-weight: 900;
+		letter-spacing: 0.3em;
+		/* The letter spacing also trails the last digit: pull it back so the
+		   year sits in the middle between the two rules. */
+		margin-right: -0.3em;
+		color: #fff;
+		text-shadow:
+			0 0 6px #f472b6,
+			0 0 14px #f472b6,
+			0 0 28px rgba(45, 212, 191, 0.7);
+	}
+	.event-year-rule {
+		flex: 0 1 4.5rem;
+		min-width: 1rem;
+		height: 2px;
+		border-radius: 2px;
+		background: linear-gradient(90deg, #2dd4bf, #f472b6, #fb923c);
+		box-shadow: 0 0 8px rgba(244, 114, 182, 0.6);
+	}
+	.event-year-rule:last-child {
+		background: linear-gradient(90deg, #fb923c, #f472b6, #2dd4bf);
 	}
 
 	/* The big booking countdown: between the title and the ticket-code field,

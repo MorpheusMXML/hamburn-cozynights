@@ -16,7 +16,7 @@ stateDiagram-v2
   Closed --> Staging: superuser, right now
 ```
 
-- **🛠 Staging** is for building. Admins shape the camp; guests can sign in and look at the (blurred) map, but can't book.
+- **🛠 Staging** is for building. Admins shape the camp; guests can sign in and look at the (blurred) map, but can't book. The top bar calls it 🛠 IN PREPARATION, for guests and crew; *Staging Mode* is the crew's word for it in the booking window and in crew messages.
 - **🎪 Live Booking** is for booking. Guests claim spots; the camp's structure is frozen so nothing moves under their feet. A countdown shows when booking closes: a big box on the start page, the phase pill in the top bar of every booking page.
 - **🔒 Closed** follows the booking window. Spots are final: guests still see their spot and their booking pass, but can't book, change or release anything. The layout stays frozen, because it holds the bookings. As soon as a new opening time is armed, guests read the countdown to it instead of "spots are final" — nothing is final while booking is about to open again.
 

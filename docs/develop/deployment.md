@@ -210,7 +210,7 @@ Booking confirmations and crew alerts are sent by PocketBase (`pb_hooks/cozy_not
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_TLS`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `MAIL_REPLY_TO` | E-mail to guests. Applied to PocketBase's mail settings on every start. |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (`TELEGRAM_THREAD_ID`) | The crew group, and guests' Telegram updates (off: `TELEGRAM_GUEST_UPDATES=off`). |
 | `COZY_ADMIN_WEBHOOK_URL` | Older crew webhook (Slack, Google Chat, Discord, Telegram URL), used when `TELEGRAM_*` are empty. |
-| `COZY_APP_URL`, `COZY_ENV_LABEL` | Links in messages and the `[STAGING]` marker. Set in the compose file, not in `.env`. |
+| `COZY_APP_URL`, `COZY_ENV_LABEL` | Links in messages and the `[STAGING]` marker. Set in the compose file, not in `.env`. Production passes no `COZY_ENV_LABEL` at all, so nothing it sends looks like a test (`tests/production-clean.test.ts`). |
 | `PB_HIDE_CONTROLS`, `PB_LOGS_DAYS` | PocketBase settings applied on every start (`pb_hooks/cozy_settings.pb.js`): the dashboard's schema editors hidden (`on`, the default on servers), and the request log kept for that many days (default 2, never with IPs). |
 
 - **One server polls a bot.** The server reads the bot's messages (guests connecting their chat, `/pass`) by polling; two servers polling the same bot would steal each other's messages. Staging and production share one bot and crew group, so exactly one of them polls it: the other runs with `TELEGRAM_GUEST_UPDATES=off` and still sends crew alerts. Until the launch staging polls; at the launch the switch goes the other way.

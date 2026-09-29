@@ -52,6 +52,18 @@ export const PHASE_ICONS: Record<BookingPhase, string> = {
 	closed: '🔒'
 };
 
+/**
+ * The phase as the top bars name it, for guests and crew alike. Before booking
+ * opens the pill reads "In Preparation": "Staging" is the crew's name for the
+ * mode in which the layout can change (the 🎟 BOOKING WINDOW panel and the
+ * crew messages keep it), not a word for guests.
+ */
+export const PHASE_PILL_LABELS: Record<BookingPhase, string> = {
+	staging: 'In Preparation',
+	live: 'Live Booking',
+	closed: 'Closed'
+};
+
 /** Why a guest's booking was refused outside Live Booking. */
 export function bookingRefusal(phase: BookingPhase): string {
 	return phase === 'closed'

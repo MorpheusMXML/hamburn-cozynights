@@ -45,7 +45,7 @@ chips, unless the guest put the panel away to look around.
 		formatDuration,
 		mapCovered,
 		PHASE_ICONS,
-		PHASE_LABELS,
+		PHASE_PILL_LABELS,
 		resyncDelay,
 		showCountdownBar,
 		toMs,
@@ -93,7 +93,7 @@ chips, unless the guest put the panel away to look around.
 	let target = $derived(toMs(next?.at));
 	let remaining = $derived(target === null ? 0 : target - now);
 	let urgent = $derived(kind === 'closes' && remaining < URGENT_MS);
-	let phaseName = $derived(PHASE_LABELS[phase].replace('Live Booking', 'Live').toUpperCase());
+	let phaseName = $derived(PHASE_PILL_LABELS[phase].replace('Live Booking', 'Live').toUpperCase());
 	let countdownLabel = $derived(
 		remaining <= 0
 			? kind === 'closes'
@@ -104,7 +104,7 @@ chips, unless the guest put the panel away to look around.
 				: 'opens in'
 	);
 	let spoken = $derived(
-		`Booking phase: ${PHASE_LABELS[phase]}.` +
+		`Booking phase: ${PHASE_PILL_LABELS[phase]}.` +
 			(countdown && next
 				? ` Booking ${countdownLabel}${remaining > 0 ? ` ${formatDuration(remaining)}` : ''}.`
 				: '')
