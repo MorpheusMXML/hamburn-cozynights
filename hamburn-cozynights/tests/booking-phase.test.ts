@@ -1,15 +1,20 @@
 import { describe, it, expect } from 'vitest';
+import { loadHookModule } from './hook-module';
 import {
 	checkWindowEdit,
 	effectivePhase,
 	formatBerlin,
 	formatDuration,
+	guestPhase,
+	mapCovered,
 	materialize,
 	nextTransition,
 	openingCountdownAt,
 	ownSpotNote,
+	quietReleaseByDefault,
 	saveTimesEdit,
 	showCountdownBar,
+	showTopBar,
 	splitDuration,
 	switchPhase,
 	windowFromRecord,
@@ -244,6 +249,109 @@ describe('checkWindowEdit', () => {
 	});
 });
 
+// pb_hooks/lib/phase.js mirrors the rules above for PocketBase's records API,
+// which an admin's token reaches without going through the app. The two are
+// written out twice (one TypeScript module, one CommonJS module for the JSVM),
+// so the cases that matter are checked against both.
+describe('the PocketBase mirror (pb_hooks/lib/phase.js)', () => {
+	const phase = loadHookModule('lib/phase.js');
+	const hookError = (current: BookingWindow, next: Partial<BookingWindow>, now = NOW) =>
+		phase.windowEditError(current, { ...current, ...next }, now) as string;
+
+	it('agrees with effectivePhase', () => {
+		for (const now of [NOW, NOW + 3 * DAY, NOW + 6 * DAY]) {
+			for (const w of [staging, planned, { ...planned, paused: true }]) {
+				expect(phase.effectivePhase(w, now)).toBe(effectivePhase(w, now));
+			}
+		}
+	});
+
+	it('refuses an opening sooner than one day and a window shorter than one day', () => {
+		expect(hookError(staging, { opensAt: at(DAY - HOUR), closesAt: at(3 * DAY) })).toMatch(
+			/one day from now at the earliest/
+		);
+		expect(hookError(staging, { opensAt: at(2 * DAY), closesAt: at(2 * DAY + 20 * HOUR) })).toMatch(
+			/stay open for at least one day/
+		);
+		expect(hookError(staging, { opensAt: at(3 * DAY), closesAt: at(2 * DAY) })).toMatch(
+			/close after it opens/
+		);
+	});
+
+	it('lets a window a day ahead and a day long through, like the app', () => {
+		expect(hookError(staging, { opensAt: at(2 * DAY), closesAt: at(5 * DAY) })).toBe('');
+		expect(hookError(staging, { opensAt: at(DAY), closesAt: at(2 * DAY) })).toBe('');
+	});
+
+	it('does not re-check times an armed timer already had', () => {
+		const now = NOW + DAY + 4 * HOUR; // the opening is 20 hours away
+		expect(hookError(planned, { closesAt: at(6 * DAY) }, now)).toBe('');
+		// … but re-arming a paused timer checks everything again.
+		expect(hookError({ ...planned, paused: true }, { paused: false }, now)).toMatch(
+			/at the earliest/
+		);
+	});
+
+	it('leaves updates that do not touch the window alone', () => {
+		// The app never asks about those; PocketBase sees every app_settings
+		// write, e.g. the special-needs switch while a short window is armed.
+		const short: BookingWindow = { ...staging, opensAt: at(HOUR), closesAt: at(2 * HOUR) };
+		expect(hookError(short, {})).toBe('');
+		expect(phase.windowChanged(short, short)).toBe(false);
+		// Pausing is always allowed: nothing switches by itself any more.
+		expect(hookError(short, { paused: true })).toBe('');
+	});
+
+	it('agrees with the app on the cases the app also sees', () => {
+		const cases: [BookingWindow, Partial<BookingWindow>, number][] = [
+			[staging, { opensAt: at(2 * DAY), closesAt: at(5 * DAY) }, NOW],
+			[staging, { opensAt: at(DAY - HOUR), closesAt: at(3 * DAY) }, NOW],
+			[staging, { opensAt: at(2 * DAY), closesAt: at(2 * DAY + 20 * HOUR) }, NOW],
+			[staging, { opensAt: at(3 * DAY), closesAt: at(2 * DAY) }, NOW],
+			[planned, { closesAt: at(6 * DAY) }, NOW + DAY + 4 * HOUR],
+			[planned, { closesAt: at(4 * DAY + HOUR) }, NOW + 3 * DAY],
+			[planned, { closesAt: at(3 * DAY + 20 * HOUR) }, NOW + 3 * DAY],
+			[planned, { opensAt: '', closesAt: '' }, NOW]
+		];
+		for (const [current, next, now] of cases) {
+			const edited = { ...current, ...next };
+			const app = checkWindowEdit(
+				current,
+				{ opensAt: edited.opensAt, closesAt: edited.closesAt, paused: edited.paused },
+				{ isSuperuser: false, now }
+			).error;
+			const hook = hookError(current, next, now);
+			// The wording differs (the app names the earliest time); refused or
+			// allowed must not.
+			expect({ opensAt: edited.opensAt, closesAt: edited.closesAt, refused: !!hook }).toEqual({
+				opensAt: edited.opensAt,
+				closesAt: edited.closesAt,
+				refused: !!app
+			});
+		}
+	});
+});
+
+describe('quietReleaseByDefault (switching back to Staging)', () => {
+	it('tells the guests while booking is still ahead or running: they have to book again', () => {
+		expect(quietReleaseByDefault(staging, NOW)).toBe(false);
+		expect(quietReleaseByDefault(planned, NOW)).toBe(false); // opens in two days
+		expect(quietReleaseByDefault(planned, NOW + 3 * DAY)).toBe(false); // live right now
+		expect(quietReleaseByDefault({ ...staging, basePhase: 'live' }, NOW)).toBe(false);
+	});
+
+	it('keeps quiet once booking is over', () => {
+		// the timer closed it
+		expect(quietReleaseByDefault(planned, NOW + 6 * DAY)).toBe(true);
+		// a superuser closed it by hand, which drops a closing time still ahead
+		expect(quietReleaseByDefault({ ...staging, basePhase: 'closed' }, NOW)).toBe(true);
+		// the closing time passed while the timer was paused
+		expect(
+			quietReleaseByDefault({ ...planned, paused: true, basePhase: 'live' }, NOW + 6 * DAY)
+		).toBe(true);
+	});
+});
+
 describe('saveTimesEdit', () => {
 	it('starts a new window unarmed and keeps the state of an existing one', () => {
 		expect(saveTimesEdit(staging, planned.opensAt, planned.closesAt).paused).toBe(true);
@@ -298,23 +406,104 @@ describe('what guests see of the window', () => {
 		);
 	});
 
-	it('shows the slim bar everywhere but where the page counts down itself', () => {
+	it('puts the top bar on the booking pages only', () => {
+		for (const path of [
+			'/map',
+			'/house/abc',
+			'/room/abc',
+			'/random-bed',
+			'/special-needs',
+			'/telegram'
+		]) {
+			expect(showTopBar(path), path).toBe(true);
+		}
+		// the start page counts down itself; legal texts, passes and the crew's pages have no bar
+		for (const path of [
+			'/',
+			'/booking-rules',
+			'/legal-notice',
+			'/privacy',
+			'/pass/ABCD-EFGH-IJKL',
+			'/admin',
+			'/admin/bookings',
+			'/mapping',
+			'/roommate'
+		]) {
+			expect(showTopBar(path), path).toBe(false);
+		}
+	});
+
+	it("shows the bar's countdown everywhere but where the map counts down itself", () => {
 		const opens = nextTransition(armed, NOW);
 		expect(showCountdownBar('staging', opens, '/map')).toBe(false);
 		expect(showCountdownBar('staging', opens, '/house/x')).toBe(true);
-		// closed with a later window armed: the map has no countdown of its own
-		expect(showCountdownBar('closed', opens, '/map')).toBe(true);
+		expect(showCountdownBar('staging', opens, '/random-bed')).toBe(true);
+		// closed with a later window armed: the map counts down in its own panel …
+		expect(showCountdownBar('closed', opens, '/map')).toBe(false);
+		expect(showCountdownBar('closed', opens, '/house/x')).toBe(true);
+		// … until the guest puts the panel away to look around (Closed only)
+		expect(showCountdownBar('closed', opens, '/map', true)).toBe(true);
+		expect(showCountdownBar('staging', opens, '/map', true)).toBe(false);
 		const closes = nextTransition({ ...armed, basePhase: 'live', opensAt: at(-DAY) }, NOW);
 		expect(showCountdownBar('live', closes, '/map')).toBe(true);
 		expect(showCountdownBar('staging', null, '/house/x')).toBe(false);
-		// the start page shows the big countdown above the ticket-code field, both kinds
+		// pages without the bar, whatever is armed
 		expect(showCountdownBar('staging', opens, '/')).toBe(false);
 		expect(showCountdownBar('closed', opens, '/')).toBe(false);
 		expect(showCountdownBar('live', closes, '/')).toBe(false);
+		expect(showCountdownBar('live', closes, '/admin')).toBe(false);
+	});
+
+	it('knows when the phase panel covers the map', () => {
+		const opens = nextTransition(armed, NOW);
+		const closes = nextTransition({ ...armed, basePhase: 'live', opensAt: at(-DAY) }, NOW);
+		expect(mapCovered('staging', opens, '/map')).toBe(true);
+		expect(mapCovered('staging', null, '/map')).toBe(true);
+		expect(mapCovered('live', closes, '/map')).toBe(false);
+		expect(mapCovered('live', null, '/map')).toBe(false);
+		expect(mapCovered('closed', null, '/map')).toBe(true);
+		expect(mapCovered('closed', null, '/map', true)).toBe(false);
+		expect(mapCovered('closed', opens, '/map', true)).toBe(false);
+		// looking around is the map's panel only: Staging has no LOOK AROUND
+		expect(mapCovered('staging', opens, '/map', true)).toBe(true);
+		// other pages have no panel
+		expect(mapCovered('staging', opens, '/house/x')).toBe(false);
+		expect(mapCovered('closed', null, '/random-bed')).toBe(false);
 	});
 
 	it('words the own-spot note by phase', () => {
 		expect(ownSpotNote('closed')).toMatch(/final/);
 		expect(ownSpotNote('staging')).toMatch(/Live Booking starts/);
+	});
+});
+
+describe('guestPhase', () => {
+	const armed = { ...planned, basePhase: 'closed' as const, opensAt: at(2 * DAY), closesAt: '' };
+
+	it('tells guests "not open yet" while booking is closed but an opening is armed', () => {
+		const opens = nextTransition(armed, NOW);
+		expect(effectivePhase(armed, NOW)).toBe('closed');
+		expect(guestPhase('closed', opens)).toBe('staging');
+		// so the pages don't call the spot final — but they don't offer a new
+		// burner name either: renaming follows the real phase (every one but Closed)
+		const note = ownSpotNote('closed', guestPhase('closed', opens));
+		expect(note).toMatch(/Live Booking starts/);
+		expect(note).not.toMatch(/final/);
+		expect(note).not.toMatch(/burner name/);
+		expect(ownSpotNote('closed', 'closed')).toMatch(/final/);
+	});
+
+	it('keeps Closed when nothing is planned, or only a paused window', () => {
+		expect(guestPhase('closed', null)).toBe('closed');
+		expect(guestPhase('closed', nextTransition({ ...armed, paused: true }, NOW))).toBe('closed');
+		// an opening that has passed is no countdown either
+		expect(guestPhase('closed', nextTransition({ ...armed, opensAt: at(-DAY) }, NOW))).toBe(
+			'closed'
+		);
+	});
+
+	it('leaves Staging and Live alone', () => {
+		expect(guestPhase('staging', nextTransition(planned, NOW))).toBe('staging');
+		expect(guestPhase('live', nextTransition({ ...planned, basePhase: 'live' }, NOW))).toBe('live');
 	});
 });

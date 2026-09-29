@@ -12,7 +12,9 @@ import { fileURLToPath } from 'url';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
 import { BURNER_NAME_MAX } from '../../src/lib/special-needs';
 import { TEMPLATE_LIMITS } from '../../src/lib/template';
+import { BED_TYPES, DESCRIPTION_MAX, type BedType } from '../../src/lib/accommodation';
 import { TICKET_LIMITS } from '../../src/lib/tickets';
+import { SWAP_NOTE_MAX } from '../../src/lib/swaps';
 
 export const TEXTS = {
 	houseLong:
@@ -28,8 +30,13 @@ export const TEXTS = {
 	customerLong: 'Maximilian-Alexander Freiherr von und zu Musterstadt-Langenhagen-Ost',
 	emailLong:
 		'maximilian.alexander.freiherr.von.und.zu.musterstadt@a-very-long-subdomain.example.org',
+	descriptionLong:
+		'Die Waldhüttengruppe liegt hinter dem Wäscherei- und Sanitärgebäude, etwa fünfzig Meter den Waldweg hinauf: Duschen und Toiletten sind im Waschhaus, nicht in den Hütten selbst. Der Weg ist geschottert und bei Regen rutschig, eine Taschenlampe ist abends unbedingt zu empfehlen. Die Hütten werden nicht geheizt; bitte einen warmen Schlafsack mitbringen, in den Nächten Ende Oktober wird es am Brahmsee empfindlich kalt. Steckdosen gibt es nur im Gemeinschaftsraum des Haupthauses.',
 	requestText:
-		'I use a wheelchair, so I need step-free access from the parking area to the room and to a toilet. A lower bed would be great, too — thank you so much for sorting this out!'
+		'I use a wheelchair, so I need step-free access from the parking area to the room and to a toilet. A lower bed would be great, too — thank you so much for sorting this out!',
+	// A swap note at the limit, with a compound word that may only break inside itself.
+	swapNote:
+		'Hey! Meine ganze Crew schläft im Kuschelzeltplatzverwaltungsgebäude nebenan – tauschen wir? Danke dir tausendmal!!! 🙏✨🦄 Glitter & Liebe!'
 };
 
 /** Spot labels of the stress room, in the order of its beds. */
@@ -45,11 +52,23 @@ export const BED_LABELS = [
 	'Sofa'
 ] as const;
 
+/**
+ * The two bunk beds of the stress room, lower level first. Each tile mixes
+ * states: a locked upper bunk over a spot another guest booked, and a booked
+ * upper bunk over "my" spot.
+ */
+export const BUNK_PAIRS: readonly [lower: string, upper: string][] = [
+	['Lower 1', 'Upper 1'],
+	['Lower 2', 'Upper 2']
+];
+
 for (const [what, value, max] of [
 	['house name', TEXTS.houseLong, TEMPLATE_LIMITS.houseNameLength],
+	['description', TEXTS.descriptionLong, DESCRIPTION_MAX],
 	['room name', TEXTS.roomLong, TEMPLATE_LIMITS.roomNameLength],
 	['burner name', TEXTS.burnerLong, BURNER_NAME_MAX],
 	['customer name', TEXTS.customerLong, TICKET_LIMITS.nameLength],
+	['swap note', TEXTS.swapNote, SWAP_NOTE_MAX],
 	['e-mail', TEXTS.emailLong, TICKET_LIMITS.emailLength],
 	...BED_LABELS.map((label) => ['spot label', label, TEMPLATE_LIMITS.bedLabelLength] as const)
 ] as const) {
@@ -68,11 +87,15 @@ export interface StressCamp {
 	/** Houses and rooms without the stress guest's spot (the "you already have a spot" banner). */
 	otherHouseIds: string[];
 	otherRoomIds: string[];
-	/** Cookie values (not headers) for the browser. */
+	/** Cookie values (not headers) for the browser: the ticket codes. */
 	guestWithSpot: string;
 	guestWithoutSpot: string;
 	guestWithRequest: string;
+	/** The booking round those codes were signed in for (cookie bookingRound). */
+	guestRound: string;
 	passCode: string;
+	/** The admin behind adminAuth: the crew address a check-in shows. */
+	adminEmail: string;
 	adminAuth: string;
 	superuserAuth: string;
 }
@@ -147,11 +170,24 @@ async function post(
 	return res;
 }
 
-async function guestLogin(base: string, code: string): Promise<string> {
+/**
+ * Signs a guest in like a browser does: the answer sets the ticket code and the
+ * booking round it belongs to, and both ride along from then on. The smoke
+ * suite runs first on the same stack and releases bookings, which starts a new
+ * round — a code sent without its round counts as signed out.
+ */
+async function guestLogin(
+	base: string,
+	code: string
+): Promise<{ code: string; round: string; header: string }> {
 	const res = await post(base, '/?/login', { bookingCode: code });
-	const cookie = (res.headers.get('set-cookie') || '').split(';')[0];
-	if (!cookie.startsWith('bookingCode=')) throw new Error(`guest login with ${code} failed`);
-	return cookie.slice('bookingCode='.length);
+	const pairs = res.headers.getSetCookie().map((c) => c.split(';')[0]);
+	const value = (name: string) =>
+		pairs.find((pair) => pair.startsWith(`${name}=`))?.slice(name.length + 1);
+	const signedIn = value('bookingCode');
+	if (!signedIn) throw new Error(`guest login with ${code} failed`);
+	const round = value('bookingRound') ?? '0';
+	return { code: signedIn, round, header: `bookingCode=${signedIn}; bookingRound=${round}` };
 }
 
 async function ticket(pb: PocketBase, customerName = 'Test Guest', email = '') {
@@ -182,15 +218,17 @@ async function setWindow(pb: PocketBase, fields: Record<string, unknown>) {
  * The booking phase as the Control Center sets it. `opening` is Staging with
  * the opening timer armed, `closing` Live with the closing timer armed: they
  * bring the countdowns (start page, map, the bar on top of every page).
+ * `reopening` is Closed with an opening armed — a window planned while booking
+ * was closed, where guests read a countdown instead of "spots are final".
  */
-export type Phase = 'staging' | 'live' | 'closed' | 'opening' | 'closing';
+export type Phase = 'staging' | 'live' | 'closed' | 'opening' | 'closing' | 'reopening';
 
 export async function setPhase(pb: PocketBase, phase: Phase) {
 	const inTwoDays = new Date(Date.now() + 2 * 24 * 3600_000).toISOString();
 	await setWindow(pb, {
 		is_booking_active: phase === 'live' || phase === 'closing',
-		booking_closed: phase === 'closed',
-		booking_unlock_at: phase === 'opening' ? inTwoDays : '',
+		booking_closed: phase === 'closed' || phase === 'reopening',
+		booking_unlock_at: phase === 'opening' || phase === 'reopening' ? inTwoDays : '',
 		booking_close_at: phase === 'closing' ? inTwoDays : '',
 		booking_timer_paused: false
 	});
@@ -200,9 +238,16 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 	const tag = uid();
 	// Houses on all four edges of the map (0–1000 × 0–700): their labels must
 	// stay on the map. Far enough apart that labels don't cover each other.
-	const house = await pb
-		.collection('houses')
-		.create({ name: `${TEXTS.houseLong.slice(0, 90)} ${tag}`, x: 12, y: 330 });
+	const house = await pb.collection('houses').create({
+		name: `${TEXTS.houseLong.slice(0, 90)} ${tag}`,
+		x: 12,
+		y: 330,
+		// The details of a place at their worst: every chip a house can have
+		// and a description at the limit (src/lib/accommodation.ts).
+		kind: 'hut_group',
+		features: ['wheelchair', 'ground_floor', 'toilets_inside', 'heated', 'quiet'],
+		description: TEXTS.descriptionLong
+	});
 	const otherHouseIds: string[] = [];
 	const otherRoomIds: string[] = [];
 	for (const [name, x, y] of [
@@ -224,9 +269,29 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		name: TEXTS.roomLong,
 		room_number: TEMPLATE_LIMITS.roomNumber,
 		house: house.id,
-		amount_beds: BED_LABELS.length
+		amount_beds: BED_LABELS.length,
+		kind: 'hut',
+		// Every room feature but "No heating": the longest chip row. Wheelchair
+		// accessible, so its upper bunks show what they are not (struck through
+		// in the admin editor, "no ♿ …" on the guest cards).
+		features: ['wheelchair', 'ground_floor', 'own_bathroom', 'heated', 'quiet'],
+		// A superuser switched one house feature off for this room: the form
+		// shows it struck through under "From the house".
+		features_off: ['toilets_inside'],
+		description: TEXTS.descriptionLong
 	});
 	const beds: Record<string, string> = {};
+	// One of every kind of bed: the stacked spots carry their level, the other
+	// five labels get the other five kinds (src/lib/accommodation.ts).
+	const levels: Record<string, BedType> = {};
+	for (const [lower, upper] of BUNK_PAIRS) {
+		levels[lower] = 'bunk_lower';
+		levels[upper] = 'bunk_upper';
+	}
+	const otherKinds = BED_TYPES.map((type) => type.value).filter(
+		(kind) => kind !== 'bunk_lower' && kind !== 'bunk_upper'
+	);
+	let kind = 0;
 	for (const label of BED_LABELS) {
 		const bed = await pb.collection('beds').create({
 			label,
@@ -234,37 +299,65 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 			enabled: true,
 			occupied: false,
 			is_locked: label === 'Upper 1',
-			is_special: label.startsWith('Doppelbett')
+			is_special: label.startsWith('Doppelbett'),
+			bed_type: levels[label] ?? otherKinds[kind++ % otherKinds.length],
+			// The locked upper bunk lost the room's own bathroom and the house's
+			// quiet: a long "off here" list on a spot, next to its struck-out ♿.
+			features_off: label === 'Upper 1' ? ['own_bathroom', 'quiet'] : []
 		});
 		beds[label] = bed.id;
+	}
+	// The pairing is written on both sides, like the room page does (the
+	// PocketBase hook would complete the other side too).
+	for (const [lower, upper] of BUNK_PAIRS) {
+		await pb.collection('beds').update(beds[lower], { bunk_partner: beds[upper] });
+		await pb.collection('beds').update(beds[upper], { bunk_partner: beds[lower] });
 	}
 
 	// Bookings: other guests with awkward burner names, and "me".
 	await setPhase(pb, 'live');
 	const book = async (label: string, burnerName: string, customer?: string, email?: string) => {
 		const t = await ticket(pb, customer, email);
-		const cookie = await guestLogin(base, t.code);
+		const session = await guestLogin(base, t.code);
 		await post(
 			base,
 			`/room/${room.id}?/bookBed`,
 			{ bedId: beds[label], guestName: burnerName },
-			`bookingCode=${cookie}`
+			session.header
 		);
-		return { ...t, cookie };
+		return { ...t, cookie: session.code, round: session.round };
 	};
-	await book('Upper 2', TEXTS.burnerLong);
+	const captain = await book('Upper 2', TEXTS.burnerLong);
 	await book('Lower 1', TEXTS.burnerWord);
 	await book('Kuschelzeltplatzverwaltungsbett', 'Ö');
 	await book('1', TEXTS.burnerEmoji);
 	const mine = await book('Lower 2', TEXTS.burnerMine, TEXTS.customerLong, TEXTS.emailLong);
 	const passCode = (await pb.collection('orders').getOne(mine.order.id)).pass_code as string;
 
-	const guestWithoutSpot = await guestLogin(base, (await ticket(pb)).code);
+	// Swap requests (docs/guide/booking.md "Swap spots"), through the app like a
+	// guest asks: the longest burner name asks "me" with a note at the limit,
+	// and "I" ask for the spot with the longest single word.
+	const session = (guest: { cookie: string; round: string }) =>
+		`bookingCode=${guest.cookie}; bookingRound=${guest.round}`;
+	await post(
+		base,
+		`/room/${room.id}?/askSwap`,
+		{ bedId: beds['Lower 2'], vibe: 'bunk', note: TEXTS.swapNote },
+		session(captain)
+	);
+	await post(
+		base,
+		`/room/${room.id}?/askSwap`,
+		{ bedId: beds['Kuschelzeltplatzverwaltungsbett'], vibe: 'crew', note: TEXTS.swapNote },
+		session(mine)
+	);
+
+	const guestWithoutSpot = (await guestLogin(base, (await ticket(pb)).code)).code;
 
 	// A special-needs request (pending), written through the app like a guest does.
 	await setWindow(pb, { special_requests_open: true });
 	const asker = await ticket(pb, TEXTS.customerLong, TEXTS.emailLong);
-	const guestWithRequest = await guestLogin(base, asker.code);
+	const requester = await guestLogin(base, asker.code);
 	const form = new URLSearchParams({
 		text: TEXTS.requestText,
 		burnerName: TEXTS.burnerLong,
@@ -272,8 +365,9 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 	});
 	for (const need of ['lower_bunk', 'step_free', 'near_toilet', 'power'])
 		form.append('needs', need);
-	await post(base, '/special-needs?/save', form, `bookingCode=${guestWithRequest}`);
+	await post(base, '/special-needs?/save', form, requester.header);
 
+	const adminEmail = `layout-admin-${tag}@mauersegler.art`;
 	return {
 		houseId: house.id,
 		houseName: house.name as string,
@@ -282,9 +376,12 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		otherRoomIds,
 		guestWithSpot: mine.cookie,
 		guestWithoutSpot,
-		guestWithRequest,
+		guestWithRequest: requester.code,
+		// Nothing in the seed releases bookings, so every sign-in above got the same round.
+		guestRound: mine.round,
 		passCode,
-		adminAuth: await adminSession(pb, 'admin', `layout-admin-${tag}@mauersegler.art`),
+		adminEmail,
+		adminAuth: await adminSession(pb, 'admin', adminEmail),
 		superuserAuth: await adminSession(
 			pb,
 			'superuser',

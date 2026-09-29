@@ -2,12 +2,13 @@
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { onMount, tick } from 'svelte';
+	import { onMount } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
 	import { countdownKind } from '$lib/booking-phase';
 	import CountdownTimer from '$lib/components/CountdownTimer.svelte';
 	import EffigyTitle from '$lib/components/EffigyTitle.svelte';
 	import LegalLinks from '$lib/components/LegalLinks.svelte';
+	import { revealInvalid } from '$lib/field-alert';
 	import MadeInHamburg from '$lib/components/MadeInHamburg.svelte';
 	import type { ActionData, PageData } from './$types';
 
@@ -46,7 +47,6 @@
 	const TICKET_CODE_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
 	const SURROUNDING_BLANKS = /^[\s\u200B-\u200D\uFEFF]+|[\s\u200B-\u200D\uFEFF]+$/g;
 
-	let codeInput: HTMLInputElement;
 	let code = form?.code ?? '';
 	let clientError = '';
 	let isSubmitting = false;
@@ -54,20 +54,28 @@
 	$: errorMessage = clientError || (isSubmitting ? '' : (form?.error ?? ''));
 
 	// The big countdown between the title and the ticket-code field: until
-	// booking opens, and while it is live until it closes. It replaces the slim
-	// bar on this page (showCountdownBar). When it ends, the page data is
+	// booking opens, and while it is live until it closes. The start page has
+	// no guest top bar (showTopBar), so this is the only countdown here. When
+	// it ends, the page data is
 	// reloaded and the server says which phase it is now.
 	$: countdown = countdownKind(data.booking.phase, data.booking.next);
 
-	// Guest pages send visitors here when the ticket-code cookie is missing or stale.
+	// Guest pages send visitors here when the ticket-code cookie is missing or
+	// stale; `data.signedOut` is set when this very visit lost its session
+	// (the code is gone, or a new booking round started).
+	$: loginReason = data.signedOut ?? $page.url.searchParams.get('login');
 	$: loginHint =
-		$page.url.searchParams.get('login') === 'expired'
+		loginReason === 'expired'
 			? 'Your ticket code is not valid on this device (anymore). Please enter it again.'
-			: $page.url.searchParams.get('login') === 'required'
-				? 'Please enter your ticket code first. After that you can open the map and pick your spot.'
-				: $page.url.searchParams.get('login') === 'out'
-					? 'Your ticket code was removed from this device. Enter it again whenever you want to change your spot.'
-					: '';
+			: loginReason === 'round'
+				? 'A new booking round has started, so this device was signed out. Please enter your ticket code again — it still works.'
+				: loginReason === 'required'
+					? data.next
+						? 'Please enter your ticket code first. Then we take you right back.'
+						: 'Please enter your ticket code first. After that you can open the map and pick your spot.'
+					: loginReason === 'out'
+						? 'Your ticket code was removed from this device. Enter it again whenever you want to change your spot.'
+						: '';
 
 	function checkTicketCode(value: string): string {
 		if (!value) return 'Please enter your ticket code.';
@@ -77,10 +85,12 @@
 		return '';
 	}
 
+	let ticketForm: HTMLFormElement;
+
 	async function showClientError(message: string) {
 		clientError = message;
-		await tick();
-		codeInput?.focus();
+		// Focus, nudge and ping the ticket box: the same signal every form gives.
+		await revealInvalid(ticketForm);
 	}
 </script>
 
@@ -142,8 +152,12 @@
 				method="POST"
 				action="?/login"
 				novalidate
-				class="input-group"
+				class="input-group field-box"
 				class:has-error={!!errorMessage}
+				class:state-ring={!!errorMessage}
+				class:state-ring-alert={!!errorMessage}
+				data-state={errorMessage ? 'danger' : undefined}
+				bind:this={ticketForm}
 				use:enhance={({ formData, cancel }) => {
 					const cleaned = code.replace(SURROUNDING_BLANKS, '');
 					const problem = checkTicketCode(cleaned);
@@ -168,18 +182,18 @@
 							return;
 						}
 						await update({ reset: false });
-						if (result.type === 'failure') {
-							await tick();
-							codeInput?.focus();
-						}
+						if (result.type === 'failure') await revealInvalid(ticketForm);
 					};
 				}}
 			>
+				{#if data.next}
+					<!-- where the guest came from (a link in a confirmation), checked on the server -->
+					<input type="hidden" name="next" value={data.next} />
+				{/if}
 				<input
 					type="text"
 					name="bookingCode"
 					id="ticket-code"
-					bind:this={codeInput}
 					bind:value={code}
 					on:input={() => (clientError = '')}
 					placeholder="TICKET CODE"
@@ -222,15 +236,15 @@
 			</form>
 
 			{#if errorMessage}
-				<p class="error-msg" id="ticket-code-error" role="alert" in:fade={{ duration: 150 }}>
+				<p class="form-error" id="ticket-code-error" role="alert">
 					{errorMessage}
 				</p>
 			{/if}
 
 			{#if data.hasTicket}
 				<div class="continue-row">
-					<a class="continue-link" href="/map"
-						>Already signed in on this device? Continue to the map →</a
+					<a class="continue-link" href={data.next ?? '/map'}
+						>Already signed in on this device? {data.next ? 'Continue' : 'Continue to the map'} →</a
 					>
 					<form method="POST" action="?/signOut" class="sign-out-form" use:enhance>
 						<button type="submit" class="sign-out">Not your ticket? Sign out</button>
@@ -548,7 +562,7 @@
 	}
 
 	.login-hint,
-	.error-msg {
+	.form-error {
 		margin: 1rem 0 0;
 		padding: 0.75rem 1rem;
 		border-radius: 14px;
@@ -565,7 +579,7 @@
 		color: #d1faf5;
 	}
 
-	.error-msg {
+	.form-error {
 		border: 1px solid #f87171;
 		color: #fecaca;
 		text-shadow: 0 0 10px rgba(248, 113, 113, 0.3);

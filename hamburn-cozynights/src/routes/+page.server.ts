@@ -1,8 +1,13 @@
 // src/routes/+page.server.ts
 import { fail, redirect } from '@sveltejs/kit';
-import { dev } from '$app/environment';
 import type { Actions, PageServerLoad } from './$types';
 import { BookingService } from '$lib/server/booking';
+import {
+	clearGuestSession,
+	readGuestRound,
+	safeReturnPath,
+	setGuestSession
+} from '$lib/server/guest-session';
 import { FailureRateLimiter } from '$lib/server/rate-limit';
 
 // Ticket codes are bearer secrets: slow down guessing them.
@@ -18,8 +23,16 @@ function cleanTicketCode(raw: FormDataEntryValue | null): string {
 	return (typeof raw === 'string' ? raw : '').replace(SURROUNDING_BLANKS, '');
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
-	return { hasTicket: !!locals.orderNumber };
+export const load: PageServerLoad = async ({ locals, url }) => {
+	// `orderNumber` is only set for a ticket the server just found (hooks.server.ts),
+	// so a code that is no longer in the ticket list never gets "already signed in".
+	// `signedOut` says why this visit lost its session, for the hint on the page.
+	// `next`: the guest page that sent the visitor here (signInUrl), checked.
+	return {
+		hasTicket: !!locals.orderNumber,
+		signedOut: locals.guestSignOut ?? null,
+		next: safeReturnPath(url.searchParams.get('next'))
+	};
 };
 
 export const actions: Actions = {
@@ -84,16 +97,12 @@ export const actions: Actions = {
 			});
 		}
 
-		// The code is the guest's session: one ticket code = one booking.
-		cookies.set('bookingCode', matchedCode, {
-			path: '/',
-			httpOnly: true,
-			secure: !dev,
-			sameSite: 'lax',
-			maxAge: 60 * 60 * 24 * 30
-		});
+		// The code is the guest's session: one ticket code = one booking. The
+		// booking round it was signed in for rides along, so a reset between
+		// rounds ends the session (see $lib/server/guest-session).
+		setGuestSession(cookies, matchedCode, (await readGuestRound(locals.pb)) ?? 0);
 
-		throw redirect(303, '/map');
+		throw redirect(303, safeReturnPath(data.get('next')) ?? '/map');
 	},
 
 	/**
@@ -102,7 +111,7 @@ export const actions: Actions = {
 	 * needs a way to give it back.
 	 */
 	signOut: async ({ cookies }) => {
-		cookies.delete('bookingCode', { path: '/' });
+		clearGuestSession(cookies);
 		throw redirect(303, '/?login=out');
 	}
 };

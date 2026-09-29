@@ -12,7 +12,7 @@
 #   scripts/cozy-admin.sh add <email> [<email> ...]     invite admin(s) up front
 #   scripts/cozy-admin.sh superuser <email>             PocketBase superuser (prompts for a
 #                                                       password) + app role superuser
-#   scripts/cozy-admin.sh remove <email>                reject/revoke app access + superuser
+#   scripts/cozy-admin.sh remove <email> --yes          reject/revoke app access + superuser
 #   scripts/cozy-admin.sh service-account               create/update the app's service superuser
 #                                                       from PB_ADMIN_EMAIL/PASSWORD in .env
 #                                                       (generates the password if missing) and
@@ -20,11 +20,17 @@
 #
 # Ticket codes (the guests' logins, collection `orders`) and the ticket holders'
 # e-mail addresses for booking confirmations (superusers can also load the list
-# in the app, /admin/tickets, which can also hand a ticket over to a new holder):
-#   scripts/cozy-admin.sh tickets import <roster.csv> [--dry-run]
+# in the app, /admin/tickets, which decides per ticket whether it changed hands):
+#   scripts/cozy-admin.sh tickets import <roster.csv> [--dry-run] [--hand-over]
 #                                                       create/update tickets from a CSV file with
 #                                                       the columns code, email (and name); checks
-#                                                       the whole file first
+#                                                       the whole file first. A changed address on
+#                                                       a ticket that still has a pass, a Telegram
+#                                                       chat, a special-needs request, a burner name
+#                                                       or a check-in is refused — use the Tickets
+#                                                       page, or --hand-over to treat EVERY changed
+#                                                       address in the file as a new holder (drops
+#                                                       all of that, keeps the spot)
 #   scripts/cozy-admin.sh tickets add <code> [<code> ...] [--name <label>] [--email <address>]
 #                                                       create tickets for known codes (--email:
 #                                                       one code only)
@@ -34,17 +40,22 @@
 #   scripts/cozy-admin.sh tickets list                  codes with sign-in, booking and contact state
 #   scripts/cozy-admin.sh tickets remove <code> [<code> ...]  delete tickets that hold no bed
 #   scripts/cozy-admin.sh tickets forget-contacts --yes after the event: delete all guest e-mail
-#                                                       addresses, Telegram links and
-#                                                       special-needs requests
+#                                                       addresses, Telegram links, special-needs
+#                                                       requests, swap requests and wallet
+#                                                       device registrations
 #
 # Notifications (guest e-mail and Telegram, crew chat; settings in .env):
 #   scripts/cozy-admin.sh notify status                 what is configured, queued, the last events
 #   scripts/cozy-admin.sh notify test [--email <address>]
 #                                                       test message to the crew chat (+ test e-mail)
 #
-# Targets docker-compose.staging.yml next to this script's parent folder;
-# override with COZY_COMPOSE_FILE=/path/to/docker-compose.<env>.yml plus COZY_ENV_FILE and
-# COMPOSE_PROJECT_NAME (or COZY_DEPLOY_CONF=/etc/cozynights/<env>.conf) for another stack.
+# Targets docker-compose.staging.yml next to this script's parent folder. For
+# another stack, run the copy in THAT stack's checkout with its deploy config,
+# which names the compose file and project (deploy/README.md, "Produktion"):
+#   COZY_DEPLOY_CONF=/etc/cozynights/deploy-production.conf \
+#     /opt/hamburn-cozynights-production/hamburn-cozynights/scripts/cozy-admin.sh list
+# or set COZY_COMPOSE_FILE=/path/to/docker-compose.<env>.yml plus COZY_ENV_FILE
+# and COMPOSE_PROJECT_NAME by hand.
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -53,11 +64,36 @@ ENV_FILE="${COZY_ENV_FILE:-$APP_DIR/.env}"
 # Same compose project as the deploy script (deploy/README.md), otherwise
 # `docker compose` would not find the running containers.
 DEPLOY_CONF="${COZY_DEPLOY_CONF:-/etc/cozynights/deploy-staging.conf}"
+conf_value() {
+	sed -n "s/^$1=//p" "$DEPLOY_CONF" | tail -n1 | tr -d "'\""
+}
+if [[ -n "${COZY_DEPLOY_CONF:-}" && ! -r "$DEPLOY_CONF" ]]; then
+	echo "error: cannot read $DEPLOY_CONF" >&2
+	exit 1
+fi
+if [[ -z "${COZY_COMPOSE_FILE:-}" && -r "$DEPLOY_CONF" ]]; then
+	# The stack comes from its deploy config (staging's by default): compose
+	# file and project as for the deploy script, and only from its own
+	# checkout — this checkout's .env and compose file belong to one stack, and
+	# a recreate from here would start the other stack's containers with them.
+	conf_dir="$(conf_value APP_DIR)"
+	if [[ -n "$conf_dir" && "${conf_dir%/}/hamburn-cozynights" != "$APP_DIR" ]]; then
+		echo "error: $DEPLOY_CONF is the stack in $conf_dir, not the one of this checkout — run ${conf_dir%/}/hamburn-cozynights/scripts/cozy-admin.sh, or pick this checkout's stack with COZY_DEPLOY_CONF=/etc/cozynights/deploy-<env>.conf" >&2
+		exit 1
+	fi
+	conf_compose="$(conf_value COMPOSE_FILE)"
+	COMPOSE_FILE="$APP_DIR/${conf_compose:-docker-compose.staging.yml}"
+	conf_project="$(conf_value COMPOSE_PROJECT_NAME)"
+	if [[ -n "${COMPOSE_PROJECT_NAME:-}" && -n "$conf_project" && "$COMPOSE_PROJECT_NAME" != "$conf_project" ]]; then
+		echo "error: COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME in this shell, but $DEPLOY_CONF says $conf_project — unset it" >&2
+		exit 1
+	fi
+fi
 if [[ -z "${COMPOSE_PROJECT_NAME:-}" ]]; then
 	if [[ -n "${COZY_COMPOSE_FILE:-}" ]]; then
 		# Another environment (e.g. production): docker compose would otherwise
 		# guess the project from the folder name and hit the wrong stack.
-		echo "error: COZY_COMPOSE_FILE is set but COMPOSE_PROJECT_NAME is not — export the project name of that stack (or COZY_DEPLOY_CONF=/etc/cozynights/<env>.conf)" >&2
+		echo "error: COZY_COMPOSE_FILE is set but COMPOSE_PROJECT_NAME is not — export the project name of that stack (or use COZY_DEPLOY_CONF=/etc/cozynights/deploy-<env>.conf instead of COZY_COMPOSE_FILE)" >&2
 		exit 1
 	elif [[ -r "$DEPLOY_CONF" ]]; then
 		COMPOSE_PROJECT_NAME="$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' "$DEPLOY_CONF" | tail -n1 | tr -d "'\"")"
@@ -151,9 +187,10 @@ case "$cmd" in
 		cozy -- approve "$@"
 		;;
 	remove)
-		[[ $# -eq 1 ]] || die "usage: $0 remove <email>"
+		# Destructive like the other removals: the command itself insists on --yes.
+		[[ $# -ge 1 ]] || die "usage: $0 remove <email> --yes"
 		require_running
-		cozy -- remove "$1"
+		cozy -- remove "$@"
 		;;
 	list)
 		require_running
@@ -172,7 +209,7 @@ case "$cmd" in
 		require_running
 		if [[ "$1" == "import" ]]; then
 			# The file lives on the host; the command reads it from stdin.
-			[[ $# -ge 2 && -f "$2" ]] || die "usage: $0 tickets import <roster.csv> [--dry-run]"
+			[[ $# -ge 2 && -f "$2" ]] || die "usage: $0 tickets import <roster.csv> [--dry-run] [--hand-over]"
 			file="$2"
 			shift 2
 			cozy -- tickets import - "$@" <"$file"

@@ -12,14 +12,17 @@
 //    changes, deleted rooms/houses, template import) marks the ticket as due.
 //    So does a new e-mail address on a ticket, and a special-needs request
 //    that is sent, decided or withdrawn.
-// 3. Crew: admin access changes, admin sign-ins, booking phase changes and
-//    opening/closing special-needs requests become admin_events; their
-//    Telegram alerts go out with the next run.
+// 3. Crew: admin access changes, admin sign-ins, booking phase changes,
+//    opening/closing special-needs requests and turning swap requests off or
+//    on become admin_events; their Telegram alerts go out with the next run.
 //    (last_sign_in for the weekly re-sign-in: pb_hooks/admins_oauth_guard.pb.js)
-// 4. A cron job delivers: e-mail, Telegram messages, crew alerts, and reads
-//    the bot's incoming messages (guests linking their chat).
+// 4. A cron job delivers: e-mail, Telegram messages (spots, special-needs
+//    requests, swap requests), crew alerts, and reads the bot's incoming
+//    messages (guests linking their chat).
 // 5. POST /api/cozy/notify/flush (superusers only): one run right now, for
-//    the tests.
+//    the tests. POST /api/cozy/notify/quiet (superusers only): mutes guest
+//    messages for a moment, e.g. around the release when switching back to
+//    Staging (the crew alert goes out regardless).
 // 6. The message texts for /admin/messages (superusers only, the app's service
 //    account): GET /api/cozy/texts lists the catalogue with the defaults,
 //    POST /api/cozy/texts/preview renders sample messages with changed texts.
@@ -242,8 +245,9 @@ onRecordUpdateRequest((e) => {
 	try {
 		const old = e.record.original();
 		before = require(`${__hooks}/lib/phase.js`).windowOf(old);
-		// the special-needs switch lives in the same record (its own alert below)
+		// the special-needs and swap switches live in the same record (own alerts below)
 		before.requests = old.getBool('special_requests_open');
+		before.swapsOff = old.getBool('swaps_off');
 	} catch (err) {
 		console.error('[cozy-notify] booking phase alert: ' + err);
 	}
@@ -255,6 +259,7 @@ onRecordUpdateRequest((e) => {
 		const now = Date.now();
 		const after = phase.windowOf(e.record);
 		after.requests = e.record.getBool('special_requests_open');
+		after.swapsOff = e.record.getBool('swaps_off');
 		const actor = e.auth ? e.auth.email() : 'unknown';
 		const was = phase.effectivePhase(before, now);
 		const is = phase.effectivePhase(after, now);
@@ -285,6 +290,9 @@ onRecordUpdateRequest((e) => {
 			notify.logEvent(e.app, after.requests ? 'requests_opened' : 'requests_closed', {
 				actor: actor
 			});
+		}
+		if (before.swapsOff !== after.swapsOff) {
+			notify.logEvent(e.app, after.swapsOff ? 'swaps_off' : 'swaps_on', { actor: actor });
 		}
 	} catch (err) {
 		console.error('[cozy-notify] booking phase alert: ' + err);
@@ -329,6 +337,21 @@ routerAdd(
 		// force=1: ignore the settle time and the per-ticket cooldown (tests)
 		const force = e.request.url.query().get('force') === '1';
 		return e.json(200, notify.flush(e.app, force));
+	},
+	$apis.requireSuperuserAuth()
+);
+
+// Body: { seconds } — mutes guest messages for that long (0 ends it early).
+// The Control Center opens it around the release when a superuser switches
+// back to Staging with "Don't notify the guests"; crew alerts are unaffected.
+routerAdd(
+	'POST',
+	'/api/cozy/notify/quiet',
+	(e) => {
+		const notify = require(`${__hooks}/lib/notify.js`);
+		const body = e.requestInfo().body || {};
+		const until = notify.setQuiet(e.app, body.seconds);
+		return e.json(200, { quietUntil: until ? new Date(until).toISOString() : '' });
 	},
 	$apis.requireSuperuserAuth()
 );

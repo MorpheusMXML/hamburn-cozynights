@@ -12,7 +12,7 @@
 //      cozy-admin approve <email> [admin|superuser]  approve an access request
 //      cozy-admin superuser <email>               PocketBase superuser (password from
 //                                                 $COZY_SU_PASSWORD) + app role superuser
-//      cozy-admin remove <email>                  revoke/reject: app access + PocketBase superuser
+//      cozy-admin remove <email> --yes            revoke/reject: app access + PocketBase superuser
 //      cozy-admin list                            show pending requests, admins, superusers
 //      cozy-admin service-account <email>         create/rotate the app's service superuser
 //                                                 (password from $COZY_SU_PASSWORD)
@@ -32,12 +32,14 @@
 //      cozy-admin tickets list                    ticket codes, sign-ins, booked beds, contacts
 //      cozy-admin tickets remove <code> [<code> ...]  delete tickets that hold no bed
 //      cozy-admin tickets forget-contacts --yes   after the event: delete all guest e-mail
-//                                                 addresses, Telegram links and
-//                                                 special-needs requests
+//                                                 addresses, Telegram links, special-needs
+//                                                 requests, swap requests and wallet device
+//                                                 registrations
 //
 //    Notifications (pb_hooks/cozy_notify.pb.js):
 //
-//      cozy-admin notify status                   what is configured, what is queued
+//      cozy-admin notify status                   what is configured, what is queued,
+//                                                 whether the bot can post in the crew chat
 //      cozy-admin notify test [--email <address>] crew chat test message (+ test e-mail)
 //
 // 2. On every start, sync the Google OAuth client of the `admins` collection
@@ -256,33 +258,47 @@ cozyAdmin.addCommand(
 );
 
 cozyAdmin.addCommand(
-	new Command({
-		use: 'remove <email>',
-		short: 'Revoke app admin access and the PocketBase superuser account of this email',
-		run: (cmd, args) => {
-			if (args.length !== 1) cozyFail(cmd, 'usage: cozy-admin remove <email>');
-			cozyAdminsCollection(cmd);
-			const email = cozyNormalizeEmail(cmd, args[0], false);
+	(() => {
+		const remove = new Command({
+			use: 'remove <email>',
+			short: 'Revoke app admin access and the PocketBase superuser account of this email',
+			run: (cmd, args) => {
+				if (args.length !== 1) cozyFail(cmd, 'usage: cozy-admin remove <email> --yes');
+				cozyAdminsCollection(cmd);
+				const email = cozyNormalizeEmail(cmd, args[0], false);
 
-			const rec = cozyFind('admins', email);
-			const su = cozyFind('_superusers', email);
-			if (!rec && !su) cozyFail(cmd, 'no admin or superuser with email ' + email);
-			if (su && $app.countRecords('_superusers') <= 1) {
-				cozyFail(cmd, 'refusing to remove the last PocketBase superuser (' + email + ')');
-			}
+				const rec = cozyFind('admins', email);
+				const su = cozyFind('_superusers', email);
+				if (!rec && !su) cozyFail(cmd, 'no admin or superuser with email ' + email);
+				if (su && $app.countRecords('_superusers') <= 1) {
+					cozyFail(cmd, 'refusing to remove the last PocketBase superuser (' + email + ')');
+				}
+				// Like the other destructive commands: say what goes, then insist on --yes.
+				if (!cmd.flags().getBool('yes')) {
+					const what = [];
+					if (rec) what.push('the app admin access (role ' + rec.getString('role') + ')');
+					if (su) what.push('the PocketBase superuser account');
+					cozyFail(
+						cmd,
+						'this removes ' + what.join(' and ') + ' of ' + email + ' — run it with --yes'
+					);
+				}
 
-			if (rec) {
-				// Deleting the record also deletes its Google link and invalidates
-				// its tokens: the app drops the session on the next request.
-				$app.delete(rec);
-				cmd.println('removed app admin access: ' + email);
+				if (rec) {
+					// Deleting the record also deletes its Google link and invalidates
+					// its tokens: the app drops the session on the next request.
+					$app.delete(rec);
+					cmd.println('removed app admin access: ' + email);
+				}
+				if (su) {
+					$app.delete(su);
+					cmd.println('removed PocketBase superuser: ' + email);
+				}
 			}
-			if (su) {
-				$app.delete(su);
-				cmd.println('removed PocketBase superuser: ' + email);
-			}
-		}
-	})
+		});
+		remove.flags().bool('yes', false, 'really remove the access');
+		return remove;
+	})()
 );
 
 cozyAdmin.addCommand(
@@ -673,8 +689,26 @@ const cozyTicketsImport = new Command({
 		}
 
 		const dryRun = cmd.flags().getBool('dry-run');
-		const counts = { created: 0, updated: 0, unchanged: 0, confirmations: 0, withoutEmail: 0 };
+		const handOverAllowed = cmd.flags().getBool('hand-over');
+		// What handing a ticket over means is described in one place, shared with
+		// the app's Tickets page (pb_hooks/lib/handover.js).
+		const handover = require(`${__hooks}/lib/handover.js`);
+		const counts = {
+			created: 0,
+			updated: 0,
+			unchanged: 0,
+			confirmations: 0,
+			withoutEmail: 0,
+			handedOver: 0
+		};
+		// Tickets whose address would change although they still carry something
+		// of their holder. Without --hand-over the whole file is refused: the CLI
+		// has no per-row choice, and silently swapping the address would leave the
+		// old holder's pass, Telegram chat and special-needs request on the ticket.
+		const refusals = [];
+		const handedOverLines = [];
 		let conflict = '';
+		const pbNow = cozyNotifyModule().pbDate(Date.now());
 		try {
 			$app.runInTransaction((txApp) => {
 				for (const entry of entries) {
@@ -698,7 +732,42 @@ const cozyTicketsImport = new Command({
 					}
 					// Empty cells leave the stored value alone.
 					let changed = false;
-					if (entry.email && exact.getString('email') !== entry.email) {
+					const newAddress = !!entry.email && exact.getString('email') !== entry.email;
+					// Only an address that REPLACES one can hand the ticket to
+					// somebody else. A ticket that had none yet simply becomes
+					// reachable — its pass and burner name belong to the guest who
+					// booked with its code. The app draws the same line
+					// (canBeNewHolder in src/lib/tickets.ts).
+					const replaces = newAddress && !!exact.getString('email');
+					if (replaces) {
+						const state = handover.holderState(txApp, exact);
+						if (state.any && !handOverAllowed) {
+							refusals.push(
+								'line ' +
+									entry.line +
+									': ' +
+									entry.code +
+									' still has ' +
+									handover.describeState(state) +
+									' of its current holder'
+							);
+							continue;
+						}
+						if (state.any) {
+							handover.handOver(txApp, exact, pbNow);
+							counts.handedOver++;
+							handedOverLines.push(
+								'  hand-over: ' +
+									entry.code +
+									' → ' +
+									entry.email +
+									' (drops ' +
+									handover.describeState(state) +
+									')'
+							);
+						}
+					}
+					if (newAddress) {
 						exact.set('email', entry.email);
 						changed = true;
 						if (cozyBedOfTicket(txApp, exact.id)) counts.confirmations++;
@@ -714,10 +783,25 @@ const cozyTicketsImport = new Command({
 						counts.unchanged++;
 					}
 				}
+				if (refusals.length > 0) throw new Error('cozy-refused');
 				if (dryRun) throw new Error('cozy-dry-run');
 			});
 		} catch (err) {
-			if (String(err).indexOf('cozy-dry-run') < 0) {
+			const failure = String(err);
+			if (failure.indexOf('cozy-refused') >= 0) {
+				for (const r of refusals.slice(0, MAX_IMPORT_PROBLEMS_SHOWN)) cmd.println(r);
+				if (refusals.length > MAX_IMPORT_PROBLEMS_SHOWN) {
+					cmd.println('… and ' + (refusals.length - MAX_IMPORT_PROBLEMS_SHOWN) + ' more');
+				}
+				cozyFail(
+					cmd,
+					refusals.length +
+						' ticket(s) would change hands — nothing was imported. Hand them over on the ' +
+						'Tickets page (🎟️ Tickets → "🔁 New holder"), which decides per ticket, or run ' +
+						'this import again with --hand-over to do it for every one of them.'
+				);
+			}
+			if (failure.indexOf('cozy-dry-run') < 0) {
 				cozyFail(cmd, 'nothing was imported: ' + (conflict || err));
 			}
 		}
@@ -732,11 +816,24 @@ const cozyTicketsImport = new Command({
 				counts.unchanged +
 				' ticket(s)'
 		);
+		if (counts.handedOver > 0) {
+			cmd.println(
+				'  ' +
+					counts.handedOver +
+					' ticket(s) changed hands: old pass, burner name, Telegram chat, special-needs ' +
+					'request and check-in are gone'
+			);
+			for (const line of handedOverLines.slice(0, MAX_IMPORT_PROBLEMS_SHOWN)) cmd.println(line);
+			if (handedOverLines.length > MAX_IMPORT_PROBLEMS_SHOWN) {
+				cmd.println('  … and ' + (handedOverLines.length - MAX_IMPORT_PROBLEMS_SHOWN) + ' more');
+			}
+		}
 		if (counts.confirmations > 0) {
 			cmd.println(
 				'  ' +
 					counts.confirmations +
-					' of the updated tickets hold a spot: their new address gets a confirmation'
+					' of the updated tickets hold a spot: their new address gets a ' +
+					(counts.handedOver > 0 ? 'message' : 'confirmation')
 			);
 		}
 		if (counts.withoutEmail > 0) {
@@ -765,11 +862,37 @@ const cozyTicketsImport = new Command({
 				'  ' + others + ' ticket(s) in the database are not in this file (left unchanged)'
 			);
 		}
+
+		// The crew group hears about an import from the server the same way it
+		// hears about one from the Tickets page — until now this one was silent.
+		if (!dryRun && counts.created + counts.updated > 0) {
+			try {
+				cozyNotifyModule().logEvent($app, 'tickets_imported', {
+					actor: 'cozy-admin (server)',
+					subject: '',
+					details: {
+						created: counts.created,
+						updated: counts.updated,
+						newHolders: counts.handedOver,
+						failed: 0
+					}
+				});
+			} catch (err) {
+				cmd.println('  note: the crew group could not be told about this import: ' + err);
+			}
+		}
 	}
 });
 cozyTicketsImport
 	.flags()
 	.bool('dry-run', false, 'check the file and show what would change, without changing anything');
+cozyTicketsImport
+	.flags()
+	.bool(
+		'hand-over',
+		false,
+		'treat every changed address as a new holder: drops the old pass, burner name, Telegram chat, special-needs request and check-in'
+	);
 cozyTickets.addCommand(cozyTicketsImport);
 
 cozyTickets.addCommand(
@@ -777,19 +900,22 @@ cozyTickets.addCommand(
 		const forget = new Command({
 			use: 'forget-contacts',
 			short:
-				'After the event: delete every e-mail address, Telegram link and special-needs request of the tickets',
+				'After the event: delete every e-mail address, Telegram link, special-needs request, swap request and wallet device registration of the tickets',
 			run: (cmd, args) => {
 				if (args.length !== 0 || !cmd.flags().getBool('yes')) {
 					cozyFail(
 						cmd,
-						'this deletes the e-mail address of every ticket, every Telegram link and every special-needs request (ticket codes and bookings stay) — run it with --yes'
+						'this deletes the e-mail address of every ticket, every Telegram link, every special-needs request, every swap request and every wallet device registration (ticket codes and bookings stay) — run it with --yes'
 					);
 				}
 				cozyCollection(cmd, 'guest_notify');
 				cozyCollection(cmd, 'special_requests');
+				cozyCollection(cmd, 'swap_requests');
 				let emails = 0;
 				let links = 0;
 				let requests = 0;
+				let swaps = 0;
+				let devices = 0;
 				$app.runInTransaction((txApp) => {
 					for (const t of txApp.findRecordsByFilter('orders', "email != ''", '', 0, 0)) {
 						t.set('email', '');
@@ -801,9 +927,28 @@ cozyTickets.addCommand(
 						txApp.delete(r);
 						requests++;
 					}
+					// Swap requests, with what guests wrote to each other.
+					for (const r of txApp.findRecordsByFilter('swap_requests', "id != ''", '', 0, 0)) {
+						txApp.delete(r);
+						swaps++;
+					}
 					for (const n of txApp.findRecordsByFilter('guest_notify', "id != ''", '', 0, 0)) {
 						if (n.getString('tg_chat')) links++;
 						txApp.delete(n);
+					}
+					// The phones that registered an Apple Wallet pass for updates. The
+					// passes stay in the wallets as they are; they expire after the event.
+					let hasDevices = true;
+					try {
+						txApp.findCollectionByNameOrId('wallet_devices');
+					} catch (_) {
+						hasDevices = false; // a database from before the wallet passes
+					}
+					if (hasDevices) {
+						for (const d of txApp.findRecordsByFilter('wallet_devices', "id != ''", '', 0, 0)) {
+							txApp.delete(d);
+							devices++;
+						}
 					}
 				});
 				cmd.println(
@@ -811,9 +956,13 @@ cozyTickets.addCommand(
 						emails +
 						' e-mail address(es), ' +
 						links +
-						' Telegram link(s) and ' +
+						' Telegram link(s), ' +
 						requests +
-						' special-needs request(s); the ticket codes and bookings are kept'
+						' special-needs request(s), ' +
+						swaps +
+						' swap request(s) and ' +
+						devices +
+						' wallet device registration(s); the ticket codes and bookings are kept'
 				);
 			}
 		});
@@ -1014,6 +1163,28 @@ function cozyCount(collection, filter) {
 	}
 }
 
+/** What to do about a failed crew chat send ({error, migrateTo} from notify.js). */
+function cozyCrewChatHints(r) {
+	if (r.migrateTo) {
+		// TELEGRAM_CHAT_ID stays the operator's: the server never rewrites it
+		return [
+			'the crew group became a supergroup (e.g. "chat history for new members" or topics turned on) and has a new id:',
+			'set TELEGRAM_CHAT_ID=' +
+				r.migrateTo +
+				' in .env, recreate the PocketBase container, run notify test again',
+			'the bot must be a member of the new group: to add it again, @BotFather "Allow Groups" must be on (turn it off afterwards)'
+		];
+	}
+	if (/^401\b/.test(r.error)) return ['the bot token is wrong (TELEGRAM_BOT_TOKEN)'];
+	if (/chat not found|^403\b/.test(r.error)) {
+		return [
+			'the bot is not a member of that chat, or TELEGRAM_CHAT_ID is wrong',
+			'to add the bot to a group again, @BotFather "Allow Groups" must be on (turn it off afterwards)'
+		];
+	}
+	return [];
+}
+
 const cozyNotify = new Command({
 	use: 'notify',
 	short: 'Notifications (guest e-mail, Telegram): status and test messages',
@@ -1025,7 +1196,8 @@ const cozyNotify = new Command({
 cozyNotify.addCommand(
 	new Command({
 		use: 'status',
-		short: 'Show what is configured, what is queued and the latest admin events',
+		short:
+			'Show what is configured, whether the bot can post in the crew chat, what is queued and the latest admin events',
 		run: (cmd, args) => {
 			const notify = cozyNotifyModule();
 			const cfg = notify.config($app);
@@ -1054,6 +1226,13 @@ cozyNotify.addCommand(
 				crew = 'webhook COZY_ADMIN_WEBHOOK_URL';
 			}
 			cmd.println('CREW CHAT          ' + crew);
+			if (cfg.telegram.token && cfg.telegram.chatId) {
+				const check = notify.crewCheck(cfg);
+				if (!check.ok) {
+					cmd.println('  WARNING: the bot cannot post there: ' + check.error);
+					for (const hint of cozyCrewChatHints(check)) cmd.println('  ' + hint);
+				}
+			}
 			if (cfg.telegram.token) {
 				const me = notify.telegramCall(cfg, 'getMe', {}, 10);
 				cmd.println(
@@ -1131,11 +1310,7 @@ const cozyNotifyTest = new Command({
 			} else {
 				failed++;
 				cmd.println('crew chat: FAILED — ' + r.error);
-				if (/^401\b/.test(r.error)) {
-					cmd.println('  the bot token is wrong (TELEGRAM_BOT_TOKEN)');
-				} else if (/chat not found|^403\b/.test(r.error)) {
-					cmd.println('  the bot is not a member of that chat, or TELEGRAM_CHAT_ID is wrong');
-				}
+				for (const hint of cozyCrewChatHints(r)) cmd.println('  ' + hint);
 			}
 		} else {
 			cmd.println('crew chat: not configured (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)');

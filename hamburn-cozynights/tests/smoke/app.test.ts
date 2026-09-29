@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type PocketBase from 'pocketbase';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
+import { readZip } from '../../src/lib/server/wallet/zip';
 import { adminCookie, createAdmin, seedHouse, seedTicket, serviceAccount } from '../stack-helpers';
 
 const BASE = (process.env.SMOKE_BASE_URL || '').replace(/\/$/, '');
@@ -59,14 +60,19 @@ describe('any deployment (read-only)', () => {
 		expect(res.headers.get('set-cookie') || '').not.toContain('bookingCode=');
 	});
 
-	it('sends guest pages without a ticket back to the login', async () => {
+	it('sends guest pages without a ticket back to the login, and back again after it', async () => {
 		const res = await get('/room/doesnotexist000');
 		expect(res.status).toBe(303);
-		expect(res.headers.get('location')).toBe('/?login=required');
+		// `next`: signing in comes back to the page the visitor wanted
+		expect(res.headers.get('location')).toBe('/?login=required&next=%2Froom%2Fdoesnotexist000');
 
 		const request = await get('/special-needs');
 		expect(request.status).toBe(303);
-		expect(request.headers.get('location')).toBe('/?login=required');
+		expect(request.headers.get('location')).toBe('/?login=required&next=%2Fspecial-needs');
+
+		const swaps = await get('/swaps');
+		expect(swaps.status).toBe(303);
+		expect(swaps.headers.get('location')).toBe('/?login=required&next=%2Fswaps');
 	});
 
 	it('shows the admin login page, with the backend reachable', async () => {
@@ -102,6 +108,17 @@ describe('any deployment (read-only)', () => {
 			403
 		);
 		expect((await post('/admin/messages/preview')).status).toBe(403);
+
+		// who booked which spot: the camp editor, the bookings list and its
+		// check-in, the rows behind them and "Open ticket" are for admins only
+		for (const path of ['/admin/camp', '/admin/templates', '/admin/bookings']) {
+			const res = await get(path);
+			expect(res.status, path).toBe(303);
+			expect(res.headers.get('location'), path).toBe('/admin/login');
+		}
+		expect((await get('/admin/api/bookings')).status).toBe(403);
+		expect((await post('/admin/bookings?/checkin', { order: 'doesnotexist000' })).status).toBe(403);
+		expect((await post('/admin/tickets?/open', { ticket: 'doesnotexist000' })).status).toBe(403);
 	});
 
 	it('ignores a forged admin cookie', async () => {
@@ -142,7 +159,11 @@ describe('any deployment (read-only)', () => {
 	it('reports readiness only with a working service account', async () => {
 		const res = await get('/api/health');
 		expect(res.status, 'app → PocketBase → service account').toBe(200);
-		expect(await res.json()).toEqual({ status: 'ok' });
+		const body = await res.json();
+		expect(body).toMatchObject({ status: 'ok' });
+		// The running version, as the badge and the release tag show it.
+		expect(body.version, 'version from package.json').toMatch(/^\d+\.\d+\.\d+/);
+		expect(typeof body.commit).toBe('string');
 		expect(res.headers.get('cache-control')).toContain('no-store');
 	});
 
@@ -185,14 +206,24 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		});
 	}
 
+	/**
+	 * Signs a guest in and returns what a browser would send from then on: the
+	 * ticket code and the booking round it was signed in for. A reset between
+	 * rounds (releasing every booking) ends sessions of earlier rounds, so the
+	 * round cookie has to ride along like in a real browser.
+	 */
 	async function guestLogin(code: string): Promise<string> {
 		const res = await post('/?/login', { bookingCode: code });
 		expect(res.status).toBe(303);
 		expect(res.headers.get('location')).toBe('/map');
-		const setCookie = res.headers.get('set-cookie') || '';
-		expect(setCookie).toContain('bookingCode=');
-		expect(setCookie).toContain('HttpOnly');
-		return setCookie.split(';')[0];
+		const setCookies = res.headers.getSetCookie();
+		expect(setCookies.some((c) => c.startsWith('bookingCode=') && c.includes('HttpOnly'))).toBe(
+			true
+		);
+		expect(setCookies.some((c) => c.startsWith('bookingRound=') && c.includes('HttpOnly'))).toBe(
+			true
+		);
+		return setCookies.map((c) => c.split(';')[0]).join('; ');
 	}
 
 	beforeAll(async () => {
@@ -276,6 +307,35 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		expect(guestView).not.toContain(ticket.code);
 		const gif = await get(`/pass/${shown}/qr.gif`);
 		expect(gif.headers.get('content-type')).toBe('image/gif');
+		const png = await get(`/pass/${shown}/qr.png`);
+		expect(png.headers.get('content-type')).toBe('image/png');
+		expect(
+			Buffer.from(await png.arrayBuffer())
+				.subarray(1, 4)
+				.toString()
+		).toBe('PNG');
+
+		// the wallets (throwaway credentials in the test stack): a signed pass
+		// file for Apple, a save link for Google
+		const pkpass = await get(`/pass/${shown}/wallet/apple`);
+		expect(pkpass.status).toBe(200);
+		expect(pkpass.headers.get('content-type')).toBe('application/vnd.apple.pkpass');
+		const files = readZip(Buffer.from(await pkpass.arrayBuffer()));
+		expect([...files.keys()]).toContain('signature');
+		expect(JSON.parse(files.get('pass.json')!.toString('utf8'))).toMatchObject({
+			serialNumber: code,
+			passTypeIdentifier: 'pass.test.cozynights'
+		});
+		const save = await get(`/pass/${shown}/wallet/google`);
+		expect(save.status).toBe(303);
+		expect(save.headers.get('location')).toContain('https://pay.google.com/gp/v/save/');
+		expect(guestView).toContain('Add to Apple Wallet');
+
+		// the Telegram page needs the ticket code, and comes back afterwards
+		const telegram = await get('/telegram');
+		expect(telegram.status).toBe(303);
+		expect(telegram.headers.get('location')).toBe('/?login=required&next=%2Ftelegram');
+		expect(await (await get('/telegram', cookie)).text()).toContain('Updates on Telegram');
 
 		// the crew: the same link shows the booking and a Check in button
 		const admin = await createAdmin(su, 'admin');
@@ -332,6 +392,65 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		expect((await post(`/room/${room.id}?/unbookBed`, {}, guest)).status).toBe(200);
 	});
 
+	it('shows admins who booked a spot, masked, and checks guests in from the list', async () => {
+		const { room, beds } = await seedHouse(su, 1);
+		const ticket = await seedTicket(su);
+		const guest = await guestLogin(ticket.code);
+		await setBookingOpen(true);
+		await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[0].id, guestName: 'List Arriver' },
+			guest
+		);
+		const checkedIn = async () => (await su.collection('beds').getOne(beds[0].id)).checked_in_at;
+
+		// the ticket holder and a pending access request get nothing
+		const pending = await createAdmin(su, 'pending');
+		for (const cookie of [guest, adminCookie(pending.client)]) {
+			expect((await get(`/admin/api/bookings?room=${room.id}`, cookie)).status).toBe(403);
+			expect(
+				(await post('/admin/bookings?/checkin', { order: ticket.order.id }, cookie)).status
+			).toBe(403);
+		}
+
+		// an admin sees the booking: names, the ticket code masked, never in full
+		const admin = await createAdmin(su, 'admin');
+		const cookie = adminCookie(admin.client);
+		const api = await get(`/admin/api/bookings?room=${room.id}`, cookie);
+		expect(api.status).toBe(200);
+		expect(api.headers.get('cache-control')).toContain('no-store');
+		const body = await api.text();
+		expect(body).not.toContain(ticket.code);
+		const [row] = JSON.parse(body).bookings;
+		expect(row).toMatchObject({
+			bedId: beds[0].id,
+			guest: { orderId: ticket.order.id, name: 'Test Guest', burnerName: 'List Arriver' },
+			checkIn: null
+		});
+		const roomPage = await (await get(`/admin/room/${room.id}`, cookie)).text();
+		expect(roomPage).toContain('List Arriver');
+		// the bunk-bed control is on the spot's card (disabled: it stands alone)
+		expect(roomPage).toContain(`id="stack-${beds[0].id}"`);
+		expect(roomPage).toContain('action="/admin/tickets?/open"');
+		expect(roomPage).not.toContain(ticket.code);
+
+		// check in without the pass, and back
+		const checked = await post('/admin/bookings?/checkin', { order: ticket.order.id }, cookie);
+		expect(checked.status).toBe(200);
+		expect((await su.collection('beds').getOne(beds[0].id)).checked_in_by).toBe(admin.email);
+		expect((await post('/admin/bookings?/undo', { order: ticket.order.id }, cookie)).status).toBe(
+			200
+		);
+		expect(await checkedIn()).toBe('');
+
+		// Open ticket: the full card, the code still masked (the admin didn't type it)
+		const opened = await post('/admin/tickets?/open', { ticket: ticket.order.id }, cookie);
+		expect(opened.status).toBe(200);
+		const card = await opened.text();
+		expect(card).toContain('The ticket booked on');
+		expect(card).not.toContain(ticket.code);
+	});
+
 	it('opens the admin area for approved admins only', async () => {
 		const admin = await createAdmin(su, 'admin');
 		const pending = await createAdmin(su, 'pending');
@@ -383,7 +502,7 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 			expect(await (await get('/special-needs', cookie)).text()).toContain('Waiting for the crew');
 			const otherGuest = await guestLogin((await seedTicket(su)).code);
 			const roomHtml = await (await get(`/room/${room.id}`, otherGuest)).text();
-			expect(roomHtml).toContain('Reserved by the crew');
+			expect(roomHtml).toContain('Blocked by admin');
 			expect(roomHtml).not.toContain('is_special');
 
 			const admin = await createAdmin(su, 'admin');
@@ -520,7 +639,61 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		expect(renamed.status).toBe(200);
 	});
 
-	it('nukes a spot for the roulette only as confirmed, then books a new random one', async () => {
+	it('lets two guests swap spots: ask on the room page, say yes on /swaps', async () => {
+		const { room, beds } = await seedHouse(su, 2);
+		const ada = await seedTicket(su);
+		const bo = await seedTicket(su);
+		const adaCookie = await guestLogin(ada.code);
+		const boCookie = await guestLogin(bo.code);
+		await setBookingOpen(true);
+		await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[0].id, guestName: 'Swap Ada' },
+			adaCookie
+		);
+		await post(`/room/${room.id}?/bookBed`, { bedId: beds[1].id, guestName: 'Swap Bo' }, boCookie);
+
+		// nobody signed in: the action refuses and the page sends the visitor to the login
+		for (const [path, fields] of [
+			[`/room/${room.id}?/askSwap`, { bedId: beds[1].id }],
+			['/swaps?/accept', { id: 'abc' }]
+		] as const) {
+			const refused = await post(path, fields);
+			expect(refused.status, path).toBe(303);
+			expect(refused.headers.get('location'), path).toMatch(/^\/\?login=required/);
+		}
+		expect(
+			await su.collection('swap_requests').getFullList({
+				filter: su.filter('from_order = {:o} || to_order = {:o}', { o: bo.order.id })
+			})
+		).toHaveLength(0);
+
+		const asked = await post(
+			`/room/${room.id}?/askSwap`,
+			{ bedId: beds[1].id, vibe: 'crew', note: 'Smoke says hi — swap?' },
+			adaCookie
+		);
+		expect(asked.status).toBe(200);
+		const [request] = await su.collection('swap_requests').getFullList({
+			filter: su.filter('from_order = {:o}', { o: ada.order.id })
+		});
+		expect(request).toMatchObject({ status: 'pending', to_order: bo.order.id });
+
+		// Bo reads the note and Ada's burner name — never her ticket
+		const boPage = await (await get('/swaps', boCookie)).text();
+		expect(boPage).toContain('Smoke says hi — swap?');
+		expect(boPage).toContain('Swap Ada');
+		expect(boPage).not.toContain(ada.code);
+		// only Bo can answer it
+		expect((await post('/swaps?/accept', { id: request.id }, adaCookie)).status).toBe(404);
+
+		expect((await post('/swaps?/accept', { id: request.id }, boCookie)).status).toBe(200);
+		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(bo.order.id);
+		expect((await su.collection('beds').getOne(beds[1].id)).order).toBe(ada.order.id);
+		expect((await su.collection('swap_requests').getOne(request.id)).status).toBe('accepted');
+	});
+
+	it('sweeps a spot away for the roulette only as confirmed, then books a new random one', async () => {
 		const { room, beds } = await seedHouse(su, 2);
 		const ticket = await seedTicket(su);
 		const cookie = await guestLogin(ticket.code);
@@ -529,17 +702,17 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 			200
 		);
 
-		// a warning that showed another spot (stale tab) deletes nothing
+		// a dialog that showed another spot (stale tab) deletes nothing
 		const stale = await post('/random-bed?/releaseBed', { bedId: beds[1].id }, cookie);
 		expect(stale.status).toBe(409);
 		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
 
-		// the ☢ launch deletes the booking right away …
-		const nuked = await post('/random-bed?/releaseBed', { bedId: beds[0].id }, cookie);
-		expect(nuked.status).toBe(200);
+		// the sweep deletes the booking right away …
+		const swept = await post('/random-bed?/releaseBed', { bedId: beds[0].id }, cookie);
+		expect(swept.status).toBe(200);
 		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(false);
 
-		// … and the roulette books the spot it rolled
+		// … and the roulette books the spot it spun
 		const rolled = await post(
 			'/random-bed?/bookRandom',
 			{ bedId: beds[1].id, guestName: 'Plasma Puma #404' },
@@ -571,6 +744,8 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		const kept = await post('/admin?/setPhase', { phase: 'staging' }, adminCookie(boss.client));
 		expect(kept.status).toBe(200);
 		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
+		// keeping the bookings keeps the guests signed in
+		expect((await get(`/room/${room.id}`, cookie)).status).toBe(200);
 
 		// back to live, then switch again and release them this time
 		await setBookingOpen(true);
@@ -587,8 +762,17 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		expect((await su.collection('app_settings').getOne(APP_SETTINGS_ID)).is_booking_active).toBe(
 			false
 		);
-		// the ticket roster survives
-		await guestLogin(ticket.code);
+		// releasing them starts a new booking round: the device signs in again,
+		// told why, and both cookies are deleted
+		const signedOut = await get(`/room/${room.id}`, cookie);
+		expect(signedOut.status).toBe(303);
+		expect(signedOut.headers.get('location')).toMatch(/^\/\?login=round(&next=|$)/);
+		const cleared = signedOut.headers.getSetCookie();
+		expect(cleared.some((c) => c.startsWith('bookingCode=;'))).toBe(true);
+		expect(cleared.some((c) => c.startsWith('bookingRound=;'))).toBe(true);
+		// the ticket roster survives: the same code signs in again and stays
+		const again = await guestLogin(ticket.code);
+		expect((await get(`/room/${room.id}`, again)).status).toBe(200);
 	});
 
 	it('reserves "clear all bookings" for superusers and keeps the tickets', async () => {

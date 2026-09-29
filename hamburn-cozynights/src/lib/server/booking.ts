@@ -1,7 +1,19 @@
 import type { ClientResponseError } from 'pocketbase';
-import type { TypedPocketBase, OrdersResponse, BedsResponse } from '$lib/pocketbase-types';
+import type {
+	TypedPocketBase,
+	OrdersResponse,
+	BedsResponse,
+	SwapRequestsResponse
+} from '$lib/pocketbase-types';
 import { createLookupHash, encrypt } from '$lib/server/crypto';
 import { CHECKED_IN_NOTE } from '$lib/check-in';
+import { APP_SETTINGS_ID } from '$lib/server/constants';
+import {
+	bookingRefusal,
+	effectivePhase,
+	windowFromRecord,
+	type BookingPhase
+} from '$lib/booking-phase';
 
 /**
  * Thrown when a bed can no longer be booked (already taken by someone else,
@@ -16,11 +28,39 @@ export class ReleaseFailedError extends Error {}
  * now (booked in a second tab): nothing was released.
  */
 export class SpotChangedError extends Error {}
+/**
+ * Booking stopped being open while the claim was waiting for its lock: the
+ * claim was undone, so the switch to Staging does not leave one booking behind.
+ */
+export class BookingClosedError extends Error {}
 /** The guest was checked in at the spot: releasing or moving it is for the crew only. */
 export class CheckedInError extends Error {
 	constructor() {
 		super(CHECKED_IN_NOTE);
 		this.name = 'CheckedInError';
+	}
+}
+
+/**
+ * Why PocketBase refused a swap (pb_hooks/lib/swap.js REFUSALS): the request
+ * isn't open any more, ran out, booking or swaps are closed, a spot changed
+ * hands, a spot can't be swapped, or it isn't addressed to this ticket.
+ */
+export type SwapRefusal = 'answered' | 'expired' | 'closed' | 'moved' | 'fixed' | 'mismatch';
+const SWAP_REFUSALS: readonly string[] = [
+	'answered',
+	'expired',
+	'closed',
+	'moved',
+	'fixed',
+	'mismatch'
+];
+
+/** PocketBase refused the swap; nothing changed. */
+export class SwapRefusedError extends Error {
+	constructor(public reason: SwapRefusal) {
+		super(`swap refused: ${reason}`);
+		this.name = 'SwapRefusedError';
 	}
 }
 
@@ -59,6 +99,11 @@ function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
 	return run;
 }
 
+/** Several locks, taken in the order given. */
+function withLocks<T>(keys: string[], fn: () => Promise<T>): Promise<T> {
+	return keys.reduceRight<() => Promise<T>>((inner, key) => () => withLock(key, inner), fn)();
+}
+
 function isNotFound(err: unknown): boolean {
 	return (err as ClientResponseError | undefined)?.status === 404;
 }
@@ -66,7 +111,7 @@ function isNotFound(err: unknown): boolean {
 /**
  * Whether a guest may book this bed at all (independent of occupancy).
  * Locked spots and special-needs spots are for the crew to hand out: guests
- * see both as "Reserved by the crew".
+ * see both as "Blocked by admin".
  */
 export function isBedBookable(
 	bed: Pick<BedsResponse, 'enabled' | 'is_locked'> & { is_special?: boolean },
@@ -77,29 +122,9 @@ export function isBedBookable(
 	return true;
 }
 
-const BURNER_NAMES = [
-	'Dusty Nomad',
-	'Neon Shaman',
-	'Sparkle Pony',
-	'Fire Weaver',
-	'LED Lizard',
-	'Gifting Goblin',
-	'Moop Master',
-	'Temple Guardian',
-	'Solar Sprite',
-	'Disco Druid',
-	'Radical Robot',
-	'Dust Bunny',
-	'Prism Pilot',
-	'Bass Beast',
-	'Infinite Improviser'
-];
-
-/** A burner name for a booking made without one, e.g. "Disco Druid #417". */
-export function randomBurnerName(): string {
-	const name = BURNER_NAMES[Math.floor(Math.random() * BURNER_NAMES.length)];
-	return `${name} #${Math.floor(100 + Math.random() * 900)}`;
-}
+// A burner name for a booking made without one, from the same list the
+// slot machine in the browser rolls through ($lib/burner-names).
+export { randomBurnerName } from '$lib/burner-names';
 
 /**
  * Service for managing bed bookings and orders on the playa.
@@ -160,6 +185,28 @@ export class BookingService {
 	}
 
 	/**
+	 * The booking phase straight from app_settings, or null when the record
+	 * can't be read. Deliberately not getBookingSettings: that answers
+	 * "staging" for a failed read, and a database hiccup must never undo a
+	 * booking that is perfectly fine. Only a phase it actually read counts.
+	 */
+	private async readPhase(): Promise<BookingPhase | null> {
+		try {
+			const settings = await this.adminPb
+				.collection('app_settings')
+				// requestKey null: a parallel booking reads this too, never cancel it.
+				.getOne(APP_SETTINGS_ID, { requestKey: null });
+			return effectivePhase(windowFromRecord(settings));
+		} catch (err) {
+			console.error(
+				'[Booking] Could not re-read the booking phase after the claim, letting it stand:',
+				(err as Error)?.message
+			);
+			return null;
+		}
+	}
+
+	/**
 	 * Finds the bed currently booked for a specific order.
 	 * @param orderId The ID of the order to check.
 	 * @returns The bed record if one exists for this order, or null.
@@ -185,15 +232,19 @@ export class BookingService {
 	 *   (locked or special-needs spots).
 	 * @param options.allowCheckedIn The crew may move a guest who is checked in
 	 *   already; the check-in moves along to the new spot.
+	 * @param options.requireLivePhase A guest's own booking: booking has to
+	 *   still be open once the claim is through. The crew books in any phase.
 	 * @throws {BedUnavailableError} if the bed is taken, locked, or deactivated.
 	 * @throws {CheckedInError} if the ticket's current spot is checked in and
 	 *   `allowCheckedIn` isn't set.
+	 * @throws {BookingClosedError} if `requireLivePhase` is set and booking is
+	 *   no longer open; the claim is undone first.
 	 */
 	async bookBed(
 		order: OrdersResponse,
 		bedId: string,
 		guestName: string,
-		options: { allowLocked?: boolean; allowCheckedIn?: boolean } = {}
+		options: { allowLocked?: boolean; allowCheckedIn?: boolean; requireLivePhase?: boolean } = {}
 	): Promise<void> {
 		await withLock(`order:${order.id}`, () =>
 			withLock(`bed:${bedId}`, async () => {
@@ -232,6 +283,27 @@ export class BookingService {
 						: {})
 				});
 
+				// The route checked the phase before this request queued up behind
+				// the locks. Switching back to Staging writes app_settings first and
+				// releases the bookings right after (src/routes/admin/+page.server.ts),
+				// so a guest who was waiting here could otherwise slip a booking in
+				// behind the release and keep it in an empty camp.
+				if (options.requireLivePhase) {
+					const phase = await this.readPhase();
+					if (phase && phase !== 'live') {
+						await this.adminPb
+							.collection('beds')
+							.update(bedId, { occupied: false, order: null })
+							.catch((undoErr) =>
+								console.error(
+									`[Booking] Booking closed mid-claim and undoing spot ${bedId} of order ${order.id} failed too — it may still look booked:`,
+									(undoErr as Error)?.message
+								)
+							);
+						throw new BookingClosedError(bookingRefusal(phase));
+					}
+				}
+
 				await this.adminPb.collection('orders').update(order.id, {
 					burner_name: encrypt(guestName)
 				});
@@ -268,11 +340,47 @@ export class BookingService {
 	}
 
 	/**
+	 * Swaps two guests' spots for a swap request the other guest said yes to.
+	 * PocketBase does it in one transaction (POST /api/cozy/swap,
+	 * pb_hooks/lib/swap.js): both spots change tickets, the request becomes
+	 * accepted and every other open request about either spot or ticket ends,
+	 * after PocketBase's own last checks. This runs in both tickets' and both
+	 * spots' queues, so no booking, move or release of either guest can run
+	 * in between. The locks are taken tickets first, then spots, each sorted —
+	 * the same order everywhere, so two swaps never wait on each other.
+	 * @throws {SwapRefusedError} when PocketBase refused it; nothing changed
+	 */
+	async swapSpots(
+		request: Pick<SwapRequestsResponse, 'id' | 'from_order' | 'to_order' | 'from_bed' | 'to_bed'>
+	): Promise<void> {
+		const keys = [
+			...[request.from_order, request.to_order].map((id) => `order:${id}`).sort(),
+			...[request.from_bed, request.to_bed].map((id) => `bed:${id}`).sort()
+		];
+		await withLocks(keys, async () => {
+			try {
+				await this.adminPb.send('/api/cozy/swap', {
+					method: 'POST',
+					body: { request: request.id, order: request.to_order },
+					requestKey: null
+				});
+			} catch (err) {
+				const refused = err as ClientResponseError | undefined;
+				const reason = refused?.response?.reason;
+				if (refused?.status === 409 && SWAP_REFUSALS.includes(reason)) {
+					throw new SwapRefusedError(reason as SwapRefusal);
+				}
+				throw err;
+			}
+		});
+	}
+
+	/**
 	 * Releases all spots for an order.
 	 * @param orderId The ID of the order to release spots for.
 	 * @param options.allowCheckedIn The crew may release a spot whose guest is
 	 *   checked in; guests can't.
-	 * @param options.onlyBed The spot the guest confirmed deleting (the ☢ nuke).
+	 * @param options.onlyBed The spot the guest confirmed giving up (✨ Leave No Trace).
 	 *   If the ticket holds another one, nothing is released.
 	 * @returns How many spots were released (0: the ticket held none).
 	 * @throws {CheckedInError} if a spot is checked in and `allowCheckedIn` isn't set.

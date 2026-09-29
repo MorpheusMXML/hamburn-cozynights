@@ -1,8 +1,11 @@
 // vitest.config.ts
 import { defineConfig } from 'vitest/config';
 import path from 'path';
+import { buildDefine } from './build-info';
 
 export default defineConfig({
+	// The same build globals as vite.config.ts, so $lib/version works in unit tests.
+	define: buildDefine,
 	test: {
 		globals: true,
 		environment: 'node',

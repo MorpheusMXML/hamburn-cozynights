@@ -64,9 +64,17 @@ export function lockedDuring(phase: BookingPhase): string {
 	return phase === 'closed' ? 'while booking is closed' : 'during Live Booking';
 }
 
-/** What a guest reads under their own spot when they can't change it right now. */
-export function ownSpotNote(phase: BookingPhase): string {
-	return phase === 'closed'
+/**
+ * What a guest reads under their own spot when they can't move or release it
+ * right now. `guest` is the phase as guests are told about it (guestPhase):
+ * Closed with an opening armed isn't final, but the burner name stays fixed
+ * there too — renaming follows the real phase.
+ */
+export function ownSpotNote(phase: BookingPhase, guest: BookingPhase = phase): string {
+	if (phase !== 'closed') {
+		return 'It stays reserved for you, and its burner name can be changed on its room page any time. Moving or releasing it is possible again once Live Booking starts.';
+	}
+	return guest === 'closed'
 		? 'Spots are final now; this one stays yours.'
 		: 'It stays reserved for you. Changes are possible again once Live Booking starts.';
 }
@@ -131,6 +139,20 @@ export function countdownKind(
 }
 
 /**
+ * The phase as guests are told about it. Closed with an armed opening still
+ * ahead — a window planned while booking was closed — is "not open yet" to
+ * them, not "final": the countdown in front of them says when it opens. What
+ * guests may do stays with the real phase (the layout is locked, houses can
+ * still be looked at); only the wording follows this one.
+ */
+export function guestPhase(
+	phase: BookingPhase,
+	next: PhaseTransition | null | undefined
+): BookingPhase {
+	return phase === 'closed' && countdownKind(phase, next) === 'opens' ? 'staging' : phase;
+}
+
+/**
  * The opening time the guest map counts down to: only an ARMED window whose
  * opening is still ahead. A planned-but-paused window, or an elapsed opening
  * kept for the Control Center, shows no countdown (nothing would happen).
@@ -143,19 +165,47 @@ export function openingCountdownAt(
 }
 
 /**
- * Whether the slim countdown bar shows on a page. The start page always draws
- * the big countdown itself (above the ticket-code field), the map only its
- * "IGNITION IN" in Staging: in Closed with a later window armed, the bar is
- * the only countdown the map has.
+ * The pages that carry the guest top bar (GuestTopBar in the root layout):
+ * the booking pages a signed-in guest moves between. The start page draws
+ * the big countdown itself, the legal texts and the booking pass are read
+ * quietly, and the crew's pages have their own bar (AdminNav).
+ */
+const TOP_BAR_PAGES = /^\/(map|house|room|random-bed|special-needs|telegram|swaps)(\/|$)/;
+
+export function showTopBar(pathname: string): boolean {
+	return TOP_BAR_PAGES.test(pathname);
+}
+
+/**
+ * Whether the top bar's countdown shows on a page: where the bar is, and a
+ * timer is armed. On the map, the phase panel counts down itself whenever
+ * booking is not open yet for guests (Staging, and Closed with an opening
+ * armed) — the bar would count the same seconds twice — unless the guest put
+ * the panel away to look around (`lookingAround`, Closed only).
  */
 export function showCountdownBar(
 	phase: BookingPhase,
 	next: PhaseTransition | null | undefined,
-	pathname: string
+	pathname: string,
+	lookingAround = false
 ): boolean {
-	const kind = countdownKind(phase, next);
-	if (!kind || pathname === '/') return false;
-	return kind === 'closes' || !(phase === 'staging' && pathname === '/map');
+	if (!countdownKind(phase, next) || !showTopBar(pathname)) return false;
+	return !mapCovered(phase, next, pathname, lookingAround);
+}
+
+/**
+ * Whether the map's phase panel lies over the map: the map isn't usable, so
+ * the bar shows no wish filters and no second countdown there. Mirrors
+ * `showPanel` on the map page.
+ */
+export function mapCovered(
+	phase: BookingPhase,
+	next: PhaseTransition | null | undefined,
+	pathname: string,
+	lookingAround = false
+): boolean {
+	if (pathname !== '/map') return false;
+	return guestPhase(phase, next) !== 'live' && !(phase === 'closed' && lookingAround);
 }
 
 /**
@@ -193,6 +243,21 @@ export function windowToRecord(w: BookingWindow): Required<StoredPhaseFields> {
 		booking_close_at: w.closesAt,
 		booking_timer_paused: w.paused
 	};
+}
+
+/**
+ * Whether releasing the bookings on the way back to Staging keeps quiet about
+ * it unless the superuser says otherwise ("Don't notify the guests" ticked).
+ * Once booking is over — closed right now, or past the window's closing time —
+ * "your spot was released" only confuses guests after the event. Before that,
+ * a release is news they need: they have to book again. Closed right now counts
+ * on its own because a superuser who closes by hand drops a closing time that
+ * was still ahead (switchPhase), so there may be no closing time to go by.
+ */
+export function quietReleaseByDefault(w: BookingWindow, now = Date.now()): boolean {
+	if (effectivePhase(w, now) === 'closed') return true;
+	const closes = toMs(w.closesAt);
+	return closes !== null && closes <= now;
 }
 
 /** The same window with the phase the timers have reached written as its base phase. */

@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+/* State colours and the breathing ring both areas of the app share. */
+@import './state.css';
 @plugin '@tailwindcss/forms';
 
 /* Form controls never get wider than their box. A <select> is as wide as its
@@ -35,58 +37,100 @@ summary,
 		border-color 0.3s ease,
 		box-shadow 0.3s ease,
 		background-color 0.3s ease,
-		transform 0.2s ease;
+		transform 0.2s ease,
+		/* A control that locks or unlocks while the page is open fades over. */
+		filter 0.4s ease,
+		opacity 0.4s ease;
 }
 
 /* Laser Glass Effect for the large surfaces. The card grids (one card per
    room or spot) get the same look with a flat colour: a backdrop blur per
-   card is one compositing layer each, which phones feel. */
+   card is one compositing layer each, which phones feel.
+   Only the panels' fill and blur are forced. Everything else is a default:
+   :where() gives it no weight, so a page's own card rules win without
+   !important — a spot's state edge, a dashed deactivated spot, a panel's
+   coloured top edge. Until 25 Sep all of it was !important and hid them. */
 .house-card,
-.intel-card,
 .form-section,
 .status-card,
 .form-panel {
 	position: relative;
 	background: rgba(15, 15, 15, 0.7) !important;
 	backdrop-filter: blur(10px) !important;
-	border: 1px solid rgba(255, 255, 255, 0.1) !important;
 	overflow: hidden;
 }
+:where(.house-card, .form-section, .status-card, .form-panel) {
+	border: 1px solid rgba(255, 255, 255, 0.1);
+}
 
-.room-card,
-.bed-card {
+:where(.room-card, .bed-card) {
 	position: relative;
-	background: rgba(18, 18, 18, 0.88) !important;
-	border: 1px solid rgba(255, 255, 255, 0.1) !important;
+	background: rgba(18, 18, 18, 0.88);
+	border: 1px solid rgba(255, 255, 255, 0.1);
 	overflow: hidden;
 }
 
-/* Hover scales for all cards */
-.house-card:hover,
-.room-card:hover,
-.bed-card:hover {
+/* Hover scales for all cards. A room or spot card takes its page's hover
+   colours where the page has some; a house card always glows turquoise. */
+.house-card:hover {
 	transform: translateY(-2px) scale(1.01);
 	border-color: rgba(45, 212, 191, 0.4) !important;
 	box-shadow:
 		0 10px 30px rgba(0, 0, 0, 0.5),
 		0 0 20px rgba(45, 212, 191, 0.1) !important;
 }
+:where(.room-card, .bed-card):hover {
+	transform: translateY(-2px) scale(1.01);
+	border-color: rgba(45, 212, 191, 0.4);
+	box-shadow:
+		0 10px 30px rgba(0, 0, 0, 0.5),
+		0 0 20px rgba(45, 212, 191, 0.1);
+}
 
-/* Button Pulse Animation */
+/* Button pulse: the glow sits on a pseudo-element whose opacity animates
+   (composited), not on the button's box-shadow (a repaint of the button
+   every frame while the page idles). The button keeps its own shadow. */
 @keyframes pulse-glow {
 	0%,
 	100% {
-		box-shadow: 0 0 15px rgba(45, 212, 191, 0.3);
+		opacity: 0;
 	}
 	50% {
-		box-shadow: 0 0 30px rgba(45, 212, 191, 0.6);
+		opacity: 1;
 	}
 }
 
 .btn-ignite,
-.btn-laser.live,
 .btn-confirm {
+	--pulse-glow: rgba(45, 212, 191, 0.6);
+	position: relative;
+	isolation: isolate;
+}
+.btn-confirm {
+	--pulse-glow: rgba(244, 114, 182, 0.55);
+}
+.btn-ignite::after,
+.btn-confirm::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	border-radius: inherit;
+	box-shadow: 0 0 30px var(--pulse-glow);
+	opacity: 0;
+	pointer-events: none;
 	animation: pulse-glow 3s infinite ease-in-out;
+}
+.btn-ignite:disabled::after,
+.btn-confirm:disabled::after,
+.btn-ignite[data-locked]::after {
+	display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.btn-ignite::after,
+	.btn-confirm::after {
+		animation: none;
+	}
 }
 
 /* Disintegrate effect for deletion */

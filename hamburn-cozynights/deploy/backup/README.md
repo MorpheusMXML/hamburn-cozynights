@@ -13,14 +13,19 @@ in der Konfiguration:
 
 ### Was die Daten heute schon schützt (ohne Einrichtung)
 
-| Ebene          | Inhalt               | Ort                               | Takt                       | Hilft bei                                   |
-| -------------- | -------------------- | --------------------------------- | -------------------------- | ------------------------------------------- |
-| PocketBase-ZIP | komplettes `pb_data` | im Volume, Ordner `backups/`      | stündlich, 72 Stück        | „vor einer Stunde war es noch richtig“      |
-| Deploy-Archiv  | Volume als `tar.gz`  | `/var/backups/cozynights-staging` | vor jedem Deploy, 10 Stück | Deploy hat Daten beschädigt: zurückrollen   |
+| Ebene          | Inhalt               | Ort                               | Takt                                      | Hilft bei                                 |
+| -------------- | -------------------- | --------------------------------- | ----------------------------------------- | ----------------------------------------- |
+| PocketBase-ZIP | komplettes `pb_data` | im Volume, Ordner `backups/`      | täglich 03:05 UTC, 14 Stück (zwei Wochen) | „heute früh war es noch richtig“          |
+| Deploy-Archiv  | Volume als `tar.gz`  | `/var/backups/cozynights-staging` | vor jedem Deploy, 10 Stück                | Deploy hat Daten beschädigt: zurückrollen |
 
 Die ZIPs schreibt PocketBase selbst (`pb_hooks/cozy_backups.pb.js`, läuft ab
 dem ersten Deploy mit diesem Stand; Takt und Anzahl: `PB_BACKUP_CRON` /
-`PB_BACKUP_KEEP` in der `.env`). Die Archive zieht das Deploy-Skript.
+`PB_BACKUP_KEEP` in der `.env`; UTC, in Berlin also 05:05 Uhr, im Winter
+04:05 Uhr). Überzählige ZIPs löscht PocketBase direkt nach dem nächsten
+Auto-Backup selbst. Die Archive zieht das Deploy-Skript. Weil es nur einen
+Stand am Tag gibt: vor einem größeren Eingriff von Hand sichern (Dashboard →
+**Settings** → **Backups** → **Initialize new backup**; so ein Backup bleibt,
+bis man es löscht).
 
 Beide enthalten die komplette Datenbank. Die PocketBase-Settings darin
 (SMTP-Passwort) sind mit `PB_ENCRYPTION_KEY` verschlüsselt, das
@@ -31,9 +36,9 @@ heißt, das Client-Secret in der Google-Console zu erneuern.
 
 ### Was das lokale restic-Repository dazu bringt
 
-- **Versioniert:** stündliche Stände für 24 Stunden, danach tägliche für
-  14 Tage, wöchentliche für 8 Wochen, monatliche für 12 Monate. Die ZIPs
-  reichen nur drei Tage zurück.
+- **Versioniert:** ein Stand pro Tag (03:20 UTC) für 14 Tage, danach
+  wöchentliche für 8 Wochen und monatliche für 12 Monate. Die ZIPs reichen
+  nur zwei Wochen zurück.
 - **Alle Datenbanken des Servers, konsistent:** CozyNights, Vaultwarden und
   Listmonk. Eine laufende Datenbank wird nie als Datei kopiert (das kann eine
   kaputte Kopie ergeben), sondern über die Online-Backup-API von SQLite
@@ -138,6 +143,14 @@ wird nie überschrieben, solange sie existiert.
 
 ### 4. Erster Lauf und Alarmtest
 
+Vorher kurz nachsehen, was groß ist. Eigene Backup-, Cache- und Log-Ordner von
+Apps (ein CMS legt gern mehrere GB ZIPs ab) gehören in `EXCLUDES`: Ein zu großer
+erster Snapshot bleibt sonst ein Jahr lang als Monats-Snapshot liegen.
+
+```bash
+du -xh --max-depth=2 /opt /etc /var/lib/docker/volumes 2>/dev/null | sort -h | tail -25
+```
+
 ```bash
 server-backup --check
 ```
@@ -163,14 +176,16 @@ systemctl enable --now server-backup.timer
 systemctl list-timers server-backup.timer --no-pager
 ```
 
-Das Backup läuft ab jetzt stündlich um Minute 20.
+Das Backup läuft ab jetzt einmal täglich um 03:20 UTC (in Berlin 05:20 Uhr,
+im Winter 04:20 Uhr). `PRUNE_HOUR` in der `backup.conf` muss diese Stunde
+sein (UTC, Vorgabe 3).
 
 ### 6. Optional: Totmannschalter
 
 Der Webhook meldet nur Fehler eines Laufs. Läuft das Skript gar nicht mehr
 (Timer aus, Server hängt), kommt keine Nachricht. Dagegen hilft ein
 kostenloser Check auf [healthchecks.io](https://healthchecks.io) (Periode
-1 Stunde, Karenz 2 Stunden). Dessen Ping-URL als `HEALTHCHECK_URL` eintragen.
+1 Tag, Karenz 2 Stunden). Dessen Ping-URL als `HEALTHCHECK_URL` eintragen.
 
 ## Kontrolle
 
@@ -187,6 +202,29 @@ Die PocketBase-ZIPs:
 
 ```bash
 ls -lh "$(docker volume inspect -f '{{.Mountpoint}}' hamburn-cozynights_pb_data_staging)/backups" | tail -5
+```
+
+### Takt der PocketBase-ZIPs ändern
+
+`PB_BACKUP_CRON` und `PB_BACKUP_KEEP` in der `.env` setzen (ohne Eintrag gilt
+die Vorgabe: täglich 03:05 UTC, 14 Stück). Die Werte liest PocketBase nur beim
+Anlegen des Containers, also danach neu erzeugen:
+
+```bash
+source /etc/cozynights/deploy-staging.conf
+cd "$APP_DIR/hamburn-cozynights"
+COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME docker compose -f docker-compose.staging.yml up -d --no-deps --force-recreate pocketbase
+docker logs cozynights-staging-pocketbase 2>&1 | grep cozy-backups | tail -1
+```
+
+Überzählige ZIPs löscht PocketBase erst nach dem nächsten Auto-Backup. Sofort
+aufräumen geht von Hand. Das neueste automatische ZIP bleibt, andere Backups
+(etwa `pre-import-…` vor einem Template-Import) fasst der Befehl nicht an:
+
+```bash
+B="$(docker volume inspect -f '{{.Mountpoint}}' hamburn-cozynights_pb_data_staging)/backups"
+ls -1t "$B"/@auto_pb_backup_*.zip | tail -n +2 | while read -r f; do rm -f -- "$f" "$f.attrs"; done
+ls -lh "$B"
 ```
 
 **Meldung „Platte läuft voll“** (der Lauf endet mit `exit 3`, der Snapshot
@@ -212,7 +250,7 @@ Meldung kommt höchstens einmal am Tag.
 
 ### A. Schnelles Undo: PocketBase-ZIP über das Dashboard
 
-Für „vor einer Stunde war es noch richtig“. Auf dem Mac einen SSH-Tunnel zum
+Für „heute früh war es noch richtig“. Auf dem Mac einen SSH-Tunnel zum
 Dashboard öffnen (PocketBase ist von außen nicht erreichbar):
 
 ```bash
@@ -339,7 +377,7 @@ In Stufe 1 geht das nur, wenn es eine Kopie **außerhalb** des Servers gibt
 (siehe nächster Abschnitt). Sonst sind die Daten weg.
 
 1. Gibt es ein Hetzner-Backup oder einen Snapshot: Server daraus neu
-   aufbauen. Danach bei Bedarf B bis E für den letzten stündlichen Stand aus
+   aufbauen. Danach bei Bedarf B bis E für den letzten Stand aus
    dem mit zurückgekommenen Repository. Fertig.
 2. Sonst neuen Debian-Server anlegen, die Cloud Firewall (22/80/443)
    zuweisen, DNS auf die neue IP umstellen und Docker, nginx, certbot,
@@ -360,44 +398,43 @@ In Stufe 1 geht das nur, wenn es eine Kopie **außerhalb** des Servers gibt
 
 Alles aus Stufe 1 bleibt, nur das Ziel ändert sich. Alles als `root`.
 
-### 1. Storage Box bestellen
+### 1. Storage Box bestellen und Sub-Account anlegen
 
 Hetzner Console → **Storage Box** → **BX11** (1 TB, rund 4 € im Monat),
-Standort Deutschland. Den Benutzernamen (`u123456`) und das Passwort sofort in
-den Passwortmanager **und** auf das Notfallblatt. Protokolle müssen nicht
-freigeschaltet werden: SFTP auf Port 22 ist immer aktiv.
+Standort Deutschland, am besten in einem eigenen Projekt. Benutzername
+(`u123456`) und Passwort sofort in den Passwortmanager **und** auf das
+Notfallblatt.
 
-### 2. SSH-Key und Verbindung
+Dann unter **Sub-Accounts** einen Zugang nur für diesen Server anlegen: eigenes
+Verzeichnis, SSH an, Samba/WebDAV aus. Auch sein Passwort in den
+Passwortmanager; es wird unten genau zweimal gebraucht. Das Hauptkonto kommt
+nie auf den Server.
+
+### 2. SSH-Key und Verbindung (Port 23)
+
+Die Box spricht auf **Port 23** OpenSSH: ed25519-Host-Key, normales
+`authorized_keys`. Port 22 ist ein anderer SFTP-Server (`mod_sftp`), der nur
+einen RSA-Host-Key anbietet; der ed25519-Abgleich unten findet dort nichts.
 
 ```bash
 install -d -m 700 /root/.ssh
 ssh-keygen -t ed25519 -N "" -C "server-backup@$(hostname)" -f /root/.ssh/storagebox_ed25519
-BOX=u123456   # ← Benutzername der Storage Box
-cat >> /root/.ssh/config <<EOF
-
-Host storagebox
-    HostName $BOX.your-storagebox.de
-    User $BOX
-    IdentityFile /root/.ssh/storagebox_ed25519
-    IdentitiesOnly yes
-    ServerAliveInterval 60
-EOF
+BOX=u123456-sub1   # ← Name des Sub-Accounts, nicht dieser Platzhalter
+printf '\nHost storagebox\n    HostName %s.your-storagebox.de\n    Port 23\n    User %s\n    IdentityFile /root/.ssh/storagebox_ed25519\n    IdentitiesOnly yes\n    ServerAliveInterval 60\n' "$BOX" "$BOX" >> /root/.ssh/config
 chmod 600 /root/.ssh/config
-ssh-keyscan -t ed25519 $BOX.your-storagebox.de 2>/dev/null > /tmp/storagebox.hostkey
-ssh-keygen -lf /tmp/storagebox.hostkey
+ssh-keyscan -p 23 $BOX.your-storagebox.de > /tmp/storagebox.keys
+ssh-keygen -lf /tmp/storagebox.keys
 ```
 
-Der Fingerprint **muss** `SHA256:XqONwb1S0zuj5A1CDxpOSuD2hnAArV1A3wKY7Z3sdgM`
-sein (Hetzner-Doku „Storage Box → Overview → SSH host keys“). Nur dann weiter.
-Die beiden `sftp`/`scp`-Befehle fragen nach dem Storage-Box-Passwort. Port 22
-braucht den Key im RFC4716-Format:
+Die ED25519-Zeile **muss** `SHA256:XqONwb1S0zuj5A1CDxpOSuD2hnAArV1A3wKY7Z3sdgM`
+zeigen (Hetzner-Doku „Storage Box → SSH host keys“). Nur dann weiter. Kommt gar
+nichts, stimmt der Name nicht oder die Box ist noch nicht fertig. Die beiden
+`sftp`/`scp`-Befehle fragen nach dem Passwort des Sub-Accounts:
 
 ```bash
-cat /tmp/storagebox.hostkey >> /root/.ssh/known_hosts && rm /tmp/storagebox.hostkey
-ssh-keygen -e -f /root/.ssh/storagebox_ed25519.pub > /tmp/storagebox_rfc4716.pub
+grep ' ssh-ed25519 ' /tmp/storagebox.keys >> /root/.ssh/known_hosts && rm /tmp/storagebox.keys
 echo "mkdir .ssh" | sftp -o PubkeyAuthentication=no storagebox
-scp -o PubkeyAuthentication=no /tmp/storagebox_rfc4716.pub storagebox:.ssh/authorized_keys
-rm /tmp/storagebox_rfc4716.pub
+scp -o PubkeyAuthentication=no /root/.ssh/storagebox_ed25519.pub storagebox:.ssh/authorized_keys
 echo "ls -la" | sftp -b - storagebox
 ```
 
@@ -435,7 +472,7 @@ In `/etc/server-backup/backup.conf`:
 - in Block A die Zeile `RESTIC_REPOSITORY=…` auskommentieren,
 - in Block B die Zeile `RESTIC_REPOSITORY="sftp:storagebox:restic/$(hostname)"`
   aktivieren,
-- `/root/.ssh/config` in `BACKUP_PATHS` aufnehmen.
+- `/root/.ssh/config` in `BACKUP_PATHS` aufnehmen (entfällt, wenn `/root` schon drinsteht).
 
 ```bash
 server-backup --check
@@ -490,8 +527,8 @@ rsync -a --exclude 'locks/*' -e ssh root@<server>:/var/backups/restic/ ~/Backups
 - Absichtlich **ohne** `--delete`: Löscht jemand auf dem Server Snapshots,
   bleiben sie auf dem Mac erhalten. Die Kopie wächst dadurch langsam, bei
   diesen Datenmengen um wenige MB pro Woche.
-- Nicht zwischen Minute 20 und 30 starten, dann läuft auf dem Server gerade
-  das Backup.
+- Nicht zwischen 03:20 und 03:30 UTC starten (in Berlin 05:20 Uhr, im
+  Winter 04:20 Uhr), dann läuft auf dem Server gerade das Backup.
 - Ab und zu prüfen (fragt nach dem restic-Passwort):
   `brew install restic`, dann
   `restic -r ~/Backups/cozynights-restic/<hostname> check` und

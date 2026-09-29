@@ -6,9 +6,9 @@
 | --- | --- | --- | --- |
 | **Local** | `http://localhost:5173` | Development on your machine | Your own `pb_data/`, never shared |
 | **Staging** | [test-cozynights.hamburn.de](https://test-cozynights.hamburn.de) | Testing with real Google sign-ins before anything goes live | Separate and disposable |
-| **Production** | the event's address | The live event | Real tickets and bookings |
+| **Production** | [cozynights.hamburn.de](https://cozynights.hamburn.de) | The live event | Real tickets and bookings |
 
-Staging behaves exactly like production: no extra login gate in front of it, guests use ticket codes, admins use Google.
+Staging behaves exactly like production after its launch: no extra login in front of it, guests use ticket codes, admins use Google. Until launch day production has one more lock: a Google sign-in for `mauersegler.art` accounts in front of the whole site (see [Pre-launch gate](#pre-launch-gate)).
 
 ### How environments stay apart
 
@@ -24,36 +24,56 @@ flowchart LR
     papp["app"] --> ppb[("PocketBase")]
   end
   nginx -- "test-cozynights.…" --> sapp
-  nginx -- "event domain" --> papp
+  nginx -- "cozynights.…" --> papp
 ```
 
 - Containers bind to the server's **loopback interface only**; nginx is the single public entry point and terminates TLS.
 - **PocketBase is never public.** The app reaches it over the stack's internal network.
-- **No secrets in git.** Each environment's `.env` exists only on its server (plus a copy in the team's password manager). The staging layout of that file is described in `deploy/staging.env.template`.
+- **No secrets in git.** Each environment's `.env` exists only on its server (plus a copy in the team's password manager). Its layout is described in `deploy/staging.env.template` and `deploy/production.env.template`.
 
 ## Deploying to staging
 
 Staging is deployed **on demand** with a button in GitHub Actions. It runs **`integration/staging`** (see [Branches, integration & releases](./integration)): deploying a single feature branch would drop every other feature from the server.
 
+Since 24 September 2026 `integration/staging` is protected like `main`: **a direct push is refused, every deploy goes through a pull request.** The branch rule stayed, the required approvals were set to zero and code-owner review switched off, so the pull request is a formality you merge yourself — but the route is fixed:
+
 ::: code-group
 
 ```text [GitHub UI]
-Actions → Deploy staging → Run workflow → choose the branch
+git switch -c deploy/23-bunk-cards          (the deploy's own branch, off integration/staging)
+scripts/release.sh 0.23.0 "Deploy Nr. 23: …"   (in hamburn-cozynights/, see Versions and releases below)
+git push origin deploy/23-bunk-cards v0.23.0
+→ open the pull request against integration/staging and merge it
+Actions → Deploy staging → Run workflow → branch integration/staging
 → approve the "staging" deployment in the run
 ```
 
 ```bash [gh CLI]
-gh workflow run deploy-staging.yml --ref <branch>
+git switch -c deploy/23-bunk-cards
+scripts/release.sh 0.23.0 "Deploy Nr. 23: …"   # in hamburn-cozynights/, stamps the version
+git push origin deploy/23-bunk-cards v0.23.0
+gh pr create --base integration/staging --head deploy/23-bunk-cards --fill
+# one chain: the merge waits for the pull request's CI run, the dispatch for the merge
+until run=$(gh run list --workflow ci.yml --commit "$(git rev-parse HEAD)" --json databaseId --jq '.[0].databaseId // empty') && [ -n "$run" ]; do sleep 5; done
+gh run watch "$run" --exit-status \
+  && gh pr merge deploy/23-bunk-cards --merge \
+  && gh workflow run deploy-staging.yml --ref integration/staging
 gh run watch
 ```
 
 :::
 
+**Dispatch after the merge, never before.** The workflow builds the tip of `integration/staging` at the moment it starts; started too early it deploys the state without your merge, and the run has to be cancelled. `gh pr merge` refuses while the required `Verify` check is still running, so wait for the whole CI run and chain the rest with `&&`, as above, never one command after the other. (Waiting for `gh pr checks --watch` is not enough: the collecting `Verify` job only shows up once the other parts are done.)
+
 ```mermaid
 flowchart TD
-  run(["▶ Run workflow on a branch"]) --> verify["🧪 verify — the same checks as every pull request:<br/>type check · unit tests<br/>integration tests against an empty PocketBase<br/>smoke tests against the staging Docker image"]
+  run(["▶ Run workflow on a branch"]) --> gate{"gate — did exactly these files<br/>pass CI already?"}
+  gate -- "yes: the pull request's run" --> secrets["🔑 secrets scan only"]
+  gate -- no --> verify["🧪 verify — the same checks as every pull request:<br/>type check · unit tests<br/>integration tests against an empty PocketBase<br/>smoke and layout tests against the staging Docker image"]
   verify -- fails --> stop1["❌ Server untouched"]
+  secrets -- fails --> stop1
   verify --> approve{"Reviewer<br/>approval"}
+  secrets --> approve
   approve --> server["🖥️ deploy — on the server, via a key that can only start the deploy script:<br/>check out the commit · build the image · back up PocketBase · restart"]
   server --> health{"Health check<br/>within 60 s"}
   health -- fails --> rollback["↩ Previous commit restarted,<br/>job turns red"]
@@ -64,7 +84,8 @@ flowchart TD
 
 The old containers keep serving while the new image builds.
 
-- **`verify`** reuses [`.github/workflows/ci.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/ci.yml), the workflow behind the `Verify` check on every pull request, for exactly the commit being deployed. What it runs is described in [Testing & release checks](./testing).
+- **`gate`** looks for a green CI run that already tested exactly the files being deployed. A pull request into `integration/staging` can only be merged with a green `Verify`, and its merge commit holds the very files that run tested (GitHub tests the pull request merged into its base). So the green `Verify` job leaves a marker named after the git tree it tested (`verified-tree-<tree>`, kept 7 days), and the gate trusts it only after checking that run through the API: `ci.yml`, a pull request or push of this repository (never a fork), completed with every job green, and its commit part of the one being deployed. Anything else — no marker, another tree because the branch moved on in between, an API error — means the full verification, as before.
+- **`verify`** reuses [`.github/workflows/ci.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/ci.yml), the workflow behind the `Verify` check on every pull request: all of it for a commit the gate found no green run for, otherwise the secrets scan only. What it runs is described in [Testing & release checks](./testing).
 - **`deploy`** waits for approval in the `staging` GitHub environment, then runs the deploy script on the server.
 - **`smoke`** runs `npm run smoke:remote` against the live site: pages are served, `/api/health` confirms the service account, a ticket lookup reaches the database, the admin login page offers Google sign-in, the admin area is closed, the security headers are present and PocketBase is not reachable from outside. Read-only, no credentials.
 - The script **refuses to deploy** and changes nothing if the server checkout has local changes, the build fails, or the backup can't be written.
@@ -95,6 +116,39 @@ docker compose -f docker-compose.staging.yml logs pocketbase | grep -iE 'failed 
 
 The `smoke` job has already confirmed that pages are served and the app reaches its database. Then sign in to `/admin` once and open the camp map with a test ticket code.
 
+## Versions and releases
+
+Every deploy carries a version in the shape **`0.<deploy number>.<fix>`**: Deploy Nr. 18 is `v0.18.0`, a fix on top of it `v0.18.1`. The version is visible wherever someone might report a bug:
+
+- as a small badge next to the title on the start page, in the footer of every other page and in the admin menu — hover it for the build (commit and day), click it for the release notes on GitHub;
+- in `GET /api/health`, as `version` and `commit`, so the [deploy runbook](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md) can compare it with the release that was just approved.
+
+The version lives in `package.json` and is baked into the build together with the commit (`build-info.ts`; the deploy script passes the commit as the Docker build argument `GIT_SHA`). The script that does that is the installed copy the deploy key's forced command runs — `/usr/local/bin/deploy-cozynights-staging` and `/usr/local/bin/deploy-cozynights-production` on the server — **not** the one in the checkout, and never a copy under another path: after changing `deploy/deploy-staging.sh`, install it again, otherwise the server keeps running the old one (an image built without `GIT_SHA`, for example, shows the version with an empty commit). Each copy comes from the branch its stack deploys: staging's from `integration/staging`, so a changed script runs on staging first, production's from `main` once the change is released (commands for both in the runbook, section *Wartung*). For staging:
+
+```bash
+# on the server as root, the install step of the runbook's one-time setup
+APP_DIR=/opt/hamburn-cozynights-staging
+sudo -u deploy git -C "$APP_DIR" fetch origin &&
+  sudo -u deploy git -C "$APP_DIR" show origin/integration/staging:hamburn-cozynights/deploy/deploy-staging.sh > /tmp/deploy-staging.sh &&
+  install -o root -g root -m 755 /tmp/deploy-staging.sh /usr/local/bin/deploy-cozynights-staging &&
+  rm /tmp/deploy-staging.sh &&
+  grep -c GIT_SHA /usr/local/bin/deploy-cozynights-staging   # must not print 0
+```
+
+Stamp the version on the state that is about to be deployed, **before** the deploy run:
+
+```bash
+# from hamburn-cozynights/, on the deploy branch with a clean tree
+scripts/release.sh 0.23.0 "Deploy Nr. 23: the bunk bed cards are back"
+git push origin deploy/23-bunk-cards v0.23.0
+```
+
+The script bumps `package.json` and `package-lock.json`, makes a signed commit and a signed tag `v0.23.0`, and pushes nothing; the push is yours. Pushing the tag runs [`.github/workflows/release.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/release.yml), which creates the **GitHub release** with the generated notes since the previous tag. A tag whose commit is not on `main` yet is a **pre-release** — that is every staging deploy. When the release PR lands on `main`, the same workflow turns those pre-releases into releases. The workflow refuses a tag that does not match `package.json`, so the badge, the health check and the release page can never disagree.
+
+The same push also runs [`.github/workflows/docs.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/docs.yml): the **public guide on GitHub Pages** is rebuilt from that tag, so it matches the version that was just deployed instead of waiting for the release PR. The app itself carries both guides in its image, built from the same commit — the admin guide behind the login at `/admin/docs/`, the public one at `/docs/`. See [Publishing](./docs#publishing).
+
+A one-off deploy script kept outside the repository does the same: it calls `scripts/release.sh` with the deploy number as the minor version as its last step before the push.
+
 ## Backups and where data lives
 
 | What | Source of truth |
@@ -107,9 +161,9 @@ The live database stays on the server's local disk. SQLite must not run on a net
 
 Backups come in layers. The first two need no setup:
 
-- **Hourly ZIPs:** PocketBase writes ZIP backups into its volume (`pb_hooks/cozy_backups.pb.js`, `PB_BACKUP_CRON` / `PB_BACKUP_KEEP`; default: hourly, keep 72; `PB_BACKUP_CRON=off` switches them off). A quick undo from the dashboard.
+- **Daily ZIPs:** PocketBase writes a ZIP backup into its volume once a day (`pb_hooks/cozy_backups.pb.js`, `PB_BACKUP_CRON` / `PB_BACKUP_KEEP`; default: 03:05 UTC, keep 14, i.e. two weeks; `PB_BACKUP_CRON=off` switches them off). A quick undo from the dashboard; before a bigger change, start one by hand there.
 - **Before every deploy:** the deploy script archives the volume.
-- **Versioned server backup, hourly:** `deploy/backup/server-backup.sh` copies all live databases of the server consistently and stores them, together with configuration and certificates, in an encrypted [restic](https://restic.net) repository (24 hourly, 14 daily, 8 weekly and 12 monthly snapshots). It alerts on failure and on a disk running full, and test-restores the databases weekly.
+- **Versioned server backup, once a day (needs the setup below):** `deploy/backup/server-backup.sh` (03:20 UTC) copies all live databases of the server consistently and stores them, together with configuration and certificates, in an encrypted [restic](https://restic.net) repository (14 daily, 8 weekly and 12 monthly snapshots). It alerts on failure and on a disk running full, and test-restores the databases weekly.
 
 The restic repository is set up in two stages that differ by one line of configuration:
 
@@ -135,9 +189,9 @@ What this does and does not cover, verified against PocketBase 0.40.4 with a cop
 - **Existing databases keep working.** PocketBase reads plain-text settings with or without the key and only encrypts when the row is saved. `pb_hooks/cozy_settings.pb.js` does that save once on the first start with the key (log: `settings were stored in plain text and are now encrypted`, unless another hook's start-up save got there first). Nothing has to be re-entered, and the plain text is gone from the database file after that save; older backups keep the old row.
 - **Without the key PocketBase does not start** once the settings are encrypted (`invalid settings db data or missing encryption key`), and neither with a wrong one (`cipher: message authentication failed`). That includes every `pocketbase` command run inside the container: `scripts/cozy-admin.sh` and the test stack pass the flag, a bare `docker compose exec pocketbase /usr/local/bin/pocketbase …` has to add `--encryptionEnv=PB_ENCRYPTION_KEY`. `PB_ADMIN_EMAIL`/`PB_ADMIN_PASSWORD` must never reach the PocketBase container: the image's entrypoint would run a `superuser upsert` without the flag and the container would not come up.
 - **The key must be exactly 32 characters.** The hook refuses to start with any other length, before any setting is saved: AES would silently accept 16 or 24 characters (a weaker cipher) and fail every save with any other length, which only shows as "An error occurred while saving the new settings" in the dashboard and as `.env` values that never reach the settings.
-- **Losing or changing the key is recoverable.** Everything secret in the settings comes from `.env` and is re-applied by the hooks on start (SMTP, sender, backup schedule, dashboard controls, log retention). With PocketBase stopped, delete the settings row and start with the new key; only values set by hand in the dashboard (rate limits, trusted proxy headers, …) have to be re-entered. The commands are in the runbook, section "PocketBase-Settings-Schlüssel".
+- **Losing or changing the key is recoverable.** Everything secret in the settings comes from `.env` and is re-applied by the hooks on start (SMTP, sender, backup schedule, dashboard controls, log retention). With PocketBase stopped, delete the settings row and start with the new key; only values set by hand in the dashboard (rate limits, trusted proxy headers, …) have to be re-entered. The commands are in the runbook, section [PocketBase-Settings-Schlüssel](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md#pocketbase-settings-schlüssel).
 - **Not covered: a collection's OAuth2 provider settings.** PocketBase keeps those outside this encryption, so a database backup still holds the admin sign-in's client secret: backups stay secret material, and an exposed one means rotating that secret.
-- The key belongs next to `ENCRYPTION_KEY` in the team's password manager and on the emergency sheet (`deploy/backup/README.md`): a restic snapshot includes `.env`, so a restore on the same server has it; a rebuilt server does not.
+- The key belongs next to `ENCRYPTION_KEY` in the team's password manager and on the [emergency sheet](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/backup/README.md#notfallblatt) of the backup runbook: a restic snapshot includes `.env`, so a restore on the same server has it; a rebuilt server does not.
 
 ## Google sign-in per environment
 
@@ -159,25 +213,66 @@ Booking confirmations and crew alerts are sent by PocketBase (`pb_hooks/cozy_not
 | `COZY_APP_URL`, `COZY_ENV_LABEL` | Links in messages and the `[STAGING]` marker. Set in the compose file, not in `.env`. |
 | `PB_HIDE_CONTROLS`, `PB_LOGS_DAYS` | PocketBase settings applied on every start (`pb_hooks/cozy_settings.pb.js`): the dashboard's schema editors hidden (`on`, the default on servers), and the request log kept for that many days (default 2, never with IPs). |
 
-- **One Telegram bot per environment.** The server reads the bot's messages by polling; two environments with the same bot would steal each other's messages.
+- **One server polls a bot.** The server reads the bot's messages (guests connecting their chat, `/pass`) by polling; two servers polling the same bot would steal each other's messages. Staging and production share one bot and crew group, so exactly one of them polls it: the other runs with `TELEGRAM_GUEST_UPDATES=off` and still sends crew alerts. Until the launch staging polls; at the launch the switch goes the other way.
 - **The mail password is stored twice.** PocketBase keeps its own copy of the SMTP settings in its database, so it is also in every database backup. Use credentials that can only send mail — an SMTP user of a sending service, one per environment — never the password of a mailbox.
 - **Check after setting it up**, on the server: `./scripts/cozy-admin.sh notify status` and `./scripts/cozy-admin.sh notify test --email <you>`.
 
+## Wallet passes per environment
+
+The booking pass can go into Apple Wallet and Google Wallet ([Wallet passes](../admin/passes#wallet-passes-apple-wallet-google-wallet)). Unlike the messages, this lives in the **app** container: the certificate and the service-account key never reach PocketBase, which only learns from the app which wallets exist (`app_settings.wallet_platforms`). All values are optional; the buttons appear when a wallet is complete.
+
+| Setting | For |
+| --- | --- |
+| `WALLET_APPLE_PASS_TYPE_ID`, `WALLET_APPLE_TEAM_ID`, `WALLET_APPLE_CERT`, `WALLET_APPLE_KEY`, `WALLET_APPLE_WWDR` | Apple Wallet: the pass type, and the certificate chain the pass file is signed with (base64 of the PEM, one line each). |
+| `WALLET_GOOGLE_ISSUER_ID`, `WALLET_GOOGLE_SERVICE_ACCOUNT` | Google Wallet: the issuer and the service account that writes its passes (base64 of the JSON key). |
+| `WALLET_EVENT_NAME`, `WALLET_EVENT_START`, `WALLET_EVENT_END`, `WALLET_VENUE_NAME`, `WALLET_VENUE_ADDRESS`, `WALLET_VENUE_LATITUDE`, `WALLET_VENUE_LONGITUDE`, `WALLET_ORGANIZATION` | What the pass says about the event. Times need a UTC offset (`2026-10-01T14:00:00+02:00`), or they are ignored. |
+
+- **One pass type and one issuer per event, the environment decides the rest.** Ids carry the environment's host, so staging and production never overwrite each other's passes even with the same accounts.
+- **Updates need HTTPS.** A pass made on a plain-HTTP origin carries no update service, so it never refreshes itself — fine for a test stack, not for a server.
+- **The log says what is on.** At startup the app prints which wallet is on, and for one that stays off, which value is missing or wrong.
+- **What a deploy must not break:** the pass type id and the issuer id. Change them and every pass already in a guest's wallet stops being updated.
+
+## Production
+
+Production runs on the same server as staging, as a stack of its own. The one-time server setup and the switch commands are in the operator runbook [`hamburn-cozynights/deploy/README.md`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md), section *Produktion* (German).
+
+| | Staging | Production |
+| --- | --- | --- |
+| Address | `test-cozynights.hamburn.de` | `cozynights.hamburn.de` |
+| Deploys | any branch, in practice `integration/staging` | `main` only |
+| Compose file | `docker-compose.staging.yml` | `docker-compose.production.yml` |
+| Workflow · GitHub environment | `deploy-staging.yml` · `staging` | `deploy-production.yml` · `production` |
+| Server config | `/etc/cozynights/deploy-staging.conf` | `/etc/cozynights/deploy-production.conf` |
+| `.env` template | `deploy/staging.env.template` | `deploy/production.env.template` |
+
+- **Only released code.** Three independent locks keep everything but `main` out: the workflow refuses any other ref, the GitHub environment `production` admits only `main` and waits for a reviewer, and the server's deploy script refuses a commit that is not on `origin/main` (`REQUIRE_BRANCH=main` in its config). The release PR from `integration/staging` to `main` decides *what* can go live; the deploy run, approved separately, decides *when*.
+- **One deploy script, one copy per stack.** `deploy/deploy-staging.sh` is installed as `/usr/local/bin/deploy-cozynights-<env>`, from the branch that stack deploys (see [Versions and releases](#versions-and-releases)), and reads `/etc/cozynights/deploy-<env>.conf`, so each stack's forced-command key can only ever deploy that stack. Every stack except staging has to name its compose file, backup folder, health URL and PocketBase container, or the script refuses to start: a staging default there would stop the wrong database. Old images are pruned per compose project, because both stacks share one Docker daemon.
+- **Smoke test.** After the deploy the workflow checks from outside that `/api/health` answers with the deployed commit. The full read-only smoke test (`npm run smoke:remote`) runs once the site is public; while the pre-launch gate is on, the workflow only checks that the gate sends visitors to Google.
+
+### Pre-launch gate
+
+Until launch day nginx puts a Google sign-in in front of the whole production site: [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) answers nginx's `auth_request`, and only accounts of the `mauersegler.art` Google Workspace get through (with an *Internal* consent screen Google turns everyone else away already). The app knows nothing about it and runs exactly as it will after the launch; the crew signs in at the gate once a week and in the app's own admin login as usual.
+
+- **One switch.** `/etc/nginx/snippets/cozynights-gate.conf` is a symlink to `cozynights-gate-on.conf` or `cozynights-gate-off.conf` (`deploy/nginx/`). `cozynights-gate on|off|status` (`deploy/gate/cozynights-gate`) swaps it, tests and reloads nginx and starts or stops oauth2-proxy in the order that never opens the site by accident. It takes seconds and no deploy.
+- **Fails closed.** If oauth2-proxy is down while the gate is on, nginx answers `500` instead of letting anyone through.
+- **One exception:** `/api/health` (status, version, commit) stays public, for the post-deploy check and uptime monitoring.
+- **Apart from the app stack.** oauth2-proxy is its own small compose project (`deploy/gate/docker-compose.yml`, image pinned by digest) with its own Google OAuth client (redirect URI `https://cozynights.hamburn.de/oauth2/callback`); deploys never touch it.
+- **After the launch** it stays installed and switched off: `cozynights-gate on` closes the site again within seconds, during an incident or once the event is over.
+
 ## Adding an environment
 
-Production, for example:
+Production is the pattern for any further stack:
 
 <div class="steps">
 
-1. **Compose file.** Copy `docker-compose.staging.yml` to `docker-compose.<env>.yml` and give containers, ports, volume and `ORIGIN` their own values, so nothing collides with other environments. Also set `COZY_APP_URL` (the links in guest messages) and `COZY_ENV_LABEL` (empty for production: no `[STAGING]` marker).
-2. **Configuration.** Create the environment's `.env` on the server, following `deploy/staging.env.template`. Never commit it. It also holds the operator details for the Impressum and the privacy policy (`LEGAL_*`, see [Legal pages](../admin/legal)).
-3. **Domain.** Add an nginx vhost for the domain (see `deploy/nginx/`), issue a certificate, and add the redirect URI to the Google OAuth client.
-4. **Pipeline.** Add a workflow mirroring `deploy-staging.yml`, with its own GitHub environment and required approval, and a deploy user scoped to that environment only.
-5. **First admins.** Invite the crew with the admin tool, pointed at the new stack: `COZY_COMPOSE_FILE=docker-compose.<env>.yml COMPOSE_PROJECT_NAME=<project of that stack>` (or `COZY_DEPLOY_CONF=/etc/cozynights/<env>.conf`), plus `COZY_ENV_FILE` if that stack's `.env` isn't next to the compose file. The tool refuses to guess the project name (*COZY_COMPOSE_FILE is set but COMPOSE_PROJECT_NAME is not*), because a guess would silently target the staging containers. See [Admin access & roles](../admin/access#managing-admins).
-6. **Keep the stacks apart.** Give the new compose file a fixed volume name and its own `container_name`s and ports; the deploy script gets its own config in `/etc/cozynights/` and its own backup folder; the forced-command deploy key is a second key. Both stacks share one Docker daemon, so never prune images while the other stack builds.
+1. **Compose file.** A copy of `docker-compose.production.yml` with its own top-level `name:`, `container_name`s, ports, network and fixed volume name, so nothing collides with the other stacks; `ORIGIN` and `COZY_APP_URL` set to its address, `COZY_ENV_LABEL` for a marker in messages (staging: `STAGING`).
+2. **Configuration.** The environment's `.env` on the server, following `deploy/production.env.template`, with keys of its own. Never commit it. It also holds the operator details for the Impressum and the privacy policy (`LEGAL_*`, see [Legal pages](../admin/legal)).
+3. **Domain.** An nginx vhost (see `deploy/nginx/`), a certificate, and the environment's own Google OAuth client with its redirect URI.
+4. **Pipeline.** A workflow like `deploy-production.yml` with its own GitHub environment and required approval; the deploy script installed once more as `/usr/local/bin/deploy-cozynights-<env>` from the branch the stack deploys, with `/etc/cozynights/deploy-<env>.conf` and its own backup folder, reached through another forced-command key of the `deploy` user.
+5. **First admins.** Run the admin tool from that stack's checkout with its deploy config: `COZY_DEPLOY_CONF=/etc/cozynights/deploy-<env>.conf scripts/cozy-admin.sh …` takes compose file and project from there and refuses to run from another stack's checkout, because a recreate from there would start the containers with the wrong `.env`. See [Admin access & roles](../admin/access#managing-admins).
 
 </div>
 
 ## Documentation site
 
-These docs are built and published by their own workflow. See [Working on these docs](./docs).
+These docs are built and published by their own workflow: the public guide to GitHub Pages with every version tag and every push to `main`, both guides into the app's image with every deploy. See [Working on these docs](./docs).

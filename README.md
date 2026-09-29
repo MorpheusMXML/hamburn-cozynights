@@ -29,7 +29,7 @@ Ticket holders pick their own bed on the Hamburn camp map. The crew builds the c
 | --- | ---------------------------- | ------------------------------------------------------------------------------------------------------ |
 | 🗺️  | **Interactive camp map**     | Every house sits on the real site plan; guests see at a glance where beds are free.                    |
 | 🎫  | **One ticket, one bed**      | No accounts or passwords for guests. The ticket code is the key, and it holds exactly one spot.        |
-| 🎰  | **Destiny Roulette**         | A random free bed and burner name for the undecided; booked guests can nuke their spot and respin.     |
+| 🎰  | **Destiny Roulette**         | A neon slot machine for the undecided: pull the lever for a random free bed, then keep, type or roll a burner name; booked guests can leave no trace and respin. |
 | 🎆  | **Booking fireworks**        | Neon rockets rise from your new spot and burst like the cursor does; a fire finale ends the show.      |
 | 🛠️  | **Staging, Live, Closed**    | The crew builds the layout in staging; a booking window opens and closes booking by timer, and closing freezes it. |
 | 🔐  | **Google Workspace sign-in** | Admins use their `@mauersegler.art` account. Newcomers request access, a superuser approves.           |
@@ -40,7 +40,9 @@ Ticket holders pick their own bed on the Hamburn camp map. The crew builds the c
 | ⚖️  | **Legal pages**              | Legal notice, privacy policy and booking rules on every page; the operator's details stay out of git.  |
 | 📬  | **Booking confirmations**    | E-mail to the ticket holder, Telegram if they like, and a crew group that hears about admin changes.   |
 | 🎟️  | **Booking pass**             | A QR code and a short code per booking; the crew checks it with a phone camera, a PC or a USB scanner. |
+| 👛  | **In the wallet**            | The pass goes into Apple Wallet or Google Wallet and follows the booking: move a guest and their pass updates itself. |
 | ♿   | **Special-needs spots**      | Guests ask with their ticket code, even before booking opens; the crew books a fitting spot.           |
+| 🔁  | **Swapping spots**           | During Live Booking a guest asks another for a swap, with a vibe and a few words; hold to swap, both spots change at once. |
 | ✉️  | **Message texts**            | Every sentence guests get by e-mail, on Telegram or from the bot is editable in the admin area, with a live preview. |
 
 ## 🧭 How it works

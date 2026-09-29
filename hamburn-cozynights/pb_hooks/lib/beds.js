@@ -1,0 +1,212 @@
+/// <reference path="../../pb_data/types.d.ts" />
+//
+// What a spot is like, for the messages PocketBase sends (notify.js) and for
+// the records API: the kind of bed, the features around it, and the two rules
+// the app applies to them. The catalogue itself lives in
+// src/lib/accommodation.ts — the app, the layout templates and the ♿ picker
+// read it there. PocketBase's JSVM can't import TypeScript, so the labels are
+// repeated here and tests/accommodation.test.ts checks that both stay the same.
+//
+// The rules (the same as in accommodation.ts):
+// - Two features that say the opposite (heated / unheated) can't both be set
+//   on one house or room: featureProblem() refuses such a write.
+// - A spot has no features of its own (the 🔌 power socket, the only one it
+//   had, was dropped on 2026-09-28): its features are its room's and house's,
+//   the room winning an argument, minus what the room or spot switched off —
+//   and a bed with a ladder is never wheelchair accessible (NOT_UP_A_LADDER).
+//
+// A CommonJS module for PocketBase's JSVM, like texts.js.
+
+const BED_TYPE_LABELS = {
+	single: 'Single bed',
+	bunk_lower: 'Lower bunk',
+	bunk_upper: 'Upper bunk',
+	double: 'Double bed (shared)',
+	sofa: 'Sofa',
+	mattress: 'Mattress',
+	camp_bed: 'Camp bed'
+};
+
+/** The bed types you need a ladder for. */
+const LADDER_TYPES = ['bunk_upper'];
+
+// In catalogue order: value → label, icon, the levels it may be set on, and
+// the feature that says the opposite.
+const FEATURES = [
+	{ value: 'wheelchair', label: 'Wheelchair accessible', icon: '♿', levels: ['house', 'room'] },
+	{ value: 'ground_floor', label: 'Ground floor', icon: '⬇️', levels: ['house', 'room'] },
+	{ value: 'toilets_inside', label: 'Toilets + showers inside', icon: '🚻', levels: ['house'] },
+	{ value: 'own_bathroom', label: 'Own bathroom', icon: '🛁', levels: ['room'] },
+	{ value: 'heated', label: 'Heated', icon: '🔥', levels: ['house', 'room'], opposite: 'unheated' },
+	{
+		value: 'unheated',
+		label: 'No heating',
+		icon: '❄️',
+		levels: ['house', 'room'],
+		opposite: 'heated'
+	},
+	{ value: 'quiet', label: 'Quiet zone', icon: '🤫', levels: ['house', 'room'] }
+];
+
+/** What a bed with a ladder can never be. */
+const NOT_UP_A_LADDER = ['wheelchair'];
+
+/** The levels a room or spot inherits from. */
+const LEVELS_ABOVE = { room: ['house'], spot: ['house', 'room'] };
+
+/** The label of a stored bed type, or '' when a spot doesn't say. */
+function bedTypeLabel(value) {
+	return BED_TYPE_LABELS[value] || '';
+}
+
+function featureEntry(value) {
+	for (const entry of FEATURES) if (entry.value === value) return entry;
+	return null;
+}
+
+/** A stored features value as a clean list: known ones of this level, no duplicates, catalogue order. */
+function readFeatures(raw, level) {
+	const values = Array.isArray(raw) ? raw : typeof raw === 'string' && raw ? [raw] : [];
+	const chosen = {};
+	for (const value of values) {
+		const entry = featureEntry(value);
+		if (entry && entry.levels.indexOf(level) >= 0) chosen[value] = true;
+	}
+	return FEATURES.filter((entry) => chosen[entry.value]).map((entry) => entry.value);
+}
+
+/** What a room or spot may switch off: any feature a level above it can have (src/lib/accommodation.ts, offAllowed). */
+function offAllowed(level) {
+	const above = LEVELS_ABOVE[level] || [];
+	return FEATURES.filter((entry) => entry.levels.some((l) => above.indexOf(l) >= 0));
+}
+
+/** A stored features_off value as a clean list: what this level may switch off, catalogue order. */
+function readFeaturesOff(raw, level) {
+	const values = Array.isArray(raw) ? raw : typeof raw === 'string' && raw ? [raw] : [];
+	const allowed = offAllowed(level).map((entry) => entry.value);
+	const chosen = {};
+	for (const value of values) if (allowed.indexOf(value) >= 0) chosen[value] = true;
+	return FEATURES.filter((entry) => chosen[entry.value]).map((entry) => entry.value);
+}
+
+/**
+ * Why a house or room record can't be written: two of its features say the
+ * opposite of each other, or (a room) it switches a feature off that it
+ * claims itself. A spot has no features of its own, so it always passes
+ * here. Returns the reason, or '' when it is fine.
+ */
+function featureProblem(record, level) {
+	if (level !== 'house' && level !== 'room') return '';
+	const features = readFeatures(record.get('features'), level);
+	for (const entry of FEATURES) {
+		if (
+			entry.opposite &&
+			features.indexOf(entry.value) >= 0 &&
+			features.indexOf(entry.opposite) >= 0
+		) {
+			const other = featureEntry(entry.opposite);
+			return (
+				'"' +
+				entry.label +
+				'" and "' +
+				(other ? other.label : entry.opposite) +
+				'" say the opposite of each other. Set only one of them.'
+			);
+		}
+	}
+	if (level === 'room') {
+		const off = readFeaturesOff(record.get('features_off'), level);
+		for (const value of off) {
+			if (features.indexOf(value) >= 0) {
+				const entry = featureEntry(value);
+				return (
+					'"' +
+					(entry ? entry.label : value) +
+					'" is switched off here and ticked here at the same time. Do one or the other.'
+				);
+			}
+		}
+	}
+	return '';
+}
+
+/**
+ * Why this request may not change features_off: only a superuser (the app's
+ * own superuser role, or PocketBase's) switches an inherited feature off or
+ * on again. An unchanged list passes, whoever writes; the app's actions apply
+ * the same rule before they write. Returns the reason, or ''.
+ */
+function overrideChangeProblem(auth, before, after, level) {
+	if (level !== 'room' && level !== 'spot') return '';
+	const was = readFeaturesOff(before, level).join(',');
+	const now = readFeaturesOff(after, level).join(',');
+	if (was === now) return '';
+	// PocketBase superusers (the dashboard, the service account) and the app's
+	// superusers may; every other admin token may not.
+	if (!auth || !auth.collection || auth.collection().name !== 'admins') return '';
+	if (auth.get('role') === 'superuser') return '';
+	return 'Only a superuser can switch an inherited feature off or on again.';
+}
+
+function addOwn(chosen, features) {
+	for (const value of features) {
+		const entry = featureEntry(value);
+		if (entry && entry.opposite) delete chosen[entry.opposite];
+		chosen[value] = true;
+	}
+}
+
+/**
+ * What is true for one spot: house and room features together, the room
+ * winning an argument, what the room or the spot switched off gone, and
+ * nothing a ladder rules out. The same as effectiveFeatures() in
+ * src/lib/accommodation.ts.
+ */
+function effectiveFeatures(house, room, bedType, roomOff, spotOff) {
+	const chosen = {};
+	addOwn(chosen, readFeatures(house, 'house'));
+	for (const value of readFeaturesOff(roomOff, 'room')) delete chosen[value];
+	addOwn(chosen, readFeatures(room, 'room'));
+	for (const value of readFeaturesOff(spotOff, 'spot')) delete chosen[value];
+	if (LADDER_TYPES.indexOf(bedType) >= 0) {
+		for (const value of NOT_UP_A_LADDER) delete chosen[value];
+	}
+	return FEATURES.filter((entry) => chosen[entry.value]).map((entry) => entry.value);
+}
+
+/** "🔥 Heated · 🤫 Quiet zone", or '' for none. */
+function featureText(features) {
+	return (features || [])
+		.map((value) => featureEntry(value))
+		.filter((entry) => !!entry)
+		.map((entry) => entry.icon + ' ' + entry.label)
+		.join(' · ');
+}
+
+/**
+ * "Upper bunk · above B1": the bed type and, for a bunk bed, where the other
+ * level is. Just the type when the partner is unknown; '' when nobody said.
+ */
+function bedRow(bedType, partnerLabel) {
+	const label = bedTypeLabel(bedType);
+	if (!label || !partnerLabel) return label;
+	if (bedType === 'bunk_lower') return label + ' · below ' + partnerLabel;
+	if (bedType === 'bunk_upper') return label + ' · above ' + partnerLabel;
+	return label;
+}
+
+module.exports = {
+	BED_TYPE_LABELS: BED_TYPE_LABELS,
+	FEATURES: FEATURES,
+	NOT_UP_A_LADDER: NOT_UP_A_LADDER,
+	bedTypeLabel: bedTypeLabel,
+	readFeatures: readFeatures,
+	offAllowed: offAllowed,
+	readFeaturesOff: readFeaturesOff,
+	featureProblem: featureProblem,
+	overrideChangeProblem: overrideChangeProblem,
+	effectiveFeatures: effectiveFeatures,
+	featureText: featureText,
+	bedRow: bedRow
+};

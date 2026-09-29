@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+# cozynights-gate: the pre-launch gate of https://cozynights.hamburn.de
+#
+#   cozynights-gate status   what nginx does now, whether oauth2-proxy runs,
+#                            what a visitor without a gate session gets
+#   cozynights-gate on       start oauth2-proxy, then send every visitor to the
+#                            Google sign-in (mauersegler.art accounts only)
+#   cozynights-gate off      LAUNCH: the site is public, oauth2-proxy stops
+#
+# Installed as /usr/local/sbin/cozynights-gate (root:root 755); run as root.
+# Source and runbook: deploy/gate/ and deploy/README.md ("Produktion") in the
+# CozyNights repository. It changes nothing but the symlink
+# /etc/nginx/snippets/cozynights-gate.conf (plus an nginx reload) and the
+# container of /opt/cozynights-gate. Order is what keeps the site closed:
+# "on" starts oauth2-proxy before nginx asks it, "off" opens nginx before
+# oauth2-proxy stops. A config that fails `nginx -t` is rolled back.
+set -euo pipefail
+
+SNIPPETS=/etc/nginx/snippets
+LINK="$SNIPPETS/cozynights-gate.conf"
+ON="$SNIPPETS/cozynights-gate-on.conf"
+OFF="$SNIPPETS/cozynights-gate-off.conf"
+GATE_DIR="${COZY_GATE_DIR:-/opt/cozynights-gate}"
+SITE="${COZY_GATE_SITE:-https://cozynights.hamburn.de}"
+PING=http://127.0.0.1:4180/ping
+CONTAINER=cozynights-gate
+
+die() {
+	printf 'cozynights-gate: %s\n' "$*" >&2
+	exit 1
+}
+
+usage() {
+	sed -n '2,/^set -euo pipefail$/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'
+}
+
+nginx_state() { # on | off | not set | other: <target>
+	local target
+	target="$(readlink "$LINK" 2>/dev/null || true)"
+	case "${target##*/}" in
+	cozynights-gate-on.conf) echo on ;;
+	cozynights-gate-off.conf) echo off ;;
+	'') echo 'not set' ;;
+	*) echo "other: $target" ;;
+	esac
+}
+
+gate_answers() {
+	curl -fsS -o /dev/null --max-time 2 "$PING" 2>/dev/null
+}
+
+# What a visitor without a gate session gets for /: "302 <location>" or "200 ".
+public_answer() {
+	curl -s -o /dev/null --max-time 10 -w '%{http_code} %{redirect_url}' "$SITE/" 2>/dev/null || printf 'no answer'
+}
+
+# The public answer once it matches the glob $1, or the last one after ~5 s:
+# a reload is asynchronous, nginx answers with the old config for a moment.
+settled_answer() {
+	local answer i
+	for i in $(seq 1 10); do
+		answer="$(public_answer)"
+		# shellcheck disable=SC2053 # $1 is a glob on purpose
+		[[ "$answer" == $1 ]] && break
+		[[ $i -lt 10 ]] && sleep 0.5
+	done
+	printf '%s' "$answer"
+}
+
+compose() {
+	docker compose -f "$GATE_DIR/docker-compose.yml" "$@"
+}
+
+# Point the symlink at $1 (atomically), test nginx, reload. On a failing test
+# the link goes back to where it pointed before and nginx is not reloaded.
+point_nginx_at() {
+	local before
+	before="$(readlink "$LINK" 2>/dev/null || true)"
+	ln -sfn "$1" "$LINK.new"
+	mv -Tf "$LINK.new" "$LINK"
+	if ! nginx -t -q; then
+		if [[ -n "$before" ]]; then
+			ln -sfn "$before" "$LINK.new"
+			mv -Tf "$LINK.new" "$LINK"
+		else
+			rm -f "$LINK"
+		fi
+		die "nginx -t failed with the gate $(basename "$1") — link restored, nginx not reloaded"
+	fi
+	systemctl reload nginx
+}
+
+cmd_status() {
+	local proxy
+	proxy="$(docker inspect -f '{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo 'no container')"
+	if gate_answers; then proxy="$proxy, answers on $PING"; fi
+	printf 'nginx:         gate %s (%s)\n' "$(nginx_state)" "$LINK"
+	printf 'oauth2-proxy:  %s\n' "$proxy"
+	printf 'GET %s/ → %s\n' "$SITE" "$(public_answer)"
+}
+
+cmd_on() {
+	local answer i
+	[[ -f "$ON" && -f "$OFF" ]] || die "$ON or $OFF is missing (install both from deploy/nginx/)"
+	[[ -f "$GATE_DIR/docker-compose.yml" && -f "$GATE_DIR/.env" ]] ||
+		die "$GATE_DIR/docker-compose.yml or $GATE_DIR/.env is missing (deploy/gate/)"
+	compose up -d
+	for i in $(seq 1 20); do
+		gate_answers && break
+		[[ $i -lt 20 ]] || die "oauth2-proxy does not answer on $PING (docker logs $CONTAINER) — nginx unchanged"
+		sleep 1
+	done
+	point_nginx_at "$ON"
+	answer="$(settled_answer '302 https://accounts.google.com/*')"
+	printf 'gate ON. GET %s/ → %s\n' "$SITE" "$answer"
+	if [[ "$answer" != "302 https://accounts.google.com/"* ]]; then
+		printf 'note: expected a 302 to accounts.google.com — fine while the vhost is not enabled yet, otherwise check nginx and DNS\n'
+	fi
+}
+
+cmd_off() {
+	local answer
+	[[ -f "$OFF" ]] || die "$OFF is missing (install it from deploy/nginx/)"
+	point_nginx_at "$OFF"
+	if [[ -f "$GATE_DIR/docker-compose.yml" ]]; then
+		compose down || true
+	else
+		docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+	fi
+	answer="$(settled_answer '200 *')"
+	printf 'gate OFF — the site is public. GET %s/ → %s\n' "$SITE" "$answer"
+	if [[ "$answer" != "200 "* ]]; then
+		printf 'note: expected 200 — check the app (cozy status / docker ps) and nginx\n'
+	fi
+}
+
+case "${1:-status}" in
+-h | --help | help)
+	usage
+	exit 0
+	;;
+esac
+[[ $EUID -eq 0 ]] || die "run as root (sudo -i)"
+case "${1:-status}" in
+status) cmd_status ;;
+on) cmd_on ;;
+off) cmd_off ;;
+*)
+	usage >&2
+	exit 2
+	;;
+esac

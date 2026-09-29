@@ -1,4 +1,6 @@
 <script lang="ts">
+	import PlaceDetails from '$lib/components/PlaceDetails.svelte';
+	import { filterLabel, roomWord } from '$lib/accommodation';
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import PassTicket from '$lib/components/PassTicket.svelte';
@@ -24,10 +26,22 @@
 			<a href="/map" class="back-link">← Map</a>
 		</div>
 		<h1>{data.house.name}</h1>
-		<p class="subtitle">Choose a room for your night</p>
+		<p class="subtitle">Choose a {roomWord(data.house.kind)} for your night</p>
+		<PlaceDetails
+			level="house"
+			kind={data.house.kind}
+			features={data.house.features}
+			description={data.house.description}
+		/>
+		{#if data.wishes.length > 0}
+			<p class="wishes" role="status">
+				Your wishes: {data.wishes.map(filterLabel).join(' · ')} —
+				<a href="/house/{data.house.id}">show everything</a>
+			</p>
+		{/if}
 	</header>
 
-	{#if data.phase === 'closed'}
+	{#if data.guestPhase === 'closed'}
 		<div class="info-banner" role="status">
 			<div class="banner-icon" aria-hidden="true">🔒</div>
 			<div class="banner-content">
@@ -62,7 +76,7 @@
 						One ticket code is one spot. To pick a different one, release your current spot first.
 					</p>
 				{:else}
-					<p>{ownSpotNote(data.phase)}</p>
+					<p>{ownSpotNote(data.phase, data.guestPhase)}</p>
 				{/if}
 				{#if data.pass}
 					<PassTicket pass={data.pass} />
@@ -123,7 +137,11 @@
 
 	<div class="grid">
 		{#each data.rooms as room}
-			<a href="/room/{room.id}" class="card" class:full={room.freeCount === 0}>
+			<a
+				href="/room/{room.id}{data.wishes.length > 0 ? `?w=${data.wishes.join(',')}` : ''}"
+				class="card"
+				class:full={room.freeCount === 0}
+			>
 				<div class="card-header">
 					<h2>{room.name || 'Room'} <span class="room-number">#{room.room_number}</span></h2>
 					<span class="badge" class:green={room.freeCount > 0}>
@@ -140,6 +158,21 @@
 						style="width: {((room.totalCount - room.freeCount) / (room.totalCount || 1)) * 100}%"
 					></div>
 				</div>
+				<PlaceDetails
+					level="room"
+					kind={room.kind}
+					features={room.features}
+					description={room.description}
+					compact
+				/>
+				{#if room.bedMix}<p class="bed-mix">{room.bedMix}</p>{/if}
+				{#if room.fittingFree !== null}
+					<p class="fitting" class:none={room.fittingFree === 0}>
+						{room.fittingFree === 0
+							? 'No free spot here fits your wishes'
+							: `${room.fittingFree} free ${room.fittingFree === 1 ? 'spot fits' : 'spots fit'} your wishes`}
+					</p>
+				{/if}
 			</a>
 		{/each}
 	</div>
@@ -197,7 +230,34 @@
 	}
 	.subtitle {
 		color: #9a9a9a;
-		margin: 0.25rem 0 0;
+		margin: 0.25rem 0 0.75rem;
+	}
+
+	.wishes {
+		margin: 0.75rem 0 0;
+		font-size: 0.85rem;
+		color: #9fb3c8;
+		overflow-wrap: anywhere;
+	}
+	.wishes a {
+		color: #00ffe0;
+	}
+	.bed-mix {
+		margin: 0.5rem 0 0;
+		font-size: 0.78rem;
+		color: #8a8f98;
+		overflow-wrap: anywhere;
+	}
+	.fitting {
+		margin: 0.35rem 0 0;
+		font-size: 0.82rem;
+		font-weight: 700;
+		color: #6ee7b7;
+		overflow-wrap: anywhere;
+	}
+	.fitting.none {
+		color: #9a9a9a;
+		font-weight: 400;
 	}
 
 	.info-banner,
@@ -209,9 +269,11 @@
 		align-items: flex-start;
 		margin-bottom: 2rem;
 	}
+	/* "Booking is closed" / "not open yet": the closed phase's colour, the same
+	   as the room page's banner (state.css). Pink is for special needs only. */
 	.info-banner {
-		background: rgba(244, 114, 182, 0.08);
-		border: 1px solid #f472b6;
+		background: var(--state-closed-soft);
+		border: 1px solid var(--state-closed);
 	}
 	.booking-warning-banner {
 		background: rgba(248, 113, 113, 0.1);
@@ -229,7 +291,7 @@
 		font-weight: 900;
 	}
 	.info-banner h3 {
-		color: #f472b6;
+		color: var(--state-closed);
 	}
 	.booking-warning-banner h3 {
 		color: #f87171;
@@ -323,17 +385,20 @@
 		background: rgba(74, 222, 128, 0.1);
 	}
 
+	/* The bar sits under the header; the chips of the room's details follow
+	   with a clear gap, so they never crowd the bar. */
 	.progress-bar {
 		height: 4px;
+		margin: 0 0 1rem;
 		background: #333;
 		border-radius: 2px;
 		overflow: hidden;
 	}
 	.fill {
 		height: 100%;
-		background: #4ade80;
+		background: var(--state-open);
 	}
 	.full .fill {
-		background: #ef4444;
+		background: var(--state-full);
 	}
 </style>

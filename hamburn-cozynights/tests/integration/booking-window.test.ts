@@ -107,6 +107,75 @@ describe('phase guard', () => {
 		);
 	});
 
+	// The one-day minimums used to live in the app alone, so an admin's token
+	// could set a closing time five minutes out straight on the records API.
+	it('holds an admin to the one-day minimums, a superuser not', async () => {
+		await reset();
+		const admin = await createAdmin(su, 'admin');
+		const boss = await createAdmin(su, 'superuser');
+		const soon = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+		// Opening in two days, closing five minutes from now: shorter than a
+		// day, and the closing even comes before the opening.
+		await expectRefused(
+			admin.client
+				.collection('app_settings')
+				.update(APP_SETTINGS_ID, { booking_unlock_at: inDays(2), booking_close_at: soon })
+		);
+		// A window that is a day ahead but only hours long.
+		await expectRefused(
+			admin.client.collection('app_settings').update(APP_SETTINGS_ID, {
+				booking_unlock_at: inDays(2),
+				booking_close_at: inDays(2.2)
+			})
+		);
+		// Opening sooner than a day, long enough otherwise.
+		await expectRefused(
+			admin.client.collection('app_settings').update(APP_SETTINGS_ID, {
+				booking_unlock_at: inDays(0.5),
+				booking_close_at: inDays(3)
+			})
+		);
+		// Nothing of that was written.
+		const untouched = await su.collection('app_settings').getOne(APP_SETTINGS_ID);
+		expect(untouched.booking_unlock_at).toBe('');
+		expect(untouched.booking_close_at).toBe('');
+
+		// The same window is the superuser's call …
+		await boss.client
+			.collection('app_settings')
+			.update(APP_SETTINGS_ID, { booking_unlock_at: inDays(2), booking_close_at: soon });
+		// … and the admin may still plan a proper one on top of it.
+		await admin.client
+			.collection('app_settings')
+			.update(APP_SETTINGS_ID, { booking_unlock_at: inDays(2), booking_close_at: inDays(4) });
+	});
+
+	it('lets an admin change what is not the window while a short one is armed', async () => {
+		// PocketBase sees every app_settings write, not only the window
+		// actions: a window a superuser armed must not block the rest.
+		await reset({
+			booking_unlock_at: inDays(2),
+			booking_close_at: inDays(2.1)
+		});
+		const admin = await createAdmin(su, 'admin');
+		const requestsOpen = (await su.collection('app_settings').getOne(APP_SETTINGS_ID))
+			.special_requests_open;
+		try {
+			await admin.client
+				.collection('app_settings')
+				.update(APP_SETTINGS_ID, { special_requests_open: !requestsOpen });
+			// Pausing that window is fine too: nothing switches by itself any more.
+			await admin.client
+				.collection('app_settings')
+				.update(APP_SETTINGS_ID, { booking_timer_paused: true });
+		} finally {
+			await su
+				.collection('app_settings')
+				.update(APP_SETTINGS_ID, { special_requests_open: requestsOpen });
+		}
+	});
+
 	it('lets a superuser switch right now', async () => {
 		await reset();
 		const boss = await createAdmin(su, 'superuser');

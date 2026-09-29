@@ -12,8 +12,10 @@ import crypto from 'crypto';
 import path from 'path';
 import type PocketBase from 'pocketbase';
 import { BookingService } from '../../src/lib/server/booking';
+import { holdGuestMessage, RESPIN_HOLD_MINUTES } from '../../src/lib/server/notifications';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
 import { maskedTicketLabel } from '../../src/lib/tickets';
+import { formatPassCode } from '../../src/lib/pass';
 import {
 	anonymous,
 	createAdmin,
@@ -57,7 +59,14 @@ async function mock(route: string, body?: unknown) {
 	return res.json();
 }
 
-type SentMessage = { chat_id: string; text: string };
+type SentMessage = {
+	chat_id: string;
+	text: string;
+	/** sendMessage or sendPhoto (the mock puts a photo's caption into `text`). */
+	method?: string;
+	photo?: string;
+	reply_markup?: { inline_keyboard: { text: string; url: string }[][] };
+};
 async function telegramTo(chat: string | number): Promise<SentMessage[]> {
 	const sent: SentMessage[] = await mock('/_mock/telegram/sent');
 	return sent.filter((m) => m.chat_id === String(chat));
@@ -88,6 +97,11 @@ async function notifyRecord(orderId: string) {
 		.collection('guest_notify')
 		.getFirstListItem(su.filter('order = {:orderId}', { orderId }))
 		.catch(() => null);
+}
+
+/** How long until the next delivery run, from a `due` in PocketBase's date format. */
+function dueIn(due: unknown): number {
+	return Date.parse(String(due).replace(' ', 'T')) - Date.now();
 }
 
 /** What the "Get updates on Telegram" button does (src/lib/server/notifications.ts). */
@@ -174,6 +188,39 @@ describe('booking confirmations by e-mail', () => {
 		await booking.bookBed(guest.order as any, beds[1].id, 'Mover');
 		await flush();
 
+		const mails = await mailsTo(guest.email);
+		expect(mails.map((m) => m.Subject.split(':')[0])).toEqual([
+			'[TEST] Your CozyNights spot',
+			'[TEST] Your CozyNights spot changed'
+		]);
+		expect((await mailBody(mails[1].ID)).Text).toContain(`Before: ${beds[0].label}`);
+	});
+
+	it('hold the release of a ✨ respin back, so the guest gets one "changed" e-mail', async () => {
+		const { beds } = await seedHouse(su, 2);
+		const guest = await ticketWithEmail();
+
+		await booking.bookBed(guest.order as any, beds[0].id, 'Respinner');
+		await flush();
+		expect(await mailsTo(guest.email)).toHaveLength(1);
+
+		// What ?/releaseBed on the roulette does: the spot goes right away, the
+		// message waits for the new one (src/routes/random-bed/+page.server.ts).
+		expect(await booking.unbookOrder(guest.order.id, { onlyBed: beds[0].id })).toBe(1);
+		expect(await holdGuestMessage(su as any, guest.order.id)).toBe(true);
+		const held = await notifyRecord(guest.order.id);
+		expect(dueIn(held?.due)).toBeGreaterThan((RESPIN_HOLD_MINUTES - 1) * 60_000);
+
+		// A run that plays by the rules (no force) leaves the held ticket alone.
+		await su.send('/api/cozy/notify/flush', { method: 'POST' });
+		expect(await mailsTo(guest.email)).toHaveLength(1);
+
+		// The respin books a new spot, which marks the ticket again: the hold ends
+		// with the normal settle time, and the guest hears about the move once.
+		await booking.bookBed(guest.order as any, beds[1].id, 'Respinner');
+		expect(dueIn((await notifyRecord(guest.order.id))?.due)).toBeLessThan(60_000);
+
+		await flush();
 		const mails = await mailsTo(guest.email);
 		expect(mails.map((m) => m.Subject.split(':')[0])).toEqual([
 			'[TEST] Your CozyNights spot',
@@ -366,6 +413,80 @@ describe('booking updates on Telegram', () => {
 		expect(toStopper.some((m) => m.text.includes('is booked'))).toBe(false);
 	});
 
+	it('send the pass as a picture with buttons, and again on /pass', async () => {
+		const { beds } = await seedHouse(su, 1);
+		const guest = await seedTicket(su);
+		await su
+			.collection('app_settings')
+			.update(APP_SETTINGS_ID, { wallet_platforms: 'apple,google' });
+		await booking.bookBed(guest.order as any, beds[0].id, 'Snapper');
+		const chat = chatId();
+		await mock('/_mock/telegram/update', {
+			chat_id: chat,
+			text: `/start ${await telegramLink(guest.order.id)}`
+		});
+		await flush();
+
+		const code = (await su.collection('orders').getOne(guest.order.id)).pass_code;
+		const connected = (await telegramTo(chat)).at(-1)!;
+		expect(connected.method).toBe('sendPhoto');
+		expect(connected.photo).toBe(`${APP_URL}/pass/${formatPassCode(code)}/qr.png`);
+		expect(connected.text).toContain(beds[0].label);
+		const buttons = (connected.reply_markup?.inline_keyboard ?? []).flat();
+		expect(buttons.map((b) => b.text)).toEqual([
+			'🎫 Show booking pass',
+			'Add to Apple Wallet',
+			'Add to Google Wallet'
+		]);
+		expect(buttons[1].url).toBe(`${APP_URL}/pass/${formatPassCode(code)}/wallet/apple`);
+
+		// /pass shows it again, in this chat only
+		await mock('/_mock/telegram/update', { chat_id: chat, text: '/pass' });
+		const other = chatId();
+		await mock('/_mock/telegram/update', { chat_id: other, text: '/pass' });
+		await flush();
+		const again = (await telegramTo(chat)).at(-1)!;
+		expect(again.method).toBe('sendPhoto');
+		expect(again.text).toContain(formatPassCode(code));
+		expect((await telegramTo(other)).at(-1)?.text).toContain('not connected to a ticket');
+
+		// the guest commands are in the bot's menu, for private chats only
+		const commands = (await mock('/_mock/telegram/commands')) as {
+			commands: { command: string }[];
+			scope: { type: string };
+		};
+		expect(commands.commands.map((c) => c.command)).toEqual(['pass', 'stop', 'help']);
+		expect(commands.scope).toEqual({ type: 'all_private_chats' });
+		await su.collection('app_settings').update(APP_SETTINGS_ID, { wallet_platforms: '' });
+	});
+
+	it('offer Telegram and the wallets in the e-mail, until the guest has connected', async () => {
+		const { beds } = await seedHouse(su, 2);
+		const guest = await ticketWithEmail();
+		await su.collection('app_settings').update(APP_SETTINGS_ID, { wallet_platforms: 'apple' });
+		await booking.bookBed(guest.order as any, beds[0].id, 'Offered');
+		await flush();
+
+		const first = await mailBody((await mailsTo(guest.email)).at(-1)!.ID);
+		expect(first.Text).toContain(`${APP_URL}/telegram`);
+		expect(first.Text).toContain('Apple Wallet or Google Wallet');
+		expect(first.HTML).toContain(`href="${APP_URL}/telegram"`);
+
+		// once a chat is linked, the offer is gone
+		const chat = chatId();
+		await mock('/_mock/telegram/update', {
+			chat_id: chat,
+			text: `/start ${await telegramLink(guest.order.id)}`
+		});
+		await flush();
+		await booking.bookBed(guest.order as any, beds[1].id, 'Offered');
+		await flush();
+		const second = await mailBody((await mailsTo(guest.email)).at(-1)!.ID);
+		expect(second.Text).toContain('different spot');
+		expect(second.Text).not.toContain(`${APP_URL}/telegram`);
+		await su.collection('app_settings').update(APP_SETTINGS_ID, { wallet_platforms: '' });
+	});
+
 	it('answer unknown links and other messages with how to connect', async () => {
 		const chat = chatId();
 		await mock('/_mock/telegram/update', { chat_id: chat, text: '/start not-a-real-token' });
@@ -381,6 +502,59 @@ describe('booking updates on Telegram', () => {
 });
 
 // --- crew alerts ---------------------------------------------------------------------
+
+// The switch back to Staging with "Don't notify the guests" (the Control
+// Center mutes guest messages around the release, POST /api/cozy/notify/quiet).
+describe('a release the crew keeps quiet', () => {
+	const quiet = (seconds: number) =>
+		su.send('/api/cozy/notify/quiet', { method: 'POST', body: { seconds } });
+
+	it('tells the guest nothing, and a later booking is news again', async () => {
+		const { beds } = await seedHouse(su, 2);
+		const guest = await ticketWithEmail();
+		await booking.bookBed(guest.order as any, beds[0].id, 'Quiet One');
+		await flush();
+		expect(await mailsTo(guest.email)).toHaveLength(1);
+
+		await quiet(60);
+		try {
+			await booking.unbookOrder(guest.order.id);
+		} finally {
+			await quiet(0);
+		}
+		await flush();
+		expect(await mailsTo(guest.email)).toHaveLength(1); // nothing about the release
+
+		// Booking opens again: the new spot is "booked", not a change from the old one.
+		await booking.bookBed(guest.order as any, beds[1].id, 'Quiet One');
+		await flush();
+		const mails = await mailsTo(guest.email);
+		expect(mails).toHaveLength(2);
+		expect(mails.map((m) => m.Subject.split(':')[0])).toEqual([
+			'[TEST] Your CozyNights spot',
+			'[TEST] Your CozyNights spot' // booked, not "spot changed"
+		]);
+		expect((await mailBody(mails[1].ID)).Text).not.toContain('Before:');
+	});
+
+	it('is over as soon as it is ended', async () => {
+		await quiet(60);
+		await quiet(0);
+		// Still muted, this booking would be taken as told and never confirmed.
+		const { beds } = await seedHouse(su, 1);
+		const guest = await ticketWithEmail();
+		await booking.bookBed(guest.order as any, beds[0].id, 'Loud Again');
+		await flush();
+		expect(await mailsTo(guest.email)).toHaveLength(1);
+	});
+
+	it("is only for the app's service account", async () => {
+		const boss = await createAdmin(su, 'superuser');
+		const body = { method: 'POST', body: { seconds: 60 } };
+		await expectRefused(boss.client.send('/api/cozy/notify/quiet', body));
+		await expectRefused(anonymous().send('/api/cozy/notify/quiet', body));
+	});
+});
 
 describe('crew alerts', () => {
 	it('report access requests, approvals and removals', async () => {
@@ -457,6 +631,46 @@ describe('crew alerts', () => {
 		expect((await telegramTo(CREW_CHAT)).some((m) => m.text.includes(pending.email))).toBe(true);
 	});
 
+	it('name the new id when the crew group became a supergroup', async () => {
+		// Turning on "chat history for new members" upgrades a basic group, and
+		// Telegram gives it a new id. TELEGRAM_CHAT_ID stays as it is in .env.
+		const supergroup = '-1009876543210';
+		const hint = `set TELEGRAM_CHAT_ID=${supergroup}`;
+		await mock('/_mock/telegram/migrate', { chat_id: CREW_CHAT, to: supergroup });
+		let pending;
+		try {
+			pending = await createAdmin(su, 'pending');
+			await flush();
+			const [event] = await adminEvents('access_request', pending.email);
+			expect(event.alert_status).toBe('pending');
+			expect(event.alert_error).toBe(
+				`400 Bad Request: group chat was upgraded to a supergroup chat — the group is now a supergroup, ${hint}`
+			);
+
+			const status = cozyAdmin(['notify', 'status']);
+			expect(status).toContain('CREW CHAT          Telegram chat ' + CREW_CHAT);
+			expect(status).toContain(`WARNING: the bot cannot post there: 400 Bad Request`);
+			expect(status).toContain(`${hint} in .env`);
+
+			let output = '';
+			try {
+				cozyAdmin(['notify', 'test']);
+			} catch (err) {
+				output = String((err as Error).message);
+			}
+			expect(output).toContain(`crew chat: FAILED — 400 Bad Request`);
+			expect(output).toContain(`${hint} in .env, recreate the PocketBase container`);
+			expect(output).toContain('@BotFather "Allow Groups" must be on');
+		} finally {
+			await mock('/_mock/telegram/migrate', { chat_id: CREW_CHAT, to: '' });
+		}
+		expect(cozyAdmin(['notify', 'status'])).not.toContain('WARNING: the bot cannot post there');
+		await flush();
+		const [event] = await adminEvents('access_request', pending.email);
+		expect(event.alert_status).toBe('sent');
+		expect(event.alert_error).toBe('');
+	});
+
 	it('record every Google sign-in of an admin (and when it happened)', async () => {
 		// Point the admins' Google provider at the stand-in (the PocketBase
 		// container reaches it as http://mocks:8081).
@@ -497,6 +711,9 @@ describe('crew alerts', () => {
 
 		const first = await signIn(); // creates the access request
 		expect(first.record.role).toBe('pending');
+		// Recorded before the sign-in completes (pb_hooks/admins_oauth_guard.pb.js):
+		// without it the app would end the session on the next request.
+		expect(first.record.last_sign_in).toBeTruthy();
 		await su.collection('admins').update(first.record.id, { role: 'admin' });
 
 		const before = Date.now();
@@ -569,7 +786,10 @@ describe('cozy-admin tickets import and notify', () => {
 	it('reports an invite from the server as an invite, not as an access request', async () => {
 		const email = `invited-${uid()}@mauersegler.art`;
 		expect(cozyAdmin(['add', email])).toContain(`invited: ${email} (role admin)`);
-		expect(cozyAdmin(['remove', email])).toContain(`removed app admin access: ${email}`);
+		// Destructive: without --yes it only says what it would remove.
+		expect(() => cozyAdmin(['remove', email])).toThrow(/removes the app admin access.*--yes/);
+		expect(cozyAdmin(['list'])).toContain(email);
+		expect(cozyAdmin(['remove', email, '--yes'])).toContain(`removed app admin access: ${email}`);
 		await flush();
 
 		const texts = (await telegramTo(CREW_CHAT)).map((m) => m.text);
@@ -617,7 +837,9 @@ describe('message texts', () => {
 		expect(preview.mail[0].subject).toContain('[TEST] Your CozyNights spot: ');
 		expect(preview.mail[0].text).toContain('— Your Cozy crew 🌙');
 		expect(preview.mail[0].html).toContain('— Your Cozy crew 🌙');
-		expect(preview.telegram[0].text).toContain('Send /stop to disconnect.'); // '' = the default
+		expect(preview.telegram[0].text).toContain(
+			'Send /pass to see your booking pass again, /stop to disconnect.'
+		); // '' = the default
 		expect(preview.bot[0].text).toContain(APP_URL);
 
 		// the crew hears about a change (the app records the event)

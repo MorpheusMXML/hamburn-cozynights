@@ -2,6 +2,10 @@
 
 ## For guests
 
+::: details A field turned red and shook — what now?
+That field is what needs fixing. The reason stands right under it (or, for the whole form, in a red box above the button), and the cursor is already in the field. Correct it and send again: the red disappears as soon as you start typing. If your device is set to *reduce motion*, nothing shakes — the red border and the message are the same.
+:::
+
 ::: details "We could not find this ticket code. Check it for typos (0 vs. O, 1 vs. I) and try again…"
 Check the code for typos: it's on your ticket and contains only letters, digits, `-` and `_`. Copy and paste works best. Only **Indoor memberships** include a bed, so only their codes work here; Camper memberships don't need CozyNights. Still not working? Contact the Hamburn crew; your ticket may not be in the ticket list yet.
 :::
@@ -18,8 +22,16 @@ After many wrong codes from the same network, CozyNights pauses sign-in attempts
 CozyNights couldn't reach its database for a moment. Your code is fine. Try again shortly.
 :::
 
+::: details A spot says nothing about its bed, or my wish finds no spot
+CozyNights only shows what the crew filled in: an empty spot card means *nobody said*, not *no bed*. The wish chips in the top bar (on the map and the roulette) are strict for the same reason — they only keep spots the crew actually described, so nothing is promised that isn't written down; a wish no spot answers isn't even offered as a chip. Ask the crew if a detail matters to you, and use the [special-needs request](./special-needs) if you need a particular kind of spot.
+:::
+
 ::: details The map is blurry and houses don't open ("Booking is not open yet…")
 Booking hasn't opened yet. Once the crew has armed the timer, a countdown shows when it starts, and the map unlocks by itself when it ends. Without a countdown the map says *Booking is not open yet. The crew is still setting up the houses. Check back soon.* <kbd>📡 RELOAD SENSORS</kbd> refreshes the page state.
+:::
+
+::: details Where is the countdown?
+In the top bar of every booking page, fused with the phase pill: *opens in …* before booking opens, *closes in …* while it is live (red in the last hour). Tap it for the exact Berlin time. The start page shows the same countdown big, and the map counts down on its panel while booking is not open yet — there the bar shows the phase alone. No countdown anywhere means the crew hasn't armed the timer yet.
 :::
 
 ::: details I can't book or change my spot any more ("Booking is closed")
@@ -34,12 +46,16 @@ You opened a house, a room, the roulette or the special-needs page on a device w
 The code this browser remembered is no longer in the ticket list, for example because the ticket was replaced. Enter the code of your current ticket; if that doesn't work either, ask the crew.
 :::
 
+::: details "A new booking round has started, so this device was signed out."
+The crew released every booking and started a new round — before the real booking opens after a trial run, for example. Your ticket code still works: enter it on the start page again. Spots the crew booked for [special-needs requests](./special-needs) stay as they are.
+:::
+
 ::: details "You are not signed in anymore. Go to the start page and enter your ticket code again."
 Your browser has forgotten your ticket code, typically in a tab that was open for a while: it remembers the code for 30 days, unless you signed out. Enter your code on the start page again; your booking is still there. *Your ticket code was not found* instead means the ticket is no longer in the ticket list: ask the crew.
 :::
 
 ::: details How do I sign out on a shared device?
-On the start page, press <kbd>Not your ticket? Sign out</kbd>. The code is removed from that browser, your booking stays. See [Shared devices](./booking#shared-devices).
+Press <kbd>Sign out</kbd> (⏏ on a phone) in the top bar of any booking page, or <kbd>Not your ticket? Sign out</kbd> on the start page. The code is removed from that browser, your booking stays. See [Shared devices](./booking#shared-devices).
 :::
 
 ::: details How do I get back to my room and my booking pass?
@@ -47,19 +63,19 @@ Open the room link in your confirmation e-mail or Telegram message. During Live 
 :::
 
 ::: details "Something went wrong while booking…", "The booking system has a technical problem…", "This spot doesn't exist anymore…"
-First look at the room page: if the spot shows as **Your Spot**, all is fine. *Something went wrong* means the booking may or may not have gone through, so check before booking again. *Technical problem. Nothing was booked* is one for the crew. *This spot doesn't exist anymore* means the crew changed the layout meanwhile: pick another spot.
+First look at the room page: if the spot shows as **Yours**, all is fine. *Something went wrong* means the booking may or may not have gone through, so check before booking again. *Technical problem. Nothing was booked* is one for the crew. *This spot doesn't exist anymore* means the crew changed the layout meanwhile: pick another spot.
 :::
 
-::: details Destiny Roulette says "Someone was faster", "The roll was incomplete" or "You already have a spot"
-Roll again: another guest took that spot in the meantime, or the roll didn't finish. *You already have a spot* means the roulette only hands out spots to tickets without one; release yours first if you want to roll.
+::: details Destiny Roulette says "Someone was faster", "The spin was incomplete" or "You already have a spot"
+Spin again: another guest took that spot in the meantime, or the spin didn't finish. *You already have a spot* means the roulette only hands out spots to tickets without one; give yours up first (✨ *Leave No Trace & Respin* on the roulette page) if you want to spin.
 :::
 
 ::: details "This house doesn't exist (anymore)", "This room doesn't exist (anymore)", "The map could not be loaded right now"
 The crew changed the camp layout while you had the page open, or the map data didn't arrive. Go back to the map and pick again; if the map itself won't load, try again in a minute.
 :::
 
-::: details I can't click a free spot, it says "Release your other spot first"
-Your ticket already holds a spot somewhere else. One ticket code = one spot. Release the old spot first, then book the new one. See [Changing your mind](./booking#changing-your-mind). In a tab that was open for a while you may instead read *Your ticket already holds spot B1. Release it first, then pick this one.*: same reason.
+::: details I can't click a green spot, it says "Release your other spot first"
+Your ticket already holds a spot somewhere else. One ticket code = one spot: the spot is free (green), but not for you until you release the old one. Release it first, then book the new one. See [Changing your mind](./booking#changing-your-mind). In a tab that was open for a while you may instead read *Your ticket already holds spot B1. Release it first, then pick this one.*: same reason.
 :::
 
 ::: details Someone grabbed the bed I wanted at the same moment
@@ -71,7 +87,11 @@ Enter your ticket code on the start page of the new device. Your booking is atta
 :::
 
 ::: details Can I book for a friend?
-Only with their ticket code. On a shared device, entering another code switches that browser to the other ticket: enter your own code again afterwards, or press <kbd>Not your ticket? Sign out</kbd> on the start page.
+Only with their ticket code. On a shared device, entering another code switches that browser to the other ticket: enter your own code again afterwards, or press <kbd>Sign out</kbd> in the top bar (or <kbd>Not your ticket? Sign out</kbd> on the start page).
+:::
+
+::: details My spot shows no burner name (the ticket was handed to me)
+Open the room of your spot (the room link in your confirmation, or its house on the map), tap **Yours**, type a name or press <kbd>New Name 🎲</kbd> to roll one, and press <kbd>Save Spot</kbd>; leave the field empty and the slot machine rolls one for you first. That works before booking opens too. Only once booking has closed is the name final, like the spot itself.
 :::
 
 ::: details I didn't get a confirmation e-mail
@@ -91,23 +111,39 @@ The crew checked your booking pass when you arrived, so the spot is yours for th
 :::
 
 ::: details How do I stop the Telegram messages?
-Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page, or send `/stop` to the bot.
+Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page or on the page **Updates on Telegram**, or send `/stop` to the bot.
+:::
+
+::: details Can I keep my pass in Apple Wallet or Google Wallet?
+If the crew has set it up, yes: <kbd>Add to Apple Wallet</kbd> or <kbd>Add to Google Wallet</kbd> sits under your pass, on your room page and on the roulette card — your phone shows the one it has. The wallet pass updates itself when your spot changes, and expires after the event. No buttons? Then this camp doesn't offer it; the pass page and a screenshot work just as well.
+:::
+
+::: details Can I get my pass in the Telegram chat?
+Yes: send `/pass` to the bot and it sends your pass with its QR code as a picture. That works as soon as you have connected Telegram.
 :::
 
 ::: details I need a special spot (lower bunk, step-free, quiet, a socket for a medical device)
-Ask the crew for a special-needs spot, even before booking opens: sign in with your ticket code and follow the ♿ link on the map (*Need a special-needs spot? Ask the crew now* before booking opens, the ♿ **Special-needs spot** button after that) while the crew accepts requests. See [Special-needs spot](./special-needs).
+Ask the crew for a special-needs spot, even before booking opens: sign in with your ticket code and follow the ♿ link (*Need a special-needs spot? Ask the crew now* on the map before booking opens, ♿ **Special-needs spot** in the top bar of every booking page after that) while the crew accepts requests. See [Special-needs spot](./special-needs).
 :::
 
 ::: details My special-needs request won't send, or says the crew has already decided
 The form needs at least one ticked need (or *Something else*), a few words of text (5 to 500 characters) and the ticked consent box. *You sent your request 10 times within an hour* is a limit: it works again within the hour. *Special-needs requests are closed right now, so nothing was sent* means the crew stopped taking requests meanwhile: contact the crew. *The crew has already decided on your request* means it can't be changed anymore; the page shows the decision. If something changed, contact the crew. You can still withdraw the request.
 :::
 
-::: details A spot says "Not available · Reserved by the crew"
-The crew holds it back: the bed is broken, kept free on purpose, not in use, or kept for guests with special needs. Pick another spot.
+::: details A spot says "Blocked by admin" in violet
+The crew holds it back: the bed is broken, kept free on purpose, taken by the crew, not in use, or kept for guests with special needs. Pick another spot.
+:::
+
+::: details What do the colours on the spot cards mean?
+One colour, one meaning, on every page: **green** free, **red** taken by another guest, **turquoise** yours, **violet** blocked by admin, **grey** not bookable right now (booking hasn't opened, or has closed). Pink is only ever ♿ special needs. In a bunk bed each half carries its own colour, and each is its own button.
 :::
 
 ::: details The burning title is too much for me
 Press the pause button ⏸ next to the title; your browser remembers it. If your device is set to reduce motion (for example on iPhone: Settings → Accessibility → Motion → Reduce Motion), the title doesn't move at all, and there are no fireworks after booking either. And if you like it: move the cursor over the standing letters or tap them to set them on fire yourself.
+:::
+
+::: details What is the small `v0.18.1` next to the title?
+The version of CozyNights you are looking at. It is also at the bottom of every page; hover it to see the build, click it for what changed. If you report a problem, say which version you saw.
 :::
 
 ::: details Who runs CozyNights, and what happens with my data?
@@ -115,6 +151,32 @@ Every page of CozyNights links the **legal notice** (who runs it and how to reac
 :::
 
 <!-- audience:admin -->
+
+### Swapping spots
+
+::: details I don't see "⇄ Ask to swap" on the taken spots
+You need a spot of your own (a swap trades yours for theirs), booking has to be live, and the crew may have paused swaps for a moment (**Swap requests** says so). If the crew picked your spot for you, set it aside or checked you in, your spot can't be swapped — your room page says so. See [Swapping spots](./swaps).
+:::
+
+::: details I asked, but nobody answers
+The other guest has three days. Some guests don't answer, some paused swap requests, and some spots can't be swapped at all — CozyNights never says which, so nobody learns why a spot is special. After three days the request shows *No answer — it ran out*. Ask for another spot, or ask again.
+:::
+
+::: details "This swap isn't possible any more"
+One of the two spots changed hands in the meantime (somebody moved or released it), or booking closed. Nothing changed: you both keep your spots. Reload **Swap requests**.
+:::
+
+::: details "You have 3 open swap requests" · "They said no to this swap already"
+At most three requests can wait at a time: take one back on **Swap requests**, or wait for an answer. A no is final for that spot and its guest — ask somebody else.
+:::
+
+::: details Can I undo a swap?
+Not with a button, but you can ask for your old spot back the same way. The other guest decides.
+:::
+
+::: details Who sees why I want to swap?
+Only the guest you ask sees your vibe and your few words, in the app. They are never in an e-mail or on Telegram, and the crew doesn't read them. No need to explain why: a friendly word is enough.
+:::
 
 ## For admins
 
@@ -124,6 +186,10 @@ Your Google sign-in worked, and your access request is waiting for a superuser. 
 
 ::: details "WEEKLY CHECK 🔐" at sign-in
 Admins sign in with Google again every 7 days, even when they use the admin area every day. Press the Google button once and you're back. See [Sessions](../admin/access#sessions).
+:::
+
+::: details "SIGN-IN NOT RECORDED ⚠️" at sign-in
+Google accepted the account, but PocketBase could not record the sign-in (the `last_sign_in` date of the admin account), so no session was started: without that date the next request would end the session again and send you back to the sign-in page. Try again. If it keeps happening, the operator looks at the PocketBase log for `[admins-guard] last_sign_in not saved` and at the sign-in hook, `pb_hooks/admins_oauth_guard.pb.js`.
 :::
 
 ::: details "WRONG ACCOUNT 🛑" at sign-in
@@ -139,7 +205,9 @@ First the phase: guests book only during 🎪 Live Booking. Then check the spot 
 :::
 
 ::: details A house won't move when I drag it
-Either the layout is locked (Live Booking, or booking closed: dragging is switched off), or you are pushing it right on top of another house: houses keep a small distance from each other. Wait for Staging, or drop it a little further away.
+Either the layout is locked (Live Booking, or booking closed: the pin shakes its head and a small bubble next to it says so), or you are pushing it right on top of another house: houses keep a small distance from each other. Wait for Staging, or drop it a little further away.
+
+If the pin moves but jumps back with *The new position was not saved: …*, the server refused the move, and the text after the colon says why. Usually the phase changed while the page was open (*Map layout is locked during Live Booking*): reload the page. A refused rename or delete gives its reason in a dialog, *House not renamed* or *House not deleted*.
 :::
 
 ::: details I can't find "Clear all bookings", or I can't apply a template

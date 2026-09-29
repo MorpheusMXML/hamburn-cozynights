@@ -38,6 +38,13 @@ const IGNORE = ['[data-layout-ignore]'];
 /** The camp map lies under the floating header and buttons on purpose. */
 const CANVAS = ['.map-wrapper'];
 
+/**
+ * Floating layers that cover the page on purpose, like a dialog (the lock
+ * hint) or the admin's sticky top bar, which sits over whatever scrolled
+ * under it once a form field further down was brought into view.
+ */
+const OVERLAYS = ['[data-layout-overlay]', '.admin-topbar'];
+
 const MARK = 'data-layout-problem';
 
 type Who =
@@ -50,10 +57,32 @@ interface PageCase {
 	phases?: Phase[];
 	/** Optional step after loading, e.g. open a dialog; its result is checked too. */
 	open?: (page: Page) => Promise<void>;
+	/**
+	 * The stress guest's spot is checked in (the crew scanned the pass). Set
+	 * before every case, so no case depends on what an earlier one did.
+	 */
+	checkedIn?: boolean;
+	/** What a checked-in case must show, so it proves its state (default: the guest's note). */
+	checkedInText?: RegExp;
 }
 
-/** The three phases, plus both armed timers (countdown box, countdown bar). */
-const ALL_PHASES: Phase[] = ['staging', 'live', 'closed', 'opening', 'closing'];
+/** The three phases, plus every armed timer (countdown box, countdown bar). */
+const ALL_PHASES: Phase[] = ['staging', 'live', 'closed', 'opening', 'closing', 'reopening'];
+
+/** Opens every folded form of an admin house or room page (FoldToggle). */
+async function unfoldAll(page: Page) {
+	const folded = page.locator('button.fold-toggle[aria-expanded="false"]');
+	while ((await folded.count()) > 0) await folded.first().click();
+	// The bodies slide open: measure them where they land.
+	await page.evaluate(() =>
+		Promise.all(
+			document
+				.getAnimations()
+				.filter((a) => a.effect?.getTiming().iterations !== Infinity)
+				.map((a) => a.finished.catch(() => undefined))
+		)
+	);
+}
 
 const PAGES: PageCase[] = [
 	{ name: 'start page', path: () => '/', as: 'anonymous', phases: ALL_PHASES },
@@ -107,14 +136,440 @@ const PAGES: PageCase[] = [
 			await page.getByRole('dialog').waitFor();
 		}
 	},
-	{ name: 'random spot', path: () => '/random-bed', as: 'guestWithoutSpot' },
+	{
+		// The same dialog before booking opens: only the burner name can change
+		// there, so it has one button less than during Live Booking.
+		name: 'room: rename dialog before booking opens',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithSpot',
+		phases: ['staging'],
+		open: async (page) => {
+			await page.locator('button.bed-card.mine').click();
+			await page.getByRole('dialog').waitFor();
+		}
+	},
+	// Swap requests (docs/guide/booking.md "Swap spots"): the sheet on a taken
+	// spot, and /swaps with a request at the limits for "me" and one of mine.
+	{
+		name: 'room: swap sheet',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithSpot',
+		phases: ['live'],
+		open: async (page) => {
+			await page
+				.locator('button.bed-card.swappable', { hasText: TEXTS.burnerLong.slice(0, 30) })
+				.click();
+			await page.getByRole('dialog').waitFor();
+			// The sheet and its tickets fly in: measure them where they land.
+			await page.evaluate(() =>
+				Promise.all(
+					document
+						.getAnimations()
+						.filter((a) => a.effect?.getTiming().iterations !== Infinity)
+						.map((a) => a.finished.catch(() => undefined))
+				)
+			);
+		}
+	},
+	{ name: 'swap requests', path: () => '/swaps', as: 'guestWithSpot', phases: ['live', 'closed'] },
+	{ name: 'swap requests without a spot', path: () => '/swaps', as: 'guestWithoutSpot' },
+	{
+		name: 'start page: refused ticket code',
+		path: () => '/',
+		as: 'anonymous',
+		open: async (page) => {
+			await page.locator('#ticket-code').fill('no such code!');
+			await page.locator('#ticket-code').press('Enter');
+			await page.locator('#ticket-code-error').waitFor();
+		}
+	},
+	// The roulette's slot machine: idle while booking is live, asleep in every other phase.
+	{ name: 'random spot', path: () => '/random-bed', as: 'guestWithoutSpot', phases: ALL_PHASES },
+	{
+		// Landed, with the name plate. The machine picks at random: spin until the
+		// house reel shows the stress camp's longest house name.
+		name: 'random spot: landed',
+		path: () => '/random-bed',
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.getByRole('button', { name: /^Spin/ }).click();
+			const house = page.locator('.reel.house .face');
+			for (let i = 0; i < 40 && !/Waldhütte/.test(await house.innerText()); i++) {
+				await page.getByRole('button', { name: /Spin again/ }).click();
+			}
+			await page.locator('#guestName').waitFor();
+		}
+	},
+	{
+		// A guest with a spot: it stands on the reels, with the booking pass below.
+		name: 'random spot: my spot',
+		path: () => '/random-bed',
+		as: 'guestWithSpot',
+		phases: ['staging', 'live', 'closed']
+	},
+	{
+		name: 'random spot: leave no trace',
+		path: () => '/random-bed',
+		as: 'guestWithSpot',
+		// Not checked in (the default): a checked-in guest has no such button.
+		open: async (page) => {
+			await page.getByRole('button', { name: /Leave No Trace/ }).click();
+			await page.getByRole('alertdialog').waitFor();
+		}
+	},
+	// Checked in at arrival: the spot is final, the pages say so instead of
+	// offering a release (src/lib/check-in.ts, CHECKED_IN_NOTE).
+	{
+		name: 'house: checked in',
+		path: (c) => `/house/${c.houseId}`,
+		as: 'guestWithSpot',
+		phases: ['live'],
+		checkedIn: true
+	},
+	{
+		name: 'house without my spot: checked in',
+		path: (c) => `/house/${c.otherHouseIds[0]}`,
+		as: 'guestWithSpot',
+		phases: ['live'],
+		checkedIn: true
+	},
+	{
+		name: 'room with my spot: checked in',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithSpot',
+		phases: ['live'],
+		checkedIn: true
+	},
+	{
+		name: 'room without my spot: checked in',
+		path: (c) => `/room/${c.otherRoomIds[0]}`,
+		as: 'guestWithSpot',
+		phases: ['live'],
+		checkedIn: true
+	},
+	{
+		name: 'room: rename dialog, checked in',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithSpot',
+		phases: ['staging'],
+		checkedIn: true,
+		open: async (page) => {
+			await page.locator('button.bed-card.mine').click();
+			await page.getByRole('dialog').waitFor();
+		}
+	},
+	{
+		name: 'random spot: my spot, checked in',
+		path: () => '/random-bed',
+		as: 'guestWithSpot',
+		phases: ['live'],
+		checkedIn: true
+	},
 	{ name: 'special needs: request sent', path: () => '/special-needs', as: 'guestWithRequest' },
 	{ name: 'special needs: new request', path: () => '/special-needs', as: 'guestWithoutSpot' },
+	// The wallet buttons and the Telegram offer under a guest's pass
+	// (docs/admin/passes.md). Both wallets are set up in the test stack.
+	{ name: 'updates on Telegram', path: () => '/telegram', as: 'guestWithSpot' },
+	{ name: 'updates on Telegram without a spot', path: () => '/telegram', as: 'guestWithoutSpot' },
+	{
+		name: 'special needs: refused request',
+		path: () => '/special-needs',
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.getByRole('button', { name: 'Send request' }).click();
+			await page.locator('#consent-error').waitFor();
+		}
+	},
+	// The Control Center: booking window, attention, latest bookings, Intel
+	// (always open since the camp editor moved to /admin/camp). Each phase lists
+	// other things under "Needs attention" and in the bookings card.
 	{ name: 'admin dashboard', path: () => '/admin', as: 'admin', phases: ALL_PHASES },
 	{ name: 'admin dashboard (superuser)', path: () => '/admin', as: 'superuser' },
-	{ name: 'admin house', path: (c) => `/admin/house/${c.houseId}`, as: 'admin' },
-	{ name: 'admin room', path: (c) => `/admin/room/${c.roomId}`, as: 'admin' },
+	{
+		// Narrowed to the house with the longest name, by the hour, sorted by
+		// free spots, with the chart's numbers open as a table.
+		name: 'admin dashboard: intel panel for one house',
+		path: () => '/admin',
+		as: 'admin',
+		phases: ['live'],
+		open: async (page) => {
+			const panel = page.locator('.intel-dashboard');
+			await panel.locator('.houses-pick', { hasText: TEXTS.houseLong.slice(0, 40) }).click();
+			await panel.locator('.intel-reset').waitFor();
+			await panel.getByRole('button', { name: '24 h' }).click();
+			await panel.locator('.tile[data-state="open"]').click();
+			await panel.getByRole('button', { name: 'Show the numbers as a table' }).click();
+			await panel.locator('.activity-data').waitFor();
+			// The clicks scrolled the page; the other cases measure from the top
+			// (scrolled, the sticky admin header lies over the booking panel).
+			await page.evaluate(() => window.scrollTo(0, 0));
+		}
+	},
+	// The camp editor: the map (staging: editable, live: locked) and the list.
+	{ name: 'admin camp', path: () => '/admin/camp', as: 'admin', phases: ['staging', 'live'] },
+	{ name: 'admin camp: list view', path: () => '/admin/camp?view=list', as: 'admin' },
+	{
+		// The house with the stress bookings: who is here, next to (below) the map.
+		name: 'admin camp: house sidebar with bookings',
+		path: () => '/admin/camp',
+		as: 'admin',
+		phases: ['live', 'closed'],
+		open: async (page) => {
+			await page
+				.locator(`g.house-group[aria-label^="House ${TEXTS.houseLong.slice(0, 40)}"]`)
+				.focus();
+			await page.keyboard.press('Enter');
+			const sidebar = page.locator('.details-sidebar');
+			await sidebar.locator('.house-bookings .booking-guest').first().waitFor();
+			// The sidebar flies in (Svelte transitions ignore reduced motion):
+			// measure it where it lands, not on its way.
+			await sidebar.evaluate((el) =>
+				Promise.all(
+					el
+						.getAnimations({ subtree: true })
+						.filter((a) => a.effect?.getTiming().iterations !== Infinity)
+						.map((a) => a.finished)
+				)
+			);
+			await page.evaluate(() => window.scrollTo(0, 0));
+		}
+	},
+	// Every ticket with everything attached; a ticket without a spot is grey
+	// while booking runs and red once it closed.
+	{
+		name: 'admin guests',
+		path: () => '/admin/guests',
+		as: 'admin',
+		phases: ['staging', 'live', 'closed']
+	},
+	{
+		// A count tile pressed: the list narrowed to the tickets without a spot.
+		name: 'admin guests: filtered',
+		path: () => '/admin/guests',
+		as: 'admin',
+		open: async (page) => {
+			await page.getByRole('button', { name: /without a spot/ }).click();
+			await page.locator('.count[aria-pressed="true"]', { hasText: 'without a spot' }).waitFor();
+		}
+	},
+	// Who booked which spot: Staging (crew holds), Live (newest first), Closed
+	// (still to arrive first; with Check in buttons).
+	{
+		name: 'admin bookings',
+		path: () => '/admin/bookings',
+		as: 'admin',
+		phases: ['staging', 'live', 'closed']
+	},
+	{
+		name: 'admin bookings: one house, every booking',
+		path: (c) => `/admin/bookings?house=${c.houseId}&show=all&sort=guest`,
+		as: 'superuser'
+	},
+	{
+		// The confirmation before a check-in without the pass (nothing is saved).
+		name: 'admin bookings: check-in dialog',
+		path: () => '/admin/bookings?show=arriving',
+		as: 'admin',
+		phases: ['closed'],
+		open: async (page) => {
+			await page.locator('.booking-row .btn-step').first().click();
+			await page.getByRole('alertdialog').waitFor();
+		}
+	},
+	{
+		// The menu as a drawer (phones, tablets); from 1100 px it is the sidebar.
+		name: 'admin menu: drawer',
+		path: () => '/admin/tickets',
+		as: 'superuser',
+		open: async (page) => {
+			await page.setViewportSize({ width: 390, height: 900 });
+			// A step through the drawer moves the marked entry with it (the menu
+			// once kept marking the page it was first opened on).
+			await page.getByRole('button', { name: 'Open the menu' }).click();
+			await page
+				.locator('#admin-menu.open')
+				.getByRole('link', { name: /Control Center/ })
+				.click();
+			await page.waitForURL(/\/admin$/);
+			await page.getByRole('button', { name: 'Open the menu' }).click();
+			await page.locator('#admin-menu.open').waitFor();
+			await expect(page.locator('#admin-menu a[aria-current="page"]')).toHaveText(/Control Center/);
+		}
+	},
+	{
+		// The sidebar shrunk to its icons (below 1100 px it is the drawer again).
+		name: 'admin menu: icons only',
+		path: () => '/admin/bookings',
+		as: 'admin',
+		open: async (page) => {
+			await page.getByRole('button', { name: /Shrink menu/ }).click();
+			await page.locator('.admin-sidebar.collapsed').waitFor();
+		}
+	},
+	{
+		// Staging says the layout can be changed; Live locks it (notice, greyed
+		// controls with padlocks).
+		// The forms are folded; the titles carry a summary of what is set.
+		name: 'admin house',
+		path: (c) => `/admin/house/${c.houseId}`,
+		as: 'admin',
+		phases: ['staging', 'live']
+	},
+	{
+		name: 'admin house: forms unfolded',
+		path: (c) => `/admin/house/${c.houseId}`,
+		as: 'admin',
+		phases: ['staging', 'live'],
+		open: unfoldAll
+	},
+	{
+		name: 'admin room',
+		path: (c) => `/admin/room/${c.roomId}`,
+		as: 'admin',
+		phases: ['staging', 'live']
+	},
+	{
+		name: 'admin room: forms unfolded',
+		path: (c) => `/admin/room/${c.roomId}`,
+		as: 'admin',
+		phases: ['staging', 'live'],
+		open: unfoldAll
+	},
+	{
+		// A superuser sees the "off here" boxes and "Reset to house" under the
+		// inherited chips of the room and of every spot; an admin only the chips.
+		name: 'admin room: forms unfolded, superuser overrides',
+		path: (c) => `/admin/room/${c.roomId}`,
+		as: 'superuser',
+		phases: ['staging'],
+		open: unfoldAll
+	},
+	{
+		// A click on a name opens its field with ✓ and ✕ (InlineRename): the
+		// room's long title with its number, and the spot with the longest label.
+		name: 'admin room: renaming',
+		path: (c) => `/admin/room/${c.roomId}`,
+		as: 'admin',
+		phases: ['staging'],
+		open: async (page) => {
+			await page.locator('h1 .rename-title').click();
+			await page
+				.locator('.bed-info .rename-title', { hasText: 'Kuschelzeltplatzverwaltungsbett' })
+				.click();
+			await page.locator('.rename').nth(1).waitFor();
+		}
+	},
+	{
+		// The details of the locked upper bunk in the ♿ room: the room's ♿ is
+		// struck through ("never on an upper bunk", no box), next to a
+		// superuser's "off here" boxes and the spot's own list of them.
+		name: 'admin room: upper bunk details',
+		path: (c) => `/admin/room/${c.roomId}`,
+		as: 'superuser',
+		phases: ['staging'],
+		open: async (page) => {
+			const upper = page.locator('.bunk-half', {
+				has: page.locator('.bed-label', { hasText: /^Upper 1$/ })
+			});
+			await upper.locator('.spot-details .btn-toggle').click();
+			await upper.locator('.chip.never').waitFor();
+		}
+	},
 	{ name: 'admin new house', path: () => '/admin/house/new', as: 'admin' },
+	{
+		// A typed key in a locked field answers with the lock hint next to it.
+		// The field keeps the focus, so the hint stays while the width changes.
+		name: 'admin new house: lock hint',
+		path: () => '/admin/house/new',
+		as: 'admin',
+		phases: ['live'],
+		open: async (page) => {
+			await page.locator('#name').focus();
+			await page.keyboard.press('x');
+			await page.locator('.lock-hint.ready').waitFor();
+		}
+	},
+	{
+		// The house editor next to the map (below it on a phone), read-only
+		// while the layout is locked; the house with the long compound name.
+		name: 'admin camp: locked house editor',
+		path: () => '/admin/camp',
+		as: 'admin',
+		phases: ['live'],
+		open: async (page) => {
+			await page.locator(`g.house-group[aria-label="House ${TEXTS.houseCompound}"]`).focus();
+			await page.keyboard.press('Enter');
+			const sidebar = page.locator('.details-sidebar');
+			await sidebar.locator('.locked-badge').waitFor();
+			// The sidebar flies in (Svelte transitions ignore reduced motion):
+			// measure it where it lands, not on its way.
+			await sidebar.evaluate((el) =>
+				Promise.all(
+					el
+						.getAnimations({ subtree: true })
+						.filter((a) => a.effect?.getTiming().iterations !== Infinity)
+						.map((a) => a.finished)
+				)
+			);
+			// Opening it scrolled the page; the other cases measure from the top.
+			await page.evaluate(() => window.scrollTo(0, 0));
+		}
+	},
+	{
+		name: 'admin new house: refused',
+		path: () => '/admin/house/new',
+		as: 'admin',
+		// Staging: Live and Closed lock the layout, and these forms with it.
+		phases: ['staging'],
+		open: async (page) => {
+			// More rooms than a house holds: the generator's check answers.
+			await page.locator('#new-house-rooms-0').fill('99');
+			await page.getByRole('button', { name: 'Save House' }).click();
+			await page.locator('.room-sizes [role="alert"]').waitFor();
+		}
+	},
+	{
+		// The house generator next to the map (below it on a phone): the rolled
+		// name, the kind chips, two size rows and the live count with numbers.
+		name: 'admin camp: house generator',
+		path: () => '/admin/camp?view=list',
+		as: 'admin',
+		phases: ['staging'],
+		open: async (page) => {
+			await page.getByRole('button', { name: /Ignite New House/ }).click();
+			const sidebar = page.locator('.details-sidebar');
+			await sidebar.locator('#house-gen-rooms-0').waitFor();
+			await sidebar.getByRole('button', { name: /ANOTHER ROOM SIZE/ }).click();
+			await sidebar.getByRole('button', { name: 'Bunk beds in size 2' }).click();
+			await sidebar.getByRole('button', { name: /FLOOR BLOCKS/ }).click();
+			await sidebar.locator('.ranges', { hasText: '#11' }).waitFor();
+			// The sidebar flies in (Svelte transitions ignore reduced motion):
+			// measure it where it lands, not on its way.
+			await sidebar.evaluate((el) =>
+				Promise.all(
+					el
+						.getAnimations({ subtree: true })
+						.filter((a) => a.effect?.getTiming().iterations !== Infinity)
+						.map((a) => a.finished)
+				)
+			);
+			await page.evaluate(() => window.scrollTo(0, 0));
+		}
+	},
+	{
+		name: 'admin house: refused rooms',
+		path: (c) => `/admin/house/${c.houseId}`,
+		as: 'admin',
+		// Staging: Live and Closed lock the layout, and these forms with it.
+		phases: ['staging'],
+		open: async (page) => {
+			await unfoldAll(page);
+			await page.locator('#add-rooms-first').fill('0');
+			// A hut group's form says HUTS (src/lib/accommodation.ts, roomWord).
+			await page.getByRole('button', { name: /IGNITE \d* ?(ROOM|HUT|TENT|PLACE)S?/ }).click();
+			await page.locator('.room-sizes [role="alert"]').waitFor();
+		}
+	},
 	{ name: 'admin tickets', path: () => '/admin/tickets', as: 'superuser' },
 	{
 		name: 'admin tickets: search result',
@@ -141,11 +596,10 @@ const PAGES: PageCase[] = [
 	},
 	{
 		name: 'admin layout templates: review',
-		path: () => '/admin',
+		path: () => '/admin/templates',
 		as: 'superuser',
 		phases: ['staging'],
 		open: async (page) => {
-			await page.getByRole('button', { name: /TEMPLATES/ }).click();
 			await page.locator('.import-card input[type="file"]').setInputFiles({
 				name: 'kuschelzeltplatz-layout-2026.json',
 				mimeType: 'application/json',
@@ -153,6 +607,9 @@ const PAGES: PageCase[] = [
 			});
 			await page.getByRole('button', { name: /Expand all/ }).click();
 			await page.getByRole('list', { name: 'Houses, rooms and spots' }).waitFor();
+			// The review scrolled into view; the other cases measure from the top
+			// (scrolled, the sticky admin bar lies over the page on purpose).
+			await page.evaluate(() => window.scrollTo(0, 0));
 		}
 	},
 	{ name: 'admin special-needs requests', path: () => '/admin/requests', as: 'admin' },
@@ -181,7 +638,14 @@ const PAGES: PageCase[] = [
 			}
 		}
 	},
-	{ name: 'booking pass (crew view)', path: (c) => `/pass/${c.passCode}`, as: 'admin' }
+	// Checked in, like right after the pass check above: arrival time and crew address.
+	{
+		name: 'booking pass (crew view)',
+		path: (c) => `/pass/${c.passCode}`,
+		as: 'admin',
+		checkedIn: true,
+		checkedInText: /CHECKED IN/
+	}
 ];
 
 let pb: PocketBase;
@@ -192,16 +656,70 @@ test.beforeAll(async () => {
 	pb = await superuser(PB_URL, process.env.PB_ADMIN_EMAIL!, process.env.PB_ADMIN_PASSWORD!);
 });
 
+/**
+ * Checks the stress guest in, or takes the check-in back, straight in the
+ * database, as the admin's pass check would. Every case sets it, so no case
+ * depends on what an earlier one left behind (the run is split into shards).
+ */
+async function setCheckedIn(on: boolean) {
+	const order = await pb
+		.collection('orders')
+		.getFirstListItem(pb.filter('pass_code = {:code}', { code: camp.passCode }));
+	const bed = await pb
+		.collection('beds')
+		.getFirstListItem(pb.filter('order = {:order}', { order: order.id }));
+	if (!!bed.checked_in_at === on) return;
+	await pb.collection('beds').update(
+		bed.id,
+		on
+			? {
+					checked_in_at: new Date().toISOString(),
+					checked_in_by: camp.adminEmail
+				}
+			: { checked_in_at: '', checked_in_by: '' }
+	);
+}
+
+/**
+ * Paint-only decoration, switched off while measuring. None of it moves text,
+ * but WebKit on Linux paints in software and redraws it at every width, which
+ * made the WebKit run several times slower than Chromium:
+ *  - the two decorative full-screen layers: the ambient background and the
+ *    cursor-trail canvas on top (fixed, pointer-events: none, no text shown
+ *    under reduced motion),
+ *  - shadows (they never take up room),
+ *  - CSS transitions, so the sweep measures where a box ends up, not a random
+ *    point on its way there.
+ * The failure screenshot is taken with it too: it shows what was measured.
+ */
+const MEASURE_CSS = `
+.fairy-container, .burner-trail { display: none !important; }
+*, *::before, *::after { transition: none !important; text-shadow: none !important; box-shadow: none !important; }
+`;
+
 /** A browser signed in the way `who` is: guests by ticket code, admins by session. */
 async function openAs(browser: Browser, who: Who) {
 	const context = await browser.newContext({ baseURL: BASE, reducedMotion: 'reduce' });
+	await context.addInitScript((css) => {
+		const add = () =>
+			document.head.appendChild(
+				Object.assign(document.createElement('style'), { id: 'layout-measure', textContent: css })
+			);
+		if (document.head) add();
+		else document.addEventListener('DOMContentLoaded', add);
+	}, MEASURE_CSS);
 	const session =
 		who === 'anonymous'
-			? null
+			? []
 			: who === 'admin' || who === 'superuser'
-				? { name: 'pb_auth', value: who === 'admin' ? camp.adminAuth : camp.superuserAuth }
-				: { name: 'bookingCode', value: camp[who] };
-	if (session) await context.addCookies([{ ...session, url: BASE }]);
+				? [{ name: 'pb_auth', value: who === 'admin' ? camp.adminAuth : camp.superuserAuth }]
+				: [
+						{ name: 'bookingCode', value: camp[who] },
+						// the round the code was signed in for: without it, a reset in an
+						// earlier suite on this stack would count the session as over
+						{ name: 'bookingRound', value: camp.guestRound }
+					];
+	await context.addCookies(session.map((cookie) => ({ ...cookie, url: BASE })));
 	return context;
 }
 
@@ -221,7 +739,8 @@ async function sweep(page: Page): Promise<Finding[]> {
 		const problems = await page.evaluate(findLayoutProblems, {
 			maxWordLength: MAX_WORD_LENGTH,
 			ignore: IGNORE,
-			canvas: CANVAS
+			canvas: CANVAS,
+			overlays: OVERLAYS
 		});
 		for (const problem of problems) {
 			const key = `${problem.kind}|${problem.where}|${problem.text}`;
@@ -259,11 +778,18 @@ for (const pageCase of PAGES) {
 		const title = pageCase.phases ? `${pageCase.name} (${phase})` : pageCase.name;
 		test(title, async ({ browser }, testInfo) => {
 			await setPhase(pb, phase);
+			await setCheckedIn(!!pageCase.checkedIn);
 			const context = await openAs(browser, pageCase.as);
 			const page = await context.newPage();
 			await page.setViewportSize({ width: 1280, height: 900 });
 			const response = await page.goto(pageCase.path(camp), { waitUntil: 'networkidle' });
 			expect(response?.status(), 'the page loads').toBeLessThan(400);
+			if (pageCase.checkedIn) {
+				// The case shows what it says: the check-in reached the page.
+				await expect(
+					page.getByText(pageCase.checkedInText ?? /The crew has checked you in/).first()
+				).toBeVisible();
+			}
 			await pageCase.open?.(page);
 			await page.evaluate(() => document.fonts.ready);
 
@@ -276,6 +802,7 @@ for (const pageCase of PAGES) {
 					maxWordLength: MAX_WORD_LENGTH,
 					ignore: IGNORE,
 					canvas: CANVAS,
+					overlays: OVERLAYS,
 					markAttribute: MARK
 				});
 				await page.addStyleTag({

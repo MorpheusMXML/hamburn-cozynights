@@ -34,7 +34,7 @@ features:
     linkText: The booking flow
   - icon: 🎰
     title: Destiny Roulette
-    details: Can't decide? Roll for a random free bed and a burner name to go with it.
+    details: Can't decide? Pull the lever of a neon slot machine for a random free bed, then keep, type or roll a burner name.
     link: /guide/booking#destiny-roulette
     linkText: Feeling lucky
   - icon: 📬
@@ -44,7 +44,7 @@ features:
     linkText: Confirmations
   - icon: 🎟️
     title: Booking pass
-    details: Every booking comes with a QR code and a short code. The crew checks it at arrival with a phone camera.
+    details: Every booking comes with a QR code and a short code — on the page, in Apple Wallet or Google Wallet, or in the Telegram chat. The crew checks it at arrival with a phone camera.
     link: /guide/booking#your-booking-pass
     linkText: The pass
   - icon: ♿
@@ -52,6 +52,11 @@ features:
     details: Need a lower bunk, step-free access or a quiet room? Ask the crew with your ticket code, even before booking opens.
     link: /guide/special-needs
     linkText: Ask for a spot
+  - icon: 🔁
+    title: Swapping spots
+    details: Your dream spot is taken? Ask its guest for a swap, with a vibe and a few words. Nothing moves until they say yes — then both spots change at once.
+    link: /guide/swaps
+    linkText: Ask for a swap
   - icon: 🛠️
     title: Staging, Live, Closed
     details: The crew builds the layout in staging, then a timer opens booking and closes it again. A countdown on every page shows when.
@@ -106,6 +111,7 @@ flowchart LR
 | --- | --- |
 | 🎫 **A guest** with a ticket | [Booking a bed](./guide/booking): ticket code, map, spot, done. |
 | ♿ **In need of a special spot** | [Special-needs spot](./guide/special-needs): ask the crew, even before booking opens. |
+| 🔁 **Eyeing a taken spot** | [Swapping spots](./guide/swaps): ask its guest for a swap during Live Booking. |
 | 🤔 **Stuck** somewhere | [FAQ & troubleshooting](./guide/faq), or ask the Hamburn crew. |
 | 🛠️ **On the crew** | The admin guide is part of the app and opens for signed-in admins only: `/admin/docs/` on the CozyNights site. |
 
@@ -119,6 +125,7 @@ flowchart LR
 | 📋 **Organizing** the next burn | [Event checklist](./admin/event-checklist) from first layout to after the event. |
 | ♿ **Deciding special-needs requests** | [Special-needs requests](./admin/special-needs): mark spots, decide, book. |
 | 🎟️ **At the entrance**, checking guests in | [Booking passes & check-in](./admin/passes): phone camera, check-in page or USB scanner. |
+| 👥 **Looking for a guest** | [Guests](./admin/guests): every ticket with its spot, check-in, request state, messages and wallet passes. |
 | 💻 **A developer** | [Local development](./develop/) and [Architecture](./reference/architecture). |
 
 <!-- /audience -->

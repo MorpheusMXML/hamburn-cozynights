@@ -74,3 +74,26 @@ export function isoToBerlinLocal(iso: string): string {
 	const pad = (n: number) => String(n).padStart(2, '0');
 	return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour)}:${pad(p.minute)}`;
 }
+
+/**
+ * How long ago something happened, in English and short enough for a chip:
+ * "just now", "12 s ago", "4 min ago", "2 h ago", "3 days ago".
+ *
+ * The app is English only (see $lib/dialogs), so this deliberately does not
+ * follow the browser language the way Intl.RelativeTimeFormat would.
+ */
+export function relativeTime(iso: string | null | undefined, now = Date.now()): string {
+	if (!iso) return 'never';
+	const then = new Date(iso).getTime();
+	if (Number.isNaN(then)) return 'unknown';
+	const seconds = Math.round((now - then) / 1000);
+	if (seconds < 0) return 'just now';
+	if (seconds < 5) return 'just now';
+	if (seconds < 60) return `${seconds} s ago`;
+	const minutes = Math.round(seconds / 60);
+	if (minutes < 60) return `${minutes} min ago`;
+	const hours = Math.round(minutes / 60);
+	if (hours < 24) return `${hours} h ago`;
+	const days = Math.round(hours / 24);
+	return days === 1 ? 'yesterday' : `${days} days ago`;
+}

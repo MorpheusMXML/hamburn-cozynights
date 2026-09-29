@@ -113,7 +113,7 @@ describe('parseTemplate: accepted files', () => {
 			]
 		});
 		expect(template.format).toBe('cozynights-layout');
-		expect(template.version).toBe('2.0');
+		expect(template.version).toBe('2.2');
 		expect(template.name).toBe('Burn Location Template');
 		expect(template.exported_at).toBe('2026-09-17T15:04:05.000Z');
 		// amount_beds is derived from the spots that are listed, never the other way round.
@@ -201,6 +201,273 @@ describe('parseTemplate: accepted files', () => {
 	});
 });
 
+describe('parseTemplate: the details of a place', () => {
+	const detailed = () =>
+		v2([
+			{
+				name: 'Waldhuetten',
+				x: 100,
+				y: 200,
+				kind: 'hut_group',
+				features: ['ground_floor'],
+				description: 'Wash house 50 m away.',
+				rooms: [
+					{
+						name: 'Hut 1',
+						room_number: 1,
+						kind: 'hut',
+						features: ['own_bathroom'],
+						beds: [
+							{ label: 'B1', bed_type: 'bunk_lower' },
+							{ label: 'B2', bed_type: 'bunk_upper' }
+						]
+					}
+				]
+			}
+		]);
+
+	it('keeps kind, features, description and bed type', () => {
+		const { template } = accepted(detailed());
+		const house = template.houses[0];
+		expect(house.kind).toBe('hut_group');
+		expect(house.features).toEqual(['ground_floor']);
+		expect(house.description).toBe('Wash house 50 m away.');
+		expect(house.rooms[0]).toMatchObject({ kind: 'hut', features: ['own_bathroom'] });
+		expect(house.rooms[0].beds.map((spot) => spot.bed_type)).toEqual(['bunk_lower', 'bunk_upper']);
+		expect(house.rooms[0].beds[0]).not.toHaveProperty('features');
+	});
+
+	it('leaves the retired power socket out of an older file, with one note', () => {
+		const data = v2(
+			[
+				{
+					...goodHouse(),
+					features: ['quiet', 'power'],
+					rooms: [
+						{
+							name: 'Main',
+							room_number: 1,
+							features: ['ground_floor', 'power'],
+							features_off: ['power'],
+							beds: [
+								{ label: 'B1', features: ['power'] },
+								{ label: 'B2', features: 'power' },
+								{ label: 'B3', features_off: ['power', 'quiet'] }
+							]
+						}
+					]
+				}
+			],
+			{ version: '2.2' }
+		);
+		const snapshot = JSON.stringify(data);
+		const result = parseTemplate(JSON.stringify(data));
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.warnings).toEqual([
+			'The file names "power", which the app doesn\'t know any more (it no longer records power sockets): left out 6 times, everything else is read as it is.'
+		]);
+		const house = result.template.houses[0];
+		expect(house.features).toEqual(['quiet']);
+		expect(house.rooms[0].features).toEqual(['ground_floor']);
+		expect(house.rooms[0]).not.toHaveProperty('features_off');
+		expect(house.rooms[0].beds[0]).not.toHaveProperty('features');
+		expect(house.rooms[0].beds[2].features_off).toEqual(['quiet']);
+		expect(stringifyTemplate(result.template)).not.toContain('power');
+		// the file's data itself stays as it was
+		expect(JSON.stringify(data)).toBe(snapshot);
+	});
+
+	it('refuses features on a spot: it has none of its own, they come from its room and house', () => {
+		const data = v2([
+			house('Haus 1', 1, 2, [room('Main', 1, [bed('B1', { features: ['quiet', 'power'] })])])
+		]);
+		expect(errorsOf(data)).toEqual([
+			'houses[0] "Haus 1" > rooms[0] "Main" > beds[0] "B1": a spot has no features of its own, it takes them from its room and house (got features ["quiet"]). Put them on the room, or leave "features" out here.'
+		]);
+		// an empty list says nothing, so it is fine
+		accepted(v2([house('Haus 1', 1, 2, [room('Main', 1, [bed('B1', { features: [] })])])]));
+	});
+
+	it('round-trips them through the export text', () => {
+		const { template } = accepted(detailed());
+		const again = parseTemplate(stringifyTemplate(template));
+		expect(again.ok).toBe(true);
+		if (again.ok) expect(again.template).toEqual(template);
+	});
+
+	it('leaves out what nobody filled in, so a plain layout stays plain', () => {
+		const { template } = accepted(v2([goodHouse()]));
+		const house = template.houses[0];
+		expect(house).not.toHaveProperty('kind');
+		expect(house).not.toHaveProperty('features');
+		expect(house).not.toHaveProperty('description');
+		expect(house.rooms[0].beds[0]).not.toHaveProperty('bed_type');
+		expect(stringifyTemplate(template)).not.toContain('bed_type');
+	});
+
+	it('refuses details it does not know', () => {
+		const kind = v2([{ ...goodHouse(), kind: 'castle' }]);
+		expect(errorsOf(kind).some((line) => /kind must be one of "house"/.test(line))).toBe(true);
+
+		const feature = v2([{ ...goodHouse(), features: ['sauna'] }]);
+		expect(errorsOf(feature).some((line) => /is not a feature a house can have/.test(line))).toBe(
+			true
+		);
+
+		const roomFeature = v2([{ ...goodHouse(), features: ['own_bathroom'] }]);
+		expect(
+			errorsOf(roomFeature).some((line) => /is not a feature a house can have/.test(line))
+		).toBe(true);
+
+		const bedType = v2([
+			house('Haus 1', 1, 2, [room('Main', 1, [bed('B1', { bed_type: 'hammock' })])])
+		]);
+		expect(errorsOf(bedType).some((line) => /bed_type must be one of "single"/.test(line))).toBe(
+			true
+		);
+	});
+
+	it('refuses two features that say the opposite', () => {
+		const data = v2([{ ...goodHouse(), features: ['heated', 'unheated'] }]);
+		expect(errorsOf(data).some((line) => /say the opposite of each other/.test(line))).toBe(true);
+	});
+
+	it('refuses a description that is too long', () => {
+		const data = v2([{ ...goodHouse(), description: 'x'.repeat(501) }]);
+		expect(errorsOf(data).some((line) => /description is too long/.test(line))).toBe(true);
+	});
+});
+
+describe('parseTemplate: switched-off features (version 2.2)', () => {
+	/**
+	 * A heated, quiet hut group; hut 1 has its own bathroom but stays cold, and
+	 * B2 by the door is neither quiet nor close to that bathroom. The parts are
+	 * handed out too, so a test can spoil one before it parses `data`.
+	 */
+	const overridden = () => {
+		const b2: Record<string, unknown> = { label: 'B2', features_off: ['quiet', 'own_bathroom'] };
+		const hut: Record<string, unknown> = {
+			name: 'Hut 1',
+			room_number: 1,
+			features: ['own_bathroom'],
+			features_off: ['heated'],
+			beds: [{ label: 'B1' }, b2]
+		};
+		const house: Record<string, unknown> = {
+			name: 'Waldhuetten',
+			x: 100,
+			y: 200,
+			features: ['heated', 'quiet'],
+			rooms: [hut]
+		};
+		return { hut, b2, data: v2([house], { version: '2.2' }) };
+	};
+
+	it('keeps features_off of rooms and spots, in catalogue order, and round-trips them', () => {
+		const { template } = accepted(overridden().data);
+		const room = template.houses[0].rooms[0];
+		expect(room.features_off).toEqual(['heated']);
+		expect(room.beds[0]).not.toHaveProperty('features_off');
+		expect(room.beds[1].features_off).toEqual(['own_bathroom', 'quiet']);
+		expect(template.houses[0]).not.toHaveProperty('features_off');
+
+		const text = stringifyTemplate(template);
+		expect(text).toContain('"features_off": ["own_bathroom","quiet"]');
+		const again = parseTemplate(text);
+		expect(again.ok).toBe(true);
+		if (again.ok) expect(again.template).toEqual(template);
+	});
+
+	it('still reads version 2.1 and 2.0 files, which have no features_off', () => {
+		for (const version of ['2.0', '2.1']) {
+			const { template } = accepted(v2([goodHouse()], { version }));
+			expect(template.version).toBe('2.2');
+			expect(JSON.stringify(template)).not.toContain('features_off');
+		}
+	});
+
+	it('refuses what a level can not switch off, and says what it can', () => {
+		const roomOff = overridden();
+		roomOff.hut.features_off = ['own_bathroom']; // a room feature, not a house one
+		expect(errorsOf(roomOff.data)).toEqual([
+			'houses[0] "Waldhuetten" > rooms[0] "Hut 1": "own_bathroom" is not a feature a room can switch off. Use one of "wheelchair", "ground_floor", "toilets_inside", "heated", "unheated", "quiet".'
+		]);
+
+		const spotOff = overridden();
+		spotOff.b2.features_off = ['sauna'];
+		expect(errorsOf(spotOff.data)).toEqual([
+			'houses[0] "Waldhuetten" > rooms[0] "Hut 1" > beds[1] "B2": "sauna" is not a feature a spot can switch off. Use one of "wheelchair", "ground_floor", "toilets_inside", "own_bathroom", "heated", "unheated", "quiet".'
+		]);
+
+		const notAList = overridden();
+		notAList.hut.features_off = 'heated';
+		expect(errorsOf(notAList.data)[0]).toMatch(
+			/"Hut 1": features_off must be a list like \["wheelchair"\] \(got "heated"\)\./
+		);
+
+		const twice = overridden();
+		twice.b2.features_off = ['quiet', 'quiet'];
+		expect(errorsOf(twice.data)).toEqual([
+			'houses[0] "Waldhuetten" > rooms[0] "Hut 1" > beds[1] "B2": features_off lists "quiet" twice. Name each feature once.'
+		]);
+	});
+
+	it('refuses a feature that is switched off and set at the same time', () => {
+		const room = overridden();
+		room.hut.features = ['heated', 'own_bathroom'];
+		expect(errorsOf(room.data)).toEqual([
+			'houses[0] "Waldhuetten" > rooms[0] "Hut 1": "heated" is in "features" and in "features_off" at the same time. A room can\'t switch off what it claims itself; keep it in one of the two lists.'
+		]);
+	});
+
+	it('refuses features_off on a house, which has nothing above it', () => {
+		const data = v2([{ ...goodHouse(), features_off: ['heated'] }]);
+		expect(errorsOf(data)).toEqual([
+			'houses[0] "Haus 1": a house can\'t have features_off, there is no level above it to switch off. Remove it, or move it to a room or spot.'
+		]);
+	});
+
+	it('leaves an empty list out, so a place that inherits everything stays plain', () => {
+		const { hut, b2, data } = overridden();
+		hut.features_off = [];
+		b2.features_off = [];
+		const { template } = accepted(data);
+		expect(template.houses[0].rooms[0]).not.toHaveProperty('features_off');
+		expect(template.houses[0].rooms[0].beds[1]).not.toHaveProperty('features_off');
+	});
+
+	it('exports features_off from the records, cleaned, and only when there is something', () => {
+		const template = buildTemplate({
+			houses: [{ id: 'h', name: 'H', x: 1, y: 2, features: ['heated', 'quiet'] }],
+			rooms: [
+				// own_bathroom is not a house feature: a room can't switch it off, so it is dropped
+				{
+					id: 'r',
+					house: 'h',
+					name: 'Main',
+					room_number: 1,
+					features_off: ['own_bathroom', 'heated']
+				},
+				{ id: 's', house: 'h', name: 'Side', room_number: 2, features_off: [] }
+			],
+			beds: [
+				{ room: 'r', label: 'B1', features_off: ['quiet', 'own_bathroom'] },
+				{ room: 'r', label: 'B2' },
+				// a power socket switched off before it was dropped: nothing left to export
+				{ room: 'r', label: 'B3', features_off: ['power'] }
+			]
+		});
+		const [main, side] = template.houses[0].rooms;
+		expect(main.features_off).toEqual(['heated']);
+		expect(side).not.toHaveProperty('features_off');
+		expect(main.beds[0].features_off).toEqual(['own_bathroom', 'quiet']);
+		expect(main.beds[1]).not.toHaveProperty('features_off');
+		expect(main.beds[2]).not.toHaveProperty('features_off');
+		expect(template.version).toBe('2.2');
+	});
+});
+
 describe('parseTemplate: refused files', () => {
 	const refused: [string, string, RegExp][] = [
 		['an empty file', '', /The file is empty/],
@@ -229,7 +496,7 @@ describe('parseTemplate: refused files', () => {
 		[
 			'a missing version',
 			{ houses: [goodHouse()] },
-			/^version: is missing\. Add "version": "2\.0"/
+			/^version: is missing\. Add "version": "2\.2"/
 		],
 		['an unknown version', v2([goodHouse()], { version: '99.0' }), /^version: .* got "99.0"/],
 		[
@@ -569,11 +836,11 @@ describe('buildTemplate', () => {
 		]
 	};
 
-	it('builds a sorted version 2.0 template and leaves out orphans', () => {
+	it('builds a sorted version 2.2 template and leaves out orphans', () => {
 		const template = buildTemplate(records, new Date('2026-09-17T12:00:00.000Z'));
 		expect(template).toEqual({
 			format: 'cozynights-layout',
-			version: '2.0',
+			version: '2.2',
 			name: 'CozyNights camp layout',
 			exported_at: '2026-09-17T12:00:00.000Z',
 			map: { image: MAP_IMAGE, width: MAP_WIDTH, height: MAP_HEIGHT },
@@ -610,5 +877,87 @@ describe('buildTemplate', () => {
 		const result = parseTemplate(text);
 		expect(result.ok).toBe(true);
 		if (result.ok) expect(result.summary).toMatchObject({ houses: 2, rooms: 2, beds: 3 });
+	});
+});
+
+describe('parseTemplate: bunk beds', () => {
+	const stacked = (beds: unknown) => v2([house('Haus 1', 100, 200, [room('Main', 1, beds)])]);
+	const spots = (data: unknown) => accepted(data).template.houses[0].rooms[0].beds;
+
+	it('keeps a pairing written on both spots and fills in the levels', () => {
+		const beds = spots(
+			stacked([bed('B1', { bunk_partner: 'B2' }), bed('B2', { bunk_partner: 'B1' }), bed('B3')])
+		);
+		expect(beds[0]).toMatchObject({ label: 'B1', bunk_partner: 'B2', bed_type: 'bunk_lower' });
+		expect(beds[1]).toMatchObject({ label: 'B2', bunk_partner: 'B1', bed_type: 'bunk_upper' });
+		expect(beds[2]).not.toHaveProperty('bunk_partner');
+		expect(beds[2]).not.toHaveProperty('bed_type');
+	});
+
+	it('completes a pairing written on one spot only, and the missing level', () => {
+		const beds = spots(
+			stacked([bed('B1'), bed('B2', { bunk_partner: 'b1', bed_type: 'bunk_upper' })])
+		);
+		expect(beds[0]).toMatchObject({ bunk_partner: 'B2', bed_type: 'bunk_lower' });
+		expect(beds[1]).toMatchObject({ bunk_partner: 'B1', bed_type: 'bunk_upper' });
+	});
+
+	it('round-trips a stacked room through the export text', () => {
+		const { template } = accepted(
+			stacked([bed('B1', { bunk_partner: 'B2', bed_type: 'bunk_lower' }), bed('B2')])
+		);
+		const again = parseTemplate(stringifyTemplate(template));
+		expect(again.ok).toBe(true);
+		if (again.ok) expect(again.template).toEqual(template);
+	});
+
+	it('refuses a partner that is missing, the spot itself, or claimed twice', () => {
+		expect(errorsOf(stacked([bed('B1', { bunk_partner: 'B9' })]))[0]).toMatch(
+			/"B1": bunk_partner "B9" is not a spot of this room/
+		);
+		expect(errorsOf(stacked([bed('B1', { bunk_partner: 'B1' })]))[0]).toMatch(/own bunk_partner/);
+		expect(
+			errorsOf(
+				stacked([bed('B1', { bunk_partner: 'B3' }), bed('B2', { bunk_partner: 'B3' }), bed('B3')])
+			)[0]
+		).toMatch(/"B2": names "B3" as its bunk_partner, but "B3" names "B1"/);
+		expect(
+			errorsOf(
+				stacked([bed('B1', { bunk_partner: 'B2' }), bed('B2', { bunk_partner: 'B3' }), bed('B3')])
+			)[0]
+		).toMatch(/"B1": names "B2" as its bunk_partner, but "B2" names "B3"/);
+	});
+
+	it('refuses levels that contradict the pairing', () => {
+		expect(
+			errorsOf(stacked([bed('B1', { bunk_partner: 'B2', bed_type: 'single' }), bed('B2')]))[0]
+		).toMatch(/"B1": is stacked with "B2", so its bed_type must be "bunk_lower" or "bunk_upper"/);
+		expect(
+			errorsOf(
+				stacked([
+					bed('B1', { bunk_partner: 'B2', bed_type: 'bunk_upper' }),
+					bed('B2', { bed_type: 'bunk_upper' })
+				])
+			)[0]
+		).toMatch(/both the upper bunk/);
+	});
+
+	it('exports the partner by label, only when both spots agree', () => {
+		const template = buildTemplate({
+			houses: [{ id: 'h', name: 'H', x: 1, y: 2 }],
+			rooms: [{ id: 'r', house: 'h', name: 'Main', room_number: 1 }],
+			beds: [
+				{ id: 'a', room: 'r', label: 'B1', bed_type: 'bunk_lower', bunk_partner: 'b' },
+				{ id: 'b', room: 'r', label: 'B2', bed_type: 'bunk_upper', bunk_partner: 'a' },
+				// c points at d, d does not point back: not a bunk bed.
+				{ id: 'c', room: 'r', label: 'B3', bunk_partner: 'd' },
+				{ id: 'd', room: 'r', label: 'B4' }
+			]
+		});
+		const beds = template.houses[0].rooms[0].beds;
+		expect(beds[0]).toMatchObject({ label: 'B1', bunk_partner: 'B2' });
+		expect(beds[1]).toMatchObject({ label: 'B2', bunk_partner: 'B1' });
+		expect(beds[2]).not.toHaveProperty('bunk_partner');
+		expect(beds[3]).not.toHaveProperty('bunk_partner');
 	});
 });

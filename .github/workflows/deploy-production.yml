@@ -1,0 +1,179 @@
+name: Deploy production
+
+# Manual only: Actions → "Deploy production" → Run workflow on `main`.
+# Production runs released code only, checked three times: this workflow
+# refuses any other ref, the GitHub environment `production` admits only
+# `main` (and waits for a reviewer), and the server refuses a commit that is
+# not on origin/main (REQUIRE_BRANCH in /etc/cozynights/deploy-production.conf).
+# Runbook: hamburn-cozynights/deploy/README.md, section "Produktion".
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  main-only:
+    name: main only
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Released code only
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Production deploys only main, this run is on $GITHUB_REF. Land the release PR first."
+            exit 1
+          fi
+
+  # Same lookup as deploy-staging.yml's gate: a green CI run of this
+  # repository for exactly these files (the release PR's run, or the run of the
+  # push to main) makes a second full verification pointless.
+  tested:
+    name: Already verified?
+    needs: main-only
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read # artifacts and workflow runs
+      contents: read # commit → tree, compare
+    outputs:
+      verified: ${{ steps.lookup.outputs.verified }}
+    steps:
+      - name: Green CI run for these files
+        id: lookup
+        # Any API trouble → no output → full verification.
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          tree="$(gh api "repos/$repo/git/commits/$GITHUB_SHA" --jq .tree.sha)"
+          echo "${GITHUB_SHA::7} has tree $tree"
+
+          runs="$(gh api --paginate "repos/$repo/actions/artifacts?name=verified-tree-$tree&per_page=100" --jq "
+            .artifacts[] | select(.expired == false)
+            | select(.workflow_run.repository_id == $GITHUB_REPOSITORY_ID
+                     and .workflow_run.head_repository_id == $GITHUB_REPOSITORY_ID)
+            | .workflow_run.id" | sort -u)"
+
+          # Prints nothing if the run can be trusted, otherwise why not.
+          check() {
+            local run="$1" info path event status conclusion head_repo head_sha relation
+            info="$(gh api "repos/$repo/actions/runs/$run" --jq \
+              '[.path, .event, .status, .conclusion, .head_repository.full_name, .head_sha] | map(. // "none") | @tsv')" ||
+              { echo "API error reading the run"; return; }
+            IFS=$'\t' read -r path event status conclusion head_repo head_sha <<<"$info"
+            [ "$path" = .github/workflows/ci.yml ] || { echo "workflow is $path"; return; }
+            case "$event" in pull_request | push) ;; *) echo "event is $event"; return ;; esac
+            [ "$head_repo" = "$repo" ] || { echo "head repository is $head_repo"; return; }
+            [ "$status" = completed ] || { echo "PENDING $status"; return; }
+            [ "$conclusion" = success ] || { echo "run concluded $conclusion"; return; }
+            relation="$(gh api "repos/$repo/compare/$head_sha...$GITHUB_SHA" --jq .status)" ||
+              { echo "API error comparing ${head_sha::7}...${GITHUB_SHA::7}"; return; }
+            case "$relation" in identical | ahead) ;; *) echo "${GITHUB_SHA::7} vs tested ${head_sha::7}: $relation"; return ;; esac
+          }
+
+          verified=false
+          for run in $runs; do
+            for _ in $(seq 12); do
+              why="$(check "$run")"
+              case "$why" in PENDING*) echo "run $run: ${why#PENDING }, waiting"; sleep 15 ;; *) break ;; esac
+            done
+            if [ -z "$why" ]; then
+              verified=true
+              echo "::notice title=Tests not repeated::these files passed CI in $GITHUB_SERVER_URL/$repo/actions/runs/$run"
+              break
+            fi
+            echo "run $run not trusted: $why"
+          done
+          [ "$verified" = true ] || echo "::notice title=Full verification::no green CI run of this repository for tree $tree"
+          echo "verified=$verified" >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: tested
+    uses: ./.github/workflows/ci.yml
+    with:
+      secrets_only: ${{ needs.tested.outputs.verified == 'true' }}
+
+  deploy:
+    name: Deploy main@${{ github.sha }}
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: production
+      url: https://cozynights.hamburn.de
+    steps:
+      - name: Deploy on server
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        with:
+          host: ${{ secrets.PRODUCTION_SSH_HOST }}
+          port: ${{ secrets.PRODUCTION_SSH_PORT || 22 }}
+          username: deploy
+          key: ${{ secrets.PRODUCTION_DEPLOY_SSH_KEY }}
+          fingerprint: ${{ secrets.PRODUCTION_SSH_FINGERPRINT }}
+          command_timeout: 20m
+          # A second forced-command key of the deploy user runs
+          # /usr/local/bin/deploy-cozynights-production; only the SHA is used.
+          script: deploy ${{ github.sha }}
+
+  # From the outside, read-only. /api/health is public even while the
+  # pre-launch gate is on, so the deployed commit is always checked. The rest
+  # of the smoke suite needs the public site: behind the gate it only checks
+  # that the gate sends visitors to the Google sign-in.
+  smoke:
+    name: Smoke test production
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: hamburn-cozynights
+    env:
+      SITE: https://cozynights.hamburn.de
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: The deployed commit answers
+        run: |
+          set -euo pipefail
+          body="$(curl -fsS --max-time 15 "$SITE/api/health")"
+          echo "$body"
+          commit="$(jq -r .commit <<<"$body")"
+          if [ "$commit" != "${GITHUB_SHA::7}" ]; then
+            echo "::error::production answers commit $commit, expected ${GITHUB_SHA::7}"
+            exit 1
+          fi
+      - name: Pre-launch gate on or off?
+        id: gate
+        run: |
+          set -euo pipefail
+          read -r code location < <(curl -s -o /dev/null --max-time 15 -w '%{http_code} %{redirect_url}\n' "$SITE/")
+          echo "GET / → $code ${location:-}"
+          if [ "$code" = 302 ] && [[ "${location:-}" == https://accounts.google.com/* ]]; then
+            echo "::notice title=Pre-launch gate is on::only the gate and /api/health were checked; the full smoke test runs once the gate is off"
+            echo "open=false" >> "$GITHUB_OUTPUT"
+          elif [ "$code" = 200 ]; then
+            echo "open=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::GET / answered $code ${location:-} — neither the gate nor the app"
+            exit 1
+          fi
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.gate.outputs.open == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hamburn-cozynights/package-lock.json
+      - if: steps.gate.outputs.open == 'true'
+        run: npm ci
+      - if: steps.gate.outputs.open == 'true'
+        run: npm run smoke:remote
+        env:
+          SMOKE_BASE_URL: ${{ env.SITE }}
+          SMOKE_EXPECT_GOOGLE: '1'

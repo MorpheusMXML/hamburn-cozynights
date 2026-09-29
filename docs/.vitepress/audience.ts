@@ -28,6 +28,7 @@ const sections: Section[] = [
 				items: [
 					{ text: 'What is CozyNights?', link: '/guide/' },
 					{ text: 'Booking a bed', link: '/guide/booking' },
+					{ text: 'Swapping spots', link: '/guide/swaps' },
 					{ text: 'Special-needs spot', link: '/guide/special-needs' },
 					{ text: 'Staging, Live & Closed', link: '/guide/phases' },
 					{ text: 'FAQ & troubleshooting', link: '/guide/faq' }
@@ -46,18 +47,37 @@ const sections: Section[] = [
 		dir: 'admin',
 		audiences: ['admin'],
 		nav: { text: 'Admin', link: '/admin/', activeMatch: '^/admin/' },
+		// The sections follow the groups of the app's admin menu ($lib/admin-nav.ts).
 		sidebar: [
 			{
 				text: 'Admin guide',
 				items: [
 					{ text: 'The Control Center', link: '/admin/' },
-					{ text: 'Admin access & roles', link: '/admin/access' },
+					{ text: 'Admin access & roles', link: '/admin/access' }
+				]
+			},
+			{
+				text: 'Guests',
+				items: [
+					{ text: 'Guests: every ticket', link: '/admin/guests' },
+					{ text: 'Bookings & check-ins', link: '/admin/bookings' },
 					{ text: 'Tickets & e-mail addresses', link: '/admin/tickets' },
-					{ text: 'Notifications', link: '/admin/notifications' },
 					{ text: 'Booking passes & check-in', link: '/admin/passes' },
 					{ text: 'Special-needs requests', link: '/admin/special-needs' },
+					{ text: 'Swap requests', link: '/admin/swaps' },
+					{ text: 'Notifications', link: '/admin/notifications' }
+				]
+			},
+			{
+				text: 'Camp',
+				items: [
 					{ text: 'Houses, rooms & spots', link: '/admin/camp-layout' },
-					{ text: 'Layout templates', link: '/admin/templates' },
+					{ text: 'Layout templates', link: '/admin/templates' }
+				]
+			},
+			{
+				text: 'Event',
+				items: [
 					{ text: 'Event checklist', link: '/admin/event-checklist' },
 					{ text: 'Legal pages', link: '/admin/legal' }
 				]
@@ -101,6 +121,7 @@ const sections: Section[] = [
 					{ text: 'Local development', link: '/develop/' },
 					{ text: 'Testing & release checks', link: '/develop/testing' },
 					{ text: 'Layout: no squeezed text', link: '/develop/layout' },
+					{ text: 'States, colours & live numbers', link: '/develop/states' },
 					{ text: 'Environments & deployment', link: '/develop/deployment' },
 					{ text: 'Branches, integration & releases', link: '/develop/integration' },
 					{ text: 'Landing page title', link: '/develop/effigy-title' },

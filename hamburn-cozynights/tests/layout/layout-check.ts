@@ -45,12 +45,16 @@ export interface LayoutCheckOptions {
 	/** Backgrounds meant to lie under floating controls (the camp map): their
 	 * text may be covered, but must still not be cut off or squeezed. */
 	canvas?: string[];
+	/** Small floating layers meant to cover the page, like a dialog does (the
+	 * lock hint): what lies under them doesn't count as covered, their own
+	 * text is still checked. */
+	overlays?: string[];
 	/** Attribute set on offending elements, so a screenshot can outline them. */
 	markAttribute?: string;
 }
 
 export function findLayoutProblems(options: LayoutCheckOptions): LayoutProblem[] {
-	const { maxWordLength, ignore, canvas = [], markAttribute } = options;
+	const { maxWordLength, ignore, canvas = [], overlays = [], markAttribute } = options;
 	const problems: LayoutProblem[] = [];
 	const seen = new Set<string>();
 	const TOLERANCE = 1.5;
@@ -204,6 +208,10 @@ export function findLayoutProblems(options: LayoutCheckOptions): LayoutProblem[]
 			continue;
 		}
 		if (isIgnored(parent) || !isShown(parent)) continue;
+		// A decorative glyph drawn on a map pin (aria-hidden text inside an SVG)
+		// is part of the pin: at the map's edge the pin is cut off and the glyph
+		// with it, and nobody reads it. Every other SVG text (labels) still counts.
+		if (parent.getAttribute('aria-hidden') === 'true' && parent.closest('svg')) continue;
 		const block = blockOf(parent);
 		const blockStyle = getComputedStyle(block);
 		const truncated = blockStyle.textOverflow === 'ellipsis';
@@ -383,6 +391,7 @@ export function findLayoutProblems(options: LayoutCheckOptions): LayoutProblem[]
 			if (!hit) continue;
 			const onTop = [a, b].find((line) => line.el.contains(hit) || hit.contains(line.el));
 			if (!onTop || inFullScreenLayer(onTop.el)) continue;
+			if (overlays.some((selector) => onTop.el.closest(selector))) continue;
 			const below = onTop === a ? b : a;
 			if (canvas.some((selector) => below.el.closest(selector))) continue;
 			report(

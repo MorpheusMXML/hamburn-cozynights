@@ -8,6 +8,7 @@ import {
 	ADMIN_OAUTH_PROVIDER,
 	checkGoogleIdentity,
 	isAdminAccount,
+	isSignInFresh,
 	toAdminSession,
 	type AdminLoginError
 } from '$lib/server/admin-auth';
@@ -50,8 +51,21 @@ async function completeSignIn(
 		if (!locals.pb.authStore.isValid || !isAdminAccount(auth.record)) return 'not_authorized';
 		// A new access request (or one not approved yet) keeps its session, so the
 		// login page can show that it is waiting for a superuser.
-		return toAdminSession(auth.record) ? 'approved' : 'pending';
+		if (!toAdminSession(auth.record)) return 'pending';
+		// The guard hook records the sign-in (last_sign_in) before it completes;
+		// hooks.server.ts ends every session whose record lacks a fresh one. A
+		// session started without it would only bounce back here, so say so.
+		if (!isSignInFresh(auth.record)) {
+			console.error('[AdminLogin] Sign-in accepted but not recorded (admins.last_sign_in empty)');
+			return 'not_recorded';
+		}
+		return 'approved';
 	} catch (err) {
+		if (err instanceof ClientResponseError && err.response?.data?.code === 'sign_in_not_recorded') {
+			// The guard hook could not write last_sign_in and refused the sign-in.
+			console.error(`[AdminLogin] Sign-in not recorded by PocketBase: ${err.message}`);
+			return 'not_recorded';
+		}
 		if (err instanceof ClientResponseError && err.status === 403) {
 			// Rejected by the guard hook (not invited / wrong domain) or createRule.
 			console.warn(`[AdminLogin] Sign-in rejected by PocketBase: ${err.message}`);

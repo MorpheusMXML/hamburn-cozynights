@@ -9,7 +9,7 @@ One Telegram bot per environment, two kinds of chats:
 | Chat | Who is in it | What happens there |
 | --- | --- | --- |
 | **Crew group** (private) | the admins | The bot **reports**: access requests, approvals, sign-ins, phase switches, bulk actions, special-needs requests (never who or what they wrote), failed guest messages. It takes no commands. Nobody can approve or change anything from Telegram. |
-| **A guest's own chat** | one guest and the bot, nobody else | Only if the guest connects it on their room page or their special-needs request: the booking confirmation, every change of their spot and the crew's decision on their request. Guests never join a group and see nothing about other guests. |
+| **A guest's own chat** | one guest and the bot, nobody else | Only if the guest connects it themselves: the booking confirmation, every change of their spot, their [booking pass](./passes) with its QR code as a picture, and the crew's decision on their request. Guests never join a group and see nothing about other guests. |
 
 ::: tip Why approvals stay on the server
 A Telegram account isn't your Google Workspace account: it has no enforced 2-Step Verification and could be lost or taken over. Approving admins therefore stays where the Google identity is checked: `./scripts/cozy-admin.sh approve <email>` on the server. The group message tells you who is waiting and shows the command.
@@ -33,16 +33,19 @@ A guest hears from CozyNights when their spot changes:
 
 | When | Message |
 | --- | --- |
-| A spot is booked | **Your CozyNights spot:** house, room and spot, with links to the room and to the [booking pass](./passes) |
+| A spot is booked | **Your CozyNights spot:** house, room and spot — and the bed and what is at it, when the crew wrote them down — with links to the room and to the [booking pass](./passes) |
 | The ticket was [passed on](./tickets#a-ticket-passed-on-to-someone-else) and holds a spot | **A CozyNights spot came with your ticket:** the spot and the new pass — not a confirmation of a booking the new holder never made. Only to the new address; the old one hears nothing. |
 | The spot changes (the guest moves, or the crew moves them) | **Your CozyNights spot changed**, with the old and the new spot and the pass link |
-| The spot is gone (released by the guest, freed by an admin, its room or house deleted, **Clear all bookings**, a template import) | **Your CozyNights spot was released**, with a link to the map |
+| The spot is gone (released by the guest, freed by an admin, its room or house deleted, **Clear all bookings**, a template import, the switch back to Staging) | **Your CozyNights spot was released**, with a link to the map. Not when a superuser switches back to Staging with *Don't notify the guests* ticked (the default once booking has closed): then the release is accepted in silence, and a booking later on is news again (*booked*, not *changed*) |
 | A [special-needs request](./special-needs) arrives · is approved · is declined | **We got your special-needs request** · **…was approved** · **About your special-needs request**. Approved and booked at once: one message, **Your special-needs spot:** with the pass. What the guest wrote is never in a message. |
+| Another guest asks to [swap spots](./swaps) · the guest asked says no · says yes | To the guest asked: **🔁 Swap request for your spot …** with both spots, how long it's open and a link to **Swap requests** (on Telegram with a button to answer). To the guest who asked, after a no: **No swap this time**. After a yes both get **🔁 Swap done!** with the new spot and the pass, instead of *spot changed*. The asker's name and words are never in a message, and nothing goes out about a request that was taken back, ran out or can't happen any more. |
 
-- **One message per change.** A move is one "changed" message, never "released" plus "booked". Changes within about ten seconds are combined, and two messages about the same ticket are at least two minutes apart.
-- **E-mail goes to the address of the ticket.** Guests never type an address: it comes with the [ticket import](#ticket-codes-with-e-mail-addresses). On their room page they see where confirmations go, shortened to `m•••@example.com`.
-- **Telegram is the guest's choice.** On their room page, <kbd>Get updates on Telegram</kbd> opens a chat with the CozyNights bot. After <kbd>START</kbd> the bot confirms the current spot and sends every change from then on. <kbd>Turn off</kbd> on the room page or `/stop` in the chat ends it. The link works once and for 30 minutes.
-- **The bot talks to guests, nobody else.** Any other message to it (a question, a sticker) gets a short help text: how to connect on the room page or the special-needs page. `/start` with a used or expired link answers *⌛ This link has expired or was already used. Open your room on the booking page and tap "Get updates on Telegram" again.*; `/stop` answers *🔕 Disconnected. You won't get updates here anymore.*, or *This chat is not connected to a ticket.*
+- **One message per change.** A move is one "changed" message, never "released" plus "booked". Changes within about ten seconds are combined, and two messages about the same ticket are at least two minutes apart. A guest who gives up their spot on the roulette (✨ *Leave No Trace & Respin*) keeps that message back for up to ten minutes, so the new spot arrives as one **changed** message; if they leave without booking a new one, the release is sent after all. A switch back to Staging with *Don't notify the guests* ticked silences the tickets whose spots it releases, a held message included. A ticket that already has no spot is not part of that release: its held message still reports the release when the hold runs out.
+- **The spot, and what kind of bed it is.** Every e-mail that shows the spot lists *House*, *Room* and *Spot*, and — when the crew wrote them down on the [camp layout](./camp-layout) — *Bed* (the kind of bed and, for a bunk bed, where the other level is: *Upper bunk · above B1*) and *Features* (what its room and its house offer, minus what doesn't reach the spot: *🔥 Heated · 🤫 Quiet zone*). Telegram messages carry the same as one 🛏 line right under the spot, the bot's `/pass` reply included; the line is the box *The bed* under *Telegram · in several messages* on <kbd>✉️ Messages</kbd>. A spot nobody described gets neither the rows nor the line.
+- **E-mail goes to the address of the ticket.** Guests never type an address: it comes with the [ticket import](#ticket-codes-with-e-mail-addresses). On their room page they see where confirmations go, shortened to `m•••@example.com`. Every e-mail that shows the spot offers what this server can do on top: **Telegram** (until the guest has connected a chat) and, when [wallet passes](./passes#wallet-passes-apple-wallet-google-wallet) are set up, a line about keeping the pass in Apple Wallet or Google Wallet.
+- **Telegram is the guest's choice.** <kbd>Get updates on Telegram</kbd> is offered wherever a booking is confirmed: on the room page, on the roulette's *Destiny Fulfilled* card, on the booking pass and on the page **Updates on Telegram** (`/telegram`), which the confirmation e-mail links to. It opens a chat with the CozyNights bot; after <kbd>START</kbd> the bot confirms the current spot and sends every change from then on. <kbd>Turn off</kbd> there or `/stop` in the chat ends it. The link works once and for 30 minutes, and it always needs the ticket code first — a pass link is not enough, because the messages also tell the crew's decision on a special-needs request.
+- **The pass rides along.** Every Telegram message that shows the spot carries the pass's QR code as a picture, with buttons to the pass page and, if they are set up, to [the wallets](./passes#wallet-passes-apple-wallet-google-wallet). At arrival the guest can show the code straight from the chat. If Telegram can't fetch the picture, the message goes out as plain text instead — it is never lost.
+- **The bot talks to guests, nobody else.** Guests see three commands in its menu: `/pass` sends the booking pass again, `/stop` ends the updates, `/help` explains the bot. Any other message (a question, a sticker) gets the help text. `/start` with a used or expired link answers *⌛ This link has expired or was already used…*; `/stop` answers *🔕 Disconnected…*, or *This chat is not connected to a ticket.*; `/pass` without a connected chat answers the same way, and without a spot it points to the map.
 - **No secrets in messages.** They show the spot and a link, never the ticket code. Messages are in English. On staging every subject and message starts with `[STAGING]`.
 - **The wording is yours.** Every sentence of these messages can be changed on <kbd>✉️ Messages</kbd>, see [Message texts](#message-texts).
 - **At most 20 e-mails a minute** (the server setting `COZY_MAILS_PER_MINUTE`). On opening day, when many guests book at once, the rest wait their turn, so confirmations can lag a few minutes.
@@ -76,16 +79,16 @@ If Telegram is down, a crew message is tried again after 1, 5, 15 and 60 minutes
 
 ## Message texts
 
-Every sentence guests get — by e-mail, on Telegram and from the bot — can be changed on <kbd>✉️ Messages</kbd> in the admin header. Each text has a box with the text in use; change it, and <kbd>Save</kbd> and <kbd>Undo</kbd> appear. After saving, every message from then on uses it, and the box notes *Changed by … · Default: …*. <kbd>Reset to default</kbd> takes it back; saving the default text counts as a reset too. The preview next to the boxes shows whole messages for a sample guest, rendered by the same code that sends them, with unsaved texts included: pick e-mail, Telegram or the bot's replies, and the situation; *Show as the e-mail looks* switches to the formatted e-mail. **Find a text** filters the boxes (e.g. *released*, *pass*), next to a counter of all texts and the changed ones.
+Every sentence guests get — by e-mail, on Telegram and from the bot — can be changed on <kbd>✉️ Messages</kbd> in the admin menu. Each text has a box with the text in use; change it, and <kbd>Save</kbd> and <kbd>Undo</kbd> appear. After saving, every message from then on uses it, and the box notes *Changed by … · Default: …*. <kbd>Reset to default</kbd> takes it back; saving the default text counts as a reset too. The preview next to the boxes shows whole messages for a sample guest, rendered by the same code that sends them, with unsaved texts included: pick e-mail, Telegram or the bot's replies, and the situation; *Show as the e-mail looks* switches to the formatted e-mail. **Find a text** filters the boxes (e.g. *released*, *pass*), next to a counter of all texts and the changed ones.
 
 ![Message texts: the boxes grouped by message, and the preview of a whole e-mail](../assets/screenshots/admin-messages.webp)
 
-- **Placeholders** in curly braces are filled in when the message is sent: `{name}`, `{spot}`, `{before}`, `{roomUrl}`, `{mapUrl}`, `{requestUrl}`, `{passCode}`, `{passUrl}`, `{appUrl}`, `{status}`. Each box lists the ones its text may use; a text with any other placeholder can't be saved. Anything else in curly braces is sent as written.
+- **Placeholders** in curly braces are filled in when the message is sent: `{name}`, `{spot}`, `{bed}`, `{before}`, `{roomUrl}`, `{mapUrl}`, `{requestUrl}`, `{passCode}`, `{passUrl}`, `{appUrl}`, `{telegramUrl}`, `{status}`, and for swap requests `{other}` (the other spot of the swap), `{until}` (when the request runs out) and `{swapUrl}`. Each box lists the ones its text may use; a text with any other placeholder can't be saved. Anything else in curly braces is sent as written. `{bed}` is the bed and what is at it in one line (*Lower bunk · below B2 · 🔥 Heated*), so the 🛏 line is only sent when there is something to say.
 - **The shape of a message stays.** Which lines a message has in which case (a spot booked by the crew, a request declined while the guest keeps their spot, …) is decided by the app; the texts are the sentences it puts together. That's why some sentences exist twice, for example *The crew could not offer you a special-needs spot* with and without *you keep this spot*.
 - **Line breaks stay**, in e-mails and Telegram messages alike. Texts are plain: no HTML, no Markdown, no links other than the placeholders. A text has at most 2,000 characters and can't be empty.
 - **English only, `[STAGING]` stays.** The label in front of subjects and messages is a server setting (`COZY_ENV_LABEL`), not a text.
 - **The crew group hears about every change** (✏️ *Message text changed*, ↩️ *reset*), with the admin's name and the text's key; the audit log keeps it. Changed texts live in the collection `message_texts`, so they are in every backup; *Reset* deletes the record.
-- **Not here:** the crew group's own alerts. They are log lines with names and counts, fixed in the code.
+- **Not here:** the crew group's own alerts (log lines with names and counts) and the labels of the buttons under a Telegram message. Both are fixed in the code.
 
 ## Ticket codes with e-mail addresses
 
@@ -97,6 +100,8 @@ Operators can load the same file on the server:
 ./scripts/cozy-admin.sh tickets import roster.csv --dry-run   # check the file, change nothing
 ./scripts/cozy-admin.sh tickets import roster.csv             # create and update the tickets
 ```
+
+A ticket whose address **changes** while it still carries something of its holder (a booking pass, a Telegram chat, a special-needs request, a burner name or a check-in) is refused, and nothing is imported: such a ticket changed hands, and the server import can't decide that per row. Hand it over on the [Tickets](./tickets#a-ticket-passed-on-to-someone-else) page, or repeat the import with `--hand-over` for a file where every changed address is a new holder. A ticket's first address is never a hand-over.
 
 The file needs a header row with a **code** column and an **email** column; a **name** column is optional. Other spellings work too (`Order code`, `Ticket`, `E-Mail`, `Attendee name`, …), and so do commas, semicolons or tabs between the columns:
 
@@ -127,7 +132,7 @@ Step by step:
 
 1. **Create the bot** with @BotFather in Telegram, one per environment (for example *CozyNights Staging*).
 2. **Create the crew group** as a private group, add the crew and the bot. The bot needs no admin rights.
-3. **Find the group's id.** Send `/start@<your bot>` in the group, then read the chat id from the Bot API's `getUpdates`. Group ids are negative; bigger groups start with `-100`. Do it before the server uses the bot: from then on the server fetches the updates itself. If the group later becomes a supergroup (for example when you turn on topics), its id changes; for a topic, also set `TELEGRAM_THREAD_ID`.
+3. **Find the group's id.** Send `/start@<your bot>` in the group, then read the chat id from the Bot API's `getUpdates`. Group ids are negative; bigger groups start with `-100`. Do it before the server uses the bot: from then on the server fetches the updates itself. If the group later becomes a supergroup, its id changes, see [below](#when-the-crew-group-becomes-a-supergroup); for a topic, also set `TELEGRAM_THREAD_ID`.
 4. **Close the bot for other groups:** @BotFather → *Bot Settings* → *Allow Groups?* → *Turn groups off*.
 5. **Fill in `.env`:** bot token and group id, the mail settings, and `LEGAL_MAIL_PROVIDER` so the privacy policy names the mail service (see [Legal pages](./legal)). Then deploy.
 6. **Check** it on the server, as below.
@@ -140,6 +145,31 @@ Then check on the server:
 ./scripts/cozy-admin.sh notify status                            # what is on, queued, the latest events
 ./scripts/cozy-admin.sh notify test --email you@mauersegler.art  # test message to the group + a test e-mail
 ```
+
+`notify status` also checks that the bot can still post in the group, without posting: the group shows *typing…* for a moment.
+
+### When the crew group becomes a supergroup
+
+A new Telegram group starts as a basic group. Some settings turn it into a **supergroup**, for example **chat history for new members** (*Visible*), **topics**, a public link, or more than 200 members. The group looks the same afterwards, but it has a **new id** (starting with `-100`), and the old one no longer works. The server keeps writing to the old id from `.env` until you change it: every crew message fails with *group chat was upgraded to a supergroup chat*, and after five attempts it is marked *failed*. The server never changes `TELEGRAM_CHAT_ID` by itself.
+
+The error names the new id. You find it in the audit log (`alert_error` of the failed `admin_events`), in the PocketBase log (`[cozy-notify] crew alert failed`), and in `notify test` and `notify status`:
+
+```text
+crew chat: FAILED — 400 Bad Request: group chat was upgraded to a supergroup chat — the group is now a supergroup, set TELEGRAM_CHAT_ID=-1001234567890
+  the crew group became a supergroup (e.g. "chat history for new members" or topics turned on) and has a new id:
+  set TELEGRAM_CHAT_ID=-1001234567890 in .env, recreate the PocketBase container, run notify test again
+  the bot must be a member of the new group: to add it again, @BotFather "Allow Groups" must be on (turn it off afterwards)
+```
+
+<div class="steps">
+
+1. **Check that the bot is in the group.** Open the members list of the group. If the bot is missing, turn groups back on for it in @BotFather (*Bot Settings* → *Allow Groups?* → *Turn groups on*), add it to the group, and turn groups off again. While groups are off, nobody can add the bot, not even to your own group.
+2. **Set the new id** in the server's `.env`: `TELEGRAM_CHAT_ID=-100…`, the id from the message. If you turned on topics, also set `TELEGRAM_THREAD_ID`, or messages go to the *General* topic.
+3. **Recreate PocketBase**, so it reads the new value (the command is in `deploy/README.md`, *Benachrichtigungen*; deploying again does it too), then run `notify test`. It must say *crew chat: sent*.
+
+</div>
+
+Crew messages still waiting are sent once the id is right. Those already marked *failed* are not sent again; they stay in the audit log, and `notify status` counts them.
 
 ## After the event
 
@@ -154,10 +184,12 @@ Deletes every guest address, every Telegram link and every [special-needs reques
 | What you see | Why | What to do |
 | --- | --- | --- |
 | `notify test`: *crew chat: FAILED — 401* | The bot token is wrong. | Check the token in `.env`. |
-| `notify test`: *403* or *chat not found* | The bot isn't in the group, or the group id is wrong. | Add the bot to the group; group ids are negative numbers. |
+| `notify test`: *403* or *chat not found* | The bot isn't in the group, or the group id is wrong. | Add the bot to the group (@BotFather *Allow Groups* must be on for that; turn it off afterwards); group ids are negative numbers. |
+| `notify test` or the audit log: *group chat was upgraded to a supergroup chat* | The crew group became a supergroup, for example after turning on chat history for new members, and has a new id. | Set `TELEGRAM_CHAT_ID` to the id in the message, make sure the bot is in the group, recreate PocketBase. See [When the crew group becomes a supergroup](#when-the-crew-group-becomes-a-supergroup). |
 | `notify status`: *WARNING: this bot has a webhook* | Something else registered a webhook for the bot, so the server can't read its messages. | Remove the webhook, or give this environment its own bot. |
 | Guests see no <kbd>Get updates on Telegram</kbd> | No bot is set up, or `TELEGRAM_GUEST_UPDATES=off`. The button also only shows once the guest holds a spot (room page) or has sent a special-needs request. | `notify status`. |
 | A guest sees *⌛ This link has expired or was already used* in Telegram | The link works once and for 30 minutes. | Press <kbd>Get updates on Telegram</kbd> on the room page again. |
 | The room page shows no address | E-mail isn't set up, or the ticket has no address. | `notify status`, `tickets list`. |
-| 📭 *Could not notify ticket* in the group | The mail server refused the address on every attempt for about two days. A bounce that only comes back later by e-mail never reaches CozyNights. | The group names the ticket only shortened (*Ticket H•••*, `b•••@example.com`). Which one it is shows in the PocketBase dashboard: collection `guest_notify`, the entry with `attempts` > 0 and a `last_error`, links to the ticket. Fix its address on the [Tickets](./tickets) page. |
+| 📭 *Could not notify ticket* in the group | The mail server refused the address on every attempt for about two days. A bounce that only comes back later by e-mail never reaches CozyNights. | The group names the ticket only shortened (*Ticket H•••*, `b•••@example.com`). Which one it is shows on the [guest list](./guests): its row says ⚠️ *delivery failed*, and <kbd>Ticket →</kbd> opens the card. (Also in the PocketBase dashboard: collection `guest_notify`, the entry with `attempts` > 0 and a `last_error`, links to the ticket.) Fix its address on the [Tickets](./tickets) page. |
+| A guest says nothing arrived | Maybe no address, maybe the message still waits. | The [guest list](./guests) says per ticket whether an e-mail went out (✉️ *mailed to …*), Telegram is linked, a message is ⏳ *queued* or ⚠️ *failed*; the *no e-mail* tile lists the tickets without an address. |
 | Nothing at all | Look at the queue, then at the server log. | `notify status` (queued / retrying), PocketBase log lines with `[cozy-notify]`. |

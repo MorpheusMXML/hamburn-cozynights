@@ -61,6 +61,112 @@ describe('schema from pb_migrations/', () => {
 	});
 });
 
+describe('the details of a place (pb_migrations/1759900000_accommodation.js)', () => {
+	it('gave houses, rooms and spots their kind, features and description', async () => {
+		const fieldsOf = async (name: string) =>
+			(await su.collections.getOne(name)).fields.map((f: { name: string }) => f.name);
+
+		expect(await fieldsOf('houses')).toEqual(
+			expect.arrayContaining(['kind', 'features', 'description'])
+		);
+		expect(await fieldsOf('rooms')).toEqual(
+			expect.arrayContaining(['kind', 'features', 'description'])
+		);
+		// A spot has no features of its own since pb_migrations/1760200000_no_power_socket.js,
+		// only what it switches off of its room's and house's (1760100000).
+		expect(await fieldsOf('beds')).toEqual(expect.arrayContaining(['bed_type', 'features_off']));
+		expect(await fieldsOf('beds')).not.toContain('features');
+		// pb_migrations/1759970000_bunk_beds.js: the other spot of a bunk bed.
+		expect(await fieldsOf('beds')).toEqual(expect.arrayContaining(['bunk_partner']));
+	});
+
+	it('stores what the catalogue allows on the level it belongs to', async () => {
+		const { house, room, beds } = await seedHouse(su, 1);
+		const saved = await su.collection('houses').update(house.id, {
+			kind: 'hut_group',
+			features: ['ground_floor', 'toilets_inside'],
+			description: 'Wash house 50 m away.'
+		});
+		expect(saved.kind).toBe('hut_group');
+		expect(saved.features).toEqual(['ground_floor', 'toilets_inside']);
+		expect(saved.description).toBe('Wash house 50 m away.');
+
+		const savedRoom = await su
+			.collection('rooms')
+			.update(room.id, { kind: 'hut', features: ['own_bathroom', 'quiet'] });
+		expect(savedRoom.features).toEqual(['own_bathroom', 'quiet']);
+
+		const savedBed = await su
+			.collection('beds')
+			.update(beds[0].id, { bed_type: 'bunk_lower', features_off: ['quiet'] });
+		expect(savedBed.bed_type).toBe('bunk_lower');
+		expect(savedBed.features_off).toEqual(['quiet']);
+		// a spot has no features of its own (1760200000_no_power_socket.js)
+		expect(savedBed).not.toHaveProperty('features');
+	});
+
+	it('refuses values the catalogue does not know, and features of another level', async () => {
+		const { house, room, beds } = await seedHouse(su, 1);
+		await expectRefused(su.collection('houses').update(house.id, { kind: 'castle' }));
+		// own_bathroom describes a room, not a building
+		await expectRefused(su.collection('houses').update(house.id, { features: ['own_bathroom'] }));
+		await expectRefused(su.collection('rooms').update(room.id, { features: ['toilets_inside'] }));
+		await expectRefused(su.collection('beds').update(beds[0].id, { bed_type: 'hammock' }));
+		// the power socket is gone from the catalogue, on every level
+		await expectRefused(su.collection('rooms').update(room.id, { features: ['power'] }));
+		await expectRefused(su.collection('beds').update(beds[0].id, { features_off: ['power'] }));
+	});
+
+	it('leaves a place that nobody described empty', async () => {
+		const { house, beds } = await seedHouse(su, 1);
+		const fresh = await su.collection('houses').getOne(house.id);
+		expect(fresh.kind).toBe('');
+		expect(fresh.features).toEqual([]);
+		expect(fresh.description).toBe('');
+		const bed = await su.collection('beds').getOne(beds[0].id);
+		expect(bed.bed_type).toBe('');
+		expect(bed.features_off).toEqual([]);
+	});
+});
+
+describe('bunk beds (pb_hooks/cozy_bunks.pb.js)', () => {
+	it('keeps the two spots of a bunk bed pointing at each other, whoever wrote one of them', async () => {
+		const { beds } = await seedHouse(su, 3);
+		const [lower, upper, third] = beds;
+		// One side written: PocketBase completes the other.
+		await su
+			.collection('beds')
+			.update(lower.id, { bunk_partner: upper.id, bed_type: 'bunk_lower' });
+		expect((await su.collection('beds').getOne(upper.id)).bunk_partner).toBe(lower.id);
+
+		// The lower spot picks another partner: the old one stands alone again.
+		await su.collection('beds').update(lower.id, { bunk_partner: third.id });
+		expect((await su.collection('beds').getOne(third.id)).bunk_partner).toBe(lower.id);
+		expect((await su.collection('beds').getOne(upper.id)).bunk_partner).toBe('');
+
+		// Unstacked: the partner lets go as well.
+		await su.collection('beds').update(lower.id, { bunk_partner: '' });
+		expect((await su.collection('beds').getOne(third.id)).bunk_partner).toBe('');
+	});
+
+	it('leaves the partner standing alone when a spot is deleted', async () => {
+		const { beds } = await seedHouse(su, 2);
+		await su.collection('beds').update(beds[0].id, { bunk_partner: beds[1].id });
+		await su.collection('beds').delete(beds[0].id);
+		const left = await su.collection('beds').getOne(beds[1].id);
+		expect(left.bunk_partner).toBe('');
+	});
+
+	it('refuses a partner that is the spot itself or in another room', async () => {
+		const { beds } = await seedHouse(su, 1);
+		const other = await seedHouse(su, 1);
+		await expectRefused(su.collection('beds').update(beds[0].id, { bunk_partner: beds[0].id }));
+		await expectRefused(
+			su.collection('beds').update(beds[0].id, { bunk_partner: other.beds[0].id })
+		);
+	});
+});
+
 describe('reading and writing', () => {
 	it('stores a house → room → bed tree; houses and rooms are public, beds are for admins', async () => {
 		const { house, room, beds } = await seedHouse(su, 2);

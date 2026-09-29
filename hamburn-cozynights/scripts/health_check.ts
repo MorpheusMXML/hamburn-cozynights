@@ -24,7 +24,7 @@ async function run() {
 		await pb.health.check();
 		console.log('✅ PocketBase is reachable at', PB_URL);
 	} catch {
-		console.error('❌ PocketBase is NOT reachable. Did you run `npm run db:up`?');
+		console.error('❌ PocketBase is NOT reachable. Did you run `docker compose up -d`?');
 		process.exit(1);
 	}
 
@@ -86,7 +86,9 @@ async function run() {
 	if (problems.length > 0) {
 		console.error('❌ Database schema is outdated:');
 		for (const problem of problems) console.error('   -', problem);
-		console.error('💡 Fix: restart PocketBase so pb_migrations/ are applied (`npm run db:up`).');
+		console.error(
+			'💡 Fix: restart PocketBase so pb_migrations/ are applied (`docker compose restart pocketbase`).'
+		);
 		process.exit(1);
 	}
 	console.log('✅ Database schema is up to date (admins, rules, order_hash).');

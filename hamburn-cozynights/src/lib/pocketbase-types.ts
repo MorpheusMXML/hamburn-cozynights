@@ -21,7 +21,10 @@ export enum Collections {
 	GuestNotify = 'guest_notify',
 	AdminEvents = 'admin_events',
 	MessageTexts = 'message_texts',
-	SpecialRequests = 'special_requests'
+	SpecialRequests = 'special_requests',
+	WalletPasses = 'wallet_passes',
+	WalletDevices = 'wallet_devices',
+	SwapRequests = 'swap_requests'
 }
 
 // Alias types for improved usability
@@ -137,6 +140,16 @@ export type BedsRecord = {
 	checked_in_at?: IsoDateString;
 	/** The admin who checked the guest in (e-mail). */
 	checked_in_by?: string;
+	/** What kind of bed this spot is (src/lib/accommodation.ts); empty = not specified. */
+	bed_type?: string;
+	/** The other spot of a bunk bed, set on both spots (src/lib/bunks.ts); empty = stands alone. */
+	bunk_partner?: RecordIdString;
+	/**
+	 * What this spot switches off of what it inherits from its room and house
+	 * (a superuser's call); see src/lib/accommodation.ts. A spot has no
+	 * features of its own (pb_migrations/1760200000_no_power_socket.js).
+	 */
+	features_off?: string[];
 };
 
 export type HousesRecord = {
@@ -147,6 +160,12 @@ export type HousesRecord = {
 	updated: IsoAutoDateString;
 	x?: number;
 	y?: number;
+	/** House, hut group, tent area or something else (src/lib/accommodation.ts). */
+	kind?: string;
+	/** What is true for the whole building or cluster; its rooms and spots inherit it. */
+	features?: string[];
+	/** Free text for what only this venue knows, shown to guests. */
+	description?: string;
 };
 
 export type OrdersRecord = {
@@ -157,6 +176,8 @@ export type OrdersRecord = {
 	email?: string;
 	handed_over_at?: IsoDateString;
 	id: string;
+	/** The guest paused swap requests to them (pb_migrations/1760500000_swap_requests.js). */
+	no_swap_requests?: boolean;
 	order_number: string;
 	pass_code?: string;
 	order_hash?: string;
@@ -172,6 +193,14 @@ export type RoomsRecord = {
 	occupied?: boolean;
 	room_number: number;
 	updated: IsoAutoDateString;
+	/** Room, hut, tent or something else (src/lib/accommodation.ts). */
+	kind?: string;
+	/** What is true for this room; its spots inherit it, on top of the house's features. */
+	features?: string[];
+	/** What this room switches off of the house's features (a superuser's call). */
+	features_off?: string[];
+	/** Free text for what only this venue knows, shown to guests. */
+	description?: string;
 };
 
 export type UsersRecord = {
@@ -198,6 +227,10 @@ export type AppSettingsRecord = {
 	notify_mail?: boolean;
 	telegram_bot?: string;
 	special_requests_open?: boolean;
+	guest_round?: number;
+	wallet_platforms?: string;
+	/** The crew's switch: no swap requests right now (unset = on during Live Booking). */
+	swaps_off?: boolean;
 	updated: IsoAutoDateString;
 };
 
@@ -212,6 +245,8 @@ export type GuestNotifyRecord = {
 	mail_sent?: IsoDateString;
 	mail_spot?: string;
 	mail_to?: string;
+	/** The hand-over the address was told about (pb_migrations/1759800000_handed_over.js). */
+	mail_handover?: string;
 	order: RecordIdString;
 	tg_chat?: string;
 	tg_label?: string;
@@ -263,6 +298,44 @@ export type SpecialRequestsRecord = {
 	updated: IsoAutoDateString;
 };
 
+export enum SwapRequestsStatusOptions {
+	pending = 'pending',
+	accepted = 'accepted',
+	declined = 'declined',
+	withdrawn = 'withdrawn',
+	expired = 'expired',
+	void = 'void'
+}
+/** A guest asks another guest to swap spots (pb_migrations/1760500000_swap_requests.js). */
+export type SwapRequestsRecord = {
+	answer_mail?: IsoDateString;
+	answer_tg?: IsoDateString;
+	answered_at?: IsoDateString;
+	ask_mail?: IsoDateString;
+	ask_tg?: IsoDateString;
+	created: IsoAutoDateString;
+	/** Why it ended without a yes or no (status void), see SwapEnd in src/lib/swaps.ts. */
+	ended?: string;
+	expires_at: IsoDateString;
+	/** The spot the asker offers (theirs when they asked). */
+	from_bed: RecordIdString;
+	from_order: RecordIdString;
+	id: string;
+	/** Ciphertext of the asker's note (src/lib/server/crypto.ts). */
+	note?: string;
+	notify_attempts?: number;
+	notify_due?: IsoDateString;
+	notify_error?: string;
+	/** Never shown to the other guest nor sent to them; runs out like an unanswered request. */
+	quiet?: boolean;
+	status: SwapRequestsStatusOptions;
+	/** The spot the asker would like (the other guest's when asked). */
+	to_bed: RecordIdString;
+	to_order: RecordIdString;
+	updated: IsoAutoDateString;
+	vibe?: string;
+};
+
 export type MessageTextsRecord = {
 	created: IsoAutoDateString;
 	id: string;
@@ -270,6 +343,34 @@ export type MessageTextsRecord = {
 	text: string;
 	updated: IsoAutoDateString;
 	updated_by?: string;
+};
+
+export enum WalletPassesPlatformOptions {
+	apple = 'apple',
+	google = 'google'
+}
+export type WalletPassesRecord = {
+	attempts?: number;
+	changed_at?: IsoDateString;
+	created: IsoAutoDateString;
+	hash?: string;
+	id: string;
+	last_error?: string;
+	next_try?: IsoDateString;
+	order?: RecordIdString;
+	platform: WalletPassesPlatformOptions;
+	pushed_hash?: string;
+	serial: string;
+	updated: IsoAutoDateString;
+};
+
+export type WalletDevicesRecord = {
+	created: IsoAutoDateString;
+	device: string;
+	id: string;
+	pass: RecordIdString;
+	push_token: string;
+	updated: IsoAutoDateString;
 };
 
 // Response types include system fields and match responses from the PocketBase API
@@ -299,6 +400,12 @@ export type SpecialRequestsResponse<Texpand = unknown> = Required<SpecialRequest
 	BaseSystemFields<Texpand>;
 export type MessageTextsResponse<Texpand = unknown> = Required<MessageTextsRecord> &
 	BaseSystemFields<Texpand>;
+export type WalletPassesResponse<Texpand = unknown> = Required<WalletPassesRecord> &
+	BaseSystemFields<Texpand>;
+export type WalletDevicesResponse<Texpand = unknown> = Required<WalletDevicesRecord> &
+	BaseSystemFields<Texpand>;
+export type SwapRequestsResponse<Texpand = unknown> = Required<SwapRequestsRecord> &
+	BaseSystemFields<Texpand>;
 
 // Types containing all Records and Responses, useful for creating typing helper functions
 
@@ -319,6 +426,9 @@ export type CollectionRecords = {
 	admin_events: AdminEventsRecord;
 	special_requests: SpecialRequestsRecord;
 	message_texts: MessageTextsRecord;
+	wallet_passes: WalletPassesRecord;
+	wallet_devices: WalletDevicesRecord;
+	swap_requests: SwapRequestsRecord;
 };
 
 export type CollectionResponses = {
@@ -338,6 +448,9 @@ export type CollectionResponses = {
 	admin_events: AdminEventsResponse;
 	special_requests: SpecialRequestsResponse;
 	message_texts: MessageTextsResponse;
+	wallet_passes: WalletPassesResponse;
+	wallet_devices: WalletDevicesResponse;
+	swap_requests: SwapRequestsResponse;
 };
 
 // Utility types for create/update operations

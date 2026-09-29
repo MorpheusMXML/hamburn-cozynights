@@ -29,6 +29,8 @@ import { actions as checkActions } from '../src/routes/admin/check/+page.server'
 import { load as houseLoad } from '../src/routes/house/[id]/+page.server';
 import { load as roomLoad } from '../src/routes/room/[id]/+page.server';
 import { load as mapLoad } from '../src/routes/map/+page.server';
+import { load as rouletteLoad } from '../src/routes/random-bed/+page.server';
+import { forgetAvailableFilters } from '../src/lib/server/wishes';
 
 const CODE = '7F3K9QXM2CWD';
 const notFound = Object.assign(new Error('not found'), { status: 404 });
@@ -50,6 +52,16 @@ const BED = {
 	updated: '2026-09-18 12:00:00.000Z',
 	expand: {
 		room: { name: 'Blue Room', room_number: 2, expand: { house: { name: 'Brahmsee-Villa' } } }
+	}
+};
+/** B1 as the lower bunk under B2, in a heated room with its own bathroom. */
+const STACKED = {
+	...BED,
+	bed_type: 'bunk_lower',
+	bunk_partner: 'bed2',
+	expand: {
+		room: { ...BED.expand.room, features: ['heated', 'own_bathroom'] },
+		bunk_partner: { id: 'bed2', label: 'B2' }
 	}
 };
 
@@ -74,12 +86,21 @@ function fakeAdminPb({ order = ORDER as any, bed = BED as any } = {}) {
 	} as any;
 }
 
+/** `pb` stand-in: the pass page reads the booking settings for its offers. */
+function settingsPb(fields: Record<string, unknown> = {}) {
+	return {
+		collection: () => ({
+			getOne: async () => ({ id: 'appsettings0123', telegram_bot: 'cozy_test_bot', ...fields })
+		})
+	} as any;
+}
+
 function passEvent(code: string, locals: Record<string, unknown>) {
 	const headers: Record<string, string> = {};
 	return {
 		event: {
 			params: { code },
-			locals,
+			locals: { pb: settingsPb(), ...locals },
 			url: new URL(`https://cozy.example/pass/${code}`),
 			setHeaders: (h: Record<string, string>) => Object.assign(headers, h),
 			getClientAddress: () => '203.0.113.7'
@@ -153,6 +174,77 @@ describe('findPass', () => {
 		expect(await findPass(fakeAdminPb({ order: null }), CODE)).toBeNull();
 	});
 
+	it('says what kind of bed the spot is and what is at it, when the crew wrote it down', async () => {
+		// Nobody said anything: nothing is guessed.
+		expect((await findPass(fakeAdminPb(), CODE))?.spot).toMatchObject({ bed: '', features: '' });
+
+		// A lower bunk: the other level is read along with the room and the house.
+		const pb = fakeAdminPb({ bed: STACKED });
+		expect((await findPass(pb, CODE))?.spot).toMatchObject({
+			bed: 'Lower bunk · below B2',
+			features: '🛁 Own bathroom · 🔥 Heated'
+		});
+		expect(pb.collection('beds').getFirstListItem).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({ expand: 'room,room.house,bunk_partner' })
+		);
+
+		// An upper bunk in a wheelchair-accessible room: the room is, the bed is not.
+		const upper = {
+			...BED,
+			id: 'bed2',
+			label: 'B2',
+			bed_type: 'bunk_upper',
+			bunk_partner: 'bed1',
+			expand: {
+				room: { ...BED.expand.room, features: ['wheelchair', 'heated'] },
+				bunk_partner: { id: 'bed1', label: 'B1' }
+			}
+		};
+		expect((await findPass(fakeAdminPb({ bed: upper }), CODE))?.spot).toMatchObject({
+			bed: 'Upper bunk · above B1',
+			features: '🔥 Heated'
+		});
+
+		// A single bed says only what it is; the house's features count too, and
+		// the room's word wins over the house's where they say the opposite.
+		const single = {
+			...BED,
+			bed_type: 'single',
+			expand: {
+				room: {
+					...BED.expand.room,
+					features: ['heated'],
+					expand: { house: { name: 'Brahmsee-Villa', features: ['toilets_inside', 'unheated'] } }
+				}
+			}
+		};
+		expect((await findPass(fakeAdminPb({ bed: single }), CODE))?.spot).toMatchObject({
+			bed: 'Single bed',
+			features: '🚻 Toilets + showers inside · 🔥 Heated'
+		});
+
+		// What a room or spot switched off (features_off, a superuser's call) is
+		// gone from the pass: a room in a heated, quiet house that stays cold,
+		// and a spot in it that gives up the quiet as well.
+		const coldRoom = {
+			...STACKED,
+			expand: {
+				...STACKED.expand,
+				room: {
+					...BED.expand.room,
+					features_off: ['heated'],
+					expand: { house: { name: 'Brahmsee-Villa', features: ['heated', 'quiet'] } }
+				}
+			}
+		};
+		expect((await findPass(fakeAdminPb({ bed: coldRoom }), CODE))?.spot?.features).toBe(
+			'🤫 Quiet zone'
+		);
+		const loudSpot = { ...coldRoom, features_off: ['quiet'] };
+		expect((await findPass(fakeAdminPb({ bed: loudSpot }), CODE))?.spot?.features).toBe('');
+	});
+
 	it('dates the booking by booked_at, not by the last change of the spot', async () => {
 		const booked = { ...BED, booked_at: '2026-09-15 07:32:00.000Z' };
 		expect((await findPass(fakeAdminPb({ bed: booked }), CODE))?.spot?.bookedAt).toBe(
@@ -205,7 +297,7 @@ function campWithGuest({ phase = 'closed', passCode = CODE } = {}) {
 		order_hash: createLookupHash('HB-2002'),
 		customer_name: 'Grace Hopper'
 	});
-	return { pb, huts, hut, order, bed };
+	return { pb, villa, blue, huts, hut, order, bed };
 }
 
 /** What the small ticket shows for HB-1001. */
@@ -217,8 +309,10 @@ const TICKET = {
 	burnerName: 'Disco Druid'
 };
 
+/** Like hooks.server.ts: the ticket of the cookie, read once per request. */
 function guestLocals(pb: FakePb, orderNumber = 'HB-1001') {
-	return { pb, adminPb: pb, orderNumber, admin: null };
+	const order = pb.tables.orders?.find((row) => row.order_number === orderNumber) ?? null;
+	return { pb, adminPb: pb, orderNumber, order, admin: null };
 }
 const cookies = { delete: () => {} };
 
@@ -226,6 +320,30 @@ describe('passSummary', () => {
 	it('gives the small ticket the pass code and where the ticket sleeps', async () => {
 		const c = campWithGuest();
 		expect(await passSummary(c.pb as any, c.order as any, c.bed as any)).toEqual(TICKET);
+	});
+
+	it('says which level of a bunk bed the spot is and where the other one is', async () => {
+		const c = campWithGuest();
+		const top = c.pb.seed('beds', {
+			label: 'B2',
+			room: c.bed.room,
+			enabled: true,
+			bed_type: 'bunk_upper',
+			bunk_partner: c.bed.id
+		});
+		Object.assign(c.bed, { bed_type: 'bunk_lower', bunk_partner: top.id });
+		expect((await passSummary(c.pb as any, c.order as any, c.bed as any)).bed).toBe(
+			'Lower bunk · below B2'
+		);
+		expect((await passSummary(c.pb as any, c.order as any, top as any)).bed).toBe(
+			'Upper bunk · above B1'
+		);
+		// The partner is gone (a half-written pairing): the level alone.
+		Object.assign(c.bed, { bunk_partner: 'nosuchspot' });
+		expect((await passSummary(c.pb as any, c.order as any, c.bed as any)).bed).toBe('Lower bunk');
+		// A single bed says only what it is.
+		Object.assign(c.bed, { bed_type: 'single', bunk_partner: '' });
+		expect((await passSummary(c.pb as any, c.order as any, c.bed as any)).bed).toBe('Single bed');
 	});
 
 	it('makes the pass code on first use', async () => {
@@ -243,12 +361,14 @@ describe("the guest's own pass on other pages", () => {
 	it('house and room pages give guests with a spot their ticket', async () => {
 		const c = campWithGuest();
 		const house: any = await houseLoad({
+			url: new URL('http://test.local/'),
 			params: { id: c.huts.id },
 			locals: guestLocals(c.pb),
 			cookies
 		} as any);
 		expect(house.pass).toEqual(TICKET);
 		const room: any = await roomLoad({
+			url: new URL('http://test.local/'),
 			params: { id: c.hut.id },
 			locals: guestLocals(c.pb),
 			cookies
@@ -256,6 +376,7 @@ describe("the guest's own pass on other pages", () => {
 		expect(room.pass).toEqual(TICKET);
 
 		const noSpot: any = await houseLoad({
+			url: new URL('http://test.local/'),
 			params: { id: c.huts.id },
 			locals: guestLocals(c.pb, 'HB-2002'),
 			cookies
@@ -272,6 +393,7 @@ describe("the guest's own pass on other pages", () => {
 		});
 		const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const house: any = await houseLoad({
+			url: new URL('http://test.local/'),
 			params: { id: c.huts.id },
 			locals: guestLocals(c.pb),
 			cookies
@@ -283,27 +405,185 @@ describe("the guest's own pass on other pages", () => {
 
 	it('the map shows it on the Closed panel, and knows tickets without a spot', async () => {
 		const closed = campWithGuest();
-		expect(await mapLoad({ locals: guestLocals(closed.pb) } as any)).toMatchObject({
+		expect(
+			await mapLoad({ url: new URL('http://test.local/'), locals: guestLocals(closed.pb) } as any)
+		).toMatchObject({
 			phase: 'closed',
 			pass: TICKET,
 			noSpot: false
 		});
-		expect(await mapLoad({ locals: guestLocals(closed.pb, 'HB-2002') } as any)).toMatchObject({
+		expect(
+			await mapLoad({
+				url: new URL('http://test.local/'),
+				locals: guestLocals(closed.pb, 'HB-2002')
+			} as any)
+		).toMatchObject({
 			pass: null,
 			noSpot: true
 		});
 		// the map is public: nobody signed in, nothing to show
-		expect(await mapLoad({ locals: guestLocals(closed.pb, '') } as any)).toMatchObject({
+		expect(
+			await mapLoad({
+				url: new URL('http://test.local/'),
+				locals: guestLocals(closed.pb, '')
+			} as any)
+		).toMatchObject({
 			pass: null,
 			noSpot: false
 		});
 
 		const live = campWithGuest({ phase: 'live' });
-		expect(await mapLoad({ locals: guestLocals(live.pb) } as any)).toMatchObject({
+		expect(
+			await mapLoad({ url: new URL('http://test.local/'), locals: guestLocals(live.pb) } as any)
+		).toMatchObject({
 			phase: 'live',
 			pass: null,
 			noSpot: false
 		});
+	});
+});
+
+describe("the roulette's own pass and name", () => {
+	it('shows a guest with a spot that spot as the booking pass, in every phase', async () => {
+		for (const phase of ['live', 'closed']) {
+			const c = campWithGuest({ phase });
+			const page: any = await rouletteLoad({
+				url: new URL('http://localhost/random-bed'),
+				locals: guestLocals(c.pb),
+				cookies
+			} as any);
+			expect(page.pass).toEqual(TICKET);
+			expect(page.userBed).toEqual({
+				id: c.bed.id,
+				label: 'B1',
+				roomId: c.bed.room,
+				roomName: 'Blue Room #2',
+				houseName: 'Brahmsee-Villa'
+			});
+			// a guest with a spot spins nothing: no list of free spots is sent
+			expect(page.freeBeds).toEqual([]);
+		}
+	});
+
+	it("gives the name plate the ticket's burner name, and the reels flat free spots", async () => {
+		const c = campWithGuest({ phase: 'live' });
+		const mine: any = await rouletteLoad({
+			url: new URL('http://localhost/random-bed'),
+			locals: guestLocals(c.pb),
+			cookies
+		} as any);
+		expect(mine.burnerName).toBe('Disco Druid');
+
+		const fresh: any = await rouletteLoad({
+			url: new URL('http://localhost/random-bed'),
+			locals: guestLocals(c.pb, 'HB-2002'),
+			cookies
+		} as any);
+		expect(fresh.burnerName).toBe('');
+		expect(fresh.pass).toBeNull();
+		expect(fresh.userBed).toBeNull();
+		expect(fresh.freeBeds).toEqual([
+			{
+				id: expect.any(String),
+				label: 'H1',
+				roomId: c.hut.id,
+				roomName: 'Hut #1',
+				houseName: 'Waldhütten'
+			}
+		]);
+	});
+
+	it('a pass that cannot be made leaves the roulette working', async () => {
+		const c = campWithGuest({ phase: 'live', passCode: '' });
+		Object.assign(c.pb, {
+			send: vi.fn(async () => {
+				throw new Error('PocketBase is down');
+			})
+		});
+		const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const page: any = await rouletteLoad({
+			url: new URL('http://localhost/random-bed'),
+			locals: guestLocals(c.pb),
+			cookies
+		} as any);
+		quiet.mockRestore();
+		expect(page.userBed.id).toBe(c.bed.id);
+		expect(page.pass).toBeNull();
+	});
+});
+
+// A room or spot can switch an inherited feature off (features_off, a
+// superuser's call; src/lib/accommodation.ts). Every page that sums features
+// up must leave it out — otherwise a wish chip, the map, the house page or the
+// roulette would promise a heating the spot gave up.
+describe('what a room or spot switched off (features_off)', () => {
+	/** Both houses heated; the Blue Room stays cold, and so does the hut's only spot. */
+	function coldCamp() {
+		const c = campWithGuest({ phase: 'live' });
+		Object.assign(c.villa, { features: ['heated', 'quiet'] });
+		Object.assign(c.blue, { features_off: ['heated'] });
+		Object.assign(c.huts, { features: ['heated'] });
+		const h1 = c.pb.rows('beds').find((b) => b.label === 'H1')!;
+		Object.assign(h1, { features_off: ['heated'] });
+		// the wish chips are cached for a minute across requests
+		forgetAvailableFilters();
+		return { ...c, h1 };
+	}
+	const at = (path: string) => new URL(`http://test.local${path}`);
+
+	it('the room and house pages sum the house minus what the room switched off', async () => {
+		const c = coldCamp();
+		const room: any = await roomLoad({
+			url: at('/'),
+			params: { id: c.blue.id },
+			locals: guestLocals(c.pb),
+			cookies
+		} as any);
+		expect(room.room.features).toEqual(['quiet']);
+
+		// The hut inherits the heating; its only spot gave it up, so no free spot
+		// fits the wish "heated".
+		const house: any = await houseLoad({
+			url: at('/?w=heated'),
+			params: { id: c.huts.id },
+			locals: guestLocals(c.pb, 'HB-2002'),
+			cookies
+		} as any);
+		expect(house.rooms[0].features).toEqual(['heated']);
+		expect(house.rooms[0].fittingFree).toBe(0);
+	});
+
+	it('the wish chips, the map and the roulette skip a spot that gave a feature up', async () => {
+		const c = coldCamp();
+		const map: any = await mapLoad({
+			url: at('/map?w=heated'),
+			locals: guestLocals(c.pb, 'HB-2002')
+		} as any);
+		// no spot is heated anymore, so the chip is not offered
+		expect(map.availableFilters).toEqual(['quiet']);
+		expect(map.houses.map((h: any) => [h.name, h.fittingFree])).toEqual([
+			['Brahmsee-Villa', 0],
+			['Waldhütten', 0]
+		]);
+		expect(map.wishFit).toMatch(/^No house has a free spot that fits/);
+
+		const roulette = () =>
+			rouletteLoad({
+				url: at('/random-bed?w=heated'),
+				locals: guestLocals(c.pb, 'HB-2002'),
+				cookies
+			} as any) as Promise<any>;
+		const cold = await roulette();
+		expect(cold.freeBeds).toEqual([]);
+		expect(cold.wishFit).toBe('0 spots in the drum of 1 free');
+		expect(cold.availableFilters).toEqual(['quiet']);
+
+		// A superuser resets the spot: it is heated again, like its hut.
+		c.h1.features_off = [];
+		forgetAvailableFilters();
+		const reset = await roulette();
+		expect(reset.freeBeds.map((b: any) => b.label)).toEqual(['H1']);
+		expect(reset.availableFilters).toEqual(['heated', 'quiet']);
 	});
 });
 
@@ -321,13 +601,34 @@ describe('pass page', () => {
 		const { event, headers } = passEvent('7F3K-9QXM-2CWD', { adminPb: fakeAdminPb(), admin: null });
 		const data: any = await passLoad(event);
 		expect(data.code).toBe('7F3K-9QXM-2CWD');
-		expect(data.spot).toEqual({ house: 'Brahmsee-Villa', room: 'Blue Room #2', spot: 'B1' });
+		expect(data.spot).toEqual({
+			house: 'Brahmsee-Villa',
+			room: 'Blue Room #2',
+			spot: 'B1',
+			bed: '',
+			features: ''
+		});
 		expect(data.burnerName).toBe('Disco Druid');
 		expect(data.qrSvg).toMatch(/^<svg /);
 		expect(data.check).toBeNull();
 		expect(JSON.stringify(data)).not.toMatch(/Ada|ada@|HB-1001/);
 		expect(headers['referrer-policy']).toBe('no-referrer');
 		expect(headers['x-robots-tag']).toContain('noindex');
+	});
+
+	it('shows the kind of bed and what is at the spot, when the crew wrote them down', async () => {
+		const { event } = passEvent('7F3K-9QXM-2CWD', {
+			adminPb: fakeAdminPb({ bed: STACKED }),
+			admin: null
+		});
+		const data: any = await passLoad(event);
+		expect(data.spot).toEqual({
+			house: 'Brahmsee-Villa',
+			room: 'Blue Room #2',
+			spot: 'B1',
+			bed: 'Lower bunk · below B2',
+			features: '🛁 Own bathroom · 🔥 Heated'
+		});
 	});
 
 	it('shows signed-in admins the check result on top', async () => {

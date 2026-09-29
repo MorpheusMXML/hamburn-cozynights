@@ -10,14 +10,16 @@ variables in the server's .env (`$lib/server/legal`).
 
 	export let data: PageData;
 
-	const UPDATED = '18 September 2026';
+	const UPDATED = '24 September 2026';
 	const GOOGLE_PRIVACY = 'https://policies.google.com/privacy?hl=en';
 	const GITHUB_PRIVACY =
 		'https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement';
 	const TELEGRAM_PRIVACY = 'https://telegram.org/privacy';
+	const APPLE_PRIVACY = 'https://www.apple.com/legal/privacy/';
 
 	$: legal = data.legal;
 	$: notify = data.notify;
+	$: wallet = data.wallet;
 </script>
 
 <svelte:head>
@@ -120,13 +122,15 @@ variables in the server's .env (`$lib/server/legal`).
 	</p>
 	<p>
 		After you sign in, your browser keeps the ticket code in a cookie (<code>bookingCode</code>) for
-		30 days so you stay signed in. Scripts on the page can't read it. The cookie is strictly
-		necessary (§ 25(2) no. 2 TDDDG).
+		30 days so you stay signed in, and next to it the booking round you signed in for (<code
+			>bookingRound</code
+		>), so a new round asks for your code again. Scripts on the page can't read them. Both cookies
+		are strictly necessary (§ 25(2) no. 2 TDDDG).
 	</p>
 	<p>
-		We delete bookings, burner names, special-needs requests and the ticket list with its email
-		addresses{#if notify.telegram}
-			and linked Telegram chats{/if} as soon as we no longer need them, {legal.deletionPeriod}.
+		We delete bookings, burner names, special-needs requests, swap requests and the ticket list with
+		its email addresses{#if notify.telegram}, linked Telegram chats{/if}{#if wallet.length > 0}
+			and the devices that registered for a wallet pass{/if} as soon as we no longer need them, {legal.deletionPeriod}.
 	</p>
 
 	<h2 id="special-needs">Special-needs requests</h2>
@@ -166,6 +170,29 @@ variables in the server's .env (`$lib/server/legal`).
 		deleted after the event, {legal.deletionPeriod}.
 	</p>
 
+	<h2 id="swaps">Swapping beds with another guest</h2>
+	<p>
+		While booking is open you can ask another guest to swap beds with you. For a swap request we
+		process which two beds would be swapped, when you asked and until when the request runs, the
+		<strong>reason</strong> you may pick from a short list, the <strong>few words</strong> you may
+		add, and how the other guest answered. The guest you ask sees your burner name, your bed, your
+		reason and your words, in the app only.{#if notify.mail || notify.telegram}
+			They get {#if notify.mail}an email{/if}{#if notify.mail && notify.telegram}
+				and
+			{/if}{#if notify.telegram}a Telegram message, if they asked for Telegram updates,{/if}
+			saying that someone would like to swap, with both beds, but without your name and without your words.{/if}
+		Nothing changes unless they say yes; then both beds change at once, and you both get the usual message
+		about your new bed.
+	</p>
+	<p>
+		We process this so guests can rearrange the beds among themselves (Art. 6(1)(b) GDPR); the
+		reason and the words are voluntary (Art. 6(1)(a) GDPR). Please keep your words short and
+		friendly, there is no need to explain why. Your words are stored encrypted, the crew doesn't
+		read them, and they never leave the app. On the page <a href="/swaps">Swap requests</a> you can
+		take a waiting request back and pause requests to you. Swap requests are deleted when your
+		ticket goes to someone else, and after the event, {legal.deletionPeriod}.
+	</p>
+
 	{#if notify.mail || notify.telegram}
 		<h2>Messages about your bed</h2>
 		{#if notify.mail}
@@ -192,14 +219,54 @@ variables in the server's .env (`$lib/server/legal`).
 		{#if notify.telegram}
 			<h3>Telegram, if you ask for it</h3>
 			<p>
-				On your room page you can also get these messages on Telegram. Only when you open the link
-				to our bot and press Start do we store the ID of that Telegram chat with your booking.
+				On your room page, on your special-needs request or on the page <a href="/telegram"
+					>Updates on Telegram</a
+				>
+				you can also get these messages in your own chat with our bot, together with your booking pass
+				and its QR code as a picture (<code>/pass</code> sends it again). Only when you open the
+				link to our bot and press Start do we store the ID of that Telegram chat with your booking.
 				Telegram is operated from outside the European Union, where the level of data protection may
-				be lower than in the EU; see <a href={TELEGRAM_PRIVACY} rel="noopener"
-					>Telegram's privacy policy</a
-				>. We therefore only use it with your consent (Art. 6(1)(a) and Art. 49(1)(a) GDPR). You can
-				withdraw it at any time: <kbd>Turn off</kbd> on your room page or <code>/stop</code> in the chat
-				ends it, and we delete the chat ID.
+				be lower than in the EU; see
+				<a href={TELEGRAM_PRIVACY} rel="noopener">Telegram's privacy policy</a>. We therefore only
+				use it with your consent (Art. 6(1)(a) and Art. 49(1)(a) GDPR). You can withdraw it at any
+				time: <kbd>Turn off</kbd> on your room page or <code>/stop</code> in the chat ends it, and we
+				delete the chat ID.
+			</p>
+		{/if}
+	{/if}
+
+	{#if wallet.length > 0}
+		<h2 id="wallet">Your booking pass in a wallet, if you add it</h2>
+		<p>
+			On your booking pass you can add it to
+			{#if wallet.includes('apple')}Apple Wallet{/if}{#if wallet.length > 1}
+				or
+			{/if}{#if wallet.includes('google')}Google Wallet{/if}. The wallet pass shows what the pass
+			page shows: your bed with its room and house, your burner name, the pass code and its QR code
+			— never your ticket code, your name or your email address. We do this at your request, as part
+			of your booking (Art. 6(1)(b) GDPR), and the pass keeps itself up to date while your bed can
+			still change.
+		</p>
+		{#if wallet.includes('apple')}
+			<p>
+				<strong>Apple Wallet:</strong> we build the pass on our own server; Apple gets nothing from
+				us for it. Your device then registers with us for updates, and we store an identifier of the
+				device and a notification token, which Apple issues for this pass only. We use them for
+				nothing but telling your device that the pass changed. Delete the pass in Wallet and your
+				device unregisters itself; otherwise we delete the registrations with the other contact data
+				after the event, {legal.deletionPeriod}. If you use iCloud, Apple keeps your passes under
+				<a href={APPLE_PRIVACY} rel="noopener">Apple's privacy policy</a>.
+			</p>
+		{/if}
+		{#if wallet.includes('google')}
+			<p>
+				<strong>Google Wallet:</strong> when you tap the button, we send the pass to Google (Google
+				Ireland Limited, Gordon House, Barrow Street, Dublin 4, Ireland), which stores it for your
+				Google account and shows it in the Wallet app under its
+				<a href={GOOGLE_PRIVACY} rel="noopener">privacy policy</a>; data may be transferred to
+				Google LLC in the USA, which is certified under the EU-U.S. Data Privacy Framework. We keep
+				that pass up to date, and mark it as no longer valid when the ticket changes hands. Remove
+				it in the Wallet app whenever you like.
 			</p>
 		{/if}
 	{/if}

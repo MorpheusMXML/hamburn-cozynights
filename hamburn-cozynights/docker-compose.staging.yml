@@ -56,8 +56,9 @@ services:
       # Links in messages, and the marker in every subject / crew message.
       COZY_APP_URL: https://test-cozynights.hamburn.de
       COZY_ENV_LABEL: STAGING
-      # Local auto-backups into the volume's backups/ folder (defaults: hourly,
-      # keep 72), see pb_hooks/cozy_backups.pb.js. Off-site: deploy/backup/.
+      # Local auto-backups into the volume's backups/ folder (defaults: once a
+      # day at 03:05 UTC, keep 14), see pb_hooks/cozy_backups.pb.js. Off-site:
+      # deploy/backup/.
       PB_BACKUP_CRON: ${PB_BACKUP_CRON:-}
       PB_BACKUP_KEEP: ${PB_BACKUP_KEEP:-}
       # Sending pace (defaults: the loop runs 50 s per minute, 20 mails/minute).
@@ -92,6 +93,10 @@ services:
       # documentation site from ../docs (served at /docs and /admin/docs).
       context: ..
       dockerfile: hamburn-cozynights/Dockerfile
+      args:
+        # The deployed commit, for the version badge and /api/health
+        # (deploy/deploy-staging.sh exports it before the build).
+        GIT_SHA: ${GIT_SHA:-}
     container_name: cozynights-staging-app
     restart: unless-stopped
     depends_on:
@@ -121,6 +126,25 @@ services:
       PB_ADMIN_EMAIL: ${PB_ADMIN_EMAIL:-}
       PB_ADMIN_PASSWORD: ${PB_ADMIN_PASSWORD:-}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      # Wallet passes for the booking pass (src/lib/server/wallet, all optional:
+      # without them no wallet button shows). The certificates and keys stay in
+      # this container; PocketBase only learns which wallets exist.
+      WALLET_APPLE_PASS_TYPE_ID: ${WALLET_APPLE_PASS_TYPE_ID:-}
+      WALLET_APPLE_TEAM_ID: ${WALLET_APPLE_TEAM_ID:-}
+      WALLET_APPLE_CERT: ${WALLET_APPLE_CERT:-}
+      WALLET_APPLE_KEY: ${WALLET_APPLE_KEY:-}
+      WALLET_APPLE_WWDR: ${WALLET_APPLE_WWDR:-}
+      WALLET_GOOGLE_ISSUER_ID: ${WALLET_GOOGLE_ISSUER_ID:-}
+      WALLET_GOOGLE_SERVICE_ACCOUNT: ${WALLET_GOOGLE_SERVICE_ACCOUNT:-}
+      # What the pass says about the event (times need a UTC offset).
+      WALLET_EVENT_NAME: ${WALLET_EVENT_NAME:-}
+      WALLET_EVENT_START: ${WALLET_EVENT_START:-}
+      WALLET_EVENT_END: ${WALLET_EVENT_END:-}
+      WALLET_VENUE_NAME: ${WALLET_VENUE_NAME:-}
+      WALLET_VENUE_ADDRESS: ${WALLET_VENUE_ADDRESS:-}
+      WALLET_VENUE_LATITUDE: ${WALLET_VENUE_LATITUDE:-}
+      WALLET_VENUE_LONGITUDE: ${WALLET_VENUE_LONGITUDE:-}
+      WALLET_ORGANIZATION: ${WALLET_ORGANIZATION:-}
       # Operator details for /legal-notice and /privacy (src/lib/server/legal.ts).
       # Keep this list in step with deploy/staging.env.template: a key that is
       # missing here is silently blank on those pages.

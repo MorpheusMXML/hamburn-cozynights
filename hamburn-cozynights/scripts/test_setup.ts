@@ -11,11 +11,19 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 
 const PB_URL = process.env.PB_URL || process.env.PUBLIC_PB_URL || 'http://127.0.0.1:8090';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY ?? '';
 
+if (!ENCRYPTION_KEY) {
+	console.error(
+		'❌ ENCRYPTION_KEY is not set in .env; the test order hash would never match the app.'
+	);
+	process.exit(1);
+}
+
+// Same construction as createLookupHash in src/lib/server/crypto.ts: the hex
+// string itself is the HMAC key.
 function createLookupHash(text: string): string {
-	const salt = ENCRYPTION_KEY || 'default_salt';
-	return crypto.createHmac('sha256', salt).update(text).digest('hex');
+	return crypto.createHmac('sha256', ENCRYPTION_KEY).update(text).digest('hex');
 }
 
 async function run() {

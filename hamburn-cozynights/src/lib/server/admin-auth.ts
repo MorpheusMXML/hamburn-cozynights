@@ -55,6 +55,7 @@ export type AdminLoginError =
 	| 'expired'
 	| 'unavailable'
 	| 'reauth'
+	| 'not_recorded'
 	| 'failed';
 
 const APPROVED_ROLES: readonly string[] = ['superuser', 'admin'];

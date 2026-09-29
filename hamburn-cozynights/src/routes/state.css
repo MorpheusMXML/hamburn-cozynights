@@ -1,0 +1,420 @@
+/*
+ * One vocabulary for "what state is this in".
+ *
+ * Every state the crew reads off a screen — a house filling up, a spot held
+ * back, booking live or closed, a field that was refused — uses the same
+ * colour and the same quiet breathing ring here, so a glance is enough. The
+ * colours are the ones the app already used; only "locked" is new.
+ *
+ * The ring is drawn by a ::after overlay and animates `opacity` alone: that
+ * stays on the compositor, so a list of forty house cards costs no repaints
+ * per frame (unlike animating box-shadow or border-color).
+ *
+ * What each colour means, everywhere (decided 24 Sep): green = free or open,
+ * red = occupied or booked, turquoise = mine or checked in, violet = held by
+ * the crew or locked, grey = inactive or not open yet, orange = filling up or
+ * a warning, pink = special needs (♿) and nothing else. The booking phases
+ * have colours of their own: turquoise for staging, yellow for live, light
+ * grey for closed. Highlight chips (a bunk's upper/lower level, a feature)
+ * never borrow a status colour.
+ */
+:root {
+	--state-open: #4ade80;
+	--state-open-soft: rgba(74, 222, 128, 0.12);
+	--state-filling: #fb923c;
+	--state-filling-soft: rgba(251, 146, 60, 0.12);
+	--state-full: #f87171;
+	--state-full-soft: rgba(248, 113, 113, 0.12);
+	--state-idle: #a3a3a3;
+	--state-idle-soft: rgba(163, 163, 163, 0.1);
+	--state-checked-in: #2dd4bf;
+	--state-checked-in-soft: rgba(45, 212, 191, 0.12);
+	--state-special: #f472b6;
+	--state-special-soft: rgba(244, 114, 182, 0.12);
+	--state-locked: #a78bfa;
+	--state-locked-soft: rgba(167, 139, 250, 0.12);
+	--state-danger: #f87171;
+	--state-danger-soft: rgba(248, 113, 113, 0.12);
+
+	/* Booking phases, as the status bar and the window panel show them. */
+	--state-staging: #2dd4bf;
+	--state-staging-soft: rgba(45, 212, 191, 0.08);
+	--state-live: #facc15;
+	--state-live-soft: rgba(250, 204, 21, 0.12);
+	--state-closed: #d4d4d4;
+	--state-closed-soft: rgba(255, 255, 255, 0.05);
+
+	/* Swap requests (28 Sep): sky blue is the trade itself — the 🔁 link,
+	   the swap sheet, the /swaps page. Not a state of a spot. */
+	--swap: #38bdf8;
+	--swap-soft: rgba(56, 189, 248, 0.12);
+
+	/* One beat for the whole app. Live booking breathes a touch faster. */
+	--state-beat: 2.8s;
+}
+
+[data-state='open'] {
+	--state: var(--state-open);
+	--state-soft: var(--state-open-soft);
+}
+[data-state='filling'] {
+	--state: var(--state-filling);
+	--state-soft: var(--state-filling-soft);
+}
+[data-state='full'] {
+	--state: var(--state-full);
+	--state-soft: var(--state-full-soft);
+}
+[data-state='unconfigured'],
+[data-state='idle'] {
+	--state: var(--state-idle);
+	--state-soft: var(--state-idle-soft);
+}
+[data-state='checked-in'] {
+	--state: var(--state-checked-in);
+	--state-soft: var(--state-checked-in-soft);
+}
+[data-state='special'] {
+	--state: var(--state-special);
+	--state-soft: var(--state-special-soft);
+}
+[data-state='locked'] {
+	--state: var(--state-locked);
+	--state-soft: var(--state-locked-soft);
+}
+[data-state='danger'] {
+	--state: var(--state-danger);
+	--state-soft: var(--state-danger-soft);
+}
+/* Not an error, but not allowed right now (e.g. the layout is locked). */
+[data-state='warning'] {
+	--state: var(--state-filling);
+	--state-soft: var(--state-filling-soft);
+}
+[data-state='staging'] {
+	--state: var(--state-staging);
+	--state-soft: var(--state-staging-soft);
+}
+[data-state='live'] {
+	--state: var(--state-live);
+	--state-soft: var(--state-live-soft);
+	--state-beat: 2s;
+}
+[data-state='closed'] {
+	--state: var(--state-closed);
+	--state-soft: var(--state-closed-soft);
+}
+
+/*
+ * The breathing ring. `inset: 0` with `border-radius: inherit` follows any
+ * card shape. The ring alone carries the colour: a card's own border rule
+ * outranks the border-color below, which only colours an element that sets
+ * none of its own. It never fades out: it breathes down to 40 %, and with
+ * reduced motion it stands still at full strength.
+ */
+.state-ring {
+	position: relative;
+	border-color: var(--state);
+}
+.state-ring::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	border: 1px solid var(--state);
+	border-radius: inherit;
+	pointer-events: none;
+	opacity: 0.9;
+	animation: state-breathe var(--state-beat) ease-in-out infinite;
+}
+/* Two rings on top of each other read as a glow, which is the point. */
+.state-ring.state-ring-strong::after {
+	border-width: 2px;
+}
+
+@keyframes state-breathe {
+	0%,
+	100% {
+		opacity: 0.95;
+	}
+	50% {
+		opacity: 0.4;
+	}
+}
+
+/* A state that needs the eye now: three quick beats, then it settles. */
+.state-ring.state-ring-alert::after {
+	animation: state-alert 0.45s ease-in-out 3;
+	opacity: 1;
+}
+
+@keyframes state-alert {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.25;
+	}
+}
+
+/* The legend's and the chips' dot: same colours, no animation to avoid
+   forty pulsing specks in one list. */
+.state-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--state, var(--state-idle));
+	box-shadow: 0 0 10px var(--state, var(--state-idle));
+	flex-shrink: 0;
+}
+
+/* A small label in its state colour: the badges on the house cards. */
+.state-chip {
+	padding: 4px 8px;
+	border-radius: 6px;
+	font-size: 0.6rem;
+	font-weight: 900;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+	white-space: nowrap;
+	color: var(--state, var(--state-idle));
+	background: var(--state-soft, transparent);
+	border: 1px solid var(--state, var(--state-idle));
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.state-ring::after,
+	.state-ring.state-ring-alert::after {
+		animation: none;
+		opacity: 1;
+	}
+}
+
+/*
+ * Refused input.
+ *
+ * Every form already marks a field it refuses with aria-invalid="true" (for
+ * screen readers). That attribute is the switch for the look, so no form can
+ * forget it and every form looks the same: a red border, one soft ping that
+ * rings out from the field, then a steady faint glow while the value is still
+ * wrong. Typing clears aria-invalid in each form, and the field calms down.
+ *
+ * The glow is a forwards-filled animation rather than a plain box-shadow: an
+ * animation outranks the forms' own :focus styles (the turquoise focus glow)
+ * without !important, so the field stays red while the cursor is in it.
+ * Only the border colour needs !important — it isn't animated.
+ *
+ * A control whose visible box is a wrapper (the ticket field on the start
+ * page, a group of checkboxes) sits inside .field-box; the wrapper takes the
+ * state ring instead, so the field doesn't glow twice.
+ */
+:is(input, select, textarea)[aria-invalid='true']:not(.field-box *) {
+	border-color: var(--state-danger) !important;
+	animation: field-refused 1.1s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+@keyframes field-refused {
+	0% {
+		box-shadow:
+			0 0 0 0 rgba(248, 113, 113, 0.6),
+			0 0 0 0 rgba(248, 113, 113, 0);
+	}
+	35% {
+		box-shadow:
+			0 0 0 5px rgba(248, 113, 113, 0.22),
+			0 0 18px 2px rgba(248, 113, 113, 0.35);
+	}
+	100% {
+		box-shadow:
+			0 0 0 1px rgba(248, 113, 113, 0.5),
+			0 0 12px rgba(248, 113, 113, 0.16);
+	}
+}
+
+/* The composite box (see above) wears the alert ring of the state module. */
+.field-box[data-state='danger'] {
+	border-color: var(--state-danger);
+}
+
+/* What is wrong: right under the field (.field-error), or for the whole form
+   (.form-error, a box). Both slide in, never pop. A page with its own look
+   overrides colour and spacing in its component styles; the motion and the
+   icon stay the same everywhere. */
+.field-error {
+	display: block;
+	margin: 0;
+	color: var(--state-danger);
+	font-size: 0.8rem;
+	font-weight: 700;
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+	animation: field-error-in 0.22s ease-out both;
+}
+.form-error {
+	margin: 0;
+	padding: 0.6rem 0.9rem;
+	border-radius: 10px;
+	background: var(--state-danger-soft);
+	border: 1px solid rgba(248, 113, 113, 0.4);
+	color: #fecaca;
+	font-weight: 700;
+	line-height: 1.45;
+	overflow-wrap: anywhere;
+	animation: field-error-in 0.22s ease-out both;
+}
+.field-error::before,
+.form-error::before {
+	content: '⚠️ ';
+}
+
+@keyframes field-error-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+/* No ping, no slide: the colours alone. The forwards fill still lands on the
+   steady glow, just without getting there. */
+@media (prefers-reduced-motion: reduce) {
+	:is(input, select, textarea)[aria-invalid='true']:not(.field-box *) {
+		animation-duration: 1ms;
+	}
+	.field-error,
+	.form-error {
+		animation: none;
+	}
+}
+
+/*
+ * Locked controls.
+ *
+ * A control that is there but can't be used right now — the camp layout is
+ * locked during Live Booking and after booking closed — carries data-locked
+ * and aria-disabled="true" ($lib/layout-lock.ts, lockAttrs). Unlike
+ * `disabled` it stays focusable and clickable on purpose: a click, Enter or a
+ * typed key is answered by a short hint next to it (LockHintHost), never by
+ * silence.
+ *
+ * The look: greyed out, a small padlock (a badge on buttons, inside the box
+ * on fields), no hover lift, no glow. A refused try shakes the control once
+ * and rattles its padlock (data-lock-rattle, set by the host for 0.7 s). The
+ * shake animates `translate`, not `transform`: `transform: none !important`
+ * switches off the pages' hover lifts, and an !important declaration would
+ * outrank an animated transform.
+ */
+:root {
+	--lock-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.5 11V8.5a4.5 4.5 0 0 1 9 0V11' fill='none' stroke='%23d4d4d4' stroke-width='2.6' stroke-linecap='round'/%3E%3Crect x='4.5' y='10.5' width='15' height='10.5' rx='2.5' fill='%23d4d4d4'/%3E%3C/svg%3E");
+	--lock-icon-field: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.5 11V8.5a4.5 4.5 0 0 1 9 0V11' fill='none' stroke='%23737373' stroke-width='2.4' stroke-linecap='round'/%3E%3Crect x='4.5' y='10.5' width='15' height='10.5' rx='2.5' fill='%23737373'/%3E%3C/svg%3E");
+}
+
+:is(button, a)[data-locked] {
+	position: relative;
+	cursor: not-allowed !important;
+	filter: grayscale(1);
+	opacity: 0.5;
+	box-shadow: none !important;
+	transform: none !important;
+}
+:is(button, a)[data-locked]:hover,
+:is(button, a)[data-locked]:focus-visible {
+	opacity: 0.7;
+}
+/* The padlock badge, on the top right corner. */
+:is(button, a)[data-locked]::before {
+	content: '';
+	position: absolute;
+	top: -7px;
+	right: -7px;
+	z-index: 1;
+	width: 17px;
+	height: 17px;
+	box-sizing: border-box;
+	border-radius: 50%;
+	border: 1px solid rgba(255, 255, 255, 0.25);
+	background: #171717 var(--lock-icon) center / 9px no-repeat;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+	pointer-events: none;
+	animation: lock-badge-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+:is(input, textarea)[data-locked] {
+	cursor: not-allowed;
+	color: #8a8a8a !important;
+	border-style: dashed !important;
+	border-color: #3a3a3a !important;
+	box-shadow: none !important;
+	background-image: var(--lock-icon-field) !important;
+	background-repeat: no-repeat !important;
+	background-position: right 0.75rem center !important;
+	background-size: 13px !important;
+	padding-right: 2.25rem !important;
+}
+
+/* No spinner arrows that can't turn. */
+input[type='number'][data-locked] {
+	appearance: textfield;
+}
+input[type='number'][data-locked]::-webkit-inner-spin-button,
+input[type='number'][data-locked]::-webkit-outer-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+/* A refused try: the control shakes once, its padlock rattles and warms up. */
+[data-locked][data-lock-rattle] {
+	opacity: 0.8;
+	animation: lock-refuse 0.4s ease-in-out;
+}
+:is(button, a)[data-locked][data-lock-rattle]::before {
+	border-color: var(--state-filling);
+	animation:
+		lock-badge-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+		lock-badge-rattle 0.55s ease-in-out;
+}
+
+@keyframes lock-badge-in {
+	from {
+		opacity: 0;
+		scale: 0.4;
+		rotate: -30deg;
+	}
+}
+@keyframes lock-refuse {
+	20% {
+		translate: -4px 0;
+	}
+	45% {
+		translate: 3px 0;
+	}
+	70% {
+		translate: -2px 0;
+	}
+}
+@keyframes lock-badge-rattle {
+	20% {
+		rotate: -24deg;
+		scale: 1.3;
+	}
+	45% {
+		rotate: 18deg;
+		scale: 1.3;
+	}
+	70% {
+		rotate: -9deg;
+		scale: 1.15;
+	}
+}
+
+/* No motion: the padlock only warms up. */
+@media (prefers-reduced-motion: reduce) {
+	:is(button, a)[data-locked]::before,
+	[data-locked][data-lock-rattle],
+	:is(button, a)[data-locked][data-lock-rattle]::before {
+		animation: none;
+	}
+}

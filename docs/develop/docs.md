@@ -9,7 +9,7 @@ This site is built with [VitePress](https://vitepress.dev) from the Markdown fil
 | For | guests, anyone | the crew: approved admins |
 | Contains | home page and the guide (booking, phases, guest FAQ) | everything: guide, admin guide, under the hood, develop |
 | In the app | `/docs/`, no sign-in | `/admin/docs/`, only with an admin session |
-| On GitHub Pages | **[morpheusmxml.github.io/hamburn-cozynights](https://morpheusmxml.github.io/hamburn-cozynights/)** | never |
+| On GitHub Pages | **[morpheusmxml.github.io/hamburn-cozynights](https://morpheusmxml.github.io/hamburn-cozynights/)**, rebuilt with every version tag | never |
 
 The environment variable `DOCS_AUDIENCE` (`public` or `admin`, default `admin`) selects the build. The public build leaves out the folders `admin/`, `reference/` and `develop/` completely: their pages are not rendered, not linked from navigation, sidebar or home page, and not part of the search index. Which section belongs to which audience is defined in one place, [`.vitepress/audience.ts`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/docs/.vitepress/audience.ts).
 
@@ -65,9 +65,9 @@ On the home page, hero buttons and feature cards that link into a hidden section
 docs/
 ├── index.md                  home page (hero, features)
 ├── guide/                    for everyone: overview, booking, phases, FAQ
-├── admin/                    admins only: Control Center, access, layout, templates, checklist
+├── admin/                    admins only: Control Center, bookings, access, tickets, notifications, passes, special needs, layout, templates, checklist, legal
 ├── reference/                admins only: architecture, data model, security
-├── develop/                  admins only: local setup, testing, deployment, this page
+├── develop/                  admins only: local setup, testing, layout, states, effigy title, integration, deployment, this page
 ├── assets/screenshots/       app screenshots (WebP)
 ├── public/                   logo, favicons, social preview image
 └── .vitepress/
@@ -101,12 +101,15 @@ Screenshots show demo data only, never real guests or tickets. Take them from a 
 
 ## Publishing
 
-**GitHub Pages** gets the public build only. The workflow [`.github/workflows/docs.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/docs.yml) runs whenever something in `docs/` changes:
+Two copies, two purposes. **GitHub Pages** hosts the public guide for anyone, and is rebuilt on every [version tag](./deployment#versions-and-releases) as well as on every push to `main` that touches `docs/`, so it is as current as the version on staging. **The app** serves the admin guide behind the admin login at `/admin/docs/` — and, for now, the public guide at `/docs/` too — built into its Docker image with every deployment, so what an admin reads matches the version they are running. Both copies carry the line *this guide is rebuilt with every release* in their footer.
+
+**GitHub Pages** gets the public build only. The workflow [`.github/workflows/docs.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/docs.yml) runs whenever something in `docs/` changes, and for every version tag:
 
 - **Pull requests** build both audiences, so broken links or Markdown in either fail the check before merging.
 - **Pushes to `main`** build the public audience and deploy it to GitHub Pages.
+- **Version tags** (`v0.18.1`, made by `scripts/release.sh` on the state that is deployed) check out that tag, build the public audience from it and deploy it — so the Pages site describes the deployed state even while the release PR is still open. The paths filter doesn't apply to tags: every tag builds.
 
-The repository's Pages source has to be set to **GitHub Actions** (Settings → Pages) once.
+Two settings in the repository, once: the Pages source has to be **GitHub Actions** (Settings → Pages), and the `github-pages` environment has to allow deployments from tags (Settings → Environments → *github-pages* → *Deployment branches and tags* → add the tag pattern `v*`; the environment starts with `main` only, and a tag run would otherwise be refused with *not allowed to deploy to github-pages due to environment protection rules*).
 
 **The app** gets both builds with every [deployment](./deployment): the Docker image build runs `npm run build:app` and copies the result into the image, where the app serves it at `/docs/` and `/admin/docs/`. A docs change therefore reaches the app with the next deploy, not with the merge. "Last updated" dates only appear on GitHub Pages and in local builds, because the image is built without the git history.
 
@@ -115,14 +118,14 @@ The repository's Pages source has to be set to **GitHub Actions** (Settings → 
 Every page links the app's legal notice, privacy policy and booking rules: the home page in its footer, doc pages under their content (`.vitepress/theme/LegalLinks.vue`, because VitePress shows its footer only on pages without a sidebar). The pages themselves belong to the app, see [Legal pages](../admin/legal).
 
 - **Served by the app** (`/docs/`, `/admin/docs/`), the links point to `/legal-notice`, `/privacy` and `/booking-rules` on the same domain.
-- **On GitHub Pages** they need the app's address. The Pages build reads it from the repository variable `DOCS_APP_URL`; without it they point to staging. Once production has its domain:
+- **On GitHub Pages** they need the app's address. The Pages build reads it from the repository variable `DOCS_APP_URL`; without it they point to staging. Once production is public (its [pre-launch gate](./deployment#pre-launch-gate) is off; before that, the links would end at the Google sign-in):
 
   ```bash
-  gh variable set DOCS_APP_URL --body "https://<production-domain>"
+  gh variable set DOCS_APP_URL --body "https://cozynights.hamburn.de"
   ```
 
-  The next docs deploy (a push to `main` that touches `docs/`, or **Run workflow** on *Docs*) picks it up.
+  The next docs deploy (a version tag, a push to `main` that touches `docs/`, or **Run workflow** on *Docs*) picks it up.
 
 ## What doesn't belong here
 
-The sources are public, whatever the audience of a page. Keep out credentials, server addresses beyond the public domains, internal procedures for handling secrets, and anything about real guests. Operator-only details go into the runbook next to the deploy script.
+The sources are public, whatever the audience of a page. Keep out credentials, server addresses beyond the public domains, internal procedures for handling secrets, and anything about real guests. Operator-only details go into [the runbook next to the deploy script](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md).

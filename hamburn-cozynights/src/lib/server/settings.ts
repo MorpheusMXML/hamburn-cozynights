@@ -2,6 +2,7 @@ import type { TypedPocketBase } from '$lib/pocketbase-types';
 import { APP_SETTINGS_ID } from '$lib/server/constants';
 import {
 	effectivePhase,
+	guestPhase,
 	nextTransition,
 	windowFromRecord,
 	type BookingPhase,
@@ -12,6 +13,8 @@ import {
 export interface BookingSettings {
 	/** staging → live → closed, see $lib/booking-phase. */
 	phase: BookingPhase;
+	/** The phase as guests are told about it: Closed with an opening armed reads as "not open yet". */
+	guestPhase: BookingPhase;
 	/** Guests can book, change and release spots (phase live). */
 	isBookingActive: boolean;
 	/** Houses, rooms and spots can't be added, moved or deleted (phase live or closed). */
@@ -30,6 +33,8 @@ export interface BookingSettings {
 	telegramBot: string;
 	/** Guests can send special-needs requests (own switch, independent of the phase). */
 	requestsOpen: boolean;
+	/** The crew turned swap requests off (they only ever run during Live Booking). */
+	swapsOff: boolean;
 }
 
 /**
@@ -51,18 +56,21 @@ export async function getBookingSettings(pb: TypedPocketBase): Promise<BookingSe
 	const window = windowFromRecord(settings);
 	const now = Date.now();
 	const phase = effectivePhase(window, now);
+	const next = nextTransition(window, now);
 	const telegramBot = settings?.telegram_bot || '';
 	return {
 		phase,
+		guestPhase: guestPhase(phase, next),
 		isBookingActive: phase === 'live',
 		isLayoutLocked: phase !== 'staging',
 		bookingUnlockAt: window.opensAt,
 		bookingCloseAt: window.closesAt,
 		window,
-		next: nextTransition(window, now),
+		next,
 		notifyMail: !!settings?.notify_mail,
 		// Telegram usernames: 5–32 letters, digits and underscores
 		telegramBot: /^[A-Za-z0-9_]{5,32}$/.test(telegramBot) ? telegramBot : '',
-		requestsOpen: !!settings?.special_requests_open
+		requestsOpen: !!settings?.special_requests_open,
+		swapsOff: !!settings?.swaps_off
 	};
 }

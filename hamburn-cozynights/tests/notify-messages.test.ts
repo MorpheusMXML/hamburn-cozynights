@@ -17,7 +17,10 @@ const spot = {
 	spot: 'B1',
 	room: 'Dorm #1',
 	house: 'Villa',
-	label: 'B1 · Dorm #1 · Villa'
+	label: 'B1 · Dorm #1 · Villa',
+	// what the crew wrote down about the bed (pb_hooks/lib/beds.js)
+	bed: 'Lower bunk · below B2',
+	features: '🔥 Heated · 🤫 Quiet zone'
 };
 const pass = { code: 'AAAA-BBBB-CCCC', url: 'https://cozy.test/pass/AAAA-BBBB-CCCC' };
 
@@ -50,6 +53,90 @@ describe('spot messages without a request stay as they were', () => {
 
 		for (const m of [booked, changed, released]) expect(m.text).not.toMatch(/special-needs/);
 		expect(telegram('booked', true, none)).toContain('Change or release it');
+	});
+});
+
+// The kind of bed (for a bunk bed: where the other level is) and what is at
+// the spot: two more rows in the e-mail, one 🛏 line under the spot on
+// Telegram — only when the crew wrote them down on the layout.
+describe('the bed and what is at it', () => {
+	const BED_LINE = '🛏 Lower bunk · below B2 · 🔥 Heated · 🤫 Quiet zone';
+	// the same spot on a layout where nobody wrote the bed down
+	const plain = {
+		bedId: spot.bedId,
+		roomId: spot.roomId,
+		spot: spot.spot,
+		room: spot.room,
+		house: spot.house,
+		label: spot.label
+	};
+
+	it('has its rows in the e-mail, text and HTML, lined up with the others', () => {
+		const m = notify.guestMail(cfg, 'booked', spot, '', 'Ada', pass, none);
+		expect(m.text).toContain(
+			'\n  House:    Villa\n  Room:     Dorm #1\n  Spot:     B1\n  Bed:      Lower bunk · below B2\n  Features: 🔥 Heated · 🤫 Quiet zone\n'
+		);
+		const cell = (name: string, value: string) =>
+			`<td style="padding:4px 16px 4px 0;color:#6b6478">${name}</td><td style="padding:4px 0;font-weight:bold">${value}</td>`;
+		expect(m.html).toContain(cell('Bed', 'Lower bunk · below B2'));
+		expect(m.html).toContain(cell('Features', '🔥 Heated · 🤫 Quiet zone'));
+		// in the messages that show the spot as well
+		for (const kind of ['changed', 'handed_over']) {
+			expect(mail(kind, true, none, 'B9').text).toContain('Bed:      Lower bunk · below B2');
+		}
+		expect(mail('', true, { kind: 'approved', status: 'approved', fixed: true }).text).toContain(
+			'Features: 🔥 Heated · 🤫 Quiet zone'
+		);
+	});
+
+	it('is one 🛏 line right under the spot on Telegram', () => {
+		expect(telegram('booked', true, none)).toContain(
+			'✨ Your CozyNights spot is booked\nB1 · Dorm #1 · Villa\n' + BED_LINE + '\n\n'
+		);
+		expect(telegram('changed', true, none, 'B9 · Loft #2 · Hut')).toContain(
+			'Now: B1 · Dorm #1 · Villa\n' + BED_LINE + '\nBefore: B9 · Loft #2 · Hut'
+		);
+		expect(telegram('connected', true, none)).toContain(
+			'Your spot: B1 · Dorm #1 · Villa\nhttps://cozy.test/room/room1\n' + BED_LINE + '\n\n'
+		);
+		expect(
+			telegram('booked', true, { kind: 'approved', status: 'approved', fixed: true })
+		).toContain('booked this spot for you:\nB1 · Dorm #1 · Villa\n' + BED_LINE + '\n\n');
+		// and under the bot's /pass reply
+		const preview = notify.previewMessages(cfg);
+		const passReply = preview.bot.find((m: { id: string }) => m.id === 'pass');
+		expect(passReply.text).toContain(pass.url + '\n🛏 Lower bunk · below B2 · 🔥 Heated');
+		expect(preview.telegram.find((m: { id: string }) => m.id === 'booked').text).toContain(
+			'🛏 Lower bunk · below B2 · 🔥 Heated · 🤫 Quiet zone'
+		);
+	});
+
+	it('is left out when the crew wrote nothing down', () => {
+		const m = notify.guestMail(cfg, 'booked', plain, '', 'Ada', pass, none);
+		expect(m.text).toContain('  Spot:     B1\n\n');
+		expect(m.text).not.toContain('Bed:');
+		expect(m.text).not.toContain('Features:');
+		expect(m.html).not.toContain('>Bed<');
+		expect(m.html).not.toContain('>Features<');
+		for (const kind of ['booked', 'changed', 'connected']) {
+			expect(notify.guestTelegram(cfg, kind, plain, 'B9', pass, none)).not.toContain('🛏');
+		}
+		// only one of the two known: the line is just that
+		const onlyBed = { ...plain, bed: 'Single bed' };
+		expect(notify.guestTelegram(cfg, 'booked', onlyBed, '', pass, none)).toContain(
+			'\n🛏 Single bed\n\n'
+		);
+		const onlyFeatures = { ...plain, features: '🤫 Quiet zone' };
+		const text = notify.guestMail(cfg, 'booked', onlyFeatures, '', 'Ada', pass, none).text;
+		expect(text).toContain('  Spot:     B1\n  Features: 🤫 Quiet zone\n');
+		expect(text).not.toContain('Bed:');
+	});
+
+	it('is a text the crew can change, with the bed as its placeholder', () => {
+		const custom = { ...cfg, texts: { 'tg.bed': 'Dein Bett: {bed}' } };
+		expect(notify.guestTelegram(custom, 'booked', spot, '', pass, none)).toContain(
+			'\nDein Bett: Lower bunk · below B2 · 🔥 Heated · 🤫 Quiet zone\n'
+		);
 	});
 });
 
@@ -261,7 +348,13 @@ describe('message texts from the catalogue (pb_hooks/lib/texts.js)', () => {
 				marker(entry.key) + entry.placeholders.map((name) => ` {${name}}`).join('')
 			])
 		);
-		const preview = notify.previewMessages({ ...cfg, texts: all });
+		// The preview offers what this server can do; here: both.
+		const preview = notify.previewMessages({
+			...cfg,
+			telegram: { guests: true },
+			wallet: ['apple', 'google'],
+			texts: all
+		});
 		const rendered = [
 			...preview.mail.map((m: { subject: string; text: string }) => `${m.subject}\n${m.text}`),
 			...preview.telegram.map((m: { text: string }) => m.text),
@@ -275,7 +368,9 @@ describe('message texts from the catalogue (pb_hooks/lib/texts.js)', () => {
 			'help',
 			'link_expired',
 			'stopped',
-			'not_connected'
+			'not_connected',
+			'pass',
+			'pass_no_spot'
 		]);
 	});
 
@@ -319,5 +414,136 @@ describe('a ticket that was passed on', () => {
 		expect(sample.subject).toContain('came with your ticket');
 		// the hand-over cuts the Telegram link, so there is no such message
 		expect(preview.telegram.some((m: { id: string }) => m.id === 'handed_over')).toBe(false);
+	});
+});
+
+// Which message a channel gets is decided by the spot it last confirmed
+// against the spot the ticket holds now — not by the events in between. That
+// is what lets Leave No Trace hold the release back (holdGuestMessage in
+// src/lib/server/notifications.ts, tests/respin.test.ts): while the guest
+// spins, the channel still knows the old spot, so the new one is a change.
+describe('✨ Leave No Trace & Respin ends in one message', () => {
+	it('is "changed", not "released" and then "booked"', () => {
+		const old = 'bed9';
+
+		// Delivered while the guest is still rolling — the message to avoid.
+		expect(notify.kindOf(old, '')).toBe('released');
+		// Held back until the respin booked a spot: one message about the move.
+		expect(notify.kindOf(old, 'bed1')).toBe('changed');
+		// The roulette rolled the spot the ticket already had: no news at all.
+		expect(notify.kindOf(old, old)).toBe('');
+		// Nobody rolled and the hold ran out, so the release is the news; a
+		// booking after that is a first spot again.
+		expect(notify.kindOf('', 'bed1')).toBe('booked');
+	});
+
+	it('names the swept spot as the one before', () => {
+		const m = mail('changed', true, none, 'B9 · Loft #2 · Hut');
+		expect(m.subject).toBe('Your CozyNights spot changed: B1 · Dorm #1 · Villa');
+		expect(m.text).toContain('Before: B9 · Loft #2 · Hut');
+
+		const tg = telegram('changed', true, none, 'B9 · Loft #2 · Hut');
+		expect(tg).toContain('Now: B1 · Dorm #1 · Villa');
+		expect(tg).toContain('B9 · Loft #2 · Hut');
+	});
+});
+
+// The spots above are built by hand; currentSpot() is what reads one from the
+// records before a message goes out. What it says about the bed comes from
+// the layout the way the app sums it up (pb_hooks/lib/beds.js), including what
+// a room or spot switched off (features_off, a superuser's call).
+describe('the spot as currentSpot reads it from the records', () => {
+	type Row = Record<string, unknown>;
+	/** A record like the JSVM's, over a plain row: only what currentSpot calls. */
+	const record = (row: Row) => ({
+		id: row.id as string,
+		get: (key: string) => row[key],
+		getString: (key: string) => String(row[key] ?? ''),
+		getInt: (key: string) => Number(row[key] ?? 0)
+	});
+	/** An app like the JSVM's, over rows per collection. */
+	function app(tables: Record<string, Row[]>) {
+		return {
+			findRecordsByFilter: (
+				collection: string,
+				_filter: string,
+				_sort: string,
+				_limit: number,
+				_offset: number,
+				params: Row
+			) => tables[collection].filter((row) => row.order === params.order).map(record),
+			findRecordById: (collection: string, id: string) => {
+				const row = tables[collection].find((r) => r.id === id);
+				if (!row) throw new Error(`${collection} ${id} not found`);
+				return record(row);
+			}
+		};
+	}
+	/**
+	 * A heated, quiet, wheelchair-accessible Villa; the Dorm has its own
+	 * bathroom; B1 is the lower bunk under B2.
+	 */
+	const tables = (): Record<string, Row[]> => ({
+		houses: [{ id: 'house1', name: 'Villa', features: ['wheelchair', 'heated', 'quiet'] }],
+		rooms: [
+			{ id: 'room1', house: 'house1', name: 'Dorm', room_number: 1, features: ['own_bathroom'] }
+		],
+		beds: [
+			{
+				id: 'bed1',
+				room: 'room1',
+				label: 'B1',
+				order: 'order1',
+				bed_type: 'bunk_lower',
+				bunk_partner: 'bed2'
+			},
+			{
+				id: 'bed2',
+				room: 'room1',
+				label: 'B2',
+				order: 'order2',
+				bed_type: 'bunk_upper',
+				bunk_partner: 'bed1'
+			}
+		]
+	});
+
+	it('sums the house and the room up, and knows tickets without a spot', () => {
+		expect(notify.currentSpot(app(tables()), 'order1')).toMatchObject({
+			bedId: 'bed1',
+			roomId: 'room1',
+			spot: 'B1',
+			room: 'Dorm #1',
+			house: 'Villa',
+			label: 'B1 · Dorm #1 · Villa',
+			bed: 'Lower bunk · below B2',
+			features: '♿ Wheelchair accessible · 🛁 Own bathroom · 🔥 Heated · 🤫 Quiet zone'
+		});
+		expect(notify.currentSpot(app(tables()), 'nobody')).toBeNull();
+	});
+
+	it('never promises ♿ on the upper bunk', () => {
+		expect(notify.currentSpot(app(tables()), 'order2')).toMatchObject({
+			spot: 'B2',
+			bed: 'Upper bunk · above B1',
+			features: '🛁 Own bathroom · 🔥 Heated · 🤫 Quiet zone'
+		});
+	});
+
+	it('drops what the room or the spot switched off', () => {
+		const t = tables();
+		t.rooms[0].features_off = ['heated', 'wheelchair'];
+		expect(notify.currentSpot(app(t), 'order1').features).toBe('🛁 Own bathroom · 🤫 Quiet zone');
+		t.beds[0].features_off = ['quiet', 'own_bathroom'];
+		expect(notify.currentSpot(app(t), 'order1').features).toBe('');
+	});
+
+	it('ignores a power socket stored before it was dropped', () => {
+		const t = tables();
+		t.rooms[0].features = ['power'];
+		t.beds[0].features = 'power';
+		expect(notify.currentSpot(app(t), 'order1').features).toBe(
+			'♿ Wheelchair accessible · 🔥 Heated · 🤫 Quiet zone'
+		);
 	});
 });

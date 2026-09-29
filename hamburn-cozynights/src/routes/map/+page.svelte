@@ -1,6 +1,12 @@
 <script lang="ts" module>
-	/** Closed: once a guest looked around, back from a house the panel stays away. */
-	let lookedAround = false;
+	import type { BookingPhase } from '$lib/booking-phase';
+
+	/**
+	 * Closed: once a guest looked around, coming back from a house leaves the
+	 * panel away. Remembered with the phase it happened in, so a new phase
+	 * (booking opened again, a window was armed) greets them with it again.
+	 */
+	let lookedAroundIn: BookingPhase | null = null;
 </script>
 
 <script lang="ts">
@@ -9,20 +15,43 @@
 	import CountdownTimer from '$lib/components/CountdownTimer.svelte';
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
-	import { onMount } from 'svelte';
+	import { mapLookingAround } from '$lib/components/GuestTopBar.svelte';
+	import { onDestroy, onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { invalidateAll } from '$app/navigation';
 
 	export let data: PageData;
-	$: ({ houses, isBookingActive, phase, bookingUnlockAt } = data);
+	$: ({ isBookingActive, phase, guestPhase, bookingUnlockAt } = data);
 
-	// Closed: a panel like the one in Staging covers the blurred map until
-	// the guest wants to look around (houses still open, read-only).
-	let lookingAround = lookedAround;
-	$: closedPanel = phase === 'closed' && !lookingAround;
+	// What the guest is looking for. The wishes live in the URL, so the map can
+	// be shared, works without JavaScript and survives a reload; the chips to
+	// pick them are in the top bar (GuestTopBar, from the page data).
+	$: wishes = data.wishes;
+
+	// A panel covers the blurred map whenever guests can't book. It counts down
+	// while booking is not open yet — Staging, and Closed with an opening armed,
+	// where the spots are anything but final — and says BOOKING CLOSED once
+	// nothing is planned any more. In Closed the guest can put it away and look
+	// around (houses stay open, read-only).
+	$: notOpenYet = guestPhase === 'staging';
+	let lookingAround = data.phase === lookedAroundIn;
+	let panelPhase = data.phase;
+	$: if (phase !== panelPhase) {
+		panelPhase = phase;
+		lookingAround = false;
+	}
+	$: showPanel = guestPhase !== 'live' && !(phase === 'closed' && lookingAround);
 
 	function lookAround() {
-		lookingAround = lookedAround = true;
+		lookingAround = true;
+		lookedAroundIn = phase;
 	}
+	// Tells the top bar the map is usable again (countdown and chips), in the
+	// browser only: the store is a module, shared between requests on the server.
+	$: if (browser) mapLookingAround.set(lookingAround);
+	onDestroy(() => {
+		if (browser) mapLookingAround.set(false);
+	});
 
 	onMount(() => {
 		// Force a fresh fetch when entering the page
@@ -59,53 +88,9 @@
 	<title>Camp map · CozyNights</title>
 </svelte:head>
 
+<!-- The phase, the countdown, the wish chips and the quick access are in the
+     top bar over the page (GuestTopBar, rendered by the root layout). -->
 <div class="page-container">
-	<div class="header-overlay">
-		<div class="logo-box">
-			<span class="logo">Hamburn</span>
-			<span class="tagline">Interactive Map</span>
-		</div>
-
-		<!-- The words in .long go on the smallest phones: the header must stay one row. -->
-		{#if phase === 'live'}
-			<div class="phase-badge live">🎪 LIVE <span class="long">BOOKING</span></div>
-		{:else if phase === 'closed'}
-			<div class="phase-badge closed">🔒 <span class="long">BOOKING</span> CLOSED</div>
-		{:else}
-			<div class="phase-badge staging">🛠 STAGING <span class="long">MODE</span></div>
-		{/if}
-
-		<div class="header-right">
-			<div class="debug-counter">
-				SENSORS: {houses?.length || 0}
-			</div>
-			{#if phase !== 'staging' && (data.specialNeeds.open || data.specialNeeds.requestSent)}
-				<a
-					class="help-link special-link"
-					href="/special-needs"
-					aria-label={data.specialNeeds.requestSent
-						? 'My special-needs request'
-						: 'Ask for a special-needs spot'}
-				>
-					<span class="help-icon" aria-hidden="true">♿</span>
-					<span class="help-text"
-						>{data.specialNeeds.requestSent ? 'My request' : 'Special-needs spot'}</span
-					>
-				</a>
-			{/if}
-			<a
-				class="help-link"
-				href="/docs/guide/"
-				target="_blank"
-				rel="noopener"
-				aria-label="Help and FAQ (opens in a new tab)"
-			>
-				<span class="help-icon" aria-hidden="true">?</span>
-				<span class="help-text">Help &amp; FAQ</span>
-			</a>
-		</div>
-	</div>
-
 	{#if data.houses}
 		<div class="map-container">
 			<Map
@@ -113,72 +98,75 @@
 				isEditorMode={false}
 				isBookingActive={data.isBookingActive}
 				phase={data.phase}
-				dimmed={closedPanel}
+				dimmed={showPanel}
+				wishes={wishes.length > 0}
 			/>
 		</div>
 	{:else}
 		<div class="loading">Igniting Sensors...</div>
 	{/if}
 
-	{#if phase === 'staging'}
+	{#if showPanel}
 		<div class="phase-overlay">
 			<div class="phase-panel">
-				{#if bookingUnlockAt}
-					<div class="timer-wrapper">
-						<h2 class="laser-text pink">IGNITION IN</h2>
-						<CountdownTimer targetDate={bookingUnlockAt} on:elapsed={() => invalidateAll()} />
-					</div>
+				{#if notOpenYet}
+					{#if bookingUnlockAt}
+						<div class="timer-wrapper">
+							<h2 class="laser-text pink">IGNITION IN</h2>
+							<CountdownTimer targetDate={bookingUnlockAt} on:elapsed={() => invalidateAll()} />
+						</div>
+					{/if}
+
+					<p class="phase-note">
+						Booking is not open yet. {bookingUnlockAt
+							? 'This page unlocks by itself when the countdown ends.'
+							: 'The crew is still setting up the houses. Check back soon.'}
+					</p>
+				{:else}
+					<h2 class="laser-text closed">BOOKING CLOSED</h2>
+
+					<p class="phase-note">
+						Spots are final now: nothing can be booked, changed or released anymore.
+						{#if data.noSpot}Your ticket holds no spot. If you need one, please contact the crew.{/if}
+					</p>
+
+					<!-- Final: the spot of the ticket signed in here, as a small ticket. While
+					     a countdown runs, the panel stays short — the spot is on its room page,
+					     and a taller panel reaches into the legal links below the map. -->
+					{#if data.pass}
+						<PassTicket pass={data.pass} />
+					{/if}
 				{/if}
 
-				<p class="phase-note">
-					Booking is not open yet. {bookingUnlockAt
-						? 'This page unlocks by itself when the countdown ends.'
-						: 'The crew is still setting up the houses. Check back soon.'}
-				</p>
-
-				{#if data.specialNeeds.requestSent}
+				{#if data.specialNeeds?.requestSent}
 					<a class="special-needs-cta" href="/special-needs">
 						<span aria-hidden="true">♿</span> See your special-needs request
 					</a>
-				{:else if data.specialNeeds.open}
+				{:else if data.specialNeeds?.open && notOpenYet}
+					<!-- Before booking opens only, as the guides say. Once it has closed the
+					     ♿ button at the top of the map is the way in, and the final panel with
+					     the pass ticket has no room left: with a line more, LOOK AROUND slid
+					     under the legal links at 320 px (Linux fonts, CI run 35621290451). -->
 					<a class="special-needs-cta" href="/special-needs">
 						<span aria-hidden="true">♿</span> Need a special-needs spot? Ask the crew now
 					</a>
 				{/if}
 
-				<button class="panel-button" class:smashed={isShaking} on:click={handleReloadSensors}>
-					<span class="icon">📡</span>
-					RELOAD SENSORS
-					{#if clickCount > 5}
-						<span class="warning-text">CALIBRATING INTENSELY!</span>
-					{/if}
-				</button>
-			</div>
-		</div>
-	{:else if closedPanel}
-		<div class="phase-overlay">
-			<div class="phase-panel">
-				<h2 class="laser-text closed">BOOKING CLOSED</h2>
-
-				<p class="phase-note">
-					Spots are final now: nothing can be booked, changed or released anymore.
-					{#if data.noSpot}Your ticket holds no spot. If you need one, please contact the crew.{/if}
-				</p>
-
-				{#if data.pass}
-					<PassTicket pass={data.pass} />
+				{#if phase === 'closed'}
+					<!-- Closed: the houses stay open, read-only. -->
+					<button class="panel-button" on:click={lookAround}>
+						<span class="icon">🗺️</span>
+						LOOK AROUND
+					</button>
+				{:else}
+					<button class="panel-button" class:smashed={isShaking} on:click={handleReloadSensors}>
+						<span class="icon">📡</span>
+						RELOAD SENSORS
+						{#if clickCount > 5}
+							<span class="warning-text">CALIBRATING INTENSELY!</span>
+						{/if}
+					</button>
 				{/if}
-
-				{#if data.specialNeeds.requestSent}
-					<a class="special-needs-cta" href="/special-needs">
-						<span aria-hidden="true">♿</span> See your special-needs request
-					</a>
-				{/if}
-
-				<button class="panel-button" on:click={lookAround}>
-					<span class="icon">🗺️</span>
-					LOOK AROUND
-				</button>
 			</div>
 		</div>
 	{/if}
@@ -206,80 +194,8 @@
 		overflow: hidden;
 		position: relative;
 		font-family: 'Inter', system-ui, sans-serif;
-	}
-
-	.header-overlay {
-		position: absolute;
-		top: 20px;
-		left: 20px;
-		right: 20px;
-		z-index: 100;
-		display: grid;
-		grid-template-columns: 1fr auto 1fr;
-		align-items: center;
-		gap: 0.75rem;
-		pointer-events: none;
-	}
-
-	.logo-box {
-		justify-self: start;
-	}
-
-	.header-right {
-		justify-self: end;
 		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-	}
-
-	.help-link {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		min-height: 44px;
-		padding: 0 0.9rem;
-		border-radius: 8px;
-		border: 1px solid #333;
-		background: rgba(10, 10, 10, 0.8);
-		color: #b5b5b5;
-		font-size: 0.7rem;
-		font-weight: 900;
-		letter-spacing: 1px;
-		text-transform: uppercase;
-		text-decoration: none;
-		white-space: nowrap;
-		pointer-events: auto;
-		backdrop-filter: blur(10px);
-	}
-
-	.help-link:hover,
-	.help-link:focus-visible {
-		color: #fff;
-		border-color: #2dd4bf;
-	}
-
-	.help-icon {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.4rem;
-		height: 1.4rem;
-		border-radius: 50%;
-		border: 1px solid currentColor;
-		font-size: 0.8rem;
-	}
-
-	.debug-counter {
-		background: rgba(10, 10, 10, 0.8);
-		border: 1px solid #333;
-		padding: 0.5rem 1rem;
-		border-radius: 8px;
-		color: #8a8a8a;
-		font-size: 0.7rem;
-		font-weight: 900;
-		letter-spacing: 1px;
-		white-space: nowrap;
-		backdrop-filter: blur(10px);
+		flex-direction: column;
 	}
 
 	.bottom-dock {
@@ -365,88 +281,48 @@
 		}
 	}
 
+	/* The roulette button breathes: its glow sits on a pseudo-element whose
+	   opacity animates (composited), not on the button's own box-shadow,
+	   which would repaint the button over the map every frame. */
 	.pulsing-laser {
+		position: relative;
+		isolation: isolate;
 		animation: destiny-pulse 2s infinite;
+	}
+	.pulsing-laser::after {
+		content: '';
+		position: absolute;
+		inset: -2px;
+		z-index: -1;
+		border-radius: inherit;
+		box-shadow: 0 0 40px rgba(244, 114, 182, 0.7);
+		opacity: 0;
+		pointer-events: none;
+		animation: destiny-glow 2s infinite;
 	}
 
 	@keyframes destiny-pulse {
-		0%,
-		100% {
-			box-shadow: 0 0 20px rgba(244, 114, 182, 0.4);
-			transform: scale(1);
-		}
 		50% {
-			box-shadow: 0 0 40px rgba(244, 114, 182, 0.7);
 			transform: scale(1.02);
 		}
 	}
-
-	.logo-box {
-		background: rgba(10, 10, 10, 0.9);
-		padding: 1rem 1.5rem;
-		border-radius: 12px;
-		border: 1px solid #333;
-		display: flex;
-		flex-direction: column;
-		pointer-events: auto;
-		backdrop-filter: blur(10px);
-		box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+	@keyframes destiny-glow {
+		50% {
+			opacity: 1;
+		}
 	}
-
-	.logo {
-		font-size: 1.5rem;
-		font-weight: 900;
-		letter-spacing: -1px;
-		background: linear-gradient(to right, #2dd4bf, #f472b6);
-		background-clip: text;
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		text-transform: uppercase;
-	}
-
-	.tagline {
-		font-size: 0.65rem;
-		font-weight: 900;
-		color: #8a8a8a;
-		letter-spacing: 2px;
-		text-transform: uppercase;
-	}
-
-	.phase-badge {
-		background: #111;
-		color: #666;
-		padding: 0.5rem 1rem;
-		border-radius: 8px;
-		font-weight: 900;
-		font-size: 0.7rem;
-		letter-spacing: 1px;
-		border: 1px solid #222;
-		white-space: nowrap;
-		pointer-events: auto;
-		backdrop-filter: blur(10px);
-	}
-
-	.phase-badge.live {
-		color: #f472b6;
-		border-color: #f472b633;
-		box-shadow: 0 0 15px rgba(244, 114, 182, 0.2);
-	}
-
-	.phase-badge.staging {
-		color: #2dd4bf;
-		border-color: #2dd4bf33;
-		box-shadow: 0 0 15px rgba(45, 212, 191, 0.2);
-	}
-
-	.phase-badge.closed {
-		color: #d4d4d4;
-		border-color: #ffffff26;
-		box-shadow: 0 0 15px rgba(255, 255, 255, 0.08);
+	@media (prefers-reduced-motion: reduce) {
+		.pulsing-laser,
+		.pulsing-laser::after {
+			animation: none;
+		}
 	}
 
 	.map-container {
 		width: 100%;
 		height: 100%;
+		flex: 1 1 auto;
+		min-height: 0;
 		transition: filter 0.5s ease;
 	}
 
@@ -459,8 +335,8 @@
 		height: 100%;
 		z-index: 50;
 		display: flex;
-		/* Centred between the header and the legal links; scrolls on very short screens. */
-		padding: 6rem 1rem 5rem;
+		/* Centred above the legal links; scrolls on very short screens. */
+		padding: 2rem 1rem 5rem;
 		overflow-y: auto;
 		pointer-events: none;
 	}
@@ -511,11 +387,6 @@
 	.special-needs-cta:focus-visible {
 		background: #f472b6;
 		color: #111;
-	}
-
-	.special-link {
-		border-color: #f472b6;
-		color: #f9a8d4;
 	}
 
 	.timer-wrapper {
@@ -617,63 +488,14 @@
 		}
 	}
 
-	/* The header boxes never wrap; below these widths they don't fit next to
-	   each other any more (checked by tests/layout at every width). First the
-	   house counter (a gimmick) goes, then the links lose their text. */
-	@media (max-width: 1200px) {
-		.debug-counter {
-			display: none;
-		}
-	}
-	@media (max-width: 920px) {
-		.help-text {
-			display: none;
-		}
-		.help-link {
-			width: 44px;
-			padding: 0;
-			justify-content: center;
-			border-radius: 50%;
-		}
-	}
-
-	/* Phones: the logo shrinks, the phase badge gets shorter. */
+	/* Phones: the buttons get shorter. */
 	@media (max-width: 640px) {
-		.header-overlay {
-			top: 12px;
-			left: 12px;
-			right: 12px;
-			gap: 0.5rem;
-			grid-template-columns: auto 1fr auto;
-		}
-		.logo-box {
-			padding: 0.5rem 0.75rem;
-		}
-		.logo {
-			font-size: 1.1rem;
-		}
-		.tagline {
-			display: none;
-		}
-		.phase-badge {
-			justify-self: center;
-			padding: 0.5rem 0.6rem;
-			font-size: 0.65rem;
-		}
 		.random-btn {
 			font-size: 0.8rem;
 			letter-spacing: 1.5px;
 		}
 		.panel-button {
 			padding: 1rem 1.25rem;
-		}
-	}
-	@media (max-width: 420px) {
-		.phase-badge .long {
-			display: none;
-		}
-		.header-right {
-			gap: 0.5rem;
 		}
 	}
 

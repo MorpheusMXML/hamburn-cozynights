@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { defineConfigWithTheme, type DefaultTheme, type HeadConfig } from 'vitepress';
-import { audienceBlocksPlugin, audienceSite, readAudience } from './audience';
+import { audienceBlocksPlugin, audienceSite, readAudience } from './audience.ts';
 
 const repo = 'https://github.com/MorpheusMXML/hamburn-cozynights';
 const pagesBase = '/hamburn-cozynights/';
@@ -74,8 +74,7 @@ export default defineConfigWithTheme<CozyThemeConfig>({
 	cleanUrls: true,
 	lastUpdated: hasGitHistory,
 	appearance: 'dark',
-	// Old agent planning notes live next to the site sources; they are not docs.
-	srcExclude: ['superpowers/**', ...site.srcExclude],
+	srcExclude: site.srcExclude,
 	...(audience === 'public' && siteUrl ? { sitemap: { hostname: siteUrl } } : {}),
 	// Every other dead link fails the build; local dev URLs are fine.
 	ignoreDeadLinks: 'localhostLinks',

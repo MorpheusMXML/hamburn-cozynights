@@ -34,6 +34,10 @@
 			title: 'WEEKLY CHECK 🔐',
 			text: 'For security, admins sign in with Google again every 7 days. One click and you are back.'
 		},
+		not_recorded: {
+			title: 'SIGN-IN NOT RECORDED ⚠️',
+			text: 'Google accepted you, but the backend could not record the sign-in, so no session was started (it would have ended right away). Try again; if it keeps happening, tell the operator: the admins sign-in hook or its last_sign_in field is broken.'
+		},
 		failed: {
 			title: 'SIGN-IN FAILED',
 			text: 'Google sign-in did not complete. Please try again.'

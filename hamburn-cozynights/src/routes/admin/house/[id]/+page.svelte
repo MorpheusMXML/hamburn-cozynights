@@ -1,16 +1,48 @@
 <script lang="ts">
 	import type { PageData, SubmitFunction } from './$types';
-	import AddRoomForm from '$lib/components/admin/AddRoomForm.svelte';
-	import { fade, fly } from 'svelte/transition';
+	import AddRoomsForm from '$lib/components/admin/AddRoomsForm.svelte';
+	import BookingGuest from '$lib/components/admin/BookingGuest.svelte';
+	import DetailsPanel from '$lib/components/admin/DetailsPanel.svelte';
+	import FoldPanel from '$lib/components/admin/FoldPanel.svelte';
+	import FoldToggle from '$lib/components/admin/FoldToggle.svelte';
+	import InlineRename from '$lib/components/admin/InlineRename.svelte';
+	import { TEMPLATE_LIMITS } from '$lib/template';
+	import { bookingsByRoom, countBookings } from '$lib/bookings';
+	import LayoutLockNotice from '$lib/components/admin/LayoutLockNotice.svelte';
+	import LockGlyph from '$lib/components/LockGlyph.svelte';
+	import { layoutLock, lockAttrs } from '$lib/layout-lock';
+	import {
+		detailsSummary,
+		featureEntry,
+		houseKindEntry,
+		readFeatures,
+		roomKindEntry,
+		roomWord
+	} from '$lib/accommodation';
+	import { fade, fly, scale, slide } from 'svelte/transition';
 	import { enhance } from '$app/forms';
 	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
 
 	export let data: PageData;
 	export let form: { message?: string } | null = null;
 	// Only admins reach this page (hooks + layout)
-	$: ({ house, rooms, isLayoutLocked, phase } = data);
+	$: ({ house, rooms, isLayoutLocked, phase, isSuperuser, booking } = data);
+	// Live Booking and Closed: adding and deleting rooms is locked, the buttons
+	// stay and explain themselves ($lib/layout-lock.ts).
+	$: lock = isLayoutLocked ? layoutLock(phase, isSuperuser) : null;
+	// "rooms", "huts", "tents": what the house's kind calls its rooms.
+	$: roomsWord = roomWord(house.kind, true);
+	// Who holds which spot, room by room (docs/admin/bookings.md).
+	$: bookingRooms = bookingsByRoom(data.bookings ?? [], house.id);
+	$: bookingCounts = countBookings(data.bookings ?? []);
 
 	type RoomCard = PageData['rooms'][number];
+
+	// The two forms fold away so the rooms are one short scroll down, on a phone
+	// too; folded, their title says what is set (FoldToggle). A house without
+	// rooms opens ADD ROOMS right away: that is the next step.
+	let detailsOpen = false;
+	let addOpen = data.rooms.length === 0 && !data.isLayoutLocked;
 
 	let deletingRoomId: string | null = null;
 
@@ -66,41 +98,117 @@
 <div class="dashboard-container">
 	<div class="header-row" in:fly={{ y: -20, duration: 500 }}>
 		<nav class="breadcrumbs" aria-label="Breadcrumb">
-			<a href="/admin">Control Center</a> <span class="sep">/</span>
+			<a href="/admin/camp">Map & houses</a> <span class="sep">/</span>
 			<span class="current">{house.name}</span>
 		</nav>
 		<h1>
 			<span class="house-icon">🛖</span>
-			<span class="house-name">{house.name}</span>
+			<!-- In Staging Mode a click on the name renames the house. -->
+			<InlineRename
+				value={house.name}
+				action="?/renameHouse"
+				what="house"
+				editable={!isLayoutLocked}
+				maxLength={TEMPLATE_LIMITS.houseNameLength}
+			>
+				<span class="house-name">{house.name}</span>
+			</InlineRename>
 			<span class="subtitle">SANCTUARY OVERSIGHT</span>
 		</h1>
 	</div>
 
 	{#if form?.message}
-		<div class="error-banner" role="alert" in:fade>⚠️ {form.message}</div>
+		<div class="error-banner form-error" role="alert">{form.message}</div>
 	{/if}
 
-	{#if isLayoutLocked}
-		<div class="lockdown-notice" role="status">
-			🔒 {phase === 'closed' ? 'Booking is closed' : 'Live Booking is active'}, so rooms cannot be
-			added or deleted. A superuser can switch back to Staging Mode in the
-			<a href="/admin">Control Center</a>.
-		</div>
-	{/if}
+	<LayoutLockNotice
+		locked={isLayoutLocked}
+		{phase}
+		{isSuperuser}
+		next={booking?.next}
+		blocks="Names can't be changed, and rooms can't be added or deleted."
+		still="Spots can still be locked 🔒 and marked ♿ on the room pages."
+	/>
 
-	<section class="form-section" in:fade={{ delay: 200 }} class:disabled={isLayoutLocked}>
+	<section class="form-section" class:folded={!detailsOpen} in:fade={{ delay: 150 }}>
 		<header class="section-header">
 			<span class="laser-dot turquoise"></span>
-			<h3>ADD ROOM ➕</h3>
+			<h3>
+				<FoldToggle
+					bind:open={detailsOpen}
+					controls="house-details"
+					summary={detailsSummary('house', house.kind, house.features, house.description) ||
+						'Nothing set yet'}>HOUSE DETAILS 🏷️</FoldToggle
+				>
+			</h3>
 		</header>
-		<div class="form-wrapper">
-			<AddRoomForm disabled={isLayoutLocked} />
-		</div>
+		{#if detailsOpen}
+			<div id="house-details" transition:slide={{ duration: 180 }}>
+				<p class="section-hint">
+					What this house is like. Guests see it when they pick a spot, and the crew matches ♿
+					requests with it. Every room and spot inside inherits these features. Can be changed in
+					every phase.
+				</p>
+				<div class="form-wrapper">
+					<DetailsPanel
+						level="house"
+						action="?/saveHouse"
+						kind={house.kind ?? ''}
+						features={readFeatures(house.features, 'house')}
+						description={house.description ?? ''}
+					/>
+				</div>
+			</div>
+		{/if}
+	</section>
+
+	<section
+		class="form-section"
+		class:folded={!addOpen}
+		in:fade={{ delay: 200 }}
+		class:locked={isLayoutLocked}
+	>
+		<header class="section-header">
+			<span class="laser-dot turquoise"></span>
+			<h3>
+				<FoldToggle
+					bind:open={addOpen}
+					controls="add-room"
+					summary={isLayoutLocked
+						? 'Rooms are added in Staging Mode only'
+						: `${rooms.length} ${roomWord(house.kind, rooms.length !== 1)} so far`}
+					>ADD {roomsWord.toUpperCase()} ➕
+					{#if isLayoutLocked}
+						<span class="lock-chip" transition:scale={{ start: 0.6, duration: 250 }}>
+							<LockGlyph size={11} /> STAGING ONLY
+						</span>
+					{/if}
+				</FoldToggle>
+			</h3>
+		</header>
+		{#if addOpen}
+			<div id="add-room" class="form-wrapper" transition:slide={{ duration: 180 }}>
+				<p class="section-hint">
+					One row per size: how many {roomsWord}, how many beds each, 🪜 for bunk beds. Numbers
+					continue after the last {roomWord(house.kind)}, names are rolled.
+				</p>
+				<AddRoomsForm
+					lock={lock?.('add rooms') ?? null}
+					word={roomWord(house.kind)}
+					plural={roomsWord}
+					existing={rooms.map((room) => room.room_number)}
+					suggested={data.suggestedSize}
+				/>
+			</div>
+		{/if}
 	</section>
 
 	<header class="section-title-row">
 		<span class="laser-dot pink"></span>
-		<h2 class="section-title">ACTIVE ROOMS 🚪</h2>
+		<h2 class="section-title">
+			ACTIVE {roomWord(house.kind, true).toUpperCase()}
+			{houseKindEntry(house.kind)?.icon ?? '🚪'}
+		</h2>
 	</header>
 
 	<div class="grid">
@@ -117,6 +225,22 @@
 						<span class="room-number">#{room.room_number}</span>
 						<span class="room-name">{room.name}</span>
 					</header>
+
+					{#if roomKindEntry(room.kind) || readFeatures(room.features, 'room').length > 0 || room.bedMix}
+						<div class="room-details">
+							{#if roomKindEntry(room.kind)}
+								<span class="chip"
+									>{roomKindEntry(room.kind)?.icon} {roomKindEntry(room.kind)?.label}</span
+								>
+							{/if}
+							{#each readFeatures(room.features, 'room') as feature}
+								<span class="chip"
+									>{featureEntry(feature)?.icon} {featureEntry(feature)?.label}</span
+								>
+							{/each}
+							{#if room.bedMix}<span class="bed-mix">{room.bedMix}</span>{/if}
+						</div>
+					{/if}
 
 					<div class="card-body">
 						<div class="progress-container">
@@ -145,12 +269,7 @@
 					<a href="/admin/room/{room.id}" class="btn-manage">MANAGE SPOTS 🛌</a>
 					<form action="?/deleteRoom" method="POST" use:enhance={deleteRoom(room)}>
 						<input type="hidden" name="id" value={room.id} />
-						<button
-							type="submit"
-							class="btn-vanish"
-							class:disabled={isLayoutLocked}
-							disabled={isLayoutLocked}
-						>
+						<button type="submit" class="btn-vanish" {...lockAttrs(lock?.('delete rooms'))}>
 							VANISH ROOM 🌪️
 						</button>
 					</form>
@@ -160,14 +279,103 @@
 
 		{#if rooms.length === 0}
 			<div class="empty-state">
-				This house has no rooms yet. Add the first one with the form above; guests can only book
-				spots inside rooms.
+				This house has no {roomsWord} yet. Add them with ADD {roomsWord.toUpperCase()} above; guests can
+				only book spots inside {roomsWord}.
 			</div>
 		{/if}
+	</div>
+
+	<div class="who-is-here">
+		<FoldPanel
+			title="Who is here"
+			icon="🛏️"
+			summary="{bookingCounts.booked} booked · {bookingCounts.checkedIn} checked in{bookingCounts.crew
+				? ` · ${bookingCounts.crew} crew`
+				: ''}"
+			open={bookingCounts.booked + bookingCounts.crew > 0}
+		>
+			{#if data.bookings === null}
+				<p class="who-note">The bookings could not be read. Reload the page to try again.</p>
+			{:else if bookingRooms.length === 0}
+				<p class="who-note">Nobody has booked a spot in this house yet.</p>
+			{:else}
+				{#each bookingRooms as group (group.roomId)}
+					<section class="who-room">
+						<a class="who-room-link" href="/admin/room/{group.roomId}">{group.room}</a>
+						<ul class="who-grid">
+							{#each group.rows as row (row.bedId)}
+								<li>
+									<span class="who-spot">{row.spot || 'Spot'}</span>
+									<BookingGuest {row} />
+								</li>
+							{/each}
+						</ul>
+					</section>
+				{/each}
+			{/if}
+			<a class="who-all" href="/admin/bookings?house={house.id}"
+				>This house in the bookings list →</a
+			>
+		</FoldPanel>
 	</div>
 </div>
 
 <style>
+	.who-is-here {
+		margin-top: 3rem;
+	}
+	.who-note {
+		margin: 0;
+		color: #888;
+		font-size: 0.85rem;
+	}
+	.who-room {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin-bottom: 1.25rem;
+	}
+	.who-room-link {
+		font-size: 0.75rem;
+		font-weight: 900;
+		letter-spacing: 1px;
+		color: #2dd4bf;
+		text-decoration: none;
+		overflow-wrap: anywhere;
+	}
+	.who-room-link:hover {
+		text-decoration: underline;
+	}
+	.who-grid {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
+		gap: 0.75rem;
+	}
+	.who-grid li {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		min-width: 0;
+	}
+	.who-spot {
+		font-size: 0.72rem;
+		font-weight: 800;
+		color: #bbb;
+		overflow-wrap: anywhere;
+	}
+	.who-all {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		font-size: 0.8rem;
+		font-weight: 800;
+		color: #2dd4bf;
+		text-decoration: none;
+	}
+
 	.dashboard-container {
 		max-width: 1200px;
 		margin: 0 auto;
@@ -288,26 +496,38 @@
 		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 		position: relative;
 	}
-	.form-section.disabled {
-		opacity: 0.4;
-		filter: grayscale(1);
-		pointer-events: none;
+	.form-section.locked .laser-dot.turquoise {
+		background: #555;
+		box-shadow: none;
 	}
-	.lockdown-notice {
+	.lock-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin-left: auto;
+		padding: 3px 8px;
+		border-radius: 6px;
+		border: 1px solid rgba(251, 146, 60, 0.5);
 		background: rgba(251, 146, 60, 0.08);
-		border: 1px solid rgba(251, 146, 60, 0.3);
 		color: #fb923c;
-		padding: 1rem 1.5rem;
-		border-radius: 12px;
-		font-weight: 700;
-		font-size: 0.85rem;
-		line-height: 1.5;
-		margin-bottom: 2rem;
+		font-size: 0.6rem;
+		font-weight: 900;
+		letter-spacing: 1px;
+		white-space: nowrap;
+		--lock-glyph-hole: #1a120b;
 	}
-	.lockdown-notice a {
-		color: #fdba74;
+	/* Folded, a form is just its title bar (FoldToggle). */
+	.form-section.folded {
+		padding-top: 1rem;
+		padding-bottom: 1rem;
+		margin-bottom: 1.5rem;
+	}
+	.form-section.folded .section-header {
+		margin-bottom: 0;
 	}
 	.form-section h3 {
+		flex: 1 1 auto;
+		min-width: 0;
 		margin: 0;
 		color: #eee;
 		font-size: 0.9rem;
@@ -334,6 +554,34 @@
 	}
 
 	/* Room Card */
+	.section-hint {
+		margin: 0 0 0.9rem;
+		font-size: 0.8rem;
+		color: #8a8f98;
+		line-height: 1.4;
+		max-width: 60ch;
+	}
+	.room-details {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.35rem;
+		margin: 0.5rem 0 0.2rem;
+		min-width: 0;
+	}
+	.chip {
+		border: 1px solid rgba(255, 255, 255, 0.18);
+		border-radius: 999px;
+		padding: 0.1rem 0.5rem;
+		font-size: 0.68rem;
+		color: #cfd6dd;
+		overflow-wrap: anywhere;
+	}
+	.bed-mix {
+		font-size: 0.7rem;
+		color: #8a8f98;
+		overflow-wrap: anywhere;
+	}
 	.room-card {
 		background: #111;
 		border: 1px solid #222;
@@ -479,14 +727,10 @@
 		border-color: #2dd4bf;
 		background: rgba(45, 212, 191, 0.08);
 	}
-	.btn-vanish:hover:not(.disabled) {
+	.btn-vanish:hover:not([data-locked]) {
 		color: #f87171;
 		border-color: #f87171;
 		background: rgba(248, 113, 113, 0.05);
-	}
-	.btn-vanish.disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
 	}
 
 	@media (max-width: 640px) {

@@ -3,20 +3,31 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
 import { BookingService, CheckedInError, isBedBookable } from '$lib/server/booking';
+import { clearGuestSession, signInUrl } from '$lib/server/guest-session';
 import { getBookingSettings } from '$lib/server/settings';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
 import { passSummary } from '$lib/server/pass';
+import {
+	bedTypeMix,
+	effectiveFeatures,
+	readFeatures,
+	readFilters,
+	spotFacts,
+	spotMatchesFilters
+} from '$lib/accommodation';
 import type { PassSummary } from '$lib/pass';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 
-export const load: PageServerLoad = async ({ params, locals, cookies }) => {
-	if (!locals.orderNumber) throw redirect(303, '/?login=required');
+export const load: PageServerLoad = async ({ params, locals, cookies, url }) => {
+	if (!locals.orderNumber) throw redirect(303, signInUrl(locals, `/house/${params.id}`));
 
 	const bookingService = new BookingService(locals.adminPb);
-	let order;
+	// hooks.server.ts read the ticket for this request already; it only looks it
+	// up here when PocketBase couldn't answer there.
+	let order = locals.order ?? null;
 	try {
-		order = await bookingService.getOrderByNumber(locals.orderNumber);
+		if (!order) order = await bookingService.getOrderByNumber(locals.orderNumber);
 	} catch (err) {
 		console.error('[House] Order lookup failed:', (err as Error)?.message);
 		throw error(503, UNAVAILABLE);
@@ -24,7 +35,7 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 
 	if (!order) {
 		console.warn('[Security] House load: unknown ticket code in cookie.');
-		cookies.delete('bookingCode', { path: '/' });
+		clearGuestSession(cookies);
 		throw redirect(303, '/?login=expired');
 	}
 
@@ -47,12 +58,40 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 		// Calculate occupancy 👥 (deactivated beds don't exist for guests,
 		// locked ones count as taken)
 		const allowLocked = !!locals.admin;
+		// Wishes the guest picked on the map, carried over in the link.
+		const wishes = readFilters(url.searchParams.get('w'));
+		const houseFeatures = house.features;
 		const roomsWithStats = rooms.map((room) => {
 			const roomBeds = beds.filter((b) => b.room === room.id && b.enabled !== false);
-			const freeCount = roomBeds.filter(
-				(b) => !b.occupied && isBedBookable(b, { allowLocked })
-			).length;
-			return { ...room, freeCount, totalCount: roomBeds.length };
+			const free = roomBeds.filter((b) => !b.occupied && isBedBookable(b, { allowLocked }));
+			// What the room or the spot switched off (a superuser's call) is gone
+			// from the sum, so a wish never counts a heating the spot gave up.
+			const facts = (bed: (typeof roomBeds)[number]) =>
+				spotFacts({
+					bedType: bed.bed_type,
+					house: houseFeatures,
+					room: room.features,
+					roomOff: room.features_off,
+					spotOff: bed.features_off
+				});
+			return {
+				...room,
+				freeCount: free.length,
+				totalCount: roomBeds.length,
+				kind: room.kind ?? '',
+				features: effectiveFeatures({
+					house: houseFeatures,
+					room: room.features,
+					roomOff: room.features_off
+				}),
+				description: room.description ?? '',
+				bedMix: bedTypeMix(roomBeds.map((bed) => bed.bed_type)),
+				// Only counted when the guest brought wishes along from the map.
+				fittingFree:
+					wishes.length > 0
+						? free.filter((bed) => spotMatchesFilters(wishes, facts(bed))).length
+						: null
+			};
 		});
 
 		// Whether the crew picked the guest's spot, and their booking pass.
@@ -71,7 +110,13 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			: [false, null];
 
 		return {
-			house,
+			house: {
+				...house,
+				kind: house.kind ?? '',
+				features: readFeatures(house.features, 'house'),
+				description: house.description ?? ''
+			},
+			wishes,
 			rooms: roomsWithStats,
 			userBedId: userBed?.id || null,
 			spotFixed,
@@ -80,6 +125,8 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			pass,
 			isBookingActive: settings.isBookingActive,
 			phase: settings.phase,
+			// what the banners say; what is allowed still follows `phase`
+			guestPhase: settings.guestPhase,
 			bookingUnlockAt: settings.bookingUnlockAt
 		};
 	} catch (err) {

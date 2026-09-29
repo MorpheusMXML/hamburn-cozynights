@@ -2,6 +2,9 @@
 // Connection details come from scripts/test-stack.sh (throwaway PocketBase).
 import PocketBase, { ClientResponseError } from 'pocketbase';
 import crypto from 'crypto';
+import path from 'path';
+import { spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
 import { expect } from 'vitest';
 
 export const PB_TEST_URL = process.env.PB_TEST_URL || '';
@@ -106,4 +109,35 @@ export async function seedTicket(su: PocketBase) {
 		.collection('orders')
 		.create({ order_number: code, customer_name: 'Test Guest' });
 	return { code, order };
+}
+
+const COMPOSE_FILE = path.resolve(
+	path.dirname(fileURLToPath(import.meta.url)),
+	'../docker-compose.test.yml'
+);
+
+/** Runs `cozy-admin` in the stack's PocketBase, like an operator on the server. */
+export function cozyAdmin(args: string[]): string {
+	const run = spawnSync(
+		'docker',
+		[
+			'compose',
+			'-f',
+			COMPOSE_FILE,
+			'exec',
+			'-T',
+			'pocketbase',
+			'/usr/local/bin/pocketbase',
+			'cozy-admin',
+			...args,
+			'--dir=/pb_data',
+			'--hooksDir=/pb_hooks',
+			'--migrationsDir=/pb_migrations',
+			'--encryptionEnv=PB_ENCRYPTION_KEY'
+		],
+		{ encoding: 'utf8' }
+	);
+	const output = `${run.stdout}${run.stderr}`;
+	if (run.status !== 0) throw new Error(`cozy-admin ${args.join(' ')} failed:\n${output}`);
+	return output;
 }

@@ -71,6 +71,16 @@ onRecordAuthWithOAuth2Request((e) => {
 		}
 	}
 
+	// When this account last signed in with Google: the app ends the session
+	// once that is 7 days ago (src/lib/server/admin-auth.ts). Kept here, next
+	// to the sign-in itself, so it doesn't depend on any other hooks file, and
+	// written BEFORE the sign-in completes: once e.next() has answered, the
+	// browser holds a token, and a sign-in that then failed to be recorded
+	// would bounce between the admin area and the login page ("sign in again")
+	// without ever saying why. So a failure fails the sign-in instead; the app
+	// shows the reason on the login page (src/routes/auth/callback).
+	const signedInAt = new Date().toISOString().replace('T', ' ');
+
 	if (e.record && !e.isNewRecord) {
 		// An already linked Google account (matched by its stable id) whose email
 		// has changed since must not keep access to the old record.
@@ -80,8 +90,23 @@ onRecordAuthWithOAuth2Request((e) => {
 				'Google account email does not match the admin account.'
 			);
 		}
+		try {
+			e.record.set('last_sign_in', signedInAt);
+			e.app.save(e.record);
+		} catch (err) {
+			console.error('[admins-guard] last_sign_in not saved, sign-in refused: ' + err);
+			throw new InternalServerError(
+				'The sign-in could not be recorded (admins.last_sign_in), so no session was started.',
+				{ code: 'sign_in_not_recorded' }
+			);
+		}
 	} else {
-		e.createData = { email: email, emailVisibility: false, role: 'pending' };
+		e.createData = {
+			email: email,
+			emailVisibility: false,
+			role: 'pending',
+			last_sign_in: signedInAt
+		};
 	}
 
 	e.next();
@@ -91,17 +116,15 @@ onRecordAuthWithOAuth2Request((e) => {
 		e.record.set('role', 'pending');
 		e.app.save(e.record);
 	}
-
-	// When this account last signed in with Google: the app asks for a fresh
-	// sign-in once that is 7 days ago (src/lib/server/admin-auth.ts). Kept here,
-	// next to the sign-in itself, so it doesn't depend on any other hooks file.
-	// Never fails the sign-in: the next one writes it again.
-	if (e.record) {
+	// Should PocketBase have dropped last_sign_in from createData: a pending
+	// record has no rights, so writing it late is harmless here (the login page
+	// needs it to show "ACCESS REQUESTED").
+	if (e.isNewRecord && e.record && !e.record.getString('last_sign_in')) {
 		try {
-			e.record.set('last_sign_in', new Date().toISOString().replace('T', ' '));
+			e.record.set('last_sign_in', signedInAt);
 			e.app.save(e.record);
 		} catch (err) {
-			console.error('[admins-guard] last_sign_in not saved: ' + err);
+			console.error('[admins-guard] last_sign_in not saved for a new access request: ' + err);
 		}
 	}
 }, 'admins');

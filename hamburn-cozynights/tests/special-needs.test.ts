@@ -170,7 +170,7 @@ describe('special-needs beds in booking and counts', () => {
 				{ enabled: true, occupied: false, is_locked: false, is_special: true },
 				{ enabled: true, occupied: false, is_locked: false, is_special: false }
 			])
-		).toEqual({ total: 2, occupied: 0, free: 1, checkedIn: 0 });
+		).toMatchObject({ total: 2, occupied: 0, free: 1, checkedIn: 0, special: 1 });
 	});
 
 	it('look taken on the public map, which never learns which beds are special', async () => {
@@ -397,6 +397,20 @@ describe('special-needs requests', () => {
 		expect(spots.map((s) => [s.label, s.special])).toEqual([
 			['B1 · Dorm #2 · Villa', true],
 			['B2 · Dorm #2 · Villa', false]
+		]);
+	});
+
+	it('sums a spot up without what its room or the spot itself switched off', async () => {
+		// A superuser's call (features_off, src/lib/accommodation.ts): the Dorm
+		// in a heated, quiet Villa stays cold, and B1 gives up the quiet as well —
+		// so the ♿ matching never offers B1 to a guest who needs quiet.
+		Object.assign(c.house, { features: ['heated', 'quiet'] });
+		Object.assign(c.room, { features_off: ['heated'] });
+		Object.assign(c.special, { features_off: ['quiet'] });
+		const spots = await listAssignableSpots(c.pb as any);
+		expect(spots.map((s) => [s.spot, s.features])).toEqual([
+			['B1', []],
+			['B2', ['quiet']]
 		]);
 	});
 });

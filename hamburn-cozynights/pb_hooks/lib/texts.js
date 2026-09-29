@@ -18,6 +18,11 @@
 const PLACEHOLDERS = [
 	{ name: 'name', meaning: "the guest's name from the ticket list" },
 	{ name: 'spot', meaning: 'the spot with its room and house, like "B1 · Dorm #2 · Villa"' },
+	{
+		name: 'bed',
+		meaning:
+			'the bed, when the crew wrote it down: its kind, the other level of a bunk bed and what is at it, like "Upper bunk · above B1 · 🔥 Heated"'
+	},
 	{ name: 'before', meaning: 'the spot the ticket held before' },
 	{ name: 'roomUrl', meaning: "the link to the guest's room (to the map while they have no spot)" },
 	{ name: 'mapUrl', meaning: 'the link to the map' },
@@ -25,7 +30,21 @@ const PLACEHOLDERS = [
 	{ name: 'passCode', meaning: 'the code of the booking pass' },
 	{ name: 'passUrl', meaning: 'the link to the booking pass' },
 	{ name: 'appUrl', meaning: 'the address of the booking page' },
-	{ name: 'status', meaning: 'the status of the special-needs request, in words' }
+	{
+		name: 'telegramUrl',
+		meaning: 'the page where a guest connects Telegram (sign-in with the ticket code first)'
+	},
+	{ name: 'status', meaning: 'the status of the special-needs request, in words' },
+	{
+		name: 'other',
+		meaning:
+			'the other spot of a swap request: the one offered to the guest, or the one they asked for'
+	},
+	{ name: 'until', meaning: 'when a swap request runs out, in Berlin time' },
+	{
+		name: 'swapUrl',
+		meaning: "the page with the guest's swap requests (sign-in with the ticket code first)"
+	}
 ];
 
 const GROUPS = [
@@ -35,12 +54,14 @@ const GROUPS = [
 	{ id: 'mail.changed', channel: 'mail', title: 'E-mail · spot changed' },
 	{ id: 'mail.released', channel: 'mail', title: 'E-mail · spot released' },
 	{ id: 'mail.request', channel: 'mail', title: 'E-mail · special-needs request' },
+	{ id: 'mail.swap', channel: 'mail', title: 'E-mail · swap requests' },
 	{ id: 'tg.common', channel: 'telegram', title: 'Telegram · in several messages' },
 	{ id: 'tg.connected', channel: 'telegram', title: 'Telegram · chat connected' },
 	{ id: 'tg.booked', channel: 'telegram', title: 'Telegram · spot booked' },
 	{ id: 'tg.changed', channel: 'telegram', title: 'Telegram · spot changed' },
 	{ id: 'tg.released', channel: 'telegram', title: 'Telegram · spot released' },
 	{ id: 'tg.request', channel: 'telegram', title: 'Telegram · special-needs request' },
+	{ id: 'tg.swap', channel: 'telegram', title: 'Telegram · swap requests' },
 	{ id: 'bot', channel: 'bot', title: 'Telegram · replies of the bot' }
 ];
 
@@ -59,6 +80,10 @@ const TEXTS = [
 		text: 'Your booking pass (code {passCode}): {passUrl} — show it when you arrive, if the crew asks.' },
 	{ key: 'mail.fixed', group: 'mail.common', label: 'A spot the crew booked: how to change it', hint: 'Instead of the usual "to change or release it" line, when the crew booked the spot for a special-needs request.', placeholders: ['roomUrl'],
 		text: 'The crew picked this spot for you, so please contact the crew to change it. Your room: {roomUrl}' },
+	{ key: 'mail.wallet', group: 'mail.common', label: 'Wallet passes', hint: 'Below the booking pass, when Apple Wallet or Google Wallet passes are set up on the server.', placeholders: [],
+		text: 'Keep it in Apple Wallet or Google Wallet: open the pass and tap the button. The wallet pass updates itself when your spot changes.' },
+	{ key: 'mail.telegram', group: 'mail.common', label: 'Offer: updates on Telegram', hint: 'In every message that shows the spot, while the guest has no Telegram chat connected (and the bot is set up).', placeholders: ['telegramUrl'],
+		text: 'Want every change and your pass on Telegram as well? Connect here: {telegramUrl}' },
 
 	// --- e-mail: spot booked ----------------------------------------------------------
 	{ key: 'mail.booked.subject', group: 'mail.booked', label: 'Subject', hint: '', placeholders: ['spot'],
@@ -148,9 +173,39 @@ const TEXTS = [
 	{ key: 'mail.also.declined', group: 'mail.request', label: 'Spot booked or changed while the request is declined', hint: 'Added to the "spot booked" or "spot changed" e-mail.', placeholders: [],
 		text: 'The crew could not offer you a special-needs spot; you keep this spot.' },
 
+	// --- e-mail: swap requests ------------------------------------------------------
+	{ key: 'mail.swap_ask.subject', group: 'mail.swap', label: 'Someone would like to swap · subject', hint: 'To the guest a swap request is addressed to. What the asker wrote is never in the e-mail, only in the app.', placeholders: ['spot'],
+		text: '🔁 Swap request for your spot {spot}' },
+	{ key: 'mail.swap_ask.intro', group: 'mail.swap', label: 'Someone would like to swap · first line', hint: 'After the greeting.', placeholders: [],
+		text: 'a fellow burner would love to swap spots with you.' },
+	{ key: 'mail.swap_ask.offer', group: 'mail.swap', label: 'Someone would like to swap · the spot offered', hint: '', placeholders: ['other'],
+		text: 'You would get: {other}' },
+	{ key: 'mail.swap_ask.bed', group: 'mail.swap', label: 'Someone would like to swap · the bed offered', hint: 'Right below, when the crew wrote down what kind of bed it is or what is at it.', placeholders: ['bed'],
+		text: '🛏 {bed}' },
+	{ key: 'mail.swap_ask.yours', group: 'mail.swap', label: 'Someone would like to swap · the spot they would get', hint: '', placeholders: ['spot'],
+		text: 'They would get your spot: {spot}' },
+	{ key: 'mail.swap_ask.answer', group: 'mail.swap', label: 'Someone would like to swap · how to answer', hint: '', placeholders: ['swapUrl', 'until'],
+		text: 'They left you a few words. Read them and answer in the app (sign in with your ticket code): {swapUrl} — the request is open until {until}.' },
+	{ key: 'mail.swap_ask.nothing', group: 'mail.swap', label: 'Someone would like to swap · nothing changes', hint: 'The last line.', placeholders: [],
+		text: 'Nothing changes unless you say yes. Not for you? Tap “No thanks”, or let it run out.' },
+	{ key: 'mail.swap_no.subject', group: 'mail.swap', label: 'No swap · subject', hint: 'To the guest who asked, when the other guest said no.', placeholders: [],
+		text: 'No swap this time' },
+	{ key: 'mail.swap_no.intro', group: 'mail.swap', label: 'No swap · first line', hint: 'After the greeting.', placeholders: ['other'],
+		text: 'the guest in {other} would rather keep their spot, so nothing changed.' },
+	{ key: 'mail.swap_no.keep', group: 'mail.swap', label: 'No swap · what now', hint: '', placeholders: ['spot', 'mapUrl'],
+		text: 'You keep your spot, {spot}. Other spots may be free or up for a swap: {mapUrl}' },
+	{ key: 'mail.swapped.subject', group: 'mail.swap', label: 'Swap done · subject', hint: 'Both guests get it after a yes, instead of "spot changed". House, room and spot follow like in "spot booked".', placeholders: ['spot'],
+		text: '🔁 Swap done! Your CozyNights spot: {spot}' },
+	{ key: 'mail.swapped.intro', group: 'mail.swap', label: 'Swap done · first line', hint: 'After the greeting; house, room and spot follow.', placeholders: [],
+		text: 'your swap went through — this is your spot now:' },
+	{ key: 'mail.swapped.before', group: 'mail.swap', label: 'Swap done · the old spot', hint: '', placeholders: ['before'],
+		text: 'Your old spot, {before}, belongs to the other guest now.' },
+
 	// --- Telegram: in several messages ------------------------------------------------
 	{ key: 'tg.pass', group: 'tg.common', label: 'Booking pass', hint: 'Below every message that shows the spot.', placeholders: ['passCode', 'passUrl'],
 		text: '🎫 Booking pass {passCode}:\n{passUrl}' },
+	{ key: 'tg.bed', group: 'tg.common', label: 'The bed', hint: 'Below the spot in every message that shows it, when the crew wrote down what kind of bed it is or what is at it.', placeholders: ['bed'],
+		text: '🛏 {bed}' },
 	{ key: 'tg.before', group: 'tg.common', label: 'The old spot', hint: 'When the spot changed.', placeholders: ['before'],
 		text: 'Before: {before}' },
 	{ key: 'tg.contact_crew', group: 'tg.common', label: 'A spot the crew booked: how to change it', hint: 'When the crew booked the spot for a special-needs request.', placeholders: [],
@@ -171,8 +226,8 @@ const TEXTS = [
 		text: 'approved' },
 	{ key: 'tg.status.declined', group: 'tg.connected', label: 'Request status: declined', hint: 'The words for {status}.', placeholders: [],
 		text: 'declined' },
-	{ key: 'tg.connected.stop', group: 'tg.connected', label: 'How to disconnect', hint: '', placeholders: [],
-		text: 'Send /stop to disconnect.' },
+	{ key: 'tg.connected.stop', group: 'tg.connected', label: 'What the guest can send', hint: 'The last line.', placeholders: [],
+		text: 'Send /pass to see your booking pass again, /stop to disconnect.' },
 
 	// --- Telegram: spot booked ------------------------------------------------------------
 	{ key: 'tg.booked.intro', group: 'tg.booked', label: 'The message', hint: '', placeholders: ['spot'],
@@ -222,15 +277,33 @@ const TEXTS = [
 	{ key: 'tg.news.declined', group: 'tg.request', label: 'Spot booked, changed or released while the request is declined', hint: 'Added above the spot message.', placeholders: [],
 		text: '✋ The crew could not offer you a special-needs spot.' },
 
+	// --- Telegram: swap requests ------------------------------------------------------------
+	{ key: 'tg.swap_ask.intro', group: 'tg.swap', label: 'Someone would like to swap · the spot offered', hint: 'To the guest a swap request is addressed to, with a button to answer. The 🛏 line of the offered bed follows when the crew wrote it down.', placeholders: ['other'],
+		text: '🔁 Swap request! A fellow burner would love to trade spots with you.\n\nYou would get: {other}' },
+	{ key: 'tg.swap_ask.yours', group: 'tg.swap', label: 'Someone would like to swap · the spot they would get', hint: '', placeholders: ['spot'],
+		text: 'They would get your spot: {spot}' },
+	{ key: 'tg.swap_ask.answer', group: 'tg.swap', label: 'Someone would like to swap · how to answer', hint: 'What the asker wrote is never sent here, only shown in the app.', placeholders: ['until', 'swapUrl'],
+		text: 'Read their few words and answer in the app — open until {until}:\n{swapUrl}\n\nNothing changes unless you say yes.' },
+	{ key: 'tg.swap_no', group: 'tg.swap', label: 'No swap', hint: 'To the guest who asked, when the other guest said no.', placeholders: ['other', 'spot'],
+		text: '🔁 No swap this time: the guest in {other} keeps their spot. You keep yours, {spot}.' },
+	{ key: 'tg.swapped.intro', group: 'tg.swap', label: 'Swap done', hint: 'Both guests get it after a yes, instead of "spot changed"; the 🛏 line and the old spot follow.', placeholders: ['spot'],
+		text: '🔁 Swap done! Your CozyNights spot now:\n{spot}' },
+	{ key: 'tg.swapped.before', group: 'tg.swap', label: 'Swap done · the old spot', hint: '', placeholders: ['before'],
+		text: 'Your old spot, {before}, is theirs now.' },
+
 	// --- Telegram: replies of the bot ---------------------------------------------------------
-	{ key: 'bot.help', group: 'bot', label: 'Any other message to the bot', hint: 'Also the answer to /start without a connect link.', placeholders: ['appUrl'],
-		text: '👋 This bot sends updates about your CozyNights spot.\n\nTo connect: open {appUrl}, sign in with your ticket code, open your room or your special-needs request and tap “Get updates on Telegram”.' },
-	{ key: 'bot.link_expired', group: 'bot', label: 'The connect link has expired', hint: '', placeholders: [],
-		text: '⌛ This link has expired or was already used. Open your room on the booking page and tap “Get updates on Telegram” again.' },
+	{ key: 'bot.help', group: 'bot', label: 'Any other message to the bot', hint: 'Also the answer to /help, and to /start without a connect link.', placeholders: ['appUrl'],
+		text: '👋 This bot sends updates about your CozyNights spot, with your booking pass.\n\nTo connect: open {appUrl}/telegram, sign in with your ticket code and tap “Get updates on Telegram”.\n\nOnce connected: /pass shows your booking pass, /stop ends the updates.' },
+	{ key: 'bot.link_expired', group: 'bot', label: 'The connect link has expired', hint: '', placeholders: ['appUrl'],
+		text: '⌛ This link has expired or was already used. Open {appUrl}/telegram and tap “Get updates on Telegram” again.' },
 	{ key: 'bot.stopped', group: 'bot', label: '/stop', hint: '', placeholders: [],
 		text: '🔕 Disconnected. You won\'t get updates here anymore. You can connect again on the booking page.' },
-	{ key: 'bot.not_connected', group: 'bot', label: '/stop in a chat that is not connected', hint: '', placeholders: [],
-		text: 'This chat is not connected to a ticket.' }
+	{ key: 'bot.not_connected', group: 'bot', label: '/stop or /pass in a chat that is not connected', hint: '', placeholders: [],
+		text: 'This chat is not connected to a ticket.' },
+	{ key: 'bot.pass', group: 'bot', label: '/pass', hint: 'The booking pass on request, with its QR code as a picture. Once per ticket the chat follows.', placeholders: ['spot', 'passCode', 'passUrl'],
+		text: '🎫 Your booking pass {passCode}\n{spot}\n\nShow it when you arrive, if the crew asks: {passUrl}' },
+	{ key: 'bot.pass_no_spot', group: 'bot', label: '/pass without a spot', hint: 'When the ticket holds no spot right now.', placeholders: ['mapUrl'],
+		text: 'Your ticket holds no spot right now, so there is no pass to show. Pick one while booking is open: {mapUrl}' }
 ];
 
 module.exports = { PLACEHOLDERS: PLACEHOLDERS, GROUPS: GROUPS, TEXTS: TEXTS };

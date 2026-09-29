@@ -1,16 +1,25 @@
 // src/routes/room/[id]/+page.server.ts
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import type { RoomsResponse, BedsResponse, OrdersResponse } from '$lib/pocketbase-types';
+import type {
+	RoomsResponse,
+	BedsResponse,
+	HousesResponse,
+	OrdersResponse
+} from '$lib/pocketbase-types';
+import { effectiveFeatures, missingAtSpot, roomKind } from '$lib/accommodation';
+import { compareNatural } from '$lib/template';
 import { decrypt } from '$lib/server/crypto';
 import {
 	BookingService,
 	BedUnavailableError,
+	BookingClosedError,
 	CheckedInError,
 	ReleaseFailedError,
 	isBedBookable,
 	randomBurnerName
 } from '$lib/server/booking';
+import { clearGuestSession, signInUrl } from '$lib/server/guest-session';
 import { getBookingSettings } from '$lib/server/settings';
 import { bookingRefusal } from '$lib/booking-phase';
 import {
@@ -20,7 +29,10 @@ import {
 	type GuestNotifyStatus
 } from '$lib/server/notifications';
 import { passSummary } from '$lib/server/pass';
+import { walletPlatforms } from '$lib/server/wallet/config';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
+import { roomSwaps, type RoomSwaps } from '$lib/server/swaps';
+import { askSwapAction, withdrawSwapAction } from '$lib/server/swap-actions';
 import type { PassSummary } from '$lib/pass';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
@@ -34,13 +46,15 @@ function cleanBurnerName(raw: FormDataEntryValue | null): string {
 }
 
 export const load: PageServerLoad = async ({ params, locals, cookies }) => {
-	if (!locals.orderNumber) throw redirect(303, '/?login=required');
+	if (!locals.orderNumber) throw redirect(303, signInUrl(locals, `/room/${params.id}`));
 
 	// Always use the adminPb instance for backend operations
 	const bookingService = new BookingService(locals.adminPb);
-	let order;
+	// hooks.server.ts read the ticket for this request already; it only looks it
+	// up here when PocketBase couldn't answer there.
+	let order = locals.order ?? null;
 	try {
-		order = await bookingService.getOrderByNumber(locals.orderNumber);
+		if (!order) order = await bookingService.getOrderByNumber(locals.orderNumber);
 	} catch (err) {
 		console.error('[Room] Order lookup failed:', (err as Error)?.message);
 		throw error(503, UNAVAILABLE);
@@ -48,7 +62,7 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 
 	if (!order) {
 		console.warn('[Security] Room load: unknown ticket code in cookie.');
-		cookies.delete('bookingCode', { path: '/' });
+		clearGuestSession(cookies);
 		throw redirect(303, '/?login=expired');
 	}
 
@@ -56,7 +70,9 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 		const [settings, userBed, room, beds] = await Promise.all([
 			getBookingSettings(locals.pb),
 			bookingService.getBedForOrder(order.id),
-			locals.pb.collection('rooms').getOne<RoomsResponse>(params.id),
+			locals.pb.collection('rooms').getOne<RoomsResponse<{ house?: HousesResponse }>>(params.id, {
+				expand: 'house'
+			}),
 			locals.adminPb.collection('beds').getFullList<BedsResponse<{ order?: OrdersResponse }>>({
 				filter: locals.adminPb.filter('room = {:roomId}', { roomId: params.id }),
 				sort: 'label',
@@ -64,10 +80,17 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			})
 		]);
 
+		// PocketBase sorts labels as text (B1, B10, B2); the page shows and pairs
+		// them in the order people count in (B1, B2, …, B10).
+		beds.sort((a, b) => compareNatural(a.label, b.label));
+
 		// Only these fields reach the browser. The expanded orders carry other
 		// guests' ticket codes and customer names and must never be serialized.
 		// `bookable` only matters for free spots: for a taken one it would tell
 		// whether it is locked or a special-needs spot, next to the burner name.
+		// `blocked` is a spot taken without a ticket (TAKEN on the admin page):
+		// no guest is behind it, so the card says "Blocked by admin" like every
+		// other crew hold. A guest's booking — a ♿ one included — never is.
 		const safeBeds = beds.map((bed) => {
 			let burnerName = '';
 			if (bed.occupied && bed.expand?.order?.burner_name) {
@@ -82,17 +105,37 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				label: bed.label,
 				occupied: !!bed.occupied,
 				bookable: !bed.occupied && isBedBookable(bed, { allowLocked: !!locals.admin }),
-				burnerName
+				blocked: !!bed.occupied && !bed.order,
+				burnerName,
+				// What kind of bed it is: the room's and the house's features are
+				// shown once, above the list.
+				bedType: bed.bed_type ?? '',
+				// What this spot does NOT have although the room or house has it: a
+				// superuser switched it off here, or the bed rules it out (an upper
+				// bunk is never ♿). The card says "no ♿ Wheelchair accessible", so
+				// the room's chips above don't promise it for this bed.
+				missing: missingAtSpot({
+					house: room.expand?.house?.features,
+					room: room.features,
+					roomOff: room.features_off,
+					spotOff: bed.features_off,
+					bedType: bed.bed_type
+				}),
+				// The other spot of a bunk bed (a record id, not personal data): the
+				// page stacks the two into one tile.
+				bunkPartner: bed.bunk_partner ?? ''
 			};
 		});
 
-		// Where confirmations go, the booking pass, and whether the crew picked the
-		// spot (special-needs request). Optional: the page works without them.
+		// Where confirmations go, the booking pass, whether the crew picked the
+		// spot (special-needs request), and what swaps the guest can ask for.
+		// Optional: the page works without them.
 		let notify: GuestNotifyStatus | null = null;
 		let pass: PassSummary | null = null;
 		let spotFixed = false;
+		let swap: RoomSwaps | null = null;
 		if (userBed) {
-			[notify, pass, spotFixed] = await Promise.all([
+			[notify, pass, spotFixed, swap] = await Promise.all([
 				getGuestNotifyStatus(locals.adminPb, order, settings).catch((err) => {
 					console.error('[Room] Notification status failed:', (err as Error)?.message);
 					return null;
@@ -104,6 +147,10 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				isSpotFixed(locals.adminPb, order.id, userBed.id).catch((err) => {
 					console.error('[Room] Special-needs request lookup failed:', (err as Error)?.message);
 					return false;
+				}),
+				roomSwaps(locals.adminPb, settings, order, userBed).catch((err) => {
+					console.error('[Room] Swap requests lookup failed:', (err as Error)?.message);
+					return null;
 				})
 			]);
 		}
@@ -111,14 +158,36 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 		return {
 			notify,
 			pass,
+			// the wallet buttons under the pass (none until a wallet is set up)
+			wallet: walletPlatforms(),
 			spotFixed,
+			// Taken spots offer a swap when this is set and has `mine` (docs/guide/booking.md).
+			swap,
 			// The crew checked the guest in at arrival: only the crew changes the spot now.
 			checkedIn: !!userBed?.checked_in_at,
-			room: { id: room.id, name: room.name, room_number: room.room_number, house: room.house },
+			room: {
+				id: room.id,
+				name: room.name,
+				room_number: room.room_number,
+				house: room.house,
+				houseName: room.expand?.house?.name ?? '',
+				houseKind: room.expand?.house?.kind ?? '',
+				kind: roomKind(room.kind),
+				description: room.description ?? '',
+				// The house's features count for this room too, minus what the
+				// room switched off (a superuser's call).
+				features: effectiveFeatures({
+					house: room.expand?.house?.features,
+					room: room.features,
+					roomOff: room.features_off
+				})
+			},
 			beds: safeBeds,
 			userBedId: userBed?.id || null,
 			isBookingActive: settings.isBookingActive,
 			phase: settings.phase,
+			// what the banners say; what is allowed still follows `phase`
+			guestPhase: settings.guestPhase,
 			bookingUnlockAt: settings.bookingUnlockAt
 		};
 	} catch (err: any) {
@@ -142,7 +211,11 @@ export const actions: Actions = {
 		}
 
 		const { isBookingActive, phase } = await getBookingSettings(locals.pb);
-		if (!isBookingActive) return fail(403, { error: bookingRefusal(phase) });
+		// Closed: nothing changes any more, not even a name. Outside Live Booking
+		// only the burner name of the spot the ticket already holds may change
+		// (decided below, once that spot is known): a handed-over ticket comes
+		// without a name, and booking may not have opened yet.
+		if (phase === 'closed') return fail(403, { error: bookingRefusal(phase) });
 
 		const formData = await request.formData();
 		const bedId = formData.get('bedId') as string;
@@ -163,6 +236,8 @@ export const actions: Actions = {
 			}
 
 			const currentBed = await bookingService.getBedForOrder(order.id);
+			const renaming = !!currentBed && currentBed.id === bedId;
+			if (!renaming && !isBookingActive) return fail(403, { error: bookingRefusal(phase) });
 			if (currentBed && currentBed.id !== bedId) {
 				// A spot the crew picked for a special-needs request stays where it
 				// is; giving it a new burner name is fine.
@@ -178,9 +253,11 @@ export const actions: Actions = {
 			}
 
 			// Availability (free, enabled, not locked unless admin) is checked
-			// authoritatively inside bookBed, under per-order and per-bed locks.
+			// authoritatively inside bookBed, under per-order and per-bed locks —
+			// and so is the phase, which can close while this waits for them.
 			await bookingService.bookBed(order, bedId, guestName, {
-				allowLocked: !!locals.admin
+				allowLocked: !!locals.admin,
+				requireLivePhase: true
 			});
 			return { success: true };
 		} catch (err: any) {
@@ -190,6 +267,7 @@ export const actions: Actions = {
 			if (err instanceof ReleaseFailedError || err instanceof CheckedInError) {
 				return fail(409, { error: err.message });
 			}
+			if (err instanceof BookingClosedError) return fail(403, { error: err.message });
 			if (err?.status === 404) {
 				return fail(404, {
 					error: "This spot doesn't exist anymore. Please pick another one.",
@@ -240,6 +318,12 @@ export const actions: Actions = {
 			return fail(500, { error: 'Telegram updates could not be turned off. Please try again.' });
 		}
 	},
+
+	/** Asks the guest of a taken spot to swap (the swap sheet). */
+	askSwap: async ({ request, locals }) => askSwapAction(locals, request),
+
+	/** Takes an open swap request back. */
+	withdrawSwap: async ({ request, locals }) => withdrawSwapAction(locals, request),
 
 	unbookBed: async ({ locals }) => {
 		if (!locals.adminPb.authStore.isValid) {

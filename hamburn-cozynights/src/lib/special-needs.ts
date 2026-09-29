@@ -54,6 +54,14 @@ export interface SpotInfo {
 	house: string;
 	special: boolean;
 	locked: boolean;
+	/**
+	 * What kind of bed it is and what is true around it, as plain values of the
+	 * catalogue in src/lib/accommodation.ts (that module reads this one, so the
+	 * types stay there). The features are the spot's own plus its room's and
+	 * house's: this is what the ♿ picker matches a request's needs with.
+	 */
+	bedType: string;
+	features: string[];
 }
 
 /** What the guest sees of their own request. */

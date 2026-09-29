@@ -1,17 +1,25 @@
 <script lang="ts">
+	import PlaceDetails from '$lib/components/PlaceDetails.svelte';
+	import { bedTypeEntry, featureEntry } from '$lib/accommodation';
+	import { bunkNote, bunkOf, groupBunks, type BunkLevel } from '$lib/bunks';
+	import BunkLadder from '$lib/components/BunkLadder.svelte';
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
+	import PassActions from '$lib/components/PassActions.svelte';
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
-	import { onDestroy, tick } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import type { PageData, ActionData } from './$types';
 	import SlotMachine from '$lib/components/SlotMachine.svelte';
+	import { BURNER_NAME_MAX } from '$lib/burner-names';
 	import SuccessFireworks from '$lib/components/SuccessFireworks.svelte';
 	import type { Point } from '$lib/fx/fireworks';
 	import { confirmDialog, dialogQueue, toast } from '$lib/dialogs';
+	import SwapSheet from '$lib/components/swaps/SwapSheet.svelte';
+	import type { SwapSpot } from '$lib/swaps';
 
 	export let data: PageData;
 	export let form: ActionData;
@@ -22,9 +30,10 @@
 	let selectedBedId: string | null = null;
 	let currentNameInput = '';
 	let slotMachineRef: SlotMachine;
-	let isAutoSpinning = false;
-	let showSlotManually = false;
-	let nameGenerated = false;
+	/** The slot machine is on the table (it stays until the dialog closes). */
+	let showSlot = false;
+	/** A roll is running: the field keeps what it has until the machine stops. */
+	let rolling = false;
 
 	// Fireworks for a fresh booking: they rise from the booked card, and their
 	// finale lights the "Welcome Home" banner up for a moment.
@@ -50,8 +59,10 @@
 
 	onDestroy(() => clearTimeout(bannerTimer));
 
-	// `form` only matters without JavaScript; with it, the enhance callbacks
-	// below report errors where the guest is looking (modal or banner).
+	// The banner forms (release, Telegram) work without JavaScript: `form`
+	// carries their result then. With JavaScript, the enhance callbacks below
+	// report errors where the guest is looking (modal or banner). The booking
+	// dialog itself needs JavaScript: it only opens from a click.
 	let modalError = '';
 	let bannerError = form?.error ?? '';
 	let isSaving = false;
@@ -61,6 +72,80 @@
 
 	$: selectedBed = data.beds.find((b) => b.id === selectedBedId);
 	$: roomTitle = `${data.room.name || 'Room'} #${data.room.room_number}`;
+
+	/** A spot as $lib/bunks reads it: the server's safe fields plus the pairing. */
+	type Spot = PageData['beds'][number] & { bed_type: string; bunk_partner: string };
+	$: spots = data.beds.map((bed): Spot => ({
+		...bed,
+		bed_type: bed.bedType,
+		bunk_partner: bed.bunkPartner
+	}));
+	// The cards of the room: single spots as they are, a bunk bed as one tile.
+	// The server sorted the spots the way people count (B1, B2, …, B10), and a
+	// bunk bed sits where its first spot was.
+	$: units = groupBunks(spots);
+	// What the modal says about a stacked spot: "the upper bunk above B1".
+	$: selectedBunk = selectedBedId ? bunkOf(spots, selectedBedId) : null;
+	$: selectedLevel = selectedBunk
+		? selectedBunk.lower.id === selectedBedId
+			? 'lower'
+			: 'upper'
+		: null;
+	$: selectedNote = selectedBedId ? bunkNote(spots, selectedBedId) : '';
+
+	// Visitors who prefer reduced motion get the tiles without the fade.
+	let reduceMotion = false;
+	onMount(() => {
+		reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	});
+
+	/**
+	 * "Single bed" under a spot's label. In a bunk bed the level chip says
+	 * "Upper bunk" already, so its half only adds where the other level is:
+	 * "above B1". What the spot lacks although the room has it reads
+	 * "no ♿ Wheelchair accessible" — an upper bunk in a ♿ room, or a feature a
+	 * superuser switched off for this spot.
+	 */
+	$: spotLine = (
+		bed: { id: string; bedType: string; missing: string[] },
+		level: BunkLevel | null
+	) =>
+		[
+			level ? bunkNote(spots, bed.id) : bedTypeEntry(bed.bedType)?.label,
+			...bed.missing.map((feature) => {
+				const entry = featureEntry(feature);
+				return entry ? `no ${entry.icon} ${entry.label}` : '';
+			})
+		]
+			.filter(Boolean)
+			.join(' · ');
+	/** The level chip on a half of a bunk bed, as Deploy 20 drew it. */
+	const LEVEL_NAME: Record<BunkLevel, string> = { lower: 'Lower bunk', upper: 'Upper bunk' };
+
+	/**
+	 * A spot's state for the colours of src/routes/state.css (data-state):
+	 * 'full' someone else booked it, 'checked-in' it is mine, 'locked' the crew
+	 * holds it back (locked, ♿, inactive, or taken without a ticket: "Blocked
+	 * by admin"), 'idle' booking is not open (yet or anymore), 'open' free and
+	 * bookable. A free spot stays green while I hold another one — the spot is
+	 * free, only the button is off.
+	 */
+	type SpotState = 'open' | 'full' | 'checked-in' | 'locked' | 'idle';
+	$: spotState = (bed: Spot): SpotState =>
+		bed.blocked
+			? 'locked'
+			: bed.occupied && bed.id !== data.userBedId
+				? 'full'
+				: bed.id === data.userBedId
+					? 'checked-in'
+					: !bed.bookable
+						? 'locked'
+						: !data.isBookingActive
+							? 'idle'
+							: 'open';
+	/** Whether a card has a detail line at all. */
+	const hasDetail = (bed: { bedType: string; missing: string[] }, level: BunkLevel | null) =>
+		!!level || !!bedTypeEntry(bed.bedType) || bed.missing.length > 0;
 
 	// The page behind an open modal must not scroll along on phones.
 	$: if (typeof document !== 'undefined') {
@@ -75,9 +160,8 @@
 		currentNameInput = existingName || '';
 		modalError = '';
 		showModal = true;
-		showSlotManually = false;
-		isAutoSpinning = false;
-		nameGenerated = false;
+		showSlot = false;
+		rolling = false;
 		await tick();
 		modalEl?.focus();
 	}
@@ -85,9 +169,8 @@
 	function closeModal() {
 		showModal = false;
 		selectedBedId = null;
-		showSlotManually = false;
-		isAutoSpinning = false;
-		nameGenerated = false;
+		showSlot = false;
+		rolling = false;
 	}
 
 	function handleWindowKeydown(event: KeyboardEvent) {
@@ -95,33 +178,25 @@
 		if (event.key === 'Escape' && showModal && $dialogQueue.length === 0) closeModal();
 	}
 
+	/** The machine stopped: the name lands in the field, where it can still be changed. */
 	function handleSlotSelect(event: CustomEvent<string>) {
 		currentNameInput = event.detail;
-		if (isAutoSpinning) {
-			nameGenerated = true;
-		}
+		rolling = false;
 	}
 
-	function respinName() {
-		nameGenerated = false;
-		currentNameInput = '';
-		if (slotMachineRef) slotMachineRef.spin();
-	}
-
-	function cancelSlotSelection() {
-		showSlotManually = false;
-		isAutoSpinning = false;
-		nameGenerated = false;
-		currentNameInput = '';
-	}
-
-	/** No burner name given: the slot machine rolls one before anything is booked. */
+	/**
+	 * Rolls a burner name into the field: on 🎲, or when the form is sent with
+	 * an empty field. The field stays where it is, so the guest can keep the
+	 * roll, edit it or roll again — nothing typed is ever thrown away by the
+	 * machine, only replaced by a roll the guest asked for.
+	 */
 	async function rollBurnerName() {
-		showSlotManually = true;
-		isAutoSpinning = true;
-		nameGenerated = false;
+		if (rolling) return;
+		showSlot = true;
+		rolling = true;
 		await tick();
 		if (slotMachineRef) slotMachineRef.spin();
+		else rolling = false;
 	}
 
 	function confirmRelease() {
@@ -139,6 +214,29 @@
 	function failureMessage(result: { data?: Record<string, unknown> }, fallback: string) {
 		return typeof result.data?.error === 'string' ? result.data.error : fallback;
 	}
+
+	// Swap requests (docs/guide/booking.md "Swap spots"): while booking is live,
+	// a guest whose own spot can be swapped taps any taken spot to ask its
+	// guest for a trade. Every taken spot offers it, whatever it is.
+	$: canSwap = !!data.swap && !data.swap.pause && !!data.swap.mine && !data.swap.why;
+	$: swapAsked = data.swap?.asked ?? {};
+	let swapTarget: Spot | null = null;
+	/** A taken spot of this room as the swap sheet shows it. */
+	function swapSpotOf(bed: Spot): SwapSpot {
+		const bunk = bunkOf(spots, bed.id);
+		const level: BunkLevel | null = bunk ? (bunk.lower.id === bed.id ? 'lower' : 'upper') : null;
+		return {
+			bedId: bed.id,
+			roomId: data.room.id,
+			spot: bed.label,
+			room: roomTitle,
+			house: data.room.houseName,
+			label: [bed.label, roomTitle, data.room.houseName].filter(Boolean).join(' · '),
+			bed: level
+				? `${LEVEL_NAME[level]} · ${bunkNote(spots, bed.id)}`
+				: (bedTypeEntry(bed.bedType)?.label ?? '')
+		};
+	}
 </script>
 
 <svelte:window on:keydown={handleWindowKeydown} />
@@ -153,9 +251,15 @@
 			<a href="/house/{data.room.house}" class="back-link">← Back to House</a>
 		</div>
 		<h1>{data.room.name || 'Room'} <small>#{data.room.room_number}</small></h1>
+		<PlaceDetails
+			level="room"
+			kind={data.room.kind}
+			features={data.room.features}
+			description={data.room.description}
+		/>
 	</header>
 
-	{#if data.phase === 'closed'}
+	{#if data.guestPhase === 'closed'}
 		<div class="booking-locked-banner" role="status">
 			<div class="locked-icon" aria-hidden="true">🔒</div>
 			<div class="locked-content">
@@ -196,7 +300,7 @@
 							your current spot first.
 						</p>
 					{:else}
-						<p>{ownSpotNote(data.phase)}</p>
+						<p>{ownSpotNote(data.phase, data.guestPhase)}</p>
 					{/if}
 					{#if data.pass}
 						<PassTicket pass={data.pass} />
@@ -252,18 +356,46 @@
 						Spot <strong>{myBed.label}</strong> in this room is yours.
 						{#if data.checkedIn}
 							{CHECKED_IN_NOTE}
-							{#if data.isBookingActive}Tap it to change your burner name.{/if}
+							{#if data.phase !== 'closed'}Tap it to change your burner name.{/if}
 						{:else if data.spotFixed}
 							The crew picked it for you because of your special-needs request. To change it, please
 							contact the crew.
-							{#if data.isBookingActive}Tap it to change your burner name.{/if}
-						{:else if data.isBookingActive}Tap it to change your burner name or to release it.{/if}
+							{#if data.phase !== 'closed'}Tap it to change your burner name.{/if}
+						{:else if data.isBookingActive}Tap it to change your burner name or to release it.
+						{:else if data.phase !== 'closed'}
+							Tap it to change your burner name; moving or releasing it is possible again once Live
+							Booking starts.
+						{/if}
 					</p>
 					{#if data.pass}
 						<p class="pass-line">
 							<a class="btn-pass" href="/pass/{data.pass.code}">
 								<span class="notify-icon" aria-hidden="true">🎫</span> Show booking pass
 							</a>
+						</p>
+						<PassActions code={data.pass.code} wallet={data.wallet} />
+					{/if}
+					{#if (data.swaps?.incoming ?? 0) > 0}
+						<p class="swap-line news">
+							<span class="notify-icon" aria-hidden="true">🔁</span>
+							{data.swaps?.incoming === 1
+								? 'Someone would like to swap spots with you.'
+								: `${data.swaps?.incoming} guests would like to swap spots with you.`}
+							<a href="/swaps">Answer →</a>
+						</p>
+					{:else if canSwap}
+						<p class="swap-line">
+							<span class="notify-icon" aria-hidden="true">🔁</span>
+							Fancy another spot? Tap a taken one to ask its guest for a swap.
+							{#if data.swap?.openCount}
+								<a href="/swaps">Your requests ({data.swap.openCount}) →</a>
+							{/if}
+						</p>
+					{:else if data.swap?.why && !data.swap.pause && !data.spotFixed && !data.checkedIn}
+						<!-- the guest's own spot can't be offered (the crew set it aside): say why -->
+						<p class="swap-line">
+							<span class="notify-icon" aria-hidden="true">🔁</span>
+							{data.swap.why}
 						</p>
 					{/if}
 					{#if data.notify && (data.notify.email || data.notify.telegram)}
@@ -316,8 +448,8 @@
 										<span class="notify-icon" aria-hidden="true">✈️</span> Get updates on Telegram
 									</button>
 									<small class="field-hint">
-										Optional. Opens Telegram — tap <strong>START</strong> there and the bot confirms your
-										spot. Reload this page afterwards.
+										Optional. Opens Telegram — tap <strong>START</strong> there and the bot sends your
+										spot and your pass, and every change from then on. Reload this page afterwards.
 									</small>
 								</form>
 							{/if}
@@ -333,89 +465,175 @@
 	{/if}
 
 	<div class="beds-grid">
-		{#each data.beds as bed}
-			{@const isMyBed = bed.id === data.userBedId}
-			{@const someoneElseBooked = bed.occupied && !isMyBed}
-			{@const iHaveAnotherBooking = !!data.userBedId && !isMyBed}
-			{@const isLocked = !data.isBookingActive}
-
-			{#if someoneElseBooked}
-				<div class="bed-card occupied" data-bed-id={bed.id}>
-					<div class="icon" aria-hidden="true">🛏️</div>
-					<span class="label">{bed.label}</span>
-					<div class="status-box occupied">
-						<span class="status-text">Occupied</span>
-						<span class="guest-name">
-							{bed.burnerName || 'Mystery Burner'}
-						</span>
-					</div>
-				</div>
-			{:else if isMyBed}
-				<button
-					class="bed-card mine {isLocked ? 'locked' : ''}"
-					data-bed-id={bed.id}
-					on:click={() => !isLocked && openBookingModal(bed.id, bed.burnerName)}
-					disabled={isLocked}
+		{#each units as unit (unit.kind === 'bunk' ? unit.lower.id : unit.spot.id)}
+			{#if unit.kind === 'bunk'}
+				<!-- One bed, two levels: the upper half on top, the ladder between,
+				     the lower half below. Each half books like a card of its own and
+				     wears its own state colour; the tile only frames the pair. -->
+				<div
+					class="bunk-tile"
+					class:state-ring={unit.lower.id === data.userBedId || unit.upper.id === data.userBedId}
+					in:fade={{ duration: reduceMotion ? 0 : 300 }}
 				>
-					<div class="icon" aria-hidden="true">🛏️</div>
-					<span class="label">{bed.label}</span>
-					<div class="status-box my-status">
-						<span class="status-text">Your Spot</span>
-						<span class="guest-name">{bed.burnerName}</span>
-						<small class="edit-hint"
-							>{isLocked
-								? data.phase === 'closed'
-									? 'Spots are final now'
-									: 'Not open yet'
-								: data.spotFixed || data.checkedIn
-									? 'Tap to change your burner name'
-									: 'Tap to change or release'}</small
-						>
+					{@render spotCard(unit.upper, 'upper')}
+					<div class="bunk-rail" aria-hidden="true">
+						<span class="rail-line"></span>
+						<BunkLadder height={26} rungs={3} />
+						<span class="rail-line"></span>
 					</div>
-				</button>
-			{:else if !bed.bookable}
-				<div class="bed-card occupied" data-bed-id={bed.id}>
-					<div class="icon" aria-hidden="true">🔒</div>
-					<span class="label">{bed.label}</span>
-					<div class="status-box occupied">
-						<span class="status-text">Not available</span>
-						<span class="guest-name">Reserved by the crew</span>
-					</div>
+					{@render spotCard(unit.lower, 'lower')}
 				</div>
 			{:else}
-				<button
-					class="bed-card free {iHaveAnotherBooking || isLocked ? 'disabled' : ''}"
-					data-bed-id={bed.id}
-					on:click={() => !iHaveAnotherBooking && !isLocked && openBookingModal(bed.id)}
-					disabled={iHaveAnotherBooking || isLocked}
-				>
-					<div class="icon" aria-hidden="true">🛏️</div>
-					<span class="label">{bed.label}</span>
-					<div class="status-box free">
-						<span
-							>{isLocked
-								? data.phase === 'closed'
-									? 'Booking closed'
-									: 'Not open yet'
-								: iHaveAnotherBooking
-									? 'Unavailable'
-									: 'Available'}</span
-						>
-						<small
-							>{isLocked
-								? data.phase === 'closed'
-									? 'Spots are final'
-									: 'Booking opens soon'
-								: iHaveAnotherBooking
-									? 'Release your other spot first'
-									: 'Grab it now!'}</small
-						>
-					</div>
-				</button>
+				{@render spotCard(unit.spot, null)}
 			{/if}
 		{/each}
 	</div>
 </div>
+
+<!-- A spot's card in its four states; `level` marks a half of a bunk bed.
+     data-state picks the colour (state.css), the classes keep the layout.
+     A spot taken without a ticket is a crew hold, not someone's booking: it
+     says "Blocked by admin", like a locked, ♿ or inactive spot. -->
+{#snippet spotCard(bed: Spot, level: BunkLevel | null)}
+	{@const state = spotState(bed)}
+	{@const isMyBed = bed.id === data.userBedId}
+	{@const someoneElseBooked = bed.occupied && !isMyBed && !bed.blocked}
+	{@const iHaveAnotherBooking = !!data.userBedId && !isMyBed}
+	{@const isLocked = !data.isBookingActive}
+	{@const nameFinal = data.phase === 'closed'}
+	{@const half = level ? `bunk-half ${level}` : ''}
+
+	{#if someoneElseBooked && canSwap}
+		<!-- A taken spot while the guest could offer theirs: tap to ask for a swap. -->
+		<button
+			class="bed-card occupied swappable {half}"
+			class:asked={!!swapAsked[bed.id]}
+			data-bed-id={bed.id}
+			data-state={state}
+			on:click={() => (swapTarget = bed)}
+			aria-haspopup="dialog"
+		>
+			<div class="icon" aria-hidden="true">🛏️</div>
+			<span class="label">
+				{bed.label}
+				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
+			</span>
+			{#if hasDetail(bed, level)}
+				<span class="bed-detail">{spotLine(bed, level)}</span>
+			{/if}
+			<div class="status-box">
+				<span class="status-text"><span class="state-dot" aria-hidden="true"></span>Occupied</span>
+				<span class="guest-name">
+					{bed.burnerName || 'Mystery Burner'}
+				</span>
+				<small class="edit-hint swap-hint"
+					>{swapAsked[bed.id] ? '⏳ Asked — waiting' : '⇄ Ask to swap'}</small
+				>
+			</div>
+		</button>
+	{:else if someoneElseBooked}
+		<div class="bed-card occupied {half}" data-bed-id={bed.id} data-state={state}>
+			<div class="icon" aria-hidden="true">🛏️</div>
+			<span class="label">
+				{bed.label}
+				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
+			</span>
+			{#if hasDetail(bed, level)}
+				<span class="bed-detail">{spotLine(bed, level)}</span>
+			{/if}
+			<div class="status-box">
+				<span class="status-text"><span class="state-dot" aria-hidden="true"></span>Occupied</span>
+				<span class="guest-name">
+					{bed.burnerName || 'Mystery Burner'}
+				</span>
+			</div>
+		</div>
+	{:else if isMyBed}
+		<!-- The burner name can change in every phase but Closed (a handed-over
+		     ticket comes without one); moving or releasing needs Live Booking. -->
+		<button
+			class="bed-card mine {nameFinal ? 'locked' : ''} {half}"
+			data-bed-id={bed.id}
+			data-state={state}
+			on:click={() => !nameFinal && openBookingModal(bed.id, bed.burnerName)}
+			disabled={nameFinal}
+		>
+			<div class="icon" aria-hidden="true">🛏️</div>
+			<span class="label">
+				{bed.label}
+				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
+			</span>
+			{#if hasDetail(bed, level)}
+				<span class="bed-detail">{spotLine(bed, level)}</span>
+			{/if}
+			<div class="status-box">
+				<span class="status-text"><span class="state-dot" aria-hidden="true"></span>Yours</span>
+				<span class="guest-name">{bed.burnerName}</span>
+				<small class="edit-hint"
+					>{nameFinal
+						? data.guestPhase === 'closed'
+							? 'Spots are final now'
+							: 'Not open yet'
+						: isLocked || data.spotFixed || data.checkedIn
+							? 'Tap to change your burner name'
+							: 'Tap to change or release'}</small
+				>
+			</div>
+		</button>
+	{:else if !bed.bookable}
+		<div class="bed-card occupied {half}" data-bed-id={bed.id} data-state={state}>
+			<div class="icon" aria-hidden="true">🔒</div>
+			<span class="label">
+				{bed.label}
+				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
+			</span>
+			{#if hasDetail(bed, level)}
+				<span class="bed-detail">{spotLine(bed, level)}</span>
+			{/if}
+			<div class="status-box">
+				<span class="status-text"
+					><span class="state-dot" aria-hidden="true"></span>Blocked by admin</span
+				>
+				<small class="edit-hint">Not available</small>
+			</div>
+		</div>
+	{:else}
+		<button
+			class="bed-card free {iHaveAnotherBooking || isLocked ? 'disabled' : ''} {half}"
+			data-bed-id={bed.id}
+			data-state={state}
+			on:click={() => !iHaveAnotherBooking && !isLocked && openBookingModal(bed.id)}
+			disabled={iHaveAnotherBooking || isLocked}
+		>
+			<div class="icon" aria-hidden="true">🛏️</div>
+			<span class="label">
+				{bed.label}
+				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
+			</span>
+			{#if hasDetail(bed, level)}
+				<span class="bed-detail">{spotLine(bed, level)}</span>
+			{/if}
+			<div class="status-box">
+				<span class="status-text"
+					><span class="state-dot" aria-hidden="true"></span>{isLocked
+						? data.guestPhase === 'closed'
+							? 'Booking closed'
+							: 'Not open yet'
+						: 'Available'}</span
+				>
+				<small class="edit-hint"
+					>{isLocked
+						? data.guestPhase === 'closed'
+							? 'Spots are final'
+							: 'Booking opens soon'
+						: iHaveAnotherBooking
+							? 'Release your other spot first'
+							: 'Grab it now!'}</small
+				>
+			</div>
+		</button>
+	{/if}
+{/snippet}
 
 {#if showModal}
 	<!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -435,8 +653,15 @@
 				{selectedBedId === data.userBedId ? 'Edit Your Spot' : 'Grab This Spot'}
 			</h2>
 			<p>
-				{#if selectedBed}Spot <strong>{selectedBed.label}</strong>.{/if}
-				Set your Burner Name (optional). Everyone in this room can see it.
+				{#if selectedBed}
+					<!-- One expression, not an {#if}: Svelte drops the whitespace at the
+					     start of a block, and "B2— the upper bunk" needs its space. -->
+					Spot <strong>{selectedBed.label}</strong>{selectedLevel
+						? ` — the ${selectedLevel} bunk ${selectedNote}`
+						: ''}. Set your Burner Name (optional). Everyone in this room can see it.
+				{:else}
+					Set your Burner Name (optional). Everyone in this room can see it.
+				{/if}
 			</p>
 
 			{#if modalError}
@@ -445,7 +670,7 @@
 				</div>
 			{/if}
 
-			{#if showSlotManually}
+			{#if showSlot}
 				<SlotMachine bind:this={slotMachineRef} showButton={false} on:select={handleSlotSelect} />
 			{/if}
 
@@ -465,6 +690,9 @@
 							cancel();
 							return;
 						}
+					} else if (rolling) {
+						cancel();
+						return;
 					} else if (!currentNameInput.trim()) {
 						cancel();
 						rollBurnerName();
@@ -505,7 +733,9 @@
 			>
 				<input type="hidden" name="bedId" value={selectedBedId} />
 
-				<div class="form-group" class:hidden={showSlotManually}>
+				<!-- The field is always there: a rolled name lands in it and can be
+				     edited or rolled again; the machine never hides the field. -->
+				<div class="form-group">
 					<label for="guestName">Burner Name</label>
 					<input
 						type="text"
@@ -513,58 +743,56 @@
 						id="guestName"
 						bind:value={currentNameInput}
 						placeholder="Your burner name"
-						maxlength="80"
+						maxlength={BURNER_NAME_MAX}
 						autocomplete="off"
 						autocapitalize="words"
 						enterkeyhint="done"
 						aria-describedby="guestName-hint"
+						disabled={rolling}
 					/>
+					<button
+						type="button"
+						class="btn-roll"
+						on:click={rollBurnerName}
+						disabled={rolling || isSaving}
+						aria-live="polite"
+					>
+						{rolling ? 'Rolling…' : currentNameInput.trim() ? 'New Name 🎲' : 'Roll a name 🎲'}
+					</button>
 					<small id="guestName-hint" class="field-hint"
-						>Other ticket holders see this name next to your spot. Leave it empty and the slot
-						machine rolls one for you 🎰</small
+						>Other ticket holders see this name next to your spot. Type your own or roll one — a
+						rolled name can still be changed. Empty field? Save rolls one for you 🎰</small
 					>
 				</div>
 
-				{#if showSlotManually}
-					<div class="slot-actions" in:fade>
-						{#if nameGenerated}
-							<div class="respin-row">
-								<button type="button" class="btn-respin" on:click={respinName} disabled={isSaving}
-									>New Name 🎲</button
-								>
-								<button
-									type="button"
-									class="btn-cancel"
-									on:click={cancelSlotSelection}
-									disabled={isSaving}>Cancel</button
-								>
-							</div>
-							<button type="submit" class="btn-confirm-fate" disabled={isSaving}>
-								{isSaving ? 'Booking…' : 'Accept Fate & Book 🌵'}
-							</button>
-						{:else}
-							<p class="auto-spin-hint">Rolling for your burner identity...</p>
-						{/if}
-					</div>
-				{:else}
-					<!-- "Save" comes first in the DOM: Enter in the name field triggers the
-					     form's first submit button, and that must not be "Release". -->
-					<div class="actions">
-						<button type="submit" class="btn-confirm" disabled={isSaving}>
-							{isSaving ? 'Saving…' : 'Save Spot'}
-						</button>
-						<button type="button" class="btn-cancel" on:click={closeModal}>Cancel</button>
-						{#if selectedBedId === data.userBedId && !data.spotFixed && !data.checkedIn}
-							<button type="submit" formaction="?/unbookBed" class="btn-unbook" disabled={isSaving}
-								>Release</button
-							>
-						{/if}
-					</div>
-				{/if}
+				<!-- "Save" comes first in the DOM: Enter in the name field triggers the
+				     form's first submit button, and that must not be "Release". -->
+				<div class="actions">
+					<button type="submit" class="btn-confirm" disabled={isSaving || rolling}>
+						{isSaving ? 'Saving…' : rolling ? 'Rolling…' : 'Save Spot'}
+					</button>
+					<button type="button" class="btn-cancel" on:click={closeModal}>Cancel</button>
+					{#if selectedBedId === data.userBedId && data.isBookingActive && !data.spotFixed && !data.checkedIn}
+						<button type="submit" formaction="?/unbookBed" class="btn-unbook" disabled={isSaving}
+							>Release</button
+						>
+					{/if}
+				</div>
 				<BookingRulesNote />
 			</form>
 		</div>
 	</div>
+{/if}
+
+{#if swapTarget && data.swap?.mine}
+	<SwapSheet
+		mine={data.swap.mine}
+		target={swapSpotOf(swapTarget)}
+		name={swapTarget.burnerName}
+		askedId={swapAsked[swapTarget.id] ?? ''}
+		openCount={data.swap.openCount}
+		onclose={() => (swapTarget = null)}
+	/>
 {/if}
 
 {#if triggerFireworks}
@@ -641,7 +869,7 @@
 		gap: clamp(0.75rem, 4vw, 2rem);
 	}
 	.booking-locked-banner {
-		border-left: 4px solid #f472b6;
+		border-left: 4px solid var(--state-closed);
 	}
 	.booking-warning-banner {
 		border-left: 4px solid #fb923c;
@@ -667,7 +895,7 @@
 		font-weight: 900;
 	}
 	.locked-content h3 {
-		color: #f472b6;
+		color: var(--state-closed);
 	}
 	.warning-content h3 {
 		color: #fb923c;
@@ -787,20 +1015,34 @@
 		gap: clamp(0.75rem, 3vw, 1.5rem);
 	}
 
+	.bed-detail {
+		grid-area: detail;
+		font-size: 0.75rem;
+		color: #9fb3c8;
+		text-align: center;
+		overflow-wrap: anywhere;
+	}
+	/* The card wears its state (data-state → --state, state.css): a 3 px
+	   coloured left edge, a soft border, and the status line below. */
 	.bed-card {
 		background: #111;
-		border: 1px solid #222;
+		border: 1px solid var(--state-soft, #222);
+		border-left: 3px solid var(--state, #222);
 		border-radius: 16px;
 		padding: clamp(1rem, 4vw, 1.5rem);
 		min-width: 0;
 		min-height: 72px;
 		/* The spot label gets the whole width next to the icon, the status goes
-		   underneath: side by side, a long burner name or "Reserved by the crew"
+		   underneath: side by side, a long burner name or "Blocked by admin"
 		   squeezed the label down to a letter per line ("U / pp / er / 1"). */
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr);
+		/* The detail line ("above B1 · no ♿") has a row of its own: placed by
+		   auto-flow it would land in the icon column and widen it until the
+		   label had no room left. */
 		grid-template-areas:
 			'icon label'
+			'icon detail'
 			'icon status';
 		align-items: center;
 		align-content: center;
@@ -813,29 +1055,69 @@
 		overflow: hidden;
 	}
 	.bed-card.mine {
-		border-color: #2dd4bf;
-		background: rgba(45, 212, 191, 0.05);
+		background: var(--state-soft);
 		cursor: pointer;
 	}
 	.bed-card.mine:hover {
 		transform: translateY(-3px);
-		box-shadow: 0 10px 20px rgba(45, 212, 191, 0.1);
+		box-shadow: 0 10px 20px var(--state-soft);
 	}
 	.bed-card.free {
 		cursor: pointer;
 	}
 	.bed-card.free:hover:not(.disabled) {
-		border-color: #f472b6;
+		border-color: var(--state);
 		transform: translateY(-3px);
-		box-shadow: 0 10px 20px rgba(244, 114, 182, 0.1);
+		box-shadow: 0 10px 20px var(--state-soft);
 	}
 	.bed-card.disabled {
-		opacity: 0.6;
+		opacity: 0.7;
 		cursor: not-allowed;
-		filter: grayscale(1);
 	}
 	.bed-card.occupied {
-		opacity: 0.8;
+		opacity: 0.85;
+	}
+	/* A taken spot that can be asked for: it lifts like a free one, in the
+	   swap colour, and says so under the name. */
+	.bed-card.occupied.swappable {
+		cursor: pointer;
+		opacity: 0.92;
+	}
+	.bed-card.occupied.swappable:hover {
+		opacity: 1;
+		border-color: var(--swap);
+		transform: translateY(-3px);
+		box-shadow: 0 10px 20px var(--swap-soft);
+	}
+	.bed-card.occupied.swappable:hover .edit-hint.swap-hint {
+		color: #bae6fd;
+	}
+	/* two classes: .edit-hint's grey comes later in this file */
+	.edit-hint.swap-hint {
+		color: #7dd3fc;
+		transition: color 0.2s;
+	}
+	.bed-card.occupied.asked {
+		border-color: color-mix(in srgb, var(--swap) 55%, transparent);
+	}
+	.bunk-tile .bed-card.bunk-half.occupied.swappable:hover {
+		transform: none;
+	}
+	.success-content .swap-line {
+		margin-top: 0.9rem;
+		font-size: 0.9rem;
+	}
+	.swap-line a {
+		color: #7dd3fc;
+		font-weight: 800;
+		white-space: nowrap;
+	}
+	.success-content .swap-line.news {
+		padding: 0.6rem 0.8rem;
+		border-radius: 12px;
+		border: 1px solid rgba(56, 189, 248, 0.45);
+		background: var(--swap-soft);
+		color: #e0f2fe;
 	}
 	.bed-card.locked {
 		opacity: 0.7;
@@ -844,6 +1126,87 @@
 	.bed-card:focus-visible {
 		outline: 2px solid #fff;
 		outline-offset: 2px;
+	}
+
+	/* A bunk bed: one tile in the grid, the two halves stacked with the ladder
+	   between them. The halves keep the card look and the colour of their own
+	   state (data-state); the tile frames them, and breathes (state-ring, in my
+	   colour) when one of them is mine. The frame ties the two cards into one
+	   bed: its outline runs from the "Upper bunk" chip's turquoise down to the
+	   "Lower bunk" chip's blue, and the bar through the ladder meets it on both
+	   sides (Max's pick of four outlines, 25 Sep). */
+	.bunk-tile {
+		--state: var(--state-checked-in);
+		--bunk-top: rgba(45, 212, 191, 0.6);
+		--bunk-bottom: rgba(96, 165, 250, 0.6);
+		--bunk-pad: 0.4rem;
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		padding: var(--bunk-pad);
+		/* A border can't be a gradient: it stays transparent, and the last
+		   background layer (border-box) shows through it. The layers above
+		   stop at the padding box. */
+		border: 1px solid transparent;
+		border-radius: 20px;
+		background:
+			radial-gradient(120% 90% at 50% 0%, rgba(45, 212, 191, 0.08), transparent 60%) padding-box,
+			linear-gradient(#0b0b0b, #0b0b0b) padding-box,
+			linear-gradient(var(--bunk-top), var(--bunk-bottom)) border-box;
+	}
+	.bunk-tile:hover {
+		--bunk-top: rgba(45, 212, 191, 0.9);
+		--bunk-bottom: rgba(96, 165, 250, 0.9);
+	}
+	.bunk-tile .bed-card {
+		border-radius: 14px;
+		flex: 1;
+	}
+	/* The hover lift would hide behind the neighbouring half. The selectors
+	   must outrank `.bed-card.free:hover:not(.disabled)` above, so they name
+	   the half and the :not() too. */
+	.bunk-tile .bed-card.bunk-half.free:hover:not(.disabled),
+	.bunk-tile .bed-card.bunk-half.mine:hover {
+		transform: none;
+	}
+	/* The bar reaches through the tile's padding to the outline on either
+	   side, in the colour the outline has halfway down. */
+	.bunk-rail {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0 calc(-1 * var(--bunk-pad));
+		padding: 0.1rem 0;
+		pointer-events: none;
+	}
+	.rail-line {
+		flex: 1;
+		height: 0;
+		border-top: 1px solid color-mix(in srgb, var(--bunk-top), var(--bunk-bottom));
+	}
+
+	/* "Upper bunk" / "Lower bunk" next to the label, on the label's line
+	   while there is room and below it when there is not — the coloured chips
+	   of Deploy 20, which Max asked back for on 24 Sep. The lower one is blue,
+	   not Deploy 20's pink: pink means ♿ and nothing else since Deploy 21. */
+	.level-chip {
+		display: inline-block;
+		vertical-align: 0.2em;
+		margin-left: 0.35em;
+		--state-soft: rgba(45, 212, 191, 0.1);
+	}
+	.level-chip.upper {
+		--state: #2dd4bf;
+	}
+	.level-chip.lower {
+		--state: #60a5fa;
+		--state-soft: rgba(96, 165, 250, 0.1);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.bed-card {
+			transition: none;
+		}
 	}
 
 	.icon {
@@ -864,32 +1227,26 @@
 		grid-area: status;
 		display: flex;
 		flex-direction: column;
+		min-width: 0;
 		overflow-wrap: break-word;
 	}
+	/* The status line: bold, in the state colour, with the state's dot in
+	   front. The burner name under it stays white. */
 	.status-text {
-		font-size: 0.7rem;
+		display: flex;
+		align-items: center;
+		gap: 0.4em;
+		font-size: 0.85rem;
 		font-weight: 900;
+		line-height: 1.25;
 		text-transform: uppercase;
 		letter-spacing: 1px;
-		color: #9a9a9a;
+		color: var(--state, #9a9a9a);
 	}
 	.guest-name {
 		font-weight: bold;
 		font-size: 0.9rem;
 		color: #fff;
-	}
-	.my-status .status-text {
-		color: #2dd4bf;
-	}
-	/* Only the status: the spot label keeps its size on free spots too. */
-	.status-box.free span {
-		font-weight: 900;
-		color: #f472b6;
-		font-size: 0.85rem;
-	}
-	.status-box.free small {
-		font-size: 0.7rem;
-		color: #9a9a9a;
 	}
 
 	.edit-hint {
@@ -965,9 +1322,6 @@
 		gap: 0.5rem;
 		margin-bottom: 1.5rem;
 	}
-	.form-group.hidden {
-		display: none;
-	}
 	.form-group label {
 		font-size: 0.75rem;
 		font-weight: 900;
@@ -1019,7 +1373,7 @@
 		font-size: 0.9rem;
 	}
 	.actions button:disabled,
-	.slot-actions button:disabled {
+	.btn-roll:disabled {
 		opacity: 0.6;
 		cursor: progress;
 	}
@@ -1062,21 +1416,16 @@
 		color: #000;
 	}
 
-	.slot-actions {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-		margin-top: 1.5rem;
-	}
-	.respin-row {
-		display: flex;
-		gap: 0.75rem;
-	}
-	.respin-row button {
-		flex: 1;
-		min-height: 48px;
-		padding: 12px 8px;
+	/* The dice under the name field: a quiet secondary button, full width, so
+	   a thumb finds it. The machine above shows the roll; the field keeps it. */
+	.btn-roll {
+		align-self: flex-start;
+		min-height: 44px;
+		padding: 10px 16px;
+		background: #0a0a0a;
+		border: 2px solid #444;
 		border-radius: 12px;
+		color: #b5b5b5;
 		font-weight: 900;
 		text-transform: uppercase;
 		font-size: 0.8rem;
@@ -1084,44 +1433,12 @@
 		cursor: pointer;
 		transition: all 0.2s;
 	}
-	.btn-respin {
-		background: #0a0a0a;
-		border: 2px solid #444;
-		color: #b5b5b5;
-	}
-	.btn-respin:hover {
-		border-color: #888;
+	.btn-roll:hover:not(:disabled) {
+		border-color: #f472b6;
 		color: #fff;
 	}
-
-	.btn-confirm-fate {
-		background: linear-gradient(135deg, #2dd4bf, #0ea5e9);
-		border: none;
-		color: #000;
-		padding: clamp(1rem, 4vw, 1.5rem);
-		border-radius: 16px;
-		font-weight: 900;
-		text-transform: uppercase;
-		font-size: clamp(0.95rem, 4vw, 1.1rem);
-		letter-spacing: clamp(1px, 0.4vw, 2px);
-		cursor: pointer;
-		transition: all 0.3s;
-		box-shadow: 0 15px 30px rgba(45, 212, 191, 0.2);
-	}
-	.btn-confirm-fate:hover {
-		transform: scale(1.02);
-		box-shadow: 0 20px 40px rgba(45, 212, 191, 0.4);
-	}
-
-	.auto-spin-hint {
-		color: #f472b6 !important;
-		font-weight: 900;
-		text-align: center;
-		margin-top: 1rem;
-		font-size: 0.8rem;
-		letter-spacing: 2px;
-		text-transform: uppercase;
-		animation: pulse 1s infinite;
+	.form-group input:disabled {
+		opacity: 0.7;
 	}
 
 	/* Phones: three buttons don't fit in one row. Save on top, Release last. */

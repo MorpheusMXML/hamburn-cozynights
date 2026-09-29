@@ -93,3 +93,19 @@ export function createLookupHash(text: string): string {
 	// the database were made this way, changing it would orphan every ticket.
 	return crypto.createHmac(HASH_ALGORITHM, requireKeyHex()).update(text).digest('hex');
 }
+
+/**
+ * A secret derived from the key for one purpose (`label`) and one value, e.g.
+ * the token Apple's devices send back with every request about a wallet pass.
+ * Nothing to store: the same key, label and value always give the same token,
+ * and a token for one purpose or value is useless for any other.
+ * @returns 32 hex characters (128 bits)
+ * @throws Error if ENCRYPTION_KEY is missing or invalid.
+ */
+export function derivedToken(label: string, value: string): string {
+	const key = crypto
+		.createHmac(HASH_ALGORITHM, Buffer.from(requireKeyHex(), 'hex'))
+		.update(`cozynights:${label}`)
+		.digest();
+	return crypto.createHmac(HASH_ALGORITHM, key).update(value).digest('hex').slice(0, 32);
+}

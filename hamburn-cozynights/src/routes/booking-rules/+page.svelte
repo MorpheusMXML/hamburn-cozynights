@@ -53,17 +53,17 @@ decided.
 		</li>
 		<li>Destiny Roulette suggests a random free bed; it is only booked when you confirm.</li>
 		<li>
-			Already have a bed? The roulette can nuke it and roll a new one. Your booking is deleted the
-			moment you launch, and until you accept a new bed you have none.
+			Already have a bed? On the roulette, Leave No Trace gives it up and spins a new one. Your
+			booking is deleted the moment the sweep is done, and until you book a new bed you have none.
 		</li>
-		<li>Beds the crew has locked ("Reserved by the crew") can't be booked.</li>
+		<li>Beds the crew holds back ("Blocked by admin") can't be booked.</li>
 	</ul>
 
 	<h2>Special-needs spots</h2>
 	<ul>
 		<li>
-			Some beds are kept for guests with special needs. They show as "Reserved by the crew" and
-			can't be booked directly.
+			Some beds are kept for guests with special needs. They show as "Blocked by admin" and can't be
+			booked directly.
 		</li>
 		<li>
 			While the crew accepts requests, you can ask for such a spot on the page

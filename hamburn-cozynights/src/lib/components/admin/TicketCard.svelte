@@ -10,6 +10,7 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 	import { slide } from 'svelte/transition';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { toast } from '$lib/dialogs';
+	import { revealInvalid } from '$lib/field-alert';
 	import { formatBerlin } from '$lib/booking-phase';
 	import {
 		TICKET_LIMITS,
@@ -28,6 +29,11 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 	let newHolder = false;
 	let saving = false;
 	let error = '';
+	// Punish late: half an address is not an error yet. A field turns red once
+	// it was left, or when saving was tried — and turns back the moment it's fixed.
+	let emailLeft = false;
+	let nameLeft = false;
+	let triedToSave = false;
 
 	// A fresh ticket (saved, or found again): start from what is stored. The
 	// page hands every card a new object when any card saves, so compare the
@@ -40,6 +46,7 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 		name = fresh.name;
 		newHolder = false;
 		error = '';
+		emailLeft = nameLeft = triedToSave = false;
 	}
 
 	$: cleanEmail = normalizeEmail(email);
@@ -54,12 +61,14 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 		name.trim().length > TICKET_LIMITS.nameLength
 			? `At most ${TICKET_LIMITS.nameLength} characters.`
 			: '';
+	$: showEmailProblem = !!emailProblem && (emailLeft || triedToSave);
+	$: showNameProblem = !!nameProblem && (nameLeft || triedToSave);
 
 	/** What "passed on" does to this ticket, in the admin's words. */
 	$: handOver = [
 		ticket.spot ? 'The spot stays with the ticket.' : '',
 		ticket.telegram ? 'Telegram updates to the old holder stop.' : '',
-		ticket.pass ? 'The booking pass gets a new code: the old pass link stops working.' : '',
+		ticket.passCode ? 'The booking pass gets a new code: the old pass link stops working.' : '',
 		ticket.burnerName ? `The burner name "${ticket.burnerName}" is forgotten.` : '',
 		ticket.spot?.checkIn
 			? 'The check-in is reset: the new holder checks in with the new pass when they arrive.'
@@ -94,9 +103,17 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 		return '✅ Saved.';
 	}
 
-	const submit: SubmitFunction = ({ cancel }) => {
-		if (!dirty || emailProblem || nameProblem) {
+	const submit: SubmitFunction = ({ cancel, formElement }) => {
+		if (!dirty) {
 			cancel();
+			return;
+		}
+		if (emailProblem || nameProblem) {
+			// The button stays clickable on purpose: a greyed-out Save doesn't say
+			// why. Clicking it shows what to fix and puts the cursor there.
+			triedToSave = true;
+			cancel();
+			revealInvalid(formElement);
 			return;
 		}
 		saving = true;
@@ -114,6 +131,7 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 				error =
 					(result.data as { error?: string } | undefined)?.error ??
 					`The server refused the change (${result.status}). Nothing was saved.`;
+				revealInvalid(formElement);
 			} else if (result.type === 'error') {
 				error = 'The server could not be reached. Nothing was saved; try again.';
 			} else {
@@ -150,6 +168,15 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 					✅ Checked in {formatBerlin(ticket.spot.checkIn.at, { year: false })}
 				</li>
 			{/if}
+			{#if ticket.passCode}
+				<li>
+					<a
+						href="/pass/{ticket.passCode}"
+						title="Open the booking pass — check the guest in when their phone is dead"
+						>🎫 {ticket.passCode}</a
+					>
+				</li>
+			{/if}
 			{#if ticket.burnerName}<li>🔥 {ticket.burnerName}</li>{/if}
 			{#if ticket.telegram}<li>💬 Telegram</li>{/if}
 		</ul>
@@ -172,10 +199,13 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 					placeholder="no address: no e-mails"
 					bind:value={email}
 					class:changed={emailChanged}
-					class:invalid={!!emailProblem}
-					aria-invalid={!!emailProblem}
+					aria-invalid={showEmailProblem}
+					aria-describedby={showEmailProblem ? `ticket-${ticket.id}-email-error` : undefined}
+					on:blur={() => (emailLeft = true)}
 				/>
-				{#if emailProblem}<small class="problem">{emailProblem}</small>{/if}
+				{#if showEmailProblem}
+					<small class="field-error" id="ticket-{ticket.id}-email-error">{emailProblem}</small>
+				{/if}
 			</label>
 			<label class="field">
 				<span>Name <em>(for the greeting)</em></span>
@@ -186,10 +216,13 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 					placeholder="no name: mails say “Hi,”"
 					bind:value={name}
 					class:changed={nameChanged}
-					class:invalid={!!nameProblem}
-					aria-invalid={!!nameProblem}
+					aria-invalid={showNameProblem}
+					aria-describedby={showNameProblem ? `ticket-${ticket.id}-name-error` : undefined}
+					on:blur={() => (nameLeft = true)}
 				/>
-				{#if nameProblem}<small class="problem">{nameProblem}</small>{/if}
+				{#if showNameProblem}
+					<small class="field-error" id="ticket-{ticket.id}-name-error">{nameProblem}</small>
+				{/if}
 			</label>
 		</div>
 
@@ -206,7 +239,7 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 			</ul>
 		{/if}
 
-		{#if error}<p class="error" role="alert">⚠️ {error}</p>{/if}
+		{#if error}<p class="form-error" role="alert">{error}</p>{/if}
 
 		<div class="buttons">
 			{#if dirty}
@@ -214,12 +247,7 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 					Undo
 				</button>
 			{/if}
-			<button
-				type="submit"
-				class="btn-save"
-				class:warn={newHolder}
-				disabled={!dirty || saving || !!emailProblem || !!nameProblem}
-			>
+			<button type="submit" class="btn-save" class:warn={newHolder} disabled={!dirty || saving}>
 				{saving ? 'Saving…' : newHolder ? 'Save & hand over' : 'Save'}
 			</button>
 		</div>
@@ -343,11 +371,7 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 	.field input.changed {
 		border-color: #fb923c;
 	}
-	.field input.invalid {
-		border-color: #ef4444;
-	}
-	.problem {
-		color: #f87171;
+	.field .field-error {
 		font-size: 0.75rem;
 	}
 
@@ -395,11 +419,6 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 		display: flex;
 		flex-direction: column;
 		gap: 0.2rem;
-	}
-	.error {
-		margin: 0;
-		color: #f87171;
-		font-size: 0.85rem;
 	}
 
 	.buttons {

@@ -6,7 +6,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import CountdownDigits from '$lib/components/CountdownDigits.svelte';
 	import { actionErrorMessage, submitAction } from '$lib/admin-actions';
-	import { alertDialog, chooseDialog, confirmDialog, toast } from '$lib/dialogs';
+	import { alertDialog, chooseWithOption, confirmDialog, toast } from '$lib/dialogs';
 	import { berlinLocalToIso, isoToBerlinLocal } from '$lib/time';
 	import {
 		PHASE_ICONS,
@@ -16,6 +16,7 @@
 		formatBerlin,
 		formatDuration,
 		nextTransition,
+		quietReleaseByDefault,
 		resyncDelay,
 		saveTimesEdit,
 		switchPhase,
@@ -53,6 +54,13 @@
 	});
 	onDestroy(() => clearInterval(ticker));
 	const motion = (duration: number) => (reduceMotion ? 0 : duration);
+
+	/** Burner names a release could not clear — the spots are free regardless. */
+	function namesNote(namesLeft: number | null | undefined): string {
+		if (namesLeft === null) return ' Whether burner names were left behind is unknown.';
+		if (!namesLeft || namesLeft <= 0) return '';
+		return ` ${namesLeft} burner name${namesLeft === 1 ? '' : 's'} could not be cleared; those spots are free but still show a name.`;
+	}
 
 	let expanded = false;
 	let editing = false;
@@ -314,7 +322,7 @@
 			notes.push(
 				to === 'closed'
 					? 'Guests can no longer book, change or release a spot. The layout stays locked.'
-					: `Guests can no longer book, change or release a spot; the layout can be edited again.${guestBooked > 0 ? ` ${guestBooked} guest booking${guestBooked === 1 ? ' is' : 's are'} in the camp right now.` : ''}${arrivedNote} Choose below whether they are released (they book again once booking opens, ticket codes stay valid — this cannot be undone) or stay as they are.${crewBookedSpots > 0 ? ` The ${crewBookedSpots} spot${crewBookedSpots === 1 ? '' : 's'} the crew booked for special-needs requests stay either way.` : ' Spots the crew booked for special-needs requests stay either way.'}`
+					: `Guests can no longer book, change or release a spot; the layout can be edited again.${guestBooked > 0 ? ` ${guestBooked} guest booking${guestBooked === 1 ? ' is' : 's are'} in the camp right now.` : ''}${arrivedNote} Choose below whether they are released (ticket codes stay valid: every guest signs in again on their device and books once booking opens — this cannot be undone) or stay as they are.${crewBookedSpots > 0 ? ` The ${crewBookedSpots} spot${crewBookedSpots === 1 ? '' : 's'} the crew booked for special-needs requests stay either way.` : ' Spots the crew booked for special-needs requests stay either way.'}`
 			);
 			if (to === 'closed' && bookingWindow.closesAt && !after.closesAt) {
 				notes.push('The planned closing time is dropped.');
@@ -330,16 +338,25 @@
 		// only does it when this dialog says so.
 		const asksAboutBookings = to === 'staging' && guestBooked > 0;
 		let clearBookings = false;
+		let quietRelease = false;
 		if (asksAboutBookings) {
-			const choice = await chooseDialog(notes.join(' '), {
+			// Ticked once booking is over: after the event, "your spot was
+			// released" only confuses people. Before that they need to hear it.
+			const { choice, checked } = await chooseWithOption(notes.join(' '), {
 				title: `${PHASE_ICONS[to]} Switch to ${PHASE_LABELS[to]} right now?`,
 				tone: 'danger',
 				confirmLabel: `Switch & release ${guestBooked} booking${guestBooked === 1 ? '' : 's'}`,
 				altLabel: 'Switch & keep the bookings',
-				cancelLabel: 'Cancel'
+				cancelLabel: 'Cancel',
+				checkbox: {
+					label: "Don't notify the guests",
+					checked: quietReleaseByDefault(bookingWindow, now),
+					hint: 'Only when releasing: nobody gets a “your spot was released” message. The crew alert goes out either way.'
+				}
 			});
 			if (choice === 'cancel') return;
 			clearBookings = choice === 'confirm';
+			quietRelease = clearBookings && checked;
 		} else {
 			const ok = await confirmDialog(notes.join(' '), {
 				title: `${PHASE_ICONS[to]} Switch to ${PHASE_LABELS[to]} right now?`,
@@ -353,17 +370,24 @@
 		const form = new FormData();
 		form.set('phase', to);
 		if (clearBookings) form.set('clearBookings', '1');
+		if (quietRelease) form.set('quietRelease', '1');
 		busy = true;
 		const result = await submitAction('?/setPhase', form);
 		busy = false;
 		if (result.type === 'success') {
 			const data = result.data as
-				{ phaseBefore?: BookingPhase; released?: number; kept?: number } | undefined;
+				| {
+						phaseBefore?: BookingPhase;
+						released?: number;
+						kept?: number;
+						namesLeft?: number | null;
+				  }
+				| undefined;
 			const releasedNote =
 				to !== 'staging'
 					? ''
 					: clearBookings
-						? ` ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}.`
+						? ` ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}${quietRelease ? ', guests not notified' : ''}.${namesNote(data?.namesLeft)}`
 						: guestBooked > 0
 							? ` The ${guestBooked} guest booking${guestBooked === 1 ? '' : 's'} stay${guestBooked === 1 ? 's' : ''}: clear them with 🧨 Clear all bookings when the camp should be empty.`
 							: '';
@@ -391,7 +415,7 @@
 	async function clearAllBookings() {
 		if (busy || !isSuperuser || current !== 'staging') return;
 		const ok = await confirmDialog(
-			`${guestBooked} booked spot${guestBooked === 1 ? '' : 's'} become${guestBooked === 1 ? 's' : ''} free and lose${guestBooked === 1 ? 's' : ''} the burner name.${arrivedNote}${crewBookedSpots > 0 ? ` The ${crewBookedSpots} spot${crewBookedSpots === 1 ? '' : 's'} the crew booked for special-needs requests stay as long as those requests exist.` : ''} Ticket codes keep working. This cannot be undone.`,
+			`${guestBooked} booked spot${guestBooked === 1 ? '' : 's'} become${guestBooked === 1 ? 's' : ''} free and lose${guestBooked === 1 ? 's' : ''} the burner name.${arrivedNote}${crewBookedSpots > 0 ? ` The ${crewBookedSpots} spot${crewBookedSpots === 1 ? '' : 's'} the crew booked for special-needs requests stay as long as those requests exist.` : ''} Ticket codes keep working: every guest signs in again on their device. This cannot be undone.`,
 			{
 				title: '🧨 Clear all bookings?',
 				tone: 'danger',
@@ -404,10 +428,12 @@
 		const result = await submitAction('?/clearAllBookings', new FormData());
 		busy = false;
 		if (result.type === 'success') {
-			const data = result.data as { released?: number; kept?: number } | undefined;
+			const data = result.data as
+				{ released?: number; kept?: number; namesLeft?: number | null } | undefined;
+			const left = namesNote(data?.namesLeft);
 			toast(
-				`✨ ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}.`,
-				'success'
+				`✨ ${data?.released ?? 0} booking${data?.released === 1 ? '' : 's'} released${data?.kept ? `, ${data.kept} special-needs spot${data.kept === 1 ? '' : 's'} kept` : ''}.${left}`,
+				left ? 'warning' : 'success'
 			);
 		} else {
 			await alertDialog(
@@ -583,7 +609,15 @@
 							{#if opensLocked}
 								<small class="field-hint">Booking is already open.</small>
 							{:else if draftOpens !== null}
-								<small class="field-hint">{relative(draftOpens, 'in', 'passed')}</small>
+								<!-- The field shows the browser's own date format (dd.mm.yyyy, am/pm…):
+								     repeat the parsed time in English so nobody has to guess. -->
+								<small class="field-hint"
+									>{formatBerlin(draft.opensAt)} Berlin time · {relative(
+										draftOpens,
+										'in',
+										'passed'
+									)}</small
+								>
 							{/if}
 						</label>
 
@@ -599,13 +633,16 @@
 								on:input={() => (serverError = '')}
 							/>
 							{#if draftCloses !== null}
-								<small class="field-hint">{closesHint}</small>
+								<small class="field-hint"
+									>{formatBerlin(draft.closesAt)} Berlin time · {closesHint}</small
+								>
 							{/if}
 						</label>
 					</div>
 
 					<p class="rules">
-						Berlin time (CET/CEST).
+						Times are Berlin time (CET/CEST), 24-hour clock; the line under a field repeats what you
+						typed.
 						{#if isSuperuser}
 							⚡ As a superuser you have no minimum times; a save that switches the phase right now
 							asks first.
@@ -617,8 +654,8 @@
 					</p>
 
 					{#if draftError || serverError}
-						<p class="editor-error" role="alert" transition:slide={{ duration: motion(200) }}>
-							⚠️ {serverError || draftError}
+						<p class="editor-error form-error" role="alert">
+							{serverError || draftError}
 						</p>
 					{:else if draft.paused && armCheck.error}
 						<p class="editor-note" transition:slide={{ duration: motion(200) }}>
@@ -748,9 +785,10 @@
 			box-shadow 0.5s;
 		overflow: hidden;
 	}
+	/* The live phase is yellow (state.css); pink belongs to special needs alone. */
 	.booking-panel.phase-live {
-		--accent: #f472b6;
-		--accent-rgb: 244, 114, 182;
+		--accent: var(--state-live);
+		--accent-rgb: 250, 204, 21;
 	}
 	.booking-panel.phase-closed {
 		--accent: #e5e5e5;
@@ -843,8 +881,8 @@
 		text-shadow: 0 0 14px rgba(251, 146, 60, 0.45);
 	}
 	.status-time.closed {
-		color: #f472b6;
-		text-shadow: 0 0 14px rgba(244, 114, 182, 0.45);
+		color: var(--state-live);
+		text-shadow: 0 0 14px rgba(250, 204, 21, 0.45);
 	}
 	.status-at {
 		font-size: 0.72rem;
@@ -939,17 +977,17 @@
 		box-shadow: none;
 	}
 	.segment.live {
-		background: rgba(244, 114, 182, 0.14);
+		background: rgba(250, 204, 21, 0.14);
 	}
 	.live-fill {
 		position: absolute;
 		inset: 0;
 		transform-origin: left center;
-		background: linear-gradient(90deg, #f472b6, #fb923c);
+		background: linear-gradient(90deg, var(--state-live), #fb923c);
 		transition: transform 1s linear;
 	}
 	.segment.live.current {
-		box-shadow: 0 0 16px rgba(244, 114, 182, 0.4);
+		box-shadow: 0 0 16px rgba(250, 204, 21, 0.4);
 	}
 	.segment.after.current {
 		background: rgba(229, 229, 229, 0.3);
@@ -980,7 +1018,7 @@
 		border-color: #fb923c;
 	}
 	.marker.closes:not(.done) {
-		border-color: #f472b6;
+		border-color: var(--state-live);
 	}
 	.now-dot {
 		position: absolute;
@@ -1350,8 +1388,8 @@
 		box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.5);
 	}
 	.segmented-glider.live {
-		background: rgba(244, 114, 182, 0.14);
-		box-shadow: inset 0 0 0 1px rgba(244, 114, 182, 0.55);
+		background: rgba(250, 204, 21, 0.14);
+		box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.55);
 	}
 	.segmented-glider.closed {
 		background: rgba(229, 229, 229, 0.08);
@@ -1398,7 +1436,7 @@
 		color: #2dd4bf;
 	}
 	.segment-option.active.live {
-		color: #f472b6;
+		color: var(--state-live);
 	}
 	.segment-option.active.closed {
 		color: #f5f5f5;

@@ -23,6 +23,11 @@ Closed panel.
 				<span class="field"
 					><span class="label">Spot</span> <span class="value">{pass.spot}</span></span
 				>
+				{#if pass.bed}
+					<span class="field"
+						><span class="label">Bed</span> <span class="value">{pass.bed}</span></span
+					>
+				{/if}
 				{#if pass.burnerName}
 					<span class="field"
 						><span class="label">Burner</span> <span class="value">{pass.burnerName}</span></span

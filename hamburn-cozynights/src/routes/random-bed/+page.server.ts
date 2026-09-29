@@ -1,104 +1,170 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { clearGuestSession, signInUrl } from '$lib/server/guest-session';
 import { getBookingSettings } from '$lib/server/settings';
 import { bookingRefusal } from '$lib/booking-phase';
 import {
 	BookingService,
 	BedUnavailableError,
+	BookingClosedError,
 	CheckedInError,
 	SpotChangedError
 } from '$lib/server/booking';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
+import { getGuestNotifyStatus, holdGuestMessage } from '$lib/server/notifications';
+import { walletPlatforms } from '$lib/server/wallet/config';
+import { burnerNameOf, passSummary, roomLabel } from '$lib/server/pass';
+import type { PassSummary } from '$lib/pass';
+import type { RouletteSpot } from '$lib/roulette';
 import type { BedsResponse, RoomsResponse, HousesResponse } from '$lib/pocketbase-types';
+import { readFilters, spotFacts, spotMatchesFilters, type SpotFilter } from '$lib/accommodation';
+import { readAvailableFilters } from '$lib/server/wishes';
+
+type BedWithHouse = BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>;
+
+/** A spot as the slot machine's reels show it: house, room (as the pass names it), label. */
+function rouletteSpot(bed: BedWithHouse): RouletteSpot {
+	const room = bed.expand?.room;
+	return {
+		id: bed.id,
+		label: bed.label,
+		roomId: bed.room,
+		roomName: room ? roomLabel(room) : '',
+		houseName: room?.expand?.house?.name ?? ''
+	};
+}
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 const SIGNED_OUT =
 	'You are not signed in anymore. Go to the start page and enter your ticket code again.';
 const CODE_UNKNOWN = 'Your ticket code was not found. Go to the start page and enter it again.';
 
-export const load: PageServerLoad = async ({ locals, cookies }) => {
-	if (!locals.orderNumber) throw redirect(303, '/?login=required');
+export const load: PageServerLoad = async ({ locals, cookies, url }) => {
+	if (!locals.orderNumber) throw redirect(303, signInUrl(locals, '/random-bed'));
 
 	// Orders contain PII and are never readable via the public `pb` connection
 	// (see BookingService.getOrderByNumber, which uses the privileged adminPb).
 	const bookingService = new BookingService(locals.adminPb);
-	let order;
+	// hooks.server.ts read the ticket for this request already; it only looks it
+	// up here when PocketBase couldn't answer there.
+	let order = locals.order ?? null;
 	try {
-		order = await bookingService.getOrderByNumber(locals.orderNumber);
+		if (!order) order = await bookingService.getOrderByNumber(locals.orderNumber);
 	} catch (err) {
 		console.error('[RandomBed] Order lookup failed:', (err as Error)?.message);
 		throw error(503, UNAVAILABLE);
 	}
 	if (!order) {
-		cookies.delete('bookingCode', { path: '/' });
+		clearGuestSession(cookies);
 		throw redirect(303, '/?login=expired');
 	}
 
 	try {
-		const { isBookingActive, phase } = await getBookingSettings(locals.pb);
+		const settings = await getBookingSettings(locals.pb);
+		const { isBookingActive, phase, guestPhase } = settings;
 
 		const userBed = await locals.adminPb
 			.collection('beds')
-			.getFirstListItem<BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>>(
+			.getFirstListItem<BedWithHouse>(
 				locals.adminPb.filter('order = {:orderId}', { orderId: order.id }),
 				{ expand: 'room,room.house' }
 			)
 			.catch(() => null);
 
+		// What the guest wants the dice to respect. The wishes live in the URL, so
+		// a roll can be repeated and the page works without JavaScript.
+		const wishes = readFilters(url.searchParams.get('w'));
+
 		// Only fetch the (possibly large) free-bed list when the user doesn't
-		// already have a spot — they can't roll again without nuking it first,
-		// and the page reloads this list right after the nuke.
+		// already have a spot — they can't spin again without Leave No Trace
+		// first, and the page reloads this list right after the sweep.
 		// Deactivated, locked and special-needs beds are never part of the roulette.
-		const freeBeds = userBed
+		const allFree: BedWithHouse[] = userBed
 			? []
 			: // beds are admin-only in PocketBase: the service account reads them
-				(
-					await locals.adminPb
-						.collection('beds')
-						.getFullList<BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>>({
-							filter:
-								'occupied = false && enabled = true && is_locked = false && is_special = false',
-							expand: 'room,room.house',
-							sort: 'label'
+				await locals.adminPb.collection('beds').getFullList<BedWithHouse>({
+					filter: 'occupied = false && enabled = true && is_locked = false && is_special = false',
+					expand: 'room,room.house',
+					sort: 'label'
+				});
+		// The drum holds only the spots that fit the wishes (all of them without
+		// any); what a room or spot switched off (a superuser's call) never fits.
+		const freeBeds: RouletteSpot[] = allFree
+			.filter(
+				(bed) =>
+					wishes.length === 0 ||
+					spotMatchesFilters(
+						wishes,
+						spotFacts({
+							bedType: bed.bed_type,
+							house: bed.expand?.room?.expand?.house?.features,
+							room: bed.expand?.room?.features,
+							roomOff: bed.expand?.room?.features_off,
+							spotOff: bed.features_off
 						})
-				).map((bed) => ({
-					id: bed.id,
-					label: bed.label,
-					room: bed.room,
-					expand: {
-						room: {
-							name: bed.expand?.room?.name,
-							expand: { house: { name: bed.expand?.room?.expand?.house?.name } }
-						}
-					}
-				}));
+					)
+			)
+			.map(rouletteSpot);
 
-		const spotFixed = userBed
-			? await isSpotFixed(locals.adminPb, order.id, userBed.id).catch((err) => {
-					console.error(
-						'[RandomBed] Special-needs request lookup failed:',
-						(err as Error)?.message
-					);
-					return false;
-				})
-			: false;
+		// The wish chips of the top bar, only while the drum is in play: a guest
+		// with a spot can't spin, and outside Live Booking the machine rests.
+		const availableFilters: SpotFilter[] =
+			!userBed && isBookingActive ? await readAvailableFilters(locals.adminPb) : [];
+		// What the wishes left in the drum, as the bar says it next to the chips.
+		const wishFit =
+			wishes.length > 0
+				? `${freeBeds.length} ${freeBeds.length === 1 ? 'spot' : 'spots'} in the drum of ${allFree.length} free`
+				: '';
+
+		// A guest with a spot sees it as the small booking pass, like on the
+		// house, room and map pages; the Destiny Fulfilled card shows it too.
+		const [spotFixed, pass]: [boolean, PassSummary | null] = userBed
+			? await Promise.all([
+					isSpotFixed(locals.adminPb, order.id, userBed.id).catch((err) => {
+						console.error(
+							'[RandomBed] Special-needs request lookup failed:',
+							(err as Error)?.message
+						);
+						return false;
+					}),
+					passSummary(locals.adminPb, order, userBed).catch((err) => {
+						console.error('[RandomBed] Booking pass failed:', (err as Error)?.message);
+						return null;
+					})
+				])
+			: [false, null];
+
+		// The Destiny Fulfilled card offers the wallets and Telegram under the pass.
+		const telegram = settings.telegramBot
+			? await getGuestNotifyStatus(locals.adminPb, order, settings)
+					.then((status) => ({ connected: !!status.telegram?.connected, form: true }))
+					.catch((err) => {
+						console.error('[RandomBed] Notification status failed:', (err as Error)?.message);
+						return null;
+					})
+			: null;
 
 		return {
 			freeBeds,
+			wishes,
+			availableFilters,
+			wishFit,
+			/** All free spots, so the page can say how many the wishes left out. */
+			freeTotal: allFree.length,
 			isBookingActive,
 			spotFixed,
 			// The crew checked the guest in at arrival: only the crew changes the spot now.
 			checkedIn: !!userBed?.checked_in_at,
 			phase,
-			userBed: userBed
-				? {
-						id: userBed.id,
-						label: userBed.label,
-						roomId: userBed.room,
-						roomName: userBed.expand?.room?.name,
-						houseName: userBed.expand?.room?.expand?.house?.name
-					}
-				: null
+			// The ticket's burner name: the name plate starts with it, so a guest
+			// who spins again keeps their name unless they change it.
+			burnerName: burnerNameOf(order),
+			pass,
+			wallet: walletPlatforms(),
+			telegram,
+			// what the page says; what is allowed still follows `phase`
+			guestPhase,
+			userBed: userBed ? rouletteSpot(userBed) : null
 		};
 	} catch (err) {
 		console.error('[RandomBed] Load failed:', (err as Error)?.message);
@@ -116,8 +182,8 @@ export const actions: Actions = {
 			});
 		}
 
-		const { isBookingActive, phase } = await getBookingSettings(locals.pb);
-		if (!isBookingActive) return fail(403, { error: bookingRefusal(phase) });
+		const { isBookingActive, guestPhase } = await getBookingSettings(locals.pb);
+		if (!isBookingActive) return fail(403, { error: bookingRefusal(guestPhase) });
 
 		const formData = await request.formData();
 		const bedId = formData.get('bedId') as string;
@@ -126,7 +192,7 @@ export const actions: Actions = {
 		if (!locals.orderNumber) return fail(401, { error: SIGNED_OUT });
 		if (!bedId || !guestName) {
 			return fail(400, {
-				error: 'The roll was incomplete, so nothing was booked. Please roll the dice again.'
+				error: 'The spin was incomplete, so nothing was booked. Please spin again.'
 			});
 		}
 
@@ -139,12 +205,12 @@ export const actions: Actions = {
 			}
 
 			// Roulette is only for claiming a first spot — a guest who has one
-			// nukes it first (releaseBed, behind the hold-to-launch warning) and
-			// re-rolls deliberately, never by silently rebooking.
+			// sweeps it away first (releaseBed, behind the Leave No Trace hold)
+			// and spins again deliberately, never by silently rebooking.
 			const existingBed = await bookingService.getBedForOrder(order.id);
 			if (existingBed) {
 				return fail(409, {
-					error: 'You already have a spot. Release it first, then you can roll again.'
+					error: 'You already have a spot. Release it first, then you can spin again.'
 				});
 			}
 
@@ -152,26 +218,28 @@ export const actions: Actions = {
 			// two guests hitting "random bed" at the same moment can't both win the
 			// same bed, and one ticket can't end up with two beds.
 			await bookingService.bookBed(order, bedId, guestName.slice(0, 80), {
-				allowLocked: !!locals.admin
+				allowLocked: !!locals.admin,
+				requireLivePhase: true
 			});
 			return { success: true, bedId };
 		} catch (err: any) {
+			if (err instanceof BookingClosedError) return fail(403, { error: err.message });
 			if (err instanceof BedUnavailableError || err?.status === 404) {
 				return fail(409, {
-					error: 'Someone was faster: this spot was just taken. Roll the dice again.'
+					error: 'Someone was faster: this spot was just taken. Spin again.'
 				});
 			}
 			console.error('[RandomBed] bookRandom failed:', err?.message);
 			return fail(500, {
-				error: 'The booking did not go through. Please reload the page and roll again.'
+				error: 'The booking did not go through. Please reload the page and spin again.'
 			});
 		}
 	},
 
 	/**
-	 * The ☢ nuke before a respin: deletes the guest's booking right away, then
-	 * the page rolls a new spot. `bedId` is the spot the warning showed; if the
-	 * ticket holds another one by now, nothing is deleted.
+	 * ✨ Leave No Trace before a respin: deletes the guest's booking right away,
+	 * then the page spins a new spot. `bedId` is the spot the dialog showed; if
+	 * the ticket holds another one by now, nothing is deleted.
 	 */
 	releaseBed: async ({ request, locals }) => {
 		if (!locals.adminPb.authStore.isValid) {
@@ -203,6 +271,10 @@ export const actions: Actions = {
 			}
 
 			const released = await bookingService.unbookOrder(order.id, { onlyBed: confirmedBedId });
+			// The respin follows in a moment, so the release itself is no news:
+			// hold the guest's message back until the new spot is booked, and
+			// they hear about the move once (docs/admin/notifications.md).
+			if (released > 0) await holdGuestMessage(locals.adminPb, order.id);
 			return { success: true, released: released > 0 };
 		} catch (err: any) {
 			if (err instanceof CheckedInError) return fail(409, { error: err.message });

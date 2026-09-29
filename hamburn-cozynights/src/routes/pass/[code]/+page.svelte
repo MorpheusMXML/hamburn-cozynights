@@ -6,6 +6,7 @@
 	import type { PassCheckResult } from '$lib/pass';
 	import { formatBerlin } from '$lib/booking-phase';
 	import { confirmDialog, toast } from '$lib/dialogs';
+	import PassActions from '$lib/components/PassActions.svelte';
 
 	export let data: PageData;
 
@@ -92,6 +93,10 @@
 				{#if data.spot}
 					<dt>Spot</dt>
 					<dd><strong>{data.spot.spot}</strong> · {data.spot.room} · {data.spot.house}</dd>
+					{#if data.spot.bed}
+						<dt>Bed</dt>
+						<dd>{data.spot.bed}</dd>
+					{/if}
 					{#if data.burnerName}
 						<dt>Burner name</dt>
 						<dd>{data.burnerName}</dd>
@@ -151,6 +156,15 @@
 				<dd>{data.spot.room}</dd>
 				<dt>Spot</dt>
 				<dd>{data.spot.spot}</dd>
+				<!-- the kind of bed and what is at the spot: only when the crew wrote them down -->
+				{#if data.spot.bed}
+					<dt>Bed</dt>
+					<dd>{data.spot.bed}</dd>
+				{/if}
+				{#if data.spot.features}
+					<dt>Features</dt>
+					<dd>{data.spot.features}</dd>
+				{/if}
 				{#if data.burnerName}
 					<dt>Burner</dt>
 					<dd>{data.burnerName}</dd>
@@ -170,12 +184,19 @@
 
 		<p class="hint">
 			Show this pass when you arrive if the crew asks for it. A screenshot works too — or save the
-			QR code:
+			QR code{#if data.wallet.length > 0}, or keep the pass in your wallet: it updates itself when
+				your spot changes{/if}:
 		</p>
 		<p class="actions">
 			<a class="btn" href="/pass/{data.code}/qr.gif" download>Save QR code</a>
 			<a class="btn secondary" href="/map">Camp map</a>
 		</p>
+		<PassActions
+			code={data.code}
+			wallet={data.wallet}
+			telegram={data.telegram ? { connected: false } : null}
+			compact
+		/>
 	</article>
 </main>
 

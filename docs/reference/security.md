@@ -13,7 +13,9 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 
 - **Looked up by a keyed hash.** Sign-in compares a keyed hash (HMAC-SHA256) of the code, not the code itself.
 - **Never logged.** Neither successful nor failed codes end up in log files.
-- **Kept in a protected cookie.** The browser stores the code in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie that scripts on the page can't read.
+- **Kept in a protected cookie.** The browser stores the code in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie (`bookingCode`, 30 days) that scripts on the page can't read. A second cookie next to it (`bookingRound`) holds the booking round it was signed in for.
+- **Checked on every request.** The server looks the code up before any page runs (`src/lib/server/guest-session.ts`): a code that is no longer in the ticket list, and a code from an earlier booking round, end the session then and there — both cookies go and the start page asks for the code again. A PocketBase that can't be reached signs nobody out.
+- **A reset ends every session.** Releasing all bookings (the switch back to Staging, 🧨 Clear all bookings) counts the round up in `app_settings.guest_round`, so a new round never starts with devices still signed in for the last one.
 - **Guessing is slowed down.** Too many wrong codes from one address pause sign-in for that address for a few minutes. Correct codes never count, so a crowd behind one festival network isn't locked out.
 
 ### Names and visibility
@@ -48,12 +50,23 @@ What a guest writes about their needs is often health data (Art. 9 GDPR), so it 
 - **No hint for other guests.** Guest pages and their data never say why a spot is taken or reserved (special-needs, locked or booked all look alike); a booked special-needs spot shows the burner name like any other.
 - **Deleted after the event** with `tickets forget-contacts`.
 
+### Swap requests
+
+Guests can ask each other to swap spots during Live Booking. Details: [Swap requests](../admin/swaps#privacy).
+
+- **What guests write to each other is encrypted** (AES-256-GCM, like burner names) and decrypted only for the two guests' own pages, sent with `Cache-Control: no-store`. Never part of e-mails, Telegram messages, the crew group, logs or the audit log; no admin page shows it. Links are refused in it.
+- **No hint about special spots.** Every taken spot offers a swap. A request for a spot that can't be swapped (🔒, ♿, crew-picked, checked in) or to a guest who paused requests is stored *quiet*: never shown or sent to that guest, it runs out like an unanswered one. A failed yes never says which spot was the problem.
+- **Only between the two tickets involved**, taken from the guests' sessions; guests see each other's burner names and spots as on the room pages, never codes, list names or addresses. The swap itself is one PocketBase transaction that only the app's service account can ask for.
+- **Limits against pestering:** three open requests per ticket, ten new ones a day, one "no" is final for that spot, and every guest can pause requests to them.
+- **Deleted** with the ticket's hand-over and after the event with `tickets forget-contacts`.
+
 ### Booking passes
 
 - **A separate, random code.** The pass code (12 characters) can only show a booking; the ticket code, which can change bookings, never appears on a pass, in a QR code or in a message.
 - **Minimal content.** Anyone with a pass link sees the spot and the burner name (visible to other guests anyway). The name on the ticket, the shortened e-mail and the check-in only appear for signed-in admins.
 - **Check-in by admins only.** Checking a pass checks the guest in. That happens only in the admin area (`/admin/check`, also the target of the button on the pass page): requests without an approved admin session are refused centrally, the actions check again, and the check-in is written with the admin's own PocketBase session, which the beds' rules accept from approved admins and superusers only. Opening a pass never writes anything. A ticket code can't check anybody in, and guests never see who checked them in or when.
-- **Private links.** Pass pages send `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex` and `Cache-Control: no-store`; many unknown codes from one connection are blocked for a while. Only PocketBase creates pass codes, so two writers can't hand out different codes for one ticket.
+- **Private links.** Pass pages send `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex` and `Cache-Control: no-store`; many unknown codes from one connection are blocked for a while. Only PocketBase creates pass codes, so two writers can't hand out different codes for one ticket. The pass's files — its QR images and the wallet passes — go through the same check and the same limit.
+- **Wallet passes carry no more than the pass page**, and the Apple pass file is signed on our own server with the Pass Type ID certificate. A device asking for updates identifies itself with a token derived from the app's key for that one pass, so a token for one pass is useless for any other, and nothing about a pass is stored to check it. Subscribing to Telegram, on the other hand, always needs the ticket code: those messages also carry the crew's decision on a special-needs request, and pass links get shown around.
 
 ## Admin sign-in
 
@@ -72,7 +85,7 @@ What a guest writes about their needs is often health data (Art. 9 GDPR), so it 
 
 - **Not on the internet.** nginx only forwards to the app. PocketBase is reachable from the app's internal network, and its dashboard only from the server itself.
 - **Strict API rules.** Only houses, rooms and the phase settings are publicly readable; beds are admin-only (they carry the booking's ticket, the special-needs flag and the booking time), so guests get spots only through the app's pages, which strip all of that. Layout changes require an approved admin, the ticket list is closed to the public API entirely, admin accounts can't be listed, and PocketBase's default user sign-up is closed. On a server the dashboard's schema editors are hidden (`PB_HIDE_CONTROLS`): the schema only ever comes from `pb_migrations/`.
-- **Guards behind the rules.** Two PocketBase hooks repeat what the app already refuses, for the case that an admin token is used directly against the API: only a superuser can switch the booking phase right now (`pb_hooks/cozy_phase.pb.js`), and houses, rooms and spots can only be created or deleted while booking is in Staging (`pb_hooks/cozy_layout.pb.js`). If the phase cannot be read, both refuse.
+- **Guards behind the rules.** Three PocketBase hooks repeat what the app already refuses, for the case that an admin token is used directly against the API: only a superuser can switch the booking phase right now (`pb_hooks/cozy_phase.pb.js`), houses, rooms and spots can only be created or deleted while booking is in Staging (`pb_hooks/cozy_layout.pb.js`), and the features hook guards houses, rooms and spots (`pb_hooks/cozy_features.pb.js`): a house or room can't claim 🔥 Heated and ❄️ No heating at once, and a room or spot can't switch an inherited feature off and tick it at the same time. If the phase cannot be read, the first two refuse.
 - **A short request log without addresses.** PocketBase keeps its request log for two days (`PB_LOGS_DAYS`) and never records client IPs: a request URL can carry a ticket code on the first sign-in, and pass codes.
 - **Rules as code.** Schema and rules are versioned migrations. They are re-applied to restored backups, so an old backup can't bring back old, looser rules.
 

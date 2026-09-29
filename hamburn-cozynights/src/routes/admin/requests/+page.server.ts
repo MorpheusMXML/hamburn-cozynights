@@ -3,6 +3,7 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { BedUnavailableError, ReleaseFailedError } from '$lib/server/booking';
 import { getBookingSettings } from '$lib/server/settings';
+import { needCapacity } from '$lib/accommodation';
 import {
 	assignSpot,
 	decideRequest,
@@ -25,9 +26,16 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
 			listAssignableSpots(locals.adminPb),
 			getBookingSettings(locals.pb)
 		]);
+		// What the requests that still wait for a spot need, against the free spots
+		// that fit: the crew sees early when it has to free or mark more.
+		const open = requests.filter(
+			(request) =>
+				request.status === 'pending' || (request.status === 'approved' && !request.spot?.assigned)
+		);
 		return {
 			requests,
 			spots,
+			capacity: needCapacity(open, spots),
 			requestsOpen: settings.requestsOpen,
 			isBookingActive: settings.isBookingActive
 		};

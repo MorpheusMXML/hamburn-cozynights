@@ -45,13 +45,14 @@ Each round the wind changes and the fire ball hits a different letter. A visitor
 | `src/lib/fx/effigy/simulation.ts`       | The cycle without drawing: magic balls and the build, burning skins, fire on the frame, breaking, hinged and falling parts, debris on the pile. Seeded, so tests are reproducible      |
 | `src/lib/fx/effigy/renderer.ts`         | Canvas 2D drawing: one pre-rendered rainbow sprite per letter (burnt and painted on a scratch canvas), beams in batches, flames, sparks, smoke and glitter as sprite particles         |
 | `src/lib/fx/effigy/effigyBurn.ts`       | Mounting: canvas size, the frame loop, visibility, torch input, particle budget                                                                                                        |
-| `src/lib/components/EffigyTitle.svelte` | The heading, the canvas, the pause button and reduced motion                                                                                                                           |
+| `src/lib/components/EffigyTitle.svelte` | The heading, the canvas, the pause button, reduced motion and the version badge at the top right (`VersionBadge.svelte`, size `title`; `$lib/version` for the values)                     |
 
 ## Accessibility
 
 - **A real heading.** The `<h1>` "Hamburn CozyNights" stays in the page, transparent once the canvas draws. Screen readers and search engines read it; the canvas is `aria-hidden`. Without JavaScript the heading is the visible title, in the same rainbow colors.
 - **Reduced motion.** With _reduce motion_ set in the operating system, the title stands still as rainbow letters: no fire, no pause button, and the background video doesn't play.
 - **Pause button.** An animation that runs longer than five seconds needs a way to stop it (WCAG 2.2.2). The button next to the title stops the title, the background video and the page's decorative CSS animations (`data-motion="paused"` on `<html>`). The browser remembers the choice (`localStorage`, key `cozynights:title-motion`).
+- **The version badge** is a plain link above the effigy's top-right corner: its accessible name is the full "Version 0.18.1 · build …" text, it never overlaps a letter, and it needs no JavaScript.
 - **No flashing.** Flames flicker slowly and in small areas (WCAG 2.3.1). The landing of a fire ball or a magic ball is a single soft flash.
 
 ## Performance
