@@ -57,10 +57,10 @@ services:
       TELEGRAM_THREAD_ID: ${TELEGRAM_THREAD_ID:-}
       TELEGRAM_GUEST_UPDATES: ${TELEGRAM_GUEST_UPDATES:-}
       COZY_ADMIN_WEBHOOK_URL: ${COZY_ADMIN_WEBHOOK_URL:-}
-      # Links in messages. No environment marker in subjects and crew messages
-      # by default; COZY_ENV_LABEL in .env adds one (e.g. during a dry run).
+      # Links in messages. COZY_ENV_LABEL (the [STAGING] marker in subjects and
+      # crew messages) is left out on purpose: production never marks what it
+      # sends as a test, whatever a .env says (tests/production-clean.test.ts).
       COZY_APP_URL: https://cozynights.hamburn.de
-      COZY_ENV_LABEL: ${COZY_ENV_LABEL:-}
       # Local auto-backups into the volume's backups/ folder (defaults: once a
       # day at 03:05 UTC, keep 14), see pb_hooks/cozy_backups.pb.js. Off-site:
       # deploy/backup/.

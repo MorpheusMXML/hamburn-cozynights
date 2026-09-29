@@ -158,6 +158,7 @@ Guests and admins see one picture of the camp, `static/lageplan-brahmsee-<year>.
 2. **Save it under a new name,** `static/lageplan-brahmsee-<year>.jpg`, delete the previous year's file and point `MAP_IMAGE` in `src/lib/map-geometry.ts` to the new one. The new name matters: browsers may keep the old picture under the old address. A new drawing for a year that already had one gets a suffix instead, `…-<year>-v2.jpg`, for the same reason.
 3. **Put the same name into `map.image`** of `static/templates/brahmsee-starter.json` and of the example in [Layout templates](../admin/templates#file-format); `npm test` checks the starter template.
 4. **Check the pins** on staging in the map view of *Map & houses* (`/admin/camp`) and drag any that no longer sit on their house. Templates exported before the swap carry the old name in `map.image`; importing them shows a warning to check the pins, nothing else changes.
+5. **Set the event year** in `src/lib/event.ts` (`EVENT_YEAR`): the start page shows it under the title.
 
 ## Conventions
 
