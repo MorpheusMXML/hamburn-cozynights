@@ -25,7 +25,7 @@ the icons on the next, never a third.
 		formatBerlin,
 		formatDuration,
 		PHASE_ICONS,
-		PHASE_LABELS,
+		PHASE_PILL_LABELS,
 		resyncDelay,
 		toMs,
 		type BookingPhase,
@@ -68,7 +68,7 @@ the icons on the next, never a third.
 	let target = $derived(toMs(next?.at));
 	let remaining = $derived(target === null ? 0 : target - now);
 	let urgent = $derived(kind === 'closes' && remaining < URGENT_MS);
-	let phaseName = $derived(PHASE_LABELS[phase].replace('Live Booking', 'Live').toUpperCase());
+	let phaseName = $derived(PHASE_PILL_LABELS[phase].replace('Live Booking', 'Live').toUpperCase());
 	let countdownLabel = $derived(
 		remaining <= 0
 			? kind === 'closes'
@@ -79,7 +79,7 @@ the icons on the next, never a third.
 				: 'opens in'
 	);
 	let spoken = $derived(
-		`Booking phase: ${PHASE_LABELS[phase]}.` +
+		`Booking phase: ${PHASE_PILL_LABELS[phase]}.` +
 			(kind && next
 				? ` Booking ${countdownLabel}${remaining > 0 ? ` ${formatDuration(remaining)}` : ''}`
 				: ' No timer armed.')
