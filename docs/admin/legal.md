@@ -34,7 +34,7 @@ The details are `LEGAL_*` variables in the environment's `.env`, next to the oth
 | :---------------------------- | :-------------- | :------------------------------------------------------------------------------------------------------------- |
 | `LEGAL_NAME`                  | **yes**         | The provider incl. legal form, e.g. `'Musterverein e.V.'`                                                      |
 | `LEGAL_ADDRESS`               | **yes**         | A street address where letters can be served, no P.O. box, e.g. `'Musterstraße 1\|20095 Hamburg\|Germany'`     |
-| `LEGAL_EMAIL`                 | **yes**         | General contact address                                                                                        |
+| `LEGAL_EMAIL`                 | **yes**         | General contact address, shown in the legal notice, the booking rules (*Questions*) and the privacy policy. A crew group that accepts mail from outside works well, ideally the same as `MAIL_REPLY_TO` ([Notifications](./notifications#setting-it-up)) |
 | `LEGAL_HOSTER`                | **yes**         | The hosting company, e.g. `'Hetzner Online GmbH\|Industriestr. 25\|91710 Gunzenhausen\|Germany'`               |
 | `LEGAL_MAIL_PROVIDER`         | with e-mail     | The service that sends the booking e-mails (your processor), e.g. `'Name\|Address\|Country'`                   |
 | `LEGAL_PHONE`                 | recommended     | A second fast way to reach you                                                                                 |
@@ -53,7 +53,7 @@ While one of the four required values is missing, the pages show a red note for 
 
 The privacy policy asks PocketBase which messages this server sends: the sections on booking e-mails, on Telegram for guests and on the crew group only appear once e-mail or the Telegram bot is set up. Telegram runs outside the EU, so guests only get messages there after their own consent (they press START in the bot's chat). The section on wallet passes appears the same way, once Apple Wallet or Google Wallet is set up: it says what the pass carries, that an iPhone's device identifier and notification token are stored for updates, and that a Google pass is stored in the guest's Google account.
 
-The app reads `.env` only when its container is created. After editing it, deploy again or recreate just the app container (as root on the server):
+The app reads `.env` only when its container is created. After editing it, deploy again or recreate just the app container (as root on the server; for production use `deploy-production.conf` and `docker-compose.production.yml`):
 
 ```bash
 source /etc/cozynights/deploy-staging.conf
@@ -72,6 +72,7 @@ The ticket list holds the ticket codes and the buyers' e-mail addresses, so the 
 ## Before going live
 
 - [ ] **Every public environment is filled in**, staging included: it is reachable from the internet too. No red note on the legal pages.
+- [ ] **The contact address answers.** Send a mail to `LEGAL_EMAIL` from an address outside your organisation and check that it arrives. A typo or a group that refuses outside mail bounces silently for guests. `curl -s http://127.0.0.1:<app port>/booking-rules | grep -oE '[a-z.]+@[a-z.]+' | sort -u` on the server shows the address the page really prints.
 - [ ] **Data processing agreement with the hoster.** The privacy policy says one exists. Hetzner offers it in the account settings of its console.
 - [ ] **Data processing agreement with the mail service**, which is named in `LEGAL_MAIL_PROVIDER`.
 - [ ] **Telegram sections checked**: consent for guests, and the crew group, which gets admins' e-mail addresses on sign-ins and access changes.
