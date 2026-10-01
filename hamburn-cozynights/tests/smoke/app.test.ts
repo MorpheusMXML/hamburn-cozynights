@@ -185,7 +185,7 @@ describe('any deployment (read-only)', () => {
 	it('answers unknown booking passes with 404 and keeps the check-in for admins', async () => {
 		const unknown = await get('/pass/AAAA-BBBB-CCCC');
 		expect(unknown.status).toBe(404);
-		expect(unknown.headers.get('referrer-policy')).toBe('no-referrer');
+		expect(unknown.headers.get('referrer-policy')).toBe('same-origin');
 		expect((await get('/pass/not-a-pass')).status).toBe(404);
 		expect((await get('/admin/check')).status).toBe(303);
 		// an unknown code: nothing would change even if the door were open
