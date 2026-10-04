@@ -4,7 +4,7 @@ Get CozyNights running on your machine: a local PocketBase in Docker plus the Sv
 
 ## Prerequisites
 
-- **Node.js 22** or newer, with npm
+- **Node.js 24** or newer, with npm. With [mise](https://mise.jdx.dev), `mise install` in the repository picks the version from `mise.toml`; the Docker image and CI run Node 24 too.
 - **Docker** with Docker Compose, for the local PocketBase
 - **Git**
 

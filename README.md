@@ -57,7 +57,7 @@ flowchart LR
 
 ## 🚀 Quick start
 
-You need Node.js 22+ and Docker.
+You need Node.js 24+ and Docker (with mise, `mise install` in the repository picks it from `mise.toml`).
 
 ```bash
 git clone https://github.com/MorpheusMXML/hamburn-cozynights.git
