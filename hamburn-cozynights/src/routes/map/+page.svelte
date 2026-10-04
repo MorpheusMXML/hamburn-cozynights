@@ -171,8 +171,9 @@
 		</div>
 	{/if}
 
-	<!-- One column: the roulette button stacks on top of the legal links and
-	     the credit, so the two never cover each other. -->
+	<!-- One column: the roulette button stacks on top of the footer's slim row
+	     (legal links, then version and credit where they fit), so the two never
+	     cover each other. -->
 	<div class="bottom-dock">
 		{#if data.houses && isBookingActive}
 			<a href="/random-bed" class="random-btn pulsing-laser">
