@@ -1,6 +1,6 @@
 # Legal pages
 
-CozyNights has a **legal notice** (Impressum, `/legal-notice`), a **privacy policy** (`/privacy`) and **booking rules** (`/booking-rules`). Every page links to all three: the start page and the map in their footers, all other pages at the bottom, and these docs under every page. The booking dialogs link the booking rules too. German visitors who type `/impressum` or `/datenschutz` are redirected.
+CozyNights has a **legal notice** (Impressum, `/legal-notice`), a **privacy policy** (`/privacy`) and **booking rules** (`/booking-rules`). Every page links to all three: the start page and the map in their footers, all other pages in a slim bar at the bottom of the screen that becomes the footer at the end of the page, and these docs under every page. The booking dialogs link the booking rules too. German visitors who type `/impressum` or `/datenschutz` are redirected.
 
 Like the whole app, the pages are **in English**. Visitors can let their browser translate them.
 

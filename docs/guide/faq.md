@@ -147,7 +147,7 @@ Press the pause button ⏸ next to the title; your browser remembers it. If your
 :::
 
 ::: details What is the small `v0.18.1` next to the title?
-The version of CozyNights you are looking at. It is also at the bottom of every page; hover it to see the build, click it for what changed. If you report a problem, say which version you saw.
+The version of CozyNights you are looking at. It is also at the very end of every page (on the camp map only on wider screens); hover it to see the build, click it for what changed. If you report a problem, say which version you saw.
 :::
 
 ::: details Who runs CozyNights, and what happens with my data?
