@@ -10,7 +10,7 @@ type Row = Record<string, any>;
 const RELATIONS: Record<string, Record<string, string>> = {
 	beds: { room: 'rooms', order: 'orders', bunk_partner: 'beds' },
 	rooms: { house: 'houses' },
-	special_requests: { order: 'orders' },
+	special_requests: { order: 'orders', request_group: 'request_groups' },
 	guest_notify: { order: 'orders' },
 	wallet_passes: { order: 'orders' },
 	wallet_devices: { pass: 'wallet_passes' },
@@ -18,7 +18,8 @@ const RELATIONS: Record<string, Record<string, string>> = {
 };
 
 const UNIQUE: Record<string, string[]> = {
-	special_requests: ['order']
+	special_requests: ['order'],
+	request_groups: ['code']
 };
 
 let counter = 0;

@@ -22,7 +22,12 @@ import { APP_SETTINGS_ID } from '../src/lib/server/constants';
 import {
 	REQUEST_TEXT_MAX,
 	cleanRequestText,
+	isFormNeed,
+	isSpecialNeed,
+	needLabel,
 	parseRequestForm,
+	requestKinds,
+	RETIRED_NEEDS,
 	SPECIAL_NEEDS
 } from '../src/lib/special-needs';
 import {
@@ -33,6 +38,7 @@ import {
 	releaseSpot,
 	listAssignableSpots,
 	listRequests,
+	listSpecialSpots,
 	RequestError,
 	saveRequest,
 	ticketName,
@@ -115,9 +121,149 @@ describe('request form', () => {
 				needs: ['lower_bunk', 'quiet'],
 				text: GOOD.text,
 				burnerName: 'Sparkle Pony',
-				consent: true
+				consent: true,
+				group: { mode: 'none' }
 			}
 		});
+	});
+
+	it('takes a project request on the same form', () => {
+		const parsed = parseRequestForm(
+			form({ ...GOOD, needs: ['own_room', 'close_together'], text: 'Our dome crew, 6 people.' })
+		);
+		expect(parsed.ok).toBe(true);
+		expect(parsed.value.needs).toEqual(['own_room', 'close_together']);
+		expect(requestKinds(parsed.value.needs)).toEqual({
+			access: false,
+			project: true,
+			groupOnly: false
+		});
+	});
+
+	it('no longer offers the power socket, but old requests keep it', () => {
+		expect(SPECIAL_NEEDS.map((need) => need.value)).not.toContain('power');
+		expect(isFormNeed('power')).toBe(false);
+		expect(isSpecialNeed('power')).toBe(true);
+		expect(needLabel('power')).toBe(RETIRED_NEEDS[0].label);
+		expect(needLabel('power')).toMatch(/\(old form\)$/);
+
+		const withQuiet = parseRequestForm(form({ ...GOOD, needs: ['power', 'quiet'] }));
+		expect(withQuiet.value.needs).toEqual(['quiet']);
+		const alone = parseRequestForm(form({ ...GOOD, needs: ['power'] }));
+		expect(alone.ok).toBe(false);
+		if (!alone.ok) expect(alone.errors.needs).toMatch(/Tick at least one thing/);
+	});
+
+	it('tells what a request is about from its needs', () => {
+		expect(requestKinds(['quiet'])).toEqual({ access: true, project: false, groupOnly: false });
+		// unclear: treated as needing a special-needs spot
+		expect(requestKinds(['other']).access).toBe(true);
+		expect(requestKinds(['power']).access).toBe(true);
+		expect(requestKinds(['own_room', 'lower_bunk'])).toEqual({
+			access: true,
+			project: true,
+			groupOnly: false
+		});
+		expect(requestKinds([])).toEqual({ access: false, project: false, groupOnly: true });
+	});
+
+	it('lets a group member leave needs and text empty, but a ticked need wants a few words', () => {
+		const joining = { groupMode: 'join', groupCode: 'ABCD-EF23', consent: 'yes' };
+		const bare = parseRequestForm(form(joining));
+		expect(bare).toEqual({
+			ok: true,
+			value: {
+				needs: [],
+				text: '',
+				burnerName: '',
+				consent: true,
+				group: { mode: 'join', code: 'ABCDEF23' }
+			}
+		});
+		const ticked = parseRequestForm(form({ ...joining, needs: ['quiet'] }));
+		expect(ticked.ok).toBe(false);
+		if (!ticked.ok) expect(Object.keys(ticked.errors)).toEqual(['text']);
+
+		// already in a group: the membership stays, whatever the form says
+		const kept = parseRequestForm(form({ consent: 'yes', groupMode: 'start' }), { inGroup: true });
+		expect(kept.ok).toBe(true);
+		expect(kept.value.group).toEqual({ mode: 'keep' });
+		// a text stays limited
+		const long = parseRequestForm(form({ ...joining, text: 'x'.repeat(REQUEST_TEXT_MAX + 1) }));
+		expect(long.ok).toBe(false);
+
+		// starting a group follows the normal rules: the crew needs to know what it is about
+		const starting = parseRequestForm(
+			form({ groupMode: 'start', groupName: 'Neon Owls', consent: 'yes' })
+		);
+		expect(starting.ok).toBe(false);
+		if (!starting.ok) expect(Object.keys(starting.errors).sort()).toEqual(['needs', 'text']);
+	});
+
+	it('asks for a group name of 2 to 40 characters when starting one', () => {
+		const start = (groupName: string) =>
+			parseRequestForm(form({ ...GOOD, groupMode: 'start', groupName }));
+		const good = start('  Neon \n Owls ');
+		expect(good.ok).toBe(true);
+		expect(good.value.group).toEqual({ mode: 'start', name: 'Neon Owls' });
+		for (const name of ['', 'N', 'x'.repeat(41)]) {
+			const bad = start(name);
+			expect(bad.ok).toBe(false);
+			if (!bad.ok) {
+				expect(bad.errors.groupName).toBe('Give your group a name (2 to 40 characters).');
+			}
+		}
+		expect(start('x'.repeat(40)).ok).toBe(true);
+	});
+
+	it('takes a group code however it is typed or pasted', () => {
+		const join = (groupCode: string) =>
+			parseRequestForm(form({ ...GOOD, groupMode: 'join', groupCode })).value.group;
+		for (const typed of [
+			'ABCDEF23',
+			'abcd ef23',
+			'ABCD-EF23',
+			' abcd-ef23 ',
+			'https://cozynights.hamburn.de/special-needs?group=ABCDEF23',
+			'https://x.test/special-needs?group=abcdef23&utm=1'
+		]) {
+			expect(join(typed)).toEqual({ mode: 'join', code: 'ABCDEF23' });
+		}
+		for (const bad of ['', 'ABCDEF2', 'ABCDEF234', 'ABCDEF01', 'ABCD-EFIO']) {
+			const parsed = parseRequestForm(form({ ...GOOD, groupMode: 'join', groupCode: bad }));
+			expect(parsed.ok).toBe(false);
+			if (!parsed.ok) {
+				expect(parsed.errors.groupCode).toBe(
+					'A group code has 8 letters and digits, like ABCD-EF23.'
+				);
+			}
+		}
+		// anything else than start or join is "just for me"
+		expect(parseRequestForm(form({ ...GOOD, groupMode: 'lead' })).value.group).toEqual({
+			mode: 'none'
+		});
+	});
+
+	it('refuses a group name typed while "Just for me" stays picked (no JavaScript)', () => {
+		const named = parseRequestForm(form({ ...GOOD, groupMode: 'none', groupName: ' Neon Owls ' }));
+		expect(named.ok).toBe(false);
+		if (!named.ok) {
+			expect(named.errors).toEqual({
+				groupName: 'You named a group: choose “Start a group”, or clear the name.'
+			});
+		}
+		// an invite fills in the code: picking "Just for me" with it is fine
+		const invited = parseRequestForm(
+			form({ ...GOOD, groupMode: 'none', groupName: '  ', groupCode: 'ABCDEF23' })
+		);
+		expect(invited.ok).toBe(true);
+		expect(invited.value.group).toEqual({ mode: 'none' });
+	});
+
+	it('always asks for consent, in a group too', () => {
+		const parsed = parseRequestForm(form({ groupMode: 'join', groupCode: 'ABCDEF23' }));
+		expect(parsed.ok).toBe(false);
+		if (!parsed.ok) expect(Object.keys(parsed.errors)).toEqual(['consent']);
 	});
 
 	it('asks for at least one need, a text and consent — in English', () => {
@@ -157,11 +303,58 @@ describe('request form', () => {
 });
 
 describe('special-needs beds in booking and counts', () => {
-	it('are not bookable for guests, but for admins', () => {
+	it("are only for the crew's request flow, not even for admins with a ticket", () => {
 		const bed = { enabled: true, is_locked: false, is_special: true };
 		expect(isBedBookable(bed)).toBe(false);
-		expect(isBedBookable(bed, { allowLocked: true })).toBe(true);
+		expect(isBedBookable(bed, { allowLocked: true })).toBe(false);
+		expect(isBedBookable(bed, { allowSpecial: true })).toBe(true);
 		expect(isBedBookable({ enabled: true, is_locked: false })).toBe(true);
+		// a locked spot stays for admins with a ticket
+		const locked = { enabled: true, is_locked: true, is_special: false };
+		expect(isBedBookable(locked)).toBe(false);
+		expect(isBedBookable(locked, { allowLocked: true })).toBe(true);
+		expect(isBedBookable(locked, { allowSpecial: true })).toBe(false);
+		// both: the request flow may (it passes both)
+		const both = { enabled: true, is_locked: true, is_special: true };
+		expect(isBedBookable(both, { allowLocked: true })).toBe(false);
+		expect(isBedBookable(both, { allowLocked: true, allowSpecial: true })).toBe(true);
+		// deactivated: nobody
+		expect(
+			isBedBookable({ ...bed, enabled: false }, { allowLocked: true, allowSpecial: true })
+		).toBe(false);
+	});
+
+	it('stay closed on the room page for an admin with a ticket; a locked spot does not', async () => {
+		const c = camp({ is_booking_active: true });
+		await c.pb.collection('beds').update(c.normal.id, { is_locked: true });
+		const locals = { pb: c.pb, adminPb: c.pb, orderNumber: c.code, admin };
+
+		const { load } = await import('../src/routes/room/[id]/+page.server');
+		const data: any = await load({
+			params: { id: c.room.id },
+			locals,
+			cookies: { delete: () => {} }
+		} as any);
+		expect(data.beds.map((b: any) => [b.label, b.bookable])).toEqual([
+			['B1', false],
+			['B2', true]
+		]);
+
+		// a hand-made post doesn't get it either
+		const special: any = await roomActions.bookBed({
+			request: { formData: async () => form({ bedId: c.special.id, guestName: 'X' }) },
+			locals
+		} as any);
+		expect(special.status).toBe(409);
+		expect(special.data.error).toMatch(/not available/);
+		expect(c.pb.rows('beds').find((b) => b.id === c.special.id)!.order).toBe('');
+
+		const locked: any = await roomActions.bookBed({
+			request: { formData: async () => form({ bedId: c.normal.id, guestName: 'X' }) },
+			locals
+		} as any);
+		expect(locked).toEqual({ success: true });
+		expect(c.pb.rows('beds').find((b) => b.id === c.normal.id)!.order).toBe(c.order.id);
 	});
 
 	it('never count as free', () => {
@@ -297,7 +490,10 @@ describe('special-needs requests', () => {
 
 	it('books a special-needs spot while booking is closed, approving the request on the way', async () => {
 		const request = c.pb.seed('special_requests', { order: c.order.id, status: 'pending' });
-		await assignSpot(c.pb as any, admin, request.id, c.special.id);
+		// the only way a ♿ spot is booked: the crew's request flow, also in Staging
+		expect(await assignSpot(c.pb as any, admin, request.id, c.special.id)).toEqual({
+			approved: true
+		});
 
 		const bed = c.pb.rows('beds').find((b) => b.id === c.special.id)!;
 		expect(bed).toMatchObject({ occupied: true, order: c.order.id });
@@ -413,6 +609,114 @@ describe('special-needs requests', () => {
 			['B2', ['quiet']]
 		]);
 	});
+
+	it('still reads a power socket from an old request', async () => {
+		const { encrypt } = await import('../src/lib/server/crypto');
+		c.pb.seed('special_requests', {
+			order: c.order.id,
+			status: 'pending',
+			// stored before v0.30.0: not padded
+			needs: encrypt(JSON.stringify(['power', 'quiet']))
+		});
+		expect((await getGuestRequest(c.pb as any, c.order.id))?.needs).toEqual(['power', 'quiet']);
+		expect((await listRequests(c.pb as any))[0].needs).toEqual(['power', 'quiet']);
+	});
+
+	it('pads the needs, so the stored length does not tell what was ticked', async () => {
+		const other = c.pb.seed('orders', { order_number: 'HB-2002', customer_name: 'Bea' });
+		const base = { text: 'Our dome crew.', burnerName: '', consent: true };
+		await saveRequest(c.pb as any, c.order as any, { ...base, needs: [] });
+		await saveRequest(c.pb as any, other as any, {
+			...base,
+			needs: ['lower_bunk', 'step_free', 'near_toilet']
+		});
+		const [a, b] = c.pb.rows('special_requests');
+		expect(a.needs.length).toBe(b.needs.length);
+		expect(JSON.parse(decrypt(b.needs))).toEqual(['lower_bunk', 'step_free', 'near_toilet']);
+		// 24 + 32 + 480 hex characters and two colons: within the field's 1000
+		expect(a.needs.length).toBe(538);
+		expect(await getGuestRequest(c.pb as any, c.order.id)).toMatchObject({ needs: [] });
+	});
+
+	it('tells admins which group a request is in', async () => {
+		const group = c.pb.seed('request_groups', { code: 'ABCDEF23', name: 'x' });
+		c.pb.seed('special_requests', {
+			order: c.order.id,
+			status: 'pending',
+			request_group: group.id
+		});
+		const other = c.pb.seed('orders', { order_number: 'HB-2002', customer_name: 'Bea' });
+		c.pb.seed('special_requests', { order: other.id, status: 'pending' });
+		expect((await listRequests(c.pb as any)).map((r) => r.groupId)).toEqual([group.id, '']);
+	});
+
+	it('keeps an empty text empty, and tells it apart from one that can not be read', async () => {
+		const { encrypt } = await import('../src/lib/server/crypto');
+		// a group member who wrote nothing
+		await saveRequest(c.pb as any, c.order as any, {
+			needs: [],
+			text: '',
+			burnerName: '',
+			consent: true
+		});
+		expect(c.pb.rows('special_requests')[0].reason).toBe('');
+		expect(await getGuestRequest(c.pb as any, c.order.id)).toMatchObject({ text: '' });
+
+		const seed = (number: string, reason: string) =>
+			c.pb.seed('special_requests', {
+				order: c.pb.seed('orders', { order_number: number, customer_name: number }).id,
+				status: 'pending',
+				reason
+			});
+		// stored as encrypt('') before: an IV and a tag, no ciphertext
+		seed('HB-2002', encrypt(''));
+		// another ENCRYPTION_KEY
+		seed('HB-2003', `${'a'.repeat(24)}:${'b'.repeat(32)}:${'cd'.repeat(8)}`);
+		const list = await listRequests(c.pb as any);
+		expect(list.map((r) => [r.text, r.textUnreadable])).toEqual([
+			['', false],
+			['', false],
+			['', true]
+		]);
+	});
+
+	it('lists every ♿ spot with its state and who holds it', async () => {
+		const room = c.room.id;
+		const spot = (label: string, data: Record<string, unknown>) =>
+			c.pb.seed('beds', {
+				label,
+				room,
+				enabled: true,
+				occupied: false,
+				is_locked: false,
+				is_special: true,
+				order: '',
+				...data
+			});
+		const bea = c.pb.seed('orders', { order_number: 'HB-2002', customer_name: 'Bea Booker' });
+		spot('B3', { occupied: true, order: bea.id }); // booked by a guest
+		spot('B4', { occupied: true }); // TAKEN without a ticket
+		spot('B5', { enabled: false }); // deactivated
+		spot('B6', { is_locked: true }); // free, but locked
+		const request = c.pb.seed('special_requests', { order: c.order.id, status: 'approved' });
+		await assignSpot(c.pb as any, admin, request.id, c.special.id);
+
+		const spots = await listSpecialSpots(c.pb as any);
+		expect(spots.map((s) => [s.spot, s.state, s.holder, s.locked])).toEqual([
+			['B1', 'request', 'Ada Lovelace', false],
+			['B3', 'booked', 'Bea Booker', false],
+			['B4', 'blocked', '', false],
+			['B5', 'inactive', '', false],
+			['B6', 'free', '', true]
+		]);
+		// the normal spot B2 is no ♿ spot
+		expect(spots.every((s) => s.special)).toBe(true);
+		expect(spots[0]).toMatchObject({
+			label: 'B1 · Dorm #2 · Villa',
+			roomId: room,
+			houseId: c.house.id
+		});
+	});
 });
 
 describe('guest page actions', () => {
@@ -434,7 +738,7 @@ describe('guest page actions', () => {
 			request: { formData: async () => form({ ...GOOD, order: 'someone-else' }) },
 			locals: { pb: c.pb, adminPb: c.pb, orderNumber: c.code, admin: null }
 		} as any);
-		expect(result).toEqual({ success: true, saved: 'created' });
+		expect(result).toEqual({ success: true, saved: 'created', group: null });
 		expect(c.pb.rows('special_requests')[0].order).toBe(c.order.id);
 	});
 

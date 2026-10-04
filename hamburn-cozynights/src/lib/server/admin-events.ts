@@ -14,7 +14,13 @@ export type AdminEventAction =
 	| 'special_spot_released'
 	| 'message_text_changed'
 	| 'message_text_reset'
-	| 'check_in_undone';
+	| 'check_in_undone'
+	// Request groups (src/lib/server/request-groups.ts): one event per group
+	// step, with counts only — never names, group names or codes.
+	| 'request_group_approved'
+	| 'request_group_declined'
+	| 'request_group_booked'
+	| 'request_group_member_removed';
 
 /** What guests do that the crew hears about. Never with names or what they wrote. */
 export type GuestEventAction = 'special_request_new' | 'special_request_withdrawn';

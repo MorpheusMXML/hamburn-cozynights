@@ -1,6 +1,10 @@
 <!--
 Special-needs requests (docs/admin/special-needs.md): read, approve or
-decline, assign a spot. Assigning books even while booking is closed.
+decline, assign a spot. Assigning books even while booking is closed, and it
+is the only way a ♿ special-needs spot gets booked: the ♿ panel lists every
+one with its state, so none goes missing from the picker unexplained.
+Request groups get a card each above the lists, to decide and book for the
+whole group; every member's own card still works on its own.
 A declined request can still be approved, from the ⋯ menu on its card:
 deliberately out of the way. What guests wrote may be health data; it is
 shown here and nowhere else.
@@ -12,49 +16,61 @@ shown here and nowhere else.
 	import { confirmDialog, toast } from '$lib/dialogs';
 	import {
 		STATUS_LABELS,
+		isProjectNeed,
 		needLabel,
+		requestKinds,
 		type AdminRequestView,
-		type SpotInfo
+		type SpecialNeed
 	} from '$lib/special-needs';
-	import { factsOf, matchNeeds, needShort } from '$lib/accommodation';
+	import GroupCard from '$lib/components/admin/requests/GroupCard.svelte';
+	import SpecialSpots from '$lib/components/admin/requests/SpecialSpots.svelte';
+	import SpotSelect from '$lib/components/admin/requests/SpotSelect.svelte';
 
 	export let data: PageData;
 	// Without JavaScript a refused step comes back here (with it: a toast).
 	export let form: ActionData;
 
 	let busy = '';
-	// The spot picked in each request's list, by request id.
-	let picked: Record<string, string> = {};
 
 	$: waiting = data.requests.filter((r) => r.status === 'pending');
 	$: approved = data.requests.filter((r) => r.status === 'approved');
 	$: declined = data.requests.filter((r) => r.status === 'declined');
-	/**
-	 * The free spots for one request: the ones that answer most of its needs
-	 * first, ♿ spots still in their own group. A spot says what it fits
-	 * ("✓ lower bunk") or where it clearly doesn't ("✗ upper bunk"), so the crew
-	 * reads the list instead of remembering the camp.
-	 */
-	function ranked(request: AdminRequestView, special: boolean) {
-		return data.spots
-			.filter((spot) => spot.special === special)
-			.map((spot) => ({
-				spot,
-				match: matchNeeds(request.needs, factsOf(spot.bedType, spot.features))
-			}))
-			.sort((a, b) => b.match.score - a.match.score)
-			.map(({ spot, match }) => ({ spot, text: `${spotText(spot)}${fitText(match)}` }));
-	}
+	$: groupNames = new Map(data.groups.map((group) => [group.id, group.name]));
 
-	const spotText = (spot: SpotInfo) => `${spot.label}${spot.locked ? ' 🔒' : ''}`;
+	// The ♿ spots: how many are free, and why the others aren't (for the
+	// picker's line when none is free, and the capacity box).
+	$: specialTotal = data.specialSpots.length;
+	$: specialFree = data.specialSpots.filter((spot) => spot.state === 'free').length;
+	$: specialSummary = summarizeSpecial(data.specialSpots.map((spot) => spot.state));
+	// Same "open" as the load: waiting, or approved without a spot from the crew.
+	$: specialAsked = data.requests.filter(
+		(r) =>
+			(r.status === 'pending' || (r.status === 'approved' && !r.spot?.assigned)) &&
+			requestKinds(r.needs).access
+	).length;
 
-	function fitText(match: ReturnType<typeof matchNeeds>): string {
+	/** "3 marked — 1 booked by a guest, 1 blocked with TAKEN, 1 inactive"; '' when none is marked. */
+	function summarizeSpecial(states: string[]): string {
+		if (states.length === 0) return '';
+		const n = (state: string) => states.filter((s) => s === state).length;
 		const parts = [
-			...match.fits.map((need) => `✓ ${needShort(need)}`),
-			...match.conflicts.map((need) => `✗ ${needShort(need)}`)
-		];
-		return parts.length > 0 ? ` — ${parts.join(', ')}` : '';
+			[n('request'), 'booked through a request', 'booked through requests'],
+			[n('booked'), 'booked by a guest', 'booked by guests'],
+			[n('blocked'), 'blocked with TAKEN', 'blocked with TAKEN'],
+			[n('inactive'), 'inactive', 'inactive']
+		] as const;
+		const why = parts
+			.filter(([count]) => count > 0)
+			.map(([count, one, many]) => `${count} ${count === 1 ? one : many}`);
+		return `${states.length} marked${why.length > 0 ? ` — ${why.join(', ')}` : ''}`;
 	}
+
+	/** A need of an art project or crew: a neutral pill with its own icon, not the ♿ pink. */
+	const PROJECT_ICONS: Record<string, string> = { own_room: '🎨', close_together: '👥' };
+	const pillText = (need: SpecialNeed) =>
+		isProjectNeed(need)
+			? `${PROJECT_ICONS[need] ?? ''} ${needLabel(need)}`.trim()
+			: needLabel(need);
 
 	const NO_CONNECTION = 'We could not reach the server, so nothing was changed. Try again.';
 
@@ -62,17 +78,22 @@ shown here and nowhere else.
 
 	/**
 	 * Enhance with an optional confirmation, a busy marker and a toast. The
-	 * confirmation is built when the form is sent: the enhance callback is set
-	 * up once, and the page data may have changed since.
+	 * confirmation is built when the form is sent, from what it sends: the
+	 * enhance callback is set up once, and the page data may have changed
+	 * since. A step that worked only in part (a group booking) answers with a
+	 * `warning`, shown instead of the success toast.
+	 * @param options.reset false: keep the form as it is after a success (the
+	 *   group planner fills its rows from the page data itself)
 	 */
 	function act(
 		key: string,
 		done: string | ((data: Record<string, unknown>) => string),
-		confirmation?: () => Confirmation
+		confirmation?: (form: FormData) => Confirmation,
+		options: { reset?: boolean } = {}
 	): SubmitFunction {
-		return async ({ cancel }) => {
+		return async ({ cancel, formData }) => {
 			if (confirmation) {
-				const { title, message, label } = confirmation();
+				const { title, message, label } = confirmation(formData);
 				const ok = await confirmDialog(message, {
 					title,
 					tone: 'warning',
@@ -98,8 +119,12 @@ shown here and nowhere else.
 					return;
 				}
 				const payload = result.type === 'success' ? (result.data ?? {}) : {};
-				toast(typeof done === 'string' ? done : done(payload), 'success');
-				await update();
+				if (typeof payload.warning === 'string' && payload.warning) {
+					toast(payload.warning, 'warning', 10000);
+				} else {
+					toast(typeof done === 'string' ? done : done(payload), 'success');
+				}
+				await update({ reset: options.reset ?? true });
 			};
 		};
 	}
@@ -129,9 +154,9 @@ shown here and nowhere else.
 
 	const current = (id: string) => data.requests.find((r) => r.id === id);
 
-	function assignConfirmation(id: string): Confirmation {
+	function assignConfirmation(id: string, form: FormData): Confirmation {
 		const request = current(id);
-		const spot = data.spots.find((s) => s.bedId === picked[id])?.label ?? 'The spot';
+		const spot = data.spots.find((s) => s.bedId === form.get('bedId'))?.label ?? 'The spot';
 		const from = request?.spot ? `, and ${request.spot.label} becomes free` : '';
 		const closed = data.isBookingActive ? '' : ', although booking is closed';
 		const approves = request?.status === 'pending' ? ' The request is approved as well.' : '';
@@ -197,9 +222,10 @@ shown here and nowhere else.
 	<a href="/admin" class="back">← Control Center</a>
 	<h1>Special-needs requests ♿</h1>
 	<p class="intro">
-		Guests ask for a fitting spot with their ticket code, also before booking opens. Approve or
-		decline, then assign a spot: that books it for the guest right away, in Staging Mode too. The
-		guest gets a message about each decision and the booking.
+		Guests ask for a fitting spot with their ticket code, also before booking opens: for something
+		they need, or for an art project or crew that wants a room or spots close together — on their
+		own or as a group. Approve or decline, then book a spot: that books it for the guest right away,
+		in Staging Mode too. Each guest gets a message about each decision and the booking.
 	</p>
 
 	<section class="switch-card" class:open={data.requestsOpen}>
@@ -226,11 +252,25 @@ shown here and nowhere else.
 		</form>
 	</section>
 
-	{#if data.capacity.length > 0}
-		<section class="capacity" class:short={data.capacity.some((entry) => entry.short)}>
+	{#if data.capacity.length > 0 || specialTotal > 0 || specialAsked > 0}
+		<section
+			class="capacity"
+			class:short={data.capacity.some((entry) => entry.short) || specialFree < specialAsked}
+		>
 			<h2>What the open requests need</h2>
 			<ul>
-				{#each data.capacity as entry}
+				{#if specialTotal > 0 || specialAsked > 0}
+					<li class:short={specialFree < specialAsked}>
+						<span class="need">♿ Special-needs spots</span>
+						<span class="numbers">
+							{specialFree} free for {specialAsked} open {specialAsked === 1
+								? 'request'
+								: 'requests'} with something they need
+						</span>
+						{#if specialFree < specialAsked}<span class="warn">⚠️ not enough</span>{/if}
+					</li>
+				{/if}
+				{#each data.capacity as entry (entry.need)}
 					<li class:short={entry.short}>
 						<span class="need">{entry.label}</span>
 						<span class="numbers">
@@ -247,6 +287,8 @@ shown here and nowhere else.
 		</section>
 	{/if}
 
+	<SpecialSpots spots={data.specialSpots} />
+
 	<p class="privacy-note">
 		🔏 What guests write here may be about their health. Only admins can read it. Don't copy it into
 		chats or e-mails; talk about it in person. Everything is deleted after the event.
@@ -255,23 +297,54 @@ shown here and nowhere else.
 	{#if form && 'error' in form && form.error}
 		<p class="form-error" role="alert">{form.error}</p>
 	{/if}
+	<!-- A group booking that worked only in part: who wasn't booked, and why. -->
+	{#if form && 'warning' in form && typeof form.warning === 'string'}
+		<p class="warn" role="status">⚠️ {form.warning}</p>
+	{/if}
 
 	{#if data.requests.length === 0}
 		<p class="empty">No requests yet.</p>
 	{/if}
 
-	{#each [{ title: 'Waiting for a decision', list: waiting }, { title: 'Approved', list: approved }, { title: 'Declined', list: declined }] as group}
-		{#if group.list.length > 0}
-			<section class="group">
-				<h2>{group.title} <span class="count">{group.list.length}</span></h2>
+	{#if data.groups.length > 0}
+		<section class="status-list groups">
+			<h2>Groups 👥 <span class="count">{data.groups.length}</span></h2>
+			<p class="hint">
+				Guests who ask together share a group code. Decide and book for the whole group here, or for
+				each guest in their own card below.
+			</p>
+			{#each data.groups as group (group.id)}
+				<GroupCard
+					{group}
+					requests={data.requests}
+					spots={data.spots}
+					{specialFree}
+					{specialSummary}
+					isBookingActive={data.isBookingActive}
+					{busy}
+					{act}
+				/>
+			{/each}
+		</section>
+	{/if}
 
-				{#each group.list as request (request.id)}
-					<article class="request status-{request.status}">
+	{#each [{ title: 'Waiting for a decision', list: waiting }, { title: 'Approved', list: approved }, { title: 'Declined', list: declined }] as status (status.title)}
+		{#if status.list.length > 0}
+			<section class="status-list">
+				<h2>{status.title} <span class="count">{status.list.length}</span></h2>
+
+				{#each status.list as request (request.id)}
+					<article class="request status-{request.status}" id="request-{request.id}">
 						<header>
 							<div>
 								<h3>{who(request)}</h3>
 								{#if request.ticket.email}
 									<a class="mail" href="mailto:{request.ticket.email}">{request.ticket.email}</a>
+								{/if}
+								{#if request.groupId}
+									<a class="group-chip" href="#group-{request.groupId}"
+										>👥 {groupNames.get(request.groupId) ?? 'Group'}</a
+									>
 								{/if}
 							</div>
 							<div class="head-right">
@@ -297,8 +370,11 @@ shown here and nowhere else.
 						</header>
 
 						<ul class="needs">
+							<!-- unkeyed: stored needs aren't deduplicated, a key could clash -->
 							{#each request.needs as need}
-								<li>{needLabel(need)}</li>
+								<li class:project={isProjectNeed(need)}>{pillText(need)}</li>
+							{:else}
+								<li class="project">👥 Group only: nothing of their own</li>
 							{/each}
 						</ul>
 
@@ -310,7 +386,12 @@ shown here and nowhere else.
 
 						<details open={request.status === 'pending' || request.changedAfterDecision}>
 							<summary>What the guest wrote</summary>
-							<p class="text">{request.text || '(nothing readable)'}</p>
+							<p class="text">
+								{request.text ||
+									(request.textUnreadable
+										? '(nothing readable)'
+										: 'Nothing written: they asked as part of a group.')}
+							</p>
 						</details>
 
 						<dl>
@@ -378,26 +459,22 @@ shown here and nowhere else.
 								method="POST"
 								action="?/assign"
 								class="assign"
-								use:enhance={act(request.id, 'The spot is booked for the guest.', () =>
-									assignConfirmation(request.id)
+								use:enhance={act(request.id, 'The spot is booked for the guest.', (sent) =>
+									assignConfirmation(request.id, sent)
 								)}
 							>
 								<input type="hidden" name="id" value={request.id} />
 								<label for="spot-{request.id}">{request.spot ? 'Move to' : 'Assign a spot'}</label>
 								<div class="row">
-									<select id="spot-{request.id}" name="bedId" bind:value={picked[request.id]}>
-										<option value="">Pick a free spot…</option>
-										{#each [true, false] as special}
-											{@const group = ranked(request, special)}
-											{#if group.length > 0}
-												<optgroup label={special ? '♿ Special-needs spots' : 'Other free spots'}>
-													{#each group as entry}
-														<option value={entry.spot.bedId}>{entry.text}</option>
-													{/each}
-												</optgroup>
-											{/if}
-										{/each}
-									</select>
+									<SpotSelect
+										name="bedId"
+										id="spot-{request.id}"
+										spots={data.spots}
+										needs={request.needs}
+										{specialFree}
+										{specialSummary}
+										placeholder="Pick a free spot…"
+									/>
 									<button class="btn primary" disabled={!!busy}>
 										{request.status === 'pending'
 											? 'Approve & book'
@@ -533,10 +610,13 @@ shown here and nowhere else.
 		max-width: 36rem;
 	}
 
-	.group h2 {
+	.status-list h2 {
 		font-size: 1.1rem;
 		font-weight: 900;
 		margin: 0.5rem 0 0.75rem;
+	}
+	.groups > .hint {
+		margin: -0.25rem 0 0.75rem;
 	}
 	.count {
 		display: inline-block;
@@ -550,6 +630,8 @@ shown here and nowhere else.
 	}
 
 	.request {
+		/* reached from a group card's "Details ↓": clear of the sticky admin bar */
+		scroll-margin-top: 5rem;
 		background: #111;
 		border: 1px solid #262626;
 		border-left: 4px solid #fb923c;
@@ -596,8 +678,31 @@ shown here and nowhere else.
 		font-size: 0.9rem;
 		overflow-wrap: anywhere;
 	}
+	/* the request's group: a link up to its card, on a line of its own */
+	.group-chip {
+		display: flex;
+		align-items: center;
+		width: fit-content;
+		max-width: 100%;
+		box-sizing: border-box;
+		margin-top: 0.35rem;
+		min-height: 32px;
+		padding: 0.2rem 0.7rem;
+		border-radius: 999px;
+		border: 1px solid #525252;
+		color: #e5e5e5;
+		font-size: 0.85rem;
+		font-weight: 700;
+		text-decoration: none;
+		overflow-wrap: anywhere;
+	}
+	.group-chip:hover {
+		border-color: #a3a3a3;
+	}
 	.head-right {
 		flex: none;
+		/* wrapped under a long name it stays at the right edge, so the ⋯ menu opens inside the card */
+		margin-left: auto;
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -694,8 +799,14 @@ shown here and nowhere else.
 		font-size: 0.85rem;
 		padding: 0.25rem 0.6rem;
 		border-radius: 999px;
-		border: 1px solid #f472b6;
+		border: 1px solid var(--state-special);
 		color: #f9a8d4;
+		overflow-wrap: anywhere;
+	}
+	/* pink is ♿ alone (state.css): a project's wishes and "group only" stay neutral */
+	.needs li.project {
+		border-color: #525252;
+		color: #e5e5e5;
 	}
 	summary {
 		cursor: pointer;
@@ -736,6 +847,10 @@ shown here and nowhere else.
 		flex-wrap: wrap;
 		gap: 0.6rem;
 	}
+	/* the button stays its own height when a line under the list says why no ♿ spot is free */
+	.row {
+		align-items: flex-start;
+	}
 	.assign {
 		display: flex;
 		flex-direction: column;
@@ -749,16 +864,6 @@ shown here and nowhere else.
 		letter-spacing: 0.05em;
 		text-transform: uppercase;
 		color: #a3a3a3;
-	}
-	select {
-		flex: 1 1 16rem;
-		min-height: 44px;
-		padding: 0 0.75rem;
-		border-radius: 10px;
-		border: 1px solid #333;
-		background: #0a0a0a;
-		color: #fff;
-		font: inherit;
 	}
 	.btn {
 		min-height: 44px;

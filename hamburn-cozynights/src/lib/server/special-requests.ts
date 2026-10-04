@@ -5,10 +5,12 @@
  * while booking is closed; admins approve or decline it and assign a spot.
  * Assigning is the only way a booking happens outside Live Booking.
  *
- * Privacy: what the guest wrote may be health data. The text and the burner
- * name are stored encrypted (like orders.burner_name) and only decrypted here,
- * for the guest's own page and for the admin area. They never go into
- * messages, the log or the audit log.
+ * Privacy: what the guest wrote may be health data. The ticked needs, the text
+ * and the burner name are stored encrypted (like orders.burner_name) and only
+ * decrypted here, for the guest's own page and for the admin area. They never
+ * go into messages, the log or the audit log. Request groups build on this
+ * module: $lib/server/request-groups.ts (it imports this one, never the other
+ * way round).
  */
 import type { ClientResponseError } from 'pocketbase';
 import type {
@@ -58,15 +60,33 @@ const ALREADY_DECIDED =
 	"The crew has already decided on your request, so it can't be changed anymore. If something changed, please contact the crew.";
 
 type BedWithRoom = BedsResponse<{ room?: RoomsResponse<{ house?: HousesResponse }> }>;
+type BedWithRoomAndOrder = BedsResponse<{
+	room?: RoomsResponse<{ house?: HousesResponse }>;
+	order?: OrdersResponse;
+}>;
 type RequestWithOrder = SpecialRequestsResponse<{ order?: OrdersResponse }>;
+
+/**
+ * The needs are padded to this length before they are encrypted: AES-GCM
+ * keeps the length of the plaintext, and the length must not tell an access
+ * request from a project request. JSON.parse ignores the trailing blanks, so
+ * older, unpadded rows read the same.
+ */
+const NEEDS_PADDED_LENGTH = 240;
 
 function isNotFound(err: unknown): boolean {
 	return (err as ClientResponseError | undefined)?.status === 404;
 }
 
+/**
+ * What encrypt('') stored before empty texts were kept empty: no ciphertext
+ * after the tag, which decrypt() would hand back as if it were plain text.
+ */
+const EMPTY_CIPHERTEXT = /^[0-9a-f]+:[0-9a-f]+:$/i;
+
 /** Decrypts a stored secret; an unreadable one (other ENCRYPTION_KEY) reads as "". */
-function readSecret(value: string | undefined | null): string {
-	if (!value) return '';
+export function readSecret(value: string | undefined | null): string {
+	if (!value || EMPTY_CIPHERTEXT.test(value)) return '';
 	try {
 		return decrypt(value);
 	} catch {
@@ -92,6 +112,7 @@ export function toSpot(bed: BedWithRoom): SpotInfo {
 	return {
 		bedId: bed.id,
 		roomId: bed.room,
+		houseId: building?.id ?? room?.house ?? '',
 		label: [bed.label, roomName, house].filter(Boolean).join(' · '),
 		spot: bed.label,
 		room: roomName,
@@ -112,8 +133,11 @@ export function toSpot(bed: BedWithRoom): SpotInfo {
 	};
 }
 
-/** The ticked needs, stored encrypted as a JSON list. Anything unreadable counts as none. */
-function readNeeds(value: string | undefined): SpecialNeed[] {
+/**
+ * The ticked needs, stored encrypted as a JSON list. Anything unreadable counts
+ * as none. Values the form no longer offers (RETIRED_NEEDS) are kept.
+ */
+export function readNeeds(value: string | undefined): SpecialNeed[] {
 	const text = readSecret(value);
 	if (!text) return [];
 	try {
@@ -206,19 +230,28 @@ export async function countOpenRequests(adminPb: TypedPocketBase): Promise<numbe
 /**
  * Creates the ticket's request, or changes it while the crew hasn't decided.
  * The ticket comes from the guest's session, never from the form.
+ * @param input what the guest sent; the group choice is handled by
+ *   saveGuestRequest ($lib/server/request-groups.ts), which passes `extra`
+ * @param extra.requestGroup puts the request into this group
+ * @param extra.groupEvent tells the crew chat that a new request started or
+ *   joined a group (count only, never which one)
  * @throws {RequestError} when the crew has already decided
  */
 export async function saveRequest(
 	adminPb: TypedPocketBase,
 	order: Pick<OrdersResponse, 'id'>,
-	input: RequestInput
+	input: Omit<RequestInput, 'group'>,
+	extra: { requestGroup?: string; groupEvent?: 'started' | 'joined' } = {}
 ): Promise<'created' | 'updated'> {
 	const data = {
-		needs: encrypt(JSON.stringify(input.needs)),
-		reason: encrypt(input.text),
+		// Padded, so the ciphertext's length doesn't tell what was ticked.
+		needs: encrypt(JSON.stringify(input.needs).padEnd(NEEDS_PADDED_LENGTH)),
+		// A group member may write nothing: kept empty, like the burner name.
+		reason: input.text ? encrypt(input.text) : '',
 		burner_name: input.burnerName ? encrypt(input.burnerName) : '',
 		// The form asks for consent every time it is sent.
-		consent_at: new Date().toISOString()
+		consent_at: new Date().toISOString(),
+		...(extra.requestGroup ? { request_group: extra.requestGroup } : {})
 	};
 
 	const update = async (existing: SpecialRequestsResponse) => {
@@ -244,7 +277,10 @@ export async function saveRequest(
 	}
 
 	const open = await countOpenRequests(adminPb).catch(() => 0);
-	await logGuestEvent(adminPb, 'special_request_new', created.id, { open });
+	await logGuestEvent(adminPb, 'special_request_new', created.id, {
+		open,
+		...(extra.groupEvent ? { group: extra.groupEvent } : {})
+	});
 	return 'created';
 }
 
@@ -317,6 +353,9 @@ export async function listRequests(adminPb: TypedPocketBase): Promise<AdminReque
 		const spot = spotByOrder.get(record.order);
 		return {
 			...toGuestView(record),
+			// stored, but not readable with this ENCRYPTION_KEY
+			textUnreadable:
+				!!record.reason && !EMPTY_CIPHERTEXT.test(record.reason) && !readSecret(record.reason),
 			id: record.id,
 			consentAt: record.consent_at,
 			decidedBy: record.decided_by,
@@ -326,9 +365,54 @@ export async function listRequests(adminPb: TypedPocketBase): Promise<AdminReque
 			ticket: { name: order ? ticketName(order) : '', email: order?.email ?? '' },
 			spot: spot
 				? { ...spot, assigned: record.status === 'approved' && record.bed === spot.bedId }
-				: null
+				: null,
+			groupId: record.request_group ?? ''
 		};
 	});
+}
+
+/**
+ * Where a ♿ spot stands, for the ♿ panel on the requests page (in this order):
+ * - inactive: deactivated
+ * - request: booked by the crew for an approved request
+ * - booked: booked otherwise (by a guest, or the crew outside a request)
+ * - blocked: taken without a ticket (TAKEN on the room page)
+ * - free: offered in the picker
+ */
+export type SpecialSpotState = 'free' | 'request' | 'booked' | 'blocked' | 'inactive';
+
+export interface SpecialSpotView extends SpotInfo {
+	state: SpecialSpotState;
+	/** The ticket's name from the ticket list ('' for none). Admin-only, never leaves that page. */
+	holder: string;
+}
+
+/** Every ♿ spot of the camp with its state, house by house. */
+export async function listSpecialSpots(adminPb: TypedPocketBase): Promise<SpecialSpotView[]> {
+	const [beds, crew] = await Promise.all([
+		adminPb.collection('beds').getFullList<BedWithRoomAndOrder>({
+			filter: 'is_special = true',
+			expand: 'room,room.house,order'
+		}),
+		crewBookedBeds(adminPb)
+	]);
+	return beds
+		.map((bed): SpecialSpotView => {
+			const order = bed.expand?.order;
+			let state: SpecialSpotState;
+			if (bed.enabled === false) state = 'inactive';
+			else if (bed.order && crew.get(bed.id) === bed.order) state = 'request';
+			else if (bed.order) state = 'booked';
+			else if (bed.occupied) state = 'blocked';
+			else state = 'free';
+			return { ...toSpot(bed), state, holder: order ? ticketName(order) : '' };
+		})
+		.sort(
+			(a, b) =>
+				compareNatural(a.house, b.house) ||
+				compareNatural(a.room, b.room) ||
+				compareNatural(a.spot, b.spot)
+		);
 }
 
 /** Free active spots an admin can assign, special-needs spots first. */
@@ -348,12 +432,17 @@ export async function listAssignableSpots(adminPb: TypedPocketBase): Promise<Spo
 		);
 }
 
-/** @throws {RequestError} when the step isn't allowed */
+/**
+ * @param opts.log false: a group step (request-groups.ts) logs one event for
+ *   the whole group instead of one per request
+ * @throws {RequestError} when the step isn't allowed
+ */
 export async function decideRequest(
 	adminPb: TypedPocketBase,
 	admin: AdminSession,
 	requestId: string,
-	decision: 'approved' | 'declined'
+	decision: 'approved' | 'declined',
+	opts: { log?: boolean } = {}
 ): Promise<void> {
 	const request = await getRequest(adminPb, requestId);
 	if (request.status === decision) return;
@@ -368,6 +457,7 @@ export async function decideRequest(
 		decided_at: new Date().toISOString(),
 		...(decision === 'declined' ? { bed: '' } : {})
 	});
+	if (opts.log === false) return;
 	await logAdminEvent(
 		adminPb,
 		admin,
@@ -379,8 +469,12 @@ export async function decideRequest(
 
 /**
  * Books a spot for the request's ticket, whatever the booking phase: locked and
- * special-needs spots included. Books first, so a taken spot changes nothing;
- * then remembers the spot on the request and approves a waiting request.
+ * special-needs spots included — this is the only way a ♿ spot is booked.
+ * Books first, so a taken spot changes nothing; then remembers the spot on the
+ * request and approves a waiting request.
+ * @param opts.log false: a group booking (request-groups.ts) logs one event
+ *   for the whole group instead
+ * @returns whether the request was approved on the way
  * @throws {RequestError} for a declined request, or a spot that is gone
  * @throws {BedUnavailableError} when the spot is taken or deactivated
  */
@@ -388,8 +482,9 @@ export async function assignSpot(
 	adminPb: TypedPocketBase,
 	admin: AdminSession,
 	requestId: string,
-	bedId: string
-): Promise<void> {
+	bedId: string,
+	opts: { log?: boolean } = {}
+): Promise<{ approved: boolean }> {
 	const request = await getRequest(adminPb, requestId);
 	if (request.status === 'declined') {
 		throw new RequestError('This request is declined. Approve it first, then assign a spot.');
@@ -403,6 +498,7 @@ export async function assignSpot(
 		// The crew may move a guest who has already arrived: the check-in moves along.
 		await new BookingService(adminPb).bookBed(order, bedId, name, {
 			allowLocked: true,
+			allowSpecial: true,
 			allowCheckedIn: true
 		});
 	} catch (err) {
@@ -429,8 +525,11 @@ export async function assignSpot(
 		}
 		throw err;
 	}
-	if (approving) await logAdminEvent(adminPb, admin, 'special_request_approved', request.id, {});
-	await logAdminEvent(adminPb, admin, 'special_spot_assigned', request.id, {});
+	if (opts.log !== false) {
+		if (approving) await logAdminEvent(adminPb, admin, 'special_request_approved', request.id, {});
+		await logAdminEvent(adminPb, admin, 'special_spot_assigned', request.id, {});
+	}
+	return { approved: approving };
 }
 
 /** Releases the spot of the request's ticket. The request stays approved. */

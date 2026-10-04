@@ -14,15 +14,29 @@ import {
 import { ensurePassCode } from '$lib/server/pass';
 import { FailureRateLimiter } from '$lib/server/rate-limit';
 import {
+	findRequest,
 	getGuestRequest,
 	getSpotForOrder,
 	isSpotFixed,
 	RequestError,
-	saveRequest,
 	withdrawRequest
 } from '$lib/server/special-requests';
+import {
+	getGuestGroup,
+	GroupFieldError,
+	leaveGroup,
+	saveGuestRequest,
+	UNKNOWN_CODE
+} from '$lib/server/request-groups';
 import { formatPassCode } from '$lib/pass';
-import { parseRequestForm } from '$lib/special-needs';
+import {
+	cleanBurnerName,
+	formatGroupCode,
+	GROUP_MAX,
+	normalizeGroupCode,
+	parseRequestForm,
+	type RequestFormResult
+} from '$lib/special-needs';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 const SIGNED_OUT =
@@ -33,6 +47,30 @@ const CODE_UNKNOWN = 'Your ticket code was not found. Go to the start page and e
 // and every new request is a message to the crew.
 const SENDS_PER_HOUR = 10;
 const sends = new FailureRateLimiter(SENDS_PER_HOUR, 60 * 60 * 1000);
+
+// Joining a group with a code no group has: a few typos are fine, guessing
+// codes is not. Per ticket, on top of the sends above.
+const codeMisses = new FailureRateLimiter(5, 15 * 60 * 1000);
+
+/**
+ * What the guest typed, sent back on a failure so nothing is lost (it's the
+ * guest's own text). The group fields come back as typed, so a wrong code can
+ * be corrected.
+ */
+function typedValues(parsed: RequestFormResult, form: FormData) {
+	const typed = (name: string) => {
+		const value = form.get(name);
+		return typeof value === 'string' ? value.trim().slice(0, 200) : '';
+	};
+	return {
+		needs: parsed.value.needs,
+		text: parsed.value.text,
+		burnerName: parsed.value.burnerName,
+		groupMode: parsed.value.group.mode,
+		groupName: cleanBurnerName(typed('groupName')),
+		groupCode: typed('groupCode')
+	};
+}
 
 /** The ticket of this session, or a failure to return. Never trusts the form. */
 async function sessionOrder(
@@ -48,8 +86,16 @@ async function sessionOrder(
 	}
 }
 
-export const load: PageServerLoad = async ({ locals, cookies, setHeaders }) => {
-	if (!locals.orderNumber) throw redirect(303, signInUrl(locals, '/special-needs'));
+export const load: PageServerLoad = async ({ locals, cookies, setHeaders, url }) => {
+	// An invite link (/special-needs?group=CODE) only fills in the form: the code
+	// is not looked up here, so this page tells nobody whether a code exists.
+	const invite = normalizeGroupCode(url.searchParams.get('group'));
+	if (!locals.orderNumber) {
+		throw redirect(
+			303,
+			signInUrl(locals, invite ? `/special-needs?group=${invite}` : '/special-needs')
+		);
+	}
 	// The page shows what the guest wrote about their needs: never keep it in a cache.
 	setHeaders({ 'cache-control': 'no-store' });
 
@@ -76,9 +122,10 @@ export const load: PageServerLoad = async ({ locals, cookies, setHeaders }) => {
 			getSpotForOrder(locals.adminPb, order.id)
 		]);
 
-		// Where messages go, the pass of a spot, and whether the crew booked that
-		// spot for the request. Optional: the page works without them.
-		const [notify, passCode, fixed] = await Promise.all([
+		// Where messages go, the pass of a spot, whether the crew booked that spot
+		// for the request, and the request's group. Optional: the page works
+		// without them.
+		const [notify, passCode, fixed, group] = await Promise.all([
 			getGuestNotifyStatus(locals.adminPb, order, settings).catch((err): null => {
 				console.error('[SpecialNeeds] Notification status failed:', (err as Error)?.message);
 				return null;
@@ -96,7 +143,13 @@ export const load: PageServerLoad = async ({ locals, cookies, setHeaders }) => {
 						console.error('[SpecialNeeds] Fixed-spot check failed:', (err as Error)?.message);
 						return false;
 					})
-				: Promise.resolve(false)
+				: Promise.resolve(false),
+			request
+				? getGuestGroup(locals.adminPb, order.id, url.origin).catch((err): null => {
+						console.error('[SpecialNeeds] Group lookup failed:', (err as Error)?.message);
+						return null;
+					})
+				: Promise.resolve(null)
 		]);
 
 		return {
@@ -107,7 +160,11 @@ export const load: PageServerLoad = async ({ locals, cookies, setHeaders }) => {
 			guestPhase: settings.guestPhase,
 			spot: spot ? { label: spot.label, roomId: spot.roomId, fixed } : null,
 			passCode,
-			notify
+			notify,
+			group,
+			// the code of an invite link the guest opened, formatted like the group's code
+			invite: invite ? formatGroupCode(invite) : null,
+			groupMax: GROUP_MAX
 		};
 	} catch (err) {
 		console.error('[SpecialNeeds] Load failed:', (err as Error)?.message);
@@ -117,17 +174,22 @@ export const load: PageServerLoad = async ({ locals, cookies, setHeaders }) => {
 
 export const actions: Actions = {
 	save: async ({ request, locals }) => {
-		const parsed = parseRequestForm(await request.formData());
-		// Sent back on failure so nothing typed is lost (it's the guest's own text).
-		const values = {
-			needs: parsed.value.needs,
-			text: parsed.value.text,
-			burnerName: parsed.value.burnerName
-		};
+		const form = await request.formData();
 
 		const session = await sessionOrder(locals);
 		if ('failure' in session) return session.failure;
 		const { order } = session;
+
+		// A request in a group keeps it: the form shows no group choice then.
+		let inGroup: boolean;
+		try {
+			inGroup = !!(await findRequest(locals.adminPb, order.id))?.request_group;
+		} catch (err) {
+			console.error('[SpecialNeeds] Request lookup failed:', (err as Error)?.message);
+			return fail(503, { error: UNAVAILABLE, values: typedValues(parseRequestForm(form), form) });
+		}
+		const parsed = parseRequestForm(form, { inGroup });
+		const values = typedValues(parsed, form);
 
 		const { requestsOpen } = await getBookingSettings(locals.pb);
 		if (!requestsOpen) {
@@ -145,14 +207,25 @@ export const actions: Actions = {
 				values
 			});
 		}
+		const joining = parsed.value.group.mode === 'join';
+		if (joining && codeMisses.isBlocked(order.id)) {
+			return fail(429, {
+				error: 'Too many wrong group codes. Please wait 15 minutes, then try again.',
+				values
+			});
+		}
 		sends.recordFailure(order.id);
 
 		try {
-			const outcome = await saveRequest(locals.adminPb, order, parsed.value);
-			return { success: true, saved: outcome };
+			const outcome = await saveGuestRequest(locals.adminPb, order, parsed.value);
+			return { success: true, saved: outcome.saved, group: outcome.group };
 		} catch (err) {
+			if (err instanceof GroupFieldError) {
+				if (err.message === UNKNOWN_CODE) codeMisses.recordFailure(order.id);
+				return fail(err.status, { errors: { [err.field]: err.message }, values });
+			}
 			if (err instanceof RequestError) return fail(err.status, { error: err.message, values });
-			// Never log what the guest wrote.
+			// Never log what the guest wrote, nor a group's name or code.
 			console.error('[SpecialNeeds] Saving failed:', (err as Error)?.message);
 			return fail(500, {
 				error: 'Your request could not be saved. Please try again in a minute.',
@@ -171,6 +244,26 @@ export const actions: Actions = {
 		} catch (err) {
 			console.error('[SpecialNeeds] Withdrawing failed:', (err as Error)?.message);
 			return fail(500, { error: 'Your request could not be withdrawn. Please try again.' });
+		}
+	},
+
+	/**
+	 * Leaves the request group. Always possible, like withdrawing (it withdraws
+	 * the consent to share the burner name with the group). A request that was
+	 * only about the group is deleted with it.
+	 */
+	leaveGroup: async ({ locals }) => {
+		const session = await sessionOrder(locals);
+		if ('failure' in session) return session.failure;
+		try {
+			const { outcome } = await leaveGroup(locals.adminPb, session.order.id);
+			return { success: true, left: outcome };
+		} catch (err) {
+			if (err instanceof RequestError && err.status === 404) {
+				return fail(404, { error: 'You are not in a group.' });
+			}
+			console.error('[SpecialNeeds] Leaving the group failed:', (err as Error)?.message);
+			return fail(500, { error: 'You could not leave the group. Please try again.' });
 		}
 	},
 

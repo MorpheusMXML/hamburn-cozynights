@@ -69,6 +69,14 @@ describe('any deployment (read-only)', () => {
 		const request = await get('/special-needs');
 		expect(request.status).toBe(303);
 		expect(request.headers.get('location')).toBe('/?login=required&next=%2Fspecial-needs');
+		// a group's invite link keeps its code through the sign-in; junk is dropped
+		const invite = await get('/special-needs?group=ABCDEFGH');
+		expect(invite.status).toBe(303);
+		expect(invite.headers.get('location')).toBe(
+			'/?login=required&next=%2Fspecial-needs%3Fgroup%3DABCDEFGH'
+		);
+		const junk = await get('/special-needs?group=not-a-code');
+		expect(junk.headers.get('location')).toBe('/?login=required&next=%2Fspecial-needs');
 
 		const swaps = await get('/swaps');
 		expect(swaps.status).toBe(303);
@@ -99,6 +107,14 @@ describe('any deployment (read-only)', () => {
 		expect(requests.status).toBe(303);
 		expect(requests.headers.get('location')).toBe('/admin/login');
 		expect((await post('/admin/requests?/approve', { id: 'doesnotexist000' })).status).toBe(403);
+		// request groups: decided and booked by admins only
+		for (const action of ['approveGroup', 'declineGroup', 'assignGroup', 'removeFromGroup']) {
+			const refused = await post(`/admin/requests?/${action}`, {
+				id: 'doesnotexist000',
+				bed_doesnotexist001: 'doesnotexist002'
+			});
+			expect(refused.status, action).toBe(403);
+		}
 
 		// message texts: the editor and its preview are for admins only
 		const messages = await get('/admin/messages');
@@ -524,6 +540,105 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		} finally {
 			await su.collection('app_settings').update(APP_SETTINGS_ID, { special_requests_open: false });
 		}
+	});
+
+	it('lets guests ask as a group, and an admin approve and book the whole group', async () => {
+		await setBookingOpen(false);
+		await su.collection('app_settings').update(APP_SETTINGS_ID, { special_requests_open: true });
+		try {
+			const { room, beds } = await seedHouse(su, 3);
+			await su.collection('beds').update(beds[2].id, { is_special: true });
+			const lead = await seedTicket(su);
+			const member = await seedTicket(su);
+			const leadCookie = await guestLogin(lead.code);
+			const memberCookie = await guestLogin(member.code);
+			const requestOf = (orderId: string) =>
+				su
+					.collection('special_requests')
+					.getFirstListItem(su.filter('order = {:id}', { id: orderId }));
+
+			// A starts a group with a project request …
+			const started = await post(
+				'/special-needs?/save',
+				{
+					needs: 'own_room',
+					text: 'Smoke: our art project needs a room.',
+					burnerName: 'Smoke Lead',
+					consent: 'yes',
+					groupMode: 'start',
+					groupName: 'Smoke Crew'
+				},
+				leadCookie
+			);
+			expect(started.status).toBe(200);
+			const leadRequest = await requestOf(lead.order.id);
+			const group = await su.collection('request_groups').getOne(leadRequest.request_group);
+			expect(group.name).not.toContain('Smoke');
+
+			// … B joins with the code as people type it, nothing of their own
+			const shown = group.code.replace(/(.{4})(?=.)/, '$1-').toLowerCase();
+			const joined = await post(
+				'/special-needs?/save',
+				{ groupMode: 'join', groupCode: shown, burnerName: 'Smoke Member', consent: 'yes' },
+				memberCookie
+			);
+			expect(joined.status).toBe(200);
+			const memberRequest = await requestOf(member.order.id);
+			expect(memberRequest.request_group).toBe(group.id);
+
+			// B sees the group's name and burner names, nothing else of A
+			const memberPage = await (await get('/special-needs', memberCookie)).text();
+			expect(memberPage).toContain('Smoke Crew');
+			expect(memberPage).toContain('Smoke Lead');
+			expect(memberPage).not.toContain('our art project');
+			expect(memberPage).not.toContain(lead.code);
+
+			// the crew approves the group and books it into one room, ♿ spot included
+			const admin = await createAdmin(su, 'admin');
+			const crew = adminCookie(admin.client);
+			expect((await post('/admin/requests?/approveGroup', { id: group.id }, crew)).status).toBe(
+				200
+			);
+			expect((await requestOf(lead.order.id)).status).toBe('approved');
+			expect((await requestOf(member.order.id)).status).toBe('approved');
+			const booked = await post(
+				'/admin/requests?/assignGroup',
+				{
+					id: group.id,
+					[`bed_${leadRequest.id}`]: beds[2].id,
+					[`bed_${memberRequest.id}`]: beds[0].id
+				},
+				crew
+			);
+			expect(booked.status).toBe(200);
+			expect((await su.collection('beds').getOne(beds[2].id)).order).toBe(lead.order.id);
+			expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(member.order.id);
+
+			// crew-booked: once booking opens, B can't release the spot
+			await setBookingOpen(true);
+			expect((await post(`/room/${room.id}?/unbookBed`, {}, memberCookie)).status).toBe(409);
+			expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(member.order.id);
+		} finally {
+			await su.collection('app_settings').update(APP_SETTINGS_ID, { special_requests_open: false });
+		}
+	});
+
+	it('keeps ♿ spots for the crew: an admin with a ticket books 🔒 spots but never a ♿ one', async () => {
+		const { room, beds } = await seedHouse(su, 2);
+		await su.collection('beds').update(beds[0].id, { is_special: true });
+		await su.collection('beds').update(beds[1].id, { is_locked: true });
+		const ticket = await seedTicket(su);
+		const admin = await createAdmin(su, 'admin');
+		const cookie = `${await guestLogin(ticket.code)}; ${adminCookie(admin.client)}`;
+		await setBookingOpen(true);
+
+		const special = await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id }, cookie);
+		expect(special.status).toBe(409);
+		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(false);
+
+		const locked = await post(`/room/${room.id}?/bookBed`, { bedId: beds[1].id }, cookie);
+		expect(locked.status).toBe(200);
+		expect((await su.collection('beds').getOne(beds[1].id)).order).toBe(ticket.order.id);
 	});
 
 	it('lets admins find a ticket and change its address; the ticket list is for superusers', async () => {

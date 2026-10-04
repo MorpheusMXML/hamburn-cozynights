@@ -1,8 +1,8 @@
 // tests/integration/imports.test.ts — the ticket page and the template review
 // against a real PocketBase with its hooks: a ticket handed over to a new
-// holder (new pass, Telegram off, confirmation to the new address), the ticket
-// list import, the search, and applying chosen template changes while the
-// other bookings stay.
+// holder (new pass, Telegram off, confirmation to the new address, out of its
+// request group), the ticket list import, the search, and applying chosen
+// template changes while the other bookings stay.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { spawnSync } from 'child_process';
 import path from 'path';
@@ -14,6 +14,7 @@ import { findPass } from '../../src/lib/server/pass';
 import { defaultSelection } from '../../src/lib/template-diff';
 import type { LayoutTemplate } from '../../src/lib/template';
 import { saveRequest } from '../../src/lib/server/special-requests';
+import { saveGuestRequest } from '../../src/lib/server/request-groups';
 import { seedHouse, seedTicket, serviceAccount, uid } from '../stack-helpers';
 
 const COMPOSE_FILE = path.resolve(__dirname, '../../docker-compose.test.yml');
@@ -425,6 +426,55 @@ describe('cozy-admin tickets import', () => {
 		expect(stored.email).toBe(t.email);
 		expect(stored.pass_code).toBe(t.passCode);
 		expect(stored.handed_over_at).toBe('');
+	});
+
+	it('takes a handed-over ticket out of its request group; the group goes with its last member', async () => {
+		const lead = await seedTicket(su);
+		const member = await seedTicket(su);
+		for (const t of [lead, member]) {
+			await su.collection('orders').update(t.order.id, { email: `holder-${uid()}@example.com` });
+		}
+		const requestsOf = (orderId: string) =>
+			su
+				.collection('special_requests')
+				.getFullList({ filter: su.filter('order = {:o}', { o: orderId }) });
+		await saveGuestRequest(su as any, lead.order, {
+			needs: ['own_room'],
+			text: 'Our art project needs a room.',
+			burnerName: '',
+			consent: true,
+			group: { mode: 'start', name: 'Hand-over Crew' }
+		});
+		const [leadRequest] = await requestsOf(lead.order.id);
+		const group = await su.collection('request_groups').getOne(leadRequest.request_group);
+		await saveGuestRequest(su as any, member.order, {
+			needs: [],
+			text: '',
+			burnerName: '',
+			consent: true,
+			group: { mode: 'join', code: group.code }
+		});
+
+		// the Tickets page: the old holder's request goes, the group stays for the others
+		await changeTicket(su as any, member.order.id, {
+			email: `next-${uid()}@example.com`,
+			name: 'Next Holder',
+			newHolder: true
+		});
+		expect(await requestsOf(member.order.id)).toHaveLength(0);
+		expect((await su.collection('request_groups').getOne(group.id)).id).toBe(group.id);
+
+		// the CLI, inside its transaction: the last member, so the group goes too
+		const result = cozyAdmin(
+			['tickets', 'import', '-', '--hand-over'],
+			csv([[lead.code, `cli-${uid()}@example.com`, 'Next Holder']])
+		);
+		expect(result.ok, result.out).toBe(true);
+		expect(result.out).toContain('1 ticket(s) changed hands');
+		expect(await requestsOf(lead.order.id)).toHaveLength(0);
+		await expect(su.collection('request_groups').getOne(group.id)).rejects.toMatchObject({
+			status: 404
+		});
 	});
 
 	it('with --hand-over leaves the same record behind as the Tickets page', async () => {

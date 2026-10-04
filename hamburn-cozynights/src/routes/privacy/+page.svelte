@@ -10,7 +10,7 @@ variables in the server's .env (`$lib/server/legal`).
 
 	export let data: PageData;
 
-	const UPDATED = '24 September 2026';
+	const UPDATED = '4 October 2026';
 	const GOOGLE_PRIVACY = 'https://policies.google.com/privacy?hl=en';
 	const GITHUB_PRIVACY =
 		'https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement';
@@ -128,17 +128,17 @@ variables in the server's .env (`$lib/server/legal`).
 		are strictly necessary (§ 25(2) no. 2 TDDDG).
 	</p>
 	<p>
-		We delete bookings, burner names, special-needs requests, swap requests and the ticket list with
-		its email addresses{#if notify.telegram}, linked Telegram chats{/if}{#if wallet.length > 0}
+		We delete bookings, burner names, special-needs requests, request groups, swap requests and the
+		ticket list with its email addresses{#if notify.telegram}, linked Telegram chats{/if}{#if wallet.length > 0}
 			and the devices that registered for a wallet pass{/if} as soon as we no longer need them, {legal.deletionPeriod}.
 	</p>
 
-	<h2 id="special-needs">Special-needs requests</h2>
+	<h2 id="special-needs">Special-needs requests and groups</h2>
 	<p>
-		If you need a special spot, for example a lower bunk, step-free access, a quiet room or a socket
-		for a medical device, you can ask the crew for one on the page
-		<a href="/special-needs">Special-needs spot</a> while the crew accepts requests. For a request we
-		process:
+		If you need a special spot, for example a lower bunk, step-free access or a quiet room, you can
+		ask the crew for one on the page <a href="/special-needs">Special-needs spot</a> while the crew accepts
+		requests. Art projects, workshops, theme camps and crews can ask for a room or for spots close to
+		each other the same way. For a request we process:
 	</p>
 	<ul>
 		<li>
@@ -148,7 +148,12 @@ variables in the server's .env (`$lib/server/legal`).
 		<li>when you sent or changed the request and gave your consent;</li>
 		<li>
 			the crew's <strong>decision</strong> (approved or declined, by which crew member, when) and the
-			spot the crew books for you.
+			spot the crew books for you;
+		</li>
+		<li>
+			if you start or join a <strong>group</strong>: which group you are in, the group's name
+			(stored encrypted) and its code, and, if the crew takes you out of the group, that you can't
+			join it again.
 		</li>
 	</ul>
 	<p>
@@ -163,6 +168,14 @@ variables in the server's .env (`$lib/server/legal`).
 			or Telegram message{/if}: those only say that your request arrived and what the crew decided.
 		The crew{#if notify.telegram}'s Telegram group{/if} only learns that a request arrived or was decided,
 		without your name or what you wrote.
+	</p>
+	<p>
+		In a group, everyone in it sees the group's name and the burner names of the people in it —
+		never your ticket, your email address, what you ticked or wrote, or what the crew decided on
+		your request. Anyone with the group's link or code can join it, so whoever shares it decides who
+		gets it. Joining is your own choice, given with the same checkbox (Art. 6(1)(a) GDPR); you can
+		leave the group on the same page at any time. A group is deleted as soon as nobody is in it, and
+		all groups after the event.
 	</p>
 	<p>
 		You can withdraw your request, and with it your consent, at any time on the same page; we then
@@ -338,7 +351,8 @@ variables in the server's .env (`$lib/server/legal`).
 		<li>data portability (Art. 20 GDPR),</li>
 		<li>
 			withdraw your consent at any time with effect for the future (Art. 7(3) GDPR), for example by
-			deleting your burner name, withdrawing a special-needs request or writing to us.
+			deleting your burner name, withdrawing a special-needs request, leaving a request group or
+			writing to us.
 		</li>
 	</ul>
 	<p class="callout">

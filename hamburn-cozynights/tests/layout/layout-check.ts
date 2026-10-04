@@ -284,15 +284,38 @@ export function findLayoutProblems(options: LayoutCheckOptions): LayoutProblem[]
 			}
 		}
 
-		// 2d. One word per line: the column is too narrow to read.
+		// 2d. One word per line: the column is too narrow to read. A token that
+		// may break (2c: longer than maxWordLength, an e-mail address, a link)
+		// pushes its neighbours onto lines of their own in any column narrower
+		// than itself ("👥 Kuschelzeltplatzverwaltungsgebäude Crew!" on a phone):
+		// then only the ordinary words tell whether the column is too narrow.
 		const phrase = text.data.trim().split(/\s+/);
 		if (phrase.length >= 3 && lineCount >= phrase.length) {
-			report(
-				'word-stack',
-				parent,
-				text.data.trim(),
-				`${phrase.length} words on ${lineCount} lines in a ${Math.round(block.getBoundingClientRect().width)}px box`
-			);
+			const starts: DOMRect[] = [];
+			let words = 0;
+			let breakable = false;
+			for (const token of text.data.matchAll(/\S+/g)) {
+				if (
+					/[@/\\]|\.\w/.test(token[0]) ||
+					[...token[0].matchAll(/[\p{L}\p{N}]+/gu)].some((run) => run[0].length > maxWordLength)
+				) {
+					breakable = true;
+					continue;
+				}
+				words++;
+				range.setStart(text, token.index!);
+				range.setEnd(text, token.index! + token[0].length);
+				const first = [...range.getClientRects()].find((r) => r.width > 0 && r.height > 0);
+				if (first) starts.push(first);
+			}
+			if (!breakable || (words >= 3 && countLines(starts) >= words)) {
+				report(
+					'word-stack',
+					parent,
+					text.data.trim(),
+					`${phrase.length} words on ${lineCount} lines in a ${Math.round(block.getBoundingClientRect().width)}px box`
+				);
+			}
 		}
 
 		// What can be seen of the text: clipped or ellipsised parts can't overlap.
