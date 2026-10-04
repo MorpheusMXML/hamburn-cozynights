@@ -95,6 +95,8 @@ Houses and rooms can carry a few details, and spots say what kind of bed they ar
 
 A room shows what its house says too, and the crew can add a sentence of their own ("Showers in the wash house, 50 m along the path"). The crew can also switch a feature off for one room or spot — a cold room in a heated house, a bed by the door of a quiet room — so a chip the house shows may be missing on one room or spot on purpose; the spot's card then says *no …*.
 
+Some houses have <kbd>🗺️ Floor plan</kbd> under their description, on the house page and on each of its room pages: it opens the plan of the building, and a tap on a plan opens it full size to zoom in. The room numbers on a plan may be older than the ones in the app — the caption says so.
+
 > [!NOTE] Nothing is invented
 > The app only shows what the crew filled in. An empty spot card means *nobody said*, not *no* — ask the crew if a detail matters to you. If you need a particular kind of spot, [ask for a special-needs spot](./special-needs) instead of guessing.
 

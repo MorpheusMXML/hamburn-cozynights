@@ -167,6 +167,8 @@ export type HousesRecord = {
 	features?: string[];
 	/** Free text for what only this venue knows, shown to guests. */
 	description?: string;
+	/** Floor plan pictures in static/floorplans/; read with readFloorPlans (src/lib/floor-plans.ts). */
+	floor_plans?: unknown;
 };
 
 export type OrdersRecord = {

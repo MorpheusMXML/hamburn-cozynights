@@ -1,5 +1,6 @@
 <script lang="ts">
 	import PlaceDetails from '$lib/components/PlaceDetails.svelte';
+	import FloorPlans from '$lib/components/FloorPlans.svelte';
 	import { bedTypeEntry, featureEntry } from '$lib/accommodation';
 	import { bunkNote, bunkOf, groupBunks, type BunkLevel } from '$lib/bunks';
 	import BunkLadder from '$lib/components/BunkLadder.svelte';
@@ -257,6 +258,7 @@
 			features={data.room.features}
 			description={data.room.description}
 		/>
+		<FloorPlans plans={data.room.houseFloorPlans} houseName={data.room.houseName} />
 	</header>
 
 	{#if data.guestPhase === 'closed'}

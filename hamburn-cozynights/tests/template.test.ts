@@ -113,7 +113,7 @@ describe('parseTemplate: accepted files', () => {
 			]
 		});
 		expect(template.format).toBe('cozynights-layout');
-		expect(template.version).toBe('2.2');
+		expect(template.version).toBe('2.3');
 		expect(template.name).toBe('Burn Location Template');
 		expect(template.exported_at).toBe('2026-09-17T15:04:05.000Z');
 		// amount_beds is derived from the spots that are listed, never the other way round.
@@ -382,7 +382,7 @@ describe('parseTemplate: switched-off features (version 2.2)', () => {
 	it('still reads version 2.1 and 2.0 files, which have no features_off', () => {
 		for (const version of ['2.0', '2.1']) {
 			const { template } = accepted(v2([goodHouse()], { version }));
-			expect(template.version).toBe('2.2');
+			expect(template.version).toBe('2.3');
 			expect(JSON.stringify(template)).not.toContain('features_off');
 		}
 	});
@@ -464,7 +464,7 @@ describe('parseTemplate: switched-off features (version 2.2)', () => {
 		expect(main.beds[0].features_off).toEqual(['own_bathroom', 'quiet']);
 		expect(main.beds[1]).not.toHaveProperty('features_off');
 		expect(main.beds[2]).not.toHaveProperty('features_off');
-		expect(template.version).toBe('2.2');
+		expect(template.version).toBe('2.3');
 	});
 });
 
@@ -496,7 +496,7 @@ describe('parseTemplate: refused files', () => {
 		[
 			'a missing version',
 			{ houses: [goodHouse()] },
-			/^version: is missing\. Add "version": "2\.2"/
+			/^version: is missing\. Add "version": "2\.3"/
 		],
 		['an unknown version', v2([goodHouse()], { version: '99.0' }), /^version: .* got "99.0"/],
 		[
@@ -836,11 +836,11 @@ describe('buildTemplate', () => {
 		]
 	};
 
-	it('builds a sorted version 2.2 template and leaves out orphans', () => {
+	it('builds a sorted version 2.3 template and leaves out orphans', () => {
 		const template = buildTemplate(records, new Date('2026-09-17T12:00:00.000Z'));
 		expect(template).toEqual({
 			format: 'cozynights-layout',
-			version: '2.2',
+			version: '2.3',
 			name: 'CozyNights camp layout',
 			exported_at: '2026-09-17T12:00:00.000Z',
 			map: { image: MAP_IMAGE, width: MAP_WIDTH, height: MAP_HEIGHT },
@@ -959,5 +959,128 @@ describe('parseTemplate: bunk beds', () => {
 		expect(beds[1]).toMatchObject({ label: 'B2', bunk_partner: 'B1' });
 		expect(beds[2]).not.toHaveProperty('bunk_partner');
 		expect(beds[3]).not.toHaveProperty('bunk_partner');
+	});
+});
+
+describe('parseTemplate: floor plans (version 2.3)', () => {
+	const plan = (image: unknown, caption?: unknown) => ({ image, caption });
+	const withPlans = (floor_plans: unknown) =>
+		v2([{ ...goodHouse(), floor_plans }], { version: '2.3' });
+
+	it('keeps the plans of a house and exports them again', () => {
+		const { template } = accepted(
+			withPlans([
+				plan('/floorplans/haus-1-ground-floor-2026.webp', '  Ground   floor '),
+				plan('/floorplans/haus-1-upper-floor-2026.png')
+			])
+		);
+		expect(template.version).toBe('2.3');
+		expect(template.houses[0].floor_plans).toEqual([
+			{ image: '/floorplans/haus-1-ground-floor-2026.webp', caption: 'Ground floor' },
+			{ image: '/floorplans/haus-1-upper-floor-2026.png', caption: '' }
+		]);
+		const again = parseTemplate(stringifyTemplate(template));
+		expect(again.ok && again.template).toEqual(template);
+	});
+
+	it('leaves the field out when a house has no plans, and still reads 2.2 files', () => {
+		expect(accepted(withPlans([])).template.houses[0]).not.toHaveProperty('floor_plans');
+		const { template } = accepted(v2([goodHouse()], { version: '2.2' }));
+		expect(template.version).toBe('2.3');
+		expect(JSON.stringify(template)).not.toContain('floor_plans');
+	});
+
+	it('loads pictures of the app only, never from elsewhere', () => {
+		for (const image of [
+			'https://example.org/plan.webp',
+			'//example.org/floorplans/plan.webp',
+			'/floorplans/../secret.webp',
+			'/floorplans/plan.svg',
+			'/lageplan-brahmsee-2026-v2.jpg',
+			'javascript:alert(1)',
+			42
+		]) {
+			const errors = errorsOf(withPlans([plan(image, 'Plan')]));
+			expect(errors.join('\n')).toContain('floor_plans[0]: image must be the path of a picture');
+		}
+	});
+
+	it('refuses a plan list that is not one, too long, or with an odd caption', () => {
+		expect(errorsOf(withPlans('/floorplans/a.webp'))[0]).toContain('floor_plans must be a list');
+		const five = Array.from({ length: 5 }, (_, i) => plan(`/floorplans/p${i}.webp`));
+		expect(errorsOf(withPlans(five))[0]).toContain('5 floor plans are too many, the limit is 4');
+		expect(errorsOf(withPlans([plan('/floorplans/a.webp', 7)]))[0]).toContain(
+			'caption must be text in quotes'
+		);
+		expect(errorsOf(withPlans([plan('/floorplans/a.webp', 'x'.repeat(81))]))[0]).toContain(
+			'the caption is too long (81 characters, the limit is 80)'
+		);
+	});
+
+	it('exports only what is a plan from the records', () => {
+		const template = buildTemplate({
+			houses: [
+				{
+					id: 'h1',
+					name: 'Villa',
+					floor_plans: [
+						{ image: '/floorplans/villa.webp', caption: 'Upper floor' },
+						{ image: 'https://example.org/x.webp', caption: 'Elsewhere' },
+						'junk'
+					]
+				},
+				{ id: 'h2', name: 'Hut', floor_plans: null }
+			],
+			rooms: [],
+			beds: []
+		});
+		expect(template.houses[0]).not.toHaveProperty('floor_plans');
+		expect(template.houses[1].floor_plans).toEqual([
+			{ image: '/floorplans/villa.webp', caption: 'Upper floor' }
+		]);
+	});
+});
+
+describe('the Hamburn 2026 template', () => {
+	const text = readFileSync('static/templates/hamburn-2026.json', 'utf8');
+	const result = parseTemplate(text);
+
+	it('is valid, without warnings, and in the export format', () => {
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.warnings).toEqual([]);
+		expect(stringifyTemplate(result.template)).toBe(text.trimEnd());
+	});
+
+	it('has every bed of the 2025 bed sheet, all bookable', () => {
+		if (!result.ok) return;
+		expect(result.summary).toMatchObject({ houses: 7, rooms: 57, beds: 297, activeBeds: 297 });
+		const perHouse = Object.fromEntries(
+			result.template.houses.map((house) => [
+				house.name,
+				house.rooms.reduce((sum, room) => sum + room.beds.length, 0)
+			])
+		);
+		expect(perHouse).toEqual({
+			'Brahmsee-Buden': 62,
+			'Brahmsee-Butzen': 56,
+			'Brahmsee-Villa': 31,
+			'Haus am See': 29,
+			'See-Hütten': 12,
+			Wälderhaus: 63,
+			Waldhütten: 44
+		});
+		for (const house of result.template.houses) expect(house.description).toBeTruthy();
+	});
+
+	it('names floor plans that ship with the app', () => {
+		if (!result.ok) return;
+		const images = result.template.houses.flatMap((house) =>
+			(house.floor_plans ?? []).map((plan) => plan.image)
+		);
+		expect(images).toHaveLength(5);
+		for (const image of images) {
+			expect(() => readFileSync(`static${image}`)).not.toThrow();
+		}
 	});
 });

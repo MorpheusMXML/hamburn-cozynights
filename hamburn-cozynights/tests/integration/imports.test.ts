@@ -9,10 +9,11 @@ import path from 'path';
 import type PocketBase from 'pocketbase';
 import { BookingService } from '../../src/lib/server/booking';
 import { changeTicket, importRoster, searchTickets } from '../../src/lib/server/tickets';
-import { applyTemplate, compareTemplate } from '../../src/lib/server/template';
+import { applyTemplate, compareTemplate, exportTemplate } from '../../src/lib/server/template';
 import { findPass } from '../../src/lib/server/pass';
 import { defaultSelection } from '../../src/lib/template-diff';
-import type { LayoutTemplate } from '../../src/lib/template';
+import { parseTemplate, type LayoutTemplate } from '../../src/lib/template';
+import { readFileSync } from 'fs';
 import { saveRequest } from '../../src/lib/server/special-requests';
 import { saveGuestRequest } from '../../src/lib/server/request-groups';
 import { seedHouse, seedTicket, serviceAccount, uid } from '../stack-helpers';
@@ -250,7 +251,7 @@ describe('applying chosen template changes', () => {
 
 		const template: LayoutTemplate = {
 			format: 'cozynights-layout',
-			version: '2.2',
+			version: '2.3',
 			name: `Review ${uid()}`,
 			exported_at: '',
 			map: { image: '/map.png', width: 1000, height: 700 },
@@ -509,5 +510,47 @@ describe('cozy-admin tickets import', () => {
 		expect(mails).toHaveLength(1);
 		expect(mails[0].Subject).toContain('came with your ticket');
 		expect(await mailsTo(viaCli.email)).toHaveLength(1); // only the old confirmation
+	});
+});
+
+describe('the Hamburn 2026 template', () => {
+	it('imports with its floor plans and bunk beds, and exports the same again', async () => {
+		const parsed = parseTemplate(
+			readFileSync(path.resolve(__dirname, '../../static/templates/hamburn-2026.json'), 'utf8')
+		);
+		if (!parsed.ok) throw new Error(parsed.errors.join(' | '));
+		// Under names of their own, so the other tests' houses stay out of it.
+		const tag = uid();
+		const file: LayoutTemplate = {
+			...parsed.template,
+			houses: parsed.template.houses.map((house) => ({ ...house, name: `${house.name} ${tag}` }))
+		};
+		const diff = await compareTemplate(su as any, file);
+		const ours = (name: string) => name.endsWith(` ${tag}`);
+		expect(diff.houses.filter((house) => ours(house.name)).every((h) => h.own === 'new')).toBe(
+			true
+		);
+
+		const outcome = await applyTemplate(su as any, file, [...defaultSelection(diff)], {
+			skipBackup: true
+		});
+		expect(outcome).toMatchObject({
+			created: { houses: 7, rooms: 57, spots: 297 },
+			problems: []
+		});
+
+		const villa = await su
+			.collection('houses')
+			.getFirstListItem(su.filter('name = {:name}', { name: `Brahmsee-Villa ${tag}` }));
+		expect(villa.floor_plans).toEqual([
+			{
+				image: '/floorplans/brahmsee-villa-upper-floor-2026.webp',
+				caption: 'Upper floor: rooms 101–106 with their names'
+			}
+		]);
+
+		const exported = await exportTemplate(su as any);
+		const back = exported.houses.filter((house) => ours(house.name));
+		expect(back).toEqual(file.houses);
 	});
 });

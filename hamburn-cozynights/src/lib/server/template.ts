@@ -42,7 +42,9 @@ export class TemplateImportError extends Error {
 
 export async function exportTemplate(pb: TypedPocketBase): Promise<LayoutTemplate> {
 	const [houses, rooms, beds] = await Promise.all([
-		pb.collection('houses').getFullList({ fields: 'id,name,x,y,kind,features,description' }),
+		pb
+			.collection('houses')
+			.getFullList({ fields: 'id,name,x,y,kind,features,description,floor_plans' }),
 		pb.collection('rooms').getFullList({
 			fields: 'id,house,name,room_number,kind,features,features_off,description'
 		}),
@@ -61,7 +63,7 @@ export async function loadCamp(pb: TypedPocketBase): Promise<CampRecords> {
 	// requestKey null: parallel requests of one client must not cancel each other.
 	const [houses, rooms, beds] = await Promise.all([
 		pb.collection('houses').getFullList({
-			fields: 'id,created,name,x,y,kind,features,description',
+			fields: 'id,created,name,x,y,kind,features,description,floor_plans',
 			requestKey: null
 		}),
 		pb.collection('rooms').getFullList({

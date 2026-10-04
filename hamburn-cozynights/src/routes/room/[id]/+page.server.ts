@@ -34,6 +34,7 @@ import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
 import { roomSwaps, type RoomSwaps } from '$lib/server/swaps';
 import { askSwapAction, withdrawSwapAction } from '$lib/server/swap-actions';
 import type { PassSummary } from '$lib/pass';
+import { readFloorPlans } from '$lib/floor-plans';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 const SIGNED_OUT =
@@ -172,6 +173,8 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				house: room.house,
 				houseName: room.expand?.house?.name ?? '',
 				houseKind: room.expand?.house?.kind ?? '',
+				// the house's plans, so the guest can find this room in the building
+				houseFloorPlans: readFloorPlans(room.expand?.house?.floor_plans),
 				kind: roomKind(room.kind),
 				description: room.description ?? '',
 				// The house's features count for this room too, minus what the

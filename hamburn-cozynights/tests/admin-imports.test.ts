@@ -381,7 +381,7 @@ describe('importing the ticket list', () => {
 describe('applying template changes', () => {
 	const file = (): LayoutTemplate => ({
 		format: 'cozynights-layout',
-		version: '2.2',
+		version: '2.3',
 		name: 'Next year',
 		exported_at: '',
 		map: { image: '/map.png', width: 1000, height: 700 },
@@ -565,7 +565,7 @@ describe('who may do what', () => {
 	};
 	const layout = (): LayoutTemplate => ({
 		format: 'cozynights-layout',
-		version: '2.2',
+		version: '2.3',
 		name: 'Tent only',
 		exported_at: '',
 		map: { image: '/map.png', width: 1000, height: 700 },

@@ -21,6 +21,7 @@ import {
 	roomKindEntry,
 	type Feature
 } from './accommodation';
+import type { FloorPlan } from './floor-plans';
 
 /** How long a description may be in a "changed" line before it is cut off. */
 const DESCRIPTION_PREVIEW = 60;
@@ -64,6 +65,8 @@ export interface DetailFields {
 	/** Rooms only: what the room does not take over from its house. A house has nothing above it. */
 	features_off?: Feature[];
 	description?: string;
+	/** Houses only: pictures in static/floorplans/ (src/lib/floor-plans.ts). */
+	floor_plans?: FloorPlan[];
 }
 
 export interface RoomDiff extends DiffNode, DetailFields {
@@ -105,6 +108,7 @@ export interface CampRecords {
 		kind?: string;
 		features?: string[];
 		description?: string;
+		floor_plans?: unknown;
 	}[];
 	rooms: {
 		id: string;
@@ -168,6 +172,17 @@ const isBooked = (bed: { occupied?: boolean; order?: string }) => !!bed.occupied
 const featureList = (features: readonly Feature[] | undefined): FieldValue =>
 	features && features.length > 0 ? features.map(featureLabel).join(' · ') : null;
 
+/** "Ground floor · Upper floor", or how many plans there are when they have no captions. */
+const planList = (plans: readonly FloorPlan[] | undefined): FieldValue => {
+	if (!plans || plans.length === 0) return null;
+	const captions = plans.map((plan) => plan.caption || plan.image.replace(/^.*\//, ''));
+	return captions.join(' · ');
+};
+
+const samePlans = (a: readonly FloorPlan[] = [], b: readonly FloorPlan[] = []) =>
+	a.length === b.length &&
+	a.every((plan, i) => plan.image === b[i].image && plan.caption === b[i].caption);
+
 const shorten = (text: string | undefined): FieldValue =>
 	!text
 		? null
@@ -207,6 +222,14 @@ function detailChanges(
 			to: shorten(after.description)
 		});
 	}
+	// Only houses have plans; for a room both sides are always empty.
+	if (!samePlans(before.floor_plans, after.floor_plans)) {
+		changes.push({
+			field: 'floor_plans',
+			from: planList(before.floor_plans),
+			to: planList(after.floor_plans)
+		});
+	}
 	return changes;
 }
 
@@ -215,19 +238,21 @@ const detailsOf = (item: DetailFields): DetailFields => ({
 	...(item.kind ? { kind: item.kind } : {}),
 	...(item.features && item.features.length > 0 ? { features: item.features } : {}),
 	...(item.features_off && item.features_off.length > 0 ? { features_off: item.features_off } : {}),
-	...(item.description ? { description: item.description } : {})
+	...(item.description ? { description: item.description } : {}),
+	...(item.floor_plans && item.floor_plans.length > 0 ? { floor_plans: item.floor_plans } : {})
 });
 
 /**
  * The file decides: a detail it doesn't have is cleared in the camp. Only a
  * room gets `features_off` written (an empty list means "inherit everything");
- * the houses collection has no such field.
+ * the houses collection has no such field. Only a house gets `floor_plans`.
  */
 const detailWrite = (item: DetailFields, level: 'house' | 'room'): DetailWrite => ({
 	kind: item.kind ?? '',
 	features: item.features ?? [],
 	...(level === 'room' ? { features_off: item.features_off ?? [] } : {}),
-	description: item.description ?? ''
+	description: item.description ?? '',
+	...(level === 'house' ? { floor_plans: item.floor_plans ?? [] } : {})
 });
 
 /** Everything a spot of the file says, ready for the database. */
@@ -695,6 +720,8 @@ export interface DetailWrite {
 	/** Rooms only: what the room switches off, [] when the file says nothing. */
 	features_off?: string[];
 	description: string;
+	/** Houses only: the file's plans, [] when it has none. */
+	floor_plans?: FloorPlan[];
 }
 
 export interface LayoutPlan {

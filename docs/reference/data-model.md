@@ -9,7 +9,7 @@ data lives and how it is backed up: [Backups and where data lives](../develop/de
 
 | Collection     | Holds                                                                                    | Personal data | Written by                                           | API rules                             |
 | :------------- | :--------------------------------------------------------------------------------------- | :------------ | :--------------------------------------------------- | :------------------------------------ |
-| `houses`       | `name`, `x`, `y` (map position), `kind` (house, hut group, tent area, other), `features`, `description` | no            | admins                                               | public read, admin write              |
+| `houses`       | `name`, `x`, `y` (map position), `kind` (house, hut group, tent area, other), `features`, `description`, `floor_plans` (pictures in `static/floorplans/`) | no            | admins                                               | public read, admin write              |
 | `rooms`        | `name`, `room_number`, `house`, `amount_beds` (spots created with the room; an initial count only, not maintained: count the room's `beds`), `kind`, `features`, `description` (like a house), `features_off` (house features this room switches off for itself; superusers only) | no            | admins                                               | public read, admin write              |
 | `beds`         | `label`, `room`, `occupied`, `order`, `is_locked`, `enabled`, `is_special` (special-needs spot), `bed_type` (single bed, lower/upper bunk, half of a double bed, sofa, mattress, camp bed), `bunk_partner` (the other spot of a bunk bed, set on both spots), `features_off` (house or room features this spot switches off for itself; superusers only; a spot has no `features` of its own since `1760200000_no_power_socket.js`), `booked_at` (when the spot got its ticket, set by PocketBase), `checked_in_at` and `checked_in_by` (the check-in at arrival: when, which admin) | no      | admins; guest bookings via the app's service account; a check-in with the checking admin's own session (the service account only moves it along or clears it) | admin read, admin write (guests see spots only through the app) |
 | `orders`       | `order_number`, `order_hash`, `customer_name`, `burner_name` (encrypted), `email`, `pass_code` (booking pass, unique), `handed_over_at` (when the ticket was last passed on), `no_swap_requests` (the guest paused swap requests to them) | yes | the app's service account, `scripts/cozy-admin.sh tickets`; `pass_code` only by PocketBase | none (superusers only) |
@@ -154,8 +154,8 @@ A template is the camp's structure as JSON: houses with their map positions,
 rooms, beds and what each place is like. It contains no personal data, so
 layouts can be kept in Git. The format is described in
 [Layout templates](../admin/templates#file-format) (`format`
-`cozynights-layout`, version `2.2`; version `2.1`, `2.0` and `1.0` files are
-still read).
+`cozynights-layout`, version `2.3`; version `2.2`, `2.1`, `2.0` and `1.0`
+files are still read).
 
 - **Details:** `kind`, `features` and `description` of a house or room, a
   spot's `bed_type` and what a room or spot switched off (`features_off`, see
