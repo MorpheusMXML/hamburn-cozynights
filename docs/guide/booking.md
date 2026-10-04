@@ -71,7 +71,7 @@ That's it: fireworks go up from your new spot 🎆, and the spot now shows **You
 | 🟢 **Available** · *Release your other spot first* | Free, but you already have a spot somewhere else, so it can't be clicked. One ticket code = one spot. |
 | 🩵 **Yours** · *your burner name* | That's you. Click it to rename it (any time until booking closes) or to release it (during Live Booking); the line under the name says which of the two it is right now. |
 | 🔴 **Occupied** · *a burner name* | Taken by another guest. *Mystery Burner* means the booking has no name, for example because its ticket changed hands. During Live Booking, while you hold a spot, it adds *⇄ Ask to swap*: tap it to ask its guest for a [swap](./swaps) (*⏳ Asked — waiting* once you did). |
-| 🟣 **Blocked by admin** · *Not available* | Held back by the crew, for example a broken bed, a spot that isn't in use, one the crew took for itself or one kept for [guests with special needs](./special-needs). |
+| 🟣 **Blocked by admin** · *Not available* | Held back by the crew, for example a broken bed, a spot that isn't in use, one the crew took for itself or one kept for [guests with special needs and for projects](./special-needs): nobody books those directly, the crew hands them out. |
 | ⚪️ **Not open yet** · *Booking opens soon* | Booking hasn't opened yet. |
 | ⚪️ **Booking closed** · *Spots are final* | The booking window is over. |
 
@@ -93,7 +93,9 @@ Houses and rooms can carry a few details, and spots say what kind of bed they ar
 | 🤫 Quiet zone | A calm corner of the camp. |
 | *Lower bunk · Upper bunk · Single bed · Double bed (shared) · Sofa · Mattress · Camp bed* | What you actually sleep in, under the spot's label. In a stacked bunk bed the level is on the chip next to the label, and the line says *above B1* or *below B2* instead. |
 
-A room shows what its house says too, and the crew can add a sentence of their own ("Showers in the wash house, 50 m along the path"). The crew can also switch a feature off for one room or spot — a cold room in a heated house, a bed by the door of a quiet room — so a chip the house shows may be missing on one room or spot on purpose; the spot's card then says *no …*. Whether there is a power socket near a bed is not recorded: if you need one for a medical device, [ask the crew](./special-needs).
+A room shows what its house says too, and the crew can add a sentence of their own ("Showers in the wash house, 50 m along the path"). The crew can also switch a feature off for one room or spot — a cold room in a heated house, a bed by the door of a quiet room — so a chip the house shows may be missing on one room or spot on purpose; the spot's card then says *no …*.
+
+Some houses have <kbd>🗺️ Floor plan</kbd> under their description, on the house page and on each of its room pages: it opens the plan of the building, and a tap on a plan opens it full size to zoom in. The room numbers on a plan may be older than the ones in the app — the caption says so.
 
 > [!NOTE] Nothing is invented
 > The app only shows what the crew filled in. An empty spot card means *nobody said*, not *no* — ask the crew if a detail matters to you. If you need a particular kind of spot, [ask for a special-needs spot](./special-needs) instead of guessing.
@@ -155,7 +157,7 @@ Your dream spot is taken? Ask its guest to swap: tap the taken spot, say hi, sen
 > [!WARNING] Released means free for everyone
 > Releasing asks first (*Release your spot?* → <kbd>Release spot</kbd> or <kbd>Keep my spot</kbd>). The moment you release a spot, anyone can grab it. There is no undo.
 
-A spot the crew booked for your [special-needs request](./special-needs) can only get a new burner name: to move it or give it back, ask the crew.
+A spot the crew booked for your [special-needs request](./special-needs) — on your own or for your group — can only get a new burner name: to move it or give it back, ask the crew.
 
 Booking, moving and releasing a spot only work during Live Booking; the burner name of your spot can be changed until booking closes. After booking closes your spot is frozen: it stays yours and your booking pass keeps working (see [After booking closed](./phases#after-booking-closed)). Should the crew ever go back to Staging Mode to rebuild the camp, every guest booking is released and you get a *spot was released* e-mail; your ticket code keeps working, so you simply book again once booking reopens. Only spots the crew booked for [special-needs requests](./special-needs) stay.
 

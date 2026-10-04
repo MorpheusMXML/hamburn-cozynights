@@ -27,7 +27,7 @@ stateDiagram-v2
 | Guests: sign in and see the map | <span class="yes">✓</span> blurred, with a countdown once the timer is armed | <span class="yes">✓</span> | <span class="yes">✓</span> blurred at first, with your booking pass |
 | Guests: book or release a spot | <span class="no">✗</span> | <span class="yes">✓</span> | <span class="no">✗</span> |
 | Guests: rename the spot they hold | <span class="yes">✓</span> | <span class="yes">✓</span> | <span class="no">✗</span> |
-| Guests: ask for a [special-needs spot](./special-needs) | <span class="yes">✓</span> while requests are open | <span class="yes">✓</span> while requests are open | <span class="yes">✓</span> while requests are open |
+| Guests: ask for a [special-needs spot](./special-needs), start or join a group | <span class="yes">✓</span> while requests are open | <span class="yes">✓</span> while requests are open | <span class="yes">✓</span> while requests are open |
 | Admins: add, rename, move, delete houses | <span class="yes">✓</span> | <span class="no">✗</span> | <span class="no">✗</span> |
 | Admins: add or delete rooms and spots | <span class="yes">✓</span> | <span class="no">✗</span> | <span class="no">✗</span> |
 | Admins: activate / deactivate spots, mark as taken | <span class="yes">✓</span> | <span class="no">✗</span> | <span class="no">✗</span> |

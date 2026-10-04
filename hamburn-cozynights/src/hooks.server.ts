@@ -48,7 +48,7 @@ try {
 }
 
 // Sent with every response unless a route sets a stricter value itself (the
-// pass pages send no-referrer). HSTS belongs to the TLS terminator
+// pass pages send same-origin: no referrer to other sites). HSTS belongs to the TLS terminator
 // (deploy/nginx/*.conf). The Content-Security-Policy is deliberately narrow:
 // it only forbids embedding and plugins. The full policy runs in
 // report-only mode first: SvelteKit's inline bootstrap script and the

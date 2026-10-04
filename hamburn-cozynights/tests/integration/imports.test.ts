@@ -1,19 +1,21 @@
 // tests/integration/imports.test.ts — the ticket page and the template review
 // against a real PocketBase with its hooks: a ticket handed over to a new
-// holder (new pass, Telegram off, confirmation to the new address), the ticket
-// list import, the search, and applying chosen template changes while the
-// other bookings stay.
+// holder (new pass, Telegram off, confirmation to the new address, out of its
+// request group), the ticket list import, the search, and applying chosen
+// template changes while the other bookings stay.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { spawnSync } from 'child_process';
 import path from 'path';
 import type PocketBase from 'pocketbase';
 import { BookingService } from '../../src/lib/server/booking';
 import { changeTicket, importRoster, searchTickets } from '../../src/lib/server/tickets';
-import { applyTemplate, compareTemplate } from '../../src/lib/server/template';
+import { applyTemplate, compareTemplate, exportTemplate } from '../../src/lib/server/template';
 import { findPass } from '../../src/lib/server/pass';
 import { defaultSelection } from '../../src/lib/template-diff';
-import type { LayoutTemplate } from '../../src/lib/template';
+import { parseTemplate, type LayoutTemplate } from '../../src/lib/template';
+import { readFileSync } from 'fs';
 import { saveRequest } from '../../src/lib/server/special-requests';
+import { saveGuestRequest } from '../../src/lib/server/request-groups';
 import { seedHouse, seedTicket, serviceAccount, uid } from '../stack-helpers';
 
 const COMPOSE_FILE = path.resolve(__dirname, '../../docker-compose.test.yml');
@@ -249,7 +251,7 @@ describe('applying chosen template changes', () => {
 
 		const template: LayoutTemplate = {
 			format: 'cozynights-layout',
-			version: '2.2',
+			version: '2.3',
 			name: `Review ${uid()}`,
 			exported_at: '',
 			map: { image: '/map.png', width: 1000, height: 700 },
@@ -427,6 +429,55 @@ describe('cozy-admin tickets import', () => {
 		expect(stored.handed_over_at).toBe('');
 	});
 
+	it('takes a handed-over ticket out of its request group; the group goes with its last member', async () => {
+		const lead = await seedTicket(su);
+		const member = await seedTicket(su);
+		for (const t of [lead, member]) {
+			await su.collection('orders').update(t.order.id, { email: `holder-${uid()}@example.com` });
+		}
+		const requestsOf = (orderId: string) =>
+			su
+				.collection('special_requests')
+				.getFullList({ filter: su.filter('order = {:o}', { o: orderId }) });
+		await saveGuestRequest(su as any, lead.order, {
+			needs: ['own_room'],
+			text: 'Our art project needs a room.',
+			burnerName: '',
+			consent: true,
+			group: { mode: 'start', name: 'Hand-over Crew' }
+		});
+		const [leadRequest] = await requestsOf(lead.order.id);
+		const group = await su.collection('request_groups').getOne(leadRequest.request_group);
+		await saveGuestRequest(su as any, member.order, {
+			needs: [],
+			text: '',
+			burnerName: '',
+			consent: true,
+			group: { mode: 'join', code: group.code }
+		});
+
+		// the Tickets page: the old holder's request goes, the group stays for the others
+		await changeTicket(su as any, member.order.id, {
+			email: `next-${uid()}@example.com`,
+			name: 'Next Holder',
+			newHolder: true
+		});
+		expect(await requestsOf(member.order.id)).toHaveLength(0);
+		expect((await su.collection('request_groups').getOne(group.id)).id).toBe(group.id);
+
+		// the CLI, inside its transaction: the last member, so the group goes too
+		const result = cozyAdmin(
+			['tickets', 'import', '-', '--hand-over'],
+			csv([[lead.code, `cli-${uid()}@example.com`, 'Next Holder']])
+		);
+		expect(result.ok, result.out).toBe(true);
+		expect(result.out).toContain('1 ticket(s) changed hands');
+		expect(await requestsOf(lead.order.id)).toHaveLength(0);
+		await expect(su.collection('request_groups').getOne(group.id)).rejects.toMatchObject({
+			status: 404
+		});
+	});
+
 	it('with --hand-over leaves the same record behind as the Tickets page', async () => {
 		const viaApp = await loadedTicket();
 		const viaCli = await loadedTicket();
@@ -459,5 +510,47 @@ describe('cozy-admin tickets import', () => {
 		expect(mails).toHaveLength(1);
 		expect(mails[0].Subject).toContain('came with your ticket');
 		expect(await mailsTo(viaCli.email)).toHaveLength(1); // only the old confirmation
+	});
+});
+
+describe('the Hamburn 2026 template', () => {
+	it('imports with its floor plans and bunk beds, and exports the same again', async () => {
+		const parsed = parseTemplate(
+			readFileSync(path.resolve(__dirname, '../../static/templates/hamburn-2026.json'), 'utf8')
+		);
+		if (!parsed.ok) throw new Error(parsed.errors.join(' | '));
+		// Under names of their own, so the other tests' houses stay out of it.
+		const tag = uid();
+		const file: LayoutTemplate = {
+			...parsed.template,
+			houses: parsed.template.houses.map((house) => ({ ...house, name: `${house.name} ${tag}` }))
+		};
+		const diff = await compareTemplate(su as any, file);
+		const ours = (name: string) => name.endsWith(` ${tag}`);
+		expect(diff.houses.filter((house) => ours(house.name)).every((h) => h.own === 'new')).toBe(
+			true
+		);
+
+		const outcome = await applyTemplate(su as any, file, [...defaultSelection(diff)], {
+			skipBackup: true
+		});
+		expect(outcome).toMatchObject({
+			created: { houses: 7, rooms: 57, spots: 297 },
+			problems: []
+		});
+
+		const villa = await su
+			.collection('houses')
+			.getFirstListItem(su.filter('name = {:name}', { name: `Brahmsee-Villa ${tag}` }));
+		expect(villa.floor_plans).toEqual([
+			{
+				image: '/floorplans/brahmsee-villa-upper-floor-2026.webp',
+				caption: 'Upper floor: rooms 101–106 with their names'
+			}
+		]);
+
+		const exported = await exportTemplate(su as any);
+		const back = exported.houses.filter((house) => ours(house.name));
+		expect(back).toEqual(file.houses);
 	});
 });

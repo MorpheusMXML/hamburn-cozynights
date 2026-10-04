@@ -4,7 +4,7 @@ Get CozyNights running on your machine: a local PocketBase in Docker plus the Sv
 
 ## Prerequisites
 
-- **Node.js 22** or newer, with npm
+- **Node.js 24** or newer, with npm. With [mise](https://mise.jdx.dev), `mise install` in the repository picks the version from `mise.toml`; the Docker image and CI run Node 24 too.
 - **Docker** with Docker Compose, for the local PocketBase
 - **Git**
 
@@ -159,6 +159,8 @@ Guests and admins see one picture of the camp, `static/lageplan-brahmsee-<year>.
 3. **Put the same name into `map.image`** of `static/templates/brahmsee-starter.json` and of the example in [Layout templates](../admin/templates#file-format); `npm test` checks the starter template.
 4. **Check the pins** on staging in the map view of *Map & houses* (`/admin/camp`) and drag any that no longer sit on their house. Templates exported before the swap carry the old name in `map.image`; importing them shows a warning to check the pins, nothing else changes.
 5. **Set the event year** in `src/lib/event.ts` (`EVENT_YEAR`): the start page shows it under the title.
+
+**Floor plans of a house** follow the same rule. Save the picture as WebP, at most 1600 px wide, under `static/floorplans/<house>-<floor>-<year>.webp` (lowercase letters, digits and dashes), and name it in the house's `floor_plans` in the layout template (see [Layout templates](../admin/templates#file-format)); importing the template puts it on the house. A new picture gets a new name, never the old one. `npm test` checks that every plan of `static/templates/hamburn-2026.json` exists.
 
 ## Conventions
 

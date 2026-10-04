@@ -1,0 +1,4 @@
+# Node version for working on CozyNights; the Docker image (hamburn-cozynights/Dockerfile)
+# and CI (.github/workflows) use the same major version.
+[tools]
+node = "24"

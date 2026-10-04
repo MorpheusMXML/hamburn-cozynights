@@ -160,8 +160,10 @@ export const FEATURES: FeatureEntry[] = [
  * neither offers nor shows it any more, and
  * pb_migrations/1760200000_no_power_socket.js removed what was stored. An
  * older layout file may still name it: the import leaves it out with a note
- * instead of refusing the file (src/lib/template.ts). A guest can still ask
- * for a socket on the ♿ form — the crew answers that by hand (MATCHED_BY_HAND).
+ * instead of refusing the file (src/lib/template.ts). The ♿ form no longer
+ * offers a socket either (since v0.30.0); old requests show it as legacy
+ * (RETIRED_NEEDS in src/lib/special-needs.ts), and the crew answers it by
+ * hand (MATCHED_BY_HAND).
  */
 export const RETIRED_FEATURES: readonly string[] = ['power'];
 
@@ -533,11 +535,19 @@ export type NeedFit = 'fits' | 'conflict' | 'unknown';
 
 /**
  * Needs the layout can't answer, so only the crew can match them: a power
- * socket (the app doesn't know where the sockets are, RETIRED_FEATURES) and
- * "Something else", which is what the guest wrote. The ♿ picker shows no ✓
- * or ✗ for them, and the capacity line on the requests page leaves them out.
+ * socket (the app doesn't know where the sockets are, RETIRED_FEATURES; only
+ * old requests still have it), "Something else", which is what the guest
+ * wrote, and what a project or crew asks for (a room of their own, spots
+ * close together: a question of who else sleeps where). The ♿ picker shows
+ * no ✓ or ✗ for them, and the capacity line on the requests page leaves them
+ * out, so project requests never count against the ♿ spots.
  */
-export const MATCHED_BY_HAND: readonly SpecialNeed[] = ['power', 'other'];
+export const MATCHED_BY_HAND: readonly SpecialNeed[] = [
+	'power',
+	'other',
+	'own_room',
+	'close_together'
+];
 
 export function needFit(need: SpecialNeed, facts: SpotFacts): NeedFit {
 	switch (need) {
@@ -562,6 +572,8 @@ export function needFit(need: SpecialNeed, facts: SpotFacts): NeedFit {
 		// MATCHED_BY_HAND: nothing in the layout answers these.
 		case 'power':
 		case 'other':
+		case 'own_room':
+		case 'close_together':
 			return 'unknown';
 	}
 }

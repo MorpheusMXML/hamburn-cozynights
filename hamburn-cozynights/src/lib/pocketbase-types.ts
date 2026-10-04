@@ -24,7 +24,8 @@ export enum Collections {
 	SpecialRequests = 'special_requests',
 	WalletPasses = 'wallet_passes',
 	WalletDevices = 'wallet_devices',
-	SwapRequests = 'swap_requests'
+	SwapRequests = 'swap_requests',
+	RequestGroups = 'request_groups'
 }
 
 // Alias types for improved usability
@@ -166,6 +167,8 @@ export type HousesRecord = {
 	features?: string[];
 	/** Free text for what only this venue knows, shown to guests. */
 	description?: string;
+	/** Floor plan pictures in static/floorplans/; read with readFloorPlans (src/lib/floor-plans.ts). */
+	floor_plans?: unknown;
 };
 
 export type OrdersRecord = {
@@ -294,7 +297,25 @@ export type SpecialRequestsRecord = {
 	needs?: string;
 	order: RecordIdString;
 	reason?: string;
+	/** The request group it is in (pb_migrations/1760550000_request_groups.js); '' for none. */
+	request_group?: RecordIdString;
 	status: SpecialRequestsStatusOptions;
+	updated: IsoAutoDateString;
+};
+
+/**
+ * Guests who ask for spots together (pb_migrations/1760550000_request_groups.js).
+ * No status of its own: decisions live on each member's request.
+ */
+export type RequestGroupsRecord = {
+	/** The join code, 8 characters of the pass alphabet, without dashes. */
+	code: string;
+	created: IsoAutoDateString;
+	id: string;
+	/** Ciphertext of the name the guest gave the group (src/lib/server/crypto.ts). */
+	name: string;
+	/** Order ids the crew took out of the group: they can't join it again. */
+	removed?: null | string[];
 	updated: IsoAutoDateString;
 };
 
@@ -406,6 +427,8 @@ export type WalletDevicesResponse<Texpand = unknown> = Required<WalletDevicesRec
 	BaseSystemFields<Texpand>;
 export type SwapRequestsResponse<Texpand = unknown> = Required<SwapRequestsRecord> &
 	BaseSystemFields<Texpand>;
+export type RequestGroupsResponse<Texpand = unknown> = Required<RequestGroupsRecord> &
+	BaseSystemFields<Texpand>;
 
 // Types containing all Records and Responses, useful for creating typing helper functions
 
@@ -429,6 +452,7 @@ export type CollectionRecords = {
 	wallet_passes: WalletPassesRecord;
 	wallet_devices: WalletDevicesRecord;
 	swap_requests: SwapRequestsRecord;
+	request_groups: RequestGroupsRecord;
 };
 
 export type CollectionResponses = {
@@ -451,6 +475,7 @@ export type CollectionResponses = {
 	wallet_passes: WalletPassesResponse;
 	wallet_devices: WalletDevicesResponse;
 	swap_requests: SwapRequestsResponse;
+	request_groups: RequestGroupsResponse;
 };
 
 // Utility types for create/update operations

@@ -3,6 +3,8 @@
 	import AddRoomsForm from '$lib/components/admin/AddRoomsForm.svelte';
 	import BookingGuest from '$lib/components/admin/BookingGuest.svelte';
 	import DetailsPanel from '$lib/components/admin/DetailsPanel.svelte';
+	import FloorPlans from '$lib/components/FloorPlans.svelte';
+	import { readFloorPlans } from '$lib/floor-plans';
 	import FoldPanel from '$lib/components/admin/FoldPanel.svelte';
 	import FoldToggle from '$lib/components/admin/FoldToggle.svelte';
 	import InlineRename from '$lib/components/admin/InlineRename.svelte';
@@ -32,6 +34,8 @@
 	$: lock = isLayoutLocked ? layoutLock(phase, isSuperuser) : null;
 	// "rooms", "huts", "tents": what the house's kind calls its rooms.
 	$: roomsWord = roomWord(house.kind, true);
+	// Pictures the layout template named (src/lib/floor-plans.ts); shown, not edited here.
+	$: floorPlans = readFloorPlans(house.floor_plans);
 	// Who holds which spot, room by room (docs/admin/bookings.md).
 	$: bookingRooms = bookingsByRoom(data.bookings ?? [], house.id);
 	$: bookingCounts = countBookings(data.bookings ?? []);
@@ -157,6 +161,13 @@
 						features={readFeatures(house.features, 'house')}
 						description={house.description ?? ''}
 					/>
+					{#if floorPlans.length > 0}
+						<p class="section-hint plans-hint">
+							Floor plans come with the layout template (Burn Template Manager). Guests open them
+							from this house and its {roomsWord}.
+						</p>
+						<FloorPlans plans={floorPlans} houseName={house.name} />
+					{/if}
 				</div>
 			</div>
 		{/if}
@@ -560,6 +571,9 @@
 		color: #8a8f98;
 		line-height: 1.4;
 		max-width: 60ch;
+	}
+	.plans-hint {
+		margin: 1.25rem 0 0;
 	}
 	.room-details {
 		display: flex;

@@ -26,7 +26,7 @@ const spot = (label: string, extra: Partial<TemplateBed> = {}): TemplateBed => (
 function template(houses: TemplateHouse[]): LayoutTemplate {
 	return {
 		format: 'cozynights-layout',
-		version: '2.2',
+		version: '2.3',
 		name: 'Test',
 		exported_at: '',
 		map: { image: '/map.png', width: 1000, height: 700 },
@@ -50,7 +50,8 @@ function camp(
 			y: house.y,
 			kind: house.kind,
 			features: house.features,
-			description: house.description
+			description: house.description,
+			floor_plans: house.floor_plans
 		});
 		house.rooms.forEach((room, r) => {
 			const roomId = `${houseId}room${r}`;
@@ -349,7 +350,7 @@ describe('planChanges', () => {
 				name: 'Tent',
 				x: 800,
 				y: 600,
-				details: { kind: '', features: [], description: '' }
+				details: { kind: '', features: [], description: '', floor_plans: [] }
 			}
 		]);
 		expect(plan.createRooms).toEqual([
@@ -371,7 +372,7 @@ describe('planChanges', () => {
 				name: 'Neon Cave',
 				x: 111,
 				y: 200,
-				details: { kind: '', features: [], description: '' }
+				details: { kind: '', features: [], description: '', floor_plans: [] }
 			}
 		]);
 		// The file decides: everything it says about the spot is written, not only
@@ -465,7 +466,8 @@ describe('the details of a place', () => {
 		expect(plan.updateHouses[0].details).toEqual({
 			kind: 'hut_group',
 			features: ['ground_floor'],
-			description: ''
+			description: '',
+			floor_plans: []
 		});
 		expect(plan.updateSpots[0].fields).toMatchObject({ bed_type: '' });
 		// a spot has no features of its own, so none are written
@@ -478,7 +480,8 @@ describe('the details of a place', () => {
 		expect(plan.createHouses[0].details).toEqual({
 			kind: 'hut_group',
 			features: ['ground_floor'],
-			description: 'Wash house 50 m away.'
+			description: 'Wash house 50 m away.',
+			floor_plans: []
 		});
 		expect(plan.createRooms[0].details).toEqual({
 			kind: 'hut',
@@ -621,5 +624,57 @@ describe('bunk beds', () => {
 		expect(diff.houses[0].rooms[0].spots[0].changes).toEqual([
 			{ field: 'bunk_partner', from: null, to: 'B2' }
 		]);
+	});
+});
+
+describe('floor plans', () => {
+	const villa = (floor_plans?: TemplateHouse['floor_plans']): TemplateHouse => ({
+		name: 'Villa',
+		x: 100,
+		y: 200,
+		...(floor_plans ? { floor_plans } : {}),
+		rooms: [{ name: 'Room', room_number: 1, beds: [spot('B1')] }]
+	});
+	const upper = { image: '/floorplans/villa-upper-2026.webp', caption: 'Upper floor' };
+	const ground = { image: '/floorplans/villa-ground-2026.webp', caption: '' };
+
+	it('finds nothing to do when the plans match', () => {
+		const diff = diffLayout(camp([villa([upper])]), template([villa([upper])]));
+		expect(changeKeys(diff)).toEqual([]);
+	});
+
+	it('names new, changed and dropped plans by caption, or by file name without one', () => {
+		const added = diffLayout(camp([villa()]), template([villa([upper, ground])]));
+		expect(added.houses[0].changes).toEqual([
+			{ field: 'floor_plans', from: null, to: 'Upper floor · villa-ground-2026.webp' }
+		]);
+		const renamed = diffLayout(
+			camp([villa([upper])]),
+			template([villa([{ ...upper, caption: 'First floor' }])])
+		);
+		expect(renamed.houses[0].changes).toEqual([
+			{ field: 'floor_plans', from: 'Upper floor', to: 'First floor' }
+		]);
+		const plan = planChanges(renamed, defaultSelection(renamed));
+		expect(plan.updateHouses[0].details.floor_plans).toEqual([
+			{ ...upper, caption: 'First floor' }
+		]);
+	});
+
+	it('clears the plans when the file has none, and never writes them on a room', () => {
+		const diff = diffLayout(camp([villa([upper])]), template([villa()]));
+		const plan = planChanges(diff, defaultSelection(diff));
+		expect(plan.updateHouses[0].details.floor_plans).toEqual([]);
+
+		const fresh = diffLayout(camp([]), template([villa([upper])]));
+		const create = planChanges(fresh, defaultSelection(fresh));
+		expect(create.createHouses[0].details.floor_plans).toEqual([upper]);
+		expect(create.createRooms[0].details).not.toHaveProperty('floor_plans');
+	});
+
+	it('ignores junk in the camp field', () => {
+		const records = camp([villa()]);
+		records.houses[0].floor_plans = [{ image: 'https://example.org/x.webp' }, 'junk'];
+		expect(changeKeys(diffLayout(records, template([villa()])))).toEqual([]);
 	});
 });

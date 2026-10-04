@@ -1,5 +1,6 @@
 <script lang="ts">
 	import PlaceDetails from '$lib/components/PlaceDetails.svelte';
+	import FloorPlans from '$lib/components/FloorPlans.svelte';
 	import { filterLabel, roomWord } from '$lib/accommodation';
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
@@ -33,6 +34,7 @@
 			features={data.house.features}
 			description={data.house.description}
 		/>
+		<FloorPlans plans={data.house.floor_plans} houseName={data.house.name} />
 		{#if data.wishes.length > 0}
 			<p class="wishes" role="status">
 				Your wishes: {data.wishes.map(filterLabel).join(' · ')} —

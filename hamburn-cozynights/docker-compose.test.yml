@@ -63,7 +63,7 @@ services:
       - '127.0.0.1:${TEST_MAILPIT_PORT:-8293}:8025'
 
   mocks:
-    image: node:22-alpine
+    image: node:24-alpine
     command: ['node', '/mocks/mock-services.mjs']
     environment:
       PORT: '8081'

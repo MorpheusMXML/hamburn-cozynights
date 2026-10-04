@@ -143,3 +143,65 @@ describe('crew chat texts about guests', () => {
 		expect(withdrawn('')).toBe('🧡 A guest withdrew their special-needs request');
 	});
 });
+
+describe('crew chat texts about request groups', () => {
+	const CREW = 'crew@mauersegler.art';
+
+	it('say that a new request started or joined a group, never which one', () => {
+		const created = (details: object) =>
+			eventText(event('special_request_new', 'guest', 'req123456789012', details));
+		expect(created({ open: 3 })).toBe('🧡 New special-needs request — 3 waiting for a decision');
+		expect(created({ open: 3, group: 'started' })).toBe(
+			'🧡 New special-needs request (started a group) — 3 waiting for a decision'
+		);
+		expect(created({ open: 4, group: 'joined' })).toBe(
+			'🧡 New special-needs request (joined a group) — 4 waiting for a decision'
+		);
+		expect(
+			eventText(event('special_request_withdrawn', 'guest', '', { status: 'pending', group: true }))
+		).toBe(
+			'🧡 A guest withdrew their special-needs request (was still waiting for a decision) and left their group'
+		);
+	});
+
+	it('count what a group step did, nothing more', () => {
+		const group = 'grp123456789012';
+		expect(
+			eventText(event('request_group_approved', CREW, group, { changed: 3, skipped: 0 }))
+		).toBe('✅ Request group approved by crew@mauersegler.art: 3 request(s)');
+		expect(
+			eventText(event('request_group_declined', CREW, group, { changed: 2, skipped: 0 }))
+		).toBe('✋ Request group declined by crew@mauersegler.art: 2 request(s)');
+		expect(
+			eventText(event('request_group_declined', CREW, group, { changed: 2, skipped: 1 }))
+		).toBe(
+			'✋ Request group declined by crew@mauersegler.art: 2 request(s); 1 kept: spot booked by the crew'
+		);
+		expect(
+			eventText(event('request_group_booked', CREW, group, { booked: 4, approved: 0, failed: 0 }))
+		).toBe('👥 Spots booked for a request group by crew@mauersegler.art: 4');
+		expect(
+			eventText(event('request_group_booked', CREW, group, { booked: 3, approved: 2, failed: 1 }))
+		).toBe(
+			'👥 Spots booked for a request group by crew@mauersegler.art: 3 (2 request(s) approved on the way), 1 not booked'
+		);
+		expect(eventText(event('request_group_member_removed', CREW, 'req123456789012', {}))).toBe(
+			'👥 A request was taken out of its group by crew@mauersegler.art'
+		);
+	});
+
+	it('never print the group id, a name or a code from the details', () => {
+		// Details only ever hold counts; even if something else slipped in, it
+		// would not be printed.
+		const details = { changed: 1, skipped: 0, booked: 1, name: 'Neon Owls', code: 'KM7PQ2XR' };
+		for (const action of [
+			'request_group_approved',
+			'request_group_declined',
+			'request_group_booked',
+			'request_group_member_removed'
+		]) {
+			const text = eventText(event(action, CREW, 'grp123456789012', details));
+			expect(text).not.toMatch(/Neon|KM7P|grp123/);
+		}
+	});
+});

@@ -7,7 +7,7 @@ Who booked which spot, who is already on site, who is still on the road. Open it
 | Where | What you see |
 | --- | --- |
 | <kbd>🛏️ Bookings</kbd> (`/admin/bookings`) | Every booked spot of the camp as one list, with filters, search and <kbd>Check in</kbd> / <kbd>Undo</kbd>. |
-| Control Center, **BOOKINGS & CHECK-INS 🛏️** | The four counts and the five latest bookings — after booking closed, the five latest check-ins. |
+| Control Center, **quick views** and **BOOKINGS & CHECK-INS 🛏️** | The four counts on top, each a link into this list; the five latest bookings — after booking closed, the five latest check-ins. |
 | Room page, on each spot card | Who holds the spot, when it was booked, the check-in, <kbd>Open ticket →</kbd>. |
 | House page, **🛏️ Who is here** | The house's bookings room by room (folds away). |
 | <kbd>🗺️ Map & houses</kbd>, a house's sidebar | **WHO IS HERE 🛏️**: the house's bookings room by room, short; point at one for the details. |

@@ -29,11 +29,23 @@ Numbers next to an entry say what waits: at <kbd>♿ Special needs</kbd> the req
 
 ## What's on this page
 
-From top to bottom: the [🎟 BOOKING WINDOW](#booking-window) with the ♿ requests switch and the 🔁 swap switch below it, [NEEDS ATTENTION](#needs-attention) — with a red line when the camp layout is incomplete, see [Red alert](#red-alert-sanity-checks) —, [BOOKINGS & CHECK-INS](#bookings-check-ins), and the [Intel panel](#intel-panel-the-live-picture).
+From top to bottom: the [quick views](#quick-views) into every list, the [🎟 BOOKING WINDOW](#booking-window) with the ♿ requests switch and the 🔁 swap switch below it, [NEEDS ATTENTION](#needs-attention) — with a red line when the camp layout is incomplete, see [Red alert](#red-alert-sanity-checks) —, [BOOKINGS & CHECK-INS](#bookings-check-ins), and the [Intel panel](#intel-panel-the-live-picture).
+
+## Quick views
+
+Right under the header, one click into every list the crew filters often, each with its live count:
+
+| Row | Entries | Opens |
+| --- | --- | --- |
+| **🛏️ Bookings** | booked · still to arrive · checked in · held by the crew | the [bookings list](./bookings) with that filter |
+| **🎟️ Tickets & guests** | tickets · without a spot · no e-mail · ♿ open requests · Telegram · got an e-mail · Wallet pass · Handed over | the [guest list](./guests) with that filter; ♿ opens the [requests](./special-needs) |
+| **🧰 Desk & tools** | 🎫 Check-in desk · 🔎 Find a ticket · ♿ Special needs · ✉️ Message texts · 🗺️ Map & houses | the page itself |
+
+A count is coloured only when it says something: red for *no e-mail*, pink for waiting ♿ requests, orange for *without a spot* and *still to arrive* once booking has closed. *Wallet pass* and *Handed over* have no count here; the guest list counts them. The row titles (<kbd>🛏️ Bookings →</kbd>, <kbd>🎟️ Tickets & guests →</kbd>) open the lists unfiltered.
 
 ## Booking window
 
-Right under the header, the **🎟 BOOKING WINDOW** panel holds everything about the phase: the current phase (🛠 Staging, 🎪 Live Booking or 🔒 Closed), the opening and closing time, the timer switch and, for superusers, the switch for *right now*. Its summary line counts down to the next switch; click it to unfold the timeline and the controls.
+Below the quick views, the **🎟 BOOKING WINDOW** panel holds everything about the phase: the current phase (🛠 Staging, 🎪 Live Booking or 🔒 Closed), the opening and closing time, the timer switch and, for superusers, the switch for *right now*. Its summary line counts down to the next switch; click it to unfold the timeline and the controls.
 
 | You want to … | Do this | Who |
 | --- | --- | --- |
@@ -51,7 +63,7 @@ Under it, **🔁 Swap requests between guests: ON** (with *· n open · n swappe
 
 ## Bookings & check-ins
 
-Four counts — **booked**, **checked in**, **still to arrive**, **held by the crew** (taken without a ticket, or ♿ assigned to a request) — and below them the five **latest bookings** with guest, spot and how long ago. After booking closed the five **latest check-ins** take their place. Each count opens the [bookings list](./bookings) with that filter; <kbd>All bookings →</kbd> opens it unfiltered. Names show the way the check-in desk shows them: the holder, the burner name, masked e-mail and ticket code. The card updates itself like the Intel panel.
+The five **latest bookings** with guest, spot and how long ago. After booking closed the five **latest check-ins** take their place. The counts (**booked**, **checked in**, **still to arrive**, **held by the crew**) sit in the [quick views](#quick-views) on top; <kbd>All bookings →</kbd> opens the [bookings list](./bookings) unfiltered. Names show the way the check-in desk shows them: the holder, the burner name, masked e-mail and ticket code. The card updates itself like the Intel panel.
 
 ## Intel panel: the live picture
 
@@ -128,6 +140,11 @@ Counts for the whole camp — the House filter doesn't touch them:
 | ✉️ **Guest messages** | Whether e-mail and the Telegram bot are on; guests e-mailed; messages waiting to go out, being retried, failed for good. |
 | ♿ **Special-needs requests** | Waiting for a decision, approved, declined. |
 | 👥 **Crew** | Admins, sign-ins waiting for approval, crew alerts waiting and failed (red only while no alert has got through since). |
+
+An underlined line is a link: *Loaded*, *With a spot*, *Without a spot*,
+*Telegram linked* and *Guests e-mailed* open the [guest list](./guests) with
+that filter, *Waiting for a decision* the requests. <kbd>Find a ticket →</kbd>
+under the tickets card opens [Tickets](./tickets).
 
 A number the server could not read right now shows as —; the rest of the panel
 still works.

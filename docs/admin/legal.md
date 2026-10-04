@@ -1,6 +1,6 @@
 # Legal pages
 
-CozyNights has a **legal notice** (Impressum, `/legal-notice`), a **privacy policy** (`/privacy`) and **booking rules** (`/booking-rules`). Every page links to all three: the start page and the map in their footers, all other pages at the bottom, and these docs under every page. The booking dialogs link the booking rules too. German visitors who type `/impressum` or `/datenschutz` are redirected.
+CozyNights has a **legal notice** (Impressum, `/legal-notice`), a **privacy policy** (`/privacy`) and **booking rules** (`/booking-rules`). Every page links to all three: the start page and the map in their footers, all other pages in a slim bar at the bottom of the screen that becomes the footer at the end of the page, and these docs under every page. The booking dialogs link the booking rules too. German visitors who type `/impressum` or `/datenschutz` are redirected.
 
 Like the whole app, the pages are **in English**. Visitors can let their browser translate them.
 
@@ -15,8 +15,8 @@ The texts are a careful starting point that matches what CozyNights really does.
 | Page             | Content                                                                                                                                                                                                                                              |
 | :--------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/legal-notice`  | Provider details under § 5 DDG, contact, register entry, VAT ID if set, a disclaimer (content, links, availability, booking a bed, copyright)                                                                                                        |
-| `/privacy`       | Controller, hosting, server logs, the brake on guessing ticket codes, ticket codes, e-mail addresses, bookings and booking passes, crew sign-in with Google, browser storage, the docs on GitHub Pages, e-mail contact, recipients, rights incl. the right to object. Once they are set up, also the booking e-mails, the Telegram option for guests, the crew group ([Notifications](./notifications)) and the wallet passes ([Wallet passes](./passes#wallet-passes-apple-wallet-google-wallet)). Special-needs requests: explicit consent under Art. 9 GDPR, encryption, who reads them, deletion ([Special-needs requests](./special-needs)) |
-| `/booking-rules` | Only Indoor memberships include a bed, when and how to book, special-needs spots (ask the crew, the crew decides and changes a spot it booked), no claim to a particular bed (the crew may move people and writes to them), burner names, fair play, consent and Leave No Trace in the houses |
+| `/privacy`       | Controller, hosting, server logs, the brake on guessing ticket codes, ticket codes, e-mail addresses, bookings and booking passes, crew sign-in with Google, browser storage, the docs on GitHub Pages, e-mail contact, recipients, rights incl. the right to object. Once they are set up, also the booking e-mails, the Telegram option for guests, the crew group ([Notifications](./notifications)) and the wallet passes ([Wallet passes](./passes#wallet-passes-apple-wallet-google-wallet)). Special-needs requests and groups: explicit consent under Art. 9 GDPR, also for art projects and crews, encryption, who reads them, what members of a request group see of each other (the group's name and burner names, on the same consent under Art. 6(1)(a) GDPR), leaving a group, deletion ([Special-needs requests](./special-needs)) |
+| `/booking-rules` | Only Indoor memberships include a bed, when and how to book, special-needs spots (kept for guests with special needs and for projects, nobody books them directly, crew members' own tickets included; ask the crew, also as an art project, workshop, theme camp or crew and as a group; the crew decides and changes a spot it booked), no claim to a particular bed (the crew may move people and writes to them), burner names, fair play, consent and Leave No Trace in the houses |
 
 Left out on purpose:
 
@@ -34,7 +34,7 @@ The details are `LEGAL_*` variables in the environment's `.env`, next to the oth
 | :---------------------------- | :-------------- | :------------------------------------------------------------------------------------------------------------- |
 | `LEGAL_NAME`                  | **yes**         | The provider incl. legal form, e.g. `'Musterverein e.V.'`                                                      |
 | `LEGAL_ADDRESS`               | **yes**         | A street address where letters can be served, no P.O. box, e.g. `'Musterstraße 1\|20095 Hamburg\|Germany'`     |
-| `LEGAL_EMAIL`                 | **yes**         | General contact address                                                                                        |
+| `LEGAL_EMAIL`                 | **yes**         | General contact address, shown in the legal notice, the booking rules (*Questions*) and the privacy policy. A crew group that accepts mail from outside works well, ideally the same as `MAIL_REPLY_TO` ([Notifications](./notifications#setting-it-up)) |
 | `LEGAL_HOSTER`                | **yes**         | The hosting company, e.g. `'Hetzner Online GmbH\|Industriestr. 25\|91710 Gunzenhausen\|Germany'`               |
 | `LEGAL_MAIL_PROVIDER`         | with e-mail     | The service that sends the booking e-mails (your processor), e.g. `'Name\|Address\|Country'`                   |
 | `LEGAL_PHONE`                 | recommended     | A second fast way to reach you                                                                                 |
@@ -53,7 +53,7 @@ While one of the four required values is missing, the pages show a red note for 
 
 The privacy policy asks PocketBase which messages this server sends: the sections on booking e-mails, on Telegram for guests and on the crew group only appear once e-mail or the Telegram bot is set up. Telegram runs outside the EU, so guests only get messages there after their own consent (they press START in the bot's chat). The section on wallet passes appears the same way, once Apple Wallet or Google Wallet is set up: it says what the pass carries, that an iPhone's device identifier and notification token are stored for updates, and that a Google pass is stored in the guest's Google account.
 
-The app reads `.env` only when its container is created. After editing it, deploy again or recreate just the app container (as root on the server):
+The app reads `.env` only when its container is created. After editing it, deploy again or recreate just the app container (as root on the server; for production use `deploy-production.conf` and `docker-compose.production.yml`):
 
 ```bash
 source /etc/cozynights/deploy-staging.conf
@@ -72,11 +72,12 @@ The ticket list holds the ticket codes and the buyers' e-mail addresses, so the 
 ## Before going live
 
 - [ ] **Every public environment is filled in**, staging included: it is reachable from the internet too. No red note on the legal pages.
+- [ ] **The contact address answers.** Send a mail to `LEGAL_EMAIL` from an address outside your organisation and check that it arrives. A typo or a group that refuses outside mail bounces silently for guests. `curl -s http://127.0.0.1:<app port>/booking-rules | grep -oE '[a-z.]+@[a-z.]+' | sort -u` on the server shows the address the page really prints.
 - [ ] **Data processing agreement with the hoster.** The privacy policy says one exists. Hetzner offers it in the account settings of its console.
 - [ ] **Data processing agreement with the mail service**, which is named in `LEGAL_MAIL_PROVIDER`.
 - [ ] **Telegram sections checked**: consent for guests, and the crew group, which gets admins' e-mail addresses on sign-ins and access changes.
 - [ ] **Wallet section checked** (if wallet passes are set up): what the pass shows, the device identifiers stored for Apple's updates, and the transfer to Google for a Google pass.
-- [ ] **Special-needs section checked**: the consent text on `/special-needs` (quoted in [Special-needs requests](./special-needs#privacy)) and the privacy section. What guests write there is often health data (Art. 9 GDPR); only admins read it, and it is deleted with `forget-contacts` after the event.
+- [ ] **Special-needs section incl. groups checked**: the consent text on `/special-needs` (quoted in [Special-needs requests](./special-needs#privacy)) and the privacy section *Special-needs requests and groups*. What guests write there is often health data (Art. 9 GDPR); only admins read it, and it is deleted with `forget-contacts` after the event. Members of a request group see the group's name and each other's burner names; that rests on the same checkbox (Art. 6(1)(a) GDPR), and the groups are deleted with `forget-contacts` too.
 - [ ] **Server location.** The privacy policy says the server is in the EU.
 - [ ] **Log retention matches.** nginx rotates its logs after as many days as `LEGAL_LOG_RETENTION_DAYS` says (Debian default: 14 days, `/etc/logrotate.d/nginx`).
 - [ ] **Deletion after the event is planned** within the period the privacy policy names. See [After the burn](./event-checklist#after-the-burn).

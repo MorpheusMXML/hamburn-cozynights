@@ -16,6 +16,7 @@ import {
 	spotMatchesFilters
 } from '$lib/accommodation';
 import type { PassSummary } from '$lib/pass';
+import { readFloorPlans } from '$lib/floor-plans';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 
@@ -114,7 +115,8 @@ export const load: PageServerLoad = async ({ params, locals, cookies, url }) => 
 				...house,
 				kind: house.kind ?? '',
 				features: readFeatures(house.features, 'house'),
-				description: house.description ?? ''
+				description: house.description ?? '',
+				floor_plans: readFloorPlans(house.floor_plans)
 			},
 			wishes,
 			rooms: roomsWithStats,

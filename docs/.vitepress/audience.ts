@@ -29,7 +29,7 @@ const sections: Section[] = [
 					{ text: 'What is CozyNights?', link: '/guide/' },
 					{ text: 'Booking a bed', link: '/guide/booking' },
 					{ text: 'Swapping spots', link: '/guide/swaps' },
-					{ text: 'Special-needs spot', link: '/guide/special-needs' },
+					{ text: 'Special needs & groups', link: '/guide/special-needs' },
 					{ text: 'Staging, Live & Closed', link: '/guide/phases' },
 					{ text: 'FAQ & troubleshooting', link: '/guide/faq' }
 				]

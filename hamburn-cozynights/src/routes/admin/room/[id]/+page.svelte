@@ -379,8 +379,8 @@
 				class="btn-icon pink"
 				class:active={bed.is_special}
 				title={bed.is_special
-					? 'Special-needs spot: only the crew assigns it. Click to make it a normal spot again.'
-					: 'Special-needs spot: guests cannot book it, the crew assigns it to approved special-needs requests'}
+					? 'Special-needs spot: only the crew assigns it, on the Requests page. Click to make it a normal spot again.'
+					: 'Special-needs spot: nobody books it on the guest pages, not even admins with a ticket; the crew assigns it on the Requests page.'}
 			>
 				<span class="btn-emoji">♿</span>
 				<span class="btn-text">{bed.is_special ? 'NORMAL' : 'SPECIAL'}</span>
@@ -410,7 +410,9 @@
 				class="btn-icon turquoise"
 				title={bed.occupied
 					? 'Free this spot'
-					: 'Block this spot: taken without a ticket, guests see "Blocked by admin"'}
+					: bed.is_special
+						? 'Block this spot: taken without a ticket, guests see "Blocked by admin". A ♿ spot blocked like this is not offered for requests.'
+						: 'Block this spot: taken without a ticket, guests see "Blocked by admin"'}
 				disabled={!lock && bed.enabled === false}
 				class:disabled={!lock && bed.enabled === false}
 				{...lockAttrs(

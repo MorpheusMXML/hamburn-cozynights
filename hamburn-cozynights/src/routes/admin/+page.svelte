@@ -8,18 +8,21 @@
 	import IntelAttention from '$lib/components/admin/intel/IntelAttention.svelte';
 	import BookingWindowPanel from '$lib/components/admin/BookingWindowPanel.svelte';
 	import BookingGuest from '$lib/components/admin/BookingGuest.svelte';
+	import QuickViews from '$lib/components/admin/QuickViews.svelte';
 	import { createLivePoll } from '$lib/live-stats-poll';
 	import { createBookingsFeed } from '$lib/live-bookings';
 	import { attentionItems } from '$lib/intel';
 	import { countBookings, sortBookings } from '$lib/bookings';
+	import { quickViews } from '$lib/quick-views';
 	import { relativeTime } from '$lib/time';
 	import { alertDialog, toast } from '$lib/dialogs';
 	import { actionErrorMessage } from '$lib/admin-actions';
 
 	export let data: PageData;
 
-	// The Control Center: the booking window, the special-needs switch, what
-	// needs attention, the latest bookings and check-ins, and the live numbers.
+	// The Control Center: the quick views into every list (bookings, tickets),
+	// the booking window, the special-needs switch, what needs attention, the
+	// latest bookings and check-ins, and the live numbers.
 	// The camp editor is /admin/camp (docs/admin/index.md). Superusers
 	// additionally get the destructive tools (switch now, clear all bookings).
 	$: ({ crewBookedSpots, isSuperuser, phase, bookingWindow, sanityIssues } = data);
@@ -60,6 +63,8 @@
 	$: feed.follow($poll.stats);
 	$: rows = $feed.rows;
 	$: counts = countBookings(rows);
+	// Without the rows (read failed) the quick views fall back to the snapshot.
+	$: quick = quickViews(live, data.bookings === null && rows.length === 0 ? null : counts, phase);
 	// After booking closed the guests arrive: the check-ins are the news then.
 	$: arrival = phase === 'closed';
 	$: latest = arrival
@@ -138,6 +143,8 @@
 		</div>
 	</header>
 
+	<QuickViews groups={quick} />
+
 	<BookingWindowPanel
 		{phase}
 		{bookingWindow}
@@ -198,25 +205,6 @@
 		{#if data.bookings === null && rows.length === 0}
 			<p class="panel-note">The bookings could not be read. Reload the page to try again.</p>
 		{:else}
-			<div class="booking-counts">
-				<a class="count" data-state="full" href="/admin/bookings?show=all">
-					<span class="count-value">{counts.booked}</span>
-					<span class="count-label">booked</span>
-				</a>
-				<a class="count" data-state="checked-in" href="/admin/bookings?show=checkedin">
-					<span class="count-value">{counts.checkedIn}</span>
-					<span class="count-label">checked in</span>
-				</a>
-				<a class="count" data-state="filling" href="/admin/bookings?show=arriving">
-					<span class="count-value">{counts.arriving}</span>
-					<span class="count-label">still to arrive</span>
-				</a>
-				<a class="count" data-state="locked" href="/admin/bookings?show=crew">
-					<span class="count-value">{counts.crew + counts.viaRequest}</span>
-					<span class="count-label">held by the crew</span>
-				</a>
-			</div>
-
 			<h4 class="latest-title">
 				{arrival ? 'LATEST CHECK-INS' : 'LATEST BOOKINGS'}
 			</h4>
@@ -559,38 +547,6 @@
 		font-size: 0.8rem;
 		color: #888;
 		line-height: 1.5;
-	}
-	.booking-counts {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(min(9rem, 100%), 1fr));
-		gap: 0.75rem;
-	}
-	.count {
-		display: flex;
-		flex-direction: column;
-		gap: 0.15rem;
-		padding: 0.75rem 1rem;
-		border-radius: 12px;
-		border: 1px solid #1f1f1f;
-		background: var(--state-soft);
-		text-decoration: none;
-		min-width: 0;
-	}
-	.count:hover {
-		border-color: var(--state);
-	}
-	.count-value {
-		font-size: 1.6rem;
-		font-weight: 900;
-		color: var(--state);
-		line-height: 1.1;
-	}
-	.count-label {
-		font-size: 0.65rem;
-		font-weight: 900;
-		letter-spacing: 1px;
-		text-transform: uppercase;
-		color: #a3a3a3;
 	}
 	.latest-title {
 		margin: 0;

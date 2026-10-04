@@ -122,16 +122,20 @@ If the crew has set it up, yes: <kbd>Add to Apple Wallet</kbd> or <kbd>Add to Go
 Yes: send `/pass` to the bot and it sends your pass with its QR code as a picture. That works as soon as you have connected Telegram.
 :::
 
-::: details I need a special spot (lower bunk, step-free, quiet, a socket for a medical device)
-Ask the crew for a special-needs spot, even before booking opens: sign in with your ticket code and follow the ♿ link (*Need a special-needs spot? Ask the crew now* on the map before booking opens, ♿ **Special-needs spot** in the top bar of every booking page after that) while the crew accepts requests. See [Special-needs spot](./special-needs).
+::: details I need a special spot (lower bunk, step-free, close to a toilet, quiet)
+Ask the crew for a special-needs spot, even before booking opens: sign in with your ticket code and follow the ♿ link (*Special needs or a project? Ask the crew now* on the map before booking opens, ♿ **Special-needs spot** in the top bar of every booking page after that) while the crew accepts requests. See [Special needs & groups](./special-needs).
+:::
+
+::: details Can our art project get a room or spots together?
+Ask the crew with the same form: tick *A room just for our project or crew* or *Spots close to the people I come with* and tell them what your project is and how many of you there are. One of you starts a group and shares its link; everyone else joins with their own ticket code, up to 12 people. The crew decides on each request and tries to put the group close together; there is no claim to a particular room. See [Asking as a group](./special-needs#asking-as-a-group).
 :::
 
 ::: details My special-needs request won't send, or says the crew has already decided
-The form needs at least one ticked need (or *Something else*), a few words of text (5 to 500 characters) and the ticked consent box. *You sent your request 10 times within an hour* is a limit: it works again within the hour. *Special-needs requests are closed right now, so nothing was sent* means the crew stopped taking requests meanwhile: contact the crew. *The crew has already decided on your request* means it can't be changed anymore; the page shows the decision. If something changed, contact the crew. You can still withdraw the request.
+The form needs at least one ticked need (or *Something else*), a few words of text (5 to 500 characters) and the ticked consent box. When you join a group, or are in one already, ticking is optional, and so are the words as long as you tick nothing; starting a group needs both. *No group has this code* means a typo, or the group is gone: check the code with someone in the group. *This group is full* means 12 are in it already: contact the crew. *You can't join this group* means the crew took you out of it: contact the crew. *You sent your request 10 times within an hour* is a limit: it works again within the hour. *Special-needs requests are closed right now, so nothing was sent* means the crew stopped taking requests meanwhile: contact the crew. *The crew has already decided on your request* means it can't be changed anymore; the page shows the decision. If something changed, contact the crew. You can still withdraw the request.
 :::
 
 ::: details A spot says "Blocked by admin" in violet
-The crew holds it back: the bed is broken, kept free on purpose, taken by the crew, not in use, or kept for guests with special needs. Pick another spot.
+The crew holds it back: the bed is broken, kept free on purpose, taken by the crew, not in use, or kept for guests with special needs and for projects. Pick another spot.
 :::
 
 ::: details What do the colours on the spot cards mean?
@@ -143,7 +147,7 @@ Press the pause button ⏸ next to the title; your browser remembers it. If your
 :::
 
 ::: details What is the small `v0.18.1` next to the title?
-The version of CozyNights you are looking at. It is also at the bottom of every page; hover it to see the build, click it for what changed. If you report a problem, say which version you saw.
+The version of CozyNights you are looking at. It is also at the very end of every page (on the camp map only on wider screens); hover it to see the build, click it for what changed. If you report a problem, say which version you saw.
 :::
 
 ::: details Who runs CozyNights, and what happens with my data?
@@ -201,7 +205,7 @@ Structural changes only work in Staging Mode. During Live Booking and after book
 :::
 
 ::: details Guests can't book a spot
-First the phase: guests book only during 🎪 Live Booking. Then check the spot on its room page. Guests can't book **LOCKED 🔒**, **SPECIAL NEEDS ♿** or ⚪️ **INACTIVE 🧊** spots: unlock it, switch it back to normal with <kbd>♿ NORMAL</kbd>, or activate it with ⚡️ in Staging Mode. New spots are active from the start, but a template import keeps the states stored in the file. See [Houses, rooms & spots](../admin/camp-layout#spots).
+First the phase: guests book only during 🎪 Live Booking. Then check the spot on its room page. Guests can't book **LOCKED 🔒**, **SPECIAL NEEDS ♿** or ⚪️ **INACTIVE 🧊** spots: unlock it, switch it back to normal with <kbd>♿ NORMAL</kbd>, or activate it with ⚡️ in Staging Mode. A ♿ spot stays out of reach for admins with a ticket code too: book it for a request on ♿ **Special needs**. New spots are active from the start, but a template import keeps the states stored in the file. See [Houses, rooms & spots](../admin/camp-layout#spots).
 :::
 
 ::: details A house won't move when I drag it
