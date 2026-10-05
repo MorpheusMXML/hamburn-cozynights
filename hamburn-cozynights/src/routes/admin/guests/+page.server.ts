@@ -1,5 +1,5 @@
 // src/routes/admin/guests/+page.server.ts — every ticket with everything
-// attached: spot, check-in, special-needs request, messages, wallet passes.
+// attached: spot, check-in, special-needs request, messages.
 //
 // Guests are shown the way the check-in desk shows them: names, masked e-mail
 // and ticket code ($lib/server/guests.ts). The page changes nothing; every

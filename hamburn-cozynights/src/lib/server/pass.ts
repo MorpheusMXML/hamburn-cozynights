@@ -191,7 +191,7 @@ export async function passSummary(
 /**
  * "Upper bunk · above B1", or just "Upper bunk" when the other level is
  * unknown; '' when nobody wrote the bed type down. The one wording for the
- * small ticket, the pass page and the wallet passes.
+ * small ticket and the pass page.
  */
 export function bedRow(
 	bedType: string | undefined,
@@ -252,7 +252,7 @@ export function passQrPng(url: string): Buffer {
 export const unknownPassCodes = new FailureRateLimiter(30, 10 * 60 * 1000);
 
 /**
- * The pass behind a request for one of its files (QR images, wallet passes),
+ * The pass behind a request for one of its files (its QR images),
  * with the pass page's limit on unknown codes: these files must not become the
  * cheap way to probe for codes. Throws 404 / 429 like the pass page.
  */

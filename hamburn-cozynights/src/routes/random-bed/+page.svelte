@@ -612,12 +612,7 @@ No Trace to give it up and spin again.
 					<div class="printed">
 						<PassTicket pass={data.pass} />
 					</div>
-					<PassActions
-						code={data.pass.code}
-						wallet={data.wallet}
-						telegram={data.telegram}
-						compact
-					/>
+					<PassActions telegram={data.telegram} compact />
 				{:else if passPrint === 'printing'}
 					<p class="printing">Printing your booking pass…</p>
 				{/if}

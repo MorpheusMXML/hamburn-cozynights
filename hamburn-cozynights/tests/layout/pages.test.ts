@@ -275,8 +275,7 @@ const PAGES: PageCase[] = [
 	// GROUP_MAX burner names at the limit under a group name at the limit.
 	{ name: 'special needs: request sent', path: () => '/special-needs', as: 'guestWithRequest' },
 	{ name: 'special needs: new request', path: () => '/special-needs', as: 'guestWithoutSpot' },
-	// The wallet buttons and the Telegram offer under a guest's pass
-	// (docs/admin/passes.md). Both wallets are set up in the test stack.
+	// The Telegram offer under a guest's pass (docs/admin/passes.md).
 	{ name: 'updates on Telegram', path: () => '/telegram', as: 'guestWithSpot' },
 	{ name: 'updates on Telegram without a spot', path: () => '/telegram', as: 'guestWithoutSpot' },
 	{

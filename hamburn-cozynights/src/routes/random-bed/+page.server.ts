@@ -12,7 +12,6 @@ import {
 } from '$lib/server/booking';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
 import { getGuestNotifyStatus, holdGuestMessage } from '$lib/server/notifications';
-import { walletPlatforms } from '$lib/server/wallet/config';
 import { burnerNameOf, passSummary, roomLabel } from '$lib/server/pass';
 import type { PassSummary } from '$lib/pass';
 import type { RouletteSpot } from '$lib/roulette';
@@ -134,7 +133,7 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 				])
 			: [false, null];
 
-		// The Destiny Fulfilled card offers the wallets and Telegram under the pass.
+		// The Destiny Fulfilled card offers Telegram under the pass.
 		const telegram = settings.telegramBot
 			? await getGuestNotifyStatus(locals.adminPb, order, settings)
 					.then((status) => ({ connected: !!status.telegram?.connected, form: true }))
@@ -160,7 +159,6 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 			// who spins again keeps their name unless they change it.
 			burnerName: burnerNameOf(order),
 			pass,
-			wallet: walletPlatforms(),
 			telegram,
 			// what the page says; what is allowed still follows `phase`
 			guestPhase,

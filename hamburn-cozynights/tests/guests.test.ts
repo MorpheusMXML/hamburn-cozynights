@@ -1,8 +1,8 @@
 // tests/guests.test.ts — every ticket with everything attached, as the admin
 // area shows it (/admin/guests): the rows joined from tickets, spots, notify
-// records, special-needs requests and wallet passes (masked like at the
-// check-in desk), the list's filters, counts, search and sorting, the tile
-// colours, the endpoint's guard, and where the menu and the Intel panel link.
+// records and special-needs requests (masked like at the check-in desk), the
+// list's filters, counts, search and sorting, the tile colours, the
+// endpoint's guard, and where the menu and the Intel panel link.
 import { describe, it, expect } from 'vitest';
 import { vi } from 'vitest';
 
@@ -137,16 +137,7 @@ const records: GuestRecords = {
 		{ order: 'o2', status: 'declined', bed: '' },
 		{ order: 'o2', status: 'pending', bed: '' },
 		{ order: 'o3', status: 'approved', bed: 'b5' }
-	] as GuestRecords['requests'],
-	passes: [
-		{ order: 'o1', platform: 'apple', serial: 'PASS1', attempts: 0 },
-		// The pass from before the hand-over, and the current one that fails to update.
-		{ order: 'o3', platform: 'apple', serial: 'OLD', attempts: 0 },
-		{ order: 'o3', platform: 'apple', serial: 'PASS3', attempts: 2 },
-		{ order: 'o3', platform: 'google', serial: 'OLD', attempts: 0 },
-		// A pass whose ticket is gone.
-		{ order: '', platform: 'google', serial: 'GONE', attempts: 0 }
-	] as GuestRecords['passes']
+	] as GuestRecords['requests']
 };
 
 const rows = describeGuests(records);
@@ -219,12 +210,6 @@ describe('describeGuests', () => {
 		});
 		expect(row('o3').notify).toMatchObject({ mailed: false, failed: true });
 	});
-
-	it('tells current, voided and failing wallet passes apart, never the serial', () => {
-		expect(row('o1').wallet).toEqual({ apple: 'current', google: null });
-		expect(row('o3').wallet).toEqual({ apple: 'failing', google: 'voided' });
-		expect(row('o2').wallet).toEqual({ apple: null, google: null });
-	});
 });
 
 describe('filters, counts, search and sorting', () => {
@@ -239,7 +224,6 @@ describe('filters, counts, search and sorting', () => {
 		expect(ids('request')).toEqual(['o2']);
 		expect(ids('telegram')).toEqual(['o1']);
 		expect(ids('mailed')).toEqual(['o1']);
-		expect(ids('wallet')).toEqual(['o1', 'o3']);
 		expect(ids('handedover')).toEqual(['o3']);
 	});
 
@@ -253,7 +237,6 @@ describe('filters, counts, search and sorting', () => {
 			openRequests: 1,
 			telegram: 1,
 			mailed: 1,
-			wallet: 2,
 			handedOver: 1
 		});
 		// Every tile is a filter of the same name.
@@ -304,7 +287,6 @@ describe('filters, counts, search and sorting', () => {
 		expect(guestTileState('noemail', 'staging')).toBe('danger');
 		expect(guestTileState('request', 'staging')).toBe('special');
 		expect(guestTileState('telegram', 'live')).toBe('idle');
-		expect(guestTileState('wallet', 'live')).toBe('idle');
 		expect(guestTileState('all', 'live')).toBe('idle');
 		expect(guestRowState(row('o1'), 'closed')).toBe('checked-in');
 		expect(guestRowState(row('o3'), 'closed')).toBe('full');

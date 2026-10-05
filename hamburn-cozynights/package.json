@@ -25,7 +25,8 @@
 		"test:setup": "npx tsx scripts/test_setup.ts",
 		"predev": "npm run health",
 		"lint": "prettier --check . && eslint .",
-		"typegen": "npx tsx scripts/secure_typegen.ts"
+		"typegen": "npx tsx scripts/secure_typegen.ts",
+		"vendor:pb-qr": "node scripts/vendor-pb-qr.mjs"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.4.0",
@@ -37,7 +38,6 @@
 		"@tailwindcss/forms": "^0.5.10",
 		"@tailwindcss/vite": "^4.1.17",
 		"@types/node": "^22",
-		"@types/node-forge": "^1.3.14",
 		"@vitest/ui": "^4.1.4",
 		"dotenv": "^17.4.1",
 		"eslint": "^9.39.1",
@@ -58,7 +58,6 @@
 	},
 	"dependencies": {
 		"@number-flow/svelte": "^0.4.2",
-		"node-forge": "^1.4.0",
 		"pocketbase": "^0.28.1",
 		"qr": "^0.7.0"
 	},

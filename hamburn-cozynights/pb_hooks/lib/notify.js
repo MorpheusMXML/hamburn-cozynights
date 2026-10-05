@@ -13,10 +13,9 @@
 //   COZY_ADMIN_WEBHOOK_URL (Telegram/Slack/Google Chat/Discord) still works.
 //
 // Messages that show the spot carry the booking pass: its link and code, and
-// on Telegram its QR code as a picture with buttons for the pass and the
-// wallet passes (docs/admin/passes.md). The wallet passes themselves are the
-// app's job (src/lib/server/wallet); it tells PocketBase which ones are set up
-// in app_settings.wallet_platforms.
+// its QR code as a picture (docs/admin/passes.md). E-mails carry the picture
+// inside the mail, drawn here by lib/passqr.js, so it shows with remote images
+// blocked; Telegram gets it as a photo with a button for the pass.
 //
 // Guest messages are state based: a change of a ticket's spot only marks the
 // ticket as due (markDue). A delivery run later compares the ticket's current
@@ -102,30 +101,11 @@ function config(app) {
 			guests: !!token && isOn(env('TELEGRAM_GUEST_UPDATES'), true)
 		},
 		legacyWebhook: env('COZY_ADMIN_WEBHOOK_URL'),
-		// the wallet passes the app offers: [] | ['apple'] | ['google'] | both
-		wallet: walletPlatforms(app),
 		loopSeconds: loop >= 0 && loop <= 50 ? loop : 50,
 		mailsPerMinute: perMinute > 0 ? perMinute : 20,
 		// the texts admins changed (key → text); the defaults are in texts.js
 		texts: loadTexts(app)
 	};
-}
-
-/**
- * The wallet passes guests can add (Apple Wallet, Google Wallet). The app sets
- * app_settings.wallet_platforms when it starts, from its own configuration:
- * the certificates and keys never reach PocketBase.
- */
-function walletPlatforms(app) {
-	try {
-		const settings = app.findRecordById('app_settings', APP_SETTINGS_ID);
-		return String(settings.getString('wallet_platforms') || '')
-			.split(',')
-			.map((p) => p.trim())
-			.filter((p) => p === 'apple' || p === 'google');
-	} catch (_) {
-		return []; // no settings yet, or a database from before the field
-	}
 }
 
 function crewConfigured(cfg) {
@@ -1069,13 +1049,15 @@ function bedLine(cfg, spot) {
  * status: its current status, fixed: the ticket's spot is the one the crew
  * booked for the request, so only the crew changes it }. Every combination
  * tells both: a message is sent once per state, news left out is lost.
- * offers (optional): { telegram: the guest can still connect Telegram,
- * wallet: wallet passes are set up } — lines under a message that shows the
- * spot.
+ * offers (optional): { telegram: the guest can still connect Telegram — a
+ * line under a message that shows the spot; qr: the sender attaches the
+ * pass's QR code as a picture (passQrImage), shown under the spot's rows }.
+ * The result says whether its HTML shows the picture (usesQr) and under which
+ * Content-ID (qrCid).
  */
 function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) {
 	const req = request || { kind: '', status: '', fixed: false };
-	const offer = offers || { telegram: false, wallet: false };
+	const offer = offers || { telegram: false, qr: false };
 	const mapUrl = cfg.appUrl + '/map';
 	const requestUrl = cfg.appUrl + '/special-needs';
 	const roomUrl = spot ? cfg.appUrl + '/room/' + spot.roomId : mapUrl;
@@ -1098,7 +1080,6 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) 
 	const showSpot = !!spot && ((!!kind && kind !== 'released') || crewBooked);
 	const passUrl = pass && showSpot ? pass.url : '';
 	const passLine = passUrl ? T('mail.pass') : '';
-	const walletLine = passUrl && offer.wallet ? T('mail.wallet') : '';
 	const telegramLine = showSpot && offer.telegram ? T('mail.telegram') : '';
 	const fixedLine = T('mail.fixed');
 	// News about a request that arrives while a spot message is still due rides
@@ -1119,7 +1100,6 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) 
 		intro = T('mail.crew_booked.intro');
 		if (kind === 'changed' && previousLabel) after.push(T('mail.changed.before'));
 		if (passLine) after.push(passLine);
-		if (walletLine) after.push(walletLine);
 		after.push(fixedLine);
 	} else if (!kind) {
 		if (req.kind === 'received') {
@@ -1163,7 +1143,6 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) 
 		intro = T('mail.handed_over.intro');
 		if (alsoRequest) after.push(alsoRequest);
 		if (passUrl) after.push(T('mail.handed_over.pass'));
-		if (walletLine) after.push(walletLine);
 		after.push(req.fixed ? fixedLine : T('mail.booked.change'));
 	} else if (kind === 'swapped') {
 		// A swap both guests agreed to: their own doing, so no "maybe the crew
@@ -1173,7 +1152,6 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) 
 		if (alsoRequest) after.push(alsoRequest);
 		if (previousLabel) after.push(T('mail.swapped.before'));
 		if (passLine) after.push(passLine);
-		if (walletLine) after.push(walletLine);
 		after.push(req.fixed ? fixedLine : T('mail.booked.change'));
 	} else {
 		subject = kind === 'changed' ? T('mail.changed.subject') : T('mail.booked.subject');
@@ -1184,7 +1162,6 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) 
 			after.push(req.fixed ? T('mail.changed.by_crew') : T('mail.changed.maybe_crew'));
 		}
 		if (passLine) after.push(passLine);
-		if (walletLine) after.push(walletLine);
 		after.push(req.fixed ? fixedLine : T('mail.booked.change'));
 	}
 	if (telegramLine) after.push(telegramLine);
@@ -1194,7 +1171,12 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) 
 		intro: intro,
 		rows: showSpot ? spotLines(spot) : [],
 		after: after,
-		urls: [passUrl, roomUrl, mapUrl, requestUrl, telegramLine ? telegramUrl : '']
+		urls: [passUrl, roomUrl, mapUrl, requestUrl, telegramLine ? telegramUrl : ''],
+		// only with the pass: a released spot or request news alone has none to show
+		qr:
+			passUrl && offer.qr
+				? { cid: passQrCid(pass), alt: 'QR code of your booking pass ' + pass.code }
+				: null
 	});
 }
 
@@ -1203,6 +1185,9 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) 
  * table (House, Room, …), the lines after it, signature and small print. The
  * first of `urls` in a line becomes a link in the HTML. Every guest e-mail
  * looks like this, the spot messages and the swap requests alike.
+ * parts.qr (optional): { cid, alt } of the pass's QR code, shown in the HTML
+ * right under the table — a fixed place that no changed text can move or
+ * drop. The text part has no picture; the pass line there has link and code.
  */
 function composeMail(cfg, vars, parts) {
 	const T = (key) => t(cfg, key, vars);
@@ -1210,6 +1195,7 @@ function composeMail(cfg, vars, parts) {
 	const intro = parts.intro;
 	const rows = parts.rows;
 	const after = parts.after;
+	const qr = parts.qr || null;
 	const signature = T('mail.signature');
 	const footer = T('mail.footer');
 
@@ -1263,6 +1249,7 @@ function composeMail(cfg, vars, parts) {
 					.join('') +
 				'</table>'
 			: '') +
+		(qr ? passQrHtml(qr) : '') +
 		after.map((line) => '<p style="margin:0 0 12px">' + para(line) + '</p>').join('') +
 		'<p style="margin:16px 0 0">' +
 		para(signature) +
@@ -1271,7 +1258,52 @@ function composeMail(cfg, vars, parts) {
 		para(footer) +
 		'</p></div></body></html>';
 
-	return { subject: prefixed(cfg, parts.subject), text: text, html: html };
+	return {
+		subject: prefixed(cfg, parts.subject),
+		text: text,
+		html: html,
+		qrCid: qr ? qr.cid : '',
+		// what the sender has to attach: a picture the HTML doesn't show would
+		// only turn up as a stray attachment
+		usesQr: !!qr && html.indexOf('cid:' + qr.cid) >= 0
+	};
+}
+
+/**
+ * The Content-ID of a pass's QR code in an e-mail. It doubles as the file name
+ * of the picture, the same as the pass's qr.png download in the app.
+ */
+function passQrCid(pass) {
+	return 'cozynights-pass-' + pass.code + '.png';
+}
+
+/**
+ * The picture in the HTML, at 205 px: half the 410 px of a pass link's PNG,
+ * sharp on a retina screen. The alt text names the code for a mail app that
+ * can't show it.
+ */
+function passQrHtml(qr) {
+	return (
+		'<p style="margin:0 0 16px"><img src="cid:' +
+		esc(qr.cid) +
+		'" width="205" height="205" alt="' +
+		esc(qr.alt) +
+		'" style="display:block;width:205px;height:205px;border:0;outline:none"></p>'
+	);
+}
+
+/**
+ * The pass's QR code as PNG bytes (lib/passqr.js), or null: the picture is a
+ * bonus, a mail without it still has the pass's link and code. Never throws.
+ */
+function passQrImage(pass) {
+	if (!pass || !pass.url) return null;
+	try {
+		return require(`${__hooks}/lib/passqr.js`).passQrPng(pass.url);
+	} catch (err) {
+		console.error('[cozy-notify] pass QR picture: ' + safeError(err));
+		return null;
+	}
 }
 
 const REQUEST_STATUS_KEY = {
@@ -1389,22 +1421,15 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 /**
  * What a Telegram message that shows the spot carries besides its text: the
  * pass's QR code as a picture (Telegram's servers fetch the PNG from the app,
- * like a phone opens the pass link that is in the text anyway) and buttons
- * for the pass and the wallet passes that are set up. null without a pass.
+ * like a phone opens the pass link that is in the text anyway) and a button
+ * for the pass. null without a pass.
  */
 function passAttachments(cfg, pass) {
 	if (!pass || !pass.url) return null;
-	const wallet = cfg.wallet || [];
-	const rows = [[{ text: '🎫 Show booking pass', url: pass.url }]];
-	const walletRow = [];
-	if (wallet.indexOf('apple') >= 0) {
-		walletRow.push({ text: 'Add to Apple Wallet', url: pass.url + '/wallet/apple' });
-	}
-	if (wallet.indexOf('google') >= 0) {
-		walletRow.push({ text: 'Add to Google Wallet', url: pass.url + '/wallet/google' });
-	}
-	if (walletRow.length > 0) rows.push(walletRow);
-	return { photo: pass.url + '/qr.png', markup: { inline_keyboard: rows } };
+	return {
+		photo: pass.url + '/qr.png',
+		markup: { inline_keyboard: [[{ text: '🎫 Show booking pass', url: pass.url }]] }
+	};
 }
 
 /**
@@ -1439,10 +1464,19 @@ function sendGuestTelegram(cfg, chatId, text, extras) {
 	return telegramCall(cfg, 'sendMessage', plain, 10);
 }
 
+/** The booking pass of the sample guest: the admin preview and `cozy-admin notify test`. */
+function samplePass(cfg) {
+	return { code: 'AAAA-BBBB-CCCC', url: cfg.appUrl + '/pass/AAAA-BBBB-CCCC' };
+}
+
 /**
  * Sample messages for the admin page (/admin/messages), rendered with cfg.texts
  * like the real ones: every text is in at least one of them (tests/notify-
  * messages.test.ts checks). The sample guest is Ada with a booking pass.
+ * The e-mails reference the pass's QR code as cid: like the real ones, which
+ * the page's frame can't resolve: qrPreview has the picture once, as a data:
+ * URI to put in its place (null when it could not be drawn, and then the
+ * e-mails go without it, like a real one would).
  */
 function previewMessages(cfg) {
 	const spot = {
@@ -1456,7 +1490,8 @@ function previewMessages(cfg) {
 		features: '🔥 Heated · 🤫 Quiet zone'
 	};
 	const before = 'B7 · Loft #1 · Hut';
-	const pass = { code: 'AAAA-BBBB-CCCC', url: cfg.appUrl + '/pass/AAAA-BBBB-CCCC' };
+	const pass = samplePass(cfg);
+	const qrPng = passQrImage(pass);
 	const none = { kind: '', status: '', fixed: false };
 	const req = (kind, status, fixed) => ({ kind: kind, status: status, fixed: !!fixed });
 	// name: '' = a ticket without a name; before: '' = the old spot is unknown
@@ -1595,10 +1630,7 @@ function previewMessages(cfg) {
 	const name = (c) => (c.name === undefined ? 'Ada' : c.name);
 	// Ada hasn't connected Telegram yet: the offer lines show where this
 	// server would send them.
-	const offers = {
-		telegram: !!(cfg.telegram && cfg.telegram.guests),
-		wallet: !!(cfg.wallet && cfg.wallet.length > 0)
-	};
+	const offers = { telegram: !!(cfg.telegram && cfg.telegram.guests), qr: !!qrPng };
 	const mail = cases.map((c) => {
 		const m = guestMail(
 			cfg,
@@ -1698,7 +1730,10 @@ function previewMessages(cfg) {
 			text: prefixed(cfg, t(cfg, 'bot.pass_no_spot', { mapUrl: cfg.appUrl + '/map' }))
 		}
 	];
-	return { mail: mail, telegram: telegram, bot: bot };
+	const qrPreview = qrPng
+		? { cid: passQrCid(pass), src: require(`${__hooks}/lib/passqr.js`).dataUri(qrPng) }
+		: null;
+	return { mail: mail, telegram: telegram, bot: bot, qrPreview: qrPreview };
 }
 
 /**
@@ -1707,21 +1742,43 @@ function previewMessages(cfg) {
  * settings or anywhere else the JSVM can reach (unlike telegramCall, which
  * passes one to $http.send). A hanging send is therefore survived rather than
  * cut short — deliverOne leases the record before it gets here.
+ *
+ * msg.inline (optional): { <cid>: bytes } — pictures inside the mail, which
+ * the HTML shows as <img src="cid:<cid>">. PocketBase's mailer uses the key as
+ * Content-ID and file name, and reads the type from the bytes.
  */
 function sendMail(app, cfg, to, msg) {
 	const meta = app.settings().meta;
 	const headers = { 'Auto-Submitted': 'auto-generated' };
 	if (cfg.mail.replyTo) headers['Reply-To'] = cfg.mail.replyTo;
-	app.newMailClient().send(
-		new MailerMessage({
-			from: { address: meta.senderAddress, name: meta.senderName },
-			to: [{ address: to }],
-			subject: msg.subject,
-			html: msg.html,
-			text: msg.text,
-			headers: headers
-		})
-	);
+	const fields = {
+		from: { address: meta.senderAddress, name: meta.senderName },
+		to: [{ address: to }],
+		subject: msg.subject,
+		html: msg.html,
+		text: msg.text,
+		headers: headers
+	};
+	const readers = [];
+	try {
+		if (msg.inline) {
+			fields.inlineAttachments = {};
+			for (const cid of Object.keys(msg.inline)) {
+				const reader = $filesystem.fileFromBytes(msg.inline[cid], cid).reader.open();
+				readers.push(reader);
+				fields.inlineAttachments[cid] = reader;
+			}
+		}
+		app.newMailClient().send(new MailerMessage(fields));
+	} finally {
+		for (const reader of readers) {
+			try {
+				reader.close();
+			} catch (_) {
+				// in-memory bytes: nothing to clean up that could fail the send
+			}
+		}
+	}
 }
 
 /** Per-minute cap for guest e-mails (provider limits, runaway loops). */
@@ -1877,10 +1934,7 @@ function deliverOne(app, cfg, rec, force, keepAlive) {
 				deferred = true;
 			} else {
 				try {
-					sendMail(
-						app,
-						cfg,
-						email,
+					const mailWith = (qr) =>
 						guestMail(
 							cfg,
 							kind,
@@ -1892,10 +1946,19 @@ function deliverOne(app, cfg, rec, force, keepAlive) {
 							{
 								// only a guest who hasn't connected a chat yet is offered one
 								telegram: cfg.telegram.guests && !rec.getString('tg_chat'),
-								wallet: (cfg.wallet || []).length > 0
+								qr: qr
 							}
-						)
-					);
+						);
+					// The QR code is drawn only for a mail that shows the pass. A
+					// picture that can't be drawn is no failed delivery: the mail goes
+					// without it, its pass link and code are in the text anyway.
+					let message = mailWith(true);
+					if (message.usesQr) {
+						const png = passQrImage(pass);
+						if (png) message.inline = { [message.qrCid]: png };
+						else message = mailWith(false);
+					}
+					sendMail(app, cfg, email, message);
 					mailDone = {
 						to: email,
 						key: key,
@@ -2409,7 +2472,7 @@ function handleUpdate(app, cfg, update) {
 
 /**
  * /pass: the booking pass of every ticket this chat follows (one person may
- * have connected two tickets), with the QR code and the buttons, as the
+ * have connected two tickets), with the QR code and the button, as the
  * booking message had them — for the guest who deleted that message, or
  * wants it at the top of the chat at arrival. What the pass page shows to
  * anyone with its link, nothing more: the request status stays out.
@@ -2792,11 +2855,14 @@ module.exports = {
 	passAttachments: passAttachments,
 	sendGuestTelegram: sendGuestTelegram,
 	handleUpdate: handleUpdate,
-	walletPlatforms: walletPlatforms,
 	loadTexts: loadTexts,
 	t: t,
 	textCatalogue: textCatalogue,
 	previewMessages: previewMessages,
+	samplePass: samplePass,
+	passQrCid: passQrCid,
+	passQrHtml: passQrHtml,
+	passQrImage: passQrImage,
 	sendMail: sendMail,
 	refreshCapabilities: refreshCapabilities,
 	applyMailSettings: applyMailSettings,

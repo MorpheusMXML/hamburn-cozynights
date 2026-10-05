@@ -67,7 +67,7 @@ describe('quickViews', () => {
 			state: 'special'
 		});
 		// No number in the snapshot: a plain link.
-		expect(view(groups, 'tickets', 'wallet')?.value).toBeUndefined();
+		expect(view(groups, 'tickets', 'handedover')?.value).toBeUndefined();
 	});
 
 	it('warns about tickets without a spot and arrivals once booking closed', () => {

@@ -1,11 +1,14 @@
 // tests/stack-helpers.ts — shared by tests/integration and tests/smoke.
 // Connection details come from scripts/test-stack.sh (throwaway PocketBase).
+// The QR picture readers at the end serve tests/pass-qr-hook.test.ts too.
 import PocketBase, { ClientResponseError } from 'pocketbase';
 import crypto from 'crypto';
 import path from 'path';
+import zlib from 'zlib';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { expect } from 'vitest';
+import decodeQR from 'qr/decode.js';
 
 export const PB_TEST_URL = process.env.PB_TEST_URL || '';
 
@@ -140,4 +143,69 @@ export function cozyAdmin(args: string[]): string {
 	const output = `${run.stdout}${run.stderr}`;
 	if (run.status !== 0) throw new Error(`cozy-admin ${args.join(' ')} failed:\n${output}`);
 	return output;
+}
+
+export type PngChunk = { type: string; data: Buffer; crc: number };
+
+/** The chunks of a PNG, in order; throws when the signature is not a PNG's. */
+export function pngChunks(png: Uint8Array): PngChunk[] {
+	const buf = Buffer.from(png);
+	if (!buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+		throw new Error('not a PNG');
+	}
+	const chunks: PngChunk[] = [];
+	for (let p = 8; p < buf.length;) {
+		const length = buf.readUInt32BE(p);
+		chunks.push({
+			type: buf.toString('ascii', p + 4, p + 8),
+			data: buf.subarray(p + 8, p + 8 + length),
+			crc: buf.readUInt32BE(p + 8 + length)
+		});
+		p += 12 + length;
+	}
+	return chunks;
+}
+
+/**
+ * The pixels of a black-and-white PNG as the app (src/lib/server/png.ts) and
+ * PocketBase (pb_hooks/lib/passqr.js) write it: 1-bit greyscale, filter type 0
+ * on every row. `rows` is the inflated image data, filter bytes included.
+ */
+export function readMonochromePng(png: Uint8Array): {
+	width: number;
+	height: number;
+	rows: Buffer;
+} {
+	const chunks = pngChunks(png);
+	const header = chunks.find((c) => c.type === 'IHDR')?.data;
+	if (!header) throw new Error('no IHDR');
+	const width = header.readUInt32BE(0);
+	const height = header.readUInt32BE(4);
+	if (header[8] !== 1 || header[9] !== 0 || header[12] !== 0) {
+		throw new Error('not a 1-bit greyscale PNG without interlace');
+	}
+	const rows = zlib.inflateSync(
+		Buffer.concat(chunks.filter((c) => c.type === 'IDAT').map((c) => c.data))
+	);
+	const rowBytes = Math.ceil(width / 8) + 1;
+	if (rows.length !== rowBytes * height) throw new Error('image data of the wrong size');
+	for (let y = 0; y < height; y++) {
+		if (rows[y * rowBytes] !== 0) throw new Error(`row ${y}: filter ${rows[y * rowBytes]}`);
+	}
+	return { width, height, rows };
+}
+
+/** What the QR code in such a PNG says, read the way a phone's camera reads it. */
+export function decodeQrPng(png: Uint8Array): string {
+	const { width, height, rows } = readMonochromePng(png);
+	const rowBytes = Math.ceil(width / 8) + 1;
+	const rgb = new Uint8Array(width * height * 3);
+	for (let y = 0; y < height; y++) {
+		for (let x = 0; x < width; x++) {
+			// a set bit is white
+			const white = (rows[y * rowBytes + 1 + (x >> 3)] >> (7 - (x & 7))) & 1;
+			rgb.fill(white ? 255 : 0, (y * width + x) * 3, (y * width + x) * 3 + 3);
+		}
+	}
+	return decodeQR({ width, height, data: rgb });
 }

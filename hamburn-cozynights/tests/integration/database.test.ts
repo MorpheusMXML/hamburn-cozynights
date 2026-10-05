@@ -167,6 +167,22 @@ describe('bunk beds (pb_hooks/cozy_bunks.pb.js)', () => {
 	});
 });
 
+describe('dropping the wallet passes (pb_migrations/1760700000_drop_wallet.js)', () => {
+	it('took back what 1759950000_wallet_passes.js added', async () => {
+		// 1759950000 still runs first on a new database; the drop follows right after.
+		const names = (await su.collections.getFullList()).map((c) => c.name);
+		expect(names).not.toContain('wallet_passes');
+		expect(names).not.toContain('wallet_devices');
+
+		const settings = await su.collections.getOne('app_settings');
+		const fields = settings.fields.map((f: { name: string }) => f.name);
+		expect(fields).not.toContain('wallet_platforms');
+		expect(await su.collection('app_settings').getOne(APP_SETTINGS_ID)).not.toHaveProperty(
+			'wallet_platforms'
+		);
+	});
+});
+
 describe('reading and writing', () => {
 	it('stores a house → room → bed tree; houses and rooms are public, beds are for admins', async () => {
 		const { house, room, beds } = await seedHouse(su, 2);

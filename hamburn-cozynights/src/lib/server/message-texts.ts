@@ -23,6 +23,19 @@ import {
 
 export type { MessagePreview, MessageTextView, TextCatalogue };
 
+/**
+ * The sample pass's QR code: the preview e-mails show it as `cid:<cid>` like
+ * the real ones, which the page's frame can't load, so it puts `src` (a
+ * data: URI) in its place.
+ */
+export interface MessageQrPreview {
+	cid: string;
+	src: string;
+}
+
+/** The sample messages, and the QR picture (null when PocketBase could not draw it). */
+export type MessagePreviewWithQr = MessagePreview & { qrPreview: MessageQrPreview | null };
+
 /** A change the page doesn't allow. `message` is written for whoever clicked. */
 export class MessageTextError extends Error {
 	constructor(
@@ -149,10 +162,20 @@ export async function resetMessageText(
 export async function previewMessageTexts(
 	adminPb: TypedPocketBase,
 	texts: Record<string, string>
-): Promise<MessagePreview> {
-	return (await adminPb.send('/api/cozy/texts/preview', {
+): Promise<MessagePreviewWithQr> {
+	const preview = (await adminPb.send('/api/cozy/texts/preview', {
 		method: 'POST',
 		body: { texts },
 		requestKey: null
-	})) as MessagePreview;
+	})) as MessagePreview & { qrPreview?: Partial<MessageQrPreview> | null };
+	const qr = preview.qrPreview;
+	// Only a PNG goes into the page's frame; anything else is left as cid:,
+	// a broken picture in the preview rather than whatever came back.
+	const qrPreview =
+		typeof qr?.cid === 'string' &&
+		typeof qr.src === 'string' &&
+		qr.src.startsWith('data:image/png;base64,')
+			? { cid: qr.cid, src: qr.src }
+			: null;
+	return { ...preview, qrPreview };
 }

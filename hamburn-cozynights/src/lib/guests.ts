@@ -7,8 +7,8 @@
  * A row shows a ticket the way the check-in desk does: holder name, burner
  * name, e-mail and ticket code masked (a code is a credential). Whether the
  * ticket holds a spot, was checked in, has a special-needs request, got its
- * e-mails, linked Telegram or added the pass to a wallet is a fact each — what
- * a guest wrote in a request, a pass serial or a chat id never shows here.
+ * e-mails or linked Telegram is a fact each — what a guest wrote in a request
+ * or a chat id never shows here.
  */
 import type { BookingPhase } from '$lib/booking-phase';
 import { foldText } from '$lib/bookings';
@@ -32,14 +32,6 @@ export interface GuestSpot {
 
 /** The special-needs request of a ticket: only that there is one and where it stands. */
 export type GuestRequestState = 'none' | 'pending' | 'approved' | 'declined';
-
-/**
- * A wallet pass of a ticket: `current` when the pass in the wallet is the
- * ticket's pass, `voided` when the ticket got a new pass code since (a
- * hand-over) and `failing` when the wallet could not be told about the last
- * change. null: the guest never added the pass to that wallet.
- */
-export type GuestWalletState = 'current' | 'voided' | 'failing' | null;
 
 export interface GuestRow {
 	/** The ticket's record id: the form value of Open ticket, never shown. */
@@ -74,7 +66,6 @@ export interface GuestRow {
 		/** The last message could not be delivered and is not retried any more. */
 		failed: boolean;
 	};
-	wallet: { apple: GuestWalletState; google: GuestWalletState };
 }
 
 export const GUEST_FILTERS = [
@@ -90,7 +81,6 @@ export const GUEST_FILTERS = [
 	},
 	{ key: 'telegram', label: 'Telegram', title: 'Tickets with a linked Telegram chat' },
 	{ key: 'mailed', label: 'Got an e-mail', title: 'Tickets whose address got a booking e-mail' },
-	{ key: 'wallet', label: 'Wallet pass', title: 'Tickets with the pass in Apple or Google Wallet' },
 	{ key: 'handedover', label: 'Handed over', title: 'Tickets that were passed on to somebody else' }
 ] as const;
 export type GuestFilter = (typeof GUEST_FILTERS)[number]['key'];
@@ -127,11 +117,6 @@ export function guestName(row: Pick<GuestRow, 'name' | 'burnerName' | 'ticket'>)
 	return row.name || row.burnerName || `Ticket ${row.ticket}`;
 }
 
-/** The pass is in at least one wallet, current or not. */
-export function hasWalletPass(row: Pick<GuestRow, 'wallet'>): boolean {
-	return row.wallet.apple !== null || row.wallet.google !== null;
-}
-
 export function matchesGuestFilter(row: GuestRow, filter: GuestFilter): boolean {
 	switch (filter) {
 		case 'spot':
@@ -148,8 +133,6 @@ export function matchesGuestFilter(row: GuestRow, filter: GuestFilter): boolean 
 			return row.notify.telegram;
 		case 'mailed':
 			return row.notify.mailed;
-		case 'wallet':
-			return hasWalletPass(row);
 		case 'handedover':
 			return !!row.handedOverAt;
 		default:
@@ -218,8 +201,6 @@ export interface GuestCounts {
 	openRequests: number;
 	telegram: number;
 	mailed: number;
-	/** The pass is in at least one wallet. */
-	wallet: number;
 	handedOver: number;
 }
 
@@ -233,7 +214,6 @@ export function countGuests(rows: GuestRow[]): GuestCounts {
 		openRequests: 0,
 		telegram: 0,
 		mailed: 0,
-		wallet: 0,
 		handedOver: 0
 	};
 	for (const row of rows) {
@@ -245,7 +225,6 @@ export function countGuests(rows: GuestRow[]): GuestCounts {
 		if (row.request === 'pending') counts.openRequests++;
 		if (row.notify.telegram) counts.telegram++;
 		if (row.notify.mailed) counts.mailed++;
-		if (hasWalletPass(row)) counts.wallet++;
 		if (row.handedOverAt) counts.handedOver++;
 	}
 	return counts;
@@ -259,8 +238,7 @@ export const GUEST_TILES = [
 	{ key: 'checkedin', label: 'checked in', value: (c: GuestCounts) => c.checkedIn },
 	{ key: 'noemail', label: 'no e-mail', value: (c: GuestCounts) => c.noEmail },
 	{ key: 'request', label: '♿ open requests', value: (c: GuestCounts) => c.openRequests },
-	{ key: 'telegram', label: 'Telegram', value: (c: GuestCounts) => c.telegram },
-	{ key: 'wallet', label: 'wallet pass', value: (c: GuestCounts) => c.wallet }
+	{ key: 'telegram', label: 'Telegram', value: (c: GuestCounts) => c.telegram }
 ] as const satisfies readonly {
 	key: GuestFilter;
 	label: string;

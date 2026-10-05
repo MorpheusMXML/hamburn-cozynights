@@ -41,8 +41,7 @@
 #   scripts/cozy-admin.sh tickets remove <code> [<code> ...]  delete tickets that hold no bed
 #   scripts/cozy-admin.sh tickets forget-contacts --yes after the event: delete all guest e-mail
 #                                                       addresses, Telegram links, special-needs
-#                                                       requests, swap requests and wallet
-#                                                       device registrations
+#                                                       requests, request groups and swap requests
 #
 # Notifications (guest e-mail and Telegram, crew chat; settings in .env):
 #   scripts/cozy-admin.sh notify status                 what is configured, queued, the last events
