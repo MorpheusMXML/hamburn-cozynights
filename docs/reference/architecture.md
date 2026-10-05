@@ -73,6 +73,7 @@ erDiagram
   ORDERS ||--o| GUEST_NOTIFY : "messages about"
   ORDERS ||--o| SPECIAL_REQUESTS : "asks with"
   SPECIAL_REQUESTS |o--o| BEDS : "spot the crew booked"
+  REQUEST_GROUPS |o--|{ SPECIAL_REQUESTS : "asks together"
   HOUSES {
     text name
     number x "map position"
@@ -109,10 +110,15 @@ erDiagram
   }
   SPECIAL_REQUESTS {
     select status "pending, approved, declined"
-    text needs "encrypted"
+    text needs "encrypted, padded"
     text reason "encrypted"
     date consent_at
     relation bed "spot the crew booked"
+    relation request_group "the group, if any"
+  }
+  REQUEST_GROUPS {
+    text code "join code, unique"
+    text name "encrypted"
   }
   ADMIN_EVENTS {
     text action
@@ -142,7 +148,8 @@ erDiagram
 - **`app_settings`** is a single record holding the phase set by hand and the booking window (opening and closing time, armed or paused).
 - **`admins`** is its own auth collection for Google sign-in. PocketBase's default `users` collection is unused and closed for sign-up.
 - **`guest_notify`** holds what each ticket was last told and where (e-mail, linked Telegram chat); **`admin_events`** is the audit log that feeds the crew group. Neither has API rules: only PocketBase itself and the app server use them.
-- **`special_requests`** holds at most one special-needs request per ticket. What the guest ticked and wrote is encrypted by the app; the collection has no API rules. `bed` is the spot the crew booked for it, the only spot the guest can't change themselves. See [Special-needs requests](../admin/special-needs).
+- **`special_requests`** holds at most one special-needs request per ticket, for something the guest needs or for a project. What the guest ticked and wrote is encrypted by the app; the collection has no API rules. `bed` is the spot the crew booked for it, the only spot the guest can't change themselves. See [Special-needs requests](../admin/special-needs).
+- **`request_groups`** links requests of guests who ask together: a join `code` and the encrypted `name`, nothing else. The group has no status; decisions and bookings live on each member's request. PocketBase deletes a group when its last request leaves it (`pb_hooks/cozy_groups.pb.js`). No API rules. See [Groups](../admin/special-needs#groups).
 - **`message_texts`** holds the sentences admins changed on ✉️ Messages, one record per text (`key`, `text`, `updated_by`); the defaults are in `pb_hooks/lib/texts.js`, and PocketBase reads the records when it sends. No API rules. See [Message texts](../admin/notifications#message-texts).
 - **`pass_code`** is created by PocketBase when a ticket gets a spot. It is not the ticket code: the pass shows the booking, never lets anyone book.
 - Schema and API rules live in `hamburn-cozynights/pb_migrations/`. The migrations are idempotent, so a database restored from a backup is brought to the current rules too.
@@ -156,7 +163,7 @@ erDiagram
 | `/house/:id` | guests with a code | Rooms of a house with free spots |
 | `/room/:id` | guests with a code | Spots of a room, booking dialog |
 | `/random-bed` | guests with a code | Destiny Roulette, a slot machine for a random free spot; a guest with a spot sees it with the booking pass and can give it up with ✨ Leave No Trace (hold to sweep) and spin again |
-| `/special-needs` | guests with a code | Ask for a special-needs spot, see the crew's answer, withdraw |
+| `/special-needs` | guests with a code | Ask for a special-needs spot or a project's room, start or join a request group (an invite link `?group=` fills in the code and survives the sign-in), see the crew's answer and the group's burner names, leave the group, withdraw |
 | `/legal-notice` | everyone | Legal notice (Impressum), details from the server's `.env`; `/impressum` redirects here |
 | `/privacy` | everyone | Privacy policy; `/datenschutz` redirects here |
 | `/booking-rules` | everyone | Booking rules, linked from every booking dialog |
@@ -173,7 +180,7 @@ erDiagram
 | `/admin/house/:id` | admins | Rooms of a house, and who is booked in it |
 | `/admin/room/:id` | admins | Spots of a room, with the booking on each |
 | `/admin/check` | admins | Check guests in with their booking pass (typed code, USB scanner or camera), undo a check-in |
-| `/admin/requests` | admins | Special-needs requests: read, approve or decline, book a spot (also while booking is closed), open or close requests |
+| `/admin/requests` | admins | Special-needs requests and request groups: what became of the ♿ spots, read, approve or decline, book a spot (also while booking is closed) for one request or a whole group, take a request out of its group, open or close requests |
 | `/admin/messages` | admins | Message texts: every sentence guests get by e-mail, on Telegram and from the bot, with a preview of whole messages |
 | `/admin/tickets` | admins | Find tickets, change their e-mail address, hand them over; superusers load the ticket list |
 | `/admin/docs/*` | admins | The full documentation, admin pages included |

@@ -11,7 +11,7 @@ decided.
 
 	export let data: PageData;
 
-	const UPDATED = '18 September 2026';
+	const UPDATED = '4 October 2026';
 
 	$: legal = data.legal;
 	// Only the contact address matters here.
@@ -62,13 +62,19 @@ decided.
 	<h2>Special-needs spots</h2>
 	<ul>
 		<li>
-			Some beds are kept for guests with special needs. They show as "Blocked by admin" and can't be
-			booked directly.
+			Some beds are kept for guests with special needs and for projects. They show as "Blocked by
+			admin": nobody books them directly, crew members' own tickets included.
 		</li>
 		<li>
 			While the crew accepts requests, you can ask for such a spot on the page
 			<a href="/special-needs">Special-needs spot</a>, also before booking opens. Tell the crew what
 			you need; the crew decides and books a fitting spot for you.
+		</li>
+		<li>
+			Art projects, workshops, theme camps and crews can ask there too, on their own or as a group:
+			one of you starts the group and shares its link, the others join with their own ticket code.
+			The crew decides on each request and tries to put a group close together; there is no claim to
+			a particular room.
 		</li>
 		<li>A spot the crew booked for you can only be changed by the crew.</li>
 	</ul>

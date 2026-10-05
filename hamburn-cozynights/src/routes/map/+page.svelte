@@ -148,7 +148,7 @@
 					     the pass ticket has no room left: with a line more, LOOK AROUND slid
 					     under the legal links at 320 px (Linux fonts, CI run 35621290451). -->
 					<a class="special-needs-cta" href="/special-needs">
-						<span aria-hidden="true">♿</span> Need a special-needs spot? Ask the crew now
+						<span aria-hidden="true">♿</span> Special needs or a project? Ask the crew now
 					</a>
 				{/if}
 
@@ -171,8 +171,9 @@
 		</div>
 	{/if}
 
-	<!-- One column: the roulette button stacks on top of the legal links and
-	     the credit, so the two never cover each other. -->
+	<!-- One column: the roulette button stacks on top of the footer's slim row
+	     (legal links, then version and credit where they fit), so the two never
+	     cover each other. -->
 	<div class="bottom-dock">
 		{#if data.houses && isBookingActive}
 			<a href="/random-bed" class="random-btn pulsing-laser">

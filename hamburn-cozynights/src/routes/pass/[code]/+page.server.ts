@@ -22,8 +22,12 @@ export const load: PageServerLoad = async ({
 	getClientAddress
 }) => {
 	// The code is in the URL: no referrer to other sites, no search engines, no caches.
+	// "same-origin", not "no-referrer": a page's policy stays with the browser
+	// document while the guest goes on in the app without a reload, and with
+	// "no-referrer" every plain form POST after it (Sign out, Eject, connect
+	// Telegram) went out with "Origin: null" and was refused as cross-site.
 	setHeaders({
-		'referrer-policy': 'no-referrer',
+		'referrer-policy': 'same-origin',
 		'x-robots-tag': 'noindex, nofollow',
 		'cache-control': 'private, no-store'
 	});

@@ -900,20 +900,28 @@ cozyTickets.addCommand(
 		const forget = new Command({
 			use: 'forget-contacts',
 			short:
-				'After the event: delete every e-mail address, Telegram link, special-needs request, swap request and wallet device registration of the tickets',
+				'After the event: delete every e-mail address, Telegram link, special-needs request, request group, swap request and wallet device registration of the tickets',
 			run: (cmd, args) => {
 				if (args.length !== 0 || !cmd.flags().getBool('yes')) {
 					cozyFail(
 						cmd,
-						'this deletes the e-mail address of every ticket, every Telegram link, every special-needs request, every swap request and every wallet device registration (ticket codes and bookings stay) — run it with --yes'
+						'this deletes the e-mail address of every ticket, every Telegram link, every special-needs request, every request group, every swap request and every wallet device registration (ticket codes and bookings stay) — run it with --yes'
 					);
 				}
 				cozyCollection(cmd, 'guest_notify');
 				cozyCollection(cmd, 'special_requests');
 				cozyCollection(cmd, 'swap_requests');
+				// A database from before the request groups (v0.30.0) has none.
+				let hasGroups = true;
+				try {
+					$app.findCollectionByNameOrId('request_groups');
+				} catch (_) {
+					hasGroups = false;
+				}
 				let emails = 0;
 				let links = 0;
 				let requests = 0;
+				let groups = 0;
 				let swaps = 0;
 				let devices = 0;
 				$app.runInTransaction((txApp) => {
@@ -922,10 +930,22 @@ cozyTickets.addCommand(
 						txApp.save(t);
 						emails++;
 					}
+					// Counted before the requests go: the groups hook (pb_hooks/cozy_groups.pb.js)
+					// deletes most of them together with their last request.
+					if (hasGroups) {
+						groups = txApp.findRecordsByFilter('request_groups', "id != ''", '', 0, 0).length;
+					}
 					// What guests wrote about their needs (often health data) goes too.
 					for (const r of txApp.findRecordsByFilter('special_requests', "id != ''", '', 0, 0)) {
 						txApp.delete(r);
 						requests++;
+					}
+					// Request groups with their names and join codes: whatever the hook left.
+					// No request points at them any more.
+					if (hasGroups) {
+						for (const g of txApp.findRecordsByFilter('request_groups', "id != ''", '', 0, 0)) {
+							txApp.delete(g);
+						}
 					}
 					// Swap requests, with what guests wrote to each other.
 					for (const r of txApp.findRecordsByFilter('swap_requests', "id != ''", '', 0, 0)) {
@@ -959,6 +979,8 @@ cozyTickets.addCommand(
 						' Telegram link(s), ' +
 						requests +
 						' special-needs request(s), ' +
+						groups +
+						' request group(s), ' +
 						swaps +
 						' swap request(s) and ' +
 						devices +

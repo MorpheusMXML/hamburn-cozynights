@@ -8,7 +8,7 @@ One Telegram bot per environment, two kinds of chats:
 
 | Chat | Who is in it | What happens there |
 | --- | --- | --- |
-| **Crew group** (private) | the admins | The bot **reports**: access requests, approvals, sign-ins, phase switches, bulk actions, special-needs requests (never who or what they wrote), failed guest messages. It takes no commands. Nobody can approve or change anything from Telegram. |
+| **Crew group** (private) | the admins | The bot **reports**: access requests, approvals, sign-ins, phase switches, bulk actions, special-needs requests and request groups (never who, what they wrote, a group's name or its code), failed guest messages. It takes no commands. Nobody can approve or change anything from Telegram. |
 | **A guest's own chat** | one guest and the bot, nobody else | Only if the guest connects it themselves: the booking confirmation, every change of their spot, their [booking pass](./passes) with its QR code as a picture, and the crew's decision on their request. Guests never join a group and see nothing about other guests. |
 
 ::: tip Why approvals stay on the server
@@ -37,7 +37,7 @@ A guest hears from CozyNights when their spot changes:
 | The ticket was [passed on](./tickets#a-ticket-passed-on-to-someone-else) and holds a spot | **A CozyNights spot came with your ticket:** the spot and the new pass — not a confirmation of a booking the new holder never made. Only to the new address; the old one hears nothing. |
 | The spot changes (the guest moves, or the crew moves them) | **Your CozyNights spot changed**, with the old and the new spot and the pass link |
 | The spot is gone (released by the guest, freed by an admin, its room or house deleted, **Clear all bookings**, a template import, the switch back to Staging) | **Your CozyNights spot was released**, with a link to the map. Not when a superuser switches back to Staging with *Don't notify the guests* ticked (the default once booking has closed): then the release is accepted in silence, and a booking later on is news again (*booked*, not *changed*) |
-| A [special-needs request](./special-needs) arrives · is approved · is declined | **We got your special-needs request** · **…was approved** · **About your special-needs request**. Approved and booked at once: one message, **Your special-needs spot:** with the pass. What the guest wrote is never in a message. |
+| A [special-needs request](./special-needs) arrives · is approved · is declined | **We got your special-needs request** · **…was approved** · **About your special-needs request**. Approved and booked at once: one message, **Your special-needs spot:** with the pass. What the guest wrote is never in a message. A step on a [request group](./special-needs#groups) writes each member's own request, so each member gets these messages about their own request only; joining, leaving and being taken out of a group send nothing. |
 | Another guest asks to [swap spots](./swaps) · the guest asked says no · says yes | To the guest asked: **🔁 Swap request for your spot …** with both spots, how long it's open and a link to **Swap requests** (on Telegram with a button to answer). To the guest who asked, after a no: **No swap this time**. After a yes both get **🔁 Swap done!** with the new spot and the pass, instead of *spot changed*. The asker's name and words are never in a message, and nothing goes out about a request that was taken back, ran out or can't happen any more. |
 
 - **One message per change.** A move is one "changed" message, never "released" plus "booked". Changes within about ten seconds are combined, and two messages about the same ticket are at least two minutes apart. A guest who gives up their spot on the roulette (✨ *Leave No Trace & Respin*) keeps that message back for up to ten minutes, so the new spot arrives as one **changed** message; if they leave without booking a new one, the release is sent after all. A switch back to Staging with *Don't notify the guests* ticked silences the tickets whose spots it releases, a held message included. A ticket that already has no spot is not part of that release: its held message still reports the release when the hold runs out.
@@ -68,9 +68,12 @@ Every message here is also kept in the audit log (collection `admin_events` in t
 | 🎟️ Ticket changed | A new address, a new name or a hand-over on the Tickets page, with the code and addresses shortened (`H•••`, `a•••@example.org`) |
 | 📥 Ticket list imported | A superuser loaded the list on the Tickets page: how many tickets were created, updated and handed over |
 | 🏚️ House deleted | Every deletion, with the number of bookings released |
-| 🧡 New special-needs request | With the number waiting for a decision and a link to ♿ **Special needs**; never the guest's name or text |
-| 🧡 A guest withdrew their special-needs request | With what it was in words (*was still waiting for a decision*, *had been approved*, *had been declined*); never the guest's name or text |
+| 🧡 New special-needs request | With the number waiting for a decision and a link to ♿ **Special needs**, and *(started a group)* or *(joined a group)* when the request came with one; never the guest's name, text, the group's name or code. Joining or leaving with a request that already exists is not reported. |
+| 🧡 A guest withdrew their special-needs request | With what it was in words (*was still waiting for a decision*, *had been approved*, *had been declined*), and *and left their group* when the guest left a group with a request that only belonged to it; never the guest's name or text |
 | ✅ approved · ✋ declined · ♿ spot booked · ♿ spot released | An admin decided on a [special-needs request](./special-needs), with their e-mail address |
+| ✅ Request group approved · ✋ Request group declined | An admin decided for a [request group](./special-needs#groups), with their e-mail address and how many requests changed: *✅ Request group approved by …: 4 request(s)*; a decline adds *; 1 kept: spot booked by the crew* when members kept a spot the crew booked |
+| 👥 Spots booked for a request group | With the admin's e-mail address and counts: *👥 Spots booked for a request group by …: 3 (1 request(s) approved on the way), 1 not booked* |
+| 👥 A request was taken out of its group | With the admin's e-mail address |
 | 🧡 Special-needs requests OPENED · closed | Somebody flips the requests switch, with their e-mail address |
 | ✏️ Message text changed · ↩️ reset to its default | An admin changed a [message text](#message-texts) or took it back, with their e-mail address and the text's key |
 | 📭 Could not notify ticket | A guest message failed for good. The ticket is named by its shortened code (*Ticket H•••*), never by its holder: this line can stand right next to 🧡 *New special-needs request*, and the two must not add up to a person. |
@@ -121,10 +124,11 @@ A single ticket: `./scripts/cozy-admin.sh tickets add HB-1003 --email linus@exam
 
 ## Setting it up
 
-Operators put the settings into the server's `.env` (the template `deploy/staging.env.template` describes each value) and deploy again. Two rules:
+Operators put the settings into the server's `.env` (the template `deploy/staging.env.template` describes each value) and deploy again. Two rules, and what SMTP2GO taught us:
 
 - **One Telegram bot per environment.** The server reads the bot's messages itself (no public webhook), and two servers can't read the same bot. Add the bot to a **private** crew group, and turn off "Allow groups" for it in @BotFather afterwards, so nobody can add it elsewhere.
-- **E-mail through a sending service, from a crew address.** Recommended: a Google group of the Workspace (for example `cozynights@mauersegler.art`, anyone on the web may post, members are the crew) as the sender, so guests' replies reach the crew; sending through a transactional mail service such as SMTP2GO with its **own SMTP user per environment** (send-only, revocable without touching other apps), the sender domain verified there (DKIM), open and click tracking off. Avoid a personal mailbox with an app password: that password would open the whole mailbox.
+- **E-mail through a sending service, replies to a crew address.** Recommended: send through a transactional mail service such as SMTP2GO from an address on a subdomain of your own that is verified there (DKIM), for example `cozynights@cozynights.hamburn.de` (`MAIL_FROM_ADDRESS`), with its **own SMTP user per environment** (send-only, revocable without touching other apps) and open and click tracking off. Set a Google group of the Workspace as the reply address (`MAIL_REPLY_TO`, for example `quartermaster@hamburn.de`; anyone on the web may post, outside mail isn't moderated, members are the crew), so guests' replies reach the crew. The same group makes a good `LEGAL_EMAIL` for the [legal pages](./legal). A sender subdomain keeps the main domain's reputation apart from automated mail, and the main domain needs no records at the mail service. Avoid a personal mailbox with an app password: that password would open the whole mailbox.
+- **SMTP2GO in practice** (learned on staging, 2026-09-19): the *sender domain* you register there must be the exact domain of `MAIL_FROM_ADDRESS`, and its two CNAMEs (`em<id>.<domain>` → `return.smtp2go.net.`, `s<id>._domainkey.<domain>` → `dkim.smtp2go.net.`) live *under that domain*: a subdomain such as `test-cozynights.hamburn.de` needs `em<id>.test-cozynights.hamburn.de`, records under the apex don't count. Use one sender domain per environment (staging: the test subdomain; production: its own). If the account has *Restrict Senders* on (Settings → Sending Options → Restrictions), every sender address must be on that list, otherwise the test answers `550 … not on your allow list`; `535 Incorrect authentication data` means the SMTP user's password in `.env` is wrong (quote it with single quotes when it holds `$`, `#` or spaces). Leave the `link` tracking record out: tracking stays off. Check with `cozy-admin.sh notify test --email you@…`.
 
 Step by step:
 
@@ -177,7 +181,7 @@ Crew messages still waiting are sent once the id is right. Those already marked 
 ./scripts/cozy-admin.sh tickets forget-contacts --yes
 ```
 
-Deletes every guest address, every Telegram link and every [special-needs request](./special-needs). The ticket codes and bookings stay, and so does the audit log.
+Deletes every guest address, every Telegram link, every [special-needs request](./special-needs), every request group, every [swap request](./swaps) and every wallet device registration, and prints how many of each. The ticket codes and bookings stay, and so does the audit log.
 
 ## When something doesn't arrive
 

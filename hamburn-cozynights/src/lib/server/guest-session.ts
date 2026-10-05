@@ -65,9 +65,11 @@ export function signInUrl(locals: App.Locals, next?: string): string {
 }
 
 // The guest pages a sign-in may return to. Nothing else: `next` comes from the
-// URL, and a free-form target would make the start page an open redirect.
+// URL, and a free-form target would make the start page an open redirect. The
+// one query allowed is a request group's invite code (the booking pass
+// alphabet, src/lib/pass.ts), so an invite link survives the sign-in.
 const RETURN_PATH =
-	/^\/(?:map|random-bed|special-needs|telegram|swaps|(?:room|house)\/[a-z0-9]{1,32})$/;
+	/^\/(?:map|random-bed|special-needs(?:\?group=[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8})?|telegram|swaps|(?:room|house)\/[a-z0-9]{1,32})$/;
 
 /** A page to return to after signing in, or null for anything that isn't one. */
 export function safeReturnPath(value: unknown): string | null {

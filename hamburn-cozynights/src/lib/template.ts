@@ -27,6 +27,14 @@ import {
 	type HouseKind,
 	type RoomKind
 } from './accommodation';
+import {
+	FLOOR_PLAN_CAPTION_MAX,
+	FLOOR_PLANS_MAX,
+	cleanCaption,
+	isFloorPlanImage,
+	readFloorPlans,
+	type FloorPlan
+} from './floor-plans';
 
 const HOUSE_KIND_VALUES = HOUSE_KINDS.map((kind) => kind.value);
 const ROOM_KIND_VALUES = ROOM_KINDS.map((kind) => kind.value);
@@ -36,13 +44,14 @@ export const TEMPLATE_FORMAT = 'cozynights-layout';
 /**
  * The version an export of the running app carries. 2.0 added the details
  * of a place, 2.1 the bunk partner, 2.2 `features_off` (what a room or spot
- * does not take over from the levels above it). Since 2026-09-28 a spot has
- * no `features` of its own and nothing names "power" any more; a file that
- * still does is read without them (RETIRED_FEATURES), still as 2.2.
+ * does not take over from the levels above it), 2.3 the `floor_plans` of a
+ * house. Since 2026-09-28 a spot has no `features` of its own and nothing
+ * names "power" any more; a file that still does is read without them
+ * (RETIRED_FEATURES).
  */
-export const TEMPLATE_VERSION = '2.2';
+export const TEMPLATE_VERSION = '2.3';
 /** Older exports this app still reads. */
-export const TEMPLATE_OLD_VERSIONS = ['1.0', '2.0', '2.1'] as const;
+export const TEMPLATE_OLD_VERSIONS = ['1.0', '2.0', '2.1', '2.2'] as const;
 
 export const TEMPLATE_LIMITS = {
 	fileBytes: 1024 * 1024,
@@ -100,6 +109,8 @@ export interface TemplateHouse {
 	kind?: HouseKind;
 	features?: Feature[];
 	description?: string;
+	/** Pictures in static/floorplans/ (src/lib/floor-plans.ts); left out when there are none. */
+	floor_plans?: FloorPlan[];
 	rooms: TemplateRoom[];
 }
 
@@ -161,6 +172,7 @@ export interface LayoutRecords {
 		kind?: string;
 		features?: string[];
 		description?: string;
+		floor_plans?: unknown;
 	}[];
 	rooms: {
 		id: string;
@@ -208,6 +220,12 @@ function details<K extends string>(
 	};
 }
 
+/** A house's floor plans, written only when it has some. */
+function plansOf(record: { floor_plans?: unknown }): { floor_plans?: FloorPlan[] } {
+	const plans = readFloorPlans(record.floor_plans);
+	return plans.length > 0 ? { floor_plans: plans } : {};
+}
+
 /**
  * What a room or spot switched off, written only when there is something: a
  * place that inherits everything looks exactly as it did in version 2.1.
@@ -247,6 +265,7 @@ export function buildTemplate(records: LayoutRecords, exportedAt = new Date()): 
 			x: house.x ?? 0,
 			y: house.y ?? 0,
 			...details('house', house, isHouseKind),
+			...plansOf(house),
 			rooms: (roomsByHouse.get(house.id) ?? [])
 				.sort(
 					(a, b) => (a.room_number ?? 0) - (b.room_number ?? 0) || compareNatural(a.name, b.name)
@@ -693,6 +712,58 @@ function readSpotFeatures(value: unknown, where: string, errors: string[]): void
 	);
 }
 
+/**
+ * A house's `floor_plans`: a list of up to FLOOR_PLANS_MAX entries like
+ * { "image": "/floorplans/villa-2026.webp", "caption": "Upper floor" }. The
+ * picture must be one the app ships (static/floorplans/); the caption may be
+ * left out. Left out when the list is empty.
+ */
+function readHouseFloorPlans(
+	value: unknown,
+	where: string,
+	errors: string[]
+): { floor_plans?: FloorPlan[] } {
+	if (isMissing(value)) return {};
+	const example = '[{ "image": "/floorplans/house-2026.webp", "caption": "Ground floor" }]';
+	if (!Array.isArray(value)) {
+		errors.push(`${where}: floor_plans must be a list like ${example} (got ${show(value)}).`);
+		return {};
+	}
+	if (value.length > FLOOR_PLANS_MAX) {
+		errors.push(
+			`${where}: ${value.length} floor plans are too many, the limit is ${FLOOR_PLANS_MAX} per house.`
+		);
+		return {};
+	}
+	const plans: FloorPlan[] = [];
+	value.forEach((entry, index) => {
+		const path = `${where} > floor_plans[${index}]`;
+		if (!isObject(entry)) {
+			errors.push(`${path}: must be an object like ${example.slice(1, -1)} (got ${show(entry)}).`);
+			return;
+		}
+		if (!isFloorPlanImage(entry.image)) {
+			errors.push(
+				`${path}: image must be the path of a picture in the app's floorplans folder, like "/floorplans/house-2026.webp" (got ${show(entry.image)}). Pictures from other places are not loaded.`
+			);
+			return;
+		}
+		if (!isMissing(entry.caption) && typeof entry.caption !== 'string') {
+			errors.push(`${path}: caption must be text in quotes (got ${show(entry.caption)}).`);
+			return;
+		}
+		const caption = cleanCaption(entry.caption);
+		if (caption.length > FLOOR_PLAN_CAPTION_MAX) {
+			errors.push(
+				`${path}: the caption is too long (${caption.length} characters, the limit is ${FLOOR_PLAN_CAPTION_MAX}).`
+			);
+			return;
+		}
+		plans.push({ image: entry.image, caption });
+	});
+	return plans.length > 0 ? { floor_plans: plans } : {};
+}
+
 function readDescription(value: unknown, where: string, errors: string[]): string | undefined {
 	if (isMissing(value) || value === '') return undefined;
 	if (typeof value !== 'string') {
@@ -759,6 +830,7 @@ function readHouse(
 		x: readCoordinate(entry.x, where, 'x', MAP_WIDTH, errors),
 		y: readCoordinate(entry.y, where, 'y', MAP_HEIGHT, errors),
 		...readDetails(entry, where, 'house', isHouseKind, HOUSE_KIND_VALUES, errors),
+		...readHouseFloorPlans(entry.floor_plans, where, errors),
 		rooms: []
 	};
 

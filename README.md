@@ -41,7 +41,7 @@ Ticket holders pick their own bed on the Hamburn camp map. The crew builds the c
 | 📬  | **Booking confirmations**    | E-mail to the ticket holder, Telegram if they like, and a crew group that hears about admin changes.   |
 | 🎟️  | **Booking pass**             | A QR code and a short code per booking; the crew checks it with a phone camera, a PC or a USB scanner. |
 | 👛  | **In the wallet**            | The pass goes into Apple Wallet or Google Wallet and follows the booking: move a guest and their pass updates itself. |
-| ♿   | **Special-needs spots**      | Guests ask with their ticket code, even before booking opens; the crew books a fitting spot.           |
+| ♿   | **Special-needs spots, project requests & groups** | Guests ask with their ticket code, even before booking opens — for something they need, or for an art project or crew, on their own or as a group; the crew books fitting spots, and ♿ spots only ever go through a request. |
 | 🔁  | **Swapping spots**           | During Live Booking a guest asks another for a swap, with a vibe and a few words; hold to swap, both spots change at once. |
 | ✉️  | **Message texts**            | Every sentence guests get by e-mail, on Telegram or from the bot is editable in the admin area, with a live preview. |
 
@@ -57,7 +57,7 @@ flowchart LR
 
 ## 🚀 Quick start
 
-You need Node.js 22+ and Docker.
+You need Node.js 24+ and Docker (with mise, `mise install` in the repository picks it from `mise.toml`).
 
 ```bash
 git clone https://github.com/MorpheusMXML/hamburn-cozynights.git

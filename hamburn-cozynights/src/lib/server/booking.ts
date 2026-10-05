@@ -85,9 +85,12 @@ export interface CheckInOutcome {
 // - per order: one ticket can't grab several beds with parallel requests
 //   (each ticket code is exactly one booking).
 // Order lock is always taken before the bed lock, so they can't deadlock.
+// A request group's steps (src/lib/server/request-groups.ts) run under
+// `group:<id>`, taken before both: group → order → bed, everywhere.
+// Not re-entrant: never take the same key twice in one call chain.
 const locks = new Map<string, Promise<unknown>>();
 
-function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+export function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
 	const prior = locks.get(key) ?? Promise.resolve();
 	const run = prior.then(fn, fn);
 	// Key space is bounded by the number of beds and orders, so entries are
@@ -112,13 +115,19 @@ function isNotFound(err: unknown): boolean {
  * Whether a guest may book this bed at all (independent of occupancy).
  * Locked spots and special-needs spots are for the crew to hand out: guests
  * see both as "Blocked by admin".
+ * @param options.allowLocked an admin with a ticket may book a locked 🔒 spot
+ * @param options.allowSpecial only the crew's request flow books a ♿ spot
+ *   (assignSpot, src/lib/server/special-requests.ts) — on the guest pages it
+ *   stays closed for admins with a ticket too, so it is still free when a
+ *   request needs it.
  */
 export function isBedBookable(
 	bed: Pick<BedsResponse, 'enabled' | 'is_locked'> & { is_special?: boolean },
-	options: { allowLocked?: boolean } = {}
+	options: { allowLocked?: boolean; allowSpecial?: boolean } = {}
 ): boolean {
 	if (bed.enabled === false) return false;
-	if ((bed.is_locked || bed.is_special) && !options.allowLocked) return false;
+	if (bed.is_locked && !options.allowLocked) return false;
+	if (bed.is_special && !options.allowSpecial) return false;
 	return true;
 }
 
@@ -228,8 +237,9 @@ export class BookingService {
 	 * @param order The order record of the user making the booking.
 	 * @param bedId The ID of the bed to be claimed.
 	 * @param guestName The burner name chosen by the user.
-	 * @param options.allowLocked Admins may book beds that are locked for guests
-	 *   (locked or special-needs spots).
+	 * @param options.allowLocked Admins may book locked beds.
+	 * @param options.allowSpecial Only the crew's request flow books ♿ beds
+	 *   (special-needs spots).
 	 * @param options.allowCheckedIn The crew may move a guest who is checked in
 	 *   already; the check-in moves along to the new spot.
 	 * @param options.requireLivePhase A guest's own booking: booking has to
@@ -244,7 +254,12 @@ export class BookingService {
 		order: OrdersResponse,
 		bedId: string,
 		guestName: string,
-		options: { allowLocked?: boolean; allowCheckedIn?: boolean; requireLivePhase?: boolean } = {}
+		options: {
+			allowLocked?: boolean;
+			allowSpecial?: boolean;
+			allowCheckedIn?: boolean;
+			requireLivePhase?: boolean;
+		} = {}
 	): Promise<void> {
 		await withLock(`order:${order.id}`, () =>
 			withLock(`bed:${bedId}`, async () => {

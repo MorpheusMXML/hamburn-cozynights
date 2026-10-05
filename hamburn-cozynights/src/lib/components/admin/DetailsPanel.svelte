@@ -238,6 +238,11 @@
 			app never guesses.{#if pairs.length > 0}
 				{' '}{pairs.join(', ')}: one or the other, never both — ticking one clears the other.{/if}
 		</p>
+		<!-- Two ♿ meanings: this feature describes the place, the ♿ SPECIAL mark keeps a spot back. -->
+		<p class="hint">
+			♿ Wheelchair accessible describes the place for guests; it doesn't keep spots free. To keep a
+			spot for requests, press ♿ SPECIAL on the spot.
+		</p>
 	</fieldset>
 
 	<div class="form-group">

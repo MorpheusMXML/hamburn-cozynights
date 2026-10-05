@@ -102,7 +102,8 @@ takes its rooms and spots along).
 		features_off: 'features off',
 		bunk_partner: 'bunk partner',
 		features: 'features',
-		description: 'description'
+		description: 'description',
+		floor_plans: 'floor plans'
 	};
 
 	const describe = (change: FieldChange) =>

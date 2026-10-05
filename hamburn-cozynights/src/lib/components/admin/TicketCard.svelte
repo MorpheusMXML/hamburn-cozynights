@@ -241,7 +241,8 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 
 		{#if error}<p class="form-error" role="alert">{error}</p>{/if}
 
-		<div class="buttons">
+		<!-- data-bottom-bar: sticky on a phone, so the footer's legal pill stays at the end. -->
+		<div class="buttons" data-bottom-bar>
 			{#if dirty}
 				<button type="button" class="btn-ghost" on:click={() => reset(ticket)} disabled={saving}>
 					Undo

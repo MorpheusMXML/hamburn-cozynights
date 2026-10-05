@@ -715,7 +715,8 @@
 					{/if}
 
 					{#if changes.length > 0 || removable.length > 0}
-						<div class="action-bar">
+						<!-- data-bottom-bar: the footer's legal pill stays at the end of the page. -->
+						<div class="action-bar" data-bottom-bar>
 							<span class="action-text">
 								{plural(chosen.filter((c) => c.kind === 'new').length, 'new ticket')} ·
 								{plural(chosen.filter((c) => c.kind === 'changed').length, 'update')}

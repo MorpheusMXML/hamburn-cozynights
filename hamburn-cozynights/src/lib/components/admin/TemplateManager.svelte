@@ -473,7 +473,8 @@ Staging Mode. Unchanged spots keep their bookings.
 				<LayoutReview diff={review.diff} bind:selection readOnly={!!review.lockedReason} />
 
 				{#if !review.lockedReason && applicable > 0}
-					<div class="apply-bar">
+					<!-- data-bottom-bar: the footer's legal pill stays at the end of the page. -->
+					<div class="apply-bar" data-bottom-bar>
 						<div class="apply-text">
 							{#if steps === 0}
 								<span>Nothing chosen.</span>

@@ -48,7 +48,13 @@ const OVERLAYS = ['[data-layout-overlay]', '.admin-topbar'];
 const MARK = 'data-layout-problem';
 
 type Who =
-	'anonymous' | 'guestWithSpot' | 'guestWithoutSpot' | 'guestWithRequest' | 'admin' | 'superuser';
+	| 'anonymous'
+	| 'guestWithSpot'
+	| 'guestWithoutSpot'
+	| 'guestWithRequest'
+	| 'guestInGroup'
+	| 'admin'
+	| 'superuser';
 
 interface PageCase {
 	name: string;
@@ -265,6 +271,8 @@ const PAGES: PageCase[] = [
 		phases: ['live'],
 		checkedIn: true
 	},
+	// The stress requester leads a full request group: its card lists all
+	// GROUP_MAX burner names at the limit under a group name at the limit.
 	{ name: 'special needs: request sent', path: () => '/special-needs', as: 'guestWithRequest' },
 	{ name: 'special needs: new request', path: () => '/special-needs', as: 'guestWithoutSpot' },
 	// The wallet buttons and the Telegram offer under a guest's pass
@@ -278,6 +286,35 @@ const PAGES: PageCase[] = [
 		open: async (page) => {
 			await page.getByRole('button', { name: 'Send request' }).click();
 			await page.locator('#consent-error').waitFor();
+		}
+	},
+	// Request groups (docs/guide/special-needs.md "Asking as a group"): a group
+	// that isn't full shows its invite link and the Copy button; leaving asks
+	// first; an invite link opens the form with the code filled in.
+	{
+		name: 'special needs: in a group',
+		path: () => '/special-needs',
+		as: 'guestInGroup',
+		open: async (page) => {
+			await page.locator('#group-link').waitFor();
+			await page.getByRole('button', { name: /Copy link/ }).waitFor();
+		}
+	},
+	{
+		name: 'special needs: leaving the group',
+		path: () => '/special-needs',
+		as: 'guestWithRequest',
+		open: async (page) => {
+			await page.getByRole('button', { name: 'Leave the group' }).click();
+			await page.getByRole('alertdialog').waitFor();
+		}
+	},
+	{
+		name: 'special needs: invite',
+		path: (c) => `/special-needs?group=${c.groupCode}`,
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await expect(page.locator('input[name="groupCode"]')).not.toHaveValue('');
 		}
 	},
 	// The Control Center: booking window, attention, latest bookings, Intel
@@ -622,6 +659,38 @@ const PAGES: PageCase[] = [
 			await request.locator('select').selectOption({ index: 1 });
 			await request.locator('form.assign button.primary').click();
 			await page.getByRole('alertdialog').waitFor();
+		}
+	},
+	// Request groups and ♿ spots on the requests page: the full group (one
+	// member's ⋯ menu open), the group booking's confirmation, every ♿ spot.
+	{
+		name: 'admin special-needs: groups',
+		path: () => '/admin/requests',
+		as: 'admin',
+		open: async (page) => {
+			// the stress camp's: the smoke tests run first on the same stack and leave a group
+			const group = page.locator(`#group-${camp.fullGroupId}`);
+			await group.scrollIntoViewIfNeeded();
+			await group.locator('details.more > summary').first().click();
+			await group.locator('details.more[open]').waitFor();
+		}
+	},
+	{
+		name: 'admin special-needs: group confirm',
+		path: () => '/admin/requests',
+		as: 'admin',
+		open: async (page) => {
+			await page.locator(`#group-${camp.fullGroupId} form.plan button.primary`).click();
+			await page.getByRole('alertdialog').waitFor();
+		}
+	},
+	{
+		name: 'admin special-needs: ♿ spots',
+		path: () => '/admin/requests',
+		as: 'admin',
+		open: async (page) => {
+			await page.locator('.special-spots details > summary').click();
+			await page.locator('.special-spots details[open]').waitFor();
 		}
 	},
 	{ name: 'admin message texts', path: () => '/admin/messages', as: 'admin' },

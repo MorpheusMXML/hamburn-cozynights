@@ -386,13 +386,19 @@ describe('how a spot answers a need', () => {
 		expect(needFit('near_toilet', facts('', ['toilets_inside']))).toBe('fits');
 	});
 
-	it('leaves a power socket and "something else" to the crew', () => {
-		expect(MATCHED_BY_HAND).toEqual(['power', 'other']);
+	it('leaves a power socket, "something else" and what projects ask for to the crew', () => {
+		expect(MATCHED_BY_HAND).toEqual(['power', 'other', 'own_room', 'close_together']);
 		// nobody knows where the sockets are: no spot fits, none conflicts
 		const everything = facts('single', ['wheelchair', 'own_bathroom', 'heated', 'quiet']);
 		expect(needFit('power', everything)).toBe('unknown');
 		// what the guest wrote themselves is for a human to read
 		expect(needFit('other', facts('bunk_lower', ['quiet']))).toBe('unknown');
+		// a room of their own or spots together: a question of who else sleeps where
+		for (const need of ['own_room', 'close_together'] as SpecialNeed[]) {
+			expect(needFit(need, everything)).toBe('unknown');
+			expect(needFit(need, facts('bunk_upper'))).toBe('unknown');
+		}
+		expect(matchNeeds(['own_room', 'close_together'], everything).score).toBe(0);
 	});
 
 	it('scores a spot by what it answers, and a conflict costs a point', () => {
@@ -424,6 +430,19 @@ describe('how a spot answers a need', () => {
 		expect(needCapacity(open, hut.slice(1))).toEqual([
 			{ need: 'step_free', label: expect.any(String), asked: 2, fitting: 1, short: true }
 		]);
+	});
+
+	it('never counts project requests against the ♿ spots', () => {
+		const open = [
+			{ needs: ['own_room'] as SpecialNeed[] },
+			{ needs: ['close_together', 'quiet'] as SpecialNeed[] },
+			{ needs: [] as SpecialNeed[] }
+		];
+		const spots = [{ bedType: 'single', features: ['quiet'] }];
+		expect(needCapacity(open, spots)).toEqual([
+			{ need: 'quiet', label: 'A quiet room', asked: 1, fitting: 1, short: false }
+		]);
+		expect(needCapacity([{ needs: ['own_room', 'close_together'] }], spots)).toEqual([]);
 	});
 });
 

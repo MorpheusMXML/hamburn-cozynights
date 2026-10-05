@@ -612,7 +612,9 @@ describe('pass page', () => {
 		expect(data.qrSvg).toMatch(/^<svg /);
 		expect(data.check).toBeNull();
 		expect(JSON.stringify(data)).not.toMatch(/Ada|ada@|HB-1001/);
-		expect(headers['referrer-policy']).toBe('no-referrer');
+		// No referrer to other sites, but the app's own form posts keep their origin
+		// (no-referrer made SvelteKit refuse them as cross-site).
+		expect(headers['referrer-policy']).toBe('same-origin');
 		expect(headers['x-robots-tag']).toContain('noindex');
 	});
 

@@ -3,14 +3,15 @@
 // Real guests and crews type long burner names, German compound words, e-mail
 // addresses and emoji. Every text below is at (or near) the limit the app
 // accepts, so a layout that survives this camp survives the real one.
-// Structure goes straight into the (throwaway) PocketBase; bookings and
-// special-needs requests go through the app, which encrypts what it stores.
+// Structure goes straight into the (throwaway) PocketBase; bookings,
+// special-needs requests and request groups go through the app, which
+// encrypts what it stores.
 import PocketBase from 'pocketbase';
 import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
-import { BURNER_NAME_MAX } from '../../src/lib/special-needs';
+import { BURNER_NAME_MAX, GROUP_MAX, GROUP_NAME_MAX } from '../../src/lib/special-needs';
 import { TEMPLATE_LIMITS } from '../../src/lib/template';
 import { BED_TYPES, DESCRIPTION_MAX, type BedType } from '../../src/lib/accommodation';
 import { TICKET_LIMITS } from '../../src/lib/tickets';
@@ -34,6 +35,11 @@ export const TEXTS = {
 		'Die Waldhüttengruppe liegt hinter dem Wäscherei- und Sanitärgebäude, etwa fünfzig Meter den Waldweg hinauf: Duschen und Toiletten sind im Waschhaus, nicht in den Hütten selbst. Der Weg ist geschottert und bei Regen rutschig, eine Taschenlampe ist abends unbedingt zu empfehlen. Die Hütten werden nicht geheizt; bitte einen warmen Schlafsack mitbringen, in den Nächten Ende Oktober wird es am Brahmsee empfindlich kalt. Steckdosen gibt es nur im Gemeinschaftsraum des Haupthauses.',
 	requestText:
 		'I use a wheelchair, so I need step-free access from the parking area to the room and to a toilet. A lower bed would be great, too — thank you so much for sorting this out!',
+	// Request group names at (or near) the limit, each with a 34-letter word.
+	groupName: 'Kuschelzeltplatzverwaltungsgebäude Crew!',
+	groupNameOther: 'Supercalifragilisticexpialidocious Camp',
+	projectText:
+		'Our art project builds a glowing cardboard Kuschelzeltplatzverwaltungsgebäude: twelve of us need a room together, ideally close to the workshop tent and the lake. Any hut is fine!',
 	// A swap note at the limit, with a compound word that may only break inside itself.
 	swapNote:
 		'Hey! Meine ganze Crew schläft im Kuschelzeltplatzverwaltungsgebäude nebenan – tauschen wir? Danke dir tausendmal!!! 🙏✨🦄 Glitter & Liebe!'
@@ -67,12 +73,21 @@ for (const [what, value, max] of [
 	['description', TEXTS.descriptionLong, DESCRIPTION_MAX],
 	['room name', TEXTS.roomLong, TEMPLATE_LIMITS.roomNameLength],
 	['burner name', TEXTS.burnerLong, BURNER_NAME_MAX],
+	['group name', TEXTS.groupName, GROUP_NAME_MAX],
+	['group name', TEXTS.groupNameOther, GROUP_NAME_MAX],
 	['customer name', TEXTS.customerLong, TICKET_LIMITS.nameLength],
 	['swap note', TEXTS.swapNote, SWAP_NOTE_MAX],
 	['e-mail', TEXTS.emailLong, TICKET_LIMITS.emailLength],
 	...BED_LABELS.map((label) => ['spot label', label, TEMPLATE_LIMITS.bedLabelLength] as const)
 ] as const) {
 	if (value.length > max) throw new Error(`stress ${what} is longer than the app allows: ${value}`);
+}
+
+/** The burner name of the n-th member who joins a group: 80 characters, the limit. */
+export function joinerName(n: number): string {
+	const name = TEXTS.burnerLong.replace('Moop Patrol', `Moop Crew ${String(n).padStart(2, '0')}`);
+	if (name.length !== BURNER_NAME_MAX) throw new Error(`joiner name is not at the limit: ${name}`);
+	return name;
 }
 
 /** Where the setup project leaves the camp for the page tests. */
@@ -90,7 +105,14 @@ export interface StressCamp {
 	/** Cookie values (not headers) for the browser: the ticket codes. */
 	guestWithSpot: string;
 	guestWithoutSpot: string;
+	/** Leads a full request group (GROUP_MAX members, names at the limit). */
 	guestWithRequest: string;
+	/** That full group (its card on /admin/requests is #group-<id>). */
+	fullGroupId: string;
+	/** Started a second, smaller group: its card shows the invite link. */
+	guestInGroup: string;
+	/** That group's code, as an invite link carries it (`?group=`). */
+	groupCode: string;
 	/** The booking round those codes were signed in for (cookie bookingRound). */
 	guestRound: string;
 	passCode: string;
@@ -250,6 +272,8 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 	});
 	const otherHouseIds: string[] = [];
 	const otherRoomIds: string[] = [];
+	/** "Lower 1" of each other house: ♿ spots in every state the admin's ♿ panel knows. */
+	const otherLowerIds: string[] = [];
 	for (const [name, x, y] of [
 		[TEXTS.houseCompound, 990, 250],
 		[TEXTS.houseShort, 520, 695],
@@ -260,7 +284,10 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 			.collection('rooms')
 			.create({ name: 'Dachboden', room_number: 1, house: other.id, amount_beds: 2 });
 		for (const label of ['Upper 1', 'Lower 1']) {
-			await pb.collection('beds').create({ label, room: room.id, enabled: true, occupied: false });
+			const bed = await pb
+				.collection('beds')
+				.create({ label, room: room.id, enabled: true, occupied: false });
+			if (label === 'Lower 1') otherLowerIds.push(bed.id);
 		}
 		otherHouseIds.push(other.id);
 		otherRoomIds.push(room.id);
@@ -354,20 +381,94 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 
 	const guestWithoutSpot = (await guestLogin(base, (await ticket(pb)).code)).code;
 
-	// A special-needs request (pending), written through the app like a guest does.
-	await setWindow(pb, { special_requests_open: true });
-	const asker = await ticket(pb, TEXTS.customerLong, TEXTS.emailLong);
-	const requester = await guestLogin(base, asker.code);
-	const form = new URLSearchParams({
-		text: TEXTS.requestText,
-		burnerName: TEXTS.burnerLong,
-		consent: 'yes'
-	});
-	for (const need of ['lower_bunk', 'step_free', 'near_toilet', 'power'])
-		form.append('needs', need);
-	await post(base, '/special-needs?/save', form, requester.header);
-
 	const adminEmail = `layout-admin-${tag}@mauersegler.art`;
+	const adminAuth = await adminSession(pb, 'admin', adminEmail);
+
+	// Special-needs requests (pending), written through the app like guests do.
+	// The requester asks for everything at once and starts a request group with
+	// a name at the limit; members join it with burner names at the limit until
+	// it is full. A second, smaller group shows its invite link (a full one
+	// doesn't), and the crew booked a ♿ spot for one of its members.
+	await setWindow(pb, { special_requests_open: true });
+	const send = async (code: string, fields: Record<string, string>, needs: string[] = []) => {
+		const session = await guestLogin(base, code);
+		const form = new URLSearchParams({ consent: 'yes', ...fields });
+		for (const need of needs) form.append('needs', need);
+		await post(base, '/special-needs?/save', form, session.header);
+		return session;
+	};
+	const groupOf = async (orderId: string) => {
+		const request = await pb
+			.collection('special_requests')
+			.getFirstListItem(pb.filter('order = {:order}', { order: orderId }));
+		return {
+			requestId: request.id,
+			groupId: request.request_group as string,
+			code: (await pb.collection('request_groups').getOne(request.request_group)).code as string
+		};
+	};
+	const asker = await ticket(pb, TEXTS.customerLong, TEXTS.emailLong);
+	const requester = await send(
+		asker.code,
+		{
+			text: TEXTS.requestText,
+			burnerName: TEXTS.burnerLong,
+			groupMode: 'start',
+			groupName: TEXTS.groupName
+		},
+		['lower_bunk', 'step_free', 'near_toilet', 'quiet', 'own_room']
+	);
+	const full = await groupOf(asker.order.id);
+	for (let n = 1; n < GROUP_MAX; n++) {
+		const member = await ticket(pb, n % 2 ? TEXTS.customerLong : 'Test Guest');
+		// two members say what they need themselves, the others nothing
+		const own =
+			n === 1
+				? { text: TEXTS.requestText, needs: ['step_free', 'quiet'] }
+				: n === 2
+					? { text: TEXTS.projectText, needs: ['close_together'] }
+					: { text: '', needs: [] };
+		await send(
+			member.code,
+			{ groupMode: 'join', groupCode: full.code, burnerName: joinerName(n), text: own.text },
+			own.needs
+		);
+	}
+
+	const starter = await ticket(pb, TEXTS.customerLong);
+	const inGroup = await send(
+		starter.code,
+		{
+			text: TEXTS.projectText,
+			burnerName: TEXTS.burnerWord,
+			groupMode: 'start',
+			groupName: TEXTS.groupNameOther
+		},
+		['own_room', 'close_together']
+	);
+	const open = await groupOf(starter.order.id);
+	const helper = await ticket(pb, TEXTS.customerLong);
+	await send(helper.code, {
+		groupMode: 'join',
+		groupCode: open.code,
+		burnerName: joinerName(GROUP_MAX)
+	});
+
+	// ♿ spots in every state (the admin's ♿ panel): the free one in the stress
+	// room, one the crew booked through a request, one a guest booked before it
+	// was marked, one blocked with TAKEN, one inactive.
+	const [inactiveId, blockedId, crewBookedId] = otherLowerIds;
+	await pb.collection('beds').update(inactiveId, { is_special: true, enabled: false });
+	await pb.collection('beds').update(blockedId, { is_special: true, occupied: true });
+	await pb.collection('beds').update(beds['1'], { is_special: true });
+	await pb.collection('beds').update(crewBookedId, { is_special: true });
+	await post(
+		base,
+		'/admin/requests?/assign',
+		{ id: (await groupOf(helper.order.id)).requestId, bedId: crewBookedId },
+		`pb_auth=${adminAuth}`
+	);
+
 	return {
 		houseId: house.id,
 		houseName: house.name as string,
@@ -377,11 +478,14 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		guestWithSpot: mine.cookie,
 		guestWithoutSpot,
 		guestWithRequest: requester.code,
+		fullGroupId: full.groupId,
+		guestInGroup: inGroup.code,
+		groupCode: open.code,
 		// Nothing in the seed releases bookings, so every sign-in above got the same round.
 		guestRound: mine.round,
 		passCode,
 		adminEmail,
-		adminAuth: await adminSession(pb, 'admin', adminEmail),
+		adminAuth,
 		superuserAuth: await adminSession(
 			pb,
 			'superuser',

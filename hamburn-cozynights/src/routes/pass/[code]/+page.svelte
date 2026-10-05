@@ -68,7 +68,8 @@
 <svelte:head>
 	<title>Booking pass {data.code} · CozyNights</title>
 	<meta name="robots" content="noindex, nofollow" />
-	<meta name="referrer" content="no-referrer" />
+	<!-- No referrer to other sites; same-origin keeps the app's own form POSTs working (+page.server.ts). -->
+	<meta name="referrer" content="same-origin" />
 </svelte:head>
 
 <main class="pass-page">

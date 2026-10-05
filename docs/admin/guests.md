@@ -71,6 +71,7 @@ Some changes don't move those numbers: a **hand-over**, a **new e-mail address**
 ## Where it is linked from
 
 - The admin menu: <kbd>👥 Guests</kbd>, the first entry of the *Guests* group.
+- The Control Center's [quick views](./index#quick-views): every entry of the *🎟️ Tickets & guests* row opens the list with its filter.
 - The Control Center's *Needs attention*: 🎟 *… tickets have no spot yet* (Live Booking) and *… have no spot, and booking is closed* open the list narrowed to them (<kbd>Who</kbd>), 📭 *… tickets have no e-mail address* to the ones without an address (<kbd>Which</kbd>).
 - The Intel panel: <kbd>Guests →</kbd> next to *SPOTS & BOOKINGS* opens the list for the house you picked.
 - <kbd>Ticket →</kbd> on the [bookings list](./bookings) and here lead to the same ticket card.

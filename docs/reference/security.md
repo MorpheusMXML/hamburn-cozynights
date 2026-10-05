@@ -27,8 +27,8 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 
 - **One ticket, one spot**, enforced on the server, including under parallel requests.
 - **No double bookings.** Simultaneous clicks on the same spot are serialized; exactly one guest gets it.
-- **Locked, inactive and special-needs spots** are refused by the server, not just hidden in the interface.
-- **Booking while booking is closed** happens in exactly one place: an admin books a spot for an approved special-needs request. The ticket comes from the guest's signed-in session, never from a form field.
+- **Locked, inactive and special-needs spots** are refused by the server, not just hidden in the interface. A ♿ special-needs spot is refused on every guest page for everyone, admins signed in with a ticket code included: only the crew's request flow on `/admin/requests` books it.
+- **Booking while booking is closed** happens in exactly one place: an admin books a spot for a special-needs request, on its own or for the members of a request group. The ticket comes from the guest's signed-in session, never from a form field.
 
 ### Messages to guests
 
@@ -41,14 +41,16 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 
 ### Special-needs requests
 
-What a guest writes about their needs is often health data (Art. 9 GDPR), so it gets extra care. Details: [Special-needs requests](../admin/special-needs#privacy).
+What a guest writes about their needs is often health data (Art. 9 GDPR), so it gets extra care. Requests for art projects, workshops, theme camps and crews use the same form and get the same care, so nothing outside the admin area can tell the two apart. Details: [Special-needs requests](../admin/special-needs#privacy).
 
 - **Explicit consent** with an unticked checkbox, stored with the time; withdrawing deletes the request right away.
 - **The form asks what is needed, not why**, and says so.
-- **Encrypted at rest** (AES-256-GCM, like burner names): what was ticked and written, and the burner name. The collection has no API rules, only the app's service account reads it; the pages are sent with `Cache-Control: no-store`.
-- **Admins only.** Never part of e-mails, Telegram messages, the crew group, logs or the audit log. The crew group hears *that* a request arrived or was decided, without names.
+- **Encrypted at rest** (AES-256-GCM, like burner names): what was ticked and written, and the burner name. What was ticked is padded to one length before encryption, so the size of the stored text doesn't tell a request for something the guest needs from a project request, and no kind of request is stored in plain text. The collection has no API rules, only the app's service account reads it; the pages are sent with `Cache-Control: no-store`.
+- **Admins only.** Never part of e-mails, Telegram messages, the crew group, logs or the audit log. The crew group hears *that* a request arrived or was decided, without names; a step on a request group is reported with counts only, never the group's name or code.
 - **No hint for other guests.** Guest pages and their data never say why a spot is taken or reserved (special-needs, locked or booked all look alike); a booked special-needs spot shows the burner name like any other.
-- **Deleted after the event** with `tickets forget-contacts`.
+- **Request groups show names, not requests.** Members of a group see its name and the burner names in it — never tickets, e-mail addresses, names from the ticket list, what anyone ticked or wrote, a status, a decision or a spot. Everyone is listed whatever their status, so a decline can't be read off the list; a booked spot only shows the way every booked spot does, with its burner name on the room page. The group's name is encrypted like a burner name; its join code and who is in which group are stored plainly, like a pass code (social ties, not health data). Joining rests on the same consent checkbox as the request, and leaving the group works at any time.
+- **Group codes resist guessing.** A code is 8 characters from the booking pass alphabet (31⁸ ≈ 8.5 · 10¹¹ codes), and joining needs a signed-in ticket. Five wrong codes per ticket within 15 minutes pause joining, on top of the ten sends per hour and the web server's request limit per address. Nothing looks a code up before the form is sent, so opening an invite link reveals nothing. The app never writes a code to its logs; like any URL, an invite link does appear in the web server's access log, which only the server's administrators can read.
+- **Deleted after the event** with `tickets forget-contacts`, request groups included. A group nobody is in any more is deleted right away.
 
 ### Swap requests
 
@@ -65,7 +67,7 @@ Guests can ask each other to swap spots during Live Booking. Details: [Swap requ
 - **A separate, random code.** The pass code (12 characters) can only show a booking; the ticket code, which can change bookings, never appears on a pass, in a QR code or in a message.
 - **Minimal content.** Anyone with a pass link sees the spot and the burner name (visible to other guests anyway). The name on the ticket, the shortened e-mail and the check-in only appear for signed-in admins.
 - **Check-in by admins only.** Checking a pass checks the guest in. That happens only in the admin area (`/admin/check`, also the target of the button on the pass page): requests without an approved admin session are refused centrally, the actions check again, and the check-in is written with the admin's own PocketBase session, which the beds' rules accept from approved admins and superusers only. Opening a pass never writes anything. A ticket code can't check anybody in, and guests never see who checked them in or when.
-- **Private links.** Pass pages send `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex` and `Cache-Control: no-store`; many unknown codes from one connection are blocked for a while. Only PocketBase creates pass codes, so two writers can't hand out different codes for one ticket. The pass's files — its QR images and the wallet passes — go through the same check and the same limit.
+- **Private links.** Pass pages send `Referrer-Policy: same-origin` (other sites get no referrer, so the code never leaves the app; `no-referrer` would also strip the app's own form posts of their origin, and SvelteKit refuses those as cross-site), `X-Robots-Tag: noindex` and `Cache-Control: no-store`; many unknown codes from one connection are blocked for a while. Only PocketBase creates pass codes, so two writers can't hand out different codes for one ticket. The pass's files — its QR images and the wallet passes — go through the same check and the same limit.
 - **Wallet passes carry no more than the pass page**, and the Apple pass file is signed on our own server with the Pass Type ID certificate. A device asking for updates identifies itself with a token derived from the app's key for that one pass, so a token for one pass is useless for any other, and nothing about a pass is stored to check it. Subscribing to Telegram, on the other hand, always needs the ticket code: those messages also carry the crew's decision on a special-needs request, and pass links get shown around.
 
 ## Admin sign-in

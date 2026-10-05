@@ -9,10 +9,12 @@ import {
 	decideRequest,
 	listAssignableSpots,
 	listRequests,
+	listSpecialSpots,
 	releaseSpot,
 	RequestError,
 	setRequestsOpen
 } from '$lib/server/special-requests';
+import { assignGroup, decideGroup, listGroups, removeFromGroup } from '$lib/server/request-groups';
 
 export const load: PageServerLoad = async ({ locals, setHeaders }) => {
 	// Runs in parallel with the layout load, so it guards itself too.
@@ -21,10 +23,13 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
 	setHeaders({ 'cache-control': 'no-store' });
 
 	try {
-		const [requests, spots, settings] = await Promise.all([
+		const [requests, spots, settings, groups, specialSpots] = await Promise.all([
 			listRequests(locals.adminPb),
 			listAssignableSpots(locals.adminPb),
-			getBookingSettings(locals.pb)
+			getBookingSettings(locals.pb),
+			listGroups(locals.adminPb),
+			// Every ♿ spot with its state: why one is missing from the picker.
+			listSpecialSpots(locals.adminPb)
 		]);
 		// What the requests that still wait for a spot need, against the free spots
 		// that fit: the crew sees early when it has to free or mark more.
@@ -36,6 +41,8 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
 			requests,
 			spots,
 			capacity: needCapacity(open, spots),
+			groups,
+			specialSpots,
 			requestsOpen: settings.requestsOpen,
 			isBookingActive: settings.isBookingActive
 		};
@@ -52,11 +59,14 @@ function recordId(form: FormData, field: string): string {
 	return typeof value === 'string' && RECORD_ID.test(value) ? value : '';
 }
 
-/** Runs one admin step on a request and turns expected refusals into messages. */
-async function step(what: string, fn: () => Promise<void>) {
+/**
+ * Runs one admin step on a request or a group and turns expected refusals
+ * into messages. What the step returns goes to the page with the success.
+ */
+async function step<T extends object>(what: string, fn: () => Promise<T | void>) {
 	try {
-		await fn();
-		return { success: true };
+		const result = await fn();
+		return { success: true as const, ...(result ?? {}) };
 	} catch (err) {
 		if (err instanceof RequestError) return fail(err.status, { error: err.message });
 		if (err instanceof BedUnavailableError) {
@@ -69,6 +79,26 @@ async function step(what: string, fn: () => Promise<void>) {
 		console.error(`[Admin:Requests] ${what} failed:`, (err as Error)?.message);
 		return fail(500, { error: 'The server could not save this. Reload the page and try again.' });
 	}
+}
+
+const NO_GROUP = 'No group was selected. Reload the page.';
+const PICK_FIELD = /^bed_([a-z0-9]{15})$/;
+
+/**
+ * The planner's rows: request id → bed id ('' = keep as is), from the fields
+ * bed_<request id>. Null when a field looks forged: a bed_ name without a
+ * record id, or a value that is neither a record id nor empty.
+ */
+function readPicks(form: FormData): { requestId: string; bedId: string }[] | null {
+	const picks: { requestId: string; bedId: string }[] = [];
+	for (const [key, value] of form.entries()) {
+		if (!key.startsWith('bed_')) continue;
+		const requestId = PICK_FIELD.exec(key)?.[1];
+		if (!requestId || typeof value !== 'string') return null;
+		if (value !== '' && !RECORD_ID.test(value)) return null;
+		picks.push({ requestId, bedId: value });
+	}
+	return picks;
 }
 
 export const actions: Actions = {
@@ -119,5 +149,63 @@ export const actions: Actions = {
 		const id = recordId(await request.formData(), 'id');
 		if (!id) return fail(400, { error: 'No request was selected. Reload the page.' });
 		return step('release', () => releaseSpot(locals.adminPb, admin, id));
+	},
+
+	/** Approves every waiting request of a group; decided ones stay as they are. */
+	approveGroup: async ({ request, locals }) => {
+		const admin = locals.admin;
+		if (!admin) return fail(403, { error: 'Only admins can decide on requests.' });
+		const id = recordId(await request.formData(), 'id');
+		if (!id) return fail(400, { error: NO_GROUP });
+		return step('approve group', async () => {
+			const { changed } = await decideGroup(locals.adminPb, admin, id, 'approved');
+			return { changed };
+		});
+	},
+
+	/** Declines a group's requests, except those with a spot the crew booked. */
+	declineGroup: async ({ request, locals }) => {
+		const admin = locals.admin;
+		if (!admin) return fail(403, { error: 'Only admins can decide on requests.' });
+		const id = recordId(await request.formData(), 'id');
+		if (!id) return fail(400, { error: NO_GROUP });
+		return step('decline group', () => decideGroup(locals.adminPb, admin, id, 'declined'));
+	},
+
+	/**
+	 * Books the picked spots for a group's members (fields bed_<request id>,
+	 * '' = keep as is), also while booking is closed. Books what works: when
+	 * one member's booking fails on the way, the others stay booked and the
+	 * page gets a warning that names who wasn't booked and why.
+	 */
+	assignGroup: async ({ request, locals }) => {
+		const admin = locals.admin;
+		if (!admin) return fail(403, { error: 'Only admins can assign spots.' });
+		const form = await request.formData();
+		const id = recordId(form, 'id');
+		if (!id) return fail(400, { error: NO_GROUP });
+		const picks = readPicks(form);
+		if (!picks) return fail(400, { error: 'No request was selected. Reload the page.' });
+		return step('assign group', async () => {
+			const outcome = await assignGroup(locals.adminPb, admin, id, picks);
+			if (outcome.failed.length === 0) return outcome;
+			const tried = outcome.booked + outcome.failed.length;
+			const notBooked = outcome.failed
+				.map((failure) => `${failure.name}: ${failure.message}`)
+				.join(' ');
+			return {
+				...outcome,
+				warning: `${outcome.booked} of ${tried} spots booked. Not booked: ${notBooked}`
+			};
+		});
+	},
+
+	/** Takes a request out of its group; the request itself stays as it is. */
+	removeFromGroup: async ({ request, locals }) => {
+		const admin = locals.admin;
+		if (!admin) return fail(403, { error: 'Only admins can decide on requests.' });
+		const id = recordId(await request.formData(), 'id');
+		if (!id) return fail(400, { error: 'No request was selected. Reload the page.' });
+		return step('take out of group', () => removeFromGroup(locals.adminPb, admin, id));
 	}
 };

@@ -533,14 +533,25 @@ function eventText(ev, cfg) {
 				(d.stopped ? ' — STOPPED, ' + (d.stopped - (d.released || 0)) + ' still booked' : '')
 			);
 		// Special-needs requests: never the guest's name or what they wrote.
+		// Request groups the same: never a name, a group's name, its code, a
+		// room or what a request is about — counts and record ids only.
 		case 'special_request_new':
 			return (
 				'🧡 New special-needs request' +
+				(d.group === 'started'
+					? ' (started a group)'
+					: d.group === 'joined'
+						? ' (joined a group)'
+						: '') +
 				(d.open ? ' — ' + d.open + ' waiting for a decision' : '') +
 				(requestsUrl ? '\n' + requestsUrl : '')
 			);
 		case 'special_request_withdrawn':
-			return '🧡 A guest withdrew their special-needs request' + requestStatusNote(d.status);
+			return (
+				'🧡 A guest withdrew their special-needs request' +
+				requestStatusNote(d.status) +
+				(d.group ? ' and left their group' : '')
+			);
 		case 'special_request_approved':
 			return '✅ Special-needs request approved' + by;
 		case 'special_request_declined':
@@ -549,6 +560,28 @@ function eventText(ev, cfg) {
 			return '♿ Special-needs spot booked for a guest' + by;
 		case 'special_spot_released':
 			return '♿ Special-needs spot released' + by;
+		case 'request_group_approved':
+			return '✅ Request group approved' + by + ': ' + (d.changed || 0) + ' request(s)';
+		case 'request_group_declined':
+			return (
+				'✋ Request group declined' +
+				by +
+				': ' +
+				(d.changed || 0) +
+				' request(s)' +
+				(d.skipped ? '; ' + d.skipped + ' kept: spot booked by the crew' : '')
+			);
+		case 'request_group_booked':
+			return (
+				'👥 Spots booked for a request group' +
+				by +
+				': ' +
+				(d.booked || 0) +
+				(d.approved ? ' (' + d.approved + ' request(s) approved on the way)' : '') +
+				(d.failed ? ', ' + d.failed + ' not booked' : '')
+			);
+		case 'request_group_member_removed':
+			return '👥 A request was taken out of its group' + by;
 		case 'requests_opened':
 			return '🧡 Special-needs requests OPENED' + by + ' — guests see a link on the map';
 		case 'requests_closed':

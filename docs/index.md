@@ -48,10 +48,10 @@ features:
     link: /guide/booking#your-booking-pass
     linkText: The pass
   - icon: ♿
-    title: Special-needs spots
-    details: Need a lower bunk, step-free access or a quiet room? Ask the crew with your ticket code, even before booking opens.
+    title: Special needs & groups
+    details: Need a lower bunk, step-free access or a quiet room? Bringing an art project, a workshop or a crew? Ask the crew with your ticket code, on your own or as a group, even before booking opens.
     link: /guide/special-needs
-    linkText: Ask for a spot
+    linkText: Ask the crew
   - icon: 🔁
     title: Swapping spots
     details: Your dream spot is taken? Ask its guest for a swap, with a vibe and a few words. Nothing moves until they say yes — then both spots change at once.
@@ -110,7 +110,7 @@ flowchart LR
 | I am… | Start here |
 | --- | --- |
 | 🎫 **A guest** with a ticket | [Booking a bed](./guide/booking): ticket code, map, spot, done. |
-| ♿ **In need of a special spot** | [Special-needs spot](./guide/special-needs): ask the crew, even before booking opens. |
+| ♿ **In need of a special spot**, or here with a project | [Special needs & groups](./guide/special-needs): ask the crew, on your own or as a group, even before booking opens. |
 | 🔁 **Eyeing a taken spot** | [Swapping spots](./guide/swaps): ask its guest for a swap during Live Booking. |
 | 🤔 **Stuck** somewhere | [FAQ & troubleshooting](./guide/faq), or ask the Hamburn crew. |
 | 🛠️ **On the crew** | The admin guide is part of the app and opens for signed-in admins only: `/admin/docs/` on the CozyNights site. |
@@ -123,7 +123,7 @@ flowchart LR
 | 🎫 **A guest** with a ticket | [Booking a bed](./guide/booking): ticket code, map, spot, done. |
 | 🛠️ **On the crew** and need admin access | [Admin access & roles](./admin/access), then [the Control Center](./admin/). |
 | 📋 **Organizing** the next burn | [Event checklist](./admin/event-checklist) from first layout to after the event. |
-| ♿ **Deciding special-needs requests** | [Special-needs requests](./admin/special-needs): mark spots, decide, book. |
+| ♿ **Deciding special-needs requests** | [Special-needs requests](./admin/special-needs): mark spots, decide, book — one by one or for a whole group. |
 | 🎟️ **At the entrance**, checking guests in | [Booking passes & check-in](./admin/passes): phone camera, check-in page or USB scanner. |
 | 👥 **Looking for a guest** | [Guests](./admin/guests): every ticket with its spot, check-in, request state, messages and wallet passes. |
 | 💻 **A developer** | [Local development](./develop/) and [Architecture](./reference/architecture). |

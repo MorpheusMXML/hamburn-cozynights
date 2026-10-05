@@ -226,7 +226,9 @@ describe('changing a ticket', () => {
 				status: 'approved',
 				needs: 'x',
 				reason: 'y',
-				consent_at: '2026-09-01'
+				consent_at: '2026-09-01',
+				// in a request group: the membership goes with the request
+				request_group: 'g1'
 			},
 			{
 				id: 'sr3',
@@ -245,6 +247,10 @@ describe('changing a ticket', () => {
 		expect(outcome.requestRemoved).toBe(true);
 		expect(db.data.special_requests.map((r) => r.id)).toEqual(['sr3']);
 		expect(db.log).toContain('delete special_requests/sr1');
+		// the new holder is in no group: nobody there sees the old holder's burner
+		// name any more (PocketBase deletes the group once it is empty,
+		// pb_hooks/cozy_groups.pb.js)
+		expect(db.data.special_requests.some((r) => r.request_group === 'g1')).toBe(false);
 		// the spot stays with the ticket, as an ordinary booking
 		expect(db.data.beds.find((b) => b.id === 'b1')).toMatchObject({ occupied: true, order: 'o1' });
 
@@ -375,7 +381,7 @@ describe('importing the ticket list', () => {
 describe('applying template changes', () => {
 	const file = (): LayoutTemplate => ({
 		format: 'cozynights-layout',
-		version: '2.2',
+		version: '2.3',
 		name: 'Next year',
 		exported_at: '',
 		map: { image: '/map.png', width: 1000, height: 700 },
@@ -559,7 +565,7 @@ describe('who may do what', () => {
 	};
 	const layout = (): LayoutTemplate => ({
 		format: 'cozynights-layout',
-		version: '2.2',
+		version: '2.3',
 		name: 'Tent only',
 		exported_at: '',
 		map: { image: '/map.png', width: 1000, height: 700 },
