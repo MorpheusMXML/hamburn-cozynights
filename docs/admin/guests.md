@@ -1,11 +1,11 @@
 # Guests: every ticket at a glance
 
-One row per ticket, with everything that belongs to it: the spot, the check-in, where a special-needs request stands, which messages went out, whether the pass is in a wallet, and the ticket's own history. Open it with <kbd>👥 Guests</kbd> in the admin menu (group *Guests*, `/admin/guests`).
+One row per ticket, with everything that belongs to it: the spot, the check-in, where a special-needs request stands, which messages went out, and the ticket's own history. Open it with <kbd>👥 Guests</kbd> in the admin menu (group *Guests*, `/admin/guests`).
 
 The page **changes nothing**. Every row only links to the page that does: the ticket card, the room, the requests.
 
 > [!TIP] Bookings or Guests?
-> [Bookings & check-ins](./bookings) lists **spots** that hold a ticket and has the <kbd>Check in</kbd> / <kbd>Undo</kbd> buttons. Guests lists **tickets** — the ones without a spot too — and is where you look when the question is about a guest rather than a bed: *did they get their e-mail?*, *who has no address?*, *whose wallet pass is failing?*
+> [Bookings & check-ins](./bookings) lists **spots** that hold a ticket and has the <kbd>Check in</kbd> / <kbd>Undo</kbd> buttons. Guests lists **tickets** — the ones without a spot too — and is where you look when the question is about a guest rather than a bed: *did they get their e-mail?*, *who has no address?*
 
 ## What a row shows
 
@@ -15,7 +15,6 @@ The page **changes nothing**. Every row only links to the page that does: the ti
 | **Spot** | *B1 · Blue Room #2 · Villa*, linked to the room page, and *booked Mon 21 Sep · 14:02*. ♿ *assigned through a request* when the crew booked it for a request, ♿ *special-needs spot* when it is one. Without a spot: *No spot*. |
 | **Check-in** | ✅ with the time and *by crew@…*; *not yet* while the spot waits for the guest; — without a spot. |
 | **Messages** | ✉️ *mailed to m•••@…* once a booking e-mail went to that address, else ✉️ *no e-mail sent*. 💬 *Telegram linked* when a chat is connected. ⏳ *message queued* while one waits to be sent or retried, ⚠️ *delivery failed* when the last one could not be delivered and is not retried any more. See [Notifications](./notifications#when-something-doesn-t-arrive). |
-| **Wallet** | *Apple Wallet · up to date* / *Google Wallet · up to date* when the pass in the wallet is the ticket's current pass; *old pass* when the ticket got a new pass code since (a [hand-over](./tickets#a-ticket-passed-on-to-someone-else)); *update failing* when the wallet could not be told about the last change. — when the guest never added the pass. See [Wallet passes](./passes#wallet-passes-apple-wallet-google-wallet). |
 | **Ticket** | *imported* when the ticket list brought it, *handed over 3 days ago* if it was passed on, and *signed in* or *never signed in*. |
 | **Links** | <kbd>Ticket →</kbd> opens the full ticket card on [Tickets](./tickets) (address, pass code, hand-over). <kbd>Room →</kbd> opens the spot's room page. <kbd>Requests →</kbd> leads to the [requests page](./special-needs#_3-decide-and-book) when the ticket has a request. |
 
@@ -32,13 +31,12 @@ A guest is shown the way the [check-in desk](./passes#checking-guests-in) and th
 | The ticket code, masked: *H•••* (long codes: *LAY•••69*) | The full code — it signs the guest in and can change their booking |
 | That a request exists and how it was decided | What the guest wrote or ticked: that stays on the [requests page](./special-needs), for admins, and nowhere else |
 | That a message went out, waits or failed | The message itself, or the Telegram chat |
-| That the pass is in a wallet, and whether it is current | The pass code or serial |
 
 Names and addresses are read by the page itself and by its own endpoint only; the [live numbers](./index#are-these-numbers-current) that every admin page polls stay numbers.
 
 ## Tiles, filters and search
 
-The eight counts on top are buttons: press one and the list narrows to it, press it again for all tickets. They carry the state colours too — *with a spot* red, *checked in* turquoise, *no e-mail* red as a warning, *♿ open requests* pink; *without a spot* is grey while booking runs and orange once it has closed.
+The seven counts on top are buttons: press one and the list narrows to it, press it again for all tickets. They carry the state colours too — *with a spot* red, *checked in* turquoise, *no e-mail* red as a warning, *♿ open requests* pink; *without a spot* is grey while booking runs and orange once it has closed.
 
 | Tile | Counts |
 | --- | --- |
@@ -48,7 +46,6 @@ The eight counts on top are buttons: press one and the list narrows to it, press
 | **no e-mail** | Tickets without an address: nobody can e-mail them |
 | **♿ open requests** | Special-needs requests waiting for a decision (approved and declined ones show as tags on the rows, and are reached with <kbd>Requests →</kbd>) |
 | **Telegram** | Tickets with a linked Telegram chat |
-| **wallet pass** | Tickets whose pass is in Apple Wallet or Google Wallet, current or not |
 
 Next to them:
 
@@ -66,7 +63,7 @@ The list opens with what fits the [phase](../guide/phases): during Live Booking 
 
 While the page is open it follows the [live numbers](./index#are-these-numbers-current) like the bookings list: a booking, a move, a release or a check-in anywhere in the camp fetches the rows again within seconds, and the line under the filters says *live* — or *no connection, the list may be out of date*, or *the last update failed*.
 
-Some changes don't move those numbers: a **hand-over**, a **new e-mail address**, a **linked Telegram chat**, a **pass added to a wallet** or a message that went out. For them the page asks again whenever its tab comes back to the front, and <kbd>↻ Refresh</kbd> asks right now. So after fixing an address on [Tickets](./tickets), come back to the tab or press <kbd>↻ Refresh</kbd>.
+Some changes don't move those numbers: a **hand-over**, a **new e-mail address**, a **linked Telegram chat** or a message that went out. For them the page asks again whenever its tab comes back to the front, and <kbd>↻ Refresh</kbd> asks right now. So after fixing an address on [Tickets](./tickets), come back to the tab or press <kbd>↻ Refresh</kbd>.
 
 ## Where it is linked from
 
@@ -84,11 +81,10 @@ Some changes don't move those numbers: a **hand-over**, a **new e-mail address**
 | *No ticket matches … Try another filter.* | Filter, house and search together leave nothing. | Press the pressed tile again, choose *All houses*, clear the search. |
 | *The guest list could not be read from the database. Reload the page in a minute.* | PocketBase didn't answer. | Reload; if it stays, look at the server. |
 | A hand-over or a new address is missing | Those don't move the live numbers. | Come back to the tab or press <kbd>↻ Refresh</kbd>. |
-| *Apple Wallet · update failing* | The last change could not be pushed to the wallet. | See [Wallet passes: when something doesn't work](./passes#when-something-doesn-t-work-1). |
 
 ## Privacy
 
 - For approved admins only. Without a session, `/admin/guests` sends you to the sign-in and the data behind it (`/admin/api/guests`) answers *403*.
 - Browsers and proxies are told not to keep the answers (`no-store, private`).
-- A request's text, a guest's full address, a full ticket code, a pass serial or a Telegram chat id never appear here.
+- A request's text, a guest's full address, a full ticket code or a Telegram chat id never appear here.
 - Nothing is written from this page.

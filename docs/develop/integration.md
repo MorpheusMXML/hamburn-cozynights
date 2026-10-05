@@ -31,7 +31,7 @@ Rules that follow from it:
 
 ## What a feature branch must bring
 
-- Migrations in `pb_migrations/` that are idempotent and safe on the existing staging database (add fields, never drop or rename; backfills in raw SQL so no hook sends messages). See [Changing the database schema](./#changing-the-database-schema).
+- Migrations in `pb_migrations/` that are idempotent and safe on the existing staging database (add fields; drop or rename only by decision, and only what no deployed code still needs, as `1760200000_no_power_socket` and `1760700000_drop_wallet` did; backfills in raw SQL so no hook sends messages). See [Changing the database schema](./#changing-the-database-schema).
 - Hooks that never throw into the operation they watch, with their logic in `pb_hooks/lib/` so it can be unit-tested.
 - Tests on the layer that fits: unit for rules, integration for migrations and hooks, smoke for a route's authorization. A new admin action gets a refusal test.
 - Docs in `docs/` for what admins or guests see, and a line in the README's feature table when it is a feature.

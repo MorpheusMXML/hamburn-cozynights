@@ -39,7 +39,7 @@ sequenceDiagram
 
 - The asker needs a spot, and both spots must be ones guests could book themselves: not 🔒 locked, not ♿ special, not deactivated, not the spot the crew booked for a [special-needs request](./special-needs), not checked in.
 - Up to **3 open requests** per ticket, each open for **72 hours** (or until booking closes), at most 10 new ones a day. A no is final for that pair and spot.
-- The swap is one database transaction with its own last checks (both spots still held by the same two tickets, booking live, swaps on). The burner names belong to the tickets and travel along; booking passes keep their codes and show the new spot; wallet passes update; `booked_at` is stamped anew for both spots.
+- The swap is one database transaction with its own last checks (both spots still held by the same two tickets, booking live, swaps on). The burner names belong to the tickets and travel along; booking passes keep their codes and show the new spot; `booked_at` is stamped anew for both spots.
 - A yes ends every other open request about either spot or either ticket (*Another swap went through first*).
 
 ## When the crew changes things

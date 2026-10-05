@@ -210,27 +210,12 @@ Booking confirmations and crew alerts are sent by PocketBase (`pb_hooks/cozy_not
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_TLS`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `MAIL_REPLY_TO` | E-mail to guests. Applied to PocketBase's mail settings on every start. |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (`TELEGRAM_THREAD_ID`) | The crew group, and guests' Telegram updates (off: `TELEGRAM_GUEST_UPDATES=off`). |
 | `COZY_ADMIN_WEBHOOK_URL` | Older crew webhook (Slack, Google Chat, Discord, Telegram URL), used when `TELEGRAM_*` are empty. |
-| `COZY_APP_URL`, `COZY_ENV_LABEL` | Links in messages and the `[STAGING]` marker. Set in the compose file, not in `.env`. Production passes no `COZY_ENV_LABEL` at all, so nothing it sends looks like a test (`tests/production-clean.test.ts`). |
+| `COZY_APP_URL`, `COZY_ENV_LABEL` | Links in messages (the pass's QR picture in e-mails too) and the `[STAGING]` marker. Set in the compose file, not in `.env`. Production passes no `COZY_ENV_LABEL` at all, so nothing it sends looks like a test (`tests/production-clean.test.ts`). |
 | `PB_HIDE_CONTROLS`, `PB_LOGS_DAYS` | PocketBase settings applied on every start (`pb_hooks/cozy_settings.pb.js`): the dashboard's schema editors hidden (`on`, the default on servers), and the request log kept for that many days (default 2, never with IPs). |
 
 - **One server polls a bot.** The server reads the bot's messages (guests connecting their chat, `/pass`) by polling; two servers polling the same bot would steal each other's messages. Staging and production share one bot and crew group, so exactly one of them polls it: the other runs with `TELEGRAM_GUEST_UPDATES=off` and still sends crew alerts. Until the launch staging polls; at the launch the switch goes the other way.
 - **The mail password is stored twice.** PocketBase keeps its own copy of the SMTP settings in its database, so it is also in every database backup. Use credentials that can only send mail — an SMTP user of a sending service, one per environment — never the password of a mailbox.
 - **Check after setting it up**, on the server: `./scripts/cozy-admin.sh notify status` and `./scripts/cozy-admin.sh notify test --email <you>`.
-
-## Wallet passes per environment
-
-The booking pass can go into Apple Wallet and Google Wallet ([Wallet passes](../admin/passes#wallet-passes-apple-wallet-google-wallet)). Unlike the messages, this lives in the **app** container: the certificate and the service-account key never reach PocketBase, which only learns from the app which wallets exist (`app_settings.wallet_platforms`). All values are optional; the buttons appear when a wallet is complete.
-
-| Setting | For |
-| --- | --- |
-| `WALLET_APPLE_PASS_TYPE_ID`, `WALLET_APPLE_TEAM_ID`, `WALLET_APPLE_CERT`, `WALLET_APPLE_KEY`, `WALLET_APPLE_WWDR` | Apple Wallet: the pass type, and the certificate chain the pass file is signed with (base64 of the PEM, one line each). |
-| `WALLET_GOOGLE_ISSUER_ID`, `WALLET_GOOGLE_SERVICE_ACCOUNT` | Google Wallet: the issuer and the service account that writes its passes (base64 of the JSON key). |
-| `WALLET_EVENT_NAME`, `WALLET_EVENT_START`, `WALLET_EVENT_END`, `WALLET_VENUE_NAME`, `WALLET_VENUE_ADDRESS`, `WALLET_VENUE_LATITUDE`, `WALLET_VENUE_LONGITUDE`, `WALLET_ORGANIZATION` | What the pass says about the event. Times need a UTC offset (`2026-10-01T14:00:00+02:00`), or they are ignored. |
-
-- **One pass type and one issuer per event, the environment decides the rest.** Ids carry the environment's host, so staging and production never overwrite each other's passes even with the same accounts.
-- **Updates need HTTPS.** A pass made on a plain-HTTP origin carries no update service, so it never refreshes itself — fine for a test stack, not for a server.
-- **The log says what is on.** At startup the app prints which wallet is on, and for one that stays off, which value is missing or wrong.
-- **What a deploy must not break:** the pass type id and the issuer id. Change them and every pass already in a guest's wallet stops being updated.
 
 ## Production
 

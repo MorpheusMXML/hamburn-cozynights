@@ -4,7 +4,7 @@ A guest's whole login is the code of their ticket, and booking confirmations go 
 
 Open it with <kbd>🎟️ Tickets</kbd> in the admin menu, with <kbd>Open ticket →</kbd> on a booked spot (see [Bookings & check-ins](./bookings)) or with <kbd>Ticket →</kbd> on the guest list. Both parts fold away with <kbd>+</kbd> / <kbd>−</kbd>.
 
-This page finds **one** ticket (or the tickets of one address) and changes it. The list of **every** ticket — with its spot, check-in, request state, messages and wallet passes, and the ones without a spot or without an address — lives on [Guests: every ticket at a glance](./guests).
+This page finds **one** ticket (or the tickets of one address) and changes it. The list of **every** ticket — with its spot, check-in, request state and messages, and the ones without a spot or without an address — lives on [Guests: every ticket at a glance](./guests).
 
 ![A ticket found by its code, about to be handed over](../assets/screenshots/admin-tickets.webp)
 
