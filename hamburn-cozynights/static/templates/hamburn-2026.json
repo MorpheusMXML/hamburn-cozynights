@@ -255,11 +255,15 @@
 			"x": 593,
 			"y": 350,
 			"kind": "house",
-			"description": "Right in the centre of attention: the bar and some art and cuddle rooms are on the first floor, and the eating hall is close by. This is the place to be at night, with lots of people passing through, but it is not a second dancefloor. Rooms 101 to 106 are upstairs and carry the names from the floor plan.",
+			"description": "Right in the centre of attention: the bar and some art and cuddle rooms are on the first floor, and the eating hall is close by. This is the place to be at night, with lots of people passing through, but it is not a second dancefloor. Rooms 101 to 106 are upstairs, each with a name of its own.",
 			"floor_plans": [
 				{
-					"image": "/floorplans/brahmsee-villa-upper-floor-2026.webp",
-					"caption": "Upper floor: rooms 101–106 with their names"
+					"image": "/floorplans/brahmsee-villa-ground-floor-2026.webp",
+					"caption": "Ground floor: rooms 1 and 2 are doors 001 and 002"
+				},
+				{
+					"image": "/floorplans/brahmsee-villa-upper-floor-2026-v2.webp",
+					"caption": "Upper floor: rooms 101–106, from Kastanienblick to Bienenkorb"
 				}
 			],
 			"rooms": [
@@ -364,12 +368,12 @@
 			"description": "Everyone leaves this house by Sunday 12:00 (midday): you and all your things must be out by then. It lies a bit off to the side, in a quiet zone inside and outside the house. The Cozy Café is here: workshops during the day, a place to hang out in the evening, and a sober space. Rooms 001 to 004 are downstairs, 101 to 105 upstairs.",
 			"floor_plans": [
 				{
-					"image": "/floorplans/haus-am-see-ground-floor-2026.webp",
-					"caption": "Ground floor: rooms 001–004 (the black door numbers)"
+					"image": "/floorplans/haus-am-see-ground-floor-2026-v2.webp",
+					"caption": "Ground floor: rooms 1–4 are doors 001–004"
 				},
 				{
-					"image": "/floorplans/haus-am-see-upper-floor-2026.webp",
-					"caption": "Upper floor: rooms 101–105 (the black door numbers)"
+					"image": "/floorplans/haus-am-see-upper-floor-2026-v2.webp",
+					"caption": "Upper floor: rooms 101–105"
 				}
 			],
 			"rooms": [
@@ -530,26 +534,18 @@
 			"description": "Central house with two floors, both reachable without steps. The Jam Room on the lower floor is open from noon to 10 pm. The upper floor has the Playroom (ambient sound only) and the Welfare, Ranger and Medics rooms, so you are close to everything.",
 			"floor_plans": [
 				{
-					"image": "/floorplans/waelderhaus-lower-floor-2026.webp",
-					"caption": "Lower floor with the Jam Room (an older plan: the room numbers differ)"
+					"image": "/floorplans/waelderhaus-lower-floor-2026-v2.webp",
+					"caption": "Lower floor: rooms 1–7 are doors 001–007"
 				},
 				{
-					"image": "/floorplans/waelderhaus-upper-floor-2026.webp",
-					"caption": "Upper floor with the Playroom (an older plan: the room numbers differ)"
+					"image": "/floorplans/waelderhaus-upper-floor-2026-v2.webp",
+					"caption": "Upper floor: rooms 102–110"
 				}
 			],
 			"rooms": [
 				{
-					"name": "Single room",
-					"room_number": 1,
-					"kind": "room",
-					"beds": [
-						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "single" }
-					]
-				},
-				{
 					"name": "Five-bed room",
-					"room_number": 2,
+					"room_number": 1,
 					"kind": "room",
 					"beds": [
 						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B2" },
@@ -557,6 +553,14 @@
 						{ "label": "B3", "enabled": true, "is_locked": false, "bed_type": "bunk_lower", "bunk_partner": "B4" },
 						{ "label": "B4", "enabled": true, "is_locked": false, "bed_type": "bunk_upper", "bunk_partner": "B3" },
 						{ "label": "B5", "enabled": true, "is_locked": false, "bed_type": "single" }
+					]
+				},
+				{
+					"name": "Single room",
+					"room_number": 2,
+					"kind": "room",
+					"beds": [
+						{ "label": "B1", "enabled": true, "is_locked": false, "bed_type": "single" }
 					]
 				},
 				{
@@ -715,6 +719,20 @@
 			"y": 383,
 			"kind": "hut_group",
 			"description": "Bungalows with mostly 7 beds right at the entrance of the venue: the shortest way from the parking lot when you unload the car, and close to the dancefloor. We don't expect the sound to carry this way, and nobody passes by, so this should be a chilled corner. Hut 7 is split into two single rooms, left and right.",
+			"floor_plans": [
+				{
+					"image": "/floorplans/waldhuetten-huts-2026.webp",
+					"caption": "Huts 1–6 with 7 beds; hut 7 left and right are the single huts 101 and 102"
+				},
+				{
+					"image": "/floorplans/waldhuetten-washrooms-2026.webp",
+					"caption": "Washrooms and showers, about 100 m from the huts"
+				},
+				{
+					"image": "/floorplans/waldhuetten-lounge-2026.webp",
+					"caption": "The Waldlounge"
+				}
+			],
 			"rooms": [
 				{
 					"name": "Hut 1",

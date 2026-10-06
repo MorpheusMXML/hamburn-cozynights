@@ -1,6 +1,6 @@
 // tests/template.test.ts — layout template format: parsing, validation, export building
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import {
 	TEMPLATE_LIMITS,
 	buildTemplate,
@@ -1078,9 +1078,15 @@ describe('the Hamburn 2026 template', () => {
 		const images = result.template.houses.flatMap((house) =>
 			(house.floor_plans ?? []).map((plan) => plan.image)
 		);
-		expect(images).toHaveLength(5);
+		expect(images).toHaveLength(9);
 		for (const image of images) {
 			expect(() => readFileSync(`static${image}`)).not.toThrow();
 		}
+		// …and nothing else: an old picture left behind would only make the image bigger.
+		expect(
+			readdirSync('static/floorplans')
+				.map((file) => `/floorplans/${file}`)
+				.sort()
+		).toEqual([...images].sort());
 	});
 });

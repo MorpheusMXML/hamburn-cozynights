@@ -14,7 +14,7 @@ Press <kbd>DOWNLOAD JSON 💾</kbd>. Your browser saves `cozynights-layout-YYYY-
 - Contains **structure only**: no bookings, no ticket codes, no burner names.
 - If the camp has something an import would refuse (two houses with the same name, for example), the manager says so right after the download.
 - **How to build a starting layout** (unfold it under the button) explains the routine: build the camp in Staging Mode, download it, keep the file safe, and next time drop it on *Compare & Import*. <kbd>Download example template</kbd> there gives you `brahmsee-starter.json`, a small worked example for the Brahmsee site.
-- **The Hamburn 2026 layout** is `hamburn-2026.json` (in the app at `/templates/hamburn-2026.json`): every house, room and bed of the 2025 bed sheet — 7 places, 57 rooms and huts, 297 beds — with descriptions, bunk beds and the floor plans of Wälderhaus, Brahmsee-Villa and Haus am See. The See-Hütten pin is placed roughly by the lake; drag it onto the huts after importing.
+- **The Hamburn 2026 layout** is `hamburn-2026.json` (in the app at `/templates/hamburn-2026.json`): every house, room and bed of the 2025 bed sheet — 7 places, 57 rooms and huts, 297 beds — with descriptions, bunk beds and the floor plans of Brahmsee-Villa, Haus am See, Wälderhaus and Waldhütten. The See-Hütten pin is placed roughly by the lake; drag it onto the huts after importing.
 
 ## Compare & import
 
