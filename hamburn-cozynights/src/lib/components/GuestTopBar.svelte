@@ -21,7 +21,7 @@ chips, unless the guest put the panel away to look around.
 	import { writable } from 'svelte/store';
 
 	/**
-	 * Closed: the guest put the map's phase panel away to look around, so the
+	 * Staging or Closed: the guest put the map's phase panel away to look around, so the
 	 * map is usable again. The map page sets it in the browser only (a module
 	 * store on the server would be shared between requests) and clears it
 	 * when it leaves.

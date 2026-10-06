@@ -441,9 +441,9 @@ describe('what guests see of the window', () => {
 		// closed with a later window armed: the map counts down in its own panel …
 		expect(showCountdownBar('closed', opens, '/map')).toBe(false);
 		expect(showCountdownBar('closed', opens, '/house/x')).toBe(true);
-		// … until the guest puts the panel away to look around (Closed only)
+		// … until the guest puts the panel away to look around
 		expect(showCountdownBar('closed', opens, '/map', true)).toBe(true);
-		expect(showCountdownBar('staging', opens, '/map', true)).toBe(false);
+		expect(showCountdownBar('staging', opens, '/map', true)).toBe(true);
 		const closes = nextTransition({ ...armed, basePhase: 'live', opensAt: at(-DAY) }, NOW);
 		expect(showCountdownBar('live', closes, '/map')).toBe(true);
 		expect(showCountdownBar('staging', null, '/house/x')).toBe(false);
@@ -464,8 +464,9 @@ describe('what guests see of the window', () => {
 		expect(mapCovered('closed', null, '/map')).toBe(true);
 		expect(mapCovered('closed', null, '/map', true)).toBe(false);
 		expect(mapCovered('closed', opens, '/map', true)).toBe(false);
-		// looking around is the map's panel only: Staging has no LOOK AROUND
-		expect(mapCovered('staging', opens, '/map', true)).toBe(true);
+		// Staging has its LOOK AROUND too
+		expect(mapCovered('staging', opens, '/map', true)).toBe(false);
+		expect(mapCovered('staging', null, '/map', true)).toBe(false);
 		// other pages have no panel
 		expect(mapCovered('staging', opens, '/house/x')).toBe(false);
 		expect(mapCovered('closed', null, '/random-bed')).toBe(false);

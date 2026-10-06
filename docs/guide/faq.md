@@ -27,7 +27,7 @@ CozyNights only shows what the crew filled in: an empty spot card means *nobody 
 :::
 
 ::: details The map is blurry and houses don't open ("Booking is not open yet…")
-Booking hasn't opened yet. Once the crew has armed the timer, a countdown shows when it starts, and the map unlocks by itself when it ends. Without a countdown the map says *Booking is not open yet. The crew is still setting up the houses. Check back soon.* <kbd>📡 RELOAD SENSORS</kbd> refreshes the page state.
+Booking hasn't opened yet. Once the crew has armed the timer, a countdown shows when it starts, and the map unlocks by itself when it ends. Without a countdown the map says *Booking is not open yet. The crew is still setting up the houses. Check back soon.* <kbd>📡 RELOAD SENSORS</kbd> refreshes the page state; <kbd>🗺️ LOOK AROUND</kbd> clears the view, so you can already open houses, rooms and floor plans (read-only).
 :::
 
 ::: details Where is the countdown?

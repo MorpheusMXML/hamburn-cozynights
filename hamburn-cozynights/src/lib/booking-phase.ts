@@ -193,7 +193,7 @@ export function showTopBar(pathname: string): boolean {
  * timer is armed. On the map, the phase panel counts down itself whenever
  * booking is not open yet for guests (Staging, and Closed with an opening
  * armed) — the bar would count the same seconds twice — unless the guest put
- * the panel away to look around (`lookingAround`, Closed only).
+ * the panel away to look around (`lookingAround`).
  */
 export function showCountdownBar(
 	phase: BookingPhase,
@@ -217,7 +217,7 @@ export function mapCovered(
 	lookingAround = false
 ): boolean {
 	if (pathname !== '/map') return false;
-	return guestPhase(phase, next) !== 'live' && !(phase === 'closed' && lookingAround);
+	return guestPhase(phase, next) !== 'live' && !lookingAround;
 }
 
 /**

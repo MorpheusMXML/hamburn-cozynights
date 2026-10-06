@@ -99,10 +99,10 @@ const PAGES: PageCase[] = [
 	{ name: 'booking pass', path: (c) => `/pass/${c.passCode}`, as: 'anonymous' },
 	{ name: 'map', path: () => '/map', as: 'guestWithSpot', phases: ALL_PHASES },
 	{
-		name: 'map: looking around after booking closed',
+		name: 'map: looking around',
 		path: () => '/map',
 		as: 'guestWithSpot',
-		phases: ['closed'],
+		phases: ['staging', 'opening', 'closed', 'reopening'],
 		open: async (page) => {
 			await page.getByRole('button', { name: /LOOK AROUND/ }).click();
 			await page.locator('.phase-overlay').waitFor({ state: 'detached' });
