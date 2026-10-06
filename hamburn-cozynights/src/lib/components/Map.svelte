@@ -22,25 +22,19 @@
 		isTooCloseToOtherHouse,
 		screenToMap
 	} from '$lib/map-geometry';
-	import { toast } from '$lib/dialogs';
 	import { prefersReducedMotion } from '$lib/field-alert';
 	import { goto } from '$app/navigation';
 	import { createEventDispatcher } from 'svelte';
-	import type { BookingPhase } from '$lib/booking-phase';
 
 	export let houses: any[] = [];
 	export let isEditorMode = false;
 	export let isBookingActive = false;
-	/** Guests: houses can be opened in Live Booking and after booking closed (read-only). */
-	export let phase: BookingPhase | null = null;
 	/** Editor: the layout is locked (live or closed). Defaults to isBookingActive. */
 	export let layoutLocked: boolean | null = null;
-	/** Guests: blurs the map like in Staging while a panel covers it (Closed). */
+	/** Guests: blurs the map while the phase panel covers it (Staging, Closed). */
 	export let dimmed = false;
 	/** The guest filtered the map: houses without a fitting free spot fade back. */
 	export let wishes = false;
-
-	$: browsable = phase ? phase !== 'staging' : isBookingActive;
 
 	// Labels go below the pin unless another house sits right below it. At the
 	// top or bottom edge of the map the edge decides: a label cut off by the edge
@@ -263,10 +257,6 @@
 			}
 			return;
 		}
-		if (!browsable) {
-			toast('Booking is not open yet. You can look around once Live Booking starts.', 'info');
-			return;
-		}
 		goto(`/house/${house.id}`);
 	}
 
@@ -381,7 +371,7 @@
 			width={MAP_WIDTH}
 			height={MAP_HEIGHT}
 			class="map-image"
-			class:blurred={(!browsable || dimmed) && !isEditorMode}
+			class:blurred={dimmed && !isEditorMode}
 		/>
 
 		<!-- Dynamic Mouse Glow -->

@@ -2,7 +2,7 @@
 	import type { BookingPhase } from '$lib/booking-phase';
 
 	/**
-	 * Closed: once a guest looked around, coming back from a house leaves the
+	 * Once a guest looked around, coming back from a house leaves the
 	 * panel away. Remembered with the phase it happened in, so a new phase
 	 * (booking opened again, a window was armed) greets them with it again.
 	 */
@@ -31,8 +31,8 @@
 	// A panel covers the blurred map whenever guests can't book. It counts down
 	// while booking is not open yet — Staging, and Closed with an opening armed,
 	// where the spots are anything but final — and says BOOKING CLOSED once
-	// nothing is planned any more. In Closed the guest can put it away and look
-	// around (houses stay open, read-only).
+	// nothing is planned any more. The guest can put it away and look around:
+	// houses, rooms and floor plans stay open, read-only.
 	$: notOpenYet = guestPhase === 'staging';
 	let lookingAround = data.phase === lookedAroundIn;
 	let panelPhase = data.phase;
@@ -40,7 +40,7 @@
 		panelPhase = phase;
 		lookingAround = false;
 	}
-	$: showPanel = guestPhase !== 'live' && !(phase === 'closed' && lookingAround);
+	$: showPanel = guestPhase !== 'live' && !lookingAround;
 
 	function lookAround() {
 		lookingAround = true;
@@ -97,7 +97,6 @@
 				houses={data.houses}
 				isEditorMode={false}
 				isBookingActive={data.isBookingActive}
-				phase={data.phase}
 				dimmed={showPanel}
 				wishes={wishes.length > 0}
 			/>
@@ -152,21 +151,22 @@
 					</a>
 				{/if}
 
-				{#if phase === 'closed'}
-					<!-- Closed: the houses stay open, read-only. -->
+				<div class="panel-actions">
+					<!-- The houses stay open, read-only: before booking opens too. -->
 					<button class="panel-button" on:click={lookAround}>
 						<span class="icon">🗺️</span>
 						LOOK AROUND
 					</button>
-				{:else}
-					<button class="panel-button" class:smashed={isShaking} on:click={handleReloadSensors}>
-						<span class="icon">📡</span>
-						RELOAD SENSORS
-						{#if clickCount > 5}
-							<span class="warning-text">CALIBRATING INTENSELY!</span>
-						{/if}
-					</button>
-				{/if}
+					{#if phase !== 'closed'}
+						<button class="panel-button" class:smashed={isShaking} on:click={handleReloadSensors}>
+							<span class="icon">📡</span>
+							RELOAD SENSORS
+							{#if clickCount > 5}
+								<span class="warning-text">CALIBRATING INTENSELY!</span>
+							{/if}
+						</button>
+					{/if}
+				</div>
 			</div>
 		</div>
 	{/if}
@@ -412,6 +412,13 @@
 
 	.laser-text.closed {
 		color: #e5e5e5;
+	}
+
+	.panel-actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 1rem;
 	}
 
 	.panel-button {
