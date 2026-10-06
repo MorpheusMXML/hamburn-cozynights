@@ -161,7 +161,11 @@ Guests and admins see one picture of the camp, `static/lageplan-brahmsee-<year>.
 4. **Check the pins** on staging in the map view of *Map & houses* (`/admin/camp`) and drag any that no longer sit on their house. Templates exported before the swap carry the old name in `map.image`; importing them shows a warning to check the pins, nothing else changes.
 5. **Set the event year** in `src/lib/event.ts` (`EVENT_YEAR`): the start page shows it under the title.
 
-**Floor plans of a house** follow the same rule. Save the picture as WebP, at most 1600 px wide, under `static/floorplans/<house>-<floor>-<year>.webp` (lowercase letters, digits and dashes), and name it in the house's `floor_plans` in the layout template (see [Layout templates](../admin/templates#file-format)); importing the template puts it on the house. A new picture gets a new name, never the old one. `npm test` checks that every plan of `static/templates/hamburn-2026.json` exists.
+**Floor plans of a house** follow the same rule. Save the picture as WebP, at most 1600 px wide, under `static/floorplans/<house>-<floor>-<year>.webp` (lowercase letters, digits and dashes), and name it in the house's `floor_plans` in the layout template (see [Layout templates](../admin/templates#file-format)); importing the template puts it on the house. A new picture gets a new name, never the old one: a newer plan of the same year gets `-v2` (`waelderhaus-lower-floor-2026-v2.webp`). `npm test` checks that every plan of `static/templates/hamburn-2026.json` exists and that `static/floorplans/` holds no other picture, so delete the old file in the same commit.
+
+The youth hostel sends its plans as A4 PDFs, one floor per page. Render each page at about 2400 px wide (for example with macOS PDFKit or `pdftoppm -r 200`), crop it to the plan with its floor label, leave out the header and the "not to scale" footer, and save it at 1600 px and WebP quality 80: 30 to 70 kB per plan.
+
+A server that already imported the layout keeps the old names in its houses, and after the old files are gone it would show a broken picture. So a plan swap also ships a **migration** that puts the new list on the houses that still name an old picture, like `pb_migrations/1760800000_floor_plans_2026_v2.js` (v0.31.1); it runs on the next deploy of staging and production, no admin has to apply the template again. Keep its lists equal to the template's: `tests/floor-plans-migration.test.ts` compares them.
 
 ## Conventions
 

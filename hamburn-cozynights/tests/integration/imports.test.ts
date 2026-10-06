@@ -544,8 +544,12 @@ describe('the Hamburn 2026 template', () => {
 			.getFirstListItem(su.filter('name = {:name}', { name: `Brahmsee-Villa ${tag}` }));
 		expect(villa.floor_plans).toEqual([
 			{
-				image: '/floorplans/brahmsee-villa-upper-floor-2026.webp',
-				caption: 'Upper floor: rooms 101–106 with their names'
+				image: '/floorplans/brahmsee-villa-ground-floor-2026.webp',
+				caption: 'Ground floor: rooms 1 and 2 are doors 001 and 002'
+			},
+			{
+				image: '/floorplans/brahmsee-villa-upper-floor-2026-v2.webp',
+				caption: 'Upper floor: rooms 101–106, from Kastanienblick to Bienenkorb'
 			}
 		]);
 
