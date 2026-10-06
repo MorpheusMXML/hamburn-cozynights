@@ -165,6 +165,8 @@ Booking, moving and releasing a spot only work during Live Booking; the burner n
 
 When your spot is booked, changes or is released, CozyNights sends an e-mail to the **address of your ticket**. You don't enter it anywhere; your room page shows where confirmations go, shortened like `m•••@example.com`. It usually arrives within a minute; right after booking opens, when many people book at once, it can take a few minutes. If the crew ever has to change the camp layout and your spot goes with it, you hear about it the same way, so you can pick a new one.
 
+Every e-mail that shows your spot also brings your [booking pass](#your-booking-pass): its QR code as a picture right inside the e-mail, its link and its short code. That e-mail is all you need to show at arrival. Some mail apps also list the picture as an attachment; the link works just as well.
+
 **Your room page** is the room that holds your spot: the room link in every confirmation takes you there, and so does <kbd>Visit My Room</kbd> on the roulette page. Every other house and room shows a *You already have a spot* note with your spot as a small ticket; tapping it opens your booking pass.
 
 ### Your booking pass
@@ -174,10 +176,6 @@ Once you hold a spot, your room page shows <kbd>🎫 Show booking pass</kbd>, ev
 <p align="center"><img src="../assets/screenshots/guest-pass.webp" alt="A booking pass on a phone: house, room, spot, burner name, QR code and pass code" width="300" /></p>
 
 <kbd>Save QR code</kbd> stores the QR code as a picture (on a phone it goes to your photos), <kbd>Camp map</kbd> takes you back to the map. Before the check-in the pass stays valid when you move to another spot; the crew always sees the spot your ticket holds right now. Release your spot, and the same link says that your ticket holds no spot at the moment. The pass code is not your ticket code: it can only show your booking, never change it.
-
-### In your wallet
-
-If the crew has set it up, the pass page, your room page and the roulette card also offer <kbd>Add to Apple Wallet</kbd> or <kbd>Add to Google Wallet</kbd> — your phone shows the one it has. The wallet pass carries the same QR code, and it **keeps itself up to date**: if the crew has to move you, the pass in your wallet follows by itself and tells you. It expires the day after the event, and you can delete it any time. If your ticket is passed on to someone else, the old pass says *No longer valid* and the new holder gets their own.
 
 ### Updates on Telegram
 

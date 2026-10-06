@@ -80,8 +80,6 @@ const TEXTS = [
 		text: 'Your booking pass (code {passCode}): {passUrl} — show it when you arrive, if the crew asks.' },
 	{ key: 'mail.fixed', group: 'mail.common', label: 'A spot the crew booked: how to change it', hint: 'Instead of the usual "to change or release it" line, when the crew booked the spot for a special-needs request.', placeholders: ['roomUrl'],
 		text: 'The crew picked this spot for you, so please contact the crew to change it. Your room: {roomUrl}' },
-	{ key: 'mail.wallet', group: 'mail.common', label: 'Wallet passes', hint: 'Below the booking pass, when Apple Wallet or Google Wallet passes are set up on the server.', placeholders: [],
-		text: 'Keep it in Apple Wallet or Google Wallet: open the pass and tap the button. The wallet pass updates itself when your spot changes.' },
 	{ key: 'mail.telegram', group: 'mail.common', label: 'Offer: updates on Telegram', hint: 'In every message that shows the spot, while the guest has no Telegram chat connected (and the bot is set up).', placeholders: ['telegramUrl'],
 		text: 'Want every change and your pass on Telegram as well? Connect here: {telegramUrl}' },
 

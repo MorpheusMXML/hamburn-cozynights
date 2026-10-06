@@ -99,7 +99,7 @@ It goes to the address that belongs to your ticket, usually within a minute; rig
 :::
 
 ::: details Where is my booking pass?
-On your room page (<kbd>🎫 Show booking pass</kbd>), as the small ticket on every other house and room (and on the map once booking has closed), and behind the link in your confirmation e-mail or Telegram message. The link keeps working after you release your spot, but then it says that your ticket holds no spot right now. A screenshot of it is fine.
+On your room page (<kbd>🎫 Show booking pass</kbd>), as the small ticket on every other house and room (and on the map once booking has closed), in your confirmation e-mail (its QR code as a picture, with the link and the code) and behind the link in a Telegram message. The link keeps working after you release your spot, but then it says that your ticket holds no spot right now. A screenshot of it is fine.
 :::
 
 ::: details My pass link says "This booking pass is unknown" or "Too many unknown passes from your connection"
@@ -112,10 +112,6 @@ The crew checked your booking pass when you arrived, so the spot is yours for th
 
 ::: details How do I stop the Telegram messages?
 Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page or on the page **Updates on Telegram**, or send `/stop` to the bot.
-:::
-
-::: details Can I keep my pass in Apple Wallet or Google Wallet?
-If the crew has set it up, yes: <kbd>Add to Apple Wallet</kbd> or <kbd>Add to Google Wallet</kbd> sits under your pass, on your room page and on the roulette card — your phone shows the one it has. The wallet pass updates itself when your spot changes, and expires after the event. No buttons? Then this camp doesn't offer it; the pass page and a screenshot work just as well.
 :::
 
 ::: details Can I get my pass in the Telegram chat?

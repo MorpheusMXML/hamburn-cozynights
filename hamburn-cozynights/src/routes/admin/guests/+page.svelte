@@ -18,8 +18,7 @@
 		visibleGuests,
 		type GuestFilter,
 		type GuestRow,
-		type GuestSort,
-		type GuestWalletState
+		type GuestSort
 	} from '$lib/guests';
 	import { PHASE_ICONS, PHASE_LABELS, formatBerlin } from '$lib/booking-phase';
 	import { createLivePoll } from '$lib/live-stats-poll';
@@ -48,9 +47,9 @@
 	// The live numbers (/admin/api/stats) notice every booking, move, release
 	// and check-in; only when their `changedAt` moved are the rows asked for
 	// again (the same idea as $lib/live-bookings.ts, for /admin/api/guests).
-	// A hand-over, a new e-mail address, a linked Telegram chat or a pass
-	// added to a wallet do NOT move `changedAt` — so the page also asks again
-	// when its tab comes back to the front, and the Refresh button asks now.
+	// A hand-over, a new e-mail address or a linked Telegram chat do NOT move
+	// `changedAt` — so the page also asks again when its tab comes back to the
+	// front, and the Refresh button asks now.
 	const GUESTS_URL = '/admin/api/guests';
 	const poll = createLivePoll();
 	let rows: GuestRow[] = data.guests ?? [];
@@ -147,12 +146,6 @@
 		live: 'Live Booking: every ticket, and who has booked a spot so far.',
 		closed:
 			'Booking is closed: the guests arrive. A ticket without a spot now needs the crew; the arrivals are on the bookings page.'
-	};
-
-	const WALLET_WORDS: Record<Exclude<GuestWalletState, null>, string> = {
-		current: 'up to date',
-		voided: 'old pass',
-		failing: 'update failing'
 	};
 
 	const stamp = (iso: string) => (iso ? formatBerlin(iso, { year: false }) : '');
@@ -269,7 +262,6 @@
 			<span>Spot</span>
 			<span>Check-in</span>
 			<span>Messages</span>
-			<span>Wallet</span>
 			<span>Ticket</span>
 			<span></span>
 		</div>
@@ -326,20 +318,6 @@
 						{#if row.notify.telegram}<span>💬 Telegram linked</span>{/if}
 						{#if row.notify.queued}<span class="waiting">⏳ message queued</span>{/if}
 						{#if row.notify.failed}<span class="failed">⚠️ delivery failed</span>{/if}
-					</div>
-					<div class="cell wallet">
-						<span class="cell-label">Wallet</span>
-						{#if row.wallet.apple}
-							<span class:failed={row.wallet.apple === 'failing'}
-								>Apple Wallet · {WALLET_WORDS[row.wallet.apple]}</span
-							>
-						{/if}
-						{#if row.wallet.google}
-							<span class:failed={row.wallet.google === 'failing'}
-								>Google Wallet · {WALLET_WORDS[row.wallet.google]}</span
-							>
-						{/if}
-						{#if !row.wallet.apple && !row.wallet.google}<span class="muted">—</span>{/if}
 					</div>
 					<div class="cell ticket">
 						<span class="cell-label">Ticket</span>
@@ -558,7 +536,7 @@
 		display: grid;
 		grid-template-columns:
 			minmax(11rem, 1.4fr) minmax(9rem, 1.1fr) minmax(7rem, 0.8fr) minmax(8rem, 1fr)
-			minmax(7rem, 0.8fr) minmax(7rem, 0.8fr) minmax(7rem, auto);
+			minmax(7rem, 0.8fr) minmax(7rem, auto);
 		gap: 0.75rem 1rem;
 		align-items: start;
 	}
@@ -698,7 +676,8 @@
 			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 		}
 		.cell.guest,
-		.cell.place {
+		.cell.place,
+		.cell.ticket {
 			grid-column: 1 / -1;
 		}
 		.cell.actions {

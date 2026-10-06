@@ -158,13 +158,6 @@ export function quickViews(
 					title: 'Tickets whose address got a booking e-mail'
 				},
 				{
-					key: 'wallet',
-					label: 'Wallet pass',
-					href: '/admin/guests?show=wallet',
-					state: 'idle',
-					title: 'Tickets with the pass in Apple or Google Wallet'
-				},
-				{
 					key: 'handedover',
 					label: 'Handed over',
 					href: '/admin/guests?show=handedover',

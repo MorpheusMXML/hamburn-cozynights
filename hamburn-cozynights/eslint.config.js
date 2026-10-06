@@ -12,7 +12,8 @@ const gitignorePath = fileURLToPath(new URL('./.gitignore', import.meta.url));
 
 export default defineConfig(
 	{
-		ignores: ['src/lib/pocketbase-types.ts']
+		// generated: the types (npm run typegen), the JSVM's qr bundle (npm run vendor:pb-qr)
+		ignores: ['src/lib/pocketbase-types.ts', 'pb_hooks/lib/vendor/']
 	},
 	includeIgnoreFile(gitignorePath),
 	js.configs.recommended,

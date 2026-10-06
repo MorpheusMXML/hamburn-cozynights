@@ -1,22 +1,21 @@
 /**
  * The guest list of the admin area (/admin/guests): every imported ticket
- * with its spot, check-in, special-needs request, messages and wallet passes.
+ * with its spot, check-in, special-needs request and messages.
  *
  * Orders are superuser-only in PocketBase, so this runs on the app's service
  * account: every caller checks `locals.admin` first. Everything is read in
- * bulk — eight list requests for the whole camp, never one per ticket — and
+ * bulk — seven list requests for the whole camp, never one per ticket — and
  * joined in memory. What leaves this module is what the check-in desk shows
- * (names, masked e-mail, masked ticket code, stamps and yes/no facts); a pass
- * serial, a chat id or what a guest wrote in a request never does.
+ * (names, masked e-mail, masked ticket code, stamps and yes/no facts); a chat
+ * id or what a guest wrote in a request never does.
  */
 import type {
 	GuestNotifyResponse,
 	OrdersResponse,
 	SpecialRequestsResponse,
-	TypedPocketBase,
-	WalletPassesResponse
+	TypedPocketBase
 } from '$lib/pocketbase-types';
-import type { GuestRequestState, GuestRow, GuestWalletState } from '$lib/guests';
+import type { GuestRequestState, GuestRow } from '$lib/guests';
 import { describeBookings, type BookingRecords } from '$lib/server/bookings';
 import type { BookingRow } from '$lib/bookings';
 import { holderName, maskTicketCode } from '$lib/tickets';
@@ -32,7 +31,6 @@ type GuestOrder = Pick<
 	| 'customer_name'
 	| 'email'
 	| 'burner_name'
-	| 'pass_code'
 	| 'handed_over_at'
 	| 'created'
 >;
@@ -41,7 +39,6 @@ type GuestNotify = Pick<
 	'order' | 'mail_sent' | 'mail_to' | 'tg_chat' | 'due' | 'attempts'
 >;
 type GuestRequest = Pick<SpecialRequestsResponse, 'order' | 'status' | 'bed'>;
-type GuestPass = Pick<WalletPassesResponse, 'order' | 'platform' | 'serial' | 'attempts'>;
 
 export interface GuestRecords {
 	orders: GuestOrder[];
@@ -53,13 +50,6 @@ export interface GuestRecords {
 	assigned: Map<string, string>;
 	notify: GuestNotify[];
 	requests: GuestRequest[];
-	passes: GuestPass[];
-}
-
-/** Is the pass in this wallet the ticket's pass (like wallet/content.ts decides it)? */
-function walletState(pass: GuestPass, passCode: string): GuestWalletState {
-	if ((pass.attempts ?? 0) > 0) return 'failing';
-	return pass.serial === passCode ? 'current' : 'voided';
 }
 
 /** A ticket's request: pending beats decided, so an open one is never hidden by an old one. */
@@ -93,13 +83,6 @@ export function describeGuests(records: GuestRecords): GuestRow[] {
 		list.push(request);
 		requestsByOrder.set(request.order, list);
 	}
-	const passesByOrder = new Map<string, GuestPass[]>();
-	for (const pass of records.passes) {
-		if (!pass.order) continue;
-		const list = passesByOrder.get(pass.order) ?? [];
-		list.push(pass);
-		passesByOrder.set(pass.order, list);
-	}
 
 	const rows: GuestRow[] = [];
 	for (const order of records.orders) {
@@ -107,15 +90,6 @@ export function describeGuests(records: GuestRecords): GuestRow[] {
 		if (!order.order_number) continue;
 		const booking = bookings.get(order.id);
 		const notify = notifyByOrder.get(order.id);
-		const passes = passesByOrder.get(order.id) ?? [];
-		// Of several passes on one wallet (a hand-over made a new one), the
-		// ticket's current pass counts; the others are voided anyway.
-		const wallet = (platform: 'apple' | 'google'): GuestWalletState => {
-			const own = passes.filter((pass) => pass.platform === platform);
-			if (own.length === 0) return null;
-			const current = own.find((pass) => pass.serial === order.pass_code) ?? own[0];
-			return walletState(current, order.pass_code ?? '');
-		};
 		const attempts = notify?.attempts ?? 0;
 		rows.push({
 			id: order.id,
@@ -148,8 +122,7 @@ export function describeGuests(records: GuestRecords): GuestRow[] {
 				queued: !!notify?.due,
 				// The same reading as the ops counts (src/lib/server/stats.ts, OPS_FILTERS).
 				failed: !notify?.due && attempts > 0
-			},
-			wallet: { apple: wallet('apple'), google: wallet('google') }
+			}
 		});
 	}
 	return rows;
@@ -159,14 +132,13 @@ export function describeGuests(records: GuestRecords): GuestRow[] {
  * Reads what the rows are made of, everything in bulk: the tickets, the
  * booked spots with their rooms and houses, the notify records, the
  * special-needs requests (only ticket, status and spot — never the needs or
- * the reason, they are health data) and the wallet passes.
+ * the reason, they are health data).
  */
 export async function readGuests(adminPb: TypedPocketBase): Promise<GuestRow[]> {
 	const bulk = { batch: 1000, requestKey: null } as const;
-	const [orders, beds, rooms, houses, assigned, notify, requests, passes] = await Promise.all([
+	const [orders, beds, rooms, houses, assigned, notify, requests] = await Promise.all([
 		adminPb.collection('orders').getFullList<GuestOrder>({
-			fields:
-				'id,order_number,order_hash,customer_name,email,burner_name,pass_code,handed_over_at,created',
+			fields: 'id,order_number,order_hash,customer_name,email,burner_name,handed_over_at,created',
 			...bulk
 		}),
 		adminPb.collection('beds').getFullList<BookingRecords['beds'][number]>({
@@ -194,14 +166,7 @@ export async function readGuests(adminPb: TypedPocketBase): Promise<GuestRow[]> 
 		adminPb
 			.collection('special_requests')
 			.getFullList<GuestRequest>({ fields: 'order,status,bed', ...bulk })
-			.catch(() => [] as GuestRequest[]),
-		adminPb
-			.collection('wallet_passes')
-			.getFullList<GuestPass>({
-				fields: 'order,platform,serial,attempts',
-				...bulk
-			})
-			.catch(() => [] as GuestPass[])
+			.catch(() => [] as GuestRequest[])
 	]);
-	return describeGuests({ orders, beds, rooms, houses, assigned, notify, requests, passes });
+	return describeGuests({ orders, beds, rooms, houses, assigned, notify, requests });
 }

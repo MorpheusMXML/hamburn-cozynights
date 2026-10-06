@@ -1,6 +1,6 @@
 // src/routes/telegram/+page.server.ts — a guest's updates on Telegram
 // (docs/admin/notifications.md): connect the chat, see that it is on, turn it
-// off. Confirmation e-mails, the pass page and the wallet passes link here.
+// off. Confirmation e-mails and the pass page link here.
 //
 // It takes the ticket code (the guest session), never the pass code: the
 // messages tell the crew's decision on a special-needs request, and a pass

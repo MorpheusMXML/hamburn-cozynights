@@ -1,31 +1,31 @@
 /// <reference path="../pb_data/types.d.ts" />
 //
-// Wallet passes (docs/admin/passes.md, "Wallet passes"): the booking pass in
-// Apple Wallet and Google Wallet, kept up to date by the app
-// (src/lib/server/wallet). PocketBase only stores; the app signs, pushes and
-// talks to Apple and Google, because the keys for that live in the app's
-// environment only.
+// No more wallet passes (Max's decision of 2026-10-05): Apple Wallet and
+// Google Wallet are not offered any more, guests get their booking pass by
+// e-mail, as a link, as a code and on Telegram (docs/admin/passes.md). This
+// takes back what 1759950000_wallet_passes.js added:
 //
-// - wallet_passes: one record per pass a guest added (or downloaded), per
-//   platform. `serial` is the pass code the wallet pass was made for: after a
-//   hand-over the ticket gets a new code, and the old wallet pass is voided.
-//   `hash` is what the pass shows now, `pushed_hash` what the platform was
-//   last told (Google's copy, or the push to Apple's devices); `changed_at`
-//   is when the content last changed (Apple asks for passes changed since).
-//   The ticket may be deleted meanwhile: the relation doesn't cascade, so the
-//   record lives on long enough to void the pass.
-// - wallet_devices: the iPhones and Watches that registered an Apple Wallet
-//   pass for updates (device library id and push token, both issued by Apple
-//   for this pass type only). They go with their pass, and with
-//   `cozy-admin tickets forget-contacts` after the event.
-// - app_settings.wallet_platforms: "apple", "google" or both, set by the app
-//   when it starts. PocketBase reads it for the wallet buttons in messages.
+// - wallet_devices (Apple device ids and push tokens) first, then
+//   wallet_passes: wallet_devices.pass points at wallet_passes, and
+//   PocketBase refuses to delete a collection another one still refers to.
+//   No other collection points into either of them.
+// - app_settings.wallet_platforms.
+// - a changed text for the old e-mail line "mail.wallet" (message_texts):
+//   pb_hooks/lib/texts.js no longer has the key, so nothing would ever read
+//   it again, /admin/messages could not remove it, and a later text of the
+//   same name must not inherit it.
 //
-// No API rules: superusers only (the app's service account). Idempotent like
-// the earlier migrations.
+// A drop by decision, like 1760200000 before it (docs/develop/integration.md:
+// drop only what no deployed code still needs). No deployed code needs these
+// any more: the code from before this release tolerates their absence (the
+// guest list, notify.js and `cozy-admin tickets forget-contacts` all read
+// them as "none"), so either order of deploy is safe. And no server ever held
+// wallet data: no wallet was ever configured, so not one pass was issued.
 //
-// Dropped again by 1760700000_drop_wallet.js (v0.31.0): no wallet passes any
-// more. Fresh databases still run this one first.
+// Idempotent like the earlier migrations: whatever is gone already is
+// skipped. The down branch puts the empty collections and the field back
+// exactly as 1759950000 made them; the records and a changed "mail.wallet"
+// text are gone for good.
 
 migrate(
 	(app) => {
@@ -37,11 +37,38 @@ migrate(
 			}
 		};
 
+		const devices = find('wallet_devices');
+		if (devices) app.delete(devices);
+		const passes = find('wallet_passes');
+		if (passes) app.delete(passes);
+
+		const settings = app.findCollectionByNameOrId('app_settings');
+		if (settings.fields.getByName('wallet_platforms')) {
+			settings.fields.removeByName('wallet_platforms');
+			app.save(settings);
+		}
+
+		if (find('message_texts')) {
+			for (const row of app.findRecordsByFilter('message_texts', "key = 'mail.wallet'", '', 0, 0)) {
+				app.delete(row);
+			}
+		}
+	},
+	(app) => {
+		const find = (name) => {
+			try {
+				return app.findCollectionByNameOrId(name);
+			} catch (_) {
+				return null;
+			}
+		};
+
+		// A copy of 1759950000_wallet_passes.js: the same fields and indexes, empty.
 		const settings = app.findCollectionByNameOrId('app_settings');
 		if (!settings.fields.getByName('wallet_platforms')) {
 			settings.fields.add(new TextField({ name: 'wallet_platforms', max: 32 }));
+			app.save(settings);
 		}
-		app.save(settings);
 
 		const orders = app.findCollectionByNameOrId('orders');
 		const autodates = [
@@ -69,13 +96,10 @@ migrate(
 						maxSelect: 1,
 						values: ['apple', 'google']
 					},
-					// the pass code (without dashes) this wallet pass was made for
 					{ name: 'serial', type: 'text', required: true, max: 32 },
-					// what the pass shows now, and what the platform was last told
 					{ name: 'hash', type: 'text', max: 64 },
 					{ name: 'pushed_hash', type: 'text', max: 64 },
 					{ name: 'changed_at', type: 'date' },
-					// failed pushes: how often, when to try again, why (no secrets)
 					{ name: 'attempts', type: 'number', onlyInt: true, min: 0 },
 					{ name: 'next_try', type: 'date' },
 					{ name: 'last_error', type: 'text', max: 500 }
@@ -102,7 +126,6 @@ migrate(
 							maxSelect: 1,
 							cascadeDelete: true
 						},
-						// Apple's deviceLibraryIdentifier and the push token for this pass type
 						{ name: 'device', type: 'text', required: true, max: 128 },
 						{ name: 'push_token', type: 'text', required: true, max: 256 }
 					].concat(autodates),
@@ -113,10 +136,5 @@ migrate(
 				})
 			);
 		}
-	},
-	(app) => {
-		// Intentionally a no-op, like the earlier migrations: without these
-		// records the passes already in guests' wallets could never be updated
-		// or voided again.
 	}
 );

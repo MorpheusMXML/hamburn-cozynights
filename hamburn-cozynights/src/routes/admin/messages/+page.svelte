@@ -9,7 +9,8 @@ messages rendered by PocketBase — the same code that sends them.
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import type { ActionData, PageData } from './$types';
 	import { confirmDialog, toast } from '$lib/dialogs';
-	import type { MessageChannel, MessagePreview, MessageTextView } from '$lib/message-texts';
+	import type { MessageChannel, MessageTextView } from '$lib/message-texts';
+	import type { MessagePreviewWithQr, MessageQrPreview } from '$lib/server/message-texts';
 
 	export let data: PageData;
 	// Without JavaScript a refused change comes back here (with it: a toast).
@@ -106,7 +107,7 @@ messages rendered by PocketBase — the same code that sends them.
 
 	// --- preview: whole messages with the texts as typed --------------------------
 
-	let preview: MessagePreview | null = null;
+	let preview: MessagePreviewWithQr | null = null;
 	let previewError = '';
 	let channel: MessageChannel = 'mail';
 	let sample = '';
@@ -119,6 +120,16 @@ messages rendered by PocketBase — the same code that sends them.
 	$: samples = (preview ? preview[channel] : []) as Sample[];
 	$: current = samples.find((s) => s.id === sample) ?? samples[0] ?? null;
 	$: if (samples.length > 0 && !samples.some((s) => s.id === sample)) sample = samples[0].id;
+	$: framed = withQr(current?.html ?? '', preview?.qrPreview ?? null);
+
+	/**
+	 * The e-mail as the frame shows it: the pass's QR code is a picture inside
+	 * the real mail (cid:), which a frame can't load, so the copy PocketBase
+	 * sent along goes in its place.
+	 */
+	function withQr(html: string, picture: MessageQrPreview | null): string {
+		return picture ? html.replaceAll(`cid:${picture.cid}`, picture.src) : html;
+	}
 
 	async function loadPreview() {
 		const run = ++previewRun;
@@ -129,7 +140,7 @@ messages rendered by PocketBase — the same code that sends them.
 				body: JSON.stringify({ texts: drafts })
 			});
 			if (!res.ok) throw new Error(String(res.status));
-			const next = (await res.json()) as MessagePreview;
+			const next = (await res.json()) as MessagePreviewWithQr;
 			if (run !== previewRun) return; // a newer one is on its way
 			preview = next;
 			previewError = '';
@@ -267,7 +278,7 @@ messages rendered by PocketBase — the same code that sends them.
 					<input type="checkbox" bind:checked={asHtml} /> Show as the e-mail looks
 				</label>
 				{#if asHtml}
-					<iframe class="html" title="The e-mail" sandbox="" srcdoc={current.html ?? ''}></iframe>
+					<iframe class="html" title="The e-mail" sandbox="" srcdoc={framed}></iframe>
 				{:else}
 					<pre class="message">{current.text}</pre>
 				{/if}

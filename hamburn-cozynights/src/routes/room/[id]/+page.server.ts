@@ -29,7 +29,6 @@ import {
 	type GuestNotifyStatus
 } from '$lib/server/notifications';
 import { passSummary } from '$lib/server/pass';
-import { walletPlatforms } from '$lib/server/wallet/config';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
 import { roomSwaps, type RoomSwaps } from '$lib/server/swaps';
 import { askSwapAction, withdrawSwapAction } from '$lib/server/swap-actions';
@@ -159,8 +158,6 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 		return {
 			notify,
 			pass,
-			// the wallet buttons under the pass (none until a wallet is set up)
-			wallet: walletPlatforms(),
 			spotFixed,
 			// Taken spots offer a swap when this is set and has `mine` (docs/guide/booking.md).
 			swap,

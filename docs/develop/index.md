@@ -99,6 +99,7 @@ Cookies belong to a host name, not to a port. Two CozyNights instances on `local
 | `npm run health` | Just the health check |
 | `npm run build` / `npm run preview` | Production build and a local preview of it |
 | `npm run typegen` | Regenerates `src/lib/pocketbase-types.ts` from your local schema |
+| `npm run vendor:pb-qr` | Regenerates `pb_hooks/lib/vendor/qr.js`, PocketBase's copy of the `qr` library, after `qr` was updated; until then `tests/pass-qr-hook.test.ts` fails |
 
 ## Tests
 

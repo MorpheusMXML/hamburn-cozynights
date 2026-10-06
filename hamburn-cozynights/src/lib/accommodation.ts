@@ -742,8 +742,7 @@ export function filterLabel(value: unknown): string {
 
 /**
  * "🔥 Heated · 🤫 Quiet zone": a list of features as words with their icons,
- * for the booking pass, the wallet passes and the messages. Empty when the
- * list is.
+ * for the booking pass and the messages. Empty when the list is.
  */
 export function featureText(features: readonly string[] | undefined): string {
 	return (features ?? [])

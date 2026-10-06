@@ -7,3 +7,6 @@ bun.lockb
 
 # Miscellaneous
 /static/
+
+# Generated for the PocketBase JSVM (npm run vendor:pb-qr)
+/pb_hooks/lib/vendor/

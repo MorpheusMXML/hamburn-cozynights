@@ -1,6 +1,6 @@
 # Bookings & check-ins
 
-Who booked which spot, who is already on site, who is still on the road. Open it with <kbd>🛏️ Bookings</kbd> in the admin menu (group *Guests*). The same booking also shows on the spot itself: on the room page, on the house page and next to the map. For the tickets that hold *no* spot, and for everything else attached to a ticket — messages, wallet passes, the state of a special-needs request — see [Guests: every ticket at a glance](./guests).
+Who booked which spot, who is already on site, who is still on the road. Open it with <kbd>🛏️ Bookings</kbd> in the admin menu (group *Guests*). The same booking also shows on the spot itself: on the room page, on the house page and next to the map. For the tickets that hold *no* spot, and for everything else attached to a ticket — messages, the state of a special-needs request — see [Guests: every ticket at a glance](./guests).
 
 ## At a glance
 
@@ -12,7 +12,7 @@ Who booked which spot, who is already on site, who is still on the road. Open it
 | House page, **🛏️ Who is here** | The house's bookings room by room (folds away). |
 | <kbd>🗺️ Map & houses</kbd>, a house's sidebar | **WHO IS HERE 🛏️**: the house's bookings room by room, short; point at one for the details. |
 | Intel panel | <kbd>Who booked →</kbd> next to *SPOTS & BOOKINGS* opens the list for the house you picked; *… booked guests are not checked in yet* leads to the ones still to arrive. |
-| <kbd>👥 Guests</kbd> (`/admin/guests`) | Every ticket, with or without a spot, and next to the spot its check-in, request state, messages and wallet passes. See [Guests](./guests). |
+| <kbd>👥 Guests</kbd> (`/admin/guests`) | Every ticket, with or without a spot, and next to the spot its check-in, request state and messages. See [Guests](./guests). |
 
 ## What a booking shows
 

@@ -3,6 +3,7 @@
 // PocketBase and is covered by tests/integration/notifications.test.ts.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import crypto from 'crypto';
+import path from 'path';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: {
@@ -24,6 +25,7 @@ import { getBookingSettings } from '../src/lib/server/settings';
 import { logAdminEvent } from '../src/lib/server/admin-events';
 import { actions as roomActions } from '../src/routes/room/[id]/+page.server';
 import { loadHookModule } from './hook-module';
+import { decodeQrPng } from './stack-helpers';
 
 /** A PocketBase client stand-in: collection(name) → the service below. */
 function fakePb(service: Record<string, any>) {
@@ -284,9 +286,58 @@ function hookMatches(row: HookRow, filter: string, params: HookRow, now: number)
 	});
 }
 
+/** A mail as the hook hands it to PocketBase's mailer (MailerMessage below). */
+type SentMail = {
+	to: string;
+	subject: string;
+	text: string;
+	html: string;
+	inline?: Record<string, FakeReader>;
+};
+
+/** What $filesystem.fileFromBytes(...).reader.open() gives: the bytes, and whether it was closed. */
+type FakeReader = { name: string; bytes: number[]; closed: boolean; close(): void };
+
+/**
+ * The JSVM's globals for a module that sends mail: MailerMessage, and
+ * $filesystem for the pictures inside an e-mail. Every reader handed out is
+ * kept in `readers`, to see what was attached and that it was closed again.
+ */
+function mailGlobals() {
+	const readers: FakeReader[] = [];
+	return {
+		readers,
+		globals: {
+			MailerMessage: class {
+				constructor(fields: Record<string, unknown>) {
+					Object.assign(this, fields);
+				}
+			},
+			$filesystem: {
+				fileFromBytes: (bytes: number[], name: string) => ({
+					reader: {
+						open: () => {
+							const reader: FakeReader = {
+								name,
+								bytes,
+								closed: false,
+								close() {
+									this.closed = true;
+								}
+							};
+							readers.push(reader);
+							return reader;
+						}
+					}
+				})
+			}
+		}
+	};
+}
+
 function fakeHookApp(tables: Record<string, HookRow[]>) {
 	const store = new Map<string, unknown>();
-	const sent: { to: string; subject: string }[] = [];
+	const sent: SentMail[] = [];
 	const rows = (name: string) => (tables[name] ??= []);
 	const app: any = {
 		sent,
@@ -330,8 +381,20 @@ function fakeHookApp(tables: Record<string, HookRow[]>) {
 			}
 		}),
 		newMailClient: () => ({
-			send: (message: { to: { address: string }[]; subject: string }) => {
-				sent.push({ to: message.to[0].address, subject: message.subject });
+			send: (message: {
+				to: { address: string }[];
+				subject: string;
+				text: string;
+				html: string;
+				inlineAttachments?: Record<string, FakeReader>;
+			}) => {
+				sent.push({
+					to: message.to[0].address,
+					subject: message.subject,
+					text: message.text,
+					html: message.html,
+					inline: message.inlineAttachments
+				});
 				app.onSend?.();
 			}
 		}),
@@ -341,19 +404,12 @@ function fakeHookApp(tables: Record<string, HookRow[]>) {
 }
 
 describe('guest delivery does not send twice when a send outlives the lock', () => {
-	const notify = loadHookModule('lib/notify.js', {
-		MailerMessage: class {
-			constructor(fields: Record<string, unknown>) {
-				Object.assign(this, fields);
-			}
-		}
-	});
+	const notify = loadHookModule('lib/notify.js', mailGlobals().globals);
 	const cfg = {
 		appUrl: 'https://cozy.test',
 		label: '',
 		mail: { enabled: true, replyTo: '' },
 		telegram: { token: '', chatId: '', threadId: '', apiBase: '', guests: false },
-		wallet: [],
 		mailsPerMinute: 20,
 		texts: {}
 	};
@@ -528,19 +584,12 @@ describe('a release the crew keeps quiet (pb_hooks/lib/notify.js, setQuiet)', ()
 });
 
 describe('a delivery that fails after its lease', () => {
-	const notify = loadHookModule('lib/notify.js', {
-		MailerMessage: class {
-			constructor(fields: Record<string, unknown>) {
-				Object.assign(this, fields);
-			}
-		}
-	});
+	const notify = loadHookModule('lib/notify.js', mailGlobals().globals);
 	const cfg = {
 		appUrl: 'https://cozy.test',
 		label: '',
 		mail: { enabled: true, replyTo: '' },
 		telegram: { token: '', chatId: '', threadId: '', apiBase: '', guests: false },
-		wallet: [],
 		mailsPerMinute: 20,
 		texts: {}
 	};
@@ -567,5 +616,137 @@ describe('a delivery that fails after its lease', () => {
 		expect(stored.getString('last_error')).toContain('database hiccup');
 		const wait = Date.parse(stored.getString('due').replace(' ', 'T')) - Date.now();
 		expect(wait).toBeGreaterThan(60_000); // not again on the next pass
+	});
+});
+
+// The pass's QR code as a picture inside the e-mail (deliverOne → sendMail):
+// what gets attached, and that a picture which can't be drawn never costs the
+// guest the e-mail. Where it sits in the HTML: tests/notify-messages.test.ts;
+// a real mail through Mailpit: tests/integration/notifications.test.ts.
+describe('the pass QR picture of a delivered e-mail', () => {
+	const cfg = {
+		appUrl: 'https://cozy.test',
+		label: '',
+		mail: { enabled: true, replyTo: '' },
+		telegram: { token: '', chatId: '', threadId: '', apiBase: '', guests: false },
+		mailsPerMinute: 20,
+		texts: {}
+	};
+	const CID = 'cozynights-pass-AAAA-BBBB-CCCC.png';
+
+	/** One ticket with an e-mail and a pass; booked on bed1 unless `request` says otherwise. */
+	function camp(request = false) {
+		const due = new Date(Date.now() - 1000).toISOString().replace('T', ' ');
+		return fakeHookApp({
+			orders: [{ id: 'order1', email: 'guest@example.com', pass_code: 'AAAABBBBCCCC' }],
+			beds: request ? [] : [{ id: 'bed1', order: 'order1', label: 'B1', room: 'room1' }],
+			rooms: [{ id: 'room1', name: 'Dorm', room_number: 1, house: 'house1' }],
+			houses: [{ id: 'house1', name: 'Villa' }],
+			special_requests: request ? [{ id: 'req1', order: 'order1', status: 'pending' }] : [],
+			guest_notify: [{ id: 'n1', order: 'order1', due, attempts: 0 }]
+		});
+	}
+	type HookApp = ReturnType<typeof fakeHookApp>;
+	const deliver = (notify: ReturnType<typeof loadHookModule>, app: HookApp) =>
+		notify.deliverOne(app, cfg, app.findRecordById('guest_notify', 'n1'), false, () => true);
+	const stored = (app: HookApp) => app.findRecordById('guest_notify', 'n1');
+
+	it('goes in under the Content-ID the HTML shows, and its reader is closed after the send', () => {
+		const mail = mailGlobals();
+		const notify = loadHookModule('lib/notify.js', mail.globals);
+		const app = camp();
+		let openWhileSending = false;
+		app.onSend = () => {
+			openWhileSending = mail.readers.every((r) => !r.closed);
+		};
+
+		expect(deliver(notify, app)).toBe('done');
+
+		expect(app.sent).toHaveLength(1);
+		const [sent] = app.sent as SentMail[];
+		expect(Object.keys(sent.inline ?? {})).toEqual([CID]);
+		expect(sent.html).toContain(`<img src="cid:${CID}"`);
+		expect(sent.text).not.toContain('cid:');
+		expect(sent.text).toContain('https://cozy.test/pass/AAAA-BBBB-CCCC');
+		expect(mail.readers).toHaveLength(1);
+		expect(mail.readers[0].name).toBe(CID);
+		expect(sent.inline![CID]).toBe(mail.readers[0]);
+		expect(decodeQrPng(Buffer.from(mail.readers[0].bytes))).toBe(
+			'https://cozy.test/pass/AAAA-BBBB-CCCC'
+		);
+		expect(openWhileSending).toBe(true);
+		expect(mail.readers[0].closed).toBe(true);
+		expect(stored(app).getString('due')).toBe('');
+	});
+
+	it('has its reader closed when the send fails, which is retried like any other', () => {
+		const mail = mailGlobals();
+		const notify = loadHookModule('lib/notify.js', mail.globals);
+		const app = camp();
+		app.newMailClient = () => ({
+			send: () => {
+				throw new Error('SMTP server gone');
+			}
+		});
+
+		expect(deliver(notify, app)).toBe('retry');
+
+		expect(mail.readers).toHaveLength(1);
+		expect(mail.readers[0].closed).toBe(true);
+		expect(stored(app).getString('last_error')).toContain('SMTP server gone');
+	});
+
+	it('is left out when it cannot be drawn: the e-mail goes anyway, and is not retried', () => {
+		const mail = mailGlobals();
+		const errors: string[] = [];
+		const notify = loadHookModule('lib/notify.js', {
+			...mail.globals,
+			// what PocketBase said in the prototype with the bundle missing
+			require: (target: string) => {
+				if (target.endsWith('/lib/passqr.js')) throw new Error('Invalid module');
+				return loadHookModule(target, mail.globals);
+			},
+			console: { log() {}, warn() {}, error: (message: string) => errors.push(message) }
+		});
+		const app = camp();
+
+		expect(deliver(notify, app)).toBe('done');
+		expect(app.sent).toHaveLength(1);
+		const [sent] = app.sent as SentMail[];
+		expect(sent.inline).toBeUndefined();
+		expect(sent.html).not.toContain('<img');
+		expect(sent.html).not.toContain('cid:');
+		// the pass is still in it, as link and code
+		expect(sent.text).toContain('https://cozy.test/pass/AAAA-BBBB-CCCC');
+		expect(sent.html).toContain('href="https://cozy.test/pass/AAAA-BBBB-CCCC"');
+		expect(mail.readers).toHaveLength(0);
+		expect(errors).toEqual(['[cozy-notify] pass QR picture: Invalid module']);
+		expect(stored(app).getString('due')).toBe('');
+		expect(stored(app).getInt('attempts')).toBe(0);
+		expect(stored(app).getString('last_error')).toBe('');
+	});
+
+	it('is not even drawn for an e-mail without the pass', () => {
+		const mail = mailGlobals();
+		const loaded: string[] = [];
+		const notify = loadHookModule('lib/notify.js', {
+			...mail.globals,
+			require: (target: string) => {
+				loaded.push(path.basename(target));
+				return loadHookModule(target, mail.globals);
+			}
+		});
+
+		// a special-needs request without a spot: the mail tells about it alone
+		const asking = camp(true);
+		expect(deliver(notify, asking)).toBe('done');
+		expect(asking.sent).toHaveLength(1);
+		expect(asking.sent[0].subject).toBe('We got your special-needs request');
+		expect(asking.sent[0].inline).toBeUndefined();
+		expect(loaded).not.toContain('passqr.js');
+
+		// the same module draws it for a booking
+		expect(deliver(notify, camp())).toBe('done');
+		expect(loaded).toContain('passqr.js');
 	});
 });

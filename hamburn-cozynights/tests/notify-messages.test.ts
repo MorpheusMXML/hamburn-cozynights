@@ -1,11 +1,14 @@
 // tests/notify-messages.test.ts — the texts PocketBase sends to guests
 // (pb_hooks/lib/notify.js), for every combination of a spot change and news
-// about a special-needs request. A message goes out once per settled state,
-// so news that a text leaves out is lost for good. Delivery itself:
-// tests/integration/notifications.test.ts and special-needs.test.ts.
+// about a special-needs request, and where the pass's QR picture goes. A
+// message goes out once per settled state, so news that a text leaves out is
+// lost for good. Delivery itself: tests/integration/notifications.test.ts and
+// special-needs.test.ts.
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import { loadHookModule, HOOKS_DIR } from './hook-module';
+import { decodeQrPng } from './stack-helpers';
+import { previewMessageTexts } from '../src/lib/server/message-texts';
 
 // notify.js is a CommonJS module for PocketBase's JSVM; loaded the same way here.
 const notify = loadHookModule('lib/notify.js');
@@ -348,11 +351,10 @@ describe('message texts from the catalogue (pb_hooks/lib/texts.js)', () => {
 				marker(entry.key) + entry.placeholders.map((name) => ` {${name}}`).join('')
 			])
 		);
-		// The preview offers what this server can do; here: both.
+		// The preview offers what this server can do; here: Telegram.
 		const preview = notify.previewMessages({
 			...cfg,
 			telegram: { guests: true },
-			wallet: ['apple', 'google'],
 			texts: all
 		});
 		const rendered = [
@@ -414,6 +416,154 @@ describe('a ticket that was passed on', () => {
 		expect(sample.subject).toContain('came with your ticket');
 		// the hand-over cuts the Telegram link, so there is no such message
 		expect(preview.telegram.some((m: { id: string }) => m.id === 'handed_over')).toBe(false);
+	});
+});
+
+// The pass's QR code rides in the e-mail as a picture (cid:, attached by
+// deliverOne) right under the spot's rows: in every e-mail that shows the
+// pass, in no other. Drawing it: tests/pass-qr-hook.test.ts; attaching it:
+// tests/notifications.test.ts.
+describe('the QR code of the pass in the e-mail', () => {
+	const CID = 'cozynights-pass-AAAA-BBBB-CCCC.png';
+	const IMG = `<img src="cid:${CID}"`;
+	const withQr = { telegram: false, qr: true };
+	const approvedFixed: Req = { kind: 'approved', status: 'approved', fixed: true };
+	const qrMail = (kind: string, withSpot: boolean, req: Req, previous = '', offers = withQr) =>
+		notify.guestMail(cfg, kind, withSpot ? spot : null, previous, 'Ada', pass, req, offers);
+	const count = (html: string, needle: string) => html.split(needle).length - 1;
+	const offered = { ...spot, bedId: 'bed7', roomId: 'room2', label: 'B7 · Loft #1 · Hut' };
+
+	it('is in every e-mail that shows the pass, once, right under the spot', () => {
+		const showing = {
+			booked: qrMail('booked', true, none),
+			changed: qrMail('changed', true, none, 'B9 · Loft #2 · Hut'),
+			swapped: qrMail('swapped', true, none, 'B9 · Loft #2 · Hut'),
+			handed_over: qrMail('handed_over', true, none),
+			crew_booked: qrMail('', true, approvedFixed),
+			crew_booked_new_spot: qrMail('booked', true, approvedFixed),
+			crew_moved: qrMail('changed', true, { kind: '', status: 'approved', fixed: true }, 'B9')
+		};
+		for (const [name, m] of Object.entries(showing)) {
+			expect(count(m.html, '<img'), name).toBe(1);
+			expect(count(m.html, IMG), name).toBe(1);
+			expect(m.usesQr, name).toBe(true);
+			expect(m.qrCid, name).toBe(CID);
+			// after the spot's rows, before the line with the pass's link and code
+			const at = m.html.indexOf(IMG);
+			expect(at, name).toBeGreaterThan(m.html.indexOf('</table>'));
+			expect(at, name).toBeLessThan(m.html.indexOf(`<a href="${pass.url}"`));
+		}
+		expect(showing.booked.html).toContain(
+			'<p style="margin:0 0 16px"><img src="cid:cozynights-pass-AAAA-BBBB-CCCC.png" width="205" height="205" alt="QR code of your booking pass AAAA-BBBB-CCCC" style="display:block;width:205px;height:205px;border:0;outline:none"></p>'
+		);
+	});
+
+	it('is in no other e-mail: a release, request news alone, a swap request', () => {
+		const pending: Req = { kind: 'received', status: 'pending', fixed: false };
+		const approved: Req = { kind: 'approved', status: 'approved', fixed: false };
+		const declined: Req = { kind: 'declined', status: 'declined', fixed: false };
+		const without = {
+			released: qrMail('released', false, none, 'B1 · Dorm #1 · Villa'),
+			released_request: qrMail('released', false, pending, 'B1 · Dorm #1 · Villa'),
+			request_received: qrMail('', false, pending),
+			request_approved: qrMail('', false, approved),
+			request_approved_keep: qrMail('', true, approved),
+			request_declined: qrMail('', false, declined),
+			request_declined_keep: qrMail('', true, declined),
+			swap_ask: notify.swapMail(cfg, 'ask', spot, offered, 'Ada', 'Thu 1 Oct 18:00 (Berlin)'),
+			swap_no: notify.swapMail(cfg, 'no', spot, offered, 'Ada', ''),
+			// a spot message without a pass (its code could not be made)
+			no_pass: notify.guestMail(cfg, 'booked', spot, '', 'Ada', null, none, withQr)
+		};
+		for (const [name, m] of Object.entries(without)) {
+			expect(m.html, name).not.toContain('<img');
+			expect(m.html, name).not.toContain('cid:');
+			expect(m.usesQr, name).toBe(false);
+			expect(m.qrCid, name).toBe('');
+		}
+	});
+
+	it('leaves the e-mail as it was without it, and the text part always', () => {
+		const picture = notify.passQrHtml({
+			cid: CID,
+			alt: 'QR code of your booking pass AAAA-BBBB-CCCC'
+		});
+		for (const [kind, previous] of [
+			['booked', ''],
+			['changed', 'B9 · Loft #2 · Hut'],
+			['swapped', 'B9 · Loft #2 · Hut'],
+			['handed_over', '']
+		]) {
+			const plain = qrMail(kind, true, none, previous, { telegram: false, qr: false });
+			// what the callers got before there was a picture: no offers at all
+			const before = notify.guestMail(cfg, kind, spot, previous, 'Ada', pass, none);
+			expect(plain.html, kind).toBe(before.html);
+			expect(plain.usesQr, kind).toBe(false);
+
+			const pictured = qrMail(kind, true, none, previous);
+			expect(pictured.html.replace(picture, ''), kind).toBe(plain.html);
+			expect(pictured.text, kind).toBe(plain.text);
+			expect(pictured.text, kind).not.toContain('cid:');
+			// link and code for every mail app, with the picture or without it
+			expect(pictured.text, kind).toContain(pass.url);
+			expect(pictured.text, kind).toContain(pass.code);
+		}
+	});
+
+	it('keeps its place whatever the crew made of the texts', () => {
+		const custom = {
+			...cfg,
+			texts: { 'mail.pass': 'Show your pass at the gate.', 'mail.booked.intro': 'Booked:' }
+		};
+		const m = notify.guestMail(custom, 'booked', spot, '', 'Ada', pass, none, withQr);
+		expect(count(m.html, IMG)).toBe(1);
+		expect(m.usesQr).toBe(true);
+	});
+
+	it('comes with the preview once, as a data: URI for the admin page', () => {
+		const preview = notify.previewMessages(cfg);
+		expect(preview.qrPreview.cid).toBe(CID);
+		expect(preview.qrPreview.src).toMatch(/^data:image\/png;base64,/);
+		const png = Buffer.from(preview.qrPreview.src.split(',')[1], 'base64');
+		expect(decodeQrPng(png)).toBe('https://cozy.test/pass/AAAA-BBBB-CCCC');
+
+		const pictured = preview.mail
+			.filter((m: { html: string }) => m.html.includes(IMG))
+			.map((m: { id: string }) => m.id);
+		expect(pictured).toEqual([
+			'booked',
+			'changed',
+			'handed_over',
+			'crew_booked',
+			'crew_moved',
+			'crew_booked_again',
+			'booked_request_received',
+			'booked_request_approved',
+			'booked_request_declined',
+			'swapped'
+		]);
+		// the samples only reference it: ~30 KB each would add up
+		for (const m of preview.mail) expect(m.html).not.toContain('data:image');
+	});
+
+	it('reaches the admin page through the app, and only as a PNG', async () => {
+		// the app's service account, answering like the preview route of
+		// pb_hooks/cozy_notify.pb.js
+		const pocketbase = (answer: unknown) => ({ send: async () => answer }) as never;
+		const preview = notify.previewMessages(cfg);
+		expect((await previewMessageTexts(pocketbase(preview), {})).qrPreview).toEqual(
+			preview.qrPreview
+		);
+		for (const odd of [
+			{ cid: CID, src: 'javascript:alert(1)' },
+			{ cid: CID, src: 'data:text/html;base64,PGI+' },
+			{ cid: 7, src: preview.qrPreview.src },
+			null,
+			undefined
+		]) {
+			const answer = { ...preview, qrPreview: odd };
+			expect((await previewMessageTexts(pocketbase(answer), {})).qrPreview).toBeNull();
+		}
 	});
 });
 

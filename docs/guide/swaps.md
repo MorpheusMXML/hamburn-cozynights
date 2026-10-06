@@ -52,7 +52,7 @@ The other guest gets an e-mail (and a Telegram message, if they turned Telegram 
 
 ![Swapped! The new spot is yours now, the old one theirs, with Go to my new room and the booking pass](../assets/screenshots/guest-swap-done.webp)
 
-Both spots change hands in one step — there is no moment in which one of you has no spot or two. Your **burner name** comes along to your new spot, your [booking pass](./booking#your-booking-pass) keeps its code and shows the new spot, a wallet pass updates itself, and you both get **🔁 Swap done!** by e-mail (and on Telegram) instead of the usual *spot changed*.
+Both spots change hands in one step — there is no moment in which one of you has no spot or two. Your **burner name** comes along to your new spot, your [booking pass](./booking#your-booking-pass) keeps its code and shows the new spot, and you both get **🔁 Swap done!** by e-mail (and on Telegram) instead of the usual *spot changed*.
 
 Your other open requests end, because the spot you offered in them is no longer yours; so do other guests' requests for either of the two spots. **Swap requests** shows them as *Another swap went through first*.
 

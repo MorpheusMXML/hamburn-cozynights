@@ -19,6 +19,7 @@ import { formatPassCode } from '../../src/lib/pass';
 import {
 	anonymous,
 	createAdmin,
+	decodeQrPng,
 	expectRefused,
 	seedHouse,
 	seedTicket,
@@ -82,8 +83,28 @@ async function mailsTo(address: string): Promise<Mail[]> {
 	return [...(json.messages || [])].reverse();
 }
 
-async function mailBody(id: string): Promise<{ Text: string; HTML: string }> {
+/** A part of a message as Mailpit lists it: a picture inside the mail, or an attachment. */
+type MailPart = {
+	PartID: string;
+	FileName: string;
+	ContentType: string;
+	ContentID: string;
+	Size: number;
+};
+async function mailBody(id: string): Promise<{
+	Subject: string;
+	Text: string;
+	HTML: string;
+	Inline: MailPart[] | null;
+	Attachments: MailPart[] | null;
+}> {
 	return (await fetch(`${MAILPIT_URL}/api/v1/message/${id}`)).json();
+}
+
+/** The bytes of one part of a message (the QR picture). */
+async function mailPart(id: string, partId: string): Promise<Uint8Array> {
+	const res = await fetch(`${MAILPIT_URL}/api/v1/message/${id}/part/${partId}`);
+	return new Uint8Array(await res.arrayBuffer());
 }
 
 async function ticketWithEmail(email = `guest-${uid()}@example.com`) {
@@ -256,6 +277,46 @@ describe('booking confirmations by e-mail', () => {
 		expect(released.HTML).not.toContain('&lt;a');
 	});
 
+	it('carry the pass QR code as a picture inside the e-mail — a release none', async () => {
+		const { beds } = await seedHouse(su, 1);
+		const guest = await ticketWithEmail();
+		await booking.bookBed(guest.order as any, beds[0].id, 'QR Tester');
+		await flush();
+
+		const code = formatPassCode((await su.collection('orders').getOne(guest.order.id)).pass_code);
+		const passLink = `${APP_URL}/pass/${code}`;
+		const cid = `cozynights-pass-${code}.png`;
+		const [booked] = await mailsTo(guest.email);
+		const body = await mailBody(booked.ID);
+		// pb_hooks/lib/notify.js composeMail + sendMail; the picture is drawn by
+		// pb_hooks/lib/passqr.js inside PocketBase (this stack runs no app)
+		expect(body.Inline).toHaveLength(1);
+		expect(body.Inline![0]).toMatchObject({ ContentType: 'image/png', ContentID: cid });
+		expect(body.Attachments ?? []).toHaveLength(0);
+		expect(body.HTML.match(/<img /g)).toHaveLength(1);
+		expect(body.HTML).toContain(`<img src="cid:${cid}"`);
+		expect(body.Text).not.toContain('cid:');
+		expect(body.Text).toContain(passLink);
+		expect(body.Text).toContain(code);
+
+		const raw = await (await fetch(`${MAILPIT_URL}/api/v1/message/${booked.ID}/raw`)).text();
+		expect(raw).toContain('Content-Disposition: inline');
+		expect(raw).toContain(`Content-ID: <${cid}>`);
+		// what a phone reads from the picture: the link printed in the same mail
+		const png = await mailPart(booked.ID, body.Inline![0].PartID);
+		expect(decodeQrPng(png)).toBe(passLink);
+
+		await booking.unbookOrder(guest.order.id);
+		await flush();
+		const mails = await mailsTo(guest.email);
+		expect(mails).toHaveLength(2);
+		expect(mails[1].Subject).toBe('[TEST] Your CozyNights spot was released');
+		const released = await mailBody(mails[1].ID);
+		expect(released.Inline ?? []).toHaveLength(0);
+		expect(released.HTML).not.toContain('<img');
+		expect(released.HTML).not.toContain('cid:');
+	});
+
 	it('are not sent twice, and not at all for tickets without an address', async () => {
 		const { beds } = await seedHouse(su, 2);
 		const withMail = await ticketWithEmail();
@@ -413,12 +474,9 @@ describe('booking updates on Telegram', () => {
 		expect(toStopper.some((m) => m.text.includes('is booked'))).toBe(false);
 	});
 
-	it('send the pass as a picture with buttons, and again on /pass', async () => {
+	it('send the pass as a picture with its button, and again on /pass', async () => {
 		const { beds } = await seedHouse(su, 1);
 		const guest = await seedTicket(su);
-		await su
-			.collection('app_settings')
-			.update(APP_SETTINGS_ID, { wallet_platforms: 'apple,google' });
 		await booking.bookBed(guest.order as any, beds[0].id, 'Snapper');
 		const chat = chatId();
 		await mock('/_mock/telegram/update', {
@@ -433,12 +491,8 @@ describe('booking updates on Telegram', () => {
 		expect(connected.photo).toBe(`${APP_URL}/pass/${formatPassCode(code)}/qr.png`);
 		expect(connected.text).toContain(beds[0].label);
 		const buttons = (connected.reply_markup?.inline_keyboard ?? []).flat();
-		expect(buttons.map((b) => b.text)).toEqual([
-			'🎫 Show booking pass',
-			'Add to Apple Wallet',
-			'Add to Google Wallet'
-		]);
-		expect(buttons[1].url).toBe(`${APP_URL}/pass/${formatPassCode(code)}/wallet/apple`);
+		expect(buttons.map((b) => b.text)).toEqual(['🎫 Show booking pass']);
+		expect(buttons[0].url).toBe(`${APP_URL}/pass/${formatPassCode(code)}`);
 
 		// /pass shows it again, in this chat only
 		await mock('/_mock/telegram/update', { chat_id: chat, text: '/pass' });
@@ -457,19 +511,18 @@ describe('booking updates on Telegram', () => {
 		};
 		expect(commands.commands.map((c) => c.command)).toEqual(['pass', 'stop', 'help']);
 		expect(commands.scope).toEqual({ type: 'all_private_chats' });
-		await su.collection('app_settings').update(APP_SETTINGS_ID, { wallet_platforms: '' });
 	});
 
-	it('offer Telegram and the wallets in the e-mail, until the guest has connected', async () => {
+	it('offer Telegram in the e-mail, until the guest has connected', async () => {
 		const { beds } = await seedHouse(su, 2);
 		const guest = await ticketWithEmail();
-		await su.collection('app_settings').update(APP_SETTINGS_ID, { wallet_platforms: 'apple' });
 		await booking.bookBed(guest.order as any, beds[0].id, 'Offered');
 		await flush();
 
 		const first = await mailBody((await mailsTo(guest.email)).at(-1)!.ID);
 		expect(first.Text).toContain(`${APP_URL}/telegram`);
-		expect(first.Text).toContain('Apple Wallet or Google Wallet');
+		// the old line about Apple's and Google's passes is gone for good
+		expect(first.Text).not.toMatch(/Apple|Google/);
 		expect(first.HTML).toContain(`href="${APP_URL}/telegram"`);
 
 		// once a chat is linked, the offer is gone
@@ -484,7 +537,6 @@ describe('booking updates on Telegram', () => {
 		const second = await mailBody((await mailsTo(guest.email)).at(-1)!.ID);
 		expect(second.Text).toContain('different spot');
 		expect(second.Text).not.toContain(`${APP_URL}/telegram`);
-		await su.collection('app_settings').update(APP_SETTINGS_ID, { wallet_platforms: '' });
 	});
 
 	it('answer unknown links and other messages with how to connect', async () => {
@@ -814,8 +866,19 @@ describe('cozy-admin tickets import and notify', () => {
 		expect(status).toContain('TELEGRAM BOT       @cozy_test_bot, guest updates on');
 
 		const to = `crew-${uid()}@example.com`;
-		expect(cozyAdmin(['notify', 'test', '--email', to])).toContain(`e-mail: sent to ${to}`);
-		expect((await mailsTo(to))[0].Subject).toBe('[TEST] CozyNights test e-mail');
+		expect(cozyAdmin(['notify', 'test', '--email', to])).toContain(
+			`e-mail: sent to ${to} (with the QR code of a sample pass as a picture)`
+		);
+		const [test] = await mailsTo(to);
+		expect(test.Subject).toBe('[TEST] CozyNights test e-mail');
+		// the picture the way guests get it, to check real mail apps before a release
+		const body = await mailBody(test.ID);
+		expect(body.Inline).toHaveLength(1);
+		expect(body.Inline![0].ContentID).toBe('cozynights-pass-AAAA-BBBB-CCCC.png');
+		expect(body.HTML).toContain('<img src="cid:cozynights-pass-AAAA-BBBB-CCCC.png"');
+		expect(decodeQrPng(await mailPart(test.ID, body.Inline![0].PartID))).toBe(
+			`${APP_URL}/pass/AAAA-BBBB-CCCC`
+		);
 	});
 });
 
@@ -841,6 +904,13 @@ describe('message texts', () => {
 			'Send /pass to see your booking pass again, /stop to disconnect.'
 		); // '' = the default
 		expect(preview.bot[0].text).toContain(APP_URL);
+		// the samples reference the pass's QR picture like real e-mails; the page
+		// shows it from the data: URI that comes along once
+		expect(preview.qrPreview.cid).toBe('cozynights-pass-AAAA-BBBB-CCCC.png');
+		expect(preview.mail[0].html).toContain(`<img src="cid:${preview.qrPreview.cid}"`);
+		expect(preview.qrPreview.src).toMatch(/^data:image\/png;base64,/);
+		const sample = Buffer.from(preview.qrPreview.src.split(',')[1], 'base64');
+		expect(decodeQrPng(sample)).toBe(`${APP_URL}/pass/AAAA-BBBB-CCCC`);
 
 		// the crew hears about a change (the app records the event)
 		await su.collection('admin_events').create({
