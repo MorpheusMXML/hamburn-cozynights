@@ -23,6 +23,9 @@
 //
 // No API rules: superusers only (the app's service account). Idempotent like
 // the earlier migrations.
+//
+// Dropped again by 1760700000_drop_wallet.js (v0.31.0): no wallet passes any
+// more. Fresh databases still run this one first.
 
 migrate(
 	(app) => {

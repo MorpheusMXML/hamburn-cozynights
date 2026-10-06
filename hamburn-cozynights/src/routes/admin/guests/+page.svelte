@@ -676,7 +676,8 @@
 			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 		}
 		.cell.guest,
-		.cell.place {
+		.cell.place,
+		.cell.ticket {
 			grid-column: 1 / -1;
 		}
 		.cell.actions {

@@ -15,9 +15,9 @@
 //   it again, /admin/messages could not remove it, and a later text of the
 //   same name must not inherit it.
 //
-// Migrations never drop (docs/develop/integration.md); this is an explicit
-// exception, like 1760200000 before it. No deployed code needs these any
-// more: the code from before this release tolerates their absence (the
+// A drop by decision, like 1760200000 before it (docs/develop/integration.md:
+// drop only what no deployed code still needs). No deployed code needs these
+// any more: the code from before this release tolerates their absence (the
 // guest list, notify.js and `cozy-admin tickets forget-contacts` all read
 // them as "none"), so either order of deploy is safe. And no server ever held
 // wallet data: no wallet was ever configured, so not one pass was issued.

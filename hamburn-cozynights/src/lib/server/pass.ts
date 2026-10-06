@@ -209,7 +209,7 @@ export function bedRow(
  * room or the spot switched off is gone, an upper bunk is never ♿).
  * '' when nobody wrote anything down.
  */
-export function spotFeatureText(
+function spotFeatureText(
 	house: Pick<HousesResponse, 'features'> | undefined,
 	room: Pick<RoomsResponse, 'features' | 'features_off'> | undefined,
 	bed: Pick<BedsResponse, 'bed_type' | 'features_off'>
