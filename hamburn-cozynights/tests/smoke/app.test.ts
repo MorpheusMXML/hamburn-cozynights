@@ -10,7 +10,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type PocketBase from 'pocketbase';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
-import { readZip } from '../../src/lib/server/wallet/zip';
 import { adminCookie, createAdmin, seedHouse, seedTicket, serviceAccount } from '../stack-helpers';
 
 const BASE = (process.env.SMOKE_BASE_URL || '').replace(/\/$/, '');
@@ -331,21 +330,9 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 				.toString()
 		).toBe('PNG');
 
-		// the wallets (throwaway credentials in the test stack): a signed pass
-		// file for Apple, a save link for Google
-		const pkpass = await get(`/pass/${shown}/wallet/apple`);
-		expect(pkpass.status).toBe(200);
-		expect(pkpass.headers.get('content-type')).toBe('application/vnd.apple.pkpass');
-		const files = readZip(Buffer.from(await pkpass.arrayBuffer()));
-		expect([...files.keys()]).toContain('signature');
-		expect(JSON.parse(files.get('pass.json')!.toString('utf8'))).toMatchObject({
-			serialNumber: code,
-			passTypeIdentifier: 'pass.test.cozynights'
-		});
-		const save = await get(`/pass/${shown}/wallet/google`);
-		expect(save.status).toBe(303);
-		expect(save.headers.get('location')).toContain('https://pay.google.com/gp/v/save/');
-		expect(guestView).toContain('Add to Apple Wallet');
+		// no wallets since v0.31.0: neither a button nor the old pass files
+		expect(guestView).not.toContain('Wallet');
+		expect((await get(`/pass/${shown}/wallet/apple`)).status).toBe(404);
 
 		// the Telegram page needs the ticket code, and comes back afterwards
 		const telegram = await get('/telegram');

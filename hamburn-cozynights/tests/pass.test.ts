@@ -1,7 +1,8 @@
 // tests/pass.test.ts — booking passes: code format, lookup, the guest's pass
-// page, the crew's check page. PocketBase mocked; the real hooks that create
-// codes are covered by tests/integration/pass.test.ts.
+// page and its QR images, the crew's check page. PocketBase mocked; the real
+// hooks that create codes are covered by tests/integration/pass.test.ts.
 import { describe, it, expect, vi } from 'vitest';
+import zlib from 'zlib';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: {
@@ -22,6 +23,7 @@ import {
 	passUrl
 } from '../src/lib/server/pass';
 import { createLookupHash, encrypt } from '../src/lib/server/crypto';
+import { encodeMonochromePng } from '../src/lib/server/png';
 import { APP_SETTINGS_ID } from '../src/lib/server/constants';
 import { load as passLoad } from '../src/routes/pass/[code]/+page.server';
 import { GET as passGif } from '../src/routes/pass/[code]/qr.gif/+server';
@@ -593,6 +595,25 @@ describe('QR codes', () => {
 		expect(url).toBe('https://cozy.example/pass/7F3K-9QXM-2CWD');
 		expect(passQrSvg(url)).toMatch(/^<svg /);
 		expect(new TextDecoder().decode(passQrGif(url).slice(0, 6))).toBe('GIF87a');
+	});
+
+	it('draws a black-and-white PNG pixel by pixel', () => {
+		const pixels = [
+			[true, false, false],
+			[false, true, false]
+		];
+		const png = encodeMonochromePng(pixels);
+		expect(png.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+		expect(png.readUInt32BE(16)).toBe(3); // width
+		expect(png.readUInt32BE(20)).toBe(2); // height
+		const idatAt = png.indexOf('IDAT');
+		const raw = zlib.inflateSync(
+			png.subarray(idatAt + 4, idatAt + 4 + png.readUInt32BE(idatAt - 4))
+		);
+		// row 0: filter byte, then 0b011xxxxx (black, white, white); row 1: 0b101xxxxx
+		expect(raw[0]).toBe(0);
+		expect(raw[1] >> 5).toBe(0b011);
+		expect(raw[3] >> 5).toBe(0b101);
 	});
 });
 

@@ -117,23 +117,6 @@ services:
       # Production's own key, never staging's. Never changed once real
       # bookings exist: burner names and ticket-code hashes depend on it.
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
-      # Wallet passes (optional, without them no wallet button shows). The pass
-      # ids carry this environment's host, so staging's passes never collide.
-      WALLET_APPLE_PASS_TYPE_ID: ${WALLET_APPLE_PASS_TYPE_ID:-}
-      WALLET_APPLE_TEAM_ID: ${WALLET_APPLE_TEAM_ID:-}
-      WALLET_APPLE_CERT: ${WALLET_APPLE_CERT:-}
-      WALLET_APPLE_KEY: ${WALLET_APPLE_KEY:-}
-      WALLET_APPLE_WWDR: ${WALLET_APPLE_WWDR:-}
-      WALLET_GOOGLE_ISSUER_ID: ${WALLET_GOOGLE_ISSUER_ID:-}
-      WALLET_GOOGLE_SERVICE_ACCOUNT: ${WALLET_GOOGLE_SERVICE_ACCOUNT:-}
-      WALLET_EVENT_NAME: ${WALLET_EVENT_NAME:-}
-      WALLET_EVENT_START: ${WALLET_EVENT_START:-}
-      WALLET_EVENT_END: ${WALLET_EVENT_END:-}
-      WALLET_VENUE_NAME: ${WALLET_VENUE_NAME:-}
-      WALLET_VENUE_ADDRESS: ${WALLET_VENUE_ADDRESS:-}
-      WALLET_VENUE_LATITUDE: ${WALLET_VENUE_LATITUDE:-}
-      WALLET_VENUE_LONGITUDE: ${WALLET_VENUE_LONGITUDE:-}
-      WALLET_ORGANIZATION: ${WALLET_ORGANIZATION:-}
       # Operator details for /legal-notice and /privacy (src/lib/server/legal.ts).
       # Same list as docker-compose.staging.yml: a key missing here is silently
       # blank on those pages.

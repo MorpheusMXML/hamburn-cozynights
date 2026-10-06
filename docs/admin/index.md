@@ -17,7 +17,7 @@ Every admin page has the same **status bar** on top and the same **menu**.
 | **Overview** | <kbd>📊 Control Center</kbd> | This page. |
 | **Camp** | <kbd>🗺️ Map & houses</kbd> | The [camp editor](#map-houses-the-camp-editor): the map and the list of houses; the house and room pages belong to it. |
 | | <kbd>💾 Templates</kbd> | The **Burn Template Manager**: export the layout, compare a file with the camp, apply it. See [Layout templates](./templates). |
-| **Guests** | <kbd>👥 Guests</kbd> | [Every ticket at a glance](./guests): its spot, check-in, request state, messages and wallet passes — tickets without a spot included. |
+| **Guests** | <kbd>👥 Guests</kbd> | [Every ticket at a glance](./guests): its spot, check-in, request state and messages — tickets without a spot included. |
 | | <kbd>🛏️ Bookings</kbd> | [Who booked which spot](./bookings), who is checked in, who is still to arrive. |
 | | <kbd>🎟️ Tickets</kbd> | Find a ticket, change its e-mail address, load the ticket list. See [Tickets & e-mail addresses](./tickets). |
 | | <kbd>♿ Special needs</kbd> | The requests. See [Special-needs requests](./special-needs). |
@@ -38,10 +38,10 @@ Right under the header, one click into every list the crew filters often, each w
 | Row | Entries | Opens |
 | --- | --- | --- |
 | **🛏️ Bookings** | booked · still to arrive · checked in · held by the crew | the [bookings list](./bookings) with that filter |
-| **🎟️ Tickets & guests** | tickets · without a spot · no e-mail · ♿ open requests · Telegram · got an e-mail · Wallet pass · Handed over | the [guest list](./guests) with that filter; ♿ opens the [requests](./special-needs) |
+| **🎟️ Tickets & guests** | tickets · without a spot · no e-mail · ♿ open requests · Telegram · got an e-mail · Handed over | the [guest list](./guests) with that filter; ♿ opens the [requests](./special-needs) |
 | **🧰 Desk & tools** | 🎫 Check-in desk · 🔎 Find a ticket · ♿ Special needs · ✉️ Message texts · 🗺️ Map & houses | the page itself |
 
-A count is coloured only when it says something: red for *no e-mail*, pink for waiting ♿ requests, orange for *without a spot* and *still to arrive* once booking has closed. *Wallet pass* and *Handed over* have no count here; the guest list counts them. The row titles (<kbd>🛏️ Bookings →</kbd>, <kbd>🎟️ Tickets & guests →</kbd>) open the lists unfiltered.
+A count is coloured only when it says something: red for *no e-mail*, pink for waiting ♿ requests, orange for *without a spot* and *still to arrive* once booking has closed. *Handed over* has no count here; the guest list counts it. The row titles (<kbd>🛏️ Bookings →</kbd>, <kbd>🎟️ Tickets & guests →</kbd>) open the lists unfiltered.
 
 ## Booking window
 

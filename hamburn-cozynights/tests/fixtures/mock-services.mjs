@@ -4,8 +4,6 @@
 //
 // - Telegram Bot API:  POST /bot<token>/<method>  (getMe, sendMessage,
 //   sendPhoto, setMyCommands, sendChatAction, getUpdates incl. long polling, getWebhookInfo)
-// - Google Wallet API: POST /oauth2/token, /walletobjects/v1/eventTicket{Class,Object}
-//   (insert, replace, read) — the app's wallet passes without Google
 // - Google OAuth2:     POST /oauth/token, GET /oauth/userinfo — the admins'
 //   google provider is pointed here by the tests, so a real PocketBase
 //   OAuth2 sign-in (hooks and guard included) runs without Google.
@@ -26,8 +24,6 @@ function reset() {
 		nextUpdateId: 1000,
 		blocked: new Set(),
 		commands: null, // the last setMyCommands payload
-		wallet: new Map(), // Google Wallet classes and objects by "kind/id"
-		walletCalls: [], // { method, path } of every Wallet API call
 		migrated: new Map(), // group id → the id of the supergroup it became
 		down: false,
 		slowMs: 0, // sendMessage takes this long (a slow Telegram)
@@ -139,39 +135,6 @@ const server = http.createServer(async (req, res) => {
 		return telegram(bot[2], { ...Object.fromEntries(url.searchParams), ...body }, res);
 	}
 
-	// --- Google Wallet stand-in: an access token, then classes and objects
-	if (url.pathname === '/oauth2/token' && req.method === 'POST') {
-		return json(res, 200, { access_token: 'mock-wallet-token', expires_in: 3600 });
-	}
-	const wallet = /^\/walletobjects\/v1\/(eventTicketClass|eventTicketObject)(?:\/(.+))?$/.exec(
-		url.pathname
-	);
-	if (wallet) {
-		state.walletCalls.push({ method: req.method, path: url.pathname });
-		if (req.headers.authorization !== 'Bearer mock-wallet-token') {
-			return json(res, 401, { error: { status: 'UNAUTHENTICATED' } });
-		}
-		const [, kind, id] = wallet;
-		const key = (value) => `${kind}/${decodeURIComponent(String(value))}`;
-		if (req.method === 'POST') {
-			if (state.wallet.has(key(body.id))) {
-				return json(res, 409, { error: { status: 'ALREADY_EXISTS' } });
-			}
-			state.wallet.set(key(body.id), body);
-			return json(res, 200, body);
-		}
-		if (req.method === 'PUT') {
-			if (!state.wallet.has(key(id))) return json(res, 404, { error: { status: 'NOT_FOUND' } });
-			state.wallet.set(key(id), body);
-			return json(res, 200, body);
-		}
-		if (req.method === 'GET') {
-			const found = state.wallet.get(key(id));
-			return found ? json(res, 200, found) : json(res, 404, { error: { status: 'NOT_FOUND' } });
-		}
-		return json(res, 405, { error: { status: 'METHOD_NOT_ALLOWED' } });
-	}
-
 	// --- Google OAuth2 stand-in (the admins' sign-in)
 	if (url.pathname === '/oauth/token' && req.method === 'POST') {
 		if (!state.oauthUsers.has(body.code)) return json(res, 400, { error: 'invalid_grant' });
@@ -227,11 +190,6 @@ const server = http.createServer(async (req, res) => {
 			return json(res, 200, { ok: true });
 		case 'GET /_mock/telegram/commands':
 			return json(res, 200, state.commands);
-		case 'GET /_mock/wallet':
-			return json(res, 200, {
-				calls: state.walletCalls,
-				items: Object.fromEntries(state.wallet)
-			});
 		case 'GET /_mock/telegram/calls':
 			return json(res, 200, state.calls);
 		case 'POST /_mock/telegram/unauthorized':

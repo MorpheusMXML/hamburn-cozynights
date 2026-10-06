@@ -11,7 +11,6 @@ import { formatPassCode, normalizePassInput } from '$lib/pass';
 import { findPass, passQrSvg, passUrl, unknownPassCodes } from '$lib/server/pass';
 import { maskEmail } from '$lib/server/notifications';
 import { getBookingSettings } from '$lib/server/settings';
-import { walletPlatforms } from '$lib/server/wallet/config';
 import { displayTicketName } from '$lib/tickets';
 
 export const load: PageServerLoad = async ({
@@ -62,13 +61,12 @@ export const load: PageServerLoad = async ({
 	}
 
 	const link = passUrl(url.origin, code);
-	// The wallets and Telegram, for a pass that holds a spot. Telegram links to
-	// its own page, which asks for the ticket code: the pass code isn't enough.
+	// Telegram, for a pass that holds a spot. It links to its own page, which
+	// asks for the ticket code: the pass code isn't enough.
 	const telegramBot = pass.spot ? (await getBookingSettings(locals.pb)).telegramBot : '';
 	return {
 		code: formatPassCode(code),
 		qrSvg: passQrSvg(link),
-		wallet: pass.spot ? walletPlatforms() : [],
 		telegram: !!telegramBot,
 		spot: pass.spot
 			? {

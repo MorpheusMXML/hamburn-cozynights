@@ -7,7 +7,6 @@
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
-	import PassActions from '$lib/components/PassActions.svelte';
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
@@ -375,7 +374,6 @@
 								<span class="notify-icon" aria-hidden="true">🎫</span> Show booking pass
 							</a>
 						</p>
-						<PassActions code={data.pass.code} wallet={data.wallet} />
 					{/if}
 					{#if (data.swaps?.incoming ?? 0) > 0}
 						<p class="swap-line news">

@@ -185,19 +185,13 @@
 
 		<p class="hint">
 			Show this pass when you arrive if the crew asks for it. A screenshot works too — or save the
-			QR code{#if data.wallet.length > 0}, or keep the pass in your wallet: it updates itself when
-				your spot changes{/if}:
+			QR code:
 		</p>
 		<p class="actions">
 			<a class="btn" href="/pass/{data.code}/qr.gif" download>Save QR code</a>
 			<a class="btn secondary" href="/map">Camp map</a>
 		</p>
-		<PassActions
-			code={data.code}
-			wallet={data.wallet}
-			telegram={data.telegram ? { connected: false } : null}
-			compact
-		/>
+		<PassActions telegram={data.telegram ? { connected: false } : null} compact />
 	</article>
 </main>
 

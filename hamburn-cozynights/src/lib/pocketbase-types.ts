@@ -22,8 +22,6 @@ export enum Collections {
 	AdminEvents = 'admin_events',
 	MessageTexts = 'message_texts',
 	SpecialRequests = 'special_requests',
-	WalletPasses = 'wallet_passes',
-	WalletDevices = 'wallet_devices',
 	SwapRequests = 'swap_requests',
 	RequestGroups = 'request_groups'
 }
@@ -231,7 +229,6 @@ export type AppSettingsRecord = {
 	telegram_bot?: string;
 	special_requests_open?: boolean;
 	guest_round?: number;
-	wallet_platforms?: string;
 	/** The crew's switch: no swap requests right now (unset = on during Live Booking). */
 	swaps_off?: boolean;
 	updated: IsoAutoDateString;
@@ -366,34 +363,6 @@ export type MessageTextsRecord = {
 	updated_by?: string;
 };
 
-export enum WalletPassesPlatformOptions {
-	apple = 'apple',
-	google = 'google'
-}
-export type WalletPassesRecord = {
-	attempts?: number;
-	changed_at?: IsoDateString;
-	created: IsoAutoDateString;
-	hash?: string;
-	id: string;
-	last_error?: string;
-	next_try?: IsoDateString;
-	order?: RecordIdString;
-	platform: WalletPassesPlatformOptions;
-	pushed_hash?: string;
-	serial: string;
-	updated: IsoAutoDateString;
-};
-
-export type WalletDevicesRecord = {
-	created: IsoAutoDateString;
-	device: string;
-	id: string;
-	pass: RecordIdString;
-	push_token: string;
-	updated: IsoAutoDateString;
-};
-
 // Response types include system fields and match responses from the PocketBase API
 export type AuthoriginsResponse<Texpand = unknown> = Required<AuthoriginsRecord> &
 	BaseSystemFields<Texpand>;
@@ -421,10 +390,6 @@ export type SpecialRequestsResponse<Texpand = unknown> = Required<SpecialRequest
 	BaseSystemFields<Texpand>;
 export type MessageTextsResponse<Texpand = unknown> = Required<MessageTextsRecord> &
 	BaseSystemFields<Texpand>;
-export type WalletPassesResponse<Texpand = unknown> = Required<WalletPassesRecord> &
-	BaseSystemFields<Texpand>;
-export type WalletDevicesResponse<Texpand = unknown> = Required<WalletDevicesRecord> &
-	BaseSystemFields<Texpand>;
 export type SwapRequestsResponse<Texpand = unknown> = Required<SwapRequestsRecord> &
 	BaseSystemFields<Texpand>;
 export type RequestGroupsResponse<Texpand = unknown> = Required<RequestGroupsRecord> &
@@ -449,8 +414,6 @@ export type CollectionRecords = {
 	admin_events: AdminEventsRecord;
 	special_requests: SpecialRequestsRecord;
 	message_texts: MessageTextsRecord;
-	wallet_passes: WalletPassesRecord;
-	wallet_devices: WalletDevicesRecord;
 	swap_requests: SwapRequestsRecord;
 	request_groups: RequestGroupsRecord;
 };
@@ -472,8 +435,6 @@ export type CollectionResponses = {
 	admin_events: AdminEventsResponse;
 	special_requests: SpecialRequestsResponse;
 	message_texts: MessageTextsResponse;
-	wallet_passes: WalletPassesResponse;
-	wallet_devices: WalletDevicesResponse;
 	swap_requests: SwapRequestsResponse;
 	request_groups: RequestGroupsResponse;
 };

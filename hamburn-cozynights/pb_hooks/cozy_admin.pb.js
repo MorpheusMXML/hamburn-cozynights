@@ -33,14 +33,14 @@
 //      cozy-admin tickets remove <code> [<code> ...]  delete tickets that hold no bed
 //      cozy-admin tickets forget-contacts --yes   after the event: delete all guest e-mail
 //                                                 addresses, Telegram links, special-needs
-//                                                 requests, swap requests and wallet device
-//                                                 registrations
+//                                                 requests, request groups and swap requests
 //
 //    Notifications (pb_hooks/cozy_notify.pb.js):
 //
 //      cozy-admin notify status                   what is configured, what is queued,
 //                                                 whether the bot can post in the crew chat
-//      cozy-admin notify test [--email <address>] crew chat test message (+ test e-mail)
+//      cozy-admin notify test [--email <address>] crew chat test message (+ test e-mail
+//                                                 with the QR picture of a sample pass)
 //
 // 2. On every start, sync the Google OAuth client of the `admins` collection
 //    from PB_GOOGLE_CLIENT_ID / PB_GOOGLE_CLIENT_SECRET (so rotating the secret
@@ -900,12 +900,12 @@ cozyTickets.addCommand(
 		const forget = new Command({
 			use: 'forget-contacts',
 			short:
-				'After the event: delete every e-mail address, Telegram link, special-needs request, request group, swap request and wallet device registration of the tickets',
+				'After the event: delete every e-mail address, Telegram link, special-needs request, request group and swap request of the tickets',
 			run: (cmd, args) => {
 				if (args.length !== 0 || !cmd.flags().getBool('yes')) {
 					cozyFail(
 						cmd,
-						'this deletes the e-mail address of every ticket, every Telegram link, every special-needs request, every request group, every swap request and every wallet device registration (ticket codes and bookings stay) — run it with --yes'
+						'this deletes the e-mail address of every ticket, every Telegram link, every special-needs request, every request group and every swap request (ticket codes and bookings stay) — run it with --yes'
 					);
 				}
 				cozyCollection(cmd, 'guest_notify');
@@ -923,7 +923,6 @@ cozyTickets.addCommand(
 				let requests = 0;
 				let groups = 0;
 				let swaps = 0;
-				let devices = 0;
 				$app.runInTransaction((txApp) => {
 					for (const t of txApp.findRecordsByFilter('orders', "email != ''", '', 0, 0)) {
 						t.set('email', '');
@@ -956,20 +955,6 @@ cozyTickets.addCommand(
 						if (n.getString('tg_chat')) links++;
 						txApp.delete(n);
 					}
-					// The phones that registered an Apple Wallet pass for updates. The
-					// passes stay in the wallets as they are; they expire after the event.
-					let hasDevices = true;
-					try {
-						txApp.findCollectionByNameOrId('wallet_devices');
-					} catch (_) {
-						hasDevices = false; // a database from before the wallet passes
-					}
-					if (hasDevices) {
-						for (const d of txApp.findRecordsByFilter('wallet_devices', "id != ''", '', 0, 0)) {
-							txApp.delete(d);
-							devices++;
-						}
-					}
 				});
 				cmd.println(
 					'deleted ' +
@@ -980,11 +965,9 @@ cozyTickets.addCommand(
 						requests +
 						' special-needs request(s), ' +
 						groups +
-						' request group(s), ' +
+						' request group(s) and ' +
 						swaps +
-						' swap request(s) and ' +
-						devices +
-						' wallet device registration(s); the ticket codes and bookings are kept'
+						' swap request(s); the ticket codes and bookings are kept'
 				);
 			}
 		});
@@ -1347,12 +1330,34 @@ const cozyNotifyTest = new Command({
 				cmd.println('e-mail: not configured (SMTP_HOST, MAIL_FROM_ADDRESS)');
 			} else {
 				try {
+					// The pass's QR code inside the mail, the way every confirmation
+					// that shows a spot carries it: what real mail apps (Gmail, Apple
+					// Mail, Outlook) make of the picture is worth a look before a release.
+					const pass = notify.samplePass(cfg);
+					const png = notify.passQrImage(pass);
+					const cid = notify.passQrCid(pass);
+					const picture = png
+						? '<p>The QR code of a sample booking pass, inside the e-mail like in the confirmations:</p>' +
+							notify.passQrHtml({
+								cid: cid,
+								alt: 'QR code of the sample booking pass ' + pass.code
+							})
+						: '';
 					notify.sendMail($app, cfg, to, {
 						subject: (cfg.label ? '[' + cfg.label + '] ' : '') + 'CozyNights test e-mail',
 						text: 'This is a test e-mail from cozy-admin notify test. Guest confirmations look different.',
-						html: '<p>This is a test e-mail from <code>cozy-admin notify test</code>. Guest confirmations look different.</p>'
+						html:
+							'<p>This is a test e-mail from <code>cozy-admin notify test</code>. Guest confirmations look different.</p>' +
+							picture,
+						inline: png ? { [cid]: png } : null
 					});
-					cmd.println('e-mail: sent to ' + to);
+					cmd.println(
+						'e-mail: sent to ' +
+							to +
+							(png
+								? ' (with the QR code of a sample pass as a picture)'
+								: ' (without the QR picture: it could not be drawn, see the log above)')
+					);
 				} catch (err) {
 					failed++;
 					cmd.println('e-mail: FAILED — ' + notify.safeError(err));

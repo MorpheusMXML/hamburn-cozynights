@@ -12,8 +12,6 @@ const RELATIONS: Record<string, Record<string, string>> = {
 	rooms: { house: 'houses' },
 	special_requests: { order: 'orders', request_group: 'request_groups' },
 	guest_notify: { order: 'orders' },
-	wallet_passes: { order: 'orders' },
-	wallet_devices: { pass: 'wallet_passes' },
 	swap_requests: { from_order: 'orders', to_order: 'orders', from_bed: 'beds', to_bed: 'beds' }
 };
 
