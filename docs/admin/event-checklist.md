@@ -20,7 +20,7 @@ timeline
 
 - [ ] **Admin access sorted.** Everyone on the crew has signed in once and been approved. See [Admin access & roles](./access).
 - [ ] **Start from last year.** A superuser drops last year's template on *Compare & Import* and applies it, or you build from scratch: the [house generator](./camp-layout#create-a-house) makes a house with all its rooms and beds in one go. See [Layout templates](./templates).
-- [ ] **Hamburn 2026:** the layout ships with the app as `hamburn-2026.json` (`/templates/hamburn-2026.json`): every bed of the 2025 bed sheet, with descriptions and the floor plans of Wälderhaus, Brahmsee-Villa and Haus am See. Apply it, then drag the See-Hütten pin onto the huts. See [Layout templates](./templates#export).
+- [ ] **Hamburn 2026:** the layout ships with the app as `hamburn-2026.json` (`/templates/hamburn-2026.json`): every bed of the 2025 bed sheet, with descriptions and the floor plans of Brahmsee-Villa, Haus am See, Wälderhaus and Waldhütten (the hostel's plans of October 2026). Apply it, then drag the See-Hütten pin onto the huts. See [Layout templates](./templates#export).
 - [ ] **Map current.** A redrawn site plan for this year goes in first: a developer swaps the map image (see [The map image](../develop/#the-map-image)). The pins keep their positions, so check them afterwards.
 - [ ] **Houses on the map.** Every house is placed where it really is. See [Houses, rooms & spots](./camp-layout).
 - [ ] **Rooms and spots complete.** Room names and numbers match the signs on the doors — click a name to [change it](./camp-layout#renaming).
