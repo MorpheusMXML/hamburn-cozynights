@@ -34,6 +34,8 @@ import { roomSwaps, type RoomSwaps } from '$lib/server/swaps';
 import { askSwapAction, withdrawSwapAction } from '$lib/server/swap-actions';
 import type { PassSummary } from '$lib/pass';
 import { readFloorPlans } from '$lib/floor-plans';
+import { getLegalInfo } from '$lib/server/legal';
+import { BOOKING_CHECK_MISSING, bookingCheckPassed } from '$lib/booking-check';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 const SIGNED_OUT =
@@ -188,7 +190,9 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			phase: settings.phase,
 			// what the banners say; what is allowed still follows `phase`
 			guestPhase: settings.guestPhase,
-			bookingUnlockAt: settings.bookingUnlockAt
+			bookingUnlockAt: settings.bookingUnlockAt,
+			// the booking window links it in the rules box ($lib/booking-check)
+			codeOfConductUrl: getLegalInfo().codeOfConductUrl
 		};
 	} catch (err: any) {
 		if (err?.status === 404) {
@@ -250,6 +254,12 @@ export const actions: Actions = {
 				return fail(409, {
 					error: `Your ticket already holds ${currentBed.label ? `spot ${currentBed.label}` : 'a spot'}. Release it first, then pick this one.`
 				});
+			}
+			// Every new spot comes with the check of the booking window: the bed
+			// made and the rules confirmed ($lib/booking-check). A new name for the
+			// spot the ticket holds needs neither.
+			if (!renaming && !bookingCheckPassed(formData)) {
+				return fail(400, { error: BOOKING_CHECK_MISSING, needsCheck: true });
 			}
 
 			// Availability (free, enabled, not locked unless admin) is checked

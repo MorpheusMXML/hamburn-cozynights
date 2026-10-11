@@ -7,6 +7,7 @@
 	import { formatBerlin } from '$lib/booking-phase';
 	import { confirmDialog, toast } from '$lib/dialogs';
 	import PassActions from '$lib/components/PassActions.svelte';
+	import { BEDDING_PROVIDED, COVERS, SLEEPING_BAG_NOTE } from '$lib/booking-check';
 
 	export let data: PageData;
 
@@ -182,6 +183,21 @@
 			{@html data.qrSvg}
 		</div>
 		<p class="code">{data.code}</p>
+
+		{#if data.spot}
+			<!-- The bedding rule ($lib/booking-check): guests open this page while
+			     they pack and when they arrive. Under the QR code, which stays where
+			     the crew expects it. -->
+			<aside class="bedding" aria-label="Bring your bedding">
+				<p class="bedding-title"><span aria-hidden="true">🛏️</span> Bring your own covers</p>
+				<ul class="bedding-list">
+					{#each COVERS as cover (cover.id)}
+						<li>{cover.name}</li>
+					{/each}
+				</ul>
+				<p class="bedding-note">{BEDDING_PROVIDED} {SLEEPING_BAG_NOTE}</p>
+			</aside>
+		{/if}
 
 		<p class="hint">
 			Show this pass when you arrive if the crew asks for it. A screenshot works too — or save the
@@ -373,6 +389,43 @@
 		line-height: 1.45;
 		margin: 0.5rem 0 1rem;
 	}
+
+	.bedding {
+		max-width: 300px;
+		margin: 1rem auto 0.75rem;
+		padding: 0.75rem 0.9rem;
+		border-radius: 14px;
+		border: 1px dashed rgba(168, 85, 247, 0.6);
+		background: rgba(168, 85, 247, 0.08);
+		text-align: left;
+	}
+	.bedding-title {
+		margin: 0 0 0.5rem;
+		font-weight: 900;
+		color: #e9d5ff;
+	}
+	.bedding-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		margin: 0 0 0.55rem;
+		padding: 0;
+		list-style: none;
+	}
+	.bedding-list li {
+		padding: 0.15rem 0.6rem;
+		border-radius: 999px;
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		color: #fff;
+		font-size: 0.82rem;
+		font-weight: 800;
+	}
+	.bedding-note {
+		margin: 0;
+		color: #a3a3a3;
+		font-size: 0.82rem;
+		line-height: 1.45;
+	}
 	.actions {
 		display: flex;
 		flex-wrap: wrap;
@@ -412,8 +465,15 @@
 			background: #fff;
 		}
 		.pass .spot dd,
-		.code {
+		.code,
+		.bedding-title,
+		.bedding-list li,
+		.bedding-note {
 			color: #000;
+		}
+		.bedding {
+			background: #fff;
+			border-color: #000;
 		}
 	}
 </style>

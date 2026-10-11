@@ -1170,6 +1170,8 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) 
 		hello: hello,
 		intro: intro,
 		rows: showSpot ? spotLines(spot) : [],
+		// what to bring, with every message that shows the spot (Max, 11 Oct 2026)
+		note: showSpot ? T('mail.bedding') : '',
 		after: after,
 		urls: [passUrl, roomUrl, mapUrl, requestUrl, telegramLine ? telegramUrl : ''],
 		// only with the pass: a released spot or request news alone has none to show
@@ -1185,6 +1187,9 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) 
  * table (House, Room, …), the lines after it, signature and small print. The
  * first of `urls` in a line becomes a link in the HTML. Every guest e-mail
  * looks like this, the spot messages and the swap requests alike.
+ * parts.note (optional): a line that must not get lost among the others (the
+ * bedding to bring), right under the table and the QR code — a box of its own
+ * in the HTML, a paragraph of its own in the text.
  * parts.qr (optional): { cid, alt } of the pass's QR code, shown in the HTML
  * right under the table — a fixed place that no changed text can move or
  * drop. The text part has no picture; the pass line there has link and code.
@@ -1195,12 +1200,14 @@ function composeMail(cfg, vars, parts) {
 	const intro = parts.intro;
 	const rows = parts.rows;
 	const after = parts.after;
+	const note = parts.note || '';
 	const qr = parts.qr || null;
 	const signature = T('mail.signature');
 	const footer = T('mail.footer');
 
 	const text = [hello, '', intro]
 		.concat(rows.length ? [''].concat(rows.map((r) => '  ' + (r[0] + ':').padEnd(10) + r[1])) : [])
+		.concat(note ? ['', note] : [])
 		.concat([''])
 		.concat(after)
 		.concat(['', signature, '', footer])
@@ -1250,6 +1257,11 @@ function composeMail(cfg, vars, parts) {
 				'</table>'
 			: '') +
 		(qr ? passQrHtml(qr) : '') +
+		(note
+			? '<p style="margin:0 0 16px;padding:12px 14px;border-radius:10px;background:#f3ecff;border:1px solid #dcc8ff;color:#2b1d47">' +
+				para(note) +
+				'</p>'
+			: '') +
 		after.map((line) => '<p style="margin:0 0 12px">' + para(line) + '</p>').join('') +
 		'<p style="margin:16px 0 0">' +
 		para(signature) +
@@ -1337,6 +1349,8 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 	const passLine = pass && spot ? '\n\n' + T('tg.pass') : '';
 	// The 🛏 line right under the spot, when the crew wrote the bed down.
 	const bed = bedLine(cfg, spot);
+	// What to bring, in every message that shows the spot (Max, 11 Oct 2026).
+	const bedding = spot ? '\n\n' + T('tg.bedding') : '';
 	const crewBooked = req.kind === 'approved' && req.fixed && !!spot;
 	let text;
 	if (kind === 'connected') {
@@ -1345,7 +1359,7 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 		text =
 			T('tg.connected.intro') +
 			'\n\n' +
-			(spot ? T('tg.connected.spot') + bed + passLine : T('tg.connected.no_spot')) +
+			(spot ? T('tg.connected.spot') + bed + bedding + passLine : T('tg.connected.no_spot')) +
 			(vars.status ? '\n\n' + T('tg.connected.request') : '') +
 			'\n\n' +
 			T('tg.connected.stop');
@@ -1356,6 +1370,7 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 			(kind === 'changed' && previousLabel ? '\n' + T('tg.before') : '') +
 			'\n\n' +
 			roomUrl +
+			bedding +
 			passLine +
 			'\n\n' +
 			T('tg.contact_crew');
@@ -1394,6 +1409,7 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 				(previousLabel ? '\n' + T('tg.before') : '') +
 				'\n\n' +
 				(req.fixed ? T('tg.changed.by_crew') : T('tg.changed.maybe_crew')) +
+				bedding +
 				passLine;
 		} else if (kind === 'swapped') {
 			// a swap both guests agreed to: no "maybe the crew moved you"
@@ -1404,6 +1420,7 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 				(previousLabel ? '\n' + T('tg.swapped.before') : '') +
 				'\n\n' +
 				(req.fixed ? T('tg.booked.by_crew') : T('tg.booked.change')) +
+				bedding +
 				passLine;
 		} else {
 			text =
@@ -1412,6 +1429,7 @@ function guestTelegram(cfg, kind, spot, previousLabel, pass, request) {
 				bed +
 				'\n\n' +
 				(req.fixed ? T('tg.booked.by_crew') : T('tg.booked.change')) +
+				bedding +
 				passLine;
 		}
 	}

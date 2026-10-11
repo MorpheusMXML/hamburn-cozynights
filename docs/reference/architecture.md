@@ -159,12 +159,12 @@ erDiagram
 | `/` | everyone | Start page, ticket code sign-in |
 | `/map` | everyone | Camp map, blurred with countdown in staging; read-only after booking closed |
 | `/house/:id` | guests with a code | Rooms of a house with free spots |
-| `/room/:id` | guests with a code | Spots of a room, booking dialog |
-| `/random-bed` | guests with a code | Destiny Roulette, a slot machine for a random free spot; a guest with a spot sees it with the booking pass and can give it up with ✨ Leave No Trace (hold to sweep) and spin again |
+| `/room/:id` | guests with a code | Spots of a room, booking dialog: a new spot first asks to make the bed and to tick the rules (`$lib/booking-check`) |
+| `/random-bed` | guests with a code | Destiny Roulette, a slot machine for a random free spot; *Book it* opens the same check (make the bed, tick the rules); a guest with a spot sees it with the booking pass and can give it up with ✨ Leave No Trace (hold to sweep) and spin again |
 | `/special-needs` | guests with a code | Ask for a special-needs spot or a project's room, start or join a request group (an invite link `?group=` fills in the code and survives the sign-in), see the crew's answer and the group's burner names, leave the group, withdraw |
 | `/legal-notice` | everyone | Legal notice (Impressum), details from the server's `.env`; `/impressum` redirects here |
 | `/privacy` | everyone | Privacy policy; `/datenschutz` redirects here |
-| `/booking-rules` | everyone | Booking rules, linked from every booking dialog |
+| `/booking-rules` | everyone | Booking rules (bedding included), confirmed in every booking dialog |
 | `/pass/:code` | whoever has the link | Booking pass with QR code (`/pass/:code/qr.gif` and `…/qr.png` as images); signed-in admins also see the booking, the check-in and a Check in button |
 | `/telegram` | guests with a code | Updates on Telegram: connect the chat, see that it is on, turn it off. Confirmation e-mails link here |
 | `/docs/*` | everyone | The guest guide and FAQ |
@@ -197,7 +197,7 @@ sequenceDiagram
   participant App as SvelteKit app
   participant DB as PocketBase
   Guest->>App: Book spot B2 (form action)
-  App->>App: Phase live? Ticket code known?
+  App->>App: Phase live? Ticket code known?<br/>Bed made and rules ticked (a new spot)?
   App->>App: Queue behind other requests<br/>for this ticket and this spot
   App->>DB: Re-read the spot
   alt taken, locked or inactive
@@ -213,6 +213,7 @@ sequenceDiagram
 - **No double bookings.** Requests for the same ticket or the same spot run one after another, and availability is re-checked inside that queue. Two guests clicking the same bed at the same moment: exactly one wins.
 - **One ticket, one spot.** Even parallel requests from the same ticket end with a single booked spot.
 - **Claim first, then release.** If something fails midway, a guest keeps their old spot rather than ending up with none.
+- **Every new spot comes with the check.** The booking window sends `rulesConfirmed` and `beddingConfirmed` with the booking: the guest made the bed and ticked the rules. Without both, the room page and the roulette refuse a new spot before touching it (*Before a spot is yours, make your bed…*); a new burner name for the spot the ticket holds needs neither, and so do the crew's bookings. Nothing about it is stored.
 - **Single instance.** The queue lives in the app process, which matches the deployment of exactly one app container per environment.
 - **A booking window without a scheduler.** The phase is *the one set by hand, unless the armed timer's opening or closing time has passed* (`src/lib/booking-phase.ts`). It is evaluated on every request, so nothing has to run at the opening or closing moment; open pages reload their data when their countdown ends. Admins enter the times in Europe/Berlin time. PocketBase's notification loop only *announces* a reached time to the crew group.
 
@@ -227,7 +228,7 @@ hamburn-cozynights/                 repository root
     │   ├── hooks.server.ts         sessions and the admin gate for every request
     │   ├── routes/                 guest pages, /admin, OAuth callback
     │   └── lib/
-    │       ├── components/         map, markers, slot machines, Leave No Trace spell, effigy title, admin widgets
+    │       ├── components/         map, markers, slot machines, Leave No Trace spell, the booking check (make your bed, rules box), effigy title, admin widgets
     │       ├── fx/                 cursor trail, booking fireworks, burning effigy title, glitter sweep, roulette sounds
     │       └── server/             booking, inventory, settings, admin auth, crypto
     ├── pb_migrations/              database schema and API rules

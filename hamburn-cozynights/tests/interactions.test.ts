@@ -7,6 +7,20 @@ import { actions as houseAdminActions } from '../src/routes/admin/house/[id]/+pa
 import { APP_SETTINGS_ID } from '../src/lib/server/constants';
 import { overrideProblem } from '../src/lib/accommodation';
 import { FakePb } from './fake-pb';
+import { CONFIRMED_FIELDS } from '../src/lib/booking-check';
+
+/** Booking requests without the check, or with half of it. */
+const HALF_CHECKS: Record<string, string>[] = [
+	{},
+	{ rulesConfirmed: 'yes' },
+	{ beddingConfirmed: 'yes' }
+];
+
+/** A booking request as the booking window sends it: with the bed made and the rules ticked. */
+function confirmed(formData: FormData): FormData {
+	for (const [field, value] of Object.entries(CONFIRMED_FIELDS)) formData.append(field, value);
+	return formData;
+}
 
 // Mock environment variables
 vi.mock('$env/dynamic/private', () => ({
@@ -306,7 +320,7 @@ describe('Room Load & Booking Logic', () => {
 		const formData = new FormData();
 		formData.append('bedId', 'bed1');
 		formData.append('guestName', 'Alice');
-		const request = { formData: async () => formData } as any;
+		const request = { formData: async () => confirmed(formData) } as any;
 
 		const result = (await roomActions.bookBed({ request, locals: mockLocals } as any)) as any;
 		expect(result.success).toBe(true);
@@ -322,7 +336,7 @@ describe('Room Load & Booking Logic', () => {
 			const formData = new FormData();
 			formData.append('bedId', 'bed1');
 			formData.append('guestName', 'Alice');
-			return { formData: async () => formData } as any;
+			return { formData: async () => confirmed(formData) } as any;
 		};
 
 		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true });
@@ -353,13 +367,35 @@ describe('Room Load & Booking Logic', () => {
 
 		const formData = new FormData();
 		formData.append('bedId', 'bed1');
-		const request = { formData: async () => formData } as any;
+		const request = { formData: async () => confirmed(formData) } as any;
 
 		const result = (await roomActions.bookBed({ request, locals: mockLocals } as any)) as any;
 		expect(result.status).toBe(409);
 		expect(mockAdminPb.update).not.toHaveBeenCalled();
 	});
 
+	it('refuses a new spot without the check of the booking window, before touching the spot', async () => {
+		for (const fields of HALF_CHECKS) {
+			mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true });
+			mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' }); // the ticket, no spot yet
+			const formData = new FormData();
+			formData.append('bedId', 'bed1');
+			formData.append('guestName', 'Alice');
+			for (const [field, value] of Object.entries(fields)) formData.append(field, value);
+
+			const result = (await roomActions.bookBed({
+				request: { formData: async () => formData },
+				locals: mockLocals
+			} as any)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data).toMatchObject({ needsCheck: true });
+			expect(result.data.error).toMatch(/make your bed and confirm the rules/);
+		}
+		expect(mockAdminPb.getOne).not.toHaveBeenCalled(); // the spot was never read
+		expect(mockAdminPb.update).not.toHaveBeenCalled();
+	});
+
+	// A new name for the spot the ticket holds needs no check: these posts come without it.
 	it('lets a guest rename the spot they hold before booking opens, but not book one', async () => {
 		const post = (bedId: string, guestName: string) => {
 			const formData = new FormData();

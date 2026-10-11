@@ -48,6 +48,7 @@ import { actions as requestPageActions } from '../src/routes/special-needs/+page
 import { actions as roomActions } from '../src/routes/room/[id]/+page.server';
 import { actions as adminRequestActions } from '../src/routes/admin/requests/+page.server';
 import { buildTemplate, parseTemplate, stringifyTemplate } from '../src/lib/template';
+import { CONFIRMED_FIELDS } from '../src/lib/booking-check';
 
 function form(fields: Record<string, string | string[]>): FormData {
 	const data = new FormData();
@@ -342,7 +343,9 @@ describe('special-needs beds in booking and counts', () => {
 
 		// a hand-made post doesn't get it either
 		const special: any = await roomActions.bookBed({
-			request: { formData: async () => form({ bedId: c.special.id, guestName: 'X' }) },
+			request: {
+				formData: async () => form({ bedId: c.special.id, guestName: 'X', ...CONFIRMED_FIELDS })
+			},
 			locals
 		} as any);
 		expect(special.status).toBe(409);
@@ -350,7 +353,9 @@ describe('special-needs beds in booking and counts', () => {
 		expect(c.pb.rows('beds').find((b) => b.id === c.special.id)!.order).toBe('');
 
 		const locked: any = await roomActions.bookBed({
-			request: { formData: async () => form({ bedId: c.normal.id, guestName: 'X' }) },
+			request: {
+				formData: async () => form({ bedId: c.normal.id, guestName: 'X', ...CONFIRMED_FIELDS })
+			},
 			locals
 		} as any);
 		expect(locked).toEqual({ success: true });

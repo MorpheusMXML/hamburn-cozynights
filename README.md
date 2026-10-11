@@ -31,6 +31,7 @@ Ticket holders pick their own bed on the Hamburn camp map. The crew builds the c
 | 🎫  | **One ticket, one bed**      | No accounts or passwords for guests. The ticket code is the key, and it holds exactly one spot.        |
 | 🎰  | **Destiny Roulette**         | A neon slot machine for the undecided: pull the lever for a random free bed, then keep, type or roll a burner name; booked guests can leave no trace and respin. |
 | 🎆  | **Booking fireworks**        | Neon rockets rise from your new spot and burst like the cursor does; a fire finale ends the show.      |
+| 🧺  | **Make your bed**            | Every booking starts with dressing a neon bed in your own covers (pillow and blanket are provided) and a tick for the rules; the pass and every confirmation repeat what to pack. |
 | 🛠️  | **Staging, Live, Closed**    | The crew builds the layout in staging; a booking window opens and closes booking by timer, and closing freezes it. |
 | 🔐  | **Google Workspace sign-in** | Admins use their `@mauersegler.art` account. Newcomers request access, a superuser approves.           |
 | 💾  | **Layout templates**         | Export the camp as JSON; a file is compared with the camp and only the changes you pick are applied.   |
