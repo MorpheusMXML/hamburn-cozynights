@@ -340,7 +340,7 @@ export async function changeTicket(
 
 /** Every stored ticket, with what the review needs to know about it. */
 export async function loadStoredTickets(adminPb: TypedPocketBase): Promise<StoredTicket[]> {
-	const [orders, beds, links] = await Promise.all([
+	const [orders, beds, links, requests] = await Promise.all([
 		adminPb.collection('orders').getFullList<OrdersResponse>({
 			fields: 'id,order_number,email,customer_name',
 			batch: 1000,
@@ -355,10 +355,16 @@ export async function loadStoredTickets(adminPb: TypedPocketBase): Promise<Store
 		adminPb
 			.collection('guest_notify')
 			.getFullList({ filter: 'tg_chat != ""', fields: 'order', batch: 1000, requestKey: null })
+			.catch(() => []),
+		// Only whether a ticket has one: nothing of what it says.
+		adminPb
+			.collection('special_requests')
+			.getFullList({ fields: 'order', batch: 1000, requestKey: null })
 			.catch(() => [])
 	]);
 	const booked = new Set(beds.map((bed) => bed.order));
 	const linked = new Set(links.map((link) => link.order));
+	const requested = new Set(requests.map((request) => request.order));
 	return orders
 		.filter((order) => !!order.order_number)
 		.map((order) => ({
@@ -367,7 +373,8 @@ export async function loadStoredTickets(adminPb: TypedPocketBase): Promise<Store
 			email: order.email ?? '',
 			name: order.customer_name ?? '',
 			hasSpot: booked.has(order.id),
-			telegram: linked.has(order.id)
+			telegram: linked.has(order.id),
+			request: requested.has(order.id)
 		}));
 }
 

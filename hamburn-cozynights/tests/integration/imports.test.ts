@@ -299,6 +299,40 @@ describe('importing the ticket list', () => {
 	});
 });
 
+describe('the review of a new address', () => {
+	it('knows a ticket has a ♿ request, and does not tick its new address in advance', async () => {
+		const tag = uid().toLowerCase();
+		const withRequest = await seedTicket(su);
+		const plain = await seedTicket(su);
+		await su.collection('orders').update(withRequest.order.id, { email: `req-${tag}@example.com` });
+		await su.collection('orders').update(plain.order.id, { email: `plain-${tag}@example.com` });
+		const order = await su.collection('orders').getOne(withRequest.order.id);
+		await saveRequest(su as any, order as any, {
+			needs: ['step_free'],
+			text: 'Ground floor please',
+			burnerName: 'Rolling Thunder',
+			consent: true
+		});
+		const rows = [
+			{ line: 2, code: withRequest.code, email: `new-req-${tag}@example.com`, name: '' },
+			{ line: 3, code: plain.code, email: `new-plain-${tag}@example.com`, name: '' }
+		];
+		const { diff } = await previewRoster(su as any, rows);
+		const byCode = Object.fromEntries(diff.changes.map((c) => [c.code, c]));
+		expect(byCode[withRequest.code]).toMatchObject({
+			request: true,
+			hasSpot: false,
+			canBeNewHolder: true,
+			suggestNewHolder: true
+		});
+		expect(byCode[plain.code]).toMatchObject({ request: false, canBeNewHolder: false });
+		expect(defaultRosterSelection(diff)).toEqual({
+			selected: [plain.code.toLowerCase()],
+			newHolders: [withRequest.code.toLowerCase()]
+		});
+	});
+});
+
 describe('applying chosen template changes', () => {
 	it('moves, renames, adds and removes only what was chosen; other bookings stay', async () => {
 		const { house, room, beds } = await seedHouse(su, 2);

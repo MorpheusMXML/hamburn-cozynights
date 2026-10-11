@@ -38,6 +38,7 @@ const stored = (code: string, extra: Partial<StoredTicket> = {}): StoredTicket =
 	name: defaultTicketName(code),
 	hasSpot: false,
 	telegram: false,
+	request: false,
 	...extra
 });
 
@@ -318,8 +319,9 @@ describe('diffRoster', () => {
 		expect(byCode['A-3']).toMatchObject({ canBeNewHolder: false, suggestNewHolder: false });
 		expect(byCode['A-4']).toMatchObject({ canBeNewHolder: false, suggestNewHolder: false });
 
+		// a-1 and a-2 carry something of their holder: not ticked in advance
 		expect(defaultRosterSelection(diff)).toEqual({
-			selected: ['a-1', 'a-2', 'a-3', 'a-4'],
+			selected: ['a-3', 'a-4'],
 			newHolders: ['a-1']
 		});
 	});
@@ -349,7 +351,32 @@ describe('diffRoster', () => {
 			['S-1', true, true],
 			['S-2', true, false]
 		]);
-		expect(defaultRosterSelection(diff).newHolders).toEqual(['s-1']);
+		expect(defaultRosterSelection(diff)).toEqual({ selected: ['s-2'], newHolders: ['s-1'] });
+	});
+
+	it('ticks a new address in advance only where the ticket carries nothing of its holder', () => {
+		const diff = diffRoster(
+			entries(
+				'code,email\nH-SPOT,n1@x.de\nH-TG,n2@x.de\nH-REQ,n3@x.de\nH-PLAIN,n4@x.de\nH-NEW,n5@x.de'
+			).entries,
+			[
+				stored('H-SPOT', { email: 'o1@x.de', hasSpot: true }),
+				stored('H-TG', { email: 'o2@x.de', telegram: true }),
+				stored('H-REQ', { email: 'o3@x.de', request: true }),
+				stored('H-PLAIN', { email: 'o4@x.de' })
+			]
+		);
+		const byCode = Object.fromEntries(diff.changes.map((c) => [c.code, c]));
+		for (const code of ['H-SPOT', 'H-TG', 'H-REQ']) {
+			expect(byCode[code]).toMatchObject({ canBeNewHolder: true, suggestNewHolder: true });
+		}
+		expect(byCode['H-REQ'].request).toBe(true);
+		expect(byCode['H-PLAIN']).toMatchObject({ canBeNewHolder: false, suggestNewHolder: false });
+		// the switch stays preset (name-less file), the tick needs a decision
+		expect(defaultRosterSelection(diff)).toEqual({
+			selected: ['h-plain', 'h-new'],
+			newHolders: ['h-spot', 'h-tg', 'h-req']
+		});
 	});
 
 	it('marks stored tickets the shop cancelled, and creates nothing for unpaid orders', () => {

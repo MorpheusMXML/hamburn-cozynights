@@ -436,6 +436,8 @@ export interface StoredTicket {
 	hasSpot: boolean;
 	/** A Telegram chat is linked for updates. */
 	telegram: boolean;
+	/** A ♿ special-needs request belongs to it. */
+	request: boolean;
 }
 
 export interface RosterChange {
@@ -455,9 +457,11 @@ export interface RosterChange {
 	nameChanged: boolean;
 	hasSpot: boolean;
 	telegram: boolean;
+	request: boolean;
 	/**
 	 * The address changes on a ticket that has something of its holder:
-	 * a spot or a Telegram link. The review offers to treat it as passed on.
+	 * a spot, a Telegram link or a ♿ request. The review offers to treat it as
+	 * passed on, and doesn't tick it in advance (defaultRosterSelection).
 	 */
 	canBeNewHolder: boolean;
 	/**
@@ -548,6 +552,7 @@ export function diffRoster(
 				nameChanged: false,
 				hasSpot: false,
 				telegram: false,
+				request: false,
 				canBeNewHolder: false,
 				suggestNewHolder: false
 			});
@@ -564,7 +569,8 @@ export function diffRoster(
 			unchanged.push({ code: entry.code, line: entry.line });
 			continue;
 		}
-		const canBeNewHolder = emailChanged && !!ticket.email && (ticket.hasSpot || ticket.telegram);
+		const canBeNewHolder =
+			emailChanged && !!ticket.email && (ticket.hasSpot || ticket.telegram || ticket.request);
 		changes.push({
 			key,
 			id: ticket.id,
@@ -578,6 +584,7 @@ export function diffRoster(
 			nameChanged,
 			hasSpot: ticket.hasSpot,
 			telegram: ticket.telegram,
+			request: ticket.request,
 			canBeNewHolder,
 			suggestNewHolder:
 				canBeNewHolder &&
@@ -623,13 +630,19 @@ export function diffRoster(
 	};
 }
 
-/** Selection the review starts with: every new and changed ticket. */
+/**
+ * Selection the review starts with: every new and changed ticket — except a
+ * new address on a ticket that carries something of its holder (a spot, a
+ * Telegram link, a ♿ request). Taking that over can mean a hand-over, or undo
+ * an address the crew corrected in the app, so it needs a deliberate tick.
+ * Its 🔁 New holder switch is still preset, for when it is ticked.
+ */
 export function defaultRosterSelection(diff: RosterDiff): {
 	selected: string[];
 	newHolders: string[];
 } {
 	return {
-		selected: diff.changes.map((change) => change.key),
+		selected: diff.changes.filter((change) => !change.canBeNewHolder).map((c) => c.key),
 		newHolders: diff.changes.filter((change) => change.suggestNewHolder).map((c) => c.key)
 	};
 }

@@ -602,7 +602,9 @@
 							</label>
 							<p class="hint">
 								These tickets are in the database with another address than the file — mostly
-								tickets passed on to somebody else. Tick the ones to update, or all of them.
+								tickets passed on to somebody else. Tick the ones to update, or all of them. Tickets
+								with a spot, a Telegram link or a ♿ request start unticked: the address there may
+								have been corrected in the app.
 								{#if swappable.length > 0}
 									🔁 <b>New holder</b> also disconnects the old holder's Telegram, makes a new booking
 									pass and forgets the burner name, special-needs request and check-in; the spot stays
@@ -658,6 +660,7 @@
 												>
 											{/if}
 											{#if change.telegram}<span class="tag">💬 Telegram linked</span>{/if}
+											{#if change.request}<span class="tag">♿ special-needs request</span>{/if}
 											{#if change.canBeNewHolder}
 												<button
 													type="button"
