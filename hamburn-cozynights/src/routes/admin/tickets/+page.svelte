@@ -218,6 +218,8 @@
 	$: shownNew = newOnes.filter(matches);
 	$: shownUpdates = updates.filter(matches);
 	$: chosen = changes.filter((change) => selected.has(change.key));
+	$: newState = groupState(newOnes, selected);
+	$: updateState = groupState(updates, selected);
 	// Svelte trims the space at the start of an {#if} block: the note brings its own.
 	$: unpaidStoredNote = preview?.diff.unpaid.some((row) => row.stored)
 		? ' Those marked 🗄 are still in the database — delete them under “Not in the file”.'
@@ -263,13 +265,18 @@
 		newHolders = newHolders;
 	}
 
-	function groupState(list: RosterChange[]): 'all' | 'some' | 'none' {
-		const on = list.filter((change) => selected.has(change.key)).length;
+	/**
+	 * The "All" box of a group. `chosen` is passed in, not read from `selected`:
+	 * in this (legacy-mode) component the template only re-renders for what it
+	 * names, and the box must follow every single tick.
+	 */
+	function groupState(list: RosterChange[], chosen: Set<string>): 'all' | 'some' | 'none' {
+		const on = list.filter((change) => chosen.has(change.key)).length;
 		return on === 0 ? 'none' : on === list.length ? 'all' : 'some';
 	}
 
 	function toggleGroup(list: RosterChange[]) {
-		const on = groupState(list) !== 'all';
+		const on = groupState(list, selected) !== 'all';
 		for (const change of list) {
 			if (on) selected.add(change.key);
 			else selected.delete(change.key);
@@ -546,8 +553,8 @@
 							<label slot="actions" class="select-all">
 								<input
 									type="checkbox"
-									checked={groupState(newOnes) === 'all'}
-									indeterminate={groupState(newOnes) === 'some'}
+									checked={newState === 'all'}
+									indeterminate={newState === 'some'}
 									on:change={() => toggleGroup(newOnes)}
 								/>
 								<span>All</span>
@@ -587,8 +594,8 @@
 							<label slot="actions" class="select-all">
 								<input
 									type="checkbox"
-									checked={groupState(updates) === 'all'}
-									indeterminate={groupState(updates) === 'some'}
+									checked={updateState === 'all'}
+									indeterminate={updateState === 'some'}
 									on:change={() => toggleGroup(updates)}
 								/>
 								<span>All</span>
@@ -810,7 +817,7 @@
 							>
 								{importing
 									? 'Importing…'
-									: chosen.length === 0
+									: chosen.length === 0 && chosenRemovals > 0
 										? `Delete ${chosenRemovals} cancelled`
 										: `Import ${chosen.length} selected`}
 							</button>
