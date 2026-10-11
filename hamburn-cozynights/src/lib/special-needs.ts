@@ -116,8 +116,11 @@ export function requestKinds(needs: readonly string[]): {
 	};
 }
 
-/** At most this many requests in one group (Max, 2026-10-04). */
-export const GROUP_MAX = 12;
+/**
+ * At most this many requests in one group (Max, 2026-10-11; 12 before). A
+ * group that is bigger already keeps everyone; nobody new can join it.
+ */
+export const GROUP_MAX = 5;
 export const GROUP_NAME_MIN = 2;
 export const GROUP_NAME_MAX = 40;
 /** A group code: characters of the booking pass alphabet (no look-alikes). */
@@ -175,6 +178,17 @@ export interface SpotInfo {
 	 */
 	bedType: string;
 	features: string[];
+	/** The other spot of its bunk bed ('' or missing for a spot on its own). */
+	bunkPartner?: string;
+	/** What kind of house and room it is in (catalogue values, '' when not set). */
+	houseKind?: string;
+	roomKind?: string;
+	/**
+	 * What the room offers, before the spot's own rules: its own features and
+	 * its house's, minus what the room switched off. The spot picker shows these
+	 * on the room's card; `features` above is what counts for the spot itself.
+	 */
+	roomFeatures?: string[];
 }
 
 /** What the guest sees of their own request. */

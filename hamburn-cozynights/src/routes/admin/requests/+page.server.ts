@@ -6,6 +6,7 @@ import { getBookingSettings } from '$lib/server/settings';
 import { needCapacity } from '$lib/accommodation';
 import {
 	assignSpot,
+	countRoomSpots,
 	decideRequest,
 	listAssignableSpots,
 	listRequests,
@@ -23,13 +24,15 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
 	setHeaders({ 'cache-control': 'no-store' });
 
 	try {
-		const [requests, spots, settings, groups, specialSpots] = await Promise.all([
+		const [requests, spots, settings, groups, specialSpots, roomSizes] = await Promise.all([
 			listRequests(locals.adminPb),
 			listAssignableSpots(locals.adminPb),
 			getBookingSettings(locals.pb),
 			listGroups(locals.adminPb),
 			// Every ♿ spot with its state: why one is missing from the picker.
-			listSpecialSpots(locals.adminPb)
+			listSpecialSpots(locals.adminPb),
+			// "3 of 6 free" on the picker's room cards.
+			countRoomSpots(locals.adminPb)
 		]);
 		// What the requests that still wait for a spot need, against the free spots
 		// that fit: the crew sees early when it has to free or mark more.
@@ -43,6 +46,7 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
 			capacity: needCapacity(open, spots),
 			groups,
 			specialSpots,
+			roomSizes,
 			requestsOpen: settings.requestsOpen,
 			isBookingActive: settings.isBookingActive
 		};

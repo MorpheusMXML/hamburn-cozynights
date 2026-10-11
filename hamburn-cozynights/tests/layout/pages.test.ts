@@ -756,14 +756,31 @@ const PAGES: PageCase[] = [
 		}
 	},
 	{ name: 'admin special-needs requests', path: () => '/admin/requests', as: 'admin' },
+	// The spot picker (SpotPicker): houses, rooms and spots over the page;
+	// picking one and pressing its button books it after a confirmation.
+	{
+		name: 'admin special-needs: spot picker',
+		path: () => '/admin/requests',
+		as: 'admin',
+		open: async (page) => {
+			const request = page.locator('article.request.status-pending').first();
+			await request.locator('form.assign button.primary').click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.waitFor();
+			await sheet.locator('button.tile').first().click();
+			await sheet.locator('.picker-foot .choice-label').waitFor();
+		}
+	},
 	{
 		name: 'admin special-needs: confirm dialog',
 		path: () => '/admin/requests',
 		as: 'admin',
 		open: async (page) => {
 			const request = page.locator('article.request.status-pending').first();
-			await request.locator('select').selectOption({ index: 1 });
 			await request.locator('form.assign button.primary').click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.locator('button.tile').first().click();
+			await sheet.locator('.picker-foot button.primary').click();
 			await page.getByRole('alertdialog').waitFor();
 		}
 	},
@@ -788,6 +805,18 @@ const PAGES: PageCase[] = [
 		open: async (page) => {
 			await page.locator(`#group-${camp.fullGroupId} form.plan button.primary`).click();
 			await page.getByRole('alertdialog').waitFor();
+		}
+	},
+	// The picker for a whole group: a room chosen, its spots carry the names.
+	{
+		name: 'admin special-needs: group picker',
+		path: () => '/admin/requests',
+		as: 'admin',
+		open: async (page) => {
+			await page.locator(`#group-${camp.fullGroupId} .where button`).click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.locator('.room-action button').first().click();
+			await sheet.locator('.tile.planned').first().waitFor();
 		}
 	},
 	{

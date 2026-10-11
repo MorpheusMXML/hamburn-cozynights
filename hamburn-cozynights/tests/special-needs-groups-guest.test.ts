@@ -315,7 +315,7 @@ describe('starting and joining from the request form', () => {
 		const bea = c.ticket('Bea Booker');
 		const result = await save(c, bea, JOIN);
 		expect(result.status).toBe(409);
-		expect(result.data.errors.groupCode).toMatch(/at most 12 people/);
+		expect(result.data.errors.groupCode).toMatch(new RegExp(`at most ${GROUP_MAX} people`));
 		expect(requestOf(c, bea)).toBeUndefined();
 	});
 

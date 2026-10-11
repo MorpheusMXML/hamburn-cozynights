@@ -32,6 +32,7 @@ import {
 } from '../src/lib/special-needs';
 import {
 	assignSpot,
+	countRoomSpots,
 	decideRequest,
 	getGuestRequest,
 	isSpotFixed,
@@ -599,6 +600,36 @@ describe('special-needs requests', () => {
 			['B1 · Dorm #2 · Villa', true],
 			['B2 · Dorm #2 · Villa', false]
 		]);
+	});
+
+	it('tells the spot picker the kinds, what the room offers, the bunk partner and the room sizes', async () => {
+		Object.assign(c.house, { kind: 'house', features: ['quiet', 'toilets_inside'] });
+		Object.assign(c.room, { kind: 'room', features: ['ground_floor'], features_off: ['quiet'] });
+		Object.assign(c.special, { bed_type: 'bunk_lower', bunk_partner: c.normal.id });
+		Object.assign(c.normal, {
+			bed_type: 'bunk_upper',
+			bunk_partner: c.special.id,
+			features_off: ['ground_floor']
+		});
+		// taken and inactive spots: in the room's size only when active
+		c.pb.seed('beds', { label: 'B3', room: c.room.id, enabled: true, occupied: true, order: '' });
+		c.pb.seed('beds', { label: 'B4', room: c.room.id, enabled: false, occupied: false, order: '' });
+
+		const spots = await listAssignableSpots(c.pb as any);
+		expect(
+			spots.map((s) => [s.spot, s.houseKind, s.roomKind, s.bunkPartner, s.roomFeatures, s.features])
+		).toEqual([
+			[
+				'B1',
+				'house',
+				'room',
+				c.normal.id,
+				['ground_floor', 'toilets_inside'],
+				['ground_floor', 'toilets_inside']
+			],
+			['B2', 'house', 'room', c.special.id, ['ground_floor', 'toilets_inside'], ['toilets_inside']]
+		]);
+		expect(await countRoomSpots(c.pb as any)).toEqual({ [c.room.id]: 3 });
 	});
 
 	it('sums a spot up without what its room or the spot itself switched off', async () => {

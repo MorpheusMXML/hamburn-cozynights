@@ -7,7 +7,7 @@
  * tests. Deterministic: the same group and the same spots always give the
  * same proposal.
  */
-import { factsOf, matchNeeds } from './accommodation';
+import { MATCHED_BY_HAND, factsOf, matchNeeds } from './accommodation';
 import { isAccessNeed, requestKinds, type SpecialNeed, type SpotInfo } from './special-needs';
 import { compareNatural } from './template';
 
@@ -32,6 +32,8 @@ export interface PlaceOption {
 	special: number;
 	/** Enough free spots for everyone to place. */
 	fits: boolean;
+	/** It fits only by giving ♿ spots to members who need nothing ("uses ♿"). */
+	usesSpecial: boolean;
 }
 
 export const ANYWHERE = 'Anywhere: the best free spot for each';
@@ -41,10 +43,20 @@ export function toPlace(members: PlanMember[]): PlanMember[] {
 	return members.filter((member) => !member.declined && !member.crewSpotLabel);
 }
 
-const bySpot = (a: SpotInfo, b: SpotInfo) =>
+/** The camp's natural order: house, room, spot. */
+export const bySpot = (a: SpotInfo, b: SpotInfo) =>
 	compareNatural(a.house, b.house) ||
 	compareNatural(a.room, b.room) ||
 	compareNatural(a.spot, b.spot);
+
+/**
+ * What a ♿ spot adds to how well it fits someone: a little for a member who
+ * needs something (it is kept for them), a lot less for anyone else. The
+ * planner and the spot picker rank with it.
+ */
+export function specialPull(spot: Pick<SpotInfo, 'special'>, access: boolean): number {
+	return spot.special ? (access ? 0.5 : -2) : 0;
+}
 
 interface Place {
 	kind: 'room' | 'house';
@@ -130,13 +142,21 @@ export function placeOptions(spots: SpotInfo[], size: number, accessCount = 0): 
 
 	const special = spots.filter((spot) => spot.special).length;
 	return [
-		{ key: '', label: ANYWHERE, free: spots.length, special, fits: spots.length >= size },
+		{
+			key: '',
+			label: ANYWHERE,
+			free: spots.length,
+			special,
+			fits: spots.length >= size,
+			usesSpecial: false
+		},
 		...sorted.map((place) => ({
 			key: place.key,
 			label: describe(place.name, place.free, place.special, size, usable(place)),
 			free: place.free,
 			special: place.special,
-			fits: place.free >= size
+			fits: place.free >= size,
+			usesSpecial: place.free >= size && usable(place) < size
 		}))
 	];
 }
@@ -199,8 +219,7 @@ export function proposePlan(
 		let bestScore = -Infinity;
 		pool.forEach((spot, index) => {
 			if (taken.has(index)) return;
-			const score =
-				matchNeeds(member.needs, facts[index]).score + (spot.special ? (access ? 0.5 : -2) : 0);
+			const score = matchNeeds(member.needs, facts[index]).score + specialPull(spot, access);
 			if (score > bestScore) {
 				best = index;
 				bestScore = score;
@@ -211,4 +230,64 @@ export function proposePlan(
 		plan[member.requestId] = pool[best].bedId;
 	}
 	return plan;
+}
+
+/** How well a place answers what the members need (needsMet). */
+export interface NeedsMet {
+	/** Members whose proposed spot there answers everything the layout can tell of theirs. */
+	met: number;
+	/** Members to place who ticked something the layout can tell (lower bunk, step-free, …). */
+	of: number;
+}
+
+/**
+ * Whether the proposal for a place gives the members what they need: of the
+ * members to place who ticked something the layout can answer (not the
+ * MATCHED_BY_HAND ones), how many get a spot there that answers all of it.
+ */
+export function needsMet(members: PlanMember[], spots: SpotInfo[], placeKey: string): NeedsMet {
+	const plan = proposePlan(members, spots, placeKey);
+	const byId = new Map(spots.map((spot) => [spot.bedId, spot]));
+	const result: NeedsMet = { met: 0, of: 0 };
+	for (const member of toPlace(members)) {
+		const checkable = [...new Set(member.needs)].filter((need) => !MATCHED_BY_HAND.includes(need));
+		if (checkable.length === 0) continue;
+		result.of += 1;
+		const spot = byId.get(plan[member.requestId]);
+		if (!spot) continue;
+		const { fits } = matchNeeds(checkable, factsOf(spot.bedType, spot.features));
+		if (fits.length === checkable.length) result.met += 1;
+	}
+	return result;
+}
+
+/**
+ * The places to suggest first, from placeOptions' list: the places that fit
+ * everyone, those that answer every member's needs ahead of the rest, each in
+ * placeOptions' order (the snuggest first, sparing the ♿ spots). "Anywhere"
+ * is not among them.
+ */
+export function rankPlaces(
+	options: PlaceOption[],
+	members: PlanMember[],
+	spots: SpotInfo[]
+): (PlaceOption & { needs: NeedsMet })[] {
+	const full = (needs: NeedsMet) => (needs.of === 0 || needs.met === needs.of ? 1 : 0);
+	// sort() is stable: places that answer the needs equally keep placeOptions' order.
+	return options
+		.filter((option) => option.key && option.fits)
+		.map((option) => ({ ...option, needs: needsMet(members, spots, option.key) }))
+		.sort((a, b) => full(b.needs) - full(a.needs) || b.needs.met - a.needs.met);
+}
+
+/**
+ * Where the plan starts: the first ranked place (rankPlaces), else anywhere
+ * (''). The crew picks another one in the spot picker.
+ */
+export function defaultPlace(
+	options: PlaceOption[],
+	members: PlanMember[],
+	spots: SpotInfo[]
+): string {
+	return rankPlaces(options, members, spots)[0]?.key ?? '';
 }

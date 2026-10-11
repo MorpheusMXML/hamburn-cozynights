@@ -40,7 +40,15 @@ import {
 	type SpecialNeed,
 	type SpotInfo
 } from '../src/lib/special-needs';
-import { ANYWHERE, placeOptions, proposePlan, type PlanMember } from '../src/lib/group-plan';
+import {
+	ANYWHERE,
+	defaultPlace,
+	needsMet,
+	placeOptions,
+	proposePlan,
+	rankPlaces,
+	type PlanMember
+} from '../src/lib/group-plan';
 import { PASS_ALPHABET } from '../src/lib/pass';
 
 const admin = {
@@ -252,8 +260,26 @@ describe('joining a group', () => {
 		).catch((err) => err);
 		expect(refused).toBeInstanceOf(GroupFieldError);
 		expect(refused).toMatchObject({ field: 'groupCode', status: 409 });
-		expect(refused.message).toMatch(/at most 12 people/);
+		expect(refused.message).toMatch(new RegExp(`at most ${GROUP_MAX} people`));
 		expect(c.pb.rows('special_requests')).toHaveLength(GROUP_MAX);
+	});
+
+	it('keeps everyone in a group from before the limit went down, and lets nobody new in', async () => {
+		const { group, requests } = seedGroup(
+			c,
+			Array.from({ length: GROUP_MAX + 2 }, () => ({}))
+		);
+		const bea = c.ticket('Bea Booker');
+		const refused = await saveGuestRequest(
+			c.pb as any,
+			bea,
+			input({ mode: 'join', code: group.code })
+		).catch((err) => err);
+		expect(refused).toMatchObject({ field: 'groupCode', status: 409 });
+		expect(c.pb.rows('special_requests')).toHaveLength(GROUP_MAX + 2);
+		const view = await getGuestGroup(c.pb as any, requests[0].order, ORIGIN);
+		expect(view).toMatchObject({ max: GROUP_MAX, full: true });
+		expect(view?.members).toHaveLength(GROUP_MAX + 2);
 	});
 
 	it('refuses another group while in one', async () => {
@@ -760,10 +786,12 @@ describe('the group planner', () => {
 			['house:hA', true]
 		]);
 		expect(nobodyNeeds[3].label).toBe('Dorm #1 · Villa — 4 free (♿ 2) · fits all 4 · uses ♿');
+		expect(nobodyNeeds.map((o) => o.usesSpecial)).toEqual([false, false, false, true, true]);
 		// two members need something: the ♿ spots are theirs, so rA is the snuggest
 		const twoNeed = placeOptions(rooms, 4, 2);
 		expect(twoNeed.map((o) => o.key)).toEqual(['', 'room:rA', 'room:rB', 'house:hA', 'house:hB']);
 		expect(twoNeed[1].label).toBe('Dorm #1 · Villa — 4 free (♿ 2) · fits all 4');
+		expect(twoNeed[1].usesSpecial).toBe(false);
 		// the default proposal for the project group books no ♿ spot
 		const four = ['m1', 'm2', 'm3', 'm4'].map((id) => member(id, ['own_room']));
 		const plan = proposePlan(four, rooms, nobodyNeeds.slice(1).find((o) => o.fits)!.key);
@@ -808,6 +836,43 @@ describe('the group planner', () => {
 			kept: ''
 		});
 		expect(Object.values(proposePlan(three, SPOTS, 'room:gone'))).toEqual(['', '', '']);
+	});
+
+	it('suggests the places that answer what the members need first', () => {
+		// Dorm #2 is quiet; m1 needs quiet, the others nothing
+		const quiet = SPOTS.map((s) => (s.roomId === 'r2' ? { ...s, features: ['quiet'] } : s));
+		const members = [member('m1', ['quiet']), member('m2'), member('m3')];
+		const options = placeOptions(quiet, 3, 1);
+		expect(options.map((o) => o.key)).toEqual([
+			'',
+			'room:r3',
+			'room:r2',
+			'house:h2',
+			'house:h1',
+			'room:r1'
+		]);
+		expect(needsMet(members, quiet, 'room:r3')).toEqual({ met: 0, of: 1 });
+		expect(needsMet(members, quiet, 'room:r2')).toEqual({ met: 1, of: 1 });
+		// places that fit everyone, those that answer the needs first, else placeOptions' order
+		expect(
+			rankPlaces(options, members, quiet).map((o) => [o.key, o.needs.met, o.needs.of])
+		).toEqual([
+			['room:r2', 1, 1],
+			['house:h1', 1, 1],
+			['room:r3', 0, 1],
+			['house:h2', 0, 1]
+		]);
+		expect(defaultPlace(options, members, quiet)).toBe('room:r2');
+		// nobody needs anything: the snuggest place that fits, as before
+		expect(rankPlaces(options, three, quiet).map((o) => o.key)).toEqual([
+			'room:r3',
+			'room:r2',
+			'house:h2',
+			'house:h1'
+		]);
+		expect(defaultPlace(options, three, quiet)).toBe('room:r3');
+		// no place fits everyone: anywhere
+		expect(defaultPlace(placeOptions(quiet, 12), members, quiet)).toBe('');
 	});
 
 	it('proposes the same, whatever order the spots come in', () => {

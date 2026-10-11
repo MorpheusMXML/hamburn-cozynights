@@ -674,7 +674,12 @@ never what anyone ticked or wrote, nor what the crew decided.
 				<p class="joined">✅ You are in this group.</p>
 			{/if}
 
-			<p class="member-count">{group.members.length} of {group.max} people:</p>
+			<!-- A group from before the limit went down to 5 may be bigger: no "7 of 5". -->
+			<p class="member-count">
+				{group.members.length > group.max
+					? `${group.members.length} people:`
+					: `${group.members.length} of ${group.max} people:`}
+			</p>
 			<ul class="members">
 				{#each group.members as member, index (index)}
 					<li>{member.name}{member.you ? ' (you)' : ''}</li>
