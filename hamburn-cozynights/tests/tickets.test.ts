@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import {
 	GUEST_EMAIL_PATTERN,
+	INVISIBLE_CHARS,
 	PAID_ORDER_STATUSES,
 	TICKET_CODE_PATTERN,
 	TICKET_CSV_COLUMNS,
@@ -395,6 +396,18 @@ describe('same rules as the server CLI (pb_hooks/cozy_admin.pb.js)', () => {
 	it('knows the same column names and paid order states', () => {
 		expect(constant('CSV_COLUMNS')).toEqual(TICKET_CSV_COLUMNS);
 		expect(constant('PAID_ORDER_STATUSES')).toEqual(PAID_ORDER_STATUSES);
+	});
+
+	it('cleans every cell the same way: invisible characters out, then the spaces', () => {
+		expect(String(constant('INVISIBLE_CHARS'))).toBe(String(INVISIBLE_CHARS));
+		// the CLI's cell() strips them before it trims, like clean() in the app
+		expect(source).toMatch(
+			/const cell = \(idx\) =>[\s\S]{0,120}\.replace\(INVISIBLE_CHARS, ''\)\.trim\(\)/
+		);
+		const file = parseRoster(`code,status,email\nZ-1, paid${ZWSP} ,${ZWSP}a@x.de`);
+		if (!file.ok) throw new Error(file.error);
+		expect(file.entries).toEqual([{ line: 2, code: 'Z-1', email: 'a@x.de', name: '' }]);
+		expect(file.unpaid).toEqual([]);
 	});
 });
 

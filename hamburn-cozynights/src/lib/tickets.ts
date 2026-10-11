@@ -61,8 +61,12 @@ export type TicketColumn = keyof typeof TICKET_CSV_COLUMNS;
 /** Column index per field; -1 = not in the file. */
 export type ColumnMap = Record<TicketColumn, number>;
 
-/** Zero-width characters that copy & paste likes to bring along. */
-const INVISIBLE = /[\u200B-\u200D\uFEFF]/g;
+/**
+ * Zero-width characters that copy & paste likes to bring along. The server CLI
+ * strips the same ones (INVISIBLE_CHARS in pb_hooks/cozy_admin.pb.js).
+ */
+export const INVISIBLE_CHARS = /[\u200B-\u200D\uFEFF]/g;
+const INVISIBLE = INVISIBLE_CHARS;
 
 /** A ticket code as typed or pasted: without surrounding spaces and invisible characters. */
 export function cleanTicketCode(raw: unknown): string {

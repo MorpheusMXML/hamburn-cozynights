@@ -14,7 +14,7 @@ import {
 	previewRoster,
 	searchTickets
 } from '../../src/lib/server/tickets';
-import { defaultRosterSelection, readRosterFile } from '../../src/lib/tickets';
+import { defaultRosterSelection, parseRoster, readRosterFile } from '../../src/lib/tickets';
 import { applyTemplate, compareTemplate, exportTemplate } from '../../src/lib/server/template';
 import { findPass } from '../../src/lib/server/pass';
 import { defaultSelection } from '../../src/lib/template-diff';
@@ -463,6 +463,24 @@ describe('cozy-admin tickets import', () => {
 		expect(result.out).toContain('1 line(s) left out: the order is not paid');
 		expect(await booking.getOrderByNumber(`PAID${tag}`)).not.toBeNull();
 		expect(await booking.getOrderByNumber(`CANC${tag}`)).toBeNull();
+	});
+
+	it('cleans cells like the app: a pasted zero-width character keeps a paid order paid', async () => {
+		const tag = uid().toUpperCase();
+		const zw = String.fromCharCode(0x200b);
+		const text = [
+			'Order code,Status,Email',
+			`${zw}ZW${tag} ,paid${zw}, ${zw}zw-${tag}@example.com`
+		].join('\n');
+		const app = parseRoster(text);
+		if (!app.ok) throw new Error(app.error);
+		expect(app.entries.map((e) => e.code)).toEqual([`ZW${tag}`]);
+
+		const result = cozyAdmin(['tickets', 'import', '-'], text);
+		expect(result.ok).toBe(true);
+		expect(result.out).not.toContain('not paid');
+		const order = await booking.getOrderByNumber(`ZW${tag}`);
+		expect(order?.email).toBe(`zw-${tag.toLowerCase()}@example.com`);
 	});
 
 	it('corrects an address when the ticket has nothing to lose', async () => {

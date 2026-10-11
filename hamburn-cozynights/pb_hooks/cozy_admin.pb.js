@@ -607,6 +607,11 @@ const CSV_COLUMNS = {
 	status: ['status', 'order status', 'payment status']
 };
 
+// Zero-width characters that copy & paste brings along. Every cell is cleaned
+// like the app does (clean() in src/lib/tickets.ts): these out first, then the
+// spaces — String.trim keeps them. tests/tickets.test.ts compares both.
+const INVISIBLE_CHARS = /[\u200B-\u200D\uFEFF]/g;
+
 // Order states that make a ticket; with a status column only these rows are
 // imported (an empty cell counts as paid). Same list as src/lib/tickets.ts.
 const PAID_ORDER_STATUSES = ['paid', 'p', 'bezahlt'];
@@ -658,8 +663,11 @@ const cozyTicketsImport = new Command({
 		let unpaid = 0;
 		for (let r = 1; r < rows.length; r++) {
 			const line = r + 1;
-			const cell = (idx) => (idx >= 0 && idx < rows[r].length ? String(rows[r][idx]).trim() : '');
-			const code = cell(cols.code).replace(/[\u200B-\u200D\uFEFF]/g, '');
+			const cell = (idx) =>
+				idx >= 0 && idx < rows[r].length
+					? String(rows[r][idx]).replace(INVISIBLE_CHARS, '').trim()
+					: '';
+			const code = cell(cols.code);
 			const email = cell(cols.email).toLowerCase();
 			const name = cell(cols.name);
 			const status = cell(cols.status).toLowerCase();
