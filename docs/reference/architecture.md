@@ -61,6 +61,8 @@ The app uses PocketBase in three different ways, each with its own rights:
 
 Page data is trimmed on the server to what the page shows. A guest's room page, for example, gets spot labels, states and burner names, never other guests' tickets.
 
+The app server's connection signs in as a service account and checks its token with PocketBase every five minutes. If PocketBase doesn't answer that check (a restart, a hiccup under load), the token is kept and checked again ten seconds later, so the app works again the moment PocketBase does. Only a token PocketBase turns down is dropped and replaced by a fresh sign-in. When the layout can't be read, the map says *The map could not be loaded right now. Please try again in a minute.*, never an empty camp that guests would read as sold out.
+
 ## Data model
 
 ```mermaid

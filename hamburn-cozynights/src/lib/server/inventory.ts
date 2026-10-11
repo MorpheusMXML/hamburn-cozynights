@@ -77,8 +77,10 @@ export class InventoryService {
 
 			return tree;
 		} catch (err) {
+			// Never an empty camp in its place: to a guest that reads as sold out.
+			// The map turns the error into "try again in a minute".
 			console.error('[Inventory] getFullTree failed:', err);
-			return [];
+			throw err;
 		}
 	}
 }
