@@ -409,6 +409,14 @@ export function readRequestPath(raw: unknown): RequestPath | null {
 	return isRequestPath(raw) ? raw : null;
 }
 
+/** "You ticked “A quiet area” under another choice: …", for boxes the chosen path doesn't have. */
+function tickedElsewhere(needs: readonly SpecialNeed[]): string {
+	const list = needs.map((need) => `“${needLabel(need)}”`).join(', ');
+	return needs.length === 1
+		? `You ticked ${list} under another choice: choose that one, or untick it.`
+		: `You ticked ${list} under another choice: choose the one that fits, or untick them.`;
+}
+
 /**
  * Reads and checks the request form. Never throws; messages are written for
  * the guest.
@@ -471,11 +479,15 @@ export function parseRequestForm(
 
 	if (!about) {
 		if (!grouped || needs.length > 0) errors.about = 'Choose what your request is about.';
-	} else if (needs.length === 0 && !grouped) {
+	} else if (needs.length === 0 && (!grouped || posted.length > 0)) {
+		// In a group, ticking nothing asks only through the group; but boxes
+		// ticked under another path (a browser without JavaScript shows them
+		// all) are never dropped without a word.
+		const elsewhere = posted.length > 0 ? ` ${tickedElsewhere(posted)}` : '';
 		errors.needs =
-			about === 'project'
+			(about === 'project'
 				? 'Tick a room or a bed.'
-				: 'Tick at least one thing. If none fits, tick "Something else".';
+				: 'Tick at least one thing. If none fits, tick "Something else".') + elsewhere;
 	}
 	if (about === 'helper' && group.mode === 'none' && !errors.groupName) {
 		errors.group = HELPER_NEEDS_GROUP;

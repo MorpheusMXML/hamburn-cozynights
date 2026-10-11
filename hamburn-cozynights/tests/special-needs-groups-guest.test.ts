@@ -388,7 +388,10 @@ describe('a refused send without JavaScript', () => {
 			consent: 'yes'
 		});
 		expect(wrong.status).toBe(400);
-		expect(wrong.data.errors).toEqual({ needs: 'Tick a room or a bed.' });
+		expect(wrong.data.errors).toEqual({
+			needs:
+				'Tick a room or a bed. You ticked “A quiet area”, “Close to a toilet” under another choice: choose the one that fits, or untick them.'
+		});
 		// a retired value is not given back
 		expect(wrong.data.values).toMatchObject({ about: 'project', needs: ['quiet', 'near_toilet'] });
 		expect(requestOf(c, bea)).toBeUndefined();

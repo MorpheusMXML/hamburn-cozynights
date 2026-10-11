@@ -210,12 +210,16 @@ describe('request form', () => {
 		// a path that ticks nothing of its own
 		const bare = parseRequestForm(form({ ...GOOD, about: 'project', needs: ['quiet'] }));
 		expect(bare.ok).toBe(false);
-		if (!bare.ok) expect(bare.errors.needs).toBe('Tick a room or a bed.');
+		if (!bare.ok) {
+			expect(bare.errors.needs).toBe(
+				'Tick a room or a bed. You ticked “A quiet area” under another choice: choose that one, or untick it.'
+			);
+		}
 		const none = parseRequestForm(form({ ...GOOD, about: 'personal', needs: ['own_room'] }));
 		expect(none.ok).toBe(false);
 		if (!none.ok) {
 			expect(none.errors.needs).toBe(
-				'Tick at least one thing. If none fits, tick "Something else".'
+				'Tick at least one thing. If none fits, tick "Something else". You ticked “A room for our art project or crew” under another choice: choose that one, or untick it.'
 			);
 		}
 	});
@@ -427,6 +431,42 @@ describe('request form', () => {
 		const pathOnly = parseRequestForm(form({ ...joining, about: 'project' }));
 		expect(pathOnly.ok).toBe(true);
 		expect(pathOnly.value.needs).toEqual([]);
+
+		// boxes ticked only under another path (a browser without JavaScript) are never
+		// dropped silently in a group either: the guest hears which ones
+		const misplaced = { ...joining, about: 'project', needs: ['lower_bunk', 'step_free'] };
+		for (const [fields, opts] of [
+			[misplaced, {}],
+			[{ ...misplaced, groupMode: '' }, { inGroup: true }]
+		] as const) {
+			const parsed = parseRequestForm(
+				form({ ...fields, text: 'I need a lower bunk for my knee' }),
+				opts
+			);
+			expect(parsed.ok).toBe(false);
+			if (!parsed.ok) {
+				expect(parsed.errors).toEqual({
+					needs:
+						'Tick a room or a bed. You ticked “A lower bunk or a bed without a ladder”, “Step-free access or the ground floor” under another choice: choose the one that fits, or untick them.'
+				});
+			}
+		}
+		// nothing ticked in a group stays fine, on any path
+		expect(parseRequestForm(form({ ...joining, about: 'personal' })).ok).toBe(true);
+		expect(parseRequestForm(form({ consent: 'yes', about: 'project' }), { inGroup: true }).ok).toBe(
+			true
+		);
+		// the helper path stores the helper alone, whatever else came along
+		const helping = parseRequestForm(
+			form({
+				...joining,
+				about: 'helper',
+				needs: ['lower_bunk'],
+				text: 'I sleep close to the person I help.'
+			})
+		);
+		expect(helping.ok).toBe(true);
+		expect(helping.value.needs).toEqual(['helper']);
 
 		// already in a group: the membership stays, whatever the form says
 		const kept = parseRequestForm(form({ consent: 'yes', groupMode: 'start' }), { inGroup: true });
