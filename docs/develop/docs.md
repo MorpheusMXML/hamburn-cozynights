@@ -107,7 +107,7 @@ Two copies, two purposes. **GitHub Pages** hosts the public guide for anyone, an
 
 - **Pull requests** build both audiences, so broken links or Markdown in either fail the check before merging.
 - **Pushes to `main`** build the public audience and deploy it to GitHub Pages.
-- **Version tags** (`v0.18.1`, made by `scripts/release.sh` on the state that is deployed) check out that tag, build the public audience from it and deploy it — so the Pages site describes the deployed state even while the release PR is still open. The paths filter doesn't apply to tags: every tag builds.
+- **Version tags** (`v1.32.2`, made by `scripts/release.sh` on the state that is deployed) check out that tag, build the public audience from it and deploy it — so the Pages site describes the deployed state even while the release PR is still open. The paths filter doesn't apply to tags: every tag builds.
 
 Two settings in the repository, once: the Pages source has to be **GitHub Actions** (Settings → Pages), and the `github-pages` environment has to allow deployments from tags (Settings → Environments → *github-pages* → *Deployment branches and tags* → add the tag pattern `v*`; the environment starts with `main` only, and a tag run would otherwise be refused with *not allowed to deploy to github-pages due to environment protection rules*).
 

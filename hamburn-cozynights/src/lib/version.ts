@@ -4,8 +4,8 @@
  * the footer, the admin menu and /api/health. The values are baked in at
  * build time (build-info.ts); nothing here asks the server.
  *
- * 0.<deploy number>.<fix>: "Deploy Nr. 18" is v0.18.0, a fix on top of it
- * v0.18.1. Every deployed version has a tag `v<version>` and a GitHub release
+ * <line>.<deploy number>.<fix>, line 0 before go-live and 1 from v1.32.2 on:
+ * "Deploy Nr. 33" is v1.33.0, a fix on top of it v1.33.1. Every deployed version has a tag `v<version>` and a GitHub release
  * with the notes since the previous tag (docs/develop/deployment.md,
  * "Versions and releases").
  */
@@ -60,7 +60,7 @@ export function builtDay(builtAt: string = APP_BUILT_AT): string {
 	});
 }
 
-/** True for the 0.<deploy>.<fix> shape the release script stamps. */
+/** True for the <line>.<deploy>.<fix> shape the release script stamps. */
 export function isReleaseVersion(version: string): boolean {
 	return /^\d+\.\d+\.\d+$/.test(version);
 }

@@ -40,23 +40,23 @@ Since 24 September 2026 `integration/staging` is protected like `main`: **a dire
 ::: code-group
 
 ```text [GitHub UI]
-git switch -c deploy/23-bunk-cards          (the deploy's own branch, off integration/staging)
-scripts/release.sh 0.23.0 "Deploy Nr. 23: …"   (in hamburn-cozynights/, see Versions and releases below)
-git push origin deploy/23-bunk-cards v0.23.0
+git switch -c deploy/33-fixes               (the deploy's own branch, off integration/staging)
+scripts/release.sh 1.33.0 "Deploy Nr. 33: …"   (in hamburn-cozynights/, see Versions and releases below)
+git push origin deploy/33-fixes v1.33.0
 → open the pull request against integration/staging and merge it
 Actions → Deploy staging → Run workflow → branch integration/staging
 → approve the "staging" deployment in the run
 ```
 
 ```bash [gh CLI]
-git switch -c deploy/23-bunk-cards
-scripts/release.sh 0.23.0 "Deploy Nr. 23: …"   # in hamburn-cozynights/, stamps the version
-git push origin deploy/23-bunk-cards v0.23.0
-gh pr create --base integration/staging --head deploy/23-bunk-cards --fill
+git switch -c deploy/33-fixes
+scripts/release.sh 1.33.0 "Deploy Nr. 33: …"   # in hamburn-cozynights/, stamps the version
+git push origin deploy/33-fixes v1.33.0
+gh pr create --base integration/staging --head deploy/33-fixes --fill
 # one chain: the merge waits for the pull request's CI run, the dispatch for the merge
 until run=$(gh run list --workflow ci.yml --commit "$(git rev-parse HEAD)" --json databaseId --jq '.[0].databaseId // empty') && [ -n "$run" ]; do sleep 5; done
 gh run watch "$run" --exit-status \
-  && gh pr merge deploy/23-bunk-cards --merge \
+  && gh pr merge deploy/33-fixes --merge \
   && gh workflow run deploy-staging.yml --ref integration/staging
 gh run watch
 ```
@@ -118,7 +118,7 @@ The `smoke` job has already confirmed that pages are served and the app reaches 
 
 ## Versions and releases
 
-Every deploy carries a version in the shape **`0.<deploy number>.<fix>`**: Deploy Nr. 18 is `v0.18.0`, a fix on top of it `v0.18.1`. The version is visible wherever someone might report a bug:
+Every deploy carries a version in the shape **`<line>.<deploy number>.<fix>`**: Deploy Nr. 33 is `v1.33.0`, a fix on top of it `v1.33.1`. The first number is the line: `0` for the deploys before go-live (`v0.18.0` … `v0.32.0`), `1` from the go-live release **`v1.32.2`** on. That release came straight after `v0.32.0` and brought everything that was still open in one go, so there is no `v0.32.1` and no `v1.0.0` … `v1.32.1`. The version is visible wherever someone might report a bug:
 
 - as a small badge next to the title on the start page, in the footer at the end of every other page (on the map, which has no end, from 400 px wide) and in the admin menu — hover it for the build (commit and day), click it for the release notes on GitHub;
 - in `GET /api/health`, as `version` and `commit`, so the [deploy runbook](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md) can compare it with the release that was just approved.
@@ -139,11 +139,11 @@ Stamp the version on the state that is about to be deployed, **before** the depl
 
 ```bash
 # from hamburn-cozynights/, on the deploy branch with a clean tree
-scripts/release.sh 0.23.0 "Deploy Nr. 23: the bunk bed cards are back"
-git push origin deploy/23-bunk-cards v0.23.0
+scripts/release.sh 1.33.0 "Deploy Nr. 33: what it brings, in one line"
+git push origin deploy/33-fixes v1.33.0
 ```
 
-The script bumps `package.json` and `package-lock.json`, makes a signed commit and a signed tag `v0.23.0`, and pushes nothing; the push is yours. Pushing the tag runs [`.github/workflows/release.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/release.yml), which creates the **GitHub release** with the generated notes since the previous tag. A tag whose commit is not on `main` yet is a **pre-release** — that is every staging deploy. When the release PR lands on `main`, the same workflow turns those pre-releases into releases. The workflow refuses a tag that does not match `package.json`, so the badge, the health check and the release page can never disagree.
+The script bumps `package.json` and `package-lock.json`, makes a signed commit and a signed tag `v1.33.0`, and pushes nothing; the push is yours. Pushing the tag runs [`.github/workflows/release.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/release.yml), which creates the **GitHub release** with the generated notes since the previous tag. A tag whose commit is not on `main` yet is a **pre-release** — that is every staging deploy. When the release PR lands on `main`, the same workflow turns those pre-releases into releases. The workflow refuses a tag that does not match `package.json`, so the badge, the health check and the release page can never disagree.
 
 The same push also runs [`.github/workflows/docs.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/docs.yml): the **public guide on GitHub Pages** is rebuilt from that tag, so it matches the version that was just deployed instead of waiting for the release PR. The app itself carries both guides in its image, built from the same commit — the admin guide behind the login at `/admin/docs/`, the public one at `/docs/`. See [Publishing](./docs#publishing).
 

@@ -8,7 +8,7 @@ name: Docs
 #   fail the check.
 # - Pushes to main: build the public audience and deploy it to GitHub Pages
 #   (repository Settings → Pages → Source: GitHub Actions).
-# - Version tags (v0.18.1, made by scripts/release.sh on the state that is
+# - Version tags (v1.32.2, made by scripts/release.sh on the state that is
 #   deployed): the same build and deploy from that tag, so the public guide on
 #   Pages is as current as the version on staging, before the release PR
 #   lands on main. The paths filter is not evaluated for tags, so every tag

@@ -158,7 +158,7 @@ One colour, one meaning, on every page: **green** free, **red** taken by another
 Press the pause button ⏸ next to the title; your browser remembers it. If your device is set to reduce motion (for example on iPhone: Settings → Accessibility → Motion → Reduce Motion), the title doesn't move at all, and there are no fireworks after booking either. And if you like it: move the cursor over the standing letters or tap them to set them on fire yourself.
 :::
 
-::: details What is the small `v0.18.1` next to the title?
+::: details What is the small `v1.32.2` next to the title?
 The version of CozyNights you are looking at. It is also at the very end of every page (on the camp map only on wider screens); hover it to see the build, click it for what changed. If you report a problem, say which version you saw.
 :::
 
