@@ -90,23 +90,49 @@ async function unfoldAll(page: Page) {
 	);
 }
 
+/** Each cover and the one piece of the bed it goes on (src/lib/booking-check.ts). */
+const COVER_ON = [
+	['Bed sheet', 'Mattress'],
+	['Duvet cover', 'Blanket'],
+	['Pillowcase', 'Pillow']
+] as const;
+
 /**
- * The check before a new spot (src/lib/booking-check.ts): every cover onto the
- * bed. The cases run with reduced motion, so a tapped cover lands at once.
+ * The check before a new spot: every cover onto its own piece, by tapping
+ * the cover and then its place on the bed. The cases run with reduced motion,
+ * so a cover lands at once.
  */
 async function makeTheBed(page: Page) {
-	for (const name of [/bed sheet/i, /duvet cover/i, /pillowcase/i]) {
-		await page.getByRole('button', { name }).click();
+	for (const [cover, piece] of COVER_ON) {
+		await page.getByRole('button', { name: cover, exact: true }).click();
+		await page.getByRole('button', { name: piece, exact: true }).click();
 	}
 	await page.getByRole('button', { name: /I'll pack them/ }).waitFor();
 }
 
-/** The roulette landed on a spot with a name on the plate: "Book it" opens the check. */
+/** Lets one-shot animations end, so the sweep measures boxes where they land. */
+async function settle(page: Page) {
+	await page.evaluate(() =>
+		Promise.all(
+			document
+				.getAnimations()
+				.filter((a) => a.effect?.getTiming().iterations !== Infinity)
+				.map((a) => a.finished.catch(() => undefined))
+		)
+	);
+}
+
+/**
+ * The roulette landed on a spot with a name on the plate: "Book it" opens the
+ * check. Its card scales in (220 ms): measured mid-way, an SVG label inside
+ * looked 3 px off its own box.
+ */
 async function openRouletteCheck(page: Page) {
 	await page.getByRole('button', { name: /^Spin/ }).click();
 	await page.locator('#guestName').fill('Layout Owl');
 	await page.getByRole('button', { name: /Book it/ }).click();
 	await page.locator('.check-card').waitFor();
+	await settle(page);
 }
 
 const PAGES: PageCase[] = [
@@ -160,6 +186,19 @@ const PAGES: PageCase[] = [
 		open: async (page) => {
 			await page.locator('button.bed-card.free').first().click();
 			await page.getByRole('dialog').waitFor();
+		}
+	},
+	{
+		// A cover in hand on the wrong piece: the bed says where it goes.
+		name: 'room: booking dialog, wrong piece',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.locator('button.bed-card.free').first().click();
+			await page.getByRole('dialog').waitFor();
+			await page.getByRole('button', { name: 'Pillowcase', exact: true }).click();
+			await page.getByRole('button', { name: 'Blanket', exact: true }).click();
+			await page.locator('.make-bed .status', { hasText: "That's the blanket!" }).waitFor();
 		}
 	},
 	{
