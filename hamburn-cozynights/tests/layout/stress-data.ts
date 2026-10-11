@@ -16,6 +16,7 @@ import { TEMPLATE_LIMITS } from '../../src/lib/template';
 import { BED_TYPES, DESCRIPTION_MAX, type BedType } from '../../src/lib/accommodation';
 import { TICKET_LIMITS } from '../../src/lib/tickets';
 import { SWAP_NOTE_MAX } from '../../src/lib/swaps';
+import { CONFIRMED_FIELDS } from '../../src/lib/booking-check';
 
 export const TEXTS = {
 	houseLong:
@@ -349,7 +350,7 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		await post(
 			base,
 			`/room/${room.id}?/bookBed`,
-			{ bedId: beds[label], guestName: burnerName },
+			{ bedId: beds[label], guestName: burnerName, ...CONFIRMED_FIELDS },
 			session.header
 		);
 		return { ...t, cookie: session.code, round: session.round };

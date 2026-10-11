@@ -11,6 +11,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import type PocketBase from 'pocketbase';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
 import { adminCookie, createAdmin, seedHouse, seedTicket, serviceAccount } from '../stack-helpers';
+import { CONFIRMED_FIELDS } from '../../src/lib/booking-check';
 
 const BASE = (process.env.SMOKE_BASE_URL || '').replace(/\/$/, '');
 const FULL = process.env.SMOKE_FULL === '1';
@@ -261,9 +262,51 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		const cookie = await guestLogin((await seedTicket(su)).code);
 		await setBookingOpen(false);
 
-		const res = await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id }, cookie);
+		const res = await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[0].id, ...CONFIRMED_FIELDS },
+			cookie
+		);
 		expect(res.status).toBe(403);
 		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(false);
+	});
+
+	it('books a new spot only with the check of the booking window (bed made, rules ticked)', async () => {
+		const { room, beds } = await seedHouse(su, 2);
+		const cookie = await guestLogin((await seedTicket(su)).code);
+		const spinner = await guestLogin((await seedTicket(su)).code);
+		await setBookingOpen(true);
+
+		// a tab from before the check, or a hand-made post: nothing is booked
+		const refused = await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[0].id, guestName: 'No Check' },
+			cookie
+		);
+		expect(refused.status).toBe(400);
+		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(false);
+		const spun = await post(
+			'/random-bed?/bookRandom',
+			{ bedId: beds[1].id, guestName: 'No Check Either' },
+			spinner
+		);
+		expect(spun.status).toBe(400);
+		expect((await su.collection('beds').getOne(beds[1].id)).occupied).toBe(false);
+
+		const booked = await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[0].id, guestName: 'Checked', ...CONFIRMED_FIELDS },
+			cookie
+		);
+		expect(booked.status).toBe(200);
+		// a new name for the spot the ticket holds needs no check
+		const renamed = await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[0].id, guestName: 'Renamed' },
+			cookie
+		);
+		expect(renamed.status).toBe(200);
+		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(true);
 	});
 
 	it('books a bed, protects it from the next guest, and releases it', async () => {
@@ -275,7 +318,7 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 
 		const booked = await post(
 			`/room/${room.id}?/bookBed`,
-			{ bedId: beds[0].id, guestName: 'Smoke Tester' },
+			{ bedId: beds[0].id, guestName: 'Smoke Tester', ...CONFIRMED_FIELDS },
 			firstCookie
 		);
 		expect(booked.status).toBe(200);
@@ -289,7 +332,11 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		expect(asSecond).not.toContain(first.code);
 		expect(asSecond).not.toContain('Test Guest');
 
-		const stolen = await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id }, secondCookie);
+		const stolen = await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[0].id, ...CONFIRMED_FIELDS },
+			secondCookie
+		);
 		// 409 Conflict since the English-only guest messages (6520061)
 		expect(stolen.status).toBe(409);
 		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(first.order.id);
@@ -306,7 +353,7 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		await setBookingOpen(true);
 		await post(
 			`/room/${room.id}?/bookBed`,
-			{ bedId: beds[0].id, guestName: 'Pass Tester' },
+			{ bedId: beds[0].id, guestName: 'Pass Tester', ...CONFIRMED_FIELDS },
 			cookie
 		);
 
@@ -355,7 +402,11 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		const ticket = await seedTicket(su);
 		const guest = await guestLogin(ticket.code);
 		await setBookingOpen(true);
-		await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id, guestName: 'Arriver' }, guest);
+		await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[0].id, guestName: 'Arriver', ...CONFIRMED_FIELDS },
+			guest
+		);
 		const code = (await su.collection('orders').getOne(ticket.order.id)).pass_code as string;
 		const shown = code.replace(/(.{4})(?=.)/g, '$1-');
 		const checkedIn = async () => (await su.collection('beds').getOne(beds[0].id)).checked_in_at;
@@ -402,7 +453,7 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		await setBookingOpen(true);
 		await post(
 			`/room/${room.id}?/bookBed`,
-			{ bedId: beds[0].id, guestName: 'List Arriver' },
+			{ bedId: beds[0].id, guestName: 'List Arriver', ...CONFIRMED_FIELDS },
 			guest
 		);
 		const checkedIn = async () => (await su.collection('beds').getOne(beds[0].id)).checked_in_at;
@@ -619,11 +670,19 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		const cookie = `${await guestLogin(ticket.code)}; ${adminCookie(admin.client)}`;
 		await setBookingOpen(true);
 
-		const special = await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id }, cookie);
+		const special = await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[0].id, ...CONFIRMED_FIELDS },
+			cookie
+		);
 		expect(special.status).toBe(409);
 		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(false);
 
-		const locked = await post(`/room/${room.id}?/bookBed`, { bedId: beds[1].id }, cookie);
+		const locked = await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[1].id, ...CONFIRMED_FIELDS },
+			cookie
+		);
 		expect(locked.status).toBe(200);
 		expect((await su.collection('beds').getOne(beds[1].id)).order).toBe(ticket.order.id);
 	});
@@ -725,17 +784,22 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		const cookie = await guestLogin(ticket.code);
 		await setBookingOpen(true);
 
-		expect((await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id }, cookie)).status).toBe(
-			200
+		expect(
+			(await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id, ...CONFIRMED_FIELDS }, cookie))
+				.status
+		).toBe(200);
+		const second = await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[1].id, ...CONFIRMED_FIELDS },
+			cookie
 		);
-		const second = await post(`/room/${room.id}?/bookBed`, { bedId: beds[1].id }, cookie);
 		expect(second.status).toBe(409);
 		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
 		expect((await su.collection('beds').getOne(beds[1].id)).order).toBe('');
 		// renaming the spot it holds is fine
 		const renamed = await post(
 			`/room/${room.id}?/bookBed`,
-			{ bedId: beds[0].id, guestName: 'Dusty' },
+			{ bedId: beds[0].id, guestName: 'Dusty', ...CONFIRMED_FIELDS },
 			cookie
 		);
 		expect(renamed.status).toBe(200);
@@ -750,10 +814,14 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		await setBookingOpen(true);
 		await post(
 			`/room/${room.id}?/bookBed`,
-			{ bedId: beds[0].id, guestName: 'Swap Ada' },
+			{ bedId: beds[0].id, guestName: 'Swap Ada', ...CONFIRMED_FIELDS },
 			adaCookie
 		);
-		await post(`/room/${room.id}?/bookBed`, { bedId: beds[1].id, guestName: 'Swap Bo' }, boCookie);
+		await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[1].id, guestName: 'Swap Bo', ...CONFIRMED_FIELDS },
+			boCookie
+		);
 
 		// nobody signed in: the action refuses and the page sends the visitor to the login
 		for (const [path, fields] of [
@@ -800,9 +868,10 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		const ticket = await seedTicket(su);
 		const cookie = await guestLogin(ticket.code);
 		await setBookingOpen(true);
-		expect((await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id }, cookie)).status).toBe(
-			200
-		);
+		expect(
+			(await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id, ...CONFIRMED_FIELDS }, cookie))
+				.status
+		).toBe(200);
 
 		// a dialog that showed another spot (stale tab) deletes nothing
 		const stale = await post('/random-bed?/releaseBed', { bedId: beds[1].id }, cookie);
@@ -817,7 +886,7 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		// … and the roulette books the spot it spun
 		const rolled = await post(
 			'/random-bed?/bookRandom',
-			{ bedId: beds[1].id, guestName: 'Plasma Puma #404' },
+			{ bedId: beds[1].id, guestName: 'Plasma Puma #404', ...CONFIRMED_FIELDS },
 			cookie
 		);
 		expect(rolled.status).toBe(200);
@@ -829,9 +898,10 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		const ticket = await seedTicket(su);
 		const cookie = await guestLogin(ticket.code);
 		await setBookingOpen(true);
-		expect((await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id }, cookie)).status).toBe(
-			200
-		);
+		expect(
+			(await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id, ...CONFIRMED_FIELDS }, cookie))
+				.status
+		).toBe(200);
 		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
 
 		// admins can't switch right now (PocketBase refuses the phase change too)
@@ -882,7 +952,11 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		const ticket = await seedTicket(su);
 		const guestCookie = await guestLogin(ticket.code);
 		await setBookingOpen(true);
-		await post(`/room/${room.id}?/bookBed`, { bedId: beds[0].id }, guestCookie);
+		await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[0].id, ...CONFIRMED_FIELDS },
+			guestCookie
+		);
 		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(true);
 
 		const admin = await createAdmin(su, 'admin');

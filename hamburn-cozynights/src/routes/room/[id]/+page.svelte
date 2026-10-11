@@ -7,6 +7,15 @@
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
+	import MakeTheBed from '$lib/components/booking/MakeTheBed.svelte';
+	import RulesCheck from '$lib/components/booking/RulesCheck.svelte';
+	import {
+		CONFIRMED_FIELDS,
+		RULES_UNTICKED,
+		carriedCheck,
+		carryCheck,
+		useUpCheck
+	} from '$lib/booking-check';
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
@@ -34,6 +43,19 @@
 	let showSlot = false;
 	/** A roll is running: the field keeps what it has until the machine stops. */
 	let rolling = false;
+
+	// The check before every new spot ($lib/booking-check): the guest makes the
+	// bed first (step 1), then names the spot and ticks the rules (step 2).
+	// Renaming the spot the ticket holds needs neither.
+	let step: 'bed' | 'book' = 'book';
+	let bedMade = false;
+	let rulesOk = false;
+	let rulesError = '';
+	let rulesCheck: { nudge(): void } | undefined;
+	$: newBooking = !!selectedBedId && selectedBedId !== data.userBedId;
+	// A tick that no booking used yet stays for the next spot in this tab.
+	$: if (showModal && newBooking) carryCheck('rules', rulesOk);
+	$: if (rulesOk) rulesError = '';
 
 	// Fireworks for a fresh booking: they rise from the booked card, and their
 	// finale lights the "Welcome Home" banner up for a moment.
@@ -159,10 +181,26 @@
 		selectedBedId = bedId;
 		currentNameInput = existingName || '';
 		modalError = '';
+		// A check from an attempt that didn't book (someone was faster) still counts.
+		const carried = carriedCheck();
+		bedMade = carried.bedding;
+		rulesOk = carried.rules;
+		rulesError = '';
+		step = bedId !== data.userBedId && !bedMade ? 'bed' : 'book';
 		showModal = true;
 		showSlot = false;
 		rolling = false;
 		await tick();
+		modalEl?.focus();
+	}
+
+	/** Step 1 is done: the bed is made, the name and the rules come next. */
+	async function bedDone() {
+		bedMade = true;
+		carryCheck('bedding', true);
+		step = 'book';
+		await tick();
+		if (modalEl) modalEl.scrollTop = 0;
 		modalEl?.focus();
 	}
 
@@ -646,140 +684,185 @@
 			on:click|stopPropagation
 			role="dialog"
 			aria-modal="true"
-			aria-labelledby="booking-modal-title"
+			aria-labelledby={step === 'bed' ? 'make-bed-title' : 'booking-modal-title'}
 			tabindex="-1"
 		>
-			<h2 id="booking-modal-title">
-				{selectedBedId === data.userBedId ? 'Edit Your Spot' : 'Grab This Spot'}
-			</h2>
-			<p>
-				{#if selectedBed}
-					<!-- One expression, not an {#if}: Svelte drops the whitespace at the
-					     start of a block, and "B2— the upper bunk" needs its space. -->
-					Spot <strong>{selectedBed.label}</strong>{selectedLevel
-						? ` — the ${selectedLevel} bunk ${selectedNote}`
-						: ''}. Set your Burner Name (optional). Everyone in this room can see it.
-				{:else}
-					Set your Burner Name (optional). Everyone in this room can see it.
+			{#if step === 'bed'}
+				<p class="step-kicker">
+					{selectedBed ? `Step 1 of 2 · Spot ${selectedBed.label}` : 'Step 1 of 2'}
+				</p>
+				<MakeTheBed titleId="make-bed-title" onpacked={bedDone} />
+				<button type="button" class="btn-cancel btn-cancel-step" on:click={closeModal}
+					>Cancel</button
+				>
+			{:else}
+				{#if newBooking}
+					<p class="step-kicker">
+						Step 2 of 2{' · '}<span class="made-chip"
+							><span aria-hidden="true">🛏️</span> Bed made ✓</span
+						>
+					</p>
 				{/if}
-			</p>
+				<h2 id="booking-modal-title">
+					{selectedBedId === data.userBedId ? 'Edit Your Spot' : 'Grab This Spot'}
+				</h2>
+				<p>
+					{#if selectedBed}
+						<!-- One expression, not an {#if}: Svelte drops the whitespace at the
+					     start of a block, and "B2— the upper bunk" needs its space. -->
+						Spot <strong>{selectedBed.label}</strong>{selectedLevel
+							? ` — the ${selectedLevel} bunk ${selectedNote}`
+							: ''}. Set your Burner Name (optional). Everyone in this room can see it.
+					{:else}
+						Set your Burner Name (optional). Everyone in this room can see it.
+					{/if}
+				</p>
 
-			{#if modalError}
-				<div class="modal-error-banner" role="alert">
-					{modalError}
-				</div>
-			{/if}
+				{#if modalError}
+					<div class="modal-error-banner" role="alert">
+						{modalError}
+					</div>
+				{/if}
 
-			{#if showSlot}
-				<SlotMachine bind:this={slotMachineRef} showButton={false} on:select={handleSlotSelect} />
-			{/if}
+				{#if showSlot}
+					<SlotMachine bind:this={slotMachineRef} showButton={false} on:select={handleSlotSelect} />
+				{/if}
 
-			<!-- novalidate + own checks: browser validation bubbles follow the browser
+				<!-- novalidate + own checks: browser validation bubbles follow the browser
 			     language. Whether a click books, releases or first rolls a name is
 			     decided in the submit function; cancel() is the only reliable way to
 			     stop an enhanced form. -->
-			<form
-				id="booking-form"
-				method="POST"
-				action="?/bookBed"
-				novalidate
-				use:enhance={async ({ action, formData, cancel }) => {
-					const releasing = action.search.includes('unbookBed');
-					if (releasing) {
-						if (!(await confirmRelease())) {
+				<form
+					id="booking-form"
+					method="POST"
+					action="?/bookBed"
+					novalidate
+					use:enhance={async ({ action, formData, cancel }) => {
+						const releasing = action.search.includes('unbookBed');
+						if (releasing) {
+							if (!(await confirmRelease())) {
+								cancel();
+								return;
+							}
+						} else if (rolling) {
 							cancel();
 							return;
-						}
-					} else if (rolling) {
-						cancel();
-						return;
-					} else if (!currentNameInput.trim()) {
-						cancel();
-						rollBurnerName();
-						return;
-					} else {
-						formData.set('guestName', currentNameInput.trim());
-					}
-					modalError = '';
-					isSaving = true;
-
-					return async ({ result, update }) => {
-						isSaving = false;
-						if (result.type === 'failure') {
-							modalError = failureMessage(
-								result,
-								'That did not work and nothing was changed. Please try again.'
-							);
-							// Someone may have been faster: show the room as it is now.
-							await invalidateAll();
+						} else if (newBooking && !bedMade) {
+							cancel();
+							step = 'bed';
 							return;
-						}
-						if (result.type === 'error') {
-							modalError = NO_CONNECTION;
+						} else if (newBooking && !rulesOk) {
+							cancel();
+							rulesError = RULES_UNTICKED;
+							rulesCheck?.nudge();
 							return;
-						}
-						if (result.type === 'success') {
-							if (releasing) {
-								toast('Your spot is released.', 'success');
-							} else {
-								fireworksOrigin = cardCenter(selectedBedId);
-								triggerFireworks = true;
+						} else if (!currentNameInput.trim()) {
+							cancel();
+							rollBurnerName();
+							return;
+						} else {
+							formData.set('guestName', currentNameInput.trim());
+							if (newBooking) {
+								for (const [field, value] of Object.entries(CONFIRMED_FIELDS)) {
+									formData.set(field, value);
+								}
 							}
-							closeModal();
 						}
-						await update();
-					};
-				}}
-			>
-				<input type="hidden" name="bedId" value={selectedBedId} />
+						modalError = '';
+						isSaving = true;
 
-				<!-- The field is always there: a rolled name lands in it and can be
+						return async ({ result, update }) => {
+							isSaving = false;
+							if (result.type === 'failure') {
+								modalError = failureMessage(
+									result,
+									'That did not work and nothing was changed. Please try again.'
+								);
+								// Someone may have been faster: show the room as it is now.
+								await invalidateAll();
+								return;
+							}
+							if (result.type === 'error') {
+								modalError = NO_CONNECTION;
+								return;
+							}
+							if (result.type === 'success') {
+								if (releasing) {
+									toast('Your spot is released.', 'success');
+								} else {
+									// The check is used up: the next booking asks again.
+									if (newBooking) useUpCheck();
+									fireworksOrigin = cardCenter(selectedBedId);
+									triggerFireworks = true;
+								}
+								closeModal();
+							}
+							await update();
+						};
+					}}
+				>
+					<input type="hidden" name="bedId" value={selectedBedId} />
+
+					<!-- The field is always there: a rolled name lands in it and can be
 				     edited or rolled again; the machine never hides the field. -->
-				<div class="form-group">
-					<label for="guestName">Burner Name</label>
-					<input
-						type="text"
-						name="guestName"
-						id="guestName"
-						bind:value={currentNameInput}
-						placeholder="Your burner name"
-						maxlength={BURNER_NAME_MAX}
-						autocomplete="off"
-						autocapitalize="words"
-						enterkeyhint="done"
-						aria-describedby="guestName-hint"
-						disabled={rolling}
-					/>
-					<button
-						type="button"
-						class="btn-roll"
-						on:click={rollBurnerName}
-						disabled={rolling || isSaving}
-						aria-live="polite"
-					>
-						{rolling ? 'Rolling…' : currentNameInput.trim() ? 'New Name 🎲' : 'Roll a name 🎲'}
-					</button>
-					<small id="guestName-hint" class="field-hint"
-						>Other ticket holders see this name next to your spot. Type your own or roll one — a
-						rolled name can still be changed. Empty field? Save rolls one for you 🎰</small
-					>
-				</div>
-
-				<!-- "Save" comes first in the DOM: Enter in the name field triggers the
-				     form's first submit button, and that must not be "Release". -->
-				<div class="actions">
-					<button type="submit" class="btn-confirm" disabled={isSaving || rolling}>
-						{isSaving ? 'Saving…' : rolling ? 'Rolling…' : 'Save Spot'}
-					</button>
-					<button type="button" class="btn-cancel" on:click={closeModal}>Cancel</button>
-					{#if selectedBedId === data.userBedId && data.isBookingActive && !data.spotFixed && !data.checkedIn}
-						<button type="submit" formaction="?/unbookBed" class="btn-unbook" disabled={isSaving}
-							>Release</button
+					<div class="form-group">
+						<label for="guestName">Burner Name</label>
+						<input
+							type="text"
+							name="guestName"
+							id="guestName"
+							bind:value={currentNameInput}
+							placeholder="Your burner name"
+							maxlength={BURNER_NAME_MAX}
+							autocomplete="off"
+							autocapitalize="words"
+							enterkeyhint="done"
+							aria-describedby="guestName-hint"
+							disabled={rolling}
+						/>
+						<button
+							type="button"
+							class="btn-roll"
+							on:click={rollBurnerName}
+							disabled={rolling || isSaving}
+							aria-live="polite"
 						>
+							{rolling ? 'Rolling…' : currentNameInput.trim() ? 'New Name 🎲' : 'Roll a name 🎲'}
+						</button>
+						<small id="guestName-hint" class="field-hint"
+							>Other ticket holders see this name next to your spot. Type your own or roll one — a
+							rolled name can still be changed. Empty field? Save rolls one for you 🎰</small
+						>
+					</div>
+
+					{#if newBooking}
+						<RulesCheck
+							bind:this={rulesCheck}
+							bind:checked={rulesOk}
+							codeOfConductUrl={data.codeOfConductUrl}
+							error={rulesError}
+							id="room-rules"
+						/>
 					{/if}
-				</div>
-				<BookingRulesNote />
-			</form>
+
+					<!-- "Save" comes first in the DOM: Enter in the name field triggers the
+				     form's first submit button, and that must not be "Release". -->
+					<div class="actions">
+						<button type="submit" class="btn-confirm" disabled={isSaving || rolling}>
+							{isSaving ? 'Saving…' : rolling ? 'Rolling…' : 'Save Spot'}
+						</button>
+						<button type="button" class="btn-cancel" on:click={closeModal}>Cancel</button>
+						{#if selectedBedId === data.userBedId && data.isBookingActive && !data.spotFixed && !data.checkedIn}
+							<button type="submit" formaction="?/unbookBed" class="btn-unbook" disabled={isSaving}
+								>Release</button
+							>
+						{/if}
+					</div>
+					{#if !newBooking}
+						<BookingRulesNote />
+					{/if}
+				</form>
+			{/if}
 		</div>
 	</div>
 {/if}
@@ -1302,6 +1385,33 @@
 	}
 	.modal p strong {
 		color: #fff;
+	}
+
+	/* "Step 1 of 2 · Spot B2": where the guest is in the check before a booking. */
+	.modal .step-kicker {
+		margin: 0 0 0.75rem;
+		font-size: 0.7rem;
+		font-weight: 900;
+		letter-spacing: 2px;
+		text-transform: uppercase;
+		color: #f9a8d4;
+	}
+	/* May wrap: kept on one line, WebKit drew it wider than it measured it. */
+	.made-chip {
+		color: #c4b5fd;
+	}
+	.btn-cancel-step {
+		display: block;
+		width: 100%;
+		min-height: 48px;
+		margin-top: 0.9rem;
+		padding: 12px 10px;
+		border-radius: 12px;
+		font-weight: 900;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+		font-size: 0.85rem;
+		cursor: pointer;
 	}
 
 	.modal-error-banner {

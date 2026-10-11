@@ -18,6 +18,8 @@ import type { RouletteSpot } from '$lib/roulette';
 import type { BedsResponse, RoomsResponse, HousesResponse } from '$lib/pocketbase-types';
 import { readFilters, spotFacts, spotMatchesFilters, type SpotFilter } from '$lib/accommodation';
 import { readAvailableFilters } from '$lib/server/wishes';
+import { getLegalInfo } from '$lib/server/legal';
+import { BOOKING_CHECK_MISSING, bookingCheckPassed } from '$lib/booking-check';
 
 type BedWithHouse = BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>;
 
@@ -162,7 +164,9 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 			telegram,
 			// what the page says; what is allowed still follows `phase`
 			guestPhase,
-			userBed: userBed ? rouletteSpot(userBed) : null
+			userBed: userBed ? rouletteSpot(userBed) : null,
+			// the booking check links it in the rules box ($lib/booking-check)
+			codeOfConductUrl: getLegalInfo().codeOfConductUrl
 		};
 	} catch (err) {
 		console.error('[RandomBed] Load failed:', (err as Error)?.message);
@@ -192,6 +196,10 @@ export const actions: Actions = {
 			return fail(400, {
 				error: 'The spin was incomplete, so nothing was booked. Please spin again.'
 			});
+		}
+		// The bed made and the rules confirmed, with every booking ($lib/booking-check).
+		if (!bookingCheckPassed(formData)) {
+			return fail(400, { error: BOOKING_CHECK_MISSING, needsCheck: true });
 		}
 
 		const bookingService = new BookingService(locals.adminPb);

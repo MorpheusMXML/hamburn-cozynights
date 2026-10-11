@@ -21,6 +21,14 @@ import { BookingService, SpotChangedError } from '../src/lib/server/booking';
 import { actions, load } from '../src/routes/random-bed/+page.server';
 import { actions as roomActions } from '../src/routes/room/[id]/+page.server';
 import { RESPIN_HOLD_MINUTES } from '../src/lib/server/notifications';
+import { CONFIRMED_FIELDS } from '../src/lib/booking-check';
+
+/** Booking requests without the check, or with half of it. */
+const HALF_CHECKS: Record<string, string>[] = [
+	{},
+	{ rulesConfirmed: 'yes' },
+	{ beddingConfirmed: 'yes' }
+];
 
 function form(fields: Record<string, string>): FormData {
 	const data = new FormData();
@@ -96,7 +104,10 @@ describe('✨ Leave No Trace & Respin', () => {
 		expect(page.freeBeds.map((b: { label: string }) => b.label)).toEqual(['B1', 'B2', 'B3']);
 
 		const booked: any = await actions.bookRandom({
-			request: { formData: async () => form({ bedId: c.b3.id, guestName: 'Solar Flare #123' }) },
+			request: {
+				formData: async () =>
+					form({ bedId: c.b3.id, guestName: 'Solar Flare #123', ...CONFIRMED_FIELDS })
+			},
 			locals: c.locals
 		} as any);
 		expect(booked).toEqual({ success: true, bedId: c.b3.id });
@@ -152,11 +163,37 @@ describe('✨ Leave No Trace & Respin', () => {
 		expect(c.bed(c.b1.id).order).toBe(c.order.id);
 	});
 
+	it('books a spin only with the check of the booking window (bed made, rules ticked)', async () => {
+		const c = camp();
+		await sweep(c, { bedId: c.b1.id });
+		const spin = (fields: Record<string, string>) =>
+			actions.bookRandom({
+				request: {
+					formData: async () => form({ bedId: c.b3.id, guestName: 'Dust Owl', ...fields })
+				},
+				locals: c.locals
+			} as any) as Promise<any>;
+
+		// an old tab or a hand-made post: nothing is booked
+		for (const fields of HALF_CHECKS) {
+			const refused = await spin(fields);
+			expect(refused.status).toBe(400);
+			expect(refused.data).toMatchObject({ needsCheck: true });
+			expect(refused.data.error).toMatch(/make your bed and confirm the rules/);
+			expect(c.bed(c.b3.id).occupied).toBe(false);
+		}
+
+		expect(await spin(CONFIRMED_FIELDS)).toEqual({ success: true, bedId: c.b3.id });
+	});
+
 	it('still refuses a second spot from the roulette without the sweep', async () => {
 		const c = camp();
 
 		const result: any = await actions.bookRandom({
-			request: { formData: async () => form({ bedId: c.b2.id, guestName: 'Neon Owl #1' }) },
+			request: {
+				formData: async () =>
+					form({ bedId: c.b2.id, guestName: 'Neon Owl #1', ...CONFIRMED_FIELDS })
+			},
 			locals: c.locals
 		} as any);
 		expect(result.status).toBe(409);

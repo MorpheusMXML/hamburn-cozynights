@@ -90,6 +90,25 @@ async function unfoldAll(page: Page) {
 	);
 }
 
+/**
+ * The check before a new spot (src/lib/booking-check.ts): every cover onto the
+ * bed. The cases run with reduced motion, so a tapped cover lands at once.
+ */
+async function makeTheBed(page: Page) {
+	for (const name of [/bed sheet/i, /duvet cover/i, /pillowcase/i]) {
+		await page.getByRole('button', { name }).click();
+	}
+	await page.getByRole('button', { name: /I'll pack them/ }).waitFor();
+}
+
+/** The roulette landed on a spot with a name on the plate: "Book it" opens the check. */
+async function openRouletteCheck(page: Page) {
+	await page.getByRole('button', { name: /^Spin/ }).click();
+	await page.locator('#guestName').fill('Layout Owl');
+	await page.getByRole('button', { name: /Book it/ }).click();
+	await page.locator('.check-card').waitFor();
+}
+
 const PAGES: PageCase[] = [
 	{ name: 'start page', path: () => '/', as: 'anonymous', phases: ALL_PHASES },
 	{ name: 'booking rules', path: () => '/booking-rules', as: 'anonymous', phases: ['closing'] },
@@ -134,12 +153,38 @@ const PAGES: PageCase[] = [
 		phases: ALL_PHASES
 	},
 	{
+		// A new spot starts with the check: make the bed (step 1).
 		name: 'room: booking dialog',
 		path: (c) => `/room/${c.roomId}`,
 		as: 'guestWithoutSpot',
 		open: async (page) => {
 			await page.locator('button.bed-card.free').first().click();
 			await page.getByRole('dialog').waitFor();
+		}
+	},
+	{
+		// The bed is made: the card asks to pack the three covers for real.
+		name: 'room: booking dialog, bed made',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.locator('button.bed-card.free').first().click();
+			await page.getByRole('dialog').waitFor();
+			await makeTheBed(page);
+		}
+	},
+	{
+		// Step 2: name and rules box, after Save without the tick (its message shows).
+		name: 'room: booking dialog, rules',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.locator('button.bed-card.free').first().click();
+			await page.getByRole('dialog').waitFor();
+			await makeTheBed(page);
+			await page.getByRole('button', { name: /I'll pack them/ }).click();
+			await page.getByRole('button', { name: 'Save Spot' }).click();
+			await page.locator('.rules-error').waitFor();
 		}
 	},
 	{
@@ -204,6 +249,29 @@ const PAGES: PageCase[] = [
 				await page.getByRole('button', { name: /Spin again/ }).click();
 			}
 			await page.locator('#guestName').waitFor();
+		}
+	},
+	{
+		// "Book it" opens the check over the machine: the bed first.
+		name: 'random spot: booking check',
+		path: () => '/random-bed',
+		as: 'guestWithoutSpot',
+		open: openRouletteCheck
+	},
+	{
+		// The bed is made; "Book it" without the tick shows why it waits.
+		name: 'random spot: booking check, rules',
+		path: () => '/random-bed',
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await openRouletteCheck(page);
+			await makeTheBed(page);
+			await page.getByRole('button', { name: /I'll pack them/ }).click();
+			await page
+				.locator('.check-card')
+				.getByRole('button', { name: /Book it/ })
+				.click();
+			await page.locator('.rules-error').waitFor();
 		}
 	},
 	{

@@ -19,6 +19,15 @@ No Trace to give it up and spin again.
 	import { ownSpotNote } from '$lib/booking-phase';
 	import { CHECKED_IN_NOTE } from '$lib/check-in';
 	import BookingRulesNote from '$lib/components/BookingRulesNote.svelte';
+	import MakeTheBed from '$lib/components/booking/MakeTheBed.svelte';
+	import RulesCheck from '$lib/components/booking/RulesCheck.svelte';
+	import {
+		CONFIRMED_FIELDS,
+		RULES_UNTICKED,
+		carriedCheck,
+		carryCheck,
+		useUpCheck
+	} from '$lib/booking-check';
 	import PassActions from '$lib/components/PassActions.svelte';
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import SuccessFireworks from '$lib/components/SuccessFireworks.svelte';
@@ -79,6 +88,19 @@ No Trace to give it up and spin again.
 	let sweepSpot = $state<RouletteSpot | null>(null);
 	let sweptSpot = $state<{ id: string; label: string } | null>(null);
 
+	// The check before every booking ($lib/booking-check): "Book it" opens it
+	// over the machine. Make the bed, then tick the rules and book. A check that
+	// no booking used yet (someone was faster) counts for the next spin.
+	let checkOpen = $state(false);
+	let bedMade = $state(untrack(() => carriedCheck().bedding));
+	let rulesOk = $state(untrack(() => carriedCheck().rules));
+	let rulesError = $state('');
+	let shownRulesError = $derived(rulesOk ? '' : rulesError);
+	let rulesCheck = $state.raw<{ nudge(): void }>();
+	let checkEl = $state<HTMLDivElement>();
+	let bookButton = $state<HTMLButtonElement>();
+	$effect(() => carryCheck('rules', rulesOk));
+
 	// Wishes the reels respect. They live in the URL, like on the map; the chips
 	// to pick them are in the top bar (GuestTopBar, from the page data).
 	let wishes = $derived(data.wishes as SpotFilter[]);
@@ -138,7 +160,9 @@ No Trace to give it up and spin again.
 		if (stage === 'landed') return '✨ Jackpot ✨';
 		return 'Pull the lever';
 	});
-	let leverLocked = $derived(mode !== 'play' || stage === 'spinning' || isBooking || !!fate);
+	let leverLocked = $derived(
+		mode !== 'play' || stage === 'spinning' || isBooking || !!fate || checkOpen
+	);
 
 	onMount(() => {
 		reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -261,15 +285,32 @@ No Trace to give it up and spin again.
 			void namePlate?.roll();
 			return;
 		}
+		if (!bedMade || !rulesOk) {
+			// The check first: in its window the last tap books.
+			cancel();
+			if (checkOpen && bedMade) {
+				rulesError = RULES_UNTICKED;
+				rulesCheck?.nudge();
+			} else {
+				void openCheck();
+			}
+			return;
+		}
 		formData.set('bedId', spot.id);
 		formData.set('guestName', name);
+		for (const [field, value] of Object.entries(CONFIRMED_FIELDS)) formData.set(field, value);
 		bookingError = '';
 		isBooking = true;
 		const origin = centerOf(submitter) ?? centerOf(glassEl);
 
 		return async ({ result }) => {
 			isBooking = false;
+			checkOpen = false;
 			if (result.type === 'success') {
+				// The check is used up: the next booking asks again.
+				useUpCheck();
+				bedMade = false;
+				rulesOk = false;
 				fate = { spot, name };
 				guestName = name;
 				passPrint = 'printing';
@@ -307,7 +348,32 @@ No Trace to give it up and spin again.
 	}
 
 	function windowKey(event: KeyboardEvent) {
-		if (event.key === 'Escape' && fate && !sweepSpot) closeFate();
+		if (event.key !== 'Escape') return;
+		if (checkOpen) {
+			if (!isBooking) closeCheck();
+		} else if (fate && !sweepSpot) closeFate();
+	}
+
+	/** "Book it" without the check: open it, at the bed, or at the rules once the bed is made. */
+	async function openCheck() {
+		rulesError = '';
+		checkOpen = true;
+		await tick();
+		checkEl?.focus();
+	}
+
+	/** The bed is made: the rules and the last tap come next. */
+	async function bedDone() {
+		bedMade = true;
+		carryCheck('bedding', true);
+		await tick();
+		if (checkEl) checkEl.scrollTop = 0;
+		checkEl?.focus();
+	}
+
+	function closeCheck() {
+		checkOpen = false;
+		void tick().then(() => bookButton?.focus());
 	}
 
 	function openSweep() {
@@ -533,6 +599,7 @@ No Trace to give it up and spin again.
 							<button
 								type="submit"
 								class="btn-book btn-ignite"
+								bind:this={bookButton}
 								disabled={isBooking || stage !== 'landed'}
 							>
 								{isBooking ? 'Booking…' : 'Book it 🌵'}
@@ -540,6 +607,12 @@ No Trace to give it up and spin again.
 							<button type="button" class="btn-again" onclick={spinButton} disabled={leverLocked}>
 								Spin again 🎰
 							</button>
+							{#if bedMade && rulesOk}
+								<!-- a check no booking used yet: "Book it" books right away -->
+								<p class="check-done">
+									<span aria-hidden="true">🛏️</span> Bed made ✓ · rules ticked ✓
+								</p>
+							{/if}
 						</div>
 					{:else}
 						<button
@@ -574,6 +647,54 @@ No Trace to give it up and spin again.
 		ondone={afterSweep}
 		onpoof={() => sounds?.poof()}
 	/>
+{/if}
+
+{#if checkOpen && chosen}
+	<div class="check-overlay" transition:fade={{ duration: 160 }}>
+		<div
+			class="check-card"
+			bind:this={checkEl}
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby={bedMade ? 'roulette-rules-title' : 'roulette-bed-title'}
+			tabindex="-1"
+			in:scale={{ start: 0.95, duration: 220 }}
+		>
+			<div class="fate-top">
+				<p class="check-kicker">
+					{`Step ${bedMade ? 2 : 1} of 2 · Spot ${chosen.label}`}
+				</p>
+				<button
+					type="button"
+					class="fate-close"
+					onclick={closeCheck}
+					disabled={isBooking}
+					aria-label="Close">✕</button
+				>
+			</div>
+			{#if !bedMade}
+				<MakeTheBed titleId="roulette-bed-title" onpacked={bedDone} />
+			{:else}
+				<h2 id="roulette-rules-title" class="check-title">One last tick</h2>
+				<p class="check-spot">
+					Spot <strong>{chosen.label}</strong> in <strong>{chosen.roomName}</strong>
+					({chosen.houseName}) for <strong>{guestName.trim() || 'you'}</strong>.
+				</p>
+				<p class="made-line"><span aria-hidden="true">🛏️</span> Bed made ✓</p>
+				<RulesCheck
+					bind:this={rulesCheck}
+					bind:checked={rulesOk}
+					codeOfConductUrl={data.codeOfConductUrl}
+					error={shownRulesError}
+					id="roulette-rules"
+				/>
+				<!-- the form is the machine's: this button sends it from here -->
+				<button type="submit" form="random-form" class="btn-book btn-ignite" disabled={isBooking}>
+					{isBooking ? 'Booking…' : 'Book it 🌵'}
+				</button>
+			{/if}
+		</div>
+	</div>
 {/if}
 
 {#if fate}
@@ -637,7 +758,8 @@ No Trace to give it up and spin again.
 <style>
 	/* The machine's colours, for the page and the Destiny Fulfilled card on top of it. */
 	.page,
-	.fate-overlay {
+	.fate-overlay,
+	.check-overlay {
 		--pink: #f472b6;
 		--purple: #a855f7;
 		--teal: #2dd4bf;
@@ -1123,6 +1245,85 @@ No Trace to give it up and spin again.
 	}
 
 	/* ── Destiny Fulfilled ───────────────────────────────────────── */
+	/* ── The check before booking ($lib/booking-check) ─────────────── */
+	.check-overlay {
+		position: fixed;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		z-index: 1000;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1rem;
+		/* no backdrop blur, like the Destiny Fulfilled card: cheap on old phones */
+		background:
+			radial-gradient(80% 60% at 50% 40%, rgba(168, 85, 247, 0.14), transparent 70%),
+			rgba(4, 3, 8, 0.92);
+	}
+	.check-card {
+		position: relative;
+		width: 100%;
+		max-width: 480px;
+		max-height: calc(100vh - 2rem);
+		max-height: calc(100dvh - 2rem);
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding: clamp(1.1rem, 5vw, 2rem);
+		border: 2px solid var(--purple);
+		border-radius: clamp(22px, 7vw, 32px);
+		background: #0a0a0c;
+		box-shadow: 0 0 70px rgba(168, 85, 247, 0.25);
+		color: #fff;
+		text-align: left;
+	}
+	.check-card:focus {
+		outline: none;
+	}
+	.check-card .fate-top {
+		margin-bottom: 0.75rem;
+	}
+	.check-kicker {
+		flex: 1 1 auto;
+		margin: 0;
+		font-size: 0.75rem;
+		font-weight: 900;
+		letter-spacing: 0.2em;
+		text-transform: uppercase;
+		color: #f9a8d4;
+		text-align: center;
+	}
+	.check-title {
+		margin: 0 0 0.5rem;
+		font-size: clamp(1.5rem, 7vw, 2rem);
+		font-weight: 900;
+		letter-spacing: -1px;
+		line-height: 1.15;
+	}
+	.check-spot {
+		margin: 0 0 1rem;
+		color: #b5b5b5;
+		line-height: 1.45;
+		overflow-wrap: anywhere;
+	}
+	.check-spot strong {
+		color: #fff;
+	}
+	/* A line of its own: as a chip at the end of the sentence above, WebKit
+	   measured it 2 px narrower than it drew it, and it stuck out at 400 px. */
+	.made-line {
+		margin: -0.5rem 0 1rem;
+		color: #c4b5fd;
+		font-size: 0.9rem;
+		font-weight: 800;
+	}
+	.check-done {
+		margin: -0.3rem 0 0;
+		font-size: 0.8rem;
+		color: #a39bb0;
+	}
+
 	.fate-overlay {
 		position: fixed;
 		inset: 0;

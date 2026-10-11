@@ -1,4 +1,5 @@
 import PocketBase from 'pocketbase';
+import type { Page } from '@playwright/test';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -62,4 +63,17 @@ export async function releaseTestBooking(pb: PocketBase) {
 	for (const bed of beds) {
 		await pb.collection('beds').update(bed.id, { occupied: false, order: null });
 	}
+}
+
+/**
+ * The check before every new spot (src/lib/booking-check.ts): makes the bed in
+ * the booking window — every cover tapped onto its piece — promises to pack
+ * them, and ticks the rules. The window then shows the burner name and Save.
+ */
+export async function passBookingCheck(page: Page) {
+	for (const name of [/bed sheet/i, /duvet cover/i, /pillowcase/i]) {
+		await page.getByRole('button', { name }).click();
+	}
+	await page.getByRole('button', { name: /I'll pack them/ }).click();
+	await page.getByRole('checkbox', { name: /I've read and understood/ }).check();
 }
