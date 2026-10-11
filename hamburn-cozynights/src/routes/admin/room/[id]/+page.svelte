@@ -144,7 +144,7 @@
 					await tick();
 					mergingId = null;
 					toast(
-						`🪜 ${plainName(target)} is now the upper bunk above ${source ? plainName(source) : 'its partner'}.`,
+						`🔝 ${plainName(target)} is now the upper bunk above ${source ? plainName(source) : 'its partner'}.`,
 						'success'
 					);
 					const drawn = drawnBunkId;
@@ -442,7 +442,7 @@
 							: 'Stack another spot on top of this one: this spot becomes the lower bunk'}
 					on:click={() => (stackingId === bed.id ? leaveStacking() : (stackingId = bed.id))}
 				>
-					<span class="btn-emoji">🪜</span>
+					<span class="btn-emoji">🔝</span>
 					<span class="btn-text">STACK</span>
 				</button>
 			</div>

@@ -106,7 +106,7 @@
 			<span class="current">{house.name}</span>
 		</nav>
 		<h1>
-			<span class="house-icon">🛖</span>
+			<span class="house-icon">🏠</span>
 			<!-- In Staging Mode a click on the name renames the house. -->
 			<InlineRename
 				value={house.name}
@@ -200,7 +200,7 @@
 		{#if addOpen}
 			<div id="add-room" class="form-wrapper" transition:slide={{ duration: 180 }}>
 				<p class="section-hint">
-					One row per size: how many {roomsWord}, how many beds each, 🪜 for bunk beds. Numbers
+					One row per size: how many {roomsWord}, how many beds each, 🔝 for bunk beds. Numbers
 					continue after the last {roomWord(house.kind)}, names are rolled.
 				</p>
 				<AddRoomsForm

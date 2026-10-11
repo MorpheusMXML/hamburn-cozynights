@@ -20,8 +20,8 @@ CozyNights is the bed booking app for **Hamburn**, a regional burn in the spirit
 ```mermaid
 flowchart TB
   map["🗺️ Camp map"]
-  map --> h1["🛖 House: Neon Cave"]
-  map --> h2["🛖 House: Dust Lodge"]
+  map --> h1["🏠 House: Neon Cave"]
+  map --> h2["🏠 House: Dust Lodge"]
   h1 --> r1["🚪 Room #1"]
   h1 --> r2["🚪 Room #2"]
   r1 --> s1["🛏️ Spot B1"]

@@ -87,7 +87,7 @@ brings back the empty collections and the field, never their records.
   next free `room_number` (skipping the ones the house has), a rolled `name`
   (`src/lib/place-names.ts`, never one the house has), the `kind` its house
   implies and `amount_beds`, then its spots `B1 … Bn`, `enabled` and not
-  `occupied`; with 🪜 each pair gets `bunk_lower` / `bunk_upper` and
+  `occupied`; with 🔝 each pair gets `bunk_lower` / `bunk_upper` and
   `bunk_partner` on both spots. PocketBase has no transaction across
   requests: when a write fails, the rooms created so far are deleted again
   (their spots go with them) and a new house goes too, so nothing half-made

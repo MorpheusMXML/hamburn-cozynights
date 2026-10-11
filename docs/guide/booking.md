@@ -15,7 +15,7 @@ Beds come with **Indoor memberships** only. Camper memberships (camper or tent) 
 ```mermaid
 flowchart LR
   code["🎫 Ticket code"] --> map["🗺️ Camp map"]
-  map --> pick["🛖 House → 🚪 Room<br/>→ 🛏️ free spot"]
+  map --> pick["🏠 House → 🚪 Room<br/>→ 🛏️ free spot"]
   pick --> bed["🧺 Make your bed"] --> name["✍️ Burner name (optional)<br/>☑️ the rules"] --> done["✅ Your Spot"]
   map --> roulette["🎰 Destiny<br/>Roulette"] --> bed
 ```
@@ -84,7 +84,7 @@ That's it: fireworks go up from your new spot 🎆, and the spot now shows **You
 | --- | --- |
 | 🟢 **Available** · *Grab it now!* | Free. Click it to book. |
 | 🟢 **Available** · *Release your other spot first* | Free, but you already have a spot somewhere else, so it can't be clicked. One ticket code = one spot. |
-| 🩵 **Yours** · *your burner name* | That's you. Click it to rename it (any time until booking closes) or to release it (during Live Booking); the line under the name says which of the two it is right now. |
+| 💠 **Yours** · *your burner name* | That's you. Click it to rename it (any time until booking closes) or to release it (during Live Booking); the line under the name says which of the two it is right now. |
 | 🔴 **Occupied** · *a burner name* | Taken by another guest. *Mystery Burner* means the booking has no name, for example because its ticket changed hands. During Live Booking, while you hold a spot, it adds *⇄ Ask to swap*: tap it to ask its guest for a [swap](./swaps) (*⏳ Asked — waiting* once you did). |
 | 🟣 **Blocked by admin** · *Not available* | Held back by the crew, for example a broken bed, a spot that isn't in use, one the crew took for itself or one kept for [guests with special needs and for projects](./special-needs): nobody books those directly, the crew hands them out. |
 | ⚪️ **Not open yet** · *Booking opens soon* | Booking hasn't opened yet. |
@@ -101,7 +101,7 @@ Houses and rooms can carry a few details, and spots say what kind of bed they ar
 
 | You see | Meaning |
 | --- | --- |
-| 🏠 House · 🛖 Hut group · ⛺ Tent area | What the place on the map is. A hut group is one pin with several huts; the map pin carries the icon, and the house page then asks you to choose a **hut**. |
+| 🏠 House · 🏘️ Hut group · ⛺ Tent area | What the place on the map is. A hut group is one pin with several huts; the map pin carries the icon, and the house page then asks you to choose a **hut**. |
 | ♿ Wheelchair accessible · ⬇️ Ground floor | A step-free way in with an accessible bathroom, or no stairs to the bed. An upper bunk is never ♿, however accessible its room is — the ladder is in the way — so its card says *no ♿ Wheelchair accessible* in such a room. |
 | 🚻 Toilets + showers inside · 🛁 Own bathroom | In the building itself, or in the room. Nothing written means the toilets are somewhere else on the site — the description usually says where. |
 | 🔥 Heated · ❄️ No heating | Late October nights are cold; this is worth reading. |

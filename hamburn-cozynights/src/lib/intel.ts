@@ -378,7 +378,7 @@ export function attentionItems(stats: LiveStats, phase: BookingPhase): Attention
 		items.push({
 			key: 'houses-unconfigured',
 			tone: phase === 'staging' ? 'warning' : 'info',
-			icon: '🛖',
+			icon: '🏠',
 			text: `${plural(stats.houseStates.unconfigured, 'house has', 'houses have')} no active spots.`
 		});
 	}

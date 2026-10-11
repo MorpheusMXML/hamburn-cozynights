@@ -536,7 +536,7 @@ describe('summaries', () => {
 
 	it('folds the details of a house or room into one line', () => {
 		expect(detailsSummary('house', 'hut_group', ['heated', 'wheelchair'], 'By the lake')).toBe(
-			'🛖 Hut group · ♿ 🔥 · description'
+			'🏘️ Hut group · ♿ 🔥 · description'
 		);
 		// a room-only feature on a house is dropped, blank text is no description
 		expect(detailsSummary('house', '', ['own_bathroom'], '  ')).toBe('');

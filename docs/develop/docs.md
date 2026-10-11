@@ -95,6 +95,9 @@ Everything below renders on this site. GitHub alerts, Mermaid diagrams, tables a
 > [!TIP] Button names
 > Write UI labels exactly as the app shows them, emoji included, so readers can find them on screen.
 
+> [!WARNING] Emoji every phone can draw
+> Use emoji up to Unicode 12 (2019), in the app and in the guides. Newer ones (the hut, the ladder, the light blue heart …) show as an empty square on phones older than iOS 14.2 or Android 11 and on Windows 10. `tests/emoji-support.test.ts` refuses them in the app, its mails and its Telegram texts.
+
 ## Screenshots
 
 Screenshots show demo data only, never real guests or tickets. Take them from a local stack at 1280 × 800, save them as WebP (quality around 80, under about 250 KB), and reference them with a relative path so they work on GitHub too.

@@ -33,7 +33,7 @@ export const SWAP_VIBES: readonly SwapVibe[] = [
 	{ value: 'quiet', icon: '🤫', label: 'Quiet corner, please' },
 	{ value: 'early', icon: '🌅', label: 'Early bird' },
 	{ value: 'night', icon: '🌙', label: 'Night owl' },
-	{ value: 'bunk', icon: '🪜', label: 'The other bunk level' },
+	{ value: 'bunk', icon: '↕️', label: 'The other bunk level' },
 	{ value: 'nice', icon: '🎁', label: 'Just asking nicely' }
 ];
 

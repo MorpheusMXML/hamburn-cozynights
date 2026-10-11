@@ -95,7 +95,7 @@ true:
 | 🔑 *… admin sign-ins wait for a superuser's approval* | Somebody signed in with Google without an invite. | [Admin access](./access) |
 | 🎟 *… tickets have no spot, and booking is closed* | After booking closed: guests with a ticket but no spot. | *Who* — the [Guests](./guests) page, tickets without a spot |
 | ⏳ *… guest messages are being retried* | A delivery failed and waits for its next try. | [Notifications](./notifications) |
-| 🛖 *… houses have no active spots* | Houses without spots (orange in Staging, where they can still be fixed). | – |
+| 🏠 *… houses have no active spots* | Houses without spots (orange in Staging, where they can still be fixed). | – |
 | 🎟 *… tickets have no spot yet* | During Live Booking: guests who still have to book. | *Who* — the [Guests](./guests) page, tickets without a spot |
 | 📭 *… tickets have no e-mail address* | E-mail to guests is on, until booking closes. | *Which* — the [Guests](./guests) page, tickets without an address |
 | 🚪 *… booked guests are not checked in yet* | After booking closed, once the first guest was checked in. | *Who* — the [bookings list](./bookings), still to arrive |
@@ -183,9 +183,9 @@ a bunk bed is a neutral white outline.
 | 🟢 Green | **Open, free** — a house with free spots and nothing booked yet; a free spot (VACANT ✨, *Available* for guests) |
 | 🟠 Orange | **Filling** — booked and free spots side by side; also a warning, something not allowed right now |
 | 🔴 Red | **Full, booked, occupied** — a house with nothing left to book; a booked spot (CLAIMED 👥, *Occupied* for guests); a ticket that holds a spot |
-| 🩵 Turquoise | **Checked in**; a guest's own spot (*Yours*); and the colour of Staging Mode |
+| 💠 Turquoise | **Checked in**; a guest's own spot (*Yours*); and the colour of Staging Mode |
 | 🟣 Violet | **Held back** — locked 🔒 or marked 🔄 TAKEN by the crew (BLOCKED 🛠), *Blocked by admin* for guests |
-| 🩷 Pink | **♿ Special needs, and nothing else** — spots kept for requests, the requests and their count, the ♿ links |
+| 💗 Pink | **♿ Special needs, and nothing else** — spots kept for requests, the requests and their count, the ♿ links |
 | 🟡 Yellow | **Live Booking** — the phase pill and the countdown to the closing time |
 | ⚪️ Grey | **Not set up, inactive, not now** — a house without active spots; a switched-off spot (INACTIVE 🧊); a spot that can't be booked yet or any more; light grey for Closed |
 
@@ -257,7 +257,7 @@ Pins are teal while a house has free spots, red when none is left, and grey whil
 
 | Gesture | Result |
 | --- | --- |
-| **Click an empty place** | Sidebar *GENERATE SANCTUARY*, the [house generator](./camp-layout#create-a-house): a rolled name, the kind, and the rooms as size rows (*4 rooms × 6 beds 🪜*), then <kbd>IGNITE HOUSE ✨</kbd>. |
+| **Click an empty place** | Sidebar *GENERATE SANCTUARY*, the [house generator](./camp-layout#create-a-house): a rolled name, the kind, and the rooms as size rows (*4 rooms × 6 beds 🔝*), then <kbd>IGNITE HOUSE ✨</kbd>. |
 | **Drag a house** | Moves it. The new position is saved when you let go. |
 | **Arrow keys** on a selected pin | Move it one unit per press (with <kbd>Shift</kbd>: ten), saved when you let go of the key. |
 | **Click a house** | Sidebar *HOUSE INTEL*: rename it (<kbd>SYNC MODULE ✨</kbd>; or click its name on the house page, see [Renaming](./camp-layout#renaming)), type an exact **MAP POSITION 📍** (X 0–1000, Y 0–700) and press <kbd>MOVE PIN</kbd>, see **WHO IS HERE 🛏️** (the house's bookings room by room, see [Bookings & check-ins](./bookings)), <kbd>MANAGE ROOMS ⚙️</kbd>, or <kbd>VANISH FROM PLAYA 🌪️</kbd> to delete it. Moves are saved right away. |

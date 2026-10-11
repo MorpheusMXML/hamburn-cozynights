@@ -338,8 +338,8 @@
 		const word = roomWord(event.detail.kind, rooms !== 1);
 		toast(
 			rooms > 0
-				? `🛖 "${name}" is up: ${rooms} ${word}, ${made.spots ?? 0} spots. Rename anything on its page.`
-				: `🛖 "${name}" was created. Add its ${roomWord(event.detail.kind, true)} on its page.`,
+				? `🏠 "${name}" is up: ${rooms} ${word}, ${made.spots ?? 0} spots. Rename anything on its page.`
+				: `🏠 "${name}" was created. Add its ${roomWord(event.detail.kind, true)} on its page.`,
 			'success',
 			7000
 		);
@@ -416,7 +416,7 @@
 
 	{#if layoutChanged}
 		<p class="layout-changed" role="status">
-			🛖 The camp layout changed while this page was open.
+			🏕️ The camp layout changed while this page was open.
 			<button class="btn-inline" on:click={() => invalidateAll()}>Reload the page</button>
 			to see the houses themselves.
 		</p>
@@ -563,7 +563,7 @@
 						>
 							<div class="card-glow"></div>
 							<header class="card-header">
-								<h2>{house.name} 🛖</h2>
+								<h2>{house.name} 🏠</h2>
 								<span class="state-chip">
 									{houseStateLabel(houseState(house), house.freeBeds)}
 								</span>

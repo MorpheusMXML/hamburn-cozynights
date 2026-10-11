@@ -56,7 +56,7 @@ export const HOUSE_KINDS: (KindEntry<HouseKind> & {
 	{
 		value: 'hut_group',
 		label: 'Hut group',
-		icon: '🛖',
+		icon: '🏘️',
 		hint: 'Several huts under one pin on the map; each hut is a room.',
 		room: 'hut',
 		word: 'hut',
@@ -77,7 +77,7 @@ export const HOUSE_KINDS: (KindEntry<HouseKind> & {
 /** Keep in sync with `rooms.kind` in pb_migrations/1759900000_accommodation.js. */
 export const ROOM_KINDS: KindEntry<RoomKind>[] = [
 	{ value: 'room', label: 'Room', icon: '🚪' },
-	{ value: 'hut', label: 'Hut', icon: '🛖' },
+	{ value: 'hut', label: 'Hut', icon: '🏡' },
 	{ value: 'tent', label: 'Tent', icon: '⛺' },
 	{ value: 'other', label: 'Other', icon: '📍' }
 ];
@@ -91,7 +91,7 @@ export interface BedTypeEntry extends KindEntry<BedType> {
 export const BED_TYPES: BedTypeEntry[] = [
 	{ value: 'single', label: 'Single bed', icon: '🛏️', ladder: false },
 	{ value: 'bunk_lower', label: 'Lower bunk', icon: '🛏️', ladder: false },
-	{ value: 'bunk_upper', label: 'Upper bunk', icon: '🪜', ladder: true },
+	{ value: 'bunk_upper', label: 'Upper bunk', icon: '🔝', ladder: true },
 	{
 		value: 'double',
 		label: 'Double bed (shared)',
@@ -282,7 +282,7 @@ export function featureLabel(value: unknown): string {
 /**
  * One line for a folded details panel (admin house and room pages): the kind,
  * the icons of the features, and whether a description is written, e.g.
- * "🛖 Hut group · ♿ 🔥 · description". Empty when nothing is set.
+ * "🏘️ Hut group · ♿ 🔥 · description". Empty when nothing is set.
  */
 export function detailsSummary(
 	level: 'house' | 'room',
