@@ -226,9 +226,9 @@ export function isFiltered(filter: PickerFilter): boolean {
 /**
  * The few spots that answer a request best, for the strip above the houses:
  * no clear mismatch, and at least one need answered — or a ♿ spot, for a
- * request with something the guest needs. Best first; a tie keeps the camp's
- * order. Empty for a request only a person can match (a project, a group
- * only).
+ * request with something the guest needs. Never a spot the crew locked 🔒
+ * (it stays in its room, marked). Best first; a tie keeps the camp's order.
+ * Empty for a request only a person can match (a project, a group only).
  */
 export function bestFits(
 	spots: readonly SpotInfo[],
@@ -241,7 +241,9 @@ export function bestFits(
 		.map((spot) => ({ spot, fit: fitOf(needs, spot) }))
 		.filter(
 			({ spot, fit }) =>
-				fit.match.conflicts.length === 0 && (fit.match.fits.length > 0 || (access && spot.special))
+				!spot.locked &&
+				fit.match.conflicts.length === 0 &&
+				(fit.match.fits.length > 0 || (access && spot.special))
 		)
 		.sort((a, b) => b.fit.score - a.fit.score || bySpot(a.spot, b.spot))
 		.slice(0, limit)

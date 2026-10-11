@@ -47,6 +47,7 @@ import {
 	placeOptions,
 	proposePlan,
 	rankPlaces,
+	repick,
 	type PlanMember
 } from '../src/lib/group-plan';
 import { PASS_ALPHABET } from '../src/lib/pass';
@@ -883,6 +884,66 @@ describe('the group planner', () => {
 		expect(defaultPlace(options, three, quiet)).toBe('room:r3');
 		// no place fits everyone: anywhere
 		expect(defaultPlace(placeOptions(quiet, 12), members, quiet)).toBe('');
+	});
+
+	it('takes a spot the crew locked only when nothing else is left, and says so', () => {
+		// Room 2: 4 free, B1 + B2 locked; Room 3: 5 free, none locked — one house
+		const at = (roomId: string, room: string) => ({ roomId, room, houseId: 'h1', house: 'Villa' });
+		const locked = [
+			...['B1', 'B2', 'B3', 'B4'].map((label, i) =>
+				spot(`r2-${i + 1}`, 'r1', label, {
+					...at('rq2', 'Room 2'),
+					label: `${label} · Room 2 · Villa`,
+					locked: i < 2
+				})
+			),
+			...['B1', 'B2', 'B3', 'B4', 'B5'].map((label, i) =>
+				spot(`r3-${i + 1}`, 'r1', label, {
+					...at('rq3', 'Room 3'),
+					label: `${label} · Room 3 · Villa`
+				})
+			)
+		];
+		const four = ['m1', 'm2', 'm3', 'm4'].map((id) => member(id));
+		const options = placeOptions(locked, 4);
+		// Room 2 is the snuggest, but only with its locked spots: it comes after the rest
+		expect(options.map((o) => [o.key, o.usesLocked])).toEqual([
+			['', false],
+			['room:rq3', false],
+			['house:h1', false],
+			['room:rq2', true]
+		]);
+		expect(options[3].label).toBe('Room 2 · Villa — 4 free · fits all 4 · uses 🔒');
+		expect(defaultPlace(options, four, locked)).toBe('room:rq3');
+		// put into Room 2 anyway: the open spots first, the locked ones only for the rest
+		expect(proposePlan(four, locked, 'room:rq2')).toEqual({
+			m1: 'r2-3',
+			m2: 'r2-4',
+			m3: 'r2-1',
+			m4: 'r2-2'
+		});
+		// the whole house never needs them
+		expect(
+			Object.values(proposePlan(four, locked, 'house:h1')).every((bedId) => bedId.startsWith('r3-'))
+		).toBe(true);
+		// a place that needs a locked spot comes last, even when it answers the needs
+		const quiet = locked.map((s) => (s.roomId === 'rq2' ? { ...s, features: ['quiet'] } : s));
+		const needy = [member('m1', ['quiet']), member('m2'), member('m3'), member('m4')];
+		expect(rankPlaces(placeOptions(quiet, 4, 1), needy, quiet).map((o) => o.key)).toEqual([
+			'house:h1',
+			'room:rq3',
+			'room:rq2'
+		]);
+	});
+
+	it('swaps two planned spots, and sends a member back to Keep as is when the other row had none', () => {
+		const plan = { a: 'b1', b: 'b2', c: '' };
+		expect(repick(plan, 'a', 'b2')).toEqual({ changes: { a: 'b2', b: 'b1' }, bumped: '' });
+		// c had no spot: a loses b1 and keeps nothing
+		expect(repick(plan, 'c', 'b1')).toEqual({ changes: { c: 'b1', a: '' }, bumped: 'a' });
+		// a free spot nobody is planned on
+		expect(repick(plan, 'c', 'b9')).toEqual({ changes: { c: 'b9' }, bumped: '' });
+		expect(repick(plan, 'a', 'b1')).toEqual({ changes: { a: 'b1' }, bumped: '' });
 	});
 
 	it('proposes the same, whatever order the spots come in', () => {

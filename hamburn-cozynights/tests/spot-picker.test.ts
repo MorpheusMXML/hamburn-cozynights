@@ -203,11 +203,11 @@ describe('how a spot answers a request', () => {
 
 describe('the best fits', () => {
 	it('come without a mismatch, the best first, the ♿ spot ahead for who needs something', () => {
+		// hut2 (a lower bunk) would fit too, but the crew locked it
 		expect(bestFits(SPOTS, ['lower_bunk', 'step_free']).map((s) => s.bedId)).toEqual([
 			'w2sp',
 			'w2low',
 			'w10a',
-			'hut2',
 			'bay1'
 		]);
 		expect(bestFits(SPOTS, ['quiet', 'near_toilet']).map((s) => s.bedId)).toEqual([

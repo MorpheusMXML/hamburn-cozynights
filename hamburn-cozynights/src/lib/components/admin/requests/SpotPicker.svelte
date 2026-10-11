@@ -90,6 +90,14 @@ inside. The page renders one at a time, outside every form.
 	const access = $derived(requestKinds(needs).access);
 	const canFit = $derived(checkableNeeds(needs).length > 0);
 	const planned: Record<string, string> = $derived(spotMode?.planned ?? {});
+	/**
+	 * The row had a spot in the plan when the picker opened: picking another
+	 * member's spot swaps the two; without one, the other goes back to "Keep
+	 * as is" (repick in $lib/group-plan).
+	 */
+	const swaps = $derived(
+		!!spotMode?.selected && spots.some((spot) => spot.bedId === spotMode.selected)
+	);
 
 	// ── The filter ───────────────────────────────────────────────────────────
 	let query = $state('');
@@ -267,9 +275,10 @@ inside. The page renders one at a time, outside every form.
 	function previewSpot(bedId: string): string {
 		const spot = spots.find((s) => s.bedId === bedId);
 		if (!spot) return '';
-		if (place.startsWith('room:')) return `${spot.spot} · ${bedText(spot)}`;
-		if (place.startsWith('house:')) return `${spot.spot} · ${spot.room}`;
-		return spot.label;
+		const lock = spot.locked ? ' 🔒' : '';
+		if (place.startsWith('room:')) return `${spot.spot}${lock} · ${bedText(spot)}`;
+		if (place.startsWith('house:')) return `${spot.spot}${lock} · ${spot.room}`;
+		return `${spot.label}${lock}`;
 	}
 
 	/** "✓ needs met" / "needs: 1 of 2 met": what the proposal there gives who needs something. */
@@ -293,10 +302,13 @@ inside. The page renders one at a time, outside every form.
 		].join(' · ');
 	}
 
-	function fitBadge(key: string): { text: string; tone: 'fits' | 'special' | 'small' } | null {
+	function fitBadge(
+		key: string
+	): { text: string; tone: 'fits' | 'special' | 'locked' | 'small' } | null {
 		const option = optionOf.get(key);
 		if (!option || placing.length === 0) return null;
 		if (!option.fits) return { text: `too small for ${placing.length}`, tone: 'small' };
+		if (option.usesLocked) return { text: `fits all ${placing.length} · uses 🔒`, tone: 'locked' };
 		if (option.usesSpecial)
 			return { text: `fits all ${placing.length} · uses ♿`, tone: 'special' };
 		return { text: `fits all ${placing.length}`, tone: 'fits' };
@@ -695,9 +707,14 @@ inside. The page renders one at a time, outside every form.
 								>{/each}
 						</p>
 						{#if planned[selectedSpot.bedId]}
-							<p class="choice-detail">
-								Planned for {planned[selectedSpot.bedId]}: the two swap.
+							<p class="choice-detail" class:warn-text={!swaps}>
+								{swaps
+									? `Planned for ${planned[selectedSpot.bedId]}: the two swap.`
+									: `Planned for ${planned[selectedSpot.bedId]}, who loses it and goes back to Keep as is.`}
 							</p>
+						{/if}
+						{#if selectedSpot.locked}
+							<p class="choice-detail warn-text">🔒 Locked by the crew.</p>
 						{/if}
 						{#if selectedSpot.special && !access}
 							<p class="choice-detail warn-text">
@@ -1103,6 +1120,10 @@ inside. The page renders one at a time, outside every form.
 	.badge.special {
 		border-color: var(--state-special);
 		color: #f9a8d4;
+	}
+	.badge.locked {
+		border-color: var(--state-locked);
+		color: var(--state-locked);
 	}
 	.badge.warn {
 		border-color: var(--state-filling);

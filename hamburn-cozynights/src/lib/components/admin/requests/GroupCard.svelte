@@ -33,6 +33,7 @@
 		defaultPlace,
 		placeOptions,
 		proposePlan,
+		repick,
 		toPlace,
 		type PlanMember
 	} from '$lib/group-plan';
@@ -190,7 +191,11 @@
 		});
 	}
 
-	/** The spot picker for one row; a spot another member is planned on swaps the two. */
+	/**
+	 * The spot picker for one row. A spot another member is planned on swaps
+	 * the two, or sends the other back to "Keep as is" when this row had no
+	 * spot (repick); the picker says which before the crew takes it.
+	 */
 	function changeRow(member: PlanMember) {
 		const planned: Record<string, string> = {};
 		for (const other of planMembers) {
@@ -211,13 +216,13 @@
 			action: 'Use this spot',
 			resolve: (bedId) => {
 				if (!bedId) return;
-				const mine = valueOf(member.requestId);
-				const other = planMembers.find(
-					(m) => m.requestId !== member.requestId && !m.declined && valueOf(m.requestId) === bedId
+				// The rows as they show now: a stale spot (taken meanwhile) counts as none.
+				const rows = Object.fromEntries(
+					planMembers
+						.filter((m) => !m.declined)
+						.map((m) => [m.requestId, spotOf(valueOf(m.requestId))?.bedId ?? ''])
 				);
-				const next = { ...edits, [member.requestId]: bedId };
-				if (other) next[other.requestId] = mine;
-				edits = next;
+				edits = { ...edits, ...repick(rows, member.requestId, bedId).changes };
 			}
 		});
 	}
@@ -272,9 +277,9 @@
 		};
 	}
 
-	/** A picked spot in the dialog, ♿ marked like in the spot lists. */
+	/** A picked spot in the dialog, ♿ and 🔒 marked like in the spot lists. */
 	const spotText = (spot: SpotInfo | undefined) =>
-		spot ? `${spot.special ? '♿ ' : ''}${spot.label}` : 'a spot';
+		spot ? `${spot.special ? '♿ ' : ''}${spot.label}${spot.locked ? ' 🔒' : ''}` : 'a spot';
 
 	/** From what the form sends, so the dialog names exactly what gets booked. */
 	function bookConfirmation(form: FormData): Confirmation {
@@ -298,6 +303,22 @@
 			approving > 0
 				? ` ${approving} waiting ${plural(approving, 'request is', 'requests are')} approved as well.`
 				: '';
+		// Members who end up with no spot at all: the dialog names them.
+		const without = members.filter(
+			(member) =>
+				member.status !== 'declined' &&
+				!member.spot &&
+				!picked.some((entry) => entry.member.id === member.id)
+		);
+		const left =
+			without.length > 0
+				? ` ${without.map(nameOf).join(', ')} ${plural(without.length, 'gets', 'get')} no spot this time (Keep as is).`
+				: '';
+		const locked = picked.filter(({ bedId }) => spotOf(bedId)?.locked).length;
+		const lockedNote =
+			locked > 0
+				? ` ${locked} of the spots ${plural(locked, 'is', 'are')} locked 🔒 by the crew.`
+				: '';
 		const n = picked.length;
 		// All in one room: the title says which.
 		const rooms = new Set(picked.map(({ bedId }) => spotOf(bedId)?.roomId ?? ''));
@@ -306,7 +327,7 @@
 			title: room
 				? `Book ${n} spots in ${room.room} · ${room.house}?`
 				: `Book ${n} ${plural(n, 'spot', 'spots')} for the group?`,
-			message: `Booked right away${closed}: ${list}.${moves}${approves} Each guest gets a message with the booking pass.`,
+			message: `Booked right away${closed}: ${list}.${lockedNote}${moves}${approves}${left} Each guest gets a message with the booking pass.`,
 			label: 'Book them'
 		};
 	}
@@ -465,8 +486,8 @@
 							</span>
 							<span class="plan-spot" class:dim={!spot}>
 								{#if spot}
-									{`→ ${spot.label}${spot.special ? ' ♿' : ''}`}{#if marks}<span class="plan-marks"
-											>{` · ${marks}`}</span
+									{`→ ${spot.label}${spot.special ? ' ♿' : ''}${spot.locked ? ' 🔒' : ''}`}{#if marks}<span
+											class="plan-marks">{` · ${marks}`}</span
 										>{/if}
 								{:else if member.crewSpotLabel}
 									Keeps {member.crewSpotLabel} (booked by the crew)
