@@ -121,6 +121,9 @@ export const load: PageServerLoad = async ({ params, locals, cookies, url }) => 
 			wishes,
 			rooms: roomsWithStats,
 			userBedId: userBed?.id || null,
+			// The room card that holds the guest's spot lights up, with its label.
+			userRoomId: userBed?.room || null,
+			userBedLabel: userBed?.label ?? '',
 			spotFixed,
 			// The crew checked the guest in at arrival: only the crew changes the spot now.
 			checkedIn: !!userBed?.checked_in_at,

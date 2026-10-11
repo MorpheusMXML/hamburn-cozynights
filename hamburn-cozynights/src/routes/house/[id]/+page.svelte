@@ -139,10 +139,17 @@
 
 	<div class="grid">
 		{#each data.rooms as room}
+			{@const mine = room.id === data.userRoomId}
+			<!-- The room with the guest's spot wears "yours" (turquoise, state.css)
+			     and breathes, like the spot itself on the room page. -->
 			<a
 				href="/room/{room.id}{data.wishes.length > 0 ? `?w=${data.wishes.join(',')}` : ''}"
 				class="card"
 				class:full={room.freeCount === 0}
+				class:mine
+				class:state-ring={mine}
+				class:state-ring-strong={mine}
+				data-state={mine ? 'checked-in' : undefined}
 			>
 				<div class="card-header">
 					<h2>{room.name || 'Room'} <span class="room-number">#{room.room_number}</span></h2>
@@ -154,6 +161,11 @@
 								: 'Full'}
 					</span>
 				</div>
+				{#if mine}
+					<p class="state-chip mine-chip">
+						Your spot{data.userBedLabel ? ` · ${data.userBedLabel}` : ''}
+					</p>
+				{/if}
 				<div class="progress-bar">
 					<div
 						class="fill"
@@ -353,6 +365,20 @@
 	}
 	.card.full {
 		opacity: 0.6;
+	}
+	/* Mine outranks full: the room is full partly because of me. */
+	.card.mine {
+		opacity: 1;
+		border-color: var(--state);
+		background: linear-gradient(var(--state-soft), var(--state-soft)), #1a1a1a;
+	}
+	.card.mine:hover {
+		border-color: var(--state);
+		box-shadow: 0 10px 20px var(--state-soft);
+	}
+	.mine-chip {
+		display: inline-block;
+		margin: -0.25rem 0 0.85rem;
 	}
 
 	.card-header {

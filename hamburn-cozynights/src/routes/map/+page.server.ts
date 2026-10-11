@@ -67,8 +67,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// Without its token the beds rule quietly answers with no beds at all, and
 		// the camp would look sold out: say "try again" instead.
 		if (!locals.adminPb.authStore.isValid) throw new Error('service account not signed in');
+		// Only the guest's own house learns that it holds their spot (`mine`).
 		const inventory = new InventoryService(locals.adminPb);
-		let houses = await inventory.getFullTree();
+		let houses = await inventory.getFullTree({ orderId: locals.order?.id });
 		const [{ isBookingActive, phase, guestPhase, next }, availableFilters] = await Promise.all([
 			getBookingSettings(locals.pb),
 			// The wish chips of the top bar: only the wishes some spot answers.

@@ -30,7 +30,7 @@ test.describe('Camp map', () => {
 		await expect(page).toHaveURL(/\/map$/);
 
 		const map = await page.locator('svg[aria-label="Interactive house map"]').boundingBox();
-		const pin = page.locator(`g.house-group[aria-label="House ${house.name}"] circle.hit`);
+		const pin = page.locator(`g.house-group[aria-label^="House ${house.name}"] circle.hit`);
 		await expect(pin).toBeVisible();
 		const box = (await pin.boundingBox())!;
 		const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -48,7 +48,7 @@ test.describe('Camp map', () => {
 				document.elementFromPoint(x, y)?.closest('g.house-group')?.getAttribute('aria-label'),
 			[center.x, center.y]
 		);
-		expect(hit).toBe(`House ${house.name}`);
+		expect(hit?.startsWith(`House ${house.name}`)).toBe(true);
 
 		await pin.click();
 		await expect(page).toHaveURL(new RegExp(`/house/${house.id}$`));
@@ -59,7 +59,7 @@ test.describe('Camp map', () => {
 		await context.addCookies([await adminSessionCookie(pb)]);
 		await page.goto('/admin/camp', { waitUntil: 'networkidle' });
 
-		const pin = page.locator(`g.house-group[aria-label="House ${house.name}"] circle.hit`);
+		const pin = page.locator(`g.house-group[aria-label^="House ${house.name}"] circle.hit`);
 		await pin.scrollIntoViewIfNeeded();
 		const box = (await pin.boundingBox())!;
 		const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -86,7 +86,7 @@ test.describe('Camp map', () => {
 		await context.addCookies([await adminSessionCookie(pb)]);
 		await page.goto('/admin/camp', { waitUntil: 'networkidle' });
 
-		const pin = page.locator(`g.house-group[aria-label="House ${house.name}"] circle.hit`);
+		const pin = page.locator(`g.house-group[aria-label^="House ${house.name}"] circle.hit`);
 		await pin.scrollIntoViewIfNeeded();
 		const box = (await pin.boundingBox())!;
 		const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -110,7 +110,7 @@ test.describe('Camp map', () => {
 		await context.addCookies([await adminSessionCookie(pb)]);
 		await page.goto('/admin/camp', { waitUntil: 'networkidle' });
 
-		await page.locator(`g.house-group[aria-label="House ${house.name}"]`).focus();
+		await page.locator(`g.house-group[aria-label^="House ${house.name}"]`).focus();
 		await page.keyboard.press('Enter');
 		const x = page.locator('#house-x');
 		await expect(x).toHaveAttribute('readonly', '');

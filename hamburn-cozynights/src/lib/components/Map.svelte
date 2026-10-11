@@ -405,7 +405,7 @@
 						on:pointerleave={() => (hoveredHouseId = null)}
 						role="button"
 						tabindex="0"
-						aria-label="House {house.name}"
+						aria-label="House {house.name}{house.mine ? ', your spot is here' : ''}"
 					>
 						<!-- No transform attribute here: the refusal shake animates this group's
 						     CSS transform, which would replace an SVG one. -->
@@ -415,7 +415,8 @@
 									name={house.name}
 									status={houseMarkerStatus(house)}
 									kind={house.kind ?? ''}
-									faded={wishes && !(house.fittingFree > 0)}
+									mine={!!house.mine}
+									faded={wishes && !(house.fittingFree > 0) && !house.mine}
 									labelPosition={labelPositions[house.id]}
 									hovered={hoveredHouseId === house.id}
 									selected={selectedHouseId === house.id}

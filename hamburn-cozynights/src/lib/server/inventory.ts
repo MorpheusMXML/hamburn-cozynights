@@ -7,8 +7,12 @@ export class InventoryService {
 	/**
 	 * Fetches the entire house/room/bed hierarchy with statistics. 🛰️📊
 	 * Runs on every guest map request, so it logs nothing but failures.
+	 *
+	 * With `orderId` (the signed-in guest's ticket) the house that holds its
+	 * spot says `mine: true`, so the map can point it out. It comes from the
+	 * beds read here anyway: no extra request per map view.
 	 */
-	async getFullTree(): Promise<HouseData[]> {
+	async getFullTree({ orderId = '' }: { orderId?: string } = {}): Promise<HouseData[]> {
 		try {
 			// Fetch all data in parallel
 			const [housesRaw, roomsRaw, bedsRaw] = await Promise.all([
@@ -29,6 +33,9 @@ export class InventoryService {
 			const blank = '' as HouseData['created'];
 			const houses = housesRaw.map((h) => ({ ...h, created: blank, updated: blank }));
 			const rooms = roomsRaw.map((r) => ({ ...r, created: blank, updated: blank }));
+			// Before the order ids go: the room of the guest's own spot, if any.
+			const myRoom = orderId ? (bedsRaw.find((b) => b.order === orderId)?.room ?? '') : '';
+			const myHouse = myRoom ? (roomsRaw.find((r) => r.id === myRoom)?.house ?? '') : '';
 			const beds = bedsRaw
 				.filter((b) => b.enabled !== false)
 				.map((b) => ({
@@ -71,7 +78,8 @@ export class InventoryService {
 					totalBeds,
 					occupiedBeds,
 					freeBeds,
-					isBookable
+					isBookable,
+					mine: house.id === myHouse
 				};
 			});
 
