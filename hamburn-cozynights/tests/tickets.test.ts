@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import {
 	GUEST_EMAIL_PATTERN,
+	PAID_ORDER_STATUSES,
 	TICKET_CODE_PATTERN,
 	TICKET_CSV_COLUMNS,
 	TICKET_LIMITS,
@@ -94,14 +95,28 @@ describe('column detection', () => {
 		expect(detectColumns(['Order code', 'E-Mail', 'Attendee name'])).toEqual({
 			code: 0,
 			email: 1,
-			name: 2
+			name: 2,
+			status: -1
 		});
 		expect(detectColumns(['ticket_code', 'email_address', 'full name'])).toEqual({
 			code: 0,
 			email: 1,
-			name: 2
+			name: 2,
+			status: -1
 		});
-		expect(detectColumns(['Secret', 'Something else'])).toEqual({ code: 0, email: -1, name: -1 });
+		expect(detectColumns(['Secret', 'Something else'])).toEqual({
+			code: 0,
+			email: -1,
+			name: -1,
+			status: -1
+		});
+		// pretix's order export
+		expect(detectColumns(['Event slug', 'Event name', 'Order code', 'Status', 'Email'])).toEqual({
+			code: 2,
+			email: 4,
+			name: -1,
+			status: 3
+		});
 	});
 
 	it('lists every column that could hold a field', () => {
@@ -120,7 +135,7 @@ describe('readRosterFile (in the browser)', () => {
 			'Street,Order code,E-Mail,Phone,Attendee name\nMain 1,HB-1,Ada@Example.org,0123,Ada\n\nMain 2,HB-2,,0456,\n'
 		);
 		if (!file.ok) throw new Error(file.error);
-		expect(file.columns).toEqual({ code: 1, email: 2, name: 4 });
+		expect(file.columns).toEqual({ code: 1, email: 2, name: 4, status: -1 });
 		expect(file.rows).toEqual([
 			{ line: 2, code: 'HB-1', email: 'Ada@Example.org', name: 'Ada' },
 			// the blank line 3 is skipped but still counted
@@ -141,6 +156,15 @@ describe('readRosterFile (in the browser)', () => {
 		// the code column can't be "none"
 		const noCode = readRosterFile(text, { code: -1 });
 		expect(noCode.ok && noCode.columns.code).toBe(0);
+	});
+
+	it('keeps the order status when the file has one', () => {
+		const file = readRosterFile('Order code,Status,Email\nAB1,paid,a@x.de\nAB2,canceled,b@x.de');
+		if (!file.ok) throw new Error(file.error);
+		expect(file.rows).toEqual([
+			{ line: 2, code: 'AB1', email: 'a@x.de', name: '', status: 'paid' },
+			{ line: 3, code: 'AB2', email: 'b@x.de', name: '', status: 'canceled' }
+		]);
 	});
 
 	it('refuses files it can not use, with a reason', () => {
@@ -204,6 +228,18 @@ describe('checkRosterRows', () => {
 			[7, 'the']
 		]);
 		expect(problems[4].message).toContain('row 2');
+	});
+
+	it('leaves out orders that are not paid, without calling them problems', () => {
+		const file = entries(
+			'Event slug,Order code,Status,Email\nhb,AB1,paid,a@x.de\nhb,AB2,canceled,b@x.de\nhb,AB3,Pending,c@x.de\nhb,AB4,,d@x.de\nhb,AB5,PAID,e@x.de'
+		);
+		expect(file.entries.map((e) => e.code)).toEqual(['AB1', 'AB4', 'AB5']);
+		expect(file.problems).toEqual([]);
+		expect(file.unpaid).toEqual([
+			{ line: 3, code: 'AB2', status: 'canceled' },
+			{ line: 4, code: 'AB3', status: 'pending' }
+		]);
 	});
 });
 
@@ -301,6 +337,32 @@ describe('diffRoster', () => {
 		);
 		expect(diff.sharedEmails).toEqual([{ email: 'friend@x.de', codes: ['C-1', 'C-2'] }]);
 	});
+
+	it('suggests a new holder when only the address is known and it changed (a swap in the shop)', () => {
+		const diff = diffRoster(entries('code,email\nS-1,new@x.de\nS-2,new2@x.de').entries, [
+			stored('S-1', { email: 'old@x.de', name: 'Old Person', hasSpot: true }),
+			// nothing of an old holder on it: nothing to hand over
+			stored('S-2', { email: 'old2@x.de' })
+		]);
+		expect(diff.changes.map((c) => [c.code, c.emailChanged, c.suggestNewHolder])).toEqual([
+			['S-1', true, true],
+			['S-2', true, false]
+		]);
+		expect(defaultRosterSelection(diff).newHolders).toEqual(['s-1']);
+	});
+
+	it('marks stored tickets the shop cancelled, and creates nothing for unpaid orders', () => {
+		const file = entries('code,status,email\nP-1,paid,a@x.de\nP-2,canceled,b@x.de\nP-3,expired,');
+		const diff = diffRoster(file.entries, [stored('P-2')], file.problems, file.unpaid);
+		expect(diff.changes.map((c) => c.code)).toEqual(['P-1']);
+		expect(diff.notInFile).toEqual([
+			{ id: 'id-P-2', code: 'P-2', hasSpot: false, status: 'canceled' }
+		]);
+		expect(diff.unpaid).toEqual([
+			{ line: 3, code: 'P-2', status: 'canceled', stored: true },
+			{ line: 4, code: 'P-3', status: 'expired', stored: false }
+		]);
+	});
 });
 
 describe('maskTicketCode', () => {
@@ -330,8 +392,9 @@ describe('same rules as the server CLI (pb_hooks/cozy_admin.pb.js)', () => {
 		expect(String(constant('GUEST_EMAIL_PATTERN'))).toBe(String(GUEST_EMAIL_PATTERN));
 	});
 
-	it('knows the same column names', () => {
+	it('knows the same column names and paid order states', () => {
 		expect(constant('CSV_COLUMNS')).toEqual(TICKET_CSV_COLUMNS);
+		expect(constant('PAID_ORDER_STATUSES')).toEqual(PAID_ORDER_STATUSES);
 	});
 });
 

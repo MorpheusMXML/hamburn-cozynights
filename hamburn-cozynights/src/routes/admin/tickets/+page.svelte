@@ -107,7 +107,7 @@
 	let fileText = '';
 	let fileError = '';
 	let header: string[] = [];
-	let columns: ColumnMap = { code: -1, email: -1, name: -1 };
+	let columns: ColumnMap = { code: -1, email: -1, name: -1, status: -1 };
 	let rows: RosterRow[] = [];
 	let checking = false;
 	let importing = false;
@@ -218,6 +218,12 @@
 	$: shownNew = newOnes.filter(matches);
 	$: shownUpdates = updates.filter(matches);
 	$: chosen = changes.filter((change) => selected.has(change.key));
+	// Svelte trims the space at the start of an {#if} block: the note brings its own.
+	$: unpaidStoredNote = preview?.diff.unpaid.some((row) => row.stored)
+		? ' Those marked 🗄 are still in the database — delete them under “Not in the file”.'
+		: '';
+	$: swappable = updates.filter((change) => change.canBeNewHolder);
+	$: allHandedOver = swappable.length > 0 && swappable.every((c) => newHolders.has(c.key));
 	$: chosenHolders = chosen.filter(
 		(change) => change.canBeNewHolder && newHolders.has(change.key)
 	).length;
@@ -244,6 +250,16 @@
 	function toggleHolder(key: string) {
 		if (newHolders.has(key)) newHolders.delete(key);
 		else newHolders.add(key);
+		newHolders = newHolders;
+	}
+
+	/** "All new holders" in the changed list: every ticket that can change hands, or none. */
+	function toggleAllHolders() {
+		const on = !allHandedOver;
+		for (const change of swappable) {
+			if (on) newHolders.add(change.key);
+			else newHolders.delete(change.key);
+		}
 		newHolders = newHolders;
 	}
 
@@ -407,8 +423,8 @@
 								})`
 							: ''}.
 						{#if imported.confirmations}
-							{plural(imported.confirmations, 'new address', 'new addresses')} get a confirmation of their
-							spot.
+							{plural(imported.confirmations, 'new address', 'new addresses')}
+							{imported.confirmations === 1 ? 'gets' : 'get'} a confirmation of their spot.
 						{/if}
 						{#if imported.removed}
 							{plural(imported.removed, 'cancelled ticket')} deleted.
@@ -466,6 +482,19 @@
 								>{/each}
 						</select>
 					</label>
+					<label>
+						<span>Order status</span>
+						<select
+							disabled={checking || importing}
+							value={String(columns.status)}
+							on:change={(e) => setColumn('status', e.currentTarget.value)}
+						>
+							<option value="-1">— none —</option>
+							{#each header as name, index}<option value={String(index)}
+									>{name || `Column ${index + 1}`}</option
+								>{/each}
+						</select>
+					</label>
 				</div>
 			{/if}
 
@@ -475,6 +504,7 @@
 					<ul class="summary-chips" aria-label="What the file changes">
 						<li class="new">{plural(newOnes.length, 'new ticket')}</li>
 						<li class="changed">{plural(updates.length, 'change')}</li>
+						{#if diff.unpaid.length}<li>{diff.unpaid.length} not paid</li>{/if}
 						<li>{diff.unchanged.length} unchanged</li>
 						{#if diff.problems.length}<li class="bad">
 								{plural(diff.problems.length, 'problem')}
@@ -549,7 +579,9 @@
 						<FoldPanel
 							nested
 							tone="changed"
-							title="Changed tickets"
+							title={updates.every((c) => !c.nameChanged)
+								? 'Different e-mail address'
+								: 'Changed tickets'}
 							summary={`${updates.filter((c) => selected.has(c.key)).length} of ${updates.length} chosen`}
 						>
 							<label slot="actions" class="select-all">
@@ -561,6 +593,26 @@
 								/>
 								<span>All</span>
 							</label>
+							<p class="hint">
+								These tickets are in the database with another address than the file — mostly
+								tickets passed on to somebody else. Tick the ones to update, or all of them.
+								{#if swappable.length > 0}
+									🔁 <b>New holder</b> also disconnects the old holder's Telegram, makes a new booking
+									pass and forgets the burner name, special-needs request and check-in; the spot stays
+									with the ticket.
+								{/if}
+							</p>
+							{#if swappable.length > 1}
+								<button
+									type="button"
+									class="holder bulk"
+									class:on={allHandedOver}
+									aria-pressed={allHandedOver}
+									on:click={toggleAllHolders}
+								>
+									🔁 {allHandedOver ? 'All new holders' : 'Mark all as new holders'}
+								</button>
+							{/if}
 							<ul class="rows">
 								{#each shownUpdates as change (change.key)}
 									<li class="row" class:off={!selected.has(change.key)}>
@@ -613,6 +665,27 @@
 												</button>
 											{/if}
 										</div>
+									</li>
+								{/each}
+							</ul>
+						</FoldPanel>
+					{/if}
+
+					{#if diff.unpaid.length > 0}
+						<FoldPanel
+							nested
+							tone="muted"
+							title="Not paid"
+							summary={`${diff.unpaid.length} row(s) left out`}
+							open={false}
+						>
+							<p class="hint">
+								The shop lists these orders as cancelled, pending or expired: they are not imported.{unpaidStoredNote}
+							</p>
+							<ul class="plain">
+								{#each diff.unpaid as row (row.line)}
+									<li>
+										Row {row.line}, <code>{row.code}</code>: {row.status}{row.stored ? ' 🗄' : ''}
 									</li>
 								{/each}
 							</ul>
@@ -682,7 +755,8 @@
 								{#each diff.notInFile as ticket}
 									<li>
 										{#if ticket.hasSpot}
-											<code>{ticket.code}</code> 🛏
+											<code>{ticket.code}</code> 🛏{#if ticket.status}
+												<span class="muted">{ticket.status}</span>{/if}
 										{:else}
 											<label class="drop-row">
 												<input
@@ -691,7 +765,11 @@
 													on:change={() => toggleRemoval(ticket.id)}
 												/>
 												<code>{ticket.code}</code>
-												<span class="muted">{removals.has(ticket.id) ? 'delete' : 'keep'}</span>
+												<span class="muted"
+													>{ticket.status ? `${ticket.status} · ` : ''}{removals.has(ticket.id)
+														? 'delete'
+														: 'keep'}</span
+												>
 											</label>
 										{/if}
 									</li>
@@ -742,8 +820,9 @@
 			{:else if !fileError && !checking}
 				<p class="hint">
 					Export the ticket list from the ticket shop as CSV, with the ticket code and the holder's
-					e-mail address (a name column is optional), and drop it here. Nothing changes before you
-					press Import. Loading the same file again later only shows what changed.
+					e-mail address (name and order status columns are optional; with a status, only paid
+					orders come in), and drop it here. Nothing changes before you press Import. Loading the
+					same file again later only shows what changed.
 				</p>
 			{/if}
 		{/if}
@@ -868,7 +947,7 @@
 	.columns {
 		margin-top: 1rem;
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
 		gap: 0.6rem;
 	}
 	.columns label {
@@ -1060,6 +1139,10 @@
 	.holder:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
+	}
+	.holder.bulk {
+		align-self: flex-start;
+		margin-bottom: 0.6rem;
 	}
 	.plain {
 		margin: 0;
