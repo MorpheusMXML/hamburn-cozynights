@@ -64,6 +64,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	try {
 		// The service account reads the beds (their rules are admin-only since
 		// beds carry is_special, order and booked_at); getFullTree strips all of it.
+		// Without its token the beds rule quietly answers with no beds at all, and
+		// the camp would look sold out: say "try again" instead.
+		if (!locals.adminPb.authStore.isValid) throw new Error('service account not signed in');
 		const inventory = new InventoryService(locals.adminPb);
 		let houses = await inventory.getFullTree();
 		const [{ isBookingActive, phase, guestPhase, next }, availableFilters] = await Promise.all([

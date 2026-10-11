@@ -193,6 +193,26 @@ describe('guest map through a PocketBase outage', () => {
 		await expect(new InventoryService(down as any).getFullTree()).rejects.toThrow('fetch failed');
 	});
 
+	it('the map says "try again" while the service account has no token', async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { load } = await import('../src/routes/map/+page.server');
+		// Without a token the beds rule answers with no beds at all (HTTP 200):
+		// the map must not even ask, or the camp would look sold out.
+		const collection = vi.fn(() => {
+			throw new Error('must not read without a token');
+		});
+		const locals = {
+			adminPb: { authStore: { isValid: false }, collection },
+			pb: { collection },
+			order: null,
+			guestSignOut: false
+		};
+		await expect(
+			load({ url: new URL('http://test.local/map'), locals } as any)
+		).rejects.toMatchObject({ status: 503 });
+		expect(collection).not.toHaveBeenCalled();
+	});
+
 	it('getFullTree still builds the tree when PocketBase answers', async () => {
 		const { InventoryService } = await import('../src/lib/server/inventory');
 		const data: Record<string, unknown[]> = {
