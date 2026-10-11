@@ -179,7 +179,7 @@ erDiagram
 | `/admin/house/:id` | admins | Rooms of a house, and who is booked in it |
 | `/admin/room/:id` | admins | Spots of a room, with the booking on each |
 | `/admin/check` | admins | Check guests in with their booking pass (typed code, USB scanner or camera), undo a check-in |
-| `/admin/requests` | admins | Special-needs requests and request groups: what became of the ♿ spots, read, approve or decline, book a spot (also while booking is closed) for one request or a whole group, take a request out of its group, open or close requests |
+| `/admin/requests` | admins | Special-needs requests and request groups: what became of the ♿ spots, read, approve or decline, book a spot (also while booking is closed) for one request or a whole group — picked in the spot picker, houses, rooms and spots to search and filter, a whole group into one room in one go — take a request out of its group, open or close requests |
 | `/admin/messages` | admins | Message texts: every sentence guests get by e-mail, on Telegram and from the bot, with a preview of whole messages |
 | `/admin/tickets` | admins | Find tickets, change their e-mail address, hand them over; superusers load the ticket list |
 | `/admin/docs/*` | admins | The full documentation, admin pages included |
