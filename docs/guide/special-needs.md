@@ -34,7 +34,7 @@ An art project, a workshop, a theme camp, a crew, or friends who want to sleep c
 
 </div>
 
-The group card shows the group's name, how many of you are in it (*3 of 12 people*) and everyone's burner name, yours marked *(you)*; someone who left the burner name empty in their request shows as *A fellow burner*. A request that asks only as part of the group, with nothing ticked, says *Nothing ticked: you asked as part of your group.*
+The group card shows the group's name, how many of you are in it (*3 of 5 people*) and everyone's burner name, yours marked *(you)*; someone who left the burner name empty in their request shows as *A fellow burner*. A request that asks only as part of the group, with nothing ticked, says *Nothing ticked: you asked as part of your group.*
 
 Already sent a request on your own? While it waits for the crew and requests are open, press <kbd>Change request</kbd> (or the line *Asking together with others? Change your request to start or join a group.*) and start or join a group from there.
 
@@ -43,7 +43,7 @@ Already sent a request on your own? While it waits for the crew and requests are
 **Limits:**
 
 - **One group per ticket.** To switch groups, leave yours first.
-- **At most 12 people** in a group. A full group says so; ask the crew if more of you need to come along.
+- **At most 5 people** in a group. A full group says so (*This group is full: a group can have at most 5 people. Please contact the crew.*); ask the crew if more of you need to come along. A group that grew bigger before the limit went down from 12 keeps everyone in it, but nobody new can join it.
 - **Starting and joining** only work while requests are open and your request waits for the crew. Once the crew has decided on your request, it can't join a group anymore: if you'd like to sleep close to that group, contact the crew.
 - **Wrong codes:** *No group has this code* means a typo, or the group is gone (it is deleted when its last member leaves). After five wrong codes within 15 minutes the form asks you to wait 15 minutes. *You can't join this group* means the crew took you out of it: contact the crew.
 
