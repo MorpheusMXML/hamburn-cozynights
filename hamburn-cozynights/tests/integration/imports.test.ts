@@ -513,6 +513,22 @@ describe('cozy-admin tickets import', () => {
 		const result = cozyAdmin(['tickets', 'import', '-'], text);
 		expect(result.ok).toBe(true);
 		expect(result.out).not.toContain('not paid');
+
+		// a zero-width character in the HEADER: both still find the status column
+		const header = [
+			`Order code,Status${zw},Email`,
+			`ZH${tag},cancelled,zh-${tag}@example.com`,
+			`ZP${tag},paid,zp-${tag}@example.com`
+		].join('\n');
+		const appHeader = parseRoster(header);
+		if (!appHeader.ok) throw new Error(appHeader.error);
+		expect(appHeader.columns.status).toBe(1);
+		expect(appHeader.unpaid.map((u) => u.code)).toEqual([`ZH${tag}`]);
+		const cli = cozyAdmin(['tickets', 'import', '-'], header);
+		expect(cli.ok).toBe(true);
+		expect(cli.out).toContain('1 line(s) left out: the order is not paid');
+		expect(await booking.getOrderByNumber(`ZH${tag}`)).toBeNull();
+		expect(await booking.getOrderByNumber(`ZP${tag}`)).not.toBeNull();
 		const order = await booking.getOrderByNumber(`ZW${tag}`);
 		expect(order?.email).toBe(`zw-${tag.toLowerCase()}@example.com`);
 	});

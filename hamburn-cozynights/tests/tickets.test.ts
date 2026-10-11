@@ -319,9 +319,9 @@ describe('diffRoster', () => {
 		expect(byCode['A-3']).toMatchObject({ canBeNewHolder: false, suggestNewHolder: false });
 		expect(byCode['A-4']).toMatchObject({ canBeNewHolder: false, suggestNewHolder: false });
 
-		// a-1 and a-2 carry something of their holder: not ticked in advance
+		// a-1, a-2 and a-3 carry something of their holder: not ticked in advance
 		expect(defaultRosterSelection(diff)).toEqual({
-			selected: ['a-3', 'a-4'],
+			selected: ['a-4'],
 			newHolders: ['a-1']
 		});
 	});
@@ -352,6 +352,18 @@ describe('diffRoster', () => {
 			['S-2', true, false]
 		]);
 		expect(defaultRosterSelection(diff)).toEqual({ selected: ['s-2'], newHolders: ['s-1'] });
+	});
+
+	it('does not tick a FIRST address in advance on a booked ticket (the crew may have cleared a wrong one)', () => {
+		const diff = diffRoster(entries('code,email\nE-1,stranger@x.de\nE-2,first@x.de').entries, [
+			stored('E-1', { email: '', hasSpot: true }),
+			stored('E-2', { email: '' })
+		]);
+		const byCode = Object.fromEntries(diff.changes.map((c) => [c.code, c]));
+		// no hand-over switch (nothing to hand over), but a decision
+		expect(byCode['E-1']).toMatchObject({ needsTick: true, canBeNewHolder: false });
+		expect(byCode['E-2']).toMatchObject({ needsTick: false, canBeNewHolder: false });
+		expect(defaultRosterSelection(diff)).toEqual({ selected: ['e-2'], newHolders: [] });
 	});
 
 	it('ticks a new address in advance only where the ticket carries nothing of its holder', () => {

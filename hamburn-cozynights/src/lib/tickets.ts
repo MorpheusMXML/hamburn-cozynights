@@ -459,9 +459,15 @@ export interface RosterChange {
 	telegram: boolean;
 	request: boolean;
 	/**
-	 * The address changes on a ticket that has something of its holder:
-	 * a spot, a Telegram link or a ♿ request. The review offers to treat it as
-	 * passed on, and doesn't tick it in advance (defaultRosterSelection).
+	 * The address changes on a ticket that has something of its holder: a
+	 * spot, a Telegram link or a ♿ request — also when it had no address yet
+	 * (the crew may have cleared a wrong one). Not ticked in advance
+	 * (defaultRosterSelection): taking it over needs a decision.
+	 */
+	needsTick: boolean;
+	/**
+	 * Like needsTick, but the address REPLACES one: only then can the ticket
+	 * go to somebody else, so only then the review offers 🔁 New holder.
 	 */
 	canBeNewHolder: boolean;
 	/**
@@ -553,6 +559,7 @@ export function diffRoster(
 				hasSpot: false,
 				telegram: false,
 				request: false,
+				needsTick: false,
 				canBeNewHolder: false,
 				suggestNewHolder: false
 			});
@@ -569,8 +576,8 @@ export function diffRoster(
 			unchanged.push({ code: entry.code, line: entry.line });
 			continue;
 		}
-		const canBeNewHolder =
-			emailChanged && !!ticket.email && (ticket.hasSpot || ticket.telegram || ticket.request);
+		const needsTick = emailChanged && (ticket.hasSpot || ticket.telegram || ticket.request);
+		const canBeNewHolder = needsTick && !!ticket.email;
 		changes.push({
 			key,
 			id: ticket.id,
@@ -585,6 +592,7 @@ export function diffRoster(
 			hasSpot: ticket.hasSpot,
 			telegram: ticket.telegram,
 			request: ticket.request,
+			needsTick,
 			canBeNewHolder,
 			suggestNewHolder:
 				canBeNewHolder &&
@@ -633,7 +641,7 @@ export function diffRoster(
 /**
  * Selection the review starts with: every new and changed ticket — except a
  * new address on a ticket that carries something of its holder (a spot, a
- * Telegram link, a ♿ request). Taking that over can mean a hand-over, or undo
+ * Telegram link, a ♿ request), also where it had none before (needsTick). Taking that over can mean a hand-over, or undo
  * an address the crew corrected in the app, so it needs a deliberate tick.
  * Its 🔁 New holder switch is still preset, for when it is ticked.
  */
@@ -642,7 +650,7 @@ export function defaultRosterSelection(diff: RosterDiff): {
 	newHolders: string[];
 } {
 	return {
-		selected: diff.changes.filter((change) => !change.canBeNewHolder).map((c) => c.key),
+		selected: diff.changes.filter((change) => !change.needsTick).map((c) => c.key),
 		newHolders: diff.changes.filter((change) => change.suggestNewHolder).map((c) => c.key)
 	};
 }

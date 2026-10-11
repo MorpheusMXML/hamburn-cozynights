@@ -617,8 +617,10 @@ const INVISIBLE_CHARS = /[\u200B-\u200D\uFEFF]/g;
 const PAID_ORDER_STATUSES = ['paid', 'p', 'bezahlt'];
 
 function cozyCsvColumns(header) {
+	// Like the app: invisible characters out of the header too (readRosterFile).
 	const names = header.map((h) =>
 		String(h)
+			.replace(INVISIBLE_CHARS, '')
 			.trim()
 			.toLowerCase()
 			.replace(/[_\s]+/g, ' ')
