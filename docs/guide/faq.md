@@ -22,6 +22,18 @@ After many wrong codes from the same network, CozyNights pauses sign-in attempts
 CozyNights couldn't reach its database for a moment. Your code is fine. Try again shortly.
 :::
 
+::: details What bedding do I need to bring?
+Pillow and blanket are provided. Bring your own covers: a **bed sheet** for the mattress, a **duvet cover** for the blanket and a **pillowcase**. A sleeping bag is fine instead of the duvet cover; the bed sheet and the pillowcase are still a must. Your booking pass and every e-mail about your spot say it again, for when you pack.
+:::
+
+::: details Why do I have to make my bed every time I book?
+Many guests are at Hamburn for the first time, and a bed without covers is a cold night. So every booking starts with making your bed and ends with a tick that you have read the Code of Conduct, the privacy policy and the booking rules — also when you move to another spot. Nothing about it is stored. If a booking didn't go through because someone was faster, the next spot you pick keeps your made bed and your tick, until you reload the page.
+:::
+
+::: details "Before a spot is yours, make your bed and confirm the rules in the booking window. Don't see them? Reload the page."
+The page was opened before the booking window had the bed and the rules box (for example a tab left open since before an update). Reload the page, then book again: the window shows both.
+:::
+
 ::: details A spot says nothing about its bed, or my wish finds no spot
 CozyNights only shows what the crew filled in: an empty spot card means *nobody said*, not *no bed*. The wish chips in the top bar (on the map and the roulette) are strict for the same reason — they only keep spots the crew actually described, so nothing is promised that isn't written down; a wish no spot answers isn't even offered as a chip. Ask the crew if a detail matters to you, and use the [special-needs request](./special-needs) if you need a particular kind of spot.
 :::

@@ -4,6 +4,9 @@ All you need is the **ticket code** from your Hamburn ticket. There is no accoun
 
 Beds come with **Indoor memberships** only. Camper memberships (camper or tent) don't include a bed and don't need CozyNights.
 
+> [!IMPORTANT] Bring your own bedding
+> Pillow and blanket are provided. Bring your own covers: a **bed sheet** for the mattress, a **duvet cover** for the blanket and a **pillowcase**. A sleeping bag is fine instead of the duvet cover; the bed sheet and the pillowcase are still a must. Every booking reminds you: you [make your bed](#make-your-bed) before the spot is yours.
+
 > [!NOTE] Booking opens and closes at set times
 > Before booking opens, the start page and the (still blurred) map count down to the start; <kbd>🗺️ LOOK AROUND</kbd> lets you open houses and rooms already. You can already sign in with your code. While booking is open, the top bar of every booking page counts down to the close; after that, spots are final.
 
@@ -13,8 +16,8 @@ Beds come with **Indoor memberships** only. Camper memberships (camper or tent) 
 flowchart LR
   code["🎫 Ticket code"] --> map["🗺️ Camp map"]
   map --> pick["🛖 House → 🚪 Room<br/>→ 🛏️ free spot"]
-  pick --> name["✍️ Burner name<br/>(optional)"] --> done["✅ Your Spot"]
-  map --> roulette["🎰 Destiny<br/>Roulette"] --> done
+  pick --> bed["🧺 Make your bed"] --> name["✍️ Burner name (optional)<br/>☑️ the rules"] --> done["✅ Your Spot"]
+  map --> roulette["🎰 Destiny<br/>Roulette"] --> bed
 ```
 
 ## Step by step
@@ -53,11 +56,23 @@ flowchart LR
 
    ![Room page with free, occupied and reserved spots](../assets/screenshots/guest-room-available.webp)
 
-5. **Pick a burner name and book**
+5. <a id="make-your-bed"></a>**Make your bed**
 
-   Type the name other guests should see on your bed (up to 80 characters), or press <kbd>Roll a name 🎲</kbd> and let the slot machine pick one (something like *Dusty Unicorn, Keeper of the Moop #562*). A rolled name lands in the field, where you can still change it; <kbd>New Name 🎲</kbd> rolls again. Leave the field empty and press <kbd>Save Spot</kbd> and the machine rolls one for you first. <kbd>Save Spot</kbd> books the spot. The same dialog opens when you tap your own spot later to change the name.
+   The booking window starts with your bed. The hostel's pillow, blanket and mattress lie on it bare, and your three covers wait in **Your bag**: a bed sheet, a duvet cover and a pillowcase. Tap each cover, or drag it onto the bed: the duvet cover goes on the blanket, the pillowcase on the pillow, and the sheet slips under everything. Drop one on the wrong piece and it hops back into the bag with a hint.
 
-   ![Booking dialog with the burner name field](../assets/screenshots/guest-booking-modal.webp)
+   When the bed is made, the window lists what to pack and <kbd>I'll pack them 🤝</kbd> takes you on. Pack them for real: pillow and blanket are provided, the covers are not. A sleeping bag is fine instead of the duvet cover; the bed sheet and the pillowcase are still a must.
+
+   ![Booking window, step 1: the bare bed and the three covers in your bag](../assets/screenshots/guest-booking-bed.webp)
+
+6. **Pick a burner name, tick the rules and book**
+
+   Type the name other guests should see on your bed (up to 80 characters), or press <kbd>Roll a name 🎲</kbd> and let the slot machine pick one (something like *Dusty Unicorn, Keeper of the Moop #562*). A rolled name lands in the field, where you can still change it; <kbd>New Name 🎲</kbd> rolls again. Leave the field empty and press <kbd>Save Spot</kbd> and the machine rolls one for you first.
+
+   Below the name, tick the box: *I've read and understood the Code of Conduct, the privacy policy and, most importantly, the booking rules.* The three links open in a new tab, so the booking window stays as it is. Without the tick, <kbd>Save Spot</kbd> waits and says why. With it, <kbd>Save Spot</kbd> books the spot.
+
+   ![Booking window, step 2: burner name, the rules box and Save Spot](../assets/screenshots/guest-booking-modal.webp)
+
+   Every new spot asks for both again, also after a release or a respin. Only when a booking didn't go through (someone was faster), the next spot you pick skips the bed and keeps the tick, until you reload the page. Nothing about it is stored. Tapping your own spot later to change its name opens just the name and <kbd>Save Spot</kbd>.
 
 </div>
 
@@ -121,7 +136,7 @@ Then the burner name that goes with the spot:
 - If your ticket already has a burner name, it is filled in. Keep it or change it.
 - Type your own name into **Your burner name**, or press <kbd>🎲</kbd> to roll one (something like *Cosmic Coyote #562*). A rolled name can still be changed.
 - <kbd>SPIN AGAIN 🎰</kbd> spins for another spot and keeps the name.
-- <kbd>BOOK IT 🌵</kbd> books the spot. With the name field empty, the first tap rolls a name; the next one books.
+- <kbd>BOOK IT 🌵</kbd> opens the same check as on the room page, over the machine: [make your bed](#make-your-bed), then *One last tick* for the rules, and <kbd>BOOK IT 🌵</kbd> in that window books the spot. With the name field empty, the first tap rolls a name; the next one opens the check.
 
 *Destiny Fulfilled!* Fireworks go up and your [booking pass](#your-booking-pass) prints out on the card, with <kbd>Visit My Room</kbd> and <kbd>Back to Map</kbd>.
 
@@ -165,7 +180,7 @@ Booking, moving and releasing a spot only work during Live Booking; the burner n
 
 When your spot is booked, changes or is released, CozyNights sends an e-mail to the **address of your ticket**. You don't enter it anywhere; your room page shows where confirmations go, shortened like `m•••@example.com`. It usually arrives within a minute; right after booking opens, when many people book at once, it can take a few minutes. If the crew ever has to change the camp layout and your spot goes with it, you hear about it the same way, so you can pick a new one.
 
-Every e-mail that shows your spot also brings your [booking pass](#your-booking-pass): its QR code as a picture right inside the e-mail, its link and its short code. That e-mail is all you need to show at arrival. Some mail apps also list the picture as an attachment; the link works just as well.
+Every e-mail that shows your spot also brings your [booking pass](#your-booking-pass): its QR code as a picture right inside the e-mail, its link and its short code. That e-mail is all you need to show at arrival. Some mail apps also list the picture as an attachment; the link works just as well. Right under the spot, a highlighted line says what to pack: your bed sheet, duvet cover and pillowcase. Telegram messages say it too.
 
 **Your room page** is the room that holds your spot: the room link in every confirmation takes you there, and so does <kbd>Visit My Room</kbd> on the roulette page. Every other house and room shows a *You already have a spot* note with your spot as a small ticket; tapping it opens your booking pass.
 
@@ -175,7 +190,7 @@ Once you hold a spot, your room page shows <kbd>🎫 Show booking pass</kbd>, ev
 
 <p align="center"><img src="../assets/screenshots/guest-pass.webp" alt="A booking pass on a phone: house, room, spot, burner name, QR code and pass code" width="300" /></p>
 
-<kbd>Save QR code</kbd> stores the QR code as a picture (on a phone it goes to your photos), <kbd>Camp map</kbd> takes you back to the map. Before the check-in the pass stays valid when you move to another spot; the crew always sees the spot your ticket holds right now. Release your spot, and the same link says that your ticket holds no spot at the moment. The pass code is not your ticket code: it can only show your booking, never change it.
+Under the QR code, **Bring your own covers** lists the bed sheet, the duvet cover and the pillowcase, for the moment you pack. <kbd>Save QR code</kbd> stores the QR code as a picture (on a phone it goes to your photos), <kbd>Camp map</kbd> takes you back to the map. Before the check-in the pass stays valid when you move to another spot; the crew always sees the spot your ticket holds right now. Release your spot, and the same link says that your ticket holds no spot at the moment. The pass code is not your ticket code: it can only show your booking, never change it.
 
 ### Updates on Telegram
 
