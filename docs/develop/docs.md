@@ -120,7 +120,7 @@ Every page links the app's legal notice, privacy policy and booking rules: the h
 - **Served by the app** (`/docs/`, `/admin/docs/`), the links point to `/legal-notice`, `/privacy` and `/booking-rules` on the same domain.
 - **On GitHub Pages** they need the app's address: production, `https://cozynights.hamburn.de`. The repository variable `DOCS_APP_URL` overrides it for the Pages build, for example to point at staging (`gh variable set DOCS_APP_URL --body "https://test-cozynights.hamburn.de"`, back with `gh variable delete DOCS_APP_URL`). The next docs deploy (a version tag, a push to `main` that touches `docs/`, or **Run workflow** on *Docs*) picks a change up.
 
-  While production's [pre-launch gate](./deployment#pre-launch-gate) is on, these links end at the Google sign-in. Approve the waiting Pages deployment (Actions → *Docs* → **Review deployments**) only after the gate is off.
+  While production's [pre-launch gate](./deployment#pre-launch-gate) is on, these links end at the Google sign-in, so Docs runs are left waiting at the `github-pages` approval until the gate is off. A waiting run can't simply be approved later: the site it built expires after a day (`upload-pages-artifact`), and the deploy then fails. Once the gate is off, cancel the waiting runs, start a fresh one (Actions → *Docs* → **Run workflow** on `main`) and approve that one.
 
 ## What doesn't belong here
 

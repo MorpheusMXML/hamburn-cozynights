@@ -82,7 +82,7 @@ The ticket list holds the ticket codes and the buyers' e-mail addresses, so the 
 - [ ] **Deletion after the event is planned** within the period the privacy policy names. See [After the burn](./event-checklist#after-the-burn).
 - [ ] **Membership terms published** with the ticket shop and linked with `LEGAL_TERMS_URL`. The booking rules must not contradict them.
 - [ ] **Texts checked** with a generator or by someone qualified.
-- [ ] **Docs on GitHub Pages link the right app.** The public guide links the legal pages of production, `https://cozynights.hamburn.de`. While its pre-launch gate is on, those links end at the Google sign-in, so the Pages deployment is approved only after the gate is off (see [Working on these docs](../develop/docs#legal-links)).
+- [ ] **Docs on GitHub Pages link the right app.** The public guide links the legal pages of production, `https://cozynights.hamburn.de`. While its pre-launch gate is on, those links end at the Google sign-in, so the Pages site is deployed only after the gate is off (see [Working on these docs](../develop/docs#legal-links)).
 
 ## Keeping the privacy policy true
 
