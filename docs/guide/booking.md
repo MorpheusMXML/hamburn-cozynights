@@ -58,11 +58,11 @@ flowchart LR
 
 5. <a id="make-your-bed"></a>**Make your bed**
 
-   The booking window starts with your bed. The hostel's pillow, blanket and mattress lie on it bare, and your three covers wait in **Your bag**: a bed sheet, a duvet cover and a pillowcase. Tap each cover, or drag it onto the bed: the duvet cover goes on the blanket, the pillowcase on the pillow, and the sheet slips under everything. Drop one on the wrong piece and it hops back into the bag with a hint.
+   The booking window starts with your bed. The hostel's pillow, blanket and mattress lie on it bare, and your three covers wait in **Your bag**: a bed sheet, a duvet cover and a pillowcase. Each cover only goes on its own piece: the **bed sheet on the mattress**, the **duvet cover on the blanket**, the **pillowcase on the pillow**. Drag a cover there, or tap it (it stands up in the bag) and then tap its place on the bed. The wrong piece shakes and says where the cover belongs — *That's the blanket! The bed sheet goes on the mattress.* — and the cover waits for the right one; a dragged cover hops back into the bag. Each cover that lands is named once more (*Bed sheet on the mattress ✓*), so you remember what to pack. With a keyboard: Enter on a cover, then Tab to its piece and Enter.
 
    When the bed is made, the window lists what to pack and <kbd>I'll pack them 🤝</kbd> takes you on. Pack them for real: pillow and blanket are provided, the covers are not. A sleeping bag is fine instead of the duvet cover; the bed sheet and the pillowcase are still a must.
 
-   ![Booking window, step 1: the bare bed and the three covers in your bag](../assets/screenshots/guest-booking-bed.webp)
+   ![Booking window, step 1: the bed sheet already on the mattress, the duvet cover in hand and the question where it goes](../assets/screenshots/guest-booking-bed.webp)
 
 6. **Pick a burner name, tick the rules and book**
 

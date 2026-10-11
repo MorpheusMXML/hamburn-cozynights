@@ -26,6 +26,10 @@ CozyNights couldn't reach its database for a moment. Your code is fine. Try agai
 Pillow and blanket are provided. Bring your own covers: a **bed sheet** for the mattress, a **duvet cover** for the blanket and a **pillowcase**. A sleeping bag is fine instead of the duvet cover; the bed sheet and the pillowcase are still a must. Your booking pass and every e-mail about your spot say it again, for when you pack.
 :::
 
+::: details My cover won't go on the bed / hops back into the bag
+Every cover only goes on its own piece: the **bed sheet on the mattress** (the part under the pillow), the **duvet cover on the blanket**, the **pillowcase on the pillow**. Tap the cover, then its piece — or drag it straight there. The line under your bag says where a cover belongs when you try the wrong piece.
+:::
+
 ::: details Why do I have to make my bed every time I book?
 Many guests are at Hamburn for the first time, and a bed without covers is a cold night. So every booking starts with making your bed and ends with a tick that you have read the Code of Conduct, the privacy policy and the booking rules — also when you move to another spot. Nothing about it is stored. If a booking didn't go through because someone was faster, the next spot you pick keeps your made bed and your tick, until you reload the page.
 :::
