@@ -236,11 +236,18 @@ describe('the need pills', () => {
 		expect(needPill('lower_bunk', true)).toEqual({ text: 'No ladder', neutral: false });
 		expect(needPill('other', true)).toEqual({ text: 'Something else', neutral: false });
 		expect(needPill('own_room')).toEqual({
-			text: '🎨 A room just for our project or crew',
+			text: '🎨 A room for our art project or crew',
 			neutral: true
 		});
-		// a helper coming along is no health need either
-		expect(needPill('helper' as SpecialNeed)).toMatchObject({ neutral: true });
-		expect(needPill('helper' as SpecialNeed).text.startsWith('🤝 ')).toBe(true);
+		expect(needPill('near_project')).toEqual({
+			text: '📍 A bed close to our art piece or project',
+			neutral: true
+		});
+		// a helper coming along is no health need either, nor are stable light conditions a project
+		expect(needPill('helper')).toEqual({
+			text: '🤝 I come as the helper of someone with a personal need',
+			neutral: true
+		});
+		expect(needPill('stable_light')).toEqual({ text: 'Stable light conditions', neutral: false });
 	});
 });

@@ -286,10 +286,11 @@ shown here and nowhere else.
 	<a href="/admin" class="back">← Control Center</a>
 	<h1>Special-needs requests ♿</h1>
 	<p class="intro">
-		Guests ask for a fitting spot with their ticket code, also before booking opens: for something
-		they need, or for an art project or crew that wants a room or spots close together — on their
-		own or as a group. Approve or decline, then book a spot: that books it for the guest right away,
-		in Staging Mode too. Each guest gets a message about each decision and the booking.
+		Guests ask for a fitting spot with their ticket code, also before booking opens: for a personal
+		need, as the helper of someone with one, or for an art project or crew that needs a room or a
+		bed close to its piece — on their own or as a group. Approve or decline, then book a spot: that
+		books it for the guest right away, in Staging Mode too. Each guest gets a message about each
+		decision and the booking.
 	</p>
 
 	<section class="switch-card" class:open={data.requestsOpen}>
