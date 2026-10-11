@@ -100,57 +100,80 @@ test('a dragged cover on the wrong piece goes back into the bag', async ({ page 
 });
 
 test('a second finger on another cover in the middle of a drag strands nothing', async ({
-	page
+	browser,
+	browserName
 }) => {
-	await openBookingWindow(page);
-
-	// Two touches as a phone sends them (pointer events with their own ids): finger 1
-	// drags the bed sheet, finger 2 taps the duvet cover meanwhile, finger 1 lets go
-	// next to the bed. Before the fix, finger 2 took over the press and the sheet
-	// stayed lifted for good: no tap, drag or key could pick it up again.
-	const { duringDrag, lifted } = await page.evaluate(async () => {
-		const button = (name: string) =>
-			document.querySelector<HTMLButtonElement>(`button.cover[aria-label="${name}"]`)!;
-		const sheet = button('Bed sheet');
-		const duvet = button('Duvet cover');
-		const middle = (el: Element) => {
-			const box = el.getBoundingClientRect();
-			return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
-		};
-		const touch = (el: Element, type: string, id: number, at: { x: number; y: number }) =>
-			el.dispatchEvent(
-				new PointerEvent(type, {
-					pointerId: id,
-					pointerType: 'touch',
-					isPrimary: id === 1,
-					clientX: at.x,
-					clientY: at.y,
-					button: 0,
-					buttons: type === 'pointerup' ? 0 : 1,
-					bubbles: true,
-					cancelable: true
-				})
-			);
-		const frame = () => new Promise((done) => requestAnimationFrame(done));
-		const s = middle(sheet);
-		touch(sheet, 'pointerdown', 1, s);
-		touch(sheet, 'pointermove', 1, { x: s.x + 20, y: s.y - 20 });
-		await frame();
-		// the drag runs: the sheet is out of the bag (so the handlers saw these events)
-		const duringDrag = sheet.classList.contains('lifted');
-		touch(duvet, 'pointerdown', 2, middle(duvet));
-		touch(duvet, 'pointerup', 2, middle(duvet));
-		touch(sheet, 'pointerup', 1, { x: 2, y: 2 });
-		await frame();
-		return { duringDrag, lifted: [sheet, duvet].map((el) => el.classList.contains('lifted')) };
+	// Two real touches need Chromium's DevTools protocol (Playwright has no
+	// multi-touch API); the press logic is the same in every engine.
+	test.skip(browserName !== 'chromium', 'two real touches need the DevTools protocol');
+	const context = await browser.newContext({
+		baseURL: BASE,
+		hasTouch: true,
+		reducedMotion: 'reduce'
 	});
-	expect(duringDrag, 'the synthetic drag reached the handlers').toBe(true);
-	expect(lifted, 'neither cover is left lifted').toEqual([false, false]);
+	const page = await context.newPage();
+	await openBookingWindow(page);
+	const cdp = await context.newCDPSession(page);
+	const middle = async (target: Locator) => {
+		const box = (await target.boundingBox())!;
+		return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+	};
+	// The touches that are down after each step: the protocol presses, moves and
+	// lifts whatever changed since the step before.
+	const touches = (type: string, points: { x: number; y: number; id: number }[]) =>
+		cdp.send('Input.dispatchTouchEvent', { type: type as 'touchStart', touchPoints: points });
+	const s = await middle(cover(page, 'Bed sheet'));
+	const d = await middle(cover(page, 'Duvet cover'));
+	const held = { x: s.x + 20, y: s.y - 20, id: 1 };
+
+	// Finger 1 drags the bed sheet …
+	await touches('touchStart', [{ ...s, id: 1 }]);
+	await touches('touchMove', [held]);
+	await expect(cover(page, 'Bed sheet')).toHaveClass(/lifted/);
+	// … finger 2 taps the duvet cover meanwhile …
+	await touches('touchStart', [held, { ...d, id: 2 }]);
+	await touches('touchEnd', [held]);
+	// … and finger 1 lets go next to the bed. Before the fix, finger 2 took over
+	// the press and the sheet stayed lifted for good.
+	await touches('touchMove', [{ x: 2, y: 2, id: 1 }]);
+	await touches('touchEnd', []);
+	await expect(cover(page, 'Bed sheet')).not.toHaveClass(/lifted/);
+	await expect(cover(page, 'Duvet cover')).not.toHaveClass(/lifted/);
 
 	// the sheet still goes on the mattress (a click right after a drag belongs to it: wait)
 	await page.waitForTimeout(600);
 	await cover(page, 'Bed sheet').click();
 	await spot(page, 'Mattress').click();
+	await expect(page.locator('.cover-layer.sheet')).toHaveCount(1);
+	await context.close();
+});
+
+test('a pointerdown sent by a script never blocks the next drag', async ({ page }) => {
+	await openBookingWindow(page);
+
+	// An extension, an automation or an assistive-technology script can send a
+	// lone pointerdown for a pointer that isn't there: no up or cancel follows.
+	// Kept as a press, it refused every real drag after it.
+	await page.evaluate(() => {
+		const sheet = document.querySelector('button.cover[aria-label="Bed sheet"]')!;
+		const box = sheet.getBoundingClientRect();
+		sheet.dispatchEvent(
+			new PointerEvent('pointerdown', {
+				pointerId: 77,
+				pointerType: 'touch',
+				isPrimary: true,
+				clientX: box.left + 5,
+				clientY: box.top + 5,
+				button: 0,
+				buttons: 1,
+				bubbles: true,
+				cancelable: true
+			})
+		);
+	});
+
+	await dragOnto(page, cover(page, 'Bed sheet'), spot(page, 'Mattress'));
+	await expect(status(page)).toHaveText('Bed sheet on the mattress ✓ · 2 covers to go');
 	await expect(page.locator('.cover-layer.sheet')).toHaveCount(1);
 });
 

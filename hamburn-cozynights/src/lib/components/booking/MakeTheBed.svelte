@@ -329,12 +329,15 @@ what happened.
 		// and its cover would stay lifted for good: no bed could be made any more.
 		// (A finger resting elsewhere on the screen is fine: only a press counts.)
 		if (press) return;
-		press = { pointer: event.pointerId, x: event.clientX, y: event.clientY, cover };
 		try {
 			(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
 		} catch {
-			/* the pointer is gone already: its up or cancel ends the press */
+			// Not a live pointer (setPointerCapture throws NotFoundError): a pointerdown
+			// sent by a script, with no up or cancel ever to come. Kept as a press, it
+			// would refuse every drag after it. A tap still picks the cover up.
+			return;
 		}
+		press = { pointer: event.pointerId, x: event.clientX, y: event.clientY, cover };
 	}
 
 	function pointerMove(event: PointerEvent) {
