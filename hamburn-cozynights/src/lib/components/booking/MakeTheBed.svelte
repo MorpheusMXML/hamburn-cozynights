@@ -324,8 +324,17 @@ what happened.
 	function pointerDown(cover: Cover, event: PointerEvent) {
 		if (placed[cover.id] || lifted[cover.id]) return;
 		if (event.pointerType === 'mouse' && event.button !== 0) return;
+		// One cover by hand at a time. A second finger on another cover would take
+		// over the press, the first finger's events would be ignored from then on,
+		// and its cover would stay lifted for good: no bed could be made any more.
+		// (A finger resting elsewhere on the screen is fine: only a press counts.)
+		if (press) return;
 		press = { pointer: event.pointerId, x: event.clientX, y: event.clientY, cover };
-		(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+		try {
+			(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+		} catch {
+			/* the pointer is gone already: its up or cancel ends the press */
+		}
 	}
 
 	function pointerMove(event: PointerEvent) {
@@ -350,7 +359,8 @@ what happened.
 	function pointerUp(event: PointerEvent, cancelled = false) {
 		if (!press || event.pointerId !== press.pointer) return;
 		const ended = drag;
-		const cover = press.cover;
+		// the cover the drag holds; without a drag the press's (a tap)
+		const cover = ended?.cover ?? press.cover;
 		press = null;
 		drag = null;
 		if (!ended) return; // a tap: the click after it picks the cover up

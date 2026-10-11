@@ -99,6 +99,61 @@ test('a dragged cover on the wrong piece goes back into the bag', async ({ page 
 	await expect(page.locator('.cover-layer.sheet')).toHaveCount(1);
 });
 
+test('a second finger on another cover in the middle of a drag strands nothing', async ({
+	page
+}) => {
+	await openBookingWindow(page);
+
+	// Two touches as a phone sends them (pointer events with their own ids): finger 1
+	// drags the bed sheet, finger 2 taps the duvet cover meanwhile, finger 1 lets go
+	// next to the bed. Before the fix, finger 2 took over the press and the sheet
+	// stayed lifted for good: no tap, drag or key could pick it up again.
+	const { duringDrag, lifted } = await page.evaluate(async () => {
+		const button = (name: string) =>
+			document.querySelector<HTMLButtonElement>(`button.cover[aria-label="${name}"]`)!;
+		const sheet = button('Bed sheet');
+		const duvet = button('Duvet cover');
+		const middle = (el: Element) => {
+			const box = el.getBoundingClientRect();
+			return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+		};
+		const touch = (el: Element, type: string, id: number, at: { x: number; y: number }) =>
+			el.dispatchEvent(
+				new PointerEvent(type, {
+					pointerId: id,
+					pointerType: 'touch',
+					isPrimary: id === 1,
+					clientX: at.x,
+					clientY: at.y,
+					button: 0,
+					buttons: type === 'pointerup' ? 0 : 1,
+					bubbles: true,
+					cancelable: true
+				})
+			);
+		const frame = () => new Promise((done) => requestAnimationFrame(done));
+		const s = middle(sheet);
+		touch(sheet, 'pointerdown', 1, s);
+		touch(sheet, 'pointermove', 1, { x: s.x + 20, y: s.y - 20 });
+		await frame();
+		// the drag runs: the sheet is out of the bag (so the handlers saw these events)
+		const duringDrag = sheet.classList.contains('lifted');
+		touch(duvet, 'pointerdown', 2, middle(duvet));
+		touch(duvet, 'pointerup', 2, middle(duvet));
+		touch(sheet, 'pointerup', 1, { x: 2, y: 2 });
+		await frame();
+		return { duringDrag, lifted: [sheet, duvet].map((el) => el.classList.contains('lifted')) };
+	});
+	expect(duringDrag, 'the synthetic drag reached the handlers').toBe(true);
+	expect(lifted, 'neither cover is left lifted').toEqual([false, false]);
+
+	// the sheet still goes on the mattress (a click right after a drag belongs to it: wait)
+	await page.waitForTimeout(600);
+	await cover(page, 'Bed sheet').click();
+	await spot(page, 'Mattress').click();
+	await expect(page.locator('.cover-layer.sheet')).toHaveCount(1);
+});
+
 test('the keyboard makes the bed the same way, and the focus follows', async ({ page }) => {
 	await openBookingWindow(page);
 
