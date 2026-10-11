@@ -394,6 +394,36 @@ const PAGES: PageCase[] = [
 			await page.locator('#consent-error').waitFor();
 		}
 	},
+	// The three paths of the form: each shows only its own checkboxes (with
+	// JavaScript), the helper's refusal sits at the group question.
+	{
+		name: 'special needs: a personal need',
+		path: () => '/special-needs',
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.getByLabel('A personal need: a medical reason or a disability').check();
+			await page.getByText('Stable light conditions').waitFor();
+		}
+	},
+	{
+		name: 'special needs: an art project',
+		path: () => '/special-needs',
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.getByLabel('An art project or a crew').check();
+			await page.getByText('A bed close to our art piece or project').waitFor();
+		}
+	},
+	{
+		name: 'special needs: a helper without a group',
+		path: () => '/special-needs',
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.getByLabel('I come as the helper of someone with a personal need').check();
+			await page.getByRole('button', { name: 'Send request' }).click();
+			await page.locator('#group-error').waitFor();
+		}
+	},
 	// Request groups (docs/guide/special-needs.md "Asking as a group"): a group
 	// that isn't full shows its invite link and the Copy button; leaving asks
 	// first; an invite link opens the form with the code filled in.

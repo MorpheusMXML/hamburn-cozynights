@@ -2,9 +2,11 @@
 /**
  * Request groups against PocketBase (collection request_groups,
  * pb_migrations/1760550000_request_groups.js; docs/admin/special-needs.md,
- * "Groups"): guests who ask for spots together — an art project, a workshop,
- * a theme camp, a crew or friends. A guest starts a group or joins one with
- * its code from the request form.
+ * "Groups"): guests who ask for spots together — a helper and the person
+ * they help, or the crew of an art project. A guest starts a group or joins
+ * one with its code from the request form; a helper's request is always in
+ * one (parseRequestForm, $lib/special-needs.ts). The most a group can hold is
+ * GROUP_MAX.
  *
  * A group has no status of its own. "Approve all", "Decline group" and
  * "Book spots for the group" write each member's own request through

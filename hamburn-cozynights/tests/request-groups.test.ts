@@ -806,6 +806,16 @@ describe('the group planner', () => {
 		expect(needy).toEqual({ m1: 'b2', m2: 'b1' });
 	});
 
+	it('places a helper like anyone without needs: the ♿ spot goes to the one they help', () => {
+		// the helper first in the group, the one they help second
+		const pair = [member('helper', ['helper']), member('helped', ['stable_light'])];
+		expect(proposePlan(pair, SPOTS, 'room:r2')).toEqual({ helper: 'b2', helped: 'b1' });
+		// a helper alone never takes the ♿ spot either
+		expect(proposePlan([member('helper', ['helper'])], SPOTS, 'room:r2')).toEqual({
+			helper: 'b2'
+		});
+	});
+
 	it('gives the lower bunk to the member who needs it', () => {
 		const bunks = [
 			spot('d1', 'r4', 'B1', { bedType: 'bunk_upper' }),

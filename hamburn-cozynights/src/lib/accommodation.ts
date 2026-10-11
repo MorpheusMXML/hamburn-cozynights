@@ -536,16 +536,21 @@ export type NeedFit = 'fits' | 'conflict' | 'unknown';
 /**
  * Needs the layout can't answer, so only the crew can match them: a power
  * socket (the app doesn't know where the sockets are, RETIRED_FEATURES; only
- * old requests still have it), "Something else", which is what the guest
- * wrote, and what a project or crew asks for (a room of their own, spots
- * close together: a question of who else sleeps where). The ♿ picker shows
- * no ✓ or ✗ for them, and the capacity line on the requests page leaves them
- * out, so project requests never count against the ♿ spots.
+ * old requests still have it), stable light (no feature says it), "Something
+ * else", which is what the guest wrote, a helper (they sleep close to the
+ * person they help: a question of who sleeps where), and what an art project
+ * or a crew asks for (a room of their own, a bed close to their piece, or —
+ * on old requests — spots close together). The ♿ picker shows no ✓ or ✗ for
+ * them, and the capacity line on the requests page leaves them out, so
+ * project and helper requests never count against the ♿ spots.
  */
 export const MATCHED_BY_HAND: readonly SpecialNeed[] = [
 	'power',
+	'stable_light',
 	'other',
+	'helper',
 	'own_room',
+	'near_project',
 	'close_together'
 ];
 
@@ -571,8 +576,11 @@ export function needFit(need: SpecialNeed, facts: SpotFacts): NeedFit {
 			return hasFeature(facts, 'quiet') ? 'fits' : 'unknown';
 		// MATCHED_BY_HAND: nothing in the layout answers these.
 		case 'power':
+		case 'stable_light':
 		case 'other':
+		case 'helper':
 		case 'own_room':
+		case 'near_project':
 		case 'close_together':
 			return 'unknown';
 	}

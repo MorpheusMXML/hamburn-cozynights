@@ -20,13 +20,20 @@ import { countSpots } from '../src/lib/occupancy';
 import { InventoryService } from '../src/lib/server/inventory';
 import { APP_SETTINGS_ID } from '../src/lib/server/constants';
 import {
+	HELPER_NEEDS_GROUP,
+	REQUEST_PATHS,
 	REQUEST_TEXT_MAX,
 	cleanRequestText,
+	countWords,
+	isAccessNeed,
 	isFormNeed,
+	isProjectNeed,
 	isSpecialNeed,
 	needLabel,
+	needsOutsidePath,
 	parseRequestForm,
 	requestKinds,
+	requestPath,
 	RETIRED_NEEDS,
 	SPECIAL_NEEDS
 } from '../src/lib/special-needs';
@@ -36,6 +43,7 @@ import {
 	decideRequest,
 	getGuestRequest,
 	isSpotFixed,
+	NEEDS_PADDED_LENGTH,
 	releaseSpot,
 	listAssignableSpots,
 	listRequests,
@@ -60,6 +68,7 @@ function form(fields: Record<string, string | string[]>): FormData {
 }
 
 const GOOD = {
+	about: 'personal',
 	needs: ['lower_bunk', 'quiet'],
 	text: 'I need a lower bunk and a quiet room, please.',
 	burnerName: 'Sparkle Pony',
@@ -131,15 +140,201 @@ describe('request form', () => {
 
 	it('takes a project request on the same form', () => {
 		const parsed = parseRequestForm(
-			form({ ...GOOD, needs: ['own_room', 'close_together'], text: 'Our dome crew, 6 people.' })
+			form({
+				...GOOD,
+				about: 'project',
+				needs: ['own_room', 'near_project'],
+				text: 'Our dome glows all night: someone has to sleep next to it.'
+			})
 		);
 		expect(parsed.ok).toBe(true);
-		expect(parsed.value.needs).toEqual(['own_room', 'close_together']);
+		expect(parsed.value.needs).toEqual(['own_room', 'near_project']);
 		expect(requestKinds(parsed.value.needs)).toEqual({
 			access: false,
 			project: true,
+			helper: false,
 			groupOnly: false
 		});
+	});
+
+	it('offers three paths, each with its own needs', () => {
+		expect(REQUEST_PATHS.map((path) => [path.value, path.label])).toEqual([
+			['personal', 'A personal need: a medical reason or a disability'],
+			['helper', 'I come as the helper of someone with a personal need'],
+			['project', 'An art project or a crew']
+		]);
+		expect(SPECIAL_NEEDS.map((need) => need.value)).toEqual([
+			'lower_bunk',
+			'step_free',
+			'near_toilet',
+			'quiet',
+			'stable_light',
+			'other',
+			'helper',
+			'own_room',
+			'near_project'
+		]);
+		expect(needLabel('quiet')).toBe('A quiet area');
+		expect(needLabel('stable_light')).toBe('Stable light conditions');
+		expect(needLabel('own_room')).toBe('A room for our art project or crew');
+		expect(needLabel('near_project')).toBe('A bed close to our art piece or project');
+		expect(needLabel('helper')).toBe('I come as the helper of someone with a personal need');
+		// stable light is a personal need; a helper and "Something else" are no ♿ need of their own
+		expect(isAccessNeed('stable_light')).toBe(true);
+		expect(isAccessNeed('helper')).toBe(false);
+		expect(isAccessNeed('other')).toBe(false);
+		expect(isProjectNeed('near_project')).toBe(true);
+		expect(isProjectNeed('close_together')).toBe(true);
+		expect(isProjectNeed('helper')).toBe(false);
+	});
+
+	it('keeps a personal need with every box of its path', () => {
+		const all = ['lower_bunk', 'step_free', 'near_toilet', 'quiet', 'stable_light', 'other'];
+		const parsed = parseRequestForm(form({ ...GOOD, needs: all }));
+		expect(parsed.ok).toBe(true);
+		expect(parsed.value.needs).toEqual(all);
+		expect(requestKinds(parsed.value.needs)).toMatchObject({ access: true, helper: false });
+		// what, not why: five characters are enough
+		expect(parseRequestForm(form({ ...GOOD, text: 'Light' })).ok).toBe(true);
+	});
+
+	it('keeps only the needs of the chosen path (a browser without JavaScript posts them all)', () => {
+		const mixed = ['lower_bunk', 'own_room', 'helper', 'near_project', 'quiet'];
+		const personal = parseRequestForm(form({ ...GOOD, about: 'personal', needs: mixed }));
+		expect(personal.value.needs).toEqual(['lower_bunk', 'quiet']);
+		const project = parseRequestForm(
+			form({ ...GOOD, about: 'project', needs: mixed, text: 'We guard the dome at night, please.' })
+		);
+		expect(project.ok).toBe(true);
+		expect(project.value.needs).toEqual(['own_room', 'near_project']);
+		// a path that ticks nothing of its own
+		const bare = parseRequestForm(form({ ...GOOD, about: 'project', needs: ['quiet'] }));
+		expect(bare.ok).toBe(false);
+		if (!bare.ok) expect(bare.errors.needs).toBe('Tick a room or a bed.');
+		const none = parseRequestForm(form({ ...GOOD, about: 'personal', needs: ['own_room'] }));
+		expect(none.ok).toBe(false);
+		if (!none.ok) {
+			expect(none.errors.needs).toBe(
+				'Tick at least one thing. If none fits, tick "Something else".'
+			);
+		}
+	});
+
+	it('asks to choose a path, and never guesses one from ticked boxes', () => {
+		const parsed = parseRequestForm(form({ ...GOOD, about: '' }));
+		expect(parsed.ok).toBe(false);
+		if (!parsed.ok) expect(parsed.errors).toEqual({ about: 'Choose what your request is about.' });
+		// what was ticked comes back, so a guest without JavaScript loses nothing
+		expect(parsed.value.needs).toEqual(['lower_bunk', 'quiet']);
+		const junk = parseRequestForm(form({ ...GOOD, about: 'friends' }));
+		expect(junk.ok).toBe(false);
+		if (!junk.ok) expect(junk.errors.about).toBe('Choose what your request is about.');
+	});
+
+	it('stores a helper as the helper alone, and only in a group', () => {
+		const helper = {
+			about: 'helper',
+			needs: ['lower_bunk', 'own_room'],
+			text: 'I need to sleep in the same room as the person I help.',
+			consent: 'yes'
+		};
+		const alone = parseRequestForm(form(helper));
+		expect(alone.ok).toBe(false);
+		if (!alone.ok) expect(alone.errors).toEqual({ group: HELPER_NEEDS_GROUP });
+		expect(alone.value.needs).toEqual(['helper']);
+		expect(HELPER_NEEDS_GROUP).toBe(
+			'A helper asks together with the person they help: join their group, or start one and share the link.'
+		);
+
+		const joining = parseRequestForm(
+			form({ ...helper, groupMode: 'join', groupCode: 'ABCD-EF23' })
+		);
+		expect(joining).toEqual({
+			ok: true,
+			value: {
+				needs: ['helper'],
+				text: helper.text,
+				burnerName: '',
+				consent: true,
+				group: { mode: 'join', code: 'ABCDEF23' }
+			}
+		});
+		const starting = parseRequestForm(form({ ...helper, groupMode: 'start', groupName: 'Ada' }));
+		expect(starting.ok).toBe(true);
+		expect(parseRequestForm(form(helper), { inGroup: true }).ok).toBe(true);
+		expect(requestKinds(['helper'])).toEqual({
+			access: false,
+			project: false,
+			helper: true,
+			groupOnly: false
+		});
+
+		// a helper says what the crew should know, in a group too
+		const silent = parseRequestForm(
+			form({ ...helper, text: '', groupMode: 'join', groupCode: 'ABCD-EF23' })
+		);
+		expect(silent.ok).toBe(false);
+		if (!silent.ok) {
+			expect(silent.errors).toEqual({
+				text: 'Tell the crew in a few words what they should know.'
+			});
+		}
+		// a typed group name without "Start a group" is said first
+		const named = parseRequestForm(form({ ...helper, groupName: 'Ada' }));
+		expect(named.ok).toBe(false);
+		if (!named.ok) expect(Object.keys(named.errors)).toEqual(['groupName']);
+	});
+
+	it('wants at least five words from an art project or a crew', () => {
+		const project = (text: string) =>
+			parseRequestForm(form({ ...GOOD, about: 'project', needs: ['near_project'], text }));
+		const four = project('Our dome needs guarding');
+		expect(four.ok).toBe(false);
+		if (!four.ok) {
+			expect(four.errors.text).toBe(
+				'Describe in at least 5 words what you need and why your art piece or project would be at risk without it.'
+			);
+		}
+		expect(project('Our dome needs night guarding').ok).toBe(true);
+		// a dash or an emoji alone is no word
+		expect(project('Our dome needs — 🔥 guarding').ok).toBe(false);
+		expect(countWords('  one\ntwo  three – 4 ✨ ')).toBe(4);
+		// a personal need has no word count, only the few characters
+		expect(parseRequestForm(form({ ...GOOD, text: 'Quiet' })).ok).toBe(true);
+	});
+
+	it('tells the path of a stored request, for changing it', () => {
+		expect(requestPath(['helper'])).toBe('helper');
+		expect(requestPath(['own_room'])).toBe('project');
+		expect(requestPath(['near_project', 'own_room'])).toBe('project');
+		expect(requestPath(['close_together'])).toBe('project');
+		expect(requestPath(['quiet', 'other'])).toBe('personal');
+		expect(requestPath(['other'])).toBe('personal');
+		expect(requestPath(['power'])).toBe('personal');
+		// from before the paths: what the guest needs wins, so changing the
+		// request never drops it; a retired value never decides
+		expect(requestPath(['quiet', 'own_room'])).toBe('personal');
+		expect(requestPath(['lower_bunk', 'own_room'])).toBe('personal');
+		expect(requestPath(['close_together', 'quiet'])).toBe('personal');
+		expect(requestPath(['close_together', 'other'])).toBe('personal');
+		// only part of a group
+		expect(requestPath([])).toBeNull();
+	});
+
+	it('names what a path leaves out of a request from before the paths', () => {
+		expect(needsOutsidePath(['lower_bunk', 'own_room'], 'personal')).toEqual(['own_room']);
+		expect(needsOutsidePath(['lower_bunk', 'own_room'], 'project')).toEqual(['lower_bunk']);
+		expect(needsOutsidePath(['lower_bunk', 'own_room'], 'helper')).toEqual([
+			'lower_bunk',
+			'own_room'
+		]);
+		// retired values are dropped anyway, so they are never named
+		expect(needsOutsidePath(['quiet', 'close_together', 'power'], 'personal')).toEqual([]);
+		// a request of one path has nothing outside it
+		for (const needs of [['quiet', 'other'], ['helper'], ['own_room', 'near_project'], []]) {
+			const path = requestPath(needs);
+			if (path) expect(needsOutsidePath(needs, path), needs.join(',')).toEqual([]);
+		}
 	});
 
 	it('no longer offers the power socket, but old requests keep it', () => {
@@ -156,17 +351,54 @@ describe('request form', () => {
 		if (!alone.ok) expect(alone.errors.needs).toMatch(/Tick at least one thing/);
 	});
 
+	it('no longer offers "spots close together", but old requests keep it', () => {
+		expect(isFormNeed('close_together')).toBe(false);
+		expect(isSpecialNeed('close_together')).toBe(true);
+		expect(needLabel('close_together')).toBe('Spots close to the people I come with (old form)');
+		expect(requestKinds(['close_together'])).toMatchObject({ project: true, access: false });
+
+		const posted = parseRequestForm(
+			form({
+				...GOOD,
+				about: 'project',
+				needs: ['close_together', 'own_room'],
+				text: 'Our crew builds the dome together.'
+			})
+		);
+		expect(posted.ok).toBe(true);
+		expect(posted.value.needs).toEqual(['own_room']);
+		const alone = parseRequestForm(form({ ...GOOD, about: 'project', needs: ['close_together'] }));
+		expect(alone.ok).toBe(false);
+		if (!alone.ok) expect(alone.errors.needs).toBe('Tick a room or a bed.');
+	});
+
 	it('tells what a request is about from its needs', () => {
-		expect(requestKinds(['quiet'])).toEqual({ access: true, project: false, groupOnly: false });
+		expect(requestKinds(['quiet'])).toEqual({
+			access: true,
+			project: false,
+			helper: false,
+			groupOnly: false
+		});
 		// unclear: treated as needing a special-needs spot
 		expect(requestKinds(['other']).access).toBe(true);
 		expect(requestKinds(['power']).access).toBe(true);
+		expect(requestKinds(['stable_light']).access).toBe(true);
+		// a request from before the paths may be both
 		expect(requestKinds(['own_room', 'lower_bunk'])).toEqual({
 			access: true,
 			project: true,
+			helper: false,
 			groupOnly: false
 		});
-		expect(requestKinds([])).toEqual({ access: false, project: false, groupOnly: true });
+		expect(requestKinds(['near_project'])).toMatchObject({ access: false, project: true });
+		// a helper never counts as needing a ♿ spot
+		expect(requestKinds(['helper'])).toMatchObject({ access: false, project: false, helper: true });
+		expect(requestKinds([])).toEqual({
+			access: false,
+			project: false,
+			helper: false,
+			groupOnly: true
+		});
 	});
 
 	it('lets a group member leave needs and text empty, but a ticked need wants a few words', () => {
@@ -182,9 +414,19 @@ describe('request form', () => {
 				group: { mode: 'join', code: 'ABCDEF23' }
 			}
 		});
-		const ticked = parseRequestForm(form({ ...joining, needs: ['quiet'] }));
+		const ticked = parseRequestForm(form({ ...joining, about: 'personal', needs: ['quiet'] }));
 		expect(ticked.ok).toBe(false);
 		if (!ticked.ok) expect(Object.keys(ticked.errors)).toEqual(['text']);
+		// a box ticked without a path still asks for one
+		const unchosen = parseRequestForm(
+			form({ ...joining, needs: ['quiet'], text: 'Quiet, please.' })
+		);
+		expect(unchosen.ok).toBe(false);
+		if (!unchosen.ok) expect(Object.keys(unchosen.errors)).toEqual(['about']);
+		// a path chosen, nothing ticked: still only part of the group
+		const pathOnly = parseRequestForm(form({ ...joining, about: 'project' }));
+		expect(pathOnly.ok).toBe(true);
+		expect(pathOnly.value.needs).toEqual([]);
 
 		// already in a group: the membership stays, whatever the form says
 		const kept = parseRequestForm(form({ consent: 'yes', groupMode: 'start' }), { inGroup: true });
@@ -199,7 +441,7 @@ describe('request form', () => {
 			form({ groupMode: 'start', groupName: 'Neon Owls', consent: 'yes' })
 		);
 		expect(starting.ok).toBe(false);
-		if (!starting.ok) expect(Object.keys(starting.errors).sort()).toEqual(['needs', 'text']);
+		if (!starting.ok) expect(Object.keys(starting.errors).sort()).toEqual(['about', 'text']);
 	});
 
 	it('asks for a group name of 2 to 40 characters when starting one', () => {
@@ -272,7 +514,7 @@ describe('request form', () => {
 		const parsed = parseRequestForm(form({ text: 'hi' }));
 		expect(parsed.ok).toBe(false);
 		if (parsed.ok) return;
-		expect(Object.keys(parsed.errors).sort()).toEqual(['consent', 'needs', 'text']);
+		expect(Object.keys(parsed.errors).sort()).toEqual(['about', 'consent', 'text']);
 		expect(parsed.errors.consent).toMatch(/consent/i);
 	});
 
@@ -299,7 +541,7 @@ describe('request form', () => {
 	});
 
 	it('offers each need once', () => {
-		const values = SPECIAL_NEEDS.map((need) => need.value);
+		const values = [...SPECIAL_NEEDS, ...RETIRED_NEEDS].map((need) => need.value);
 		expect(new Set(values).size).toBe(values.length);
 	});
 });
@@ -672,6 +914,19 @@ describe('special-needs requests', () => {
 		// 24 + 32 + 480 hex characters and two colons: within the field's 1000
 		expect(a.needs.length).toBe(538);
 		expect(await getGuestRequest(c.pb as any, c.order.id)).toMatchObject({ needs: [] });
+	});
+
+	it('pads even the longest list: every value of the form and the old ones together', async () => {
+		const every = [...SPECIAL_NEEDS, ...RETIRED_NEEDS].map((need) => need.value);
+		expect(JSON.stringify(every).length).toBeLessThanOrEqual(NEEDS_PADDED_LENGTH);
+		const other = c.pb.seed('orders', { order_number: 'HB-2002', customer_name: 'Bea' });
+		const base = { text: 'x'.repeat(10), burnerName: '', consent: true };
+		await saveRequest(c.pb as any, c.order as any, { ...base, needs: ['helper'] });
+		await saveRequest(c.pb as any, other as any, { ...base, needs: every as any });
+		const [a, b] = c.pb.rows('special_requests');
+		expect(a.needs.length).toBe(538);
+		expect(b.needs.length).toBe(538);
+		expect(JSON.parse(decrypt(b.needs))).toEqual(every);
 	});
 
 	it('tells admins which group a request is in', async () => {

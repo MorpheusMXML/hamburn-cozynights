@@ -9,11 +9,13 @@
  * The form asks what a guest NEEDS, never why: a diagnosis is health data the
  * crew doesn't need to find a fitting spot.
  *
- * The same form serves art projects, workshops, theme camps and crews (a room
- * of their own, spots close together), and guests can ask together as a
- * request group. There is no stored "kind" of request: it follows from the
- * ticked needs (requestKinds), which are stored encrypted, so outside the
- * admin area nothing tells an access request from a project request.
+ * The form offers three paths ("What is your request about?", RequestPath):
+ * a personal need because of a medical reason or a disability, the helper of
+ * someone with such a need, or an art project or a crew. Guests can ask
+ * together as a request group (a helper and the person they help, or the crew
+ * of a project). There is no stored "kind" of request: it follows from the
+ * stored needs (requestKinds, requestPath), which are stored encrypted, so
+ * outside the admin area nothing tells one kind of request from another.
  */
 import { PASS_ALPHABET } from './pass';
 
@@ -22,37 +24,77 @@ import { PASS_ALPHABET } from './pass';
  * any migration: a value can be added here without one.
  */
 
-/** Something a guest needs to sleep well: the ♿ spots are kept for these. */
+/** A personal need (a medical reason or a disability): the ♿ spots are kept for these. */
 export const ACCESS_NEEDS = [
 	{ value: 'lower_bunk', label: 'A lower bunk or a bed without a ladder' },
 	{ value: 'step_free', label: 'Step-free access or the ground floor' },
 	{ value: 'near_toilet', label: 'Close to a toilet' },
-	{ value: 'quiet', label: 'A quiet room' }
-] as const;
-
-/** An art project, a workshop, a theme camp or a crew: the crew matches these by hand. */
-export const PROJECT_NEEDS = [
-	{ value: 'own_room', label: 'A room just for our project or crew' },
-	{ value: 'close_together', label: 'Spots close to the people I come with' }
+	{ value: 'quiet', label: 'A quiet area' },
+	{ value: 'stable_light', label: 'Stable light conditions' }
 ] as const;
 
 /** What the guest wrote themselves; when unclear, it counts as needing a ♿ spot. */
 export const OTHER_NEED = { value: 'other', label: 'Something else' } as const;
 
-/** What the form offers, in this order. */
-export const SPECIAL_NEEDS = [...ACCESS_NEEDS, ...PROJECT_NEEDS, OTHER_NEED] as const;
+/** The checkboxes of a personal need, in this order. */
+export const PERSONAL_NEEDS = [...ACCESS_NEEDS, OTHER_NEED] as const;
 
-/** Off the form since v0.30.0 (Max 2026-10-04: every room has power); old requests still show it to admins. */
+/**
+ * Comes as the helper of someone with a personal need. No checkbox: choosing
+ * the helper path stores this alone. A helper asks in a group with the person
+ * they help, and never counts as needing a ♿ spot.
+ */
+export const HELPER_NEED = {
+	value: 'helper',
+	label: 'I come as the helper of someone with a personal need'
+} as const;
+
+/** An art project or a crew: the crew matches these by hand. */
+export const PROJECT_NEEDS = [
+	{ value: 'own_room', label: 'A room for our art project or crew' },
+	{ value: 'near_project', label: 'A bed close to our art piece or project' }
+] as const;
+
+/** Every value the form sends now, path by path. */
+export const SPECIAL_NEEDS = [...PERSONAL_NEEDS, HELPER_NEED, ...PROJECT_NEEDS] as const;
+
+/**
+ * Off the form, with the path they belonged to; old requests still show them
+ * to admins, and a posted one is dropped.
+ * - power: since v0.30.0 (Max 2026-10-04: every room has power);
+ * - close_together: since the three paths (Max 2026-10-11): a group says that
+ *   now.
+ */
 export const RETIRED_NEEDS = [
-	{ value: 'power', label: 'A power socket for a medical device (old form)' }
+	{
+		value: 'power',
+		label: 'A power socket for a medical device (old form)',
+		path: 'personal'
+	},
+	{
+		value: 'close_together',
+		label: 'Spots close to the people I come with (old form)',
+		path: 'project'
+	}
 ] as const;
 
 export type SpecialNeed =
 	(typeof SPECIAL_NEEDS)[number]['value'] | (typeof RETIRED_NEEDS)[number]['value'];
 export type RequestStatus = 'pending' | 'approved' | 'declined';
 
+/** What a request is about: the radio at the top of the form. */
+export type RequestPath = 'personal' | 'helper' | 'project';
+
+export const REQUEST_PATHS: readonly { value: RequestPath; label: string }[] = [
+	{ value: 'personal', label: 'A personal need: a medical reason or a disability' },
+	{ value: 'helper', label: HELPER_NEED.label },
+	{ value: 'project', label: 'An art project or a crew' }
+];
+
 export const REQUEST_TEXT_MIN = 5;
 export const REQUEST_TEXT_MAX = 500;
+/** An art project or a crew says in at least this many words why it needs the spot. */
+export const PROJECT_WORDS_MIN = 5;
 /** Same limit as a burner name chosen when booking. */
 export const BURNER_NAME_MAX = 80;
 
@@ -62,13 +104,22 @@ export const STATUS_LABELS: Record<RequestStatus, string> = {
 	declined: 'Declined'
 };
 
-const FORM_VALUES: readonly string[] = SPECIAL_NEEDS.map((need) => need.value);
-const RETIRED_VALUES: readonly string[] = RETIRED_NEEDS.map((need) => need.value);
-const ACCESS_VALUES: readonly string[] = [
-	...ACCESS_NEEDS.map((need) => need.value),
-	...RETIRED_VALUES
-];
-const PROJECT_VALUES: readonly string[] = PROJECT_NEEDS.map((need) => need.value);
+const values = (list: readonly { value: string }[]): readonly string[] =>
+	list.map((need) => need.value);
+const retired = (path: RequestPath): readonly string[] =>
+	values(RETIRED_NEEDS.filter((need) => need.path === path));
+
+const FORM_VALUES = values(SPECIAL_NEEDS);
+const RETIRED_VALUES = values(RETIRED_NEEDS);
+const ACCESS_VALUES: readonly string[] = [...values(ACCESS_NEEDS), ...retired('personal')];
+const PROJECT_VALUES: readonly string[] = [...values(PROJECT_NEEDS), ...retired('project')];
+
+/** What each path of the form sends: only these are kept when it is chosen. */
+const PATH_VALUES: Record<RequestPath, readonly string[]> = {
+	personal: values(PERSONAL_NEEDS),
+	helper: [HELPER_NEED.value],
+	project: values(PROJECT_NEEDS)
+};
 
 /** A need the form offers or once offered: stored requests keep the old values. */
 export function isSpecialNeed(value: unknown): value is SpecialNeed {
@@ -82,12 +133,12 @@ export function isFormNeed(value: unknown): value is SpecialNeed {
 	return typeof value === 'string' && FORM_VALUES.includes(value);
 }
 
-/** Something the guest needs to sleep well (the retired socket included). */
+/** Something the guest needs to sleep well (the retired socket included). Not "Something else", not a helper. */
 export function isAccessNeed(value: string): boolean {
 	return ACCESS_VALUES.includes(value);
 }
 
-/** What an art project, a workshop, a theme camp or a crew asks for. */
+/** What an art project or a crew asks for (the retired "close together" included). */
 export function isProjectNeed(value: string): boolean {
 	return PROJECT_VALUES.includes(value);
 }
@@ -96,24 +147,68 @@ export function needLabel(value: string): string {
 	return [...SPECIAL_NEEDS, ...RETIRED_NEEDS].find((need) => need.value === value)?.label ?? value;
 }
 
+export function isRequestPath(value: unknown): value is RequestPath {
+	return value === 'personal' || value === 'helper' || value === 'project';
+}
+
 /**
- * What a request is about, from its ticked needs:
- * - access: something the guest needs, or "Something else" (when unclear,
- *   treat it as needing a ♿ spot);
- * - project: a room or spots for a project or crew;
- * - groupOnly: nothing ticked, the guest asks only as part of their group.
- * Both access and project can be true.
+ * The path a stored request took, from its needs: the form preselects it
+ * when the guest changes the request. A helper is a helper; a personal need
+ * or "Something else" makes it personal, also in a request from before the
+ * paths that asked for a project as well, so changing it never silently
+ * drops what the guest needs to sleep well (the form says what the other
+ * path asked for: needsOutsidePath); a project's wish, or the retired "close
+ * together" alone, makes it a project. Null when nothing is stored: the
+ * guest asks only as part of their group.
+ */
+export function requestPath(needs: readonly string[]): RequestPath | null {
+	if (needs.includes(HELPER_NEED.value)) return 'helper';
+	if (needs.some((need) => isAccessNeed(need) || need === OTHER_NEED.value)) return 'personal';
+	if (needs.some(isProjectNeed)) return 'project';
+	return null;
+}
+
+/**
+ * The stored needs a path leaves out: values the form offers under another
+ * path (retired ones are dropped anyway). Only a request from before the
+ * paths, which could tick personal and project needs both, has any for the
+ * path it was preselected with; the form then tells the guest what the other
+ * part asked for, since saving keeps one path.
+ */
+export function needsOutsidePath(needs: readonly string[], path: RequestPath): SpecialNeed[] {
+	return needs.filter(
+		(need): need is SpecialNeed => isFormNeed(need) && !PATH_VALUES[path].includes(need)
+	);
+}
+
+/**
+ * What a request is about, from its stored needs:
+ * - access: a personal need, or "Something else" (when unclear, treat it as
+ *   needing a ♿ spot);
+ * - project: a room or a bed for an art project or a crew;
+ * - helper: the helper of someone with a personal need (never a ♿ spot of
+ *   their own: the crew places them close to the person they help);
+ * - groupOnly: nothing stored, the guest asks only as part of their group.
+ * The form keeps one path per request; requests from before the paths may
+ * have access and project both.
  */
 export function requestKinds(needs: readonly string[]): {
 	access: boolean;
 	project: boolean;
+	helper: boolean;
 	groupOnly: boolean;
 } {
 	return {
 		access: needs.some((need) => isAccessNeed(need) || need === OTHER_NEED.value),
 		project: needs.some(isProjectNeed),
+		helper: needs.includes(HELPER_NEED.value),
 		groupOnly: needs.length === 0
 	};
+}
+
+/** Words with at least one letter or digit: a dash or an emoji alone is no word. */
+export function countWords(text: string): number {
+	return text.split(/\s+/).filter((word) => /[\p{L}\p{N}]/u.test(word)).length;
 }
 
 /**
@@ -255,8 +350,16 @@ export interface RequestInput {
 	group: GroupChoice;
 }
 
+/**
+ * A refused field of the request form, written for the guest. `about` is the
+ * path radio, `needs` its checkboxes, `group` the group choice as a whole (a
+ * helper without a group).
+ */
 export type RequestFormErrors = Partial<
-	Record<'needs' | 'text' | 'consent' | 'burnerName' | 'groupName' | 'groupCode', string>
+	Record<
+		'about' | 'needs' | 'text' | 'consent' | 'burnerName' | 'group' | 'groupName' | 'groupCode',
+		string
+	>
 >;
 
 export type RequestFormResult =
@@ -289,38 +392,69 @@ export function cleanBurnerName(raw: unknown): string {
 	return (typeof raw === 'string' ? raw : '').replace(/\s+/g, ' ').trim();
 }
 
+/** Where a helper's request goes: always together with the person they help. */
+export const HELPER_NEEDS_GROUP =
+	'A helper asks together with the person they help: join their group, or start one and share the link.';
+
+/** The few words the crew needs, by path. */
+const TEXT_MISSING: Record<RequestPath | 'none', string> = {
+	personal: 'Tell the crew in a few words what you need.',
+	helper: 'Tell the crew in a few words what they should know.',
+	project: `Describe in at least ${PROJECT_WORDS_MIN} words what you need and why your art piece or project would be at risk without it.`,
+	none: 'Tell the crew in a few words what you need.'
+};
+
+/** The path radio as posted, or null for none (or something else). */
+export function readRequestPath(raw: unknown): RequestPath | null {
+	return isRequestPath(raw) ? raw : null;
+}
+
 /**
  * Reads and checks the request form. Never throws; messages are written for
  * the guest.
  * @param opts.inGroup the request is in a group already: the form shows no
  *   group choice then, and the membership stays (mode keep).
  *
- * Who asks only as part of a group (in one, or joining one) may leave the
- * needs empty; a ticked need still wants a few words. Starting a group follows
- * the normal rules: the crew needs to know what the group is about.
+ * The path (`about`) decides which needs count: only the ones it offers are
+ * kept, so a browser without JavaScript, which posts the boxes of every path,
+ * can't mix them; the helper path stores HELPER_NEED alone. Ticked boxes
+ * without a path are refused rather than guessed.
+ *
+ * Who asks only as part of a group (in one, or joining one) may choose no
+ * path and tick nothing, and then leave the text empty too; a ticked need
+ * still wants a few words. Starting a group follows the normal rules: the
+ * crew needs to know what the group is about. A helper always asks in a
+ * group: starting one, joining one, or in one already.
  */
 export function parseRequestForm(
 	form: FormData,
 	opts: { inGroup?: boolean } = {}
 ): RequestFormResult {
-	const needs = [...new Set(form.getAll('needs'))].filter(isFormNeed);
+	const about = readRequestPath(form.get('about'));
+	const posted = [...new Set(form.getAll('needs'))].filter(isFormNeed);
+	const needs: SpecialNeed[] =
+		about === 'helper'
+			? [HELPER_NEED.value]
+			: about
+				? posted.filter((need) => PATH_VALUES[about].includes(need))
+				: posted;
 	const text = cleanRequestText(form.get('text'));
 	const burnerName = cleanBurnerName(form.get('burnerName'));
 	const consent = form.get('consent') === 'yes';
 	const errors: RequestFormErrors = {};
 
-	const posted = form.get('groupMode');
+	const mode = form.get('groupMode');
 	let group: GroupChoice;
 	if (opts.inGroup) {
 		group = { mode: 'keep' };
-	} else if (posted === 'start') {
+	} else if (mode === 'start') {
 		// One line, like a burner name; others in the group see it.
 		const name = cleanBurnerName(cleanRequestText(form.get('groupName')));
 		group = { mode: 'start', name };
 		if (name.length < GROUP_NAME_MIN || name.length > GROUP_NAME_MAX) {
 			errors.groupName = `Give your group a name (${GROUP_NAME_MIN} to ${GROUP_NAME_MAX} characters).`;
 		}
-	} else if (posted === 'join') {
+	} else if (mode === 'join') {
 		const code = normalizeGroupCode(form.get('groupCode'));
 		group = { mode: 'join', code };
 		if (!code) errors.groupCode = 'A group code has 8 letters and digits, like ABCD-EF23.';
@@ -335,13 +469,28 @@ export function parseRequestForm(
 	const grouped = !!opts.inGroup || group.mode === 'join';
 	const value: RequestInput = { needs, text, burnerName, consent, group };
 
-	if (needs.length === 0 && !grouped) {
-		errors.needs = 'Tick at least one thing. If none fits, tick "Something else".';
+	if (!about) {
+		if (!grouped || needs.length > 0) errors.about = 'Choose what your request is about.';
+	} else if (needs.length === 0 && !grouped) {
+		errors.needs =
+			about === 'project'
+				? 'Tick a room or a bed.'
+				: 'Tick at least one thing. If none fits, tick "Something else".';
 	}
+	if (about === 'helper' && group.mode === 'none' && !errors.groupName) {
+		errors.group = HELPER_NEEDS_GROUP;
+	}
+
+	// In a group with nothing ticked, the text is optional; anything ticked wants a few words.
+	const textNeeded = !grouped || needs.length > 0;
 	if (text.length > REQUEST_TEXT_MAX) {
 		errors.text = `Please keep it short: at most ${REQUEST_TEXT_MAX} characters (now ${text.length}).`;
-	} else if (text.length < REQUEST_TEXT_MIN && (!grouped || needs.length > 0)) {
-		errors.text = 'Tell the crew in a few words what you need or what your project is.';
+	} else if (
+		textNeeded &&
+		(text.length < REQUEST_TEXT_MIN ||
+			(about === 'project' && countWords(text) < PROJECT_WORDS_MIN))
+	) {
+		errors.text = TEXT_MISSING[about ?? 'none'];
 	}
 	if (burnerName.length > BURNER_NAME_MAX) {
 		errors.burnerName = `A burner name can have at most ${BURNER_NAME_MAX} characters.`;
