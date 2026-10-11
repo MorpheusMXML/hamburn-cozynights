@@ -376,7 +376,7 @@ const MAX_CELL = 400;
 
 /**
  * The rows the browser read from the file (readRosterFile): only line, code,
- * e-mail and name. Checked for shape and size here; the content is checked by
+ * e-mail, name and the order status. Checked for shape and size here; the content is checked by
  * checkRosterRows like any file.
  */
 export function readRosterRows(payload: unknown): RosterRow[] {
@@ -401,7 +401,9 @@ export function readRosterRows(payload: unknown): RosterRow[] {
 		const r = (row ?? {}) as Record<string, unknown>;
 		const line =
 			Number.isInteger(r.line) && (r.line as number) > 0 ? (r.line as number) : index + 2;
-		return { line, code: text(r.code), email: text(r.email), name: text(r.name) };
+		const out: RosterRow = { line, code: text(r.code), email: text(r.email), name: text(r.name) };
+		if (typeof r.status === 'string') out.status = text(r.status);
+		return out;
 	});
 }
 
@@ -410,9 +412,9 @@ export async function previewRoster(
 	adminPb: TypedPocketBase,
 	rows: RosterRow[]
 ): Promise<RosterPreview> {
-	const { entries, problems } = checkRosterRows(rows);
+	const { entries, problems, unpaid } = checkRosterRows(rows);
 	const stored = await loadStoredTickets(adminPb);
-	const diff = diffRoster(entries, stored, problems);
+	const diff = diffRoster(entries, stored, problems, unpaid);
 	// The file doesn't have these codes: only show enough to recognise them. The
 	// id stays, so the review can tick one for removal.
 	diff.notInFile = diff.notInFile.map((ticket) => ({
@@ -465,9 +467,9 @@ export async function importRoster(
 	}
 	importRunning = true;
 	try {
-		const { entries, problems } = checkRosterRows(rows);
+		const { entries, problems, unpaid } = checkRosterRows(rows);
 		const stored = await loadStoredTickets(adminPb);
-		const diff = diffRoster(entries, stored, problems);
+		const diff = diffRoster(entries, stored, problems, unpaid);
 		const wanted = new Set(options.selected.map((key) => String(key).toLowerCase()));
 		const handOver = new Set(options.newHolders.map((key) => String(key).toLowerCase()));
 		const todo = diff.changes.filter((change) => wanted.has(change.key));
