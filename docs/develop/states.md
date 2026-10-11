@@ -34,6 +34,15 @@ outline, which runs from the one colour down to the other (25 Sep), mark the
 bed, not a state; the admin tile's outline is the ladder's turquoise at 35 %.
 `tests/layout` checks that the status line stays readable at 320 px.
 
+The same turquoise finds the guest's spot from further out (11 Oct). On the
+house page the room card that holds it wears `state-ring state-ring-strong` in
+`checked-in` with a *Your spot · B1* chip, and stays bright when the room is
+full. On the map, `getFullTree({ orderId })` sets `mine` on that one house
+(from the beds it reads anyway, no extra request); its pin sends out two
+turquoise rings and its name floats in a breathing frame (`MapHouseMarker`,
+transform and opacity only, still with reduced motion), and the wish filter
+never fades it.
+
 Put `data-state="…"` on an element and it gets `--state` and `--state-soft`.
 Add `class="state-ring"` and it gets a border in that colour that breathes:
 

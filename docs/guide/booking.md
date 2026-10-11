@@ -36,7 +36,7 @@ flowchart LR
 
 2. **Find a house on the map**
 
-   Every pin is a house. **Teal** pins still have free spots, **red** pins have none left that you could book. Click a pin to open the house.
+   Every pin is a house. **Teal** pins still have free spots, **red** pins have none left that you could book. Click a pin to open the house. Once you hold a spot, your house is easy to find: turquoise rings keep rising from its pin and its name floats gently in a glowing turquoise frame (it stands still, just framed, when your device asks for reduced motion).
 
    ![Camp map during Live Booking](../assets/screenshots/guest-map-live.webp)
 
@@ -44,7 +44,7 @@ flowchart LR
 
 3. **Choose a room**
 
-   The house page lists its rooms with the number of free spots. Full rooms are marked **Full**.
+   The house page lists its rooms with the number of free spots. Full rooms are marked **Full**. The room that holds your spot lights up in turquoise, its frame breathes, and it says **Your spot · B1** with your spot's name.
 
    ![House page with room cards](../assets/screenshots/guest-house.webp)
 
