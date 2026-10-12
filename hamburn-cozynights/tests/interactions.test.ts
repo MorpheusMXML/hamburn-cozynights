@@ -603,7 +603,9 @@ describe('Admin Management Actions', () => {
 	});
 
 	it('should delete a bed in staging mode', async () => {
-		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: false }); // Staging mode
+		mockPb.getOne
+			.mockResolvedValueOnce({ is_booking_active: false }) // Staging mode
+			.mockResolvedValueOnce({ id: 'bed1', order: '' }); // the spot holds no booking
 
 		const formData = new FormData();
 		formData.append('id', 'bed1');

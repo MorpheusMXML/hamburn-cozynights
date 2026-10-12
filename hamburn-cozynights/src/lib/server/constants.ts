@@ -3,3 +3,10 @@
 // fresh PocketBase instance, permanently blocking the singleton app_settings
 // record from ever being created.
 export const APP_SETTINGS_ID = 'appsettings0123';
+
+/**
+ * The lock (withLock, $lib/server/booking) every write of the app to
+ * app_settings runs under: PocketBase saves the whole record, so two writes
+ * at once would undo each other. Taken last when combined with other locks.
+ */
+export const APP_SETTINGS_LOCK = 'app_settings';

@@ -63,6 +63,10 @@ Page data is trimmed on the server to what the page shows. A guest's room page, 
 
 The app server's connection signs in as a service account and checks its token with PocketBase every five minutes. If PocketBase doesn't answer that check (a restart, a hiccup under load), the token is kept and checked again ten seconds later, so the app works again the moment PocketBase does. Only a token PocketBase turns down is dropped and replaced by a fresh sign-in. When the layout can't be read, the map says *The map could not be loaded right now. Please try again in a minute.*, never an empty camp that guests would read as sold out.
 
+Every read the app sends to PocketBase gives up after 10 seconds, the service account's sign-in and token check after 5 (`src/lib/server/pocketbase.ts`). Writes never do: a booking or a release runs to the end. The same goes for admins: only PocketBase turning a session down ends it; when it doesn't answer, the admin stays signed in and only that request runs without admin rights. When the booking phase can't be read, the guest pages say the booking system is not reachable (for 30 seconds they show the last phase they read), guest actions change nothing and say so, and what unlocks something destructive — clearing the bookings, a template import, deleting a house, freeing a spot — refuses.
+
+PocketBase saves the whole record on every update, so two writes of one record at the same moment would undo each other. Every write of a spot, a ticket or `app_settings` in the app therefore runs in that record's queue (`withLock` in `src/lib/server/booking.ts`: `bed:<id>`, `order:<id>`, `app_settings`), the queues guest bookings use too. Several are always taken in the same order — request group, ticket, spot (several spots sorted by id), `app_settings` last — so they never wait on each other in a circle. The queues live in the app's memory: they cover one app instance, not PocketBase's own hooks.
+
 ## Data model
 
 ```mermaid

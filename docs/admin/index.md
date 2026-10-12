@@ -53,9 +53,13 @@ Below the quick views, the **🎟 BOOKING WINDOW** panel holds everything about 
 | Let it run by itself | Flip the switch to **Timer armed** | admins |
 | Hold it | Flip the switch back (paused, the times stay) | admins |
 | Open, close or go back to Staging now | <kbd>⚡ Switch right now</kbd> | superusers only |
-| Release every guest booking | The switch back to Staging asks: <kbd>Switch & release …</kbd> (every guest with an address or Telegram gets a *spot was released* message, unless *Don't notify the guests* is ticked — it is, once booking has closed) or <kbd>Switch & keep the bookings</kbd>; <kbd>🧨 Clear all bookings</kbd> (same place, Staging only, greyed out while no guest booking is left) does it later | superusers only |
+| Release every guest booking | The switch back to Staging asks: <kbd>Switch & release …</kbd> (every guest with an address or Telegram gets a *spot was released* message, unless *Don't notify the guests* is ticked — it is, once booking has closed) or <kbd>Switch & keep the bookings</kbd>; <kbd>🧨 Clear all bookings</kbd> (same place, Staging only, greyed out while no guest booking is left) does it later. Both make a backup of the database first (`pre-release-….zip`, see [Backups before a release](#backups-before-a-release)) | superusers only |
 
 Times are Europe/Berlin (CET/CEST). The rules and what each switch does to the timer are in [The booking window](../guide/phases#the-booking-window).
+
+### Backups before a release
+
+<kbd>Switch & release …</kbd> and <kbd>🧨 Clear all bookings</kbd> first make a backup of the whole database, named `pre-release-<date>-<time>.zip`; the crew chat names it with the release. A superuser can restore it in the PocketBase dashboard under Settings → Backups. The ten newest of these backups are kept, older ones are removed (the template import keeps its own ten, `pre-import-….zip`). If the backup can't be made, nothing happens — neither the switch nor a single release — and the dialog says *The safety backup could not be created …*: try again in a minute, or switch and keep the bookings. If the booking phase can't be read at that moment (PocketBase not answering), Clear all bookings refuses too: *The booking phase could not be read, so nothing was changed.*
 
 Below it, the row **♿ Special-needs requests: OPEN** (or **CLOSED**, with *· n waiting for a decision* while requests wait) opens or closes requests for guests with <kbd>Open requests</kbd> / <kbd>Close requests</kbd>, independent of the phase. <kbd>Review requests →</kbd> leads to the requests. See [Special-needs requests](./special-needs#_2-open-requests).
 

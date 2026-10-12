@@ -23,8 +23,8 @@ import type {
 } from '$lib/pocketbase-types';
 import type { AdminSession } from '$lib/server/admin-auth';
 import { logAdminEvent, logGuestEvent } from '$lib/server/admin-events';
-import { BookingService, randomBurnerName } from '$lib/server/booking';
-import { APP_SETTINGS_ID } from '$lib/server/constants';
+import { BookingService, randomBurnerName, withLock } from '$lib/server/booking';
+import { APP_SETTINGS_ID, APP_SETTINGS_LOCK } from '$lib/server/constants';
 import { holderName } from '$lib/tickets';
 import { decrypt, encrypt } from '$lib/server/crypto';
 import { compareNatural } from '$lib/template';
@@ -618,9 +618,30 @@ export async function releaseSpot(
 }
 
 /**
+ * Forgets spots on the requests the crew booked them for, once a superuser
+ * released them some other way (freed on the room page): the requests stay
+ * approved and show "No spot yet", like after Release spot. A deleted spot
+ * needs nothing: PocketBase empties the relation itself.
+ */
+export async function forgetCrewSpots(adminPb: TypedPocketBase, bedIds: string[]): Promise<void> {
+	for (const bedId of bedIds) {
+		const requests = await adminPb.collection('special_requests').getFullList({
+			filter: adminPb.filter('bed = {:bedId}', { bedId }),
+			fields: 'id'
+		});
+		for (const request of requests) {
+			await adminPb.collection('special_requests').update(request.id, { bed: '' });
+		}
+	}
+}
+
+/**
  * Opens or closes requests for guests. Uses the admin's own connection, so
- * PocketBase records who did it (pb_hooks/cozy_notify.pb.js).
+ * PocketBase records who did it (pb_hooks/cozy_notify.pb.js). In the
+ * settings' queue: another switch saved at the same moment stays saved.
  */
 export async function setRequestsOpen(pb: TypedPocketBase, open: boolean): Promise<void> {
-	await pb.collection('app_settings').update(APP_SETTINGS_ID, { special_requests_open: open });
+	await withLock(APP_SETTINGS_LOCK, () =>
+		pb.collection('app_settings').update(APP_SETTINGS_ID, { special_requests_open: open })
+	);
 }

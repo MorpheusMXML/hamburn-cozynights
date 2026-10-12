@@ -13,7 +13,13 @@
 	import { page } from '$app/state';
 	import { createLivePoll } from '$lib/live-stats-poll';
 	import { houseState, houseStateLabel } from '$lib/occupancy';
-	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
+	import { alertDialog, confirmWithOption, confirmDialog, toast } from '$lib/dialogs';
+	import {
+		RELEASE_CREW_SPOTS,
+		crewSpotsCheckbox,
+		heldIn,
+		superuserOnlyNote
+	} from '$lib/held-spots';
 	import { actionErrorMessage, submitAction } from '$lib/admin-actions';
 	import { formatBerlin } from '$lib/booking-phase';
 	import { layoutLock, lockAttrs, showLockHint } from '$lib/layout-lock';
@@ -234,21 +240,51 @@
 		showEditorOnMap();
 	}
 
-	function confirmDeleteHouse(house: { name: string; totalBeds?: number; occupiedBeds?: number }) {
+	/**
+	 * Asks before a house goes, and builds the form to send — or null when
+	 * nothing should be sent. Guest bookings in it ($lib/held-spots): a regular
+	 * admin is told that this is for superusers; a spot the crew booked for a
+	 * special-needs request only goes when the superuser ticks it.
+	 */
+	async function confirmDeleteHouse(house: {
+		id: string;
+		name: string;
+		totalBeds?: number;
+		occupiedBeds?: number;
+	}): Promise<FormData | null> {
 		const booked = house.occupiedBeds || 0;
-		return confirmDialog(
+		const held = heldIn(bookingRows.filter((row) => row.houseId === house.id));
+		if (held.guest > 0 && !isSuperuser) {
+			await alertDialog(superuserOnlyNote(held.guest), {
+				title: 'House not deleted',
+				tone: 'warning'
+			});
+			return null;
+		}
+		const message =
 			`"${house.name}" is removed from the map together with all its rooms and spots.` +
-				(booked > 0
-					? ` ${booked} booked ${booked === 1 ? 'spot is' : 'spots are'} released first; those guests have to book again.`
-					: '') +
-				' Ticket codes stay valid. This cannot be undone.',
-			{
-				title: 'Delete this house?',
-				tone: 'danger',
-				confirmLabel: 'Delete house',
-				cancelLabel: 'Keep it'
-			}
-		);
+			(booked > 0
+				? ` ${booked} booked ${booked === 1 ? 'spot is' : 'spots are'} released first; those guests have to book again.`
+				: '') +
+			' Ticket codes stay valid. This cannot be undone.';
+		const options = {
+			title: 'Delete this house?',
+			tone: 'danger' as const,
+			confirmLabel: 'Delete house',
+			cancelLabel: 'Keep it'
+		};
+		const formData = new FormData();
+		formData.append('id', house.id);
+		if (held.crew > 0) {
+			const { confirmed, checked } = await confirmWithOption(message, {
+				...options,
+				checkbox: crewSpotsCheckbox(held.crew)
+			});
+			if (!confirmed) return null;
+			if (checked) formData.append(RELEASE_CREW_SPOTS, '1');
+			return formData;
+		}
+		return (await confirmDialog(message, options)) ? formData : null;
 	}
 
 	function showDeleteFailed(result: ActionResult) {
@@ -264,10 +300,8 @@
 			return;
 		}
 		if (!house || !house.id) return;
-		if (!(await confirmDeleteHouse(house))) return;
-
-		const formData = new FormData();
-		formData.append('id', house.id);
+		const formData = await confirmDeleteHouse(house);
+		if (!formData) return;
 
 		const result = await submitAction('/admin?/deleteHouse', formData);
 
@@ -364,13 +398,11 @@
 		}
 		const house = houses.find((h) => h.id === selectedHouseId);
 		if (!house) return;
-		if (!(await confirmDeleteHouse(house))) return;
+		const formData = await confirmDeleteHouse(house);
+		if (!formData) return;
 
 		const sidebar = document.querySelector('.details-sidebar');
 		if (sidebar) sidebar.classList.add('disintegrating');
-
-		const formData = new FormData();
-		formData.append('id', house.id);
 
 		await new Promise((resolve) => setTimeout(resolve, 500));
 

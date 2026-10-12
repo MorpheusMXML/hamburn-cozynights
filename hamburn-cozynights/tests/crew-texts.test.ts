@@ -84,6 +84,56 @@ describe('crew chat texts', () => {
 	});
 });
 
+describe('crew chat texts about bookings ended on the layout pages', () => {
+	it('count what a deletion or a freed spot released, never which room, spot or guest', () => {
+		expect(
+			eventText(
+				event('room_deleted', 'max@mauersegler.art', 'r1abc', { released: 2, crewReleased: 1 })
+			)
+		).toBe(
+			'🚪 Room deleted by max@mauersegler.art: 2 booking(s) released, 1 of them a special-needs spot the crew booked'
+		);
+		expect(
+			eventText(
+				event('spot_deleted', 'max@mauersegler.art', 'b1abc', { released: 1, crewReleased: 0 })
+			)
+		).toBe('🛏️ Spot deleted by max@mauersegler.art: 1 booking(s) released');
+		expect(
+			eventText(
+				event('spot_freed', 'max@mauersegler.art', 'b1abc', { released: 1, crewReleased: 1 })
+			)
+		).toBe(
+			'🛏️ Spot freed by max@mauersegler.art: 1 booking(s) released, 1 of them a special-needs spot the crew booked'
+		);
+		expect(
+			eventText(
+				event('house_deleted', 'max@mauersegler.art', 'Neon Cave', {
+					released: 3,
+					crewReleased: 2,
+					rooms: 2
+				})
+			)
+		).toBe(
+			'🏚️ House "Neon Cave" deleted by max@mauersegler.art: 3 booking(s) released, 2 of them special-needs spots the crew booked'
+		);
+	});
+
+	it('name the backup made before all bookings were cleared', () => {
+		expect(
+			eventText(
+				event('bookings_cleared', 'max@mauersegler.art', '', {
+					released: 4,
+					kept: 1,
+					reason: 'staging',
+					backup: 'pre-release-20261012-180000-000.zip'
+				})
+			)
+		).toBe(
+			'🧨 All bookings cleared by max@mauersegler.art: 4 spot(s) released, tickets kept; 1 special-needs spot(s) kept (back to Staging Mode); backup pre-release-20261012-180000-000.zip'
+		);
+	});
+});
+
 describe('crew chat texts about message texts', () => {
 	it('say who changed or reset which text', () => {
 		expect(

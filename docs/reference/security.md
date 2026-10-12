@@ -93,7 +93,7 @@ Guests can ask each other to swap spots during Live Booking. Details: [Swap requ
 - **Weekly Google sign-in.** However active a session is, after 7 days the app asks Google again. A suspended Workspace account or newly required 2-Step Verification reaches every admin within a week.
 - **2-Step Verification is Google's job.** It is enforced for the Workspace in the Google Admin console; CozyNights deliberately adds no weaker second factor of its own.
 - **Crew alerts.** Access requests, approvals, role changes, removals, admin sign-ins, phase switches and bulk actions are logged (`admin_events`) and posted to the crew's Telegram group, see [Notifications](../admin/notifications#crew-group).
-- **Least privilege.** Clearing all bookings and importing templates are superuser-only, and no admin action ever deletes the ticket list.
+- **Least privilege.** Clearing all bookings and importing templates are superuser-only, and no admin action ever deletes the ticket list. Deleting a house, room or spot that holds guest bookings, or freeing a guest's spot, is superuser-only too, and a spot the crew booked for a special-needs request only goes when the superuser confirms it explicitly.
 
 ## Database
 

@@ -175,6 +175,7 @@ Messages say what the crew decided, never what the guest wrote. A project reques
 - **A spot the crew booked is fixed.** The guest can give it a new burner name during Live Booking, but can't move or release it themselves: they ask the crew. You move or release it here. A spot the guest booked themselves stays theirs to change, also when the request is approved.
 - **The burner name from the request** is used for the spot you book, unless the ticket already has one.
 - **Going back to Staging Mode (and Clear all bookings) keeps the spots the crew booked**, with their burner names; every other booking is released. The dialog says how many.
+- **Deleting a house, room or spot, or 🔄 FREE on the room page, never takes a spot the crew booked on the quiet**: only a superuser who ticks *Release the special-needs spot the crew booked too* in the dialog does it, and the request stays approved with *No spot yet*. See [Deleting or freeing booked spots](./camp-layout#booked-spots).
 - **A template import keeps the spots the crew booked**, like every other booking, as long as the spot stays in the layout (also when its house moves or its room is renamed). Only spots you choose to remove release their booking, crew-booked ones too: the guest gets a *spot was released* e-mail and the burner name is forgotten. Those requests stay approved and show *No spot yet*: book a spot again for them after the import. The confirmation dialog says how many bookings go before anything happens (see [Layout templates](./templates#applying)).
 
 ## Privacy

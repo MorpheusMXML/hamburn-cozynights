@@ -6,6 +6,11 @@ export type AdminEventAction =
 	| 'bookings_cleared'
 	| 'template_imported'
 	| 'house_deleted'
+	// Guest bookings ended by deleting a room or spot, or by freeing a spot on
+	// the room page (superusers only, $lib/server/held-spots): counts only.
+	| 'room_deleted'
+	| 'spot_deleted'
+	| 'spot_freed'
 	| 'ticket_updated'
 	| 'tickets_imported'
 	| 'special_request_approved'

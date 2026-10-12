@@ -28,8 +28,8 @@ import type {
 	SwapRequestsResponse,
 	TypedPocketBase
 } from '$lib/pocketbase-types';
-import { APP_SETTINGS_ID } from '$lib/server/constants';
-import { BookingService, isBedBookable, SwapRefusedError } from '$lib/server/booking';
+import { APP_SETTINGS_ID, APP_SETTINGS_LOCK } from '$lib/server/constants';
+import { BookingService, isBedBookable, SwapRefusedError, withLock } from '$lib/server/booking';
 import { decrypt, encrypt } from '$lib/server/crypto';
 import { bedRow, burnerNameOf, roomLabel } from '$lib/server/pass';
 import { isSpotFixed } from '$lib/server/special-requests';
@@ -538,13 +538,19 @@ export async function roomSwaps(
 	return result;
 }
 
-/** The guest pauses (or resumes) swap requests to them. Open ones can still be answered. */
+/**
+ * The guest pauses (or resumes) swap requests to them. Open ones can still be
+ * answered. In the ticket's queue (withLock): a booking or a crew change of
+ * the ticket at the same moment can't undo the switch, nor the switch them.
+ */
 export async function setSwapPause(
 	adminPb: TypedPocketBase,
 	order: Pick<OrdersResponse, 'id'>,
 	paused: boolean
 ): Promise<void> {
-	await adminPb.collection('orders').update(order.id, { no_swap_requests: paused });
+	await withLock(`order:${order.id}`, () =>
+		adminPb.collection('orders').update(order.id, { no_swap_requests: paused })
+	);
 }
 
 /**
@@ -578,7 +584,10 @@ export async function forgetSwaps(adminPb: TypedPocketBase, orderId: string): Pr
  * crew chat (pb_hooks/cozy_notify.pb.js).
  */
 export async function setSwapsOff(pb: TypedPocketBase, off: boolean): Promise<void> {
-	await pb.collection('app_settings').update(APP_SETTINGS_ID, { swaps_off: off });
+	// In the settings' queue: another switch saved at the same moment stays saved.
+	await withLock(APP_SETTINGS_LOCK, () =>
+		pb.collection('app_settings').update(APP_SETTINGS_ID, { swaps_off: off })
+	);
 }
 
 /** Open requests in the whole camp and swaps done, for the Control Center. */

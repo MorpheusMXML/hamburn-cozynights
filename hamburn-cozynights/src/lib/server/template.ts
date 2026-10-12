@@ -6,6 +6,7 @@
  * (docs/admin/templates.md).
  */
 import type { TypedPocketBase } from '$lib/pocketbase-types';
+import { withLock } from '$lib/server/booking';
 import { buildTemplate, type LayoutTemplate } from '$lib/template';
 import {
 	changeKeys,
@@ -23,8 +24,14 @@ export type { ApplyOutcome };
 
 type LevelCounts = ApplyOutcome['created'];
 
-const BACKUP_PREFIX = 'pre-import-';
-/** Older pre-import backups are removed, so repeated imports can't fill the disk. */
+/** The safety backups the app makes itself, by what they come before. */
+export const BACKUP_PREFIX = {
+	/** a template import */
+	import: 'pre-import-',
+	/** releasing the guests' bookings: Clear all bookings, the switch back to Staging */
+	release: 'pre-release-'
+} as const;
+/** Older backups of each kind are removed, so repeated imports can't fill the disk. */
 const BACKUPS_KEPT = 10;
 
 /** An import that did not happen. `message` is written for the admin. */
@@ -100,21 +107,32 @@ export function describeError(err: unknown): string {
 
 const isNotFound = (err: unknown) => (err as { status?: number })?.status === 404;
 
-async function createBackup(pb: TypedPocketBase): Promise<string> {
+/**
+ * A backup of the whole database (PocketBase's ZIP in pb_data/backups), made
+ * before the app changes a lot at once; a superuser restores it in the
+ * PocketBase dashboard. The ten newest of each kind are kept.
+ * Needs the service account (backups are for superusers).
+ * @returns the backup's name, e.g. pre-release-20261012-174501-123.zip
+ * @throws when PocketBase couldn't make it: then don't go on either
+ */
+export async function createSafetyBackup(
+	pb: TypedPocketBase,
+	prefix: (typeof BACKUP_PREFIX)[keyof typeof BACKUP_PREFIX]
+): Promise<string> {
 	// PocketBase accepts only [a-z0-9_-] in backup names.
 	// Down to the millisecond: a name that exists already is refused.
 	const stamp = new Date().toISOString().slice(0, 23).replace(/[-:]/g, '').replace(/[T.]/g, '-');
-	const name = `${BACKUP_PREFIX}${stamp}.zip`;
+	const name = `${prefix}${stamp}.zip`;
 	await pb.backups.create(name);
 
 	try {
 		const old = (await pb.backups.getFullList())
-			.filter((backup) => backup.key.startsWith(BACKUP_PREFIX))
+			.filter((backup) => backup.key.startsWith(prefix))
 			.sort((a, b) => b.key.localeCompare(a.key))
 			.slice(BACKUPS_KEPT);
 		for (const backup of old) await pb.backups.delete(backup.key);
 	} catch (err) {
-		console.error('[Template import] Could not tidy up old pre-import backups:', err);
+		console.error(`[Backup] Could not tidy up old ${prefix} backups:`, err);
 	}
 	return name;
 }
@@ -235,7 +253,9 @@ async function syncBunks(
 				if (wanted && !partner) continue;
 				const id = spot.id;
 				try {
-					await pb.collection('beds').update(id, { bunk_partner: partner?.id ?? '' });
+					await withLock(`bed:${id}`, () =>
+						pb.collection('beds').update(id, { bunk_partner: partner?.id ?? '' })
+					);
 					writes++;
 				} catch (err) {
 					if (isNotFound(err)) continue;
@@ -303,7 +323,7 @@ export async function applyTemplate(
 
 		if (!options.skipBackup) {
 			try {
-				outcome.backup = await createBackup(pb);
+				outcome.backup = await createSafetyBackup(pb, BACKUP_PREFIX.import);
 			} catch (err) {
 				console.error('[Template import] Backup failed:', err);
 				throw new TemplateImportError(
@@ -346,9 +366,11 @@ export async function applyTemplate(
 			);
 			if (done) outcome.updated.rooms++;
 		}
+		// Spots are written in their queue (withLock): a booking of the same spot
+		// at the same moment can't undo the change, nor the change the booking.
 		for (const spot of plan.updateSpots) {
 			const done = await attempt(`Changing spot ${spot.label}`, () =>
-				pb.collection('beds').update(spot.id, spot.fields)
+				withLock(`bed:${spot.id}`, () => pb.collection('beds').update(spot.id, spot.fields))
 			);
 			if (done) outcome.updated.spots++;
 		}
@@ -357,7 +379,7 @@ export async function applyTemplate(
 		const released = new Set<string>();
 		for (const spot of plan.removeSpots) {
 			const done = await attempt(`Removing spot ${spot.label}`, () =>
-				pb.collection('beds').delete(spot.id)
+				withLock(`bed:${spot.id}`, () => pb.collection('beds').delete(spot.id))
 			);
 			if (!done) continue;
 			outcome.removed.spots++;
@@ -396,7 +418,9 @@ export async function applyTemplate(
 		// The names chosen for released bookings go with them; the tickets stay.
 		for (const order of released) {
 			try {
-				await pb.collection('orders').update(order, { burner_name: '' });
+				await withLock(`order:${order}`, () =>
+					pb.collection('orders').update(order, { burner_name: '' })
+				);
 			} catch (err) {
 				if (isNotFound(err)) continue;
 				outcome.namesCleared = false;

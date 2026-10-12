@@ -445,6 +445,18 @@ function requestStatusNote(status) {
 	}
 }
 
+/** ", 1 of them a special-needs spot the crew booked", for releases on the layout pages. */
+function crewReleasedNote(d) {
+	const n = d.crewReleased || 0;
+	if (!n) return '';
+	return (
+		', ' +
+		n +
+		(n === 1 ? ' of them a special-needs spot' : ' of them special-needs spots') +
+		' the crew booked'
+	);
+}
+
 /** The crew chat text of an admin_events record. cfg (optional) adds links. */
 function eventText(ev, cfg) {
 	const action = ev.getString('action');
@@ -526,7 +538,8 @@ function eventText(ev, cfg) {
 				' spot(s) released, tickets kept' +
 				(d.kept ? '; ' + d.kept + ' special-needs spot(s) kept' : '') +
 				(d.reason === 'staging' ? ' (back to Staging Mode)' : '') +
-				(d.stopped ? ' — STOPPED, ' + (d.stopped - (d.released || 0)) + ' still booked' : '')
+				(d.stopped ? ' — STOPPED, ' + (d.stopped - (d.released || 0)) + ' still booked' : '') +
+				(d.backup ? '; backup ' + d.backup : '')
 			);
 		// Special-needs requests: never the guest's name or what they wrote.
 		// Request groups the same: never a name, a group's name, its code, a
@@ -678,7 +691,37 @@ function eventText(ev, cfg) {
 				by +
 				': ' +
 				(d.released || 0) +
-				' booking(s) released'
+				' booking(s) released' +
+				crewReleasedNote(d)
+			);
+		// Guest bookings ended on the room page or the house page (superusers
+		// only): counts only, never the room, the spot or who held it.
+		case 'room_deleted':
+			return (
+				'🚪 Room deleted' +
+				by +
+				': ' +
+				(d.released || 0) +
+				' booking(s) released' +
+				crewReleasedNote(d)
+			);
+		case 'spot_deleted':
+			return (
+				'🛏️ Spot deleted' +
+				by +
+				': ' +
+				(d.released || 0) +
+				' booking(s) released' +
+				crewReleasedNote(d)
+			);
+		case 'spot_freed':
+			return (
+				'🛏️ Spot freed' +
+				by +
+				': ' +
+				(d.released || 0) +
+				' booking(s) released' +
+				crewReleasedNote(d)
 			);
 		case 'guest_notice_failed':
 			return (

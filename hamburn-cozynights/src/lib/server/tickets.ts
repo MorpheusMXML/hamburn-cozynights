@@ -20,7 +20,7 @@ import type {
 	TypedPocketBase
 } from '$lib/pocketbase-types';
 import { createLookupHash, decrypt } from '$lib/server/crypto';
-import { BookingService } from '$lib/server/booking';
+import { BookingService, withLock } from '$lib/server/booking';
 import { disconnectTelegram } from '$lib/server/notifications';
 import { checkInOf } from '$lib/server/pass';
 import { forgetRequest } from '$lib/server/special-requests';
@@ -282,44 +282,56 @@ export async function changeTicket(
 	const email = readEmailInput(input.email);
 	const typedName = readNameInput(input.name);
 
-	let order: OrdersResponse;
-	try {
-		order = await adminPb.collection('orders').getOne<OrdersResponse>(id);
-	} catch (err) {
-		if (isNotFound(err)) {
-			throw new TicketError('This ticket no longer exists. Search again.', 404);
+	const readTicket = async () => {
+		try {
+			return await adminPb.collection('orders').getOne<OrdersResponse>(id);
+		} catch (err) {
+			if (isNotFound(err)) {
+				throw new TicketError('This ticket no longer exists. Search again.', 404);
+			}
+			throw err;
 		}
-		throw err;
-	}
-
-	const code = order.order_number ?? '';
-	const name = typedName || defaultTicketName(code);
-	const emailBefore = order.email ?? '';
-	const emailChanged = email !== emailBefore.toLowerCase();
-	const nameChanged = name !== order.customer_name;
-
-	const data: Record<string, string | boolean> = {};
-	if (emailChanged) data.email = email;
-	if (nameChanged) data.customer_name = name;
-	if (input.newHolder) Object.assign(data, newHolderFields());
+	};
+	const before = await readTicket();
 
 	let requestRemoved = false;
 	let checkInReset = false;
-	if (Object.keys(data).length > 0) {
-		if (input.newHolder) {
-			// Telegram first: no update about the new holder may reach the old chat.
-			await disconnectTelegram(adminPb, order.id);
-			// Then the old holder's special-needs request (their health data):
-			// before the address changes, so the new holder is never told its
-			// status. A spot the crew booked stays, as an ordinary booking.
-			requestRemoved = await forgetRequest(adminPb, order.id);
-			// The old holder's swap requests, with what they wrote.
-			await forgetSwaps(adminPb, order.id);
-			// The old holder's check-in: the new holder hasn't arrived yet.
-			checkInReset = await new BookingService(adminPb).resetCheckIn(order.id);
-		}
-		order = await adminPb.collection('orders').update<OrdersResponse>(order.id, data);
+	if (input.newHolder) {
+		// Telegram first: no update about the new holder may reach the old chat.
+		await disconnectTelegram(adminPb, before.id);
+		// Then the old holder's special-needs request (their health data):
+		// before the address changes, so the new holder is never told its
+		// status. A spot the crew booked stays, as an ordinary booking.
+		requestRemoved = await forgetRequest(adminPb, before.id);
+		// The old holder's swap requests, with what they wrote.
+		await forgetSwaps(adminPb, before.id);
+		// The old holder's check-in: the new holder hasn't arrived yet. Before
+		// the ticket's own write below, never inside it: this takes the
+		// ticket's queue itself.
+		checkInReset = await new BookingService(adminPb).resetCheckIn(before.id);
 	}
+
+	// Read, compared and written in the ticket's queue (withLock): a booking
+	// or a guest's switch of the same ticket at the same moment can't undo the
+	// change, nor the change them (PocketBase saves the whole record).
+	const changed = await withLock(`order:${before.id}`, async () => {
+		let order = await readTicket();
+		const code = order.order_number ?? '';
+		const name = typedName || defaultTicketName(code);
+		const emailBefore = order.email ?? '';
+		const emailChanged = email !== emailBefore.toLowerCase();
+		const nameChanged = name !== order.customer_name;
+
+		const data: Record<string, string | boolean> = {};
+		if (emailChanged) data.email = email;
+		if (nameChanged) data.customer_name = name;
+		if (input.newHolder) Object.assign(data, newHolderFields());
+		if (Object.keys(data).length > 0) {
+			order = await adminPb.collection('orders').update<OrdersResponse>(order.id, data);
+		}
+		return { order, code, emailBefore, emailChanged, nameChanged };
+	});
+	const { order, code, emailBefore, emailChanged, nameChanged } = changed;
 
 	// Masked like a search by address: the answer to a change must not hand out
 	// the code of a ticket the admin only found by its address. The page keeps
@@ -535,9 +547,11 @@ export async function importRoster(
 					// address changes (see changeTicket)
 					requestRemoved = await forgetRequest(adminPb, id);
 					await forgetSwaps(adminPb, id);
+					// takes the ticket's queue itself: before the write below, never inside it
 					await new BookingService(adminPb).resetCheckIn(id);
 				}
-				await adminPb.collection('orders').update(id, data);
+				// In the ticket's queue, like every write of a ticket.
+				await withLock(`order:${id}`, () => adminPb.collection('orders').update(id, data));
 				outcome.updated++;
 				if (newHolder) {
 					outcome.newHolders++;
@@ -556,7 +570,7 @@ export async function importRoster(
 
 		await inPool(cancelled, IMPORT_CONCURRENCY, async (ticket) => {
 			try {
-				await adminPb.collection('orders').delete(ticket.id);
+				await withLock(`order:${ticket.id}`, () => adminPb.collection('orders').delete(ticket.id));
 				outcome.removed++;
 			} catch (err) {
 				// Shortened like everywhere else about these tickets: the review

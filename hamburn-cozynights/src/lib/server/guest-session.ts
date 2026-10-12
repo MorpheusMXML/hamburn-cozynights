@@ -26,8 +26,8 @@
 import { dev } from '$app/environment';
 import type { Cookies } from '@sveltejs/kit';
 import type { OrdersResponse, TypedPocketBase } from '$lib/pocketbase-types';
-import { APP_SETTINGS_ID } from '$lib/server/constants';
-import { BookingService } from '$lib/server/booking';
+import { APP_SETTINGS_ID, APP_SETTINGS_LOCK } from '$lib/server/constants';
+import { BookingService, withLock } from '$lib/server/booking';
 import { guestCookieKey } from '$lib/server/crypto';
 import { readSignedGuestCode, signGuestCode } from '$lib/server/session-sig';
 
@@ -112,22 +112,27 @@ export async function readGuestRound(pb: TypedPocketBase): Promise<number | null
  * @returns the new round
  */
 export async function bumpGuestRound(pb: TypedPocketBase): Promise<number> {
-	let current = 0;
-	let exists = true;
-	try {
-		const settings = await pb
-			.collection('app_settings')
-			.getOne(APP_SETTINGS_ID, { requestKey: null });
-		current = Number(settings?.guest_round) || 0;
-	} catch (err) {
-		if (!isNotFound(err)) throw err;
-		exists = false;
-	}
+	// Read and written in the settings' queue: a phase switch or another
+	// switch saved at the same moment stays saved. Never call this while
+	// holding that lock (it isn't re-entrant): setPhase bumps after its write.
+	return withLock(APP_SETTINGS_LOCK, async () => {
+		let current = 0;
+		let exists = true;
+		try {
+			const settings = await pb
+				.collection('app_settings')
+				.getOne(APP_SETTINGS_ID, { requestKey: null });
+			current = Number(settings?.guest_round) || 0;
+		} catch (err) {
+			if (!isNotFound(err)) throw err;
+			exists = false;
+		}
 
-	const next = current + 1;
-	if (exists) await pb.collection('app_settings').update(APP_SETTINGS_ID, { guest_round: next });
-	else await pb.collection('app_settings').create({ id: APP_SETTINGS_ID, guest_round: next });
-	return next;
+		const next = current + 1;
+		if (exists) await pb.collection('app_settings').update(APP_SETTINGS_ID, { guest_round: next });
+		else await pb.collection('app_settings').create({ id: APP_SETTINGS_ID, guest_round: next });
+		return next;
+	});
 }
 
 /** The round the cookie was set in; cookies from before the round stamp count as 0. */

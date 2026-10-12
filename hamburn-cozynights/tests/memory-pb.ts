@@ -1,8 +1,9 @@
 // tests/memory-pb.ts — a small in-memory stand-in for the PocketBase SDK, for
 // unit tests of server code that reads and writes several collections. It
 // understands the filters this app writes (field = value, !=, ~, && and ||
-// with {:params}) — not PocketBase's full syntax. Real PocketBase behaviour
-// (rules, hooks, cascades) is covered by tests/integration.
+// with {:params}, and a relation path like room.house) — not PocketBase's
+// full syntax. Real PocketBase behaviour (rules, hooks, cascades) is covered
+// by tests/integration.
 import { ClientResponseError } from 'pocketbase';
 
 type Row = Record<string, any>;
@@ -25,19 +26,30 @@ function notFound() {
 
 let nextId = 1;
 
+/** Relation fields a filter may follow (`room.house`): field → collection. */
+const RELATIONS: Record<string, Record<string, string>> = {
+	beds: { room: 'rooms', order: 'orders' },
+	rooms: { house: 'houses' }
+};
+
 /** Evaluates `a = {:x} && b != "" || c ~ {:y}` against a record. */
-function matches(row: Row, filter: string, params: Row): boolean {
+function matches(
+	row: Row,
+	filter: string,
+	params: Row,
+	field: (row: Row, path: string) => unknown = (r, path) => r[path]
+): boolean {
 	if (!filter) return true;
 	return filter.split(' || ').some((part) =>
 		part.split(' && ').every((clause) => {
 			const match = /^\s*([\w.]+)\s*(!=|=|~)\s*(.+?)\s*$/.exec(clause);
 			if (!match) throw new Error(`memory-pb: unsupported filter clause "${clause}"`);
-			const [, field, op, raw] = match;
+			const [, path, op, raw] = match;
 			let value: unknown;
 			if (raw.startsWith('{:')) value = params[raw.slice(2, -1)];
 			else if (raw === 'true' || raw === 'false') value = raw === 'true';
 			else value = raw.replace(/^["']|["']$/g, '');
-			const actual = row[field] ?? (typeof value === 'boolean' ? false : '');
+			const actual = field(row, path) ?? (typeof value === 'boolean' ? false : '');
 			if (op === '=') return actual === value;
 			if (op === '!=') return actual !== value;
 			return String(actual).toLowerCase().includes(String(value).toLowerCase());
@@ -57,6 +69,16 @@ export function memoryPb(seed: Record<string, Row[]> = {}): MemoryPb {
 		pb: null
 	};
 	const table = (name: string) => (state.data[name] ??= []);
+	/** A field of `row` in collection `name`, following relations: "room.house". */
+	const fieldIn =
+		(name: string) =>
+		(row: Row, path: string): unknown => {
+			const [first, ...rest] = path.split('.');
+			if (rest.length === 0) return row[first];
+			const target = RELATIONS[name]?.[first];
+			const related = target && table(target).find((r) => r.id === row[first]);
+			return related ? fieldIn(target)(related, rest.join('.')) : undefined;
+		};
 
 	const decode = (filter: unknown): { expr: string; params: Row } => {
 		if (!filter) return { expr: '', params: {} };
@@ -98,7 +120,7 @@ export function memoryPb(seed: Record<string, Row[]> = {}): MemoryPb {
 			const { expr, params } = decode(options.filter);
 			if (expr) state.queries.push(`${name}: ${expr} ${JSON.stringify(params)}`);
 			return table(name)
-				.filter((row) => matches(row, expr, params))
+				.filter((row) => matches(row, expr, params, fieldIn(name)))
 				.map((row) => expand(name, { ...row }, options.expand));
 		},
 		async getList(page: number, perPage: number, options: Row = {}) {
@@ -108,7 +130,7 @@ export function memoryPb(seed: Record<string, Row[]> = {}): MemoryPb {
 		async getFirstListItem(filter: unknown) {
 			const { expr, params } = decode(filter);
 			state.queries.push(`${name}: ${expr} ${JSON.stringify(params)}`);
-			const row = table(name).find((r) => matches(r, expr, params));
+			const row = table(name).find((r) => matches(r, expr, params, fieldIn(name)));
 			if (!row) throw notFound();
 			return { ...row };
 		},
