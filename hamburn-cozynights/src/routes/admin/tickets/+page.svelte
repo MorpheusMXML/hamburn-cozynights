@@ -1268,9 +1268,12 @@
 		border-color: rgba(248, 113, 113, 0.5);
 		color: #fca5a5;
 	}
+	/* Carries an admin's address: may break anywhere, and wraps as a box on a phone. */
 	.tag.paid-by-hand {
 		border-color: rgba(74, 222, 128, 0.4);
 		color: #86efac;
+		overflow-wrap: anywhere;
+		border-radius: 12px;
 	}
 	.holder {
 		min-height: 34px;
