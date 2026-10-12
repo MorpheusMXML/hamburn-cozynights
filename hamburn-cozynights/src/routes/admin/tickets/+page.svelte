@@ -115,6 +115,8 @@
 	let preview: RosterPreview | null = null;
 	let selected = new Set<string>();
 	let newHolders = new Set<string>();
+	/** Tickets marked paid by hand to set back to unpaid (💳): never preselected. */
+	let undoPaid = new Set<string>();
 	/** Ids of cancelled tickets ticked for removal (only ones without a spot). */
 	let removals = new Set<string>();
 	let imported: RosterImportOutcome | null = null;
@@ -191,8 +193,9 @@
 			const start = defaultRosterSelection(preview.diff);
 			selected = new Set(start.selected);
 			newHolders = new Set(start.newHolders);
-			// Deleting is never preselected.
+			// Deleting is never preselected, nor locking a payment confirmed by hand again.
 			removals = new Set();
+			undoPaid = new Set();
 			filter = '';
 		} else if (result.type === 'redirect') {
 			await applyAction(result);
@@ -237,8 +240,10 @@
 		(change) => change.kind === 'changed' && change.emailChanged && change.hasSpot && change.email
 	).length;
 	// A ticket the file no longer lists can be deleted — but only when it holds
-	// no spot. One that does stays, whatever the file says.
-	$: removable = preview ? preview.diff.notInFile.filter((ticket) => !ticket.hasSpot) : [];
+	// no spot and isn't marked paid by hand. Those stay, whatever the file says.
+	$: removable = preview
+		? preview.diff.notInFile.filter((ticket) => !ticket.hasSpot && !ticket.paidByHand)
+		: [];
 	$: chosenRemovals = removable.filter((ticket) => removals.has(ticket.id)).length;
 
 	function toggle(key: string) {
@@ -257,6 +262,12 @@
 		if (newHolders.has(key)) newHolders.delete(key);
 		else newHolders.add(key);
 		newHolders = newHolders;
+	}
+
+	function toggleUndoPaid(key: string) {
+		if (undoPaid.has(key)) undoPaid.delete(key);
+		else undoPaid.add(key);
+		undoPaid = undoPaid;
 	}
 
 	/** "All new holders" in the changed list: every ticket that can change hands, or none. */
@@ -301,6 +312,13 @@
 		form.set(
 			'remove',
 			JSON.stringify(removable.filter((t) => removals.has(t.id)).map((t) => t.id))
+		);
+		// Only rows the review showed as marked paid by hand, with 💳 Set back to unpaid.
+		form.set(
+			'undoPaid',
+			JSON.stringify(
+				chosen.filter((c) => c.undoesPaidByHand && undoPaid.has(c.key)).map((c) => c.key)
+			)
 		);
 		const result = await post('importRoster', form);
 		importing = false;
@@ -455,6 +473,17 @@
 							1
 								? 'is'
 								: 'are'} paid in the shop too.
+						{/if}
+						{#if imported.keptPaid}
+							{plural(imported.keptPaid, 'ticket')} marked paid by hand {imported.keptPaid === 1
+								? 'stays'
+								: 'stay'} paid although the list says pending.
+						{/if}
+						{#if imported.paidUndone.length}
+							{plural(imported.paidUndone.length, 'ticket')} marked paid by hand {imported
+								.paidUndone.length === 1
+								? 'is'
+								: 'are'} unpaid again.
 						{/if}
 						{#if imported.skipped}{plural(imported.skipped, 'ticket')} needed nothing anymore.{/if}
 					</span>
@@ -650,9 +679,11 @@
 									sign in.
 								{/if}
 								{#if paidByHandChanges}
-									✋ Tickets an admin marked paid by hand start unticked when the file still says
-									pending: the shop may not know about the payment yet. Tick one only if it really
-									isn't paid.
+									✋ A ticket an admin marked paid by hand stays paid although the file says pending
+									— the shop may not know about the payment yet. A new address or name is still
+									taken over when ticked; the code is only locked again with <b
+										>💳 Set back to unpaid</b
+									>.
 								{/if}
 							</p>
 							{#if swappable.length > 1}
@@ -693,16 +724,18 @@
 														→ <b>{change.name}</b></span
 													>
 												{/if}
-												{#if change.unpaidChanged}
-													<span
-														>💳 <s
-															>{change.undoesPaidByHand
-																? 'paid by hand'
-																: change.unpaid
-																	? 'paid'
-																	: 'unpaid'}</s
+												{#if change.undoesPaidByHand}
+													{#if undoPaid.has(change.key)}
+														<span
+															>💳 <s>paid by hand</s> →
+															<b>unpaid: the code can't sign in</b></span
 														>
-														→
+													{:else}
+														<span>💳 stays paid by hand <em>(the file says pending)</em></span>
+													{/if}
+												{:else if change.unpaidChanged}
+													<span
+														>💳 <s>{change.unpaid ? 'paid' : 'unpaid'}</s> →
 														<b>{change.unpaid ? "unpaid: the code can't sign in" : 'paid'}</b></span
 													>
 												{/if}
@@ -730,6 +763,19 @@
 														year: false
 													})}{change.paidByHand.by ? ` by ${change.paidByHand.by}` : ''}</span
 												>
+											{/if}
+											{#if change.undoesPaidByHand}
+												<button
+													type="button"
+													class="holder"
+													class:on={undoPaid.has(change.key)}
+													aria-pressed={undoPaid.has(change.key)}
+													disabled={!selected.has(change.key)}
+													on:click={() => toggleUndoPaid(change.key)}
+													title="The crew confirmed this payment by hand. Set back to unpaid: the code can't sign in any more."
+												>
+													💳 {undoPaid.has(change.key) ? 'Set back to unpaid' : 'Keep paid'}
+												</button>
 											{/if}
 											{#if change.canBeNewHolder}
 												<button
@@ -830,7 +876,8 @@
 								shop, or from another file. They stay unless you tick one: a ticked ticket is
 								deleted with the import, together with its Telegram link and its special-needs
 								request. Their codes are shown shortened, and a ticket that holds a spot 🛏 cannot be
-								deleted here — free the spot first.
+								deleted here — free the spot first. Nor can one an admin marked ✋ paid by hand: set
+								it back to unpaid on its ticket first.
 							</p>
 							<ul class="code-list">
 								{#each diff.notInFile as ticket}
@@ -838,6 +885,16 @@
 										{#if ticket.hasSpot}
 											<code>{ticket.code}</code> 🛏{#if ticket.status}
 												<span class="muted">{ticket.status}</span>{/if}
+										{:else if ticket.paidByHand}
+											<code>{ticket.code}</code>
+											<span
+												class="muted"
+												title="Set it back to unpaid on its ticket first, then it can be deleted"
+												>{ticket.status ? `${ticket.status} · ` : ''}✋ paid by hand {formatBerlin(
+													ticket.paidByHand.at,
+													{ year: false }
+												)}{ticket.paidByHand.by ? ` by ${ticket.paidByHand.by}` : ''}</span
+											>
 										{:else}
 											<label class="drop-row">
 												<input

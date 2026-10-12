@@ -204,15 +204,15 @@ export class BookingService {
 					this.adminPb.filter('order_number = {:orderNumber}', { orderNumber })
 				);
 
-			// 3. Auto-migrate to the hash lookup
-			await this.adminPb
-				.collection('orders')
-				.update(order.id, { order_hash: orderHash })
-				.catch((e) => {
-					console.error(
-						`[BookingService] Hash migration failed for order ${order.id}: ${e.message}`
-					);
-				});
+			// 3. Auto-migrate to the hash lookup — in the ticket's queue, like
+			// every write of a ticket: PocketBase saves the whole record, so an
+			// admin marking it paid at the same moment would lose one of the two.
+			// No caller holds this lock here (it is not re-entrant).
+			await withLock(`order:${order.id}`, () =>
+				this.adminPb.collection('orders').update(order.id, { order_hash: orderHash })
+			).catch((e) => {
+				console.error(`[BookingService] Hash migration failed for order ${order.id}: ${e.message}`);
+			});
 			return order;
 		} catch (err) {
 			if (isNotFound(err)) return null;

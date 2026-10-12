@@ -427,9 +427,24 @@ describe('importing the ticket list', () => {
 		expect(kept).toMatchObject({ updated: 0, unpaid: 0 });
 		expect(order('o3')).toMatchObject({ unpaid: false, marked_paid_by: 'crew@mauersegler.art' });
 
-		// ticked on purpose: unpaid again, and the mark is done
-		const undone = await importRoster(db.pb, pending, { selected: ['hb-1003'], newHolders: [] });
-		expect(undone).toMatchObject({ updated: 1, unpaid: 1, failed: [] });
+		// ticked, but without 💳 Set back to unpaid: still nothing
+		const ticked = await importRoster(db.pb, pending, { selected: ['hb-1003'], newHolders: [] });
+		expect(ticked).toMatchObject({ updated: 0, keptPaid: 1, paidUndone: [] });
+		expect(order('o3')).toMatchObject({ unpaid: false, marked_paid_by: 'crew@mauersegler.art' });
+
+		// set back on purpose: unpaid again, and the mark is done
+		const undone = await importRoster(db.pb, pending, {
+			selected: ['hb-1003'],
+			newHolders: [],
+			undoPaid: ['hb-1003']
+		});
+		expect(undone).toMatchObject({
+			updated: 1,
+			unpaid: 1,
+			keptPaid: 0,
+			paidUndone: [{ id: 'o3', code: 'H•••' }],
+			failed: []
+		});
 		expect(order('o3')).toMatchObject({ unpaid: true, marked_paid_at: '', marked_paid_by: '' });
 
 		// marked again, then the shop catches up: the mark goes, the ticket stays paid
@@ -445,6 +460,52 @@ describe('importing the ticket list', () => {
 		expect(confirmed).toMatchObject({ updated: 1, paidConfirmed: 1, nowPaid: 0, failed: [] });
 		expect(order('o3')).toMatchObject({ unpaid: false, marked_paid_at: '', marked_paid_by: '' });
 		expect((await searchTickets(db.pb, 'HB-1003')).tickets[0].paidByHand).toBeNull();
+	});
+
+	it('never locks a ticket the review saw unpaid when it was marked paid since; the new address still comes', async () => {
+		Object.assign(order('o3'), { unpaid: true });
+		const rows = [
+			{ line: 2, code: 'HB-1003', email: 'grace@example.org', name: '', status: 'pending' }
+		];
+		const { diff } = await previewRoster(db.pb, rows);
+		// what the superuser saw: a new address, nothing about the payment
+		expect(diff.changes[0]).toMatchObject({ emailChanged: true, unpaidChanged: false });
+		const start = defaultRosterSelection(diff);
+		expect(start.selected).toEqual(['hb-1003']);
+
+		// meanwhile the Membership Team confirms the payment
+		await markTicketPaid(db.pb, 'o3', true, 'crew@mauersegler.art');
+		const outcome = await importRoster(db.pb, rows, start);
+		expect(outcome).toMatchObject({ updated: 1, keptPaid: 1, unpaid: 0, paidUndone: [] });
+		expect(order('o3')).toMatchObject({
+			email: 'grace@example.org',
+			unpaid: false,
+			marked_paid_by: 'crew@mauersegler.art'
+		});
+	});
+
+	it("won't delete a ticket marked paid by hand that the list no longer has", async () => {
+		Object.assign(order('o3'), { unpaid: true });
+		await markTicketPaid(db.pb, 'o3', true, 'crew@mauersegler.art');
+		const rows = [{ line: 2, code: 'HB-1002', email: 'ada@example.org', name: '' }];
+		const { diff } = await previewRoster(db.pb, rows);
+		expect(diff.notInFile.find((t) => t.id === 'o3')).toMatchObject({
+			code: 'H•••',
+			paidByHand: { by: 'crew@mauersegler.art' }
+		});
+		const outcome = await importRoster(db.pb, rows, {
+			selected: [],
+			newHolders: [],
+			remove: ['o3']
+		});
+		expect(outcome.removed).toBe(0);
+		expect(outcome.failed).toEqual([
+			{
+				code: 'H•••',
+				error: 'marked paid by hand — set it back to unpaid on its ticket first, then delete it'
+			}
+		]);
+		expect(order('o3')).toBeDefined();
 	});
 
 	it('checks the shape of what the browser sent', () => {
@@ -685,6 +746,32 @@ describe('who may do what', () => {
 			} as any);
 			expect(refused.status).toBe(status);
 		}
+	});
+
+	it('logs a payment set back by the import once per ticket, with the code shortened', async () => {
+		Object.assign(order('o3'), { unpaid: true });
+		await markTicketPaid(db.pb, 'o3', true, 'crew@mauersegler.art');
+		const rows = JSON.stringify([
+			{ line: 2, code: 'HB-1003', email: '', name: '', status: 'pending' }
+		]);
+		const done: any = await ticketActions.importRoster({
+			locals: locals(boss),
+			request: post({ rows, selected: '["hb-1003"]', newHolders: '[]', undoPaid: '["hb-1003"]' })
+		} as any);
+		expect(done.imported.paidUndone).toEqual([{ id: 'o3', code: 'H•••' }]);
+		expect(order('o3').unpaid).toBe(true);
+		const [imported, undone] = db.data.admin_events.slice(-2);
+		expect(imported).toMatchObject({
+			action: 'tickets_imported',
+			details: { updated: 1, paidUndone: 1, keptPaid: 0 }
+		});
+		expect(undone).toMatchObject({
+			action: 'ticket_marked_unpaid',
+			actor: 'boss@mauersegler.art',
+			subject: 'o3',
+			details: { ticket: 'H•••', via: 'import' }
+		});
+		expect(JSON.stringify(db.data.admin_events)).not.toContain('HB-1003');
 	});
 
 	it('refuses the ticket actions without an admin session', async () => {

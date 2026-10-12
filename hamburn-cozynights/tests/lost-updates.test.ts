@@ -10,7 +10,9 @@ import { APP_SETTINGS_ID, APP_SETTINGS_LOCK } from '../src/lib/server/constants'
 import { setRequestsOpen } from '../src/lib/server/special-requests';
 import { setSwapPause, setSwapsOff } from '../src/lib/server/swaps';
 import { bumpGuestRound } from '../src/lib/server/guest-session';
-import { changeTicket, importRoster } from '../src/lib/server/tickets';
+import { changeTicket, importRoster, markTicketPaid } from '../src/lib/server/tickets';
+import { BookingService } from '../src/lib/server/booking';
+import { createLookupHash } from '../src/lib/server/crypto';
 import { actions as dashboardActions } from '../src/routes/admin/+page.server';
 import { actions as roomActions } from '../src/routes/admin/room/[id]/+page.server';
 import { FakePb } from './fake-pb';
@@ -35,6 +37,13 @@ function wholeRecordPb(seed: Record<string, Row[]>) {
 		},
 		async getFullList() {
 			return [];
+		},
+		// Just enough for BookingService.getOrderByNumber: no ticket has the
+		// sign-in hash yet, the code finds it.
+		async getFirstListItem(filter: string) {
+			const row = filter.includes('order_hash') ? undefined : table(name)[0];
+			if (!row) throw notFound();
+			return { ...row };
 		},
 		async create(row: Row) {
 			table(name).push({ id: `${name}-${table(name).length + 1}`, ...row });
@@ -227,6 +236,19 @@ describe('tickets: every app write runs in the ticket’s queue', () => {
 		await booking;
 		expect(await imported).toMatchObject({ updated: 1, failed: [] });
 		expect(db.data.orders[0].customer_name).toBe('Ada Lovelace');
+	});
+
+	it('a first sign-in and the crew marking the ticket paid at once: both stay', async () => {
+		const { data, pb } = wholeRecordPb({ orders: [{ ...ticket, unpaid: true }] });
+		await Promise.all([
+			new BookingService(pb).getOrderByNumber('HB-1'),
+			markTicketPaid(pb, 'o1', true, 'crew@mauersegler.art')
+		]);
+		expect(data.orders[0]).toMatchObject({
+			order_hash: createLookupHash('HB-1'),
+			unpaid: false,
+			marked_paid_by: 'crew@mauersegler.art'
+		});
 	});
 
 	it('waits while a booking holds the ticket', async () => {

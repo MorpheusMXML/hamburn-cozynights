@@ -568,12 +568,15 @@ let importRunning = false;
  * Imports the selected rows. They are checked and compared again here — the
  * review in the browser is only a courtesy — so a ticket that changed
  * meanwhile gets what the file says, and one that needs nothing anymore is
- * skipped.
+ * skipped. A ticket marked paid by hand stays paid unless it is in
+ * `undoPaid`: the review showed it as such and 💳 Set back to unpaid was
+ * chosen. A selected key alone says nothing about the payment — the mark may
+ * be newer than the review.
  */
 export async function importRoster(
 	adminPb: TypedPocketBase,
 	rows: RosterRow[],
-	options: { selected: string[]; newHolders: string[]; remove?: string[] }
+	options: { selected: string[]; newHolders: string[]; remove?: string[]; undoPaid?: string[] }
 ): Promise<RosterImportOutcome> {
 	if (importRunning) {
 		throw new TicketError(
@@ -588,17 +591,22 @@ export async function importRoster(
 		const diff = diffRoster(entries, stored, problems, leftOut);
 		const wanted = new Set(options.selected.map((key) => String(key).toLowerCase()));
 		const handOver = new Set(options.newHolders.map((key) => String(key).toLowerCase()));
+		const undo = new Set((options.undoPaid ?? []).map((key) => String(key).toLowerCase()));
 		const todo = diff.changes.filter((change) => wanted.has(change.key));
 		// Tickets the file no longer lists, ticked for removal in the review. They
 		// are named by id: the review only ever sees their codes shortened. What
 		// the browser sends is a wish — only a ticket that is really missing from
 		// the file and really holds no spot is deleted. Its Telegram link and its
 		// special-needs request go with it (both cascade in PocketBase).
+		// A ticket marked paid by hand stays too: the crew confirmed its payment,
+		// so the mark has to be taken back on its ticket first.
 		const drop = new Set((options.remove ?? []).map((key) => String(key)));
 		const gone = new Set(diff.notInFile.filter((t) => !t.hasSpot).map((t) => t.id));
-		const cancelled = drop.size
+		const wished = drop.size
 			? stored.filter((ticket) => !ticket.hasSpot && drop.has(ticket.id) && gone.has(ticket.id))
 			: [];
+		const cancelled = wished.filter((ticket) => !ticket.paidByHand);
+		const paidKept = wished.filter((ticket) => !!ticket.paidByHand);
 
 		const outcome: RosterImportOutcome = {
 			created: 0,
@@ -610,8 +618,13 @@ export async function importRoster(
 			unpaid: 0,
 			nowPaid: 0,
 			paidConfirmed: 0,
+			keptPaid: 0,
+			paidUndone: [],
 			skipped: wanted.size - todo.length,
-			failed: []
+			failed: paidKept.map((ticket) => ({
+				code: maskTicketCode(ticket.code),
+				error: 'marked paid by hand — set it back to unpaid on its ticket first, then delete it'
+			}))
 		};
 
 		await inPool(todo, IMPORT_CONCURRENCY, async (change) => {
@@ -630,16 +643,21 @@ export async function importRoster(
 				}
 				const id = change.id as string;
 				const newHolder = change.canBeNewHolder && handOver.has(change.key);
+				const undoPaid = change.undoesPaidByHand && undo.has(change.key);
+				const keepPaid = change.undoesPaidByHand && !undoPaid;
 				const data: Record<string, string | boolean> = {};
 				if (change.emailChanged) data.email = change.email;
 				if (change.nameChanged) data.customer_name = change.name;
-				if (change.unpaidChanged) data.unpaid = change.unpaid;
+				if (change.unpaidChanged && !keepPaid) data.unpaid = change.unpaid;
 				// Marked paid by hand: the list caught up (paid), or the review
-				// ticked it back to unpaid on purpose. Either way the mark is done.
-				if (change.confirmsPaidByHand || change.undoesPaidByHand) {
+				// chose to set it back to unpaid. Either way the mark is done.
+				if (change.confirmsPaidByHand || undoPaid) {
 					data.marked_paid_at = '';
 					data.marked_paid_by = '';
 				}
+				if (keepPaid) outcome.keptPaid++;
+				// Only the payment would have changed, and it stays.
+				if (Object.keys(data).length === 0 && !newHolder) return;
 				let requestRemoved = false;
 				if (newHolder) {
 					Object.assign(data, newHolderFields());
@@ -659,11 +677,12 @@ export async function importRoster(
 					if (requestRemoved) outcome.requestsRemoved++;
 				}
 				if (change.emailChanged && change.email && change.hasSpot) outcome.confirmations++;
-				if (change.unpaidChanged) {
+				if (change.unpaidChanged && !keepPaid) {
 					if (change.unpaid) outcome.unpaid++;
 					else outcome.nowPaid++;
 				}
 				if (change.confirmsPaidByHand) outcome.paidConfirmed++;
+				if (undoPaid) outcome.paidUndone.push({ id, code: maskTicketCode(change.code) });
 			} catch (err) {
 				console.error(`[Tickets] Import of ${maskTicketCode(change.code)} failed:`, err);
 				outcome.failed.push({ code: change.code, error: describeError(err) });

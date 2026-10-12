@@ -507,8 +507,9 @@ export interface RosterChange {
 	paidByHand: PaidByHand | null;
 	/**
 	 * The file still lists the order as pending although an admin marked the
-	 * ticket paid by hand: importing it would lock the code again. Not ticked
-	 * in advance (defaultRosterSelection).
+	 * ticket paid by hand. The import keeps it paid — its address and name
+	 * still change — unless the review chose 💳 Set back to unpaid for it
+	 * (importRoster's `undoPaid`, its own decision like 🔁 New holder).
 	 */
 	undoesPaidByHand: boolean;
 	/** The file lists as paid what an admin marked paid by hand: the import drops the mark. */
@@ -545,7 +546,14 @@ export interface RosterDiff {
 	 * the review ticks them for removal — which refers to `id`, because the
 	 * preview shortens their codes (previewRoster).
 	 */
-	notInFile: { id: string; code: string; hasSpot: boolean; status?: string }[];
+	notInFile: {
+		id: string;
+		code: string;
+		hasSpot: boolean;
+		status?: string;
+		/** Marked paid by hand: not deleted until the mark is taken back. */
+		paidByHand?: PaidByHand;
+	}[];
 	/** Addresses used by several tickets of the file (allowed, worth a look). */
 	sharedEmails: { email: string; codes: string[] }[];
 	/**
@@ -655,6 +663,7 @@ export function diffRoster(
 		const paidByHand = ticket.unpaid ? null : ticket.paidByHand;
 		const undoesPaidByHand = !!paidByHand && isUnpaid;
 		const confirmsPaidByHand = !!paidByHand && entry.unpaid === false;
+		// Kept paid unless the review chooses otherwise: not counted.
 		if (isUnpaid && !undoesPaidByHand) unpaid++;
 		if (!emailChanged && !nameChanged && !unpaidChanged && !confirmsPaidByHand) {
 			unchanged.push({ code: entry.code, line: entry.line });
@@ -700,6 +709,7 @@ export function diffRoster(
 				hasSpot: ticket.hasSpot
 			};
 			if (status) item.status = status;
+			if (ticket.paidByHand && !ticket.unpaid) item.paidByHand = ticket.paidByHand;
 			return item;
 		})
 		.sort((a, b) => a.code.localeCompare(b.code, 'en', { numeric: true }));
@@ -734,8 +744,10 @@ export function diffRoster(
  * Telegram link, a ♿ request), also where it had none before (needsTick). Taking that over can mean a hand-over, or undo
  * an address the crew corrected in the app, so it needs a deliberate tick.
  * Its 🔁 New holder switch is still preset, for when it is ticked. Also left
- * out: a ticket marked paid by hand that the file still lists as pending
- * (undoesPaidByHand) — the shop may just not know about the payment yet.
+ * out: a ticket marked paid by hand whose only change is that the file still
+ * lists it as pending (undoesPaidByHand) — the shop may just not know about
+ * the payment yet. Its 💳 Set back to unpaid switch always starts off: that
+ * is a decision of its own, never part of a tick.
  */
 export function defaultRosterSelection(diff: RosterDiff): {
 	selected: string[];
@@ -743,7 +755,11 @@ export function defaultRosterSelection(diff: RosterDiff): {
 } {
 	return {
 		selected: diff.changes
-			.filter((change) => !change.needsTick && !change.undoesPaidByHand)
+			.filter(
+				(change) =>
+					!change.needsTick &&
+					!(change.undoesPaidByHand && !change.emailChanged && !change.nameChanged)
+			)
 			.map((c) => c.key),
 		newHolders: diff.changes.filter((change) => change.suggestNewHolder).map((c) => c.key)
 	};
@@ -848,6 +864,14 @@ export interface RosterImportOutcome {
 	nowPaid: number;
 	/** Tickets marked paid by hand that the list now shows as paid too: the mark went. */
 	paidConfirmed: number;
+	/**
+	 * Tickets marked paid by hand that the list still shows as pending, kept
+	 * paid (their address and name changes were taken over): the review didn't
+	 * choose 💳 Set back to unpaid for them.
+	 */
+	keptPaid: number;
+	/** Tickets marked paid by hand that the review set back to unpaid; masked codes. */
+	paidUndone: { id: string; code: string }[];
 	/** Selected, but nothing (or no longer anything) to change. */
 	skipped: number;
 	failed: { code: string; error: string }[];

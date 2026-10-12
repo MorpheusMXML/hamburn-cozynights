@@ -685,6 +685,7 @@ function eventText(ev, cfg) {
 				(d.ticket || subject) +
 				' set back to unpaid' +
 				by +
+				(d.via === 'import' ? ' with the ticket list' : '') +
 				": its code can't sign in any more"
 			);
 		case 'tickets_imported':
@@ -699,6 +700,9 @@ function eventText(ev, cfg) {
 				(d.newHolders ? ' (' + d.newHolders + ' passed on)' : '') +
 				(d.removed ? ', ' + d.removed + ' cancelled ticket(s) deleted' : '') +
 				(d.requestsRemoved ? ', ' + d.requestsRemoved + ' special-needs request(s) removed' : '') +
+				(d.paidUndone ? ', ' + d.paidUndone + ' paid by hand set back to unpaid' : '') +
+				(d.keptPaid ? ', ' + d.keptPaid + ' kept paid by hand (the list says pending)' : '') +
+				(d.paidConfirmed ? ', ' + d.paidConfirmed + ' paid by hand now paid in the shop' : '') +
 				(d.failed ? ', ' + d.failed + ' failed' : '')
 			);
 		case 'house_deleted':

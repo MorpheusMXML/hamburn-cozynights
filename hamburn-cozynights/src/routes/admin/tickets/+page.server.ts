@@ -156,6 +156,8 @@ export const actions: Actions = {
 		const selected = readKeys(form.get('selected'));
 		const newHolders = readKeys(form.get('newHolders'));
 		const remove = readKeys(form.get('remove')) ?? [];
+		// 💳 Set back to unpaid, chosen per ticket marked paid by hand.
+		const undoPaid = readKeys(form.get('undoPaid')) ?? [];
 		if (!selected || !newHolders) {
 			return fail(400, { error: 'The chosen tickets did not arrive. Check the file again.' });
 		}
@@ -165,7 +167,12 @@ export const actions: Actions = {
 
 		try {
 			const rows = readRosterRows(form.get('rows'));
-			const outcome = await importRoster(locals.adminPb, rows, { selected, newHolders, remove });
+			const outcome = await importRoster(locals.adminPb, rows, {
+				selected,
+				newHolders,
+				remove,
+				undoPaid
+			});
 			console.log(
 				`[Tickets] ${locals.admin.email} imported the ticket list: ${outcome.created} new, ${outcome.updated} updated, ${outcome.removed} removed, ${outcome.failed.length} failed.`
 			);
@@ -177,7 +184,18 @@ export const actions: Actions = {
 					newHolders: outcome.newHolders,
 					requestsRemoved: outcome.requestsRemoved,
 					confirmations: outcome.confirmations,
+					paidConfirmed: outcome.paidConfirmed,
+					keptPaid: outcome.keptPaid,
+					paidUndone: outcome.paidUndone.length,
 					failed: outcome.failed.length
+				});
+			}
+			// A payment the crew confirmed by hand, taken back: one entry each,
+			// like on the ticket itself.
+			for (const ticket of outcome.paidUndone) {
+				await logAdminEvent(locals.adminPb, locals.admin, 'ticket_marked_unpaid', ticket.id, {
+					ticket: ticket.code,
+					via: 'import'
 				});
 			}
 			return { imported: outcome };

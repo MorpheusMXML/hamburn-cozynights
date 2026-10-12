@@ -976,6 +976,8 @@ const cozyTicketsImport = new Command({
 						created: counts.created,
 						updated: counts.updated,
 						newHolders: counts.handedOver,
+						keptPaid: counts.keptPaid,
+						paidConfirmed: counts.paidConfirmed,
 						failed: 0
 					}
 				});

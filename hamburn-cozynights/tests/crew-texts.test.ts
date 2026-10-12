@@ -51,6 +51,30 @@ describe('crew chat texts', () => {
 		).toBe(
 			"💳 Ticket H••• set back to unpaid by crew@mauersegler.art: its code can't sign in any more"
 		);
+		expect(
+			eventText(
+				event('ticket_marked_unpaid', 'max@mauersegler.art', 'abc', {
+					ticket: 'H•••',
+					via: 'import'
+				})
+			)
+		).toBe(
+			"💳 Ticket H••• set back to unpaid by max@mauersegler.art with the ticket list: its code can't sign in any more"
+		);
+		expect(
+			eventText(
+				event('tickets_imported', 'max@mauersegler.art', '', {
+					created: 0,
+					updated: 2,
+					paidUndone: 1,
+					keptPaid: 2,
+					paidConfirmed: 1,
+					failed: 0
+				})
+			)
+		).toBe(
+			'📥 Ticket list imported by max@mauersegler.art: 0 new, 2 updated, 1 paid by hand set back to unpaid, 2 kept paid by hand (the list says pending), 1 paid by hand now paid in the shop'
+		);
 	});
 
 	it('report a ticket list import and an applied template', () => {

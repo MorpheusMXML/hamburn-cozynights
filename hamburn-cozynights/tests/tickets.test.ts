@@ -534,10 +534,12 @@ describe('diffRoster', () => {
 		});
 		expect(byCode['H-BOTH']).toMatchObject({ emailChanged: true, undoesPaidByHand: true });
 		expect(diff.unchanged.map((u) => u.code)).toEqual(['H-KEEP', 'H-OLD']);
-		// only H-OLD is unpaid with what starts ticked: the others stay paid
+		// only H-OLD is unpaid: the others stay paid unless the review chooses otherwise
 		expect(diff.unpaid).toBe(1);
-		// the shop catching up is ticked; a list that still says pending is not
-		expect(defaultRosterSelection(diff).selected).toEqual(['h-paid']);
+		// the shop catching up is ticked, and so is H-BOTH's new address (it stays
+		// paid: the payment is its own switch, never preselected); a row whose only
+		// news is "pending" is not
+		expect(defaultRosterSelection(diff).selected).toEqual(['h-paid', 'h-both']);
 	});
 });
 
