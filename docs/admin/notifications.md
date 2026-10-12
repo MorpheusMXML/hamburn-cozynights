@@ -48,10 +48,21 @@ A guest hears from CozyNights when their spot changes:
 - **The pass comes inside the e-mail.** Every e-mail that shows the spot — booked, changed, a ticket passed on with its spot, a special-needs spot, a swap done — carries the QR code of the [booking pass](./passes) as a picture, right under the spot and above the pass link and its code. The picture travels inside the e-mail, it isn't loaded from the server: it shows even when the mail app blocks remote images, and while the [pre-launch gate](../develop/deployment#pre-launch-gate) keeps the site closed. If the picture can't be made, the e-mail goes out without it, on time, with the link and the code as always. E-mails without a spot (released, requests, swap requests) have no picture.
 - **The pass rides along on Telegram too.** Every Telegram message that shows the spot carries the pass's QR code as a picture, with a button to the pass page. At arrival the guest can show the code straight from the chat. If Telegram can't fetch the picture, the message goes out as plain text instead — it is never lost.
 - **The bot talks to guests, nobody else.** Guests see three commands in its menu: `/pass` sends the booking pass again, `/stop` ends the updates, `/help` explains the bot. Any other message (a question, a sticker) gets the help text. `/start` with a used or expired link answers *⌛ This link has expired or was already used…*; `/stop` answers *🔕 Disconnected…*, or *This chat is not connected to a ticket.*; `/pass` without a connected chat answers the same way, and without a spot it points to the map.
-- **No secrets in messages.** They show the spot and a link, never the ticket code. Messages are in English. On staging every subject and message starts with `[STAGING]`.
+- **No secrets in messages.** They show the spot and a link, never the ticket code — except the one e-mail a guest asks for to get their code, see [The ticket code by e-mail](#the-ticket-code-by-e-mail). Messages are in English. On staging every subject and message starts with `[STAGING]`.
 - **The wording is yours.** Every sentence of these messages can be changed on <kbd>✉️ Messages</kbd>, see [Message texts](#message-texts).
 - **At most 20 e-mails a minute** (the server setting `COZY_MAILS_PER_MINUTE`). On opening day, when many guests book at once, the rest wait their turn, so confirmations can lag a few minutes.
 - **Delivery problems are retried** for about two days (after 1, 5 and 15 minutes, then after 1, 4, 12 and 24 hours), so a daily sending limit on opening day only delays messages. After that the crew group gets 📭 *Could not notify ticket …* with the reason.
+
+## The ticket code by e-mail
+
+A guest who mistyped their ticket code on the start page can ask for it: they enter the e-mail address of their ticket, and CozyNights sends **Your CozyNights ticket code** to that address, with one row per ticket and the link to the start page.
+
+- **Only to the ticket's address, only for paid tickets.** The e-mail goes out when the address belongs to at least one paid ticket (upper or lower case doesn't matter), and only to that address. It lists every paid ticket of the address, up to ten, so someone who bought for friends gets all the codes at once. A ticket that was removed or is unpaid again by the time it goes out is left out; with none left, nothing is sent.
+- **The visitor learns nothing.** The start page answers the same whether the address belongs to a ticket or not, so nobody can find out there who has one.
+- **One e-mail per address in 30 minutes, three a day.** Asking more often gets the same answer on the start page, but nothing is sent. Nobody can flood a stranger's inbox with it.
+- **It counts against the mail quota** (`COZY_MAILS_PER_MINUTE`, see above) and goes first: a guest is waiting for it, a booking confirmation can wait a minute.
+- **Retried after 1, 5 and 15 minutes** when the mail server refuses it, then given up without a crew message: the guest can simply ask again. Each request is a row in the collection `code_mails` (PocketBase dashboard) with `sent`, `attempts` and `last_error` — the error never shows the address. Rows are deleted after two days, sent or not.
+- **The wording** is the group *E-mail · your ticket code* on <kbd>✉️ Messages</kbd>.
 
 ## Crew group
 
@@ -62,6 +73,7 @@ Every message here is also kept in the audit log (collection `admin_events` in t
 | 🛎️ Admin access request | Someone signs in to `/admin` for the first time, with the command to approve them |
 | ✉️ Admin invited · ✅ approved · 🔁 role changed · 🚫 removed | Access changes, with `cozy-admin` or in the PocketBase dashboard |
 | 🔐 Admin sign-in | An approved admin signs in with Google (at least once a week, see [Sessions](./access#sessions)) |
+| 🚨 Many wrong ticket codes | The start page saw more than 200 wrong ticket codes within 10 minutes. For the next 30 minutes it asks for the ticket's e-mail address along with the code. Counts only, never a code or where the attempts came from. |
 | 🎪 LIVE BOOKING switched ON · 🔒 Booking CLOSED · 🛠 Back to STAGING MODE | The phase changed right now (a superuser's switch), with their e-mail address |
 | ⏰ Booking timer armed · window changed · ⏸️ paused · removed | With the opening and closing time and who did it |
 | 🎪 Booking is LIVE now · 🔒 Booking is CLOSED now | The armed timer reached the opening or the closing time |
@@ -198,5 +210,6 @@ Deletes every guest address, every Telegram link, every [special-needs request](
 | The room page shows no address | E-mail isn't set up, or the ticket has no address. | `notify status`, `tickets list`. |
 | 📭 *Could not notify ticket* in the group | The mail server refused the address on every attempt for about two days. A bounce that only comes back later by e-mail never reaches CozyNights. | The group names the ticket only shortened (*Ticket H•••*, `b•••@example.com`). Which one it is shows on the [guest list](./guests): its row says ⚠️ *delivery failed*, and <kbd>Ticket →</kbd> opens the card. (Also in the PocketBase dashboard: collection `guest_notify`, the entry with `attempts` > 0 and a `last_error`, links to the ticket.) Fix its address on the [Tickets](./tickets) page. |
 | The QR picture is missing from an e-mail, or shows as an attachment | Some mail apps also list a picture that sits inside an e-mail as an attachment. If the picture could not be made, the e-mail went out without it, and the PocketBase log has a `[cozy-notify]` line saying why. | The link and the code in the same e-mail work either way. `notify test --email` sends a sample with the picture, to check a mail app. |
+| A guest asked for their code, and no e-mail came | The address isn't the one of a paid ticket, the address already got its e-mail in the last 30 minutes (or three today), or the mail server refused it. | PocketBase dashboard, collection `code_mails`: a row per e-mail with `sent`, or with `attempts` and `last_error`. No row means none was due: check the address on the [Tickets](./tickets) page. |
 | A guest says nothing arrived | Maybe no address, maybe the message still waits. | The [guest list](./guests) says per ticket whether an e-mail went out (✉️ *mailed to …*), Telegram is linked, a message is ⏳ *queued* or ⚠️ *failed*; the *no e-mail* tile lists the tickets without an address. |
 | Nothing at all | Look at the queue, then at the server log. | `notify status` (queued / retrying), PocketBase log lines with `[cozy-notify]`. |

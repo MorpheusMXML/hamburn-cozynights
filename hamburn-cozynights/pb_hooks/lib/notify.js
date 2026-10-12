@@ -26,6 +26,10 @@
 // alert. What a guest wrote in a request is encrypted by the app and never
 // read here: messages only say what the crew decided.
 //
+// One e-mail carries ticket codes: "send me my code", which a guest who
+// mistyped theirs asks for on the start page (deliverCodeMails). It goes to
+// the address of the tickets only, never anywhere else.
+//
 // Every sentence guests get comes from pb_hooks/lib/texts.js; admins change
 // them on /admin/messages (collection message_texts). See "message texts".
 //
@@ -472,6 +476,18 @@ function eventText(ev, cfg) {
 			return '🚫 Admin access removed: ' + subject + (d.role ? ' (was ' + d.role + ')' : '');
 		case 'admin_sign_in':
 			return '🔐 Admin sign-in: ' + who + (d.role ? ' (' + d.role + ')' : '');
+		// The start page saw too many wrong ticket codes (src/lib/server/login-guard.ts):
+		// counts only, never a code or where it came from.
+		case 'sign_in_guard':
+			return (
+				'🚨 Many wrong ticket codes: ' +
+				(d.failures || '?') +
+				' within ' +
+				(d.minutes || 10) +
+				' minutes. For the next ' +
+				(d.lockMinutes || 30) +
+				" minutes the start page asks for the ticket's e-mail address as well."
+			);
 		case 'booking_live':
 			return '🎪 LIVE BOOKING switched ON' + by + ' — guests can book now';
 		case 'booking_staging':
@@ -1186,7 +1202,8 @@ function guestMail(cfg, kind, spot, previousLabel, name, pass, request, offers) 
  * The e-mail itself, as text and HTML: greeting, first line, the rows of a
  * table (House, Room, …), the lines after it, signature and small print. The
  * first of `urls` in a line becomes a link in the HTML. Every guest e-mail
- * looks like this, the spot messages and the swap requests alike.
+ * looks like this, the spot messages, the swap requests and the code e-mail
+ * alike.
  * parts.note (optional): a line that must not get lost among the others (the
  * bedding to bring), right under the table and the QR code — a box of its own
  * in the HTML, a paragraph of its own in the text.
@@ -1204,9 +1221,14 @@ function composeMail(cfg, vars, parts) {
 	const qr = parts.qr || null;
 	const signature = T('mail.signature');
 	const footer = T('mail.footer');
+	// The values in one column: 10 fits "Features:", a longer label ("Ticket
+	// code:") moves the column for that e-mail.
+	const labelWidth = rows.reduce((width, r) => Math.max(width, r[0].length + 2), 10);
 
 	const text = [hello, '', intro]
-		.concat(rows.length ? [''].concat(rows.map((r) => '  ' + (r[0] + ':').padEnd(10) + r[1])) : [])
+		.concat(
+			rows.length ? [''].concat(rows.map((r) => '  ' + (r[0] + ':').padEnd(labelWidth) + r[1])) : []
+		)
 		.concat(note ? ['', note] : [])
 		.concat([''])
 		.concat(after)
@@ -1683,6 +1705,15 @@ function previewMessages(cfg) {
 		const m = swapMail(cfg, c.kind, spot, offered, 'Ada', until);
 		mail.push({ id: c.id, title: c.title, subject: m.subject, text: m.text, html: m.html });
 	}
+	// "Send me my code": Ada bought a second ticket on the same address.
+	const code = codeMail(cfg, 'Ada', ['HB-1001', 'HB-1002']);
+	mail.push({
+		id: 'code',
+		title: 'Ticket code, asked for on the start page (two tickets on one address)',
+		subject: code.subject,
+		text: code.text,
+		html: code.html
+	});
 	const connected = [
 		{
 			id: 'connected',
@@ -2406,6 +2437,203 @@ function deliverSwaps(app, cfg, force, deadline, keepAlive) {
 	return outcome;
 }
 
+// --- "send me my code" (code_mails) -----------------------------------------
+//
+// A guest who mistyped their ticket code can ask the start page to mail it
+// (src/lib/server/code-mail.ts). The app adds a code_mails row, due right
+// away, only for an address with a paid ticket — at most one per address in
+// 30 minutes and three a day — and never tells the visitor whether it did.
+// This sends the codes of every paid ticket of that address to that address
+// and stamps `sent`. A guest is waiting for it, so it goes before the other
+// guest messages (runPass). Rows go after two days; the app counts its
+// limits on them.
+
+// Retry after 1, 5 and 15 minutes, then give up: the guest can ask again.
+const CODE_RETRY_MINUTES = [1, 5, 15];
+const CODE_MAILS_PER_PASS = 20;
+// One person buying for a whole crew: the e-mail stays readable.
+const CODE_MAIL_TICKETS_MAX = 10;
+const CODE_MAIL_KEEP_DAYS = 2;
+
+/**
+ * Subject, text and HTML of the code e-mail: one row per ticket code of the
+ * address. name: the holder's name when every ticket has the same one, else
+ * '' (greeted without a name).
+ */
+function codeMail(cfg, name, codes) {
+	const vars = { name: name || '', appUrl: cfg.appUrl || 'the booking page' };
+	const T = (key) => t(cfg, key, vars);
+	return composeMail(cfg, vars, {
+		subject: T('mail.code.subject'),
+		hello: name ? T('mail.greeting') : T('mail.greeting_anonymous'),
+		intro: T('mail.code.intro'),
+		rows: codes.map((code) => ['Ticket code', code]),
+		after: [T('mail.code.signin'), T('mail.code.ignore')],
+		urls: [cfg.appUrl]
+	});
+}
+
+/** Like updateNotify, for a code_mails row: re-read in a transaction, save what `change` decided. */
+function updateCodeMail(app, id, change) {
+	let saved = false;
+	app.runInTransaction((tx) => {
+		let fresh;
+		try {
+			fresh = tx.findRecordById('code_mails', id);
+		} catch (_) {
+			return; // deleted meanwhile (older than two days)
+		}
+		if (change(fresh) === false) return;
+		tx.save(fresh);
+		saved = true;
+	});
+	return saved;
+}
+
+/**
+ * The paid tickets of an address, by code: its address in any case, not
+ * unpaid, with a code. `~` is SQL's LIKE — case-insensitive, but it also finds
+ * longer addresses that contain this one, so the exact address is checked here.
+ */
+function paidTicketsOf(app, email) {
+	const address = String(email || '')
+		.trim()
+		.toLowerCase();
+	if (!address) return [];
+	const rows = app.findRecordsByFilter(
+		'orders',
+		"email ~ {:email} && unpaid != true && order_number != ''",
+		'order_number',
+		0,
+		0,
+		{ email: address }
+	);
+	return rows.filter((order) => order.getString('email').trim().toLowerCase() === address);
+}
+
+/**
+ * One code e-mail. Leased like deliverOne, so a send that outlives the lock
+ * is never delivered twice. A ticket removed or unpaid since the guest asked
+ * is left out; with none left the row is closed without a mail.
+ */
+function deliverCodeMail(app, cfg, rec, keepAlive) {
+	const now = Date.now();
+	const loadedDue = rec.getString('due');
+	const tickets = paidTicketsOf(app, rec.getString('email'));
+	if (tickets.length === 0) {
+		updateCodeMail(app, rec.id, (fresh) => {
+			if (fresh.getString('due') !== loadedDue || fresh.getString('sent')) return false;
+			fresh.set('due', '');
+			fresh.set('last_error', 'no paid ticket with this address any more: nothing sent');
+		});
+		return 'closed';
+	}
+
+	if (keepAlive && !keepAlive()) return 'lock-lost';
+	// No slot this minute: the row stays due as it is, no attempt counted.
+	if (!takeMailSlot(app, cfg)) return 'deferred';
+	const lease = pbDate(now + LEASE_SECONDS * 1000);
+	const leased = updateCodeMail(app, rec.id, (fresh) => {
+		// another run has it, or sent it already
+		if (fresh.getString('due') !== loadedDue || fresh.getString('sent')) return false;
+		fresh.set('due', lease);
+	});
+	if (!leased) return 'skipped';
+	// what deliverCodeMails' error path compares with
+	rec.set('due', lease);
+
+	const shown = tickets.slice(0, CODE_MAIL_TICKETS_MAX);
+	const names = shown.map(greetingName);
+	const name = names.every((n) => !!n && n === names[0]) ? names[0] : '';
+	const codes = shown.map((order) => order.getString('order_number'));
+	let error = '';
+	try {
+		// to the address as the ticket list has it, like every other guest e-mail
+		sendMail(app, cfg, shown[0].getString('email'), codeMail(cfg, name, codes));
+	} catch (err) {
+		// a mail server may quote the address back
+		error = maskEmailsIn(safeError(err));
+	}
+
+	let result = error ? 'retry' : 'sent';
+	updateCodeMail(app, rec.id, (fresh) => {
+		if (!error) {
+			fresh.set('sent', pbDate(now));
+			fresh.set('due', '');
+			fresh.set('last_error', '');
+			return;
+		}
+		if (fresh.getString('due') !== lease) return false; // taken over meanwhile
+		const attempts = fresh.getInt('attempts') + 1;
+		const gaveUp = attempts > CODE_RETRY_MINUTES.length;
+		fresh.set('attempts', attempts);
+		fresh.set('last_error', error.slice(0, 1000));
+		fresh.set('due', gaveUp ? '' : pbDate(now + CODE_RETRY_MINUTES[attempts - 1] * 60000));
+		if (gaveUp) result = 'failed';
+	});
+	return result;
+}
+
+/**
+ * Deletes code_mails rows older than CODE_MAIL_KEEP_DAYS, sent or not. One
+ * small query that finds nothing on most passes.
+ */
+function forgetCodeMails(app) {
+	const old = app.findRecordsByFilter('code_mails', 'created < {:before}', '', 50, 0, {
+		before: pbDate(Date.now() - CODE_MAIL_KEEP_DAYS * 86400000)
+	});
+	for (const rec of old) app.delete(rec);
+	return old.length;
+}
+
+/** Code e-mails whose time has come, oldest first. keepAlive() renews the loop's lock. */
+function deliverCodeMails(app, cfg, deadline, keepAlive) {
+	const outcome = { sent: 0, retry: 0, other: 0 };
+	let rows;
+	try {
+		forgetCodeMails(app);
+		// No e-mail on this server: the rows wait, and go after two days.
+		if (!cfg.mail.enabled) return outcome;
+		rows = app.findRecordsByFilter(
+			'code_mails',
+			"sent = '' && due != '' && due <= @now",
+			'created',
+			CODE_MAILS_PER_PASS,
+			0
+		);
+	} catch (_) {
+		return outcome; // a database from before code mails
+	}
+	for (const rec of rows) {
+		if (deadline && Date.now() > deadline) break;
+		if (keepAlive && !keepAlive()) break;
+		let result;
+		try {
+			result = deliverCodeMail(app, cfg, rec, keepAlive);
+		} catch (err) {
+			console.error(
+				'[cozy-notify] code mail ' + rec.id + ' failed: ' + maskEmailsIn(safeError(err))
+			);
+			// Not again on the next pass: the same error would repeat every few seconds.
+			try {
+				updateCodeMail(app, rec.id, (fresh) => {
+					if (fresh.getString('due') !== rec.getString('due')) return false;
+					fresh.set('due', pbDate(Date.now() + 5 * 60000));
+					fresh.set('last_error', ('run: ' + maskEmailsIn(safeError(err))).slice(0, 1000));
+				});
+			} catch (_) {
+				// the database itself is in trouble; the next run tries again
+			}
+			result = 'other';
+		}
+		if (result === 'sent') outcome.sent++;
+		else if (result === 'retry') outcome.retry++;
+		else outcome.other++;
+		if (result === 'deferred' || result === 'lock-lost') break; // the rest would wait as well
+	}
+	return outcome;
+}
+
 // --- Telegram: guests link their chat --------------------------------------
 
 function helpText(cfg) {
@@ -2772,9 +3000,9 @@ function releaseLock(app, owner) {
 		);
 }
 
-/** One pass: bot updates, due guest messages, swap requests, crew alerts, timer. */
+/** One pass: bot updates, timer, code e-mails, due guest messages, swap requests, crew alerts. */
 function runPass(app, cfg, pollSeconds, force, deadline, keepAlive) {
-	const result = { updates: 0, guests: null, swaps: null, alerts: 0 };
+	const result = { updates: 0, codes: null, guests: null, swaps: null, alerts: 0 };
 	const store = app.store();
 	const paused = !force && Date.now() < (store.get('cozy_tg_pause_until') || 0);
 	if (cfg.telegram.guests && !paused) {
@@ -2788,6 +3016,8 @@ function runPass(app, cfg, pollSeconds, force, deadline, keepAlive) {
 		sleep(pollSeconds * 1000);
 	}
 	announceTimer(app);
+	// first: a guest is waiting at the start page for it
+	result.codes = deliverCodeMails(app, cfg, deadline, keepAlive);
 	result.guests = deliverDue(app, cfg, force, deadline, keepAlive);
 	result.swaps = deliverSwaps(app, cfg, force, deadline, keepAlive);
 	result.alerts = sendPendingAlerts(app, cfg, force);
@@ -2870,6 +3100,9 @@ module.exports = {
 	swapTelegram: swapTelegram,
 	deliverSwap: deliverSwap,
 	deliverSwaps: deliverSwaps,
+	codeMail: codeMail,
+	deliverCodeMail: deliverCodeMail,
+	deliverCodeMails: deliverCodeMails,
 	passAttachments: passAttachments,
 	sendGuestTelegram: sendGuestTelegram,
 	handleUpdate: handleUpdate,
