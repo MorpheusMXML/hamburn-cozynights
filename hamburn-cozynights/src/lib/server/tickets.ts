@@ -481,6 +481,7 @@ export async function markTicketPaid(
 
 /** A record id as PocketBase makes them. */
 const RECORD_ID = /^[a-z0-9]{15}$/;
+const CHANGED_MEANWHILE = 'The booking changed meanwhile. Search again, then try once more.';
 
 async function readOrder(adminPb: TypedPocketBase, rawId: unknown): Promise<OrdersResponse> {
 	const id = typeof rawId === 'string' ? rawId.trim() : '';
@@ -520,7 +521,7 @@ async function heldSpot(
 		);
 	}
 	const from = typeof rawFrom === 'string' ? rawFrom.trim() : '';
-	if (from && from !== bed.id) {
+	if (from !== bed.id) {
 		throw new TicketError(
 			`The booking changed meanwhile: the ticket holds ${toSpot(bed).label} now. Search again, then ${doing} it.`,
 			409
@@ -555,6 +556,7 @@ export async function ticketMoveSpots(
 /** A booking error, in words for the admin who picked the spot. */
 function spotRefusal(err: unknown): never {
 	if (err instanceof RequestError) throw new TicketError(err.message, err.status);
+	if (err instanceof SpotChangedError) throw new TicketError(CHANGED_MEANWHILE, 409);
 	if (err instanceof BedUnavailableError) {
 		throw new TicketError(`${err.message} Pick another spot.`, 409);
 	}
@@ -612,18 +614,21 @@ export async function moveTicketSpot(
 		);
 	}
 
+	// The card's spot is checked again in the ticket's queue (onlyFrom): a guest
+	// who moved or swapped since the check above is not moved off the new spot.
 	try {
 		if (viaRequest && request) {
 			await assignSpot(adminPb, admin, request.id, bedId, {
 				log: false,
-				blockedOk: !!opts.blockedOk
+				blockedOk: !!opts.blockedOk,
+				onlyFrom: current.id
 			});
 		} else {
 			await new BookingService(adminPb).bookBed(
 				order,
 				bedId,
 				readSecret(order.burner_name) || randomBurnerName(),
-				{ allowLocked: !!opts.blockedOk, allowCheckedIn: true }
+				{ allowLocked: !!opts.blockedOk, allowCheckedIn: true, onlyFrom: current.id }
 			);
 		}
 	} catch (err) {
@@ -658,17 +663,18 @@ export async function releaseTicketSpot(
 	const current = await heldSpot(adminPb, order, rawFrom, 'release');
 	const request = await findRequest(adminPb, order.id);
 	const crewSpot = request?.status === 'approved' && request.bed === current.id;
+	let released: number;
 	try {
-		await new BookingService(adminPb).unbookOrder(order.id, {
+		released = await new BookingService(adminPb).unbookOrder(order.id, {
 			allowCheckedIn: true,
 			onlyBed: current.id
 		});
 	} catch (err) {
-		if (err instanceof SpotChangedError) {
-			throw new TicketError('The booking changed meanwhile. Search again, then release it.', 409);
-		}
+		if (err instanceof SpotChangedError) throw new TicketError(CHANGED_MEANWHILE, 409);
 		throw err;
 	}
+	// Released by somebody else in the meantime: nothing was ours to free.
+	if (released === 0) throw new TicketError(CHANGED_MEANWHILE, 409);
 	if (crewSpot) await forgetCrewSpots(adminPb, [current.id]);
 
 	return {

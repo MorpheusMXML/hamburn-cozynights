@@ -38,6 +38,9 @@ export type AdminEventAction =
 export type GuestEventAction =
 	| 'special_request_new'
 	| 'special_request_withdrawn'
+	// A guest swapped away the spot the crew booked for their special-needs
+	// request (pb_hooks/lib/swap.js): no names, no spots.
+	| 'special_spot_swapped'
 	// The start page saw more than 200 wrong ticket codes within 10 minutes
 	// ($lib/server/login-guard): counts only.
 	| 'sign_in_guard';

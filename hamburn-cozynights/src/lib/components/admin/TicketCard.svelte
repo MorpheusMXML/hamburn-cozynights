@@ -171,6 +171,13 @@ page and fires `saved` with the fresh ticket.
 		};
 	};
 
+	/**
+	 * Whether a message can reach the guest at all: a ticket without an address
+	 * and without Telegram gets none, whatever changes.
+	 */
+	const reachable = (shown: TicketView) => !!shown.email || shown.telegram;
+	const NOBODY_TOLD = 'The ticket has no e-mail address and no Telegram: tell the guest yourself.';
+
 	/** "B1 · Dorm #2 · Villa": the spot as everywhere in the admin area. */
 	$: spotLabel = ticket.spot
 		? [ticket.spot.spot, ticket.spot.room, ticket.spot.house].filter(Boolean).join(' · ')
@@ -187,9 +194,11 @@ page and fires `saved` with the fresh ticket.
 		} finally {
 			choosing = false;
 		}
-		if (!picked) return;
+		if (!picked || !moveForm?.isConnected) return;
 		moveTo = picked;
 		await tick();
+		// The confirmation hands the focus back here, not to the closed picker.
+		moveForm.querySelector('button')?.focus();
 		moveForm.requestSubmit();
 	}
 
@@ -198,10 +207,11 @@ page and fires `saved` with the fresh ticket.
 		if (result.type === 'success') {
 			const outcome = result.data?.spotChanged as TicketSpotOutcome | undefined;
 			if (!outcome) return;
+			const told = reachable(outcome.ticket) ? 'The guest gets a message shortly.' : NOBODY_TOLD;
 			toast(
 				outcome.to
-					? `🔀 Moved to ${outcome.to}. The guest gets a message shortly.`
-					: `🛏️ Released: ${outcome.from} is free. The guest gets a message shortly.`,
+					? `🔀 Moved to ${outcome.to}. ${told}`
+					: `🛏️ Released: ${outcome.from} is free. ${told}`,
 				'success',
 				7000
 			);
@@ -231,7 +241,10 @@ page and fires `saved` with the fresh ticket.
 			(spot.locked ? `🔒 ${spot.label} is blocked (out of service). ` : '') +
 				`The booking moves from ${spotLabel} to ${spot.label} right away` +
 				(ticket.spot.checkIn ? ', and the check-in moves along' : '') +
-				'. The guest gets a message with the new spot and the booking pass.',
+				'. ' +
+				(reachable(ticket)
+					? 'The guest gets a message with the new spot and the booking pass.'
+					: NOBODY_TOLD),
 			{
 				title: spot.locked ? '🔀 Move to a blocked spot?' : '🔀 Move the booking?',
 				tone: 'warning',
@@ -260,7 +273,10 @@ page and fires `saved` with the fresh ticket.
 		const ok = await confirmDialog(
 			`The ticket loses ${spotLabel} right away` +
 				(ticket.spot.checkIn ? ', and the check-in at arrival is dropped' : '') +
-				'. The guest gets a message and can book again while booking is open.' +
+				'. ' +
+				(reachable(ticket)
+					? 'The guest gets a message and can book again while booking is open.'
+					: `${NOBODY_TOLD} They can book again while booking is open.`) +
 				(ticket.spot.viaRequest
 					? ' Their special-needs request stays approved and needs a new spot on Special-needs requests.'
 					: ''),
@@ -410,7 +426,9 @@ page and fires `saved` with the fresh ticket.
 				<small
 					>{ticket.spot.viaRequest
 						? '♿ The crew booked it for their special-needs request. '
-						: ''}Move it to another free spot, or release it. The guest gets a message either way.</small
+						: ''}Move it to another free spot, or release it. {reachable(ticket)
+						? 'The guest gets a message either way.'
+						: NOBODY_TOLD}</small
 				>
 			</p>
 			<div class="spot-buttons">

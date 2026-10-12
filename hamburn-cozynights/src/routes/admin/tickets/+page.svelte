@@ -121,12 +121,21 @@
 
 	let picker: PickerRequest | null = null;
 	let moveSpots: TicketMoveSpots | null = null;
+	// One pick at a time: a Move on another card ends the one before, so its
+	// card never waits for an answer that can't come.
+	let pickCount = 0;
+	let endPick: ((spot: SpotInfo | null) => void) | null = null;
 
 	/** The free spots for this ticket, then the picker; answers with the spot picked. */
 	async function pickSpot(ticket: TicketView): Promise<SpotInfo | null> {
+		const pick = ++pickCount;
+		endPick?.(null);
+		endPick = null;
+		picker = null;
 		const form = new FormData();
 		form.set('id', ticket.id);
 		const result = await post('spots', form);
+		if (pick !== pickCount) return null;
 		if (result.type === 'redirect') {
 			await applyAction(result);
 			return null;
@@ -144,6 +153,7 @@
 			? [ticket.spot.spot, ticket.spot.room, ticket.spot.house].filter(Boolean).join(' · ')
 			: '';
 		return new Promise((resolve) => {
+			endPick = resolve;
 			picker = {
 				mode: 'spot',
 				who: ticket.name || `ticket ${ticket.code}`,
@@ -153,6 +163,7 @@
 				action: 'Move here',
 				resolve: (bedId) => {
 					picker = null;
+					endPick = null;
 					resolve(bedId ? (offer.spots.find((spot) => spot.bedId === bedId) ?? null) : null);
 				}
 			};

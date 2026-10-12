@@ -68,9 +68,13 @@
 	let code = form?.code ?? '';
 	let email = (form as LoginAnswer | null)?.email ?? '';
 	let clientError = '';
+	/** Which field the page's own check refused; a server answer is about both. */
+	let clientErrorField: 'email' | 'code' | '' = '';
 	let isSubmitting = false;
 
 	$: errorMessage = clientError || (isSubmitting ? '' : (form?.error ?? ''));
+	$: emailRefused = !!errorMessage && !(clientError && clientErrorField === 'code');
+	$: codeRefused = !!errorMessage && !(clientError && clientErrorField === 'email');
 
 	// After several wrong codes the server asks for the ticket's e-mail address
 	// as well, and offers to e-mail the code (src/lib/server/login-guard.ts).
@@ -140,8 +144,9 @@
 		codeInput.focus();
 	}
 
-	async function showClientError(message: string) {
+	async function showClientError(message: string, field: 'email' | 'code' | '' = '') {
 		clientError = message;
+		clientErrorField = field;
 		// Focus, nudge and ping the ticket box: the same signal every form gives.
 		await revealInvalid(ticketForm);
 	}
@@ -225,7 +230,8 @@
 					if (needEmail && !email.trim()) {
 						cancel();
 						showClientError(
-							'For your security, please enter your ticket code together with the e-mail address of your ticket.'
+							'For your security, please enter your ticket code together with the e-mail address of your ticket.',
+							'email'
 						);
 						return;
 					}
@@ -233,7 +239,7 @@
 					const problem = checkTicketCode(cleaned);
 					if (problem) {
 						cancel();
-						showClientError(problem);
+						showClientError(problem, 'code');
 						return;
 					}
 					code = cleaned;
@@ -282,8 +288,8 @@
 						on:keydown={emailKeydown}
 						placeholder="E-mail of your ticket"
 						aria-label="E-mail address of your ticket"
-						aria-invalid={errorMessage ? 'true' : undefined}
-						aria-describedby={errorMessage ? 'ticket-code-error' : undefined}
+						aria-invalid={emailRefused ? 'true' : undefined}
+						aria-describedby={emailRefused ? 'ticket-code-error' : undefined}
 						autocomplete="email"
 						autocapitalize="off"
 						autocorrect="off"
@@ -301,8 +307,8 @@
 					on:input={() => (clientError = '')}
 					placeholder="TICKET CODE"
 					aria-label="Ticket code"
-					aria-invalid={errorMessage ? 'true' : undefined}
-					aria-describedby={errorMessage ? 'ticket-code-error' : undefined}
+					aria-invalid={codeRefused ? 'true' : undefined}
+					aria-describedby={codeRefused ? 'ticket-code-error' : undefined}
 					autocomplete="off"
 					autocapitalize="characters"
 					autocorrect="off"

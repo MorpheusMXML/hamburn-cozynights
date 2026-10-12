@@ -37,6 +37,7 @@ import { BookingService, isBedBookable, SwapRefusedError, withLock } from '$lib/
 import { decrypt, encrypt } from '$lib/server/crypto';
 import { bedRow, burnerNameOf, roomLabel } from '$lib/server/pass';
 import { isSpotFixed } from '$lib/server/special-requests';
+import { logGuestEvent } from '$lib/server/admin-events';
 import type { BookingSettings } from '$lib/server/settings';
 import { CHECKED_IN_NOTE } from '$lib/check-in';
 import { levelOf } from '$lib/bunks';
@@ -429,8 +430,9 @@ export async function acceptSwap(
 	if (row.status !== 'pending') throw new SwapError(REFUSED.answered);
 	const pause = swapPause(settings);
 	if (pause) throw new SwapError(pauseMessage(pause), 403);
+	let swapped: { crewSpot: boolean };
 	try {
-		await new BookingService(adminPb).swapSpots(row);
+		swapped = await new BookingService(adminPb).swapSpots(row);
 	} catch (err) {
 		if (err instanceof SwapRefusedError) {
 			if (err.reason === 'fixed') await closeIfTheirs(adminPb, row);
@@ -438,6 +440,9 @@ export async function acceptSwap(
 		}
 		throw err;
 	}
+	// The asker gave away the spot the crew booked for their request: the crew
+	// hears it (no names, no spots) and can move them again (Max, 2026-10-13).
+	if (swapped.crewSpot) await logGuestEvent(adminPb, 'special_spot_swapped', '', {});
 	const [gained, gave] = await Promise.all(
 		[row.from_bed, row.to_bed].map((bedId) =>
 			adminPb

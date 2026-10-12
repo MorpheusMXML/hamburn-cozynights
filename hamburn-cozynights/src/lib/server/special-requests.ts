@@ -526,6 +526,9 @@ export async function decideRequest(
  * @param opts.blockedOk the crew confirmed booking this spot although it is
  *   locked 🔒 (blockedConfirmed in $lib/special-needs); without it a locked
  *   spot is refused
+ * @param opts.onlyFrom move the ticket off this spot only (the ticket page,
+ *   BookingService.bookBed): throws SpotChangedError when it holds another
+ *   spot by now
  * @returns whether the request was approved on the way
  * @throws {RequestError} for a declined request, a spot that is gone, or a
  *   locked spot nobody confirmed
@@ -536,7 +539,7 @@ export async function assignSpot(
 	admin: AdminSession,
 	requestId: string,
 	bedId: string,
-	opts: { log?: boolean; blockedOk?: boolean } = {}
+	opts: { log?: boolean; blockedOk?: boolean; onlyFrom?: string } = {}
 ): Promise<{ approved: boolean }> {
 	const request = await getRequest(adminPb, requestId);
 	if (request.status === 'declined') {
@@ -565,7 +568,8 @@ export async function assignSpot(
 		await new BookingService(adminPb).bookBed(order, bedId, name, {
 			allowLocked: !!opts.blockedOk,
 			allowSpecial: true,
-			allowCheckedIn: true
+			allowCheckedIn: true,
+			...(opts.onlyFrom !== undefined ? { onlyFrom: opts.onlyFrom } : {})
 		});
 	} catch (err) {
 		if (isNotFound(err)) {
@@ -575,6 +579,15 @@ export async function assignSpot(
 	}
 
 	const approving = request.status === 'pending';
+	// A spot belongs to one request: another one that still names it (its guest
+	// swapped the spot away, or was moved some other way) lets go of it.
+	const others = await adminPb.collection('special_requests').getFullList({
+		filter: adminPb.filter('bed = {:bedId} && id != {:id}', { bedId, id: request.id }),
+		fields: 'id'
+	});
+	for (const other of others) {
+		await adminPb.collection('special_requests').update(other.id, { bed: '' });
+	}
 	try {
 		await adminPb.collection('special_requests').update(request.id, {
 			bed: bedId,

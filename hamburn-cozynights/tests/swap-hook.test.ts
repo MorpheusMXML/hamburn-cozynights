@@ -130,7 +130,7 @@ function camp(settings: Row = {}) {
 describe('a yes', () => {
 	it('swaps both spots, accepts the request and ends every other one about them', () => {
 		const c = camp();
-		expect(swap.acceptSwap(c.app, 'ask', 'bo')).toEqual({ ok: true, voided: 2 });
+		expect(swap.acceptSwap(c.app, 'ask', 'bo')).toEqual({ ok: true, voided: 2, crewSpot: false });
 		expect(c.bedOf('b1')).toMatchObject({ order: 'bo', occupied: true });
 		expect(c.bedOf('b2')).toMatchObject({ order: 'ada', occupied: true });
 		expect(c.req('ask').status).toBe('accepted');
@@ -189,10 +189,13 @@ describe('no swap, and why', () => {
 			Object.assign(c.bedOf('b1'), extra);
 			expect(swap.acceptSwap(c.app, 'ask', 'bo'), JSON.stringify(extra)).toEqual({
 				ok: true,
-				voided: 2
+				voided: 2,
+				crewSpot: true
 			});
 			expect(c.bedOf('b1').order).toBe('bo');
 			expect(c.bedOf('b2').order).toBe('ada');
+			// the request lets go of the spot: it stays approved, the spot is Bo's now
+			expect(c.tables.special_requests[0]).toMatchObject({ status: 'approved', bed: '' });
 		}
 		// …but not once the asker checked in there
 		const c = camp();

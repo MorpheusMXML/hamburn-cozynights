@@ -377,6 +377,28 @@ describe('answering and taking back', () => {
 		expect(outcome.gave.spot).toBe('B2');
 	});
 
+	it('tells the crew when a guest swapped away the spot the crew booked for them', async () => {
+		const c = camp();
+		// Di offers the ♿ spot the crew booked for her request; Bo says yes
+		const id = await c.ask(c.di, c.b2);
+		(c.pb as any).send = async () => {
+			Object.assign(c.b4, { order: c.bo.id });
+			Object.assign(c.b2, { order: c.di.id });
+			c.requests()[0].status = 'accepted';
+			return { ok: true, voided: 0, crewSpot: true };
+		};
+		await acceptSwap(c.pb as any, LIVE, c.bo, id);
+		const events = c.pb.rows('admin_events');
+		expect(events).toHaveLength(1);
+		// no names, no spots: the crew looks it up on Special-needs requests
+		expect(events[0]).toMatchObject({
+			action: 'special_spot_swapped',
+			actor: 'guest',
+			subject: '',
+			details: {}
+		});
+	});
+
 	it('turns PocketBase’s refusals into words, never saying which spot is special', async () => {
 		const c = camp();
 		const id = await c.ask(c.ada, c.b2);
