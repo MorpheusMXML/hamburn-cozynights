@@ -2,8 +2,10 @@
 	/**
 	 * The ♿ panel of the requests page (docs/admin/special-needs.md): every spot
 	 * marked ♿ SPECIAL on a room page and where it stands. Only the free ones
-	 * are in the picker; for every other one the list says why and where to
-	 * change that, so a ♿ spot never just goes missing.
+	 * count for requests; for every other one the list says why and what can
+	 * change that, so a ♿ spot never just goes missing. TAKEN and
+	 * (de)activating are Staging-only (the layout lock); 🔒 and ♿ work in
+	 * every phase.
 	 *
 	 * The holder is the ticket's name from the ticket list: admin-only, like the
 	 * rest of this page (no-store), and nowhere else.
@@ -23,6 +25,7 @@
 					['request', 'booked through requests'],
 					['booked', 'booked otherwise'],
 					['blocked', 'blocked with TAKEN'],
+					['locked', 'locked 🔒'],
 					['inactive', 'inactive']
 				] as const
 			)
@@ -36,21 +39,23 @@
 		const holder = spot.holder || 'a ticket without a name';
 		switch (spot.state) {
 			case 'free':
-				return spot.locked ? 'free 🔒' : 'free';
+				return 'free';
 			case 'request':
 				return `booked for ${holder} through their request`;
 			case 'booked':
-				return `booked by ${holder}, not through a request — release it on the room page to offer it here`;
+				return `booked by ${holder}, not through a request — it counts again once it is free (releasing it during Live Booking or after needs Staging Mode and a superuser)`;
 			case 'blocked':
-				return 'blocked with TAKEN — free it on the room page to offer it here';
+				return 'blocked with TAKEN — not offered; TAKEN can only be cleared in Staging Mode (a superuser switches back)';
+			case 'locked':
+				return 'locked 🔒, out of service — not offered; an admin can still book it on purpose, or unlock it on the room page';
 			case 'inactive':
-				return 'inactive — activate it on the room page to offer it here';
+				return 'inactive — not offered; activating needs Staging Mode (a superuser switches back)';
 		}
 	}
 
-	/** Not offered in the picker, and the crew can change that on the room page. */
+	/** Not offered for requests: the line says what can change that, and when. */
 	const held = (state: SpecialSpotState) =>
-		state === 'booked' || state === 'blocked' || state === 'inactive';
+		state === 'booked' || state === 'blocked' || state === 'locked' || state === 'inactive';
 </script>
 
 <section class="special-spots">

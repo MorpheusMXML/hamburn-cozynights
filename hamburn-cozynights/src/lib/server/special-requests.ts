@@ -387,9 +387,11 @@ export async function listRequests(adminPb: TypedPocketBase): Promise<AdminReque
  * - request: booked by the crew for an approved request
  * - booked: booked otherwise (by a guest, or the crew outside a request)
  * - blocked: taken without a ticket (TAKEN on the room page)
+ * - locked: locked 🔒, out of service — not counted as free; an admin can
+ *   still book it in the picker on purpose
  * - free: offered in the picker
  */
-export type SpecialSpotState = 'free' | 'request' | 'booked' | 'blocked' | 'inactive';
+export type SpecialSpotState = 'free' | 'request' | 'booked' | 'blocked' | 'locked' | 'inactive';
 
 export interface SpecialSpotView extends SpotInfo {
 	state: SpecialSpotState;
@@ -414,6 +416,7 @@ export async function listSpecialSpots(adminPb: TypedPocketBase): Promise<Specia
 			else if (bed.order && crew.get(bed.id) === bed.order) state = 'request';
 			else if (bed.order) state = 'booked';
 			else if (bed.occupied) state = 'blocked';
+			else if (bed.is_locked) state = 'locked';
 			else state = 'free';
 			return { ...toSpot(bed), state, holder: order ? ticketName(order) : '' };
 		})
@@ -443,16 +446,24 @@ export async function listAssignableSpots(adminPb: TypedPocketBase): Promise<Spo
 }
 
 /**
- * How many active spots each room has, free or not: room id → count. The spot
- * picker says "3 of 6 free" with it.
+ * How many active spots each room has, free or not, and how many of them a
+ * guest booked: room id → count. The spot picker says "3 of 6 free" with the
+ * sizes, and that other guests sleep in a room it plans a group into with
+ * the bookings (othersBooked in $lib/group-plan).
  */
-export async function countRoomSpots(adminPb: TypedPocketBase): Promise<Record<string, number>> {
+export async function countRoomSpots(
+	adminPb: TypedPocketBase
+): Promise<{ sizes: Record<string, number>; booked: Record<string, number> }> {
 	const beds = await adminPb
 		.collection('beds')
-		.getFullList({ filter: 'enabled = true', fields: 'room' });
+		.getFullList({ filter: 'enabled = true', fields: 'room,order' });
 	const sizes: Record<string, number> = {};
-	for (const bed of beds) sizes[bed.room] = (sizes[bed.room] ?? 0) + 1;
-	return sizes;
+	const booked: Record<string, number> = {};
+	for (const bed of beds) {
+		sizes[bed.room] = (sizes[bed.room] ?? 0) + 1;
+		if (bed.order) booked[bed.room] = (booked[bed.room] ?? 0) + 1;
+	}
+	return { sizes, booked };
 }
 
 /**

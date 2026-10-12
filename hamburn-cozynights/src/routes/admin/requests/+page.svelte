@@ -18,9 +18,9 @@ shown here and nowhere else.
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import type { ActionData, PageData } from './$types';
 	import { confirmDialog, toast } from '$lib/dialogs';
-	import { STATUS_LABELS, requestKinds, type AdminRequestView } from '$lib/special-needs';
+	import { STATUS_LABELS, type AdminRequestView } from '$lib/special-needs';
 	import { needPill } from '$lib/need-pill';
-	import type { PickerRequest } from '$lib/spot-picker';
+	import { pickNotes, type PickerRequest } from '$lib/spot-picker';
 	import GroupCard from '$lib/components/admin/requests/GroupCard.svelte';
 	import SpecialSpots from '$lib/components/admin/requests/SpecialSpots.svelte';
 	import SpotPicker from '$lib/components/admin/requests/SpotPicker.svelte';
@@ -112,10 +112,10 @@ shown here and nowhere else.
 	$: specialFree = data.specialSpots.filter((spot) => spot.state === 'free').length;
 	$: specialSummary = summarizeSpecial(data.specialSpots.map((spot) => spot.state));
 	// Same "open" as the load: waiting, or approved without a spot from the crew.
+	// The ♿ spots are the pool for every request (Max, 2026-10-12), helpers and
+	// projects included.
 	$: specialAsked = data.requests.filter(
-		(r) =>
-			(r.status === 'pending' || (r.status === 'approved' && !r.spot?.assigned)) &&
-			requestKinds(r.needs).access
+		(r) => r.status === 'pending' || (r.status === 'approved' && !r.spot?.assigned)
 	).length;
 
 	/** "3 marked — 1 booked by a guest, 1 blocked with TAKEN, 1 inactive"; '' when none is marked. */
@@ -126,6 +126,7 @@ shown here and nowhere else.
 			[n('request'), 'booked through a request', 'booked through requests'],
 			[n('booked'), 'booked by a guest', 'booked by guests'],
 			[n('blocked'), 'blocked with TAKEN', 'blocked with TAKEN'],
+			[n('locked'), 'locked 🔒', 'locked 🔒'],
 			[n('inactive'), 'inactive', 'inactive']
 		] as const;
 		const why = parts
@@ -220,14 +221,27 @@ shown here and nowhere else.
 
 	function assignConfirmation(id: string, form: FormData): Confirmation {
 		const request = current(id);
-		const spot = data.spots.find((s) => s.bedId === form.get('bedId'))?.label ?? 'The spot';
+		const picked = data.spots.find((s) => s.bedId === form.get('bedId'));
+		const spot = picked?.label ?? 'The spot';
 		const from = request?.spot ? `, and ${request.spot.label} becomes free` : '';
 		const closed = data.isBookingActive ? '' : ', although booking is closed';
 		const approves = request?.status === 'pending' ? ' The request is approved as well.' : '';
+		// Picked by hand: a spot out of service, or one that doesn't fit, says so before it books.
+		const notes = picked && request ? pickNotes(request.needs, picked) : null;
+		const blocked = notes?.blocked
+			? `🔒 ${spot} is blocked (out of service). Book it anyway? `
+			: '';
+		const mismatch = notes?.mismatches.length
+			? ` ✗ It doesn't answer what they asked for: ${notes.mismatches.join(', ')}.`
+			: '';
 		return {
-			title: request?.spot ? 'Move the guest?' : 'Book this spot for the guest?',
-			message: `${spot} is booked for this ticket right away${closed}${from}. The guest gets a message with the booking pass.${approves}`,
-			label: 'Book it'
+			title: notes?.blocked
+				? 'Book a blocked spot?'
+				: request?.spot
+					? 'Move the guest?'
+					: 'Book this spot for the guest?',
+			message: `${blocked}${spot} is booked for this ticket right away${closed}${from}.${mismatch} The guest gets a message with the booking pass.${approves}`,
+			label: notes?.blocked ? 'Book it anyway' : 'Book it'
 		};
 	}
 
@@ -330,7 +344,7 @@ shown here and nowhere else.
 						<span class="numbers">
 							{specialFree} free for {specialAsked} open {specialAsked === 1
 								? 'request'
-								: 'requests'} with something they need
+								: 'requests'}
 						</span>
 						{#if specialFree < specialAsked}<span class="warn">⚠️ not enough</span>{/if}
 					</li>
@@ -386,6 +400,7 @@ shown here and nowhere else.
 					{specialFree}
 					{specialSummary}
 					isBookingActive={data.isBookingActive}
+					roomBooked={data.roomBooked}
 					{busy}
 					{act}
 					{pick}
@@ -564,7 +579,7 @@ shown here and nowhere else.
 											</button>
 										{/if}
 									</div>
-									{#if specialFree === 0 && requestKinds(request.needs).access}
+									{#if specialFree === 0}
 										<p class="hint">
 											{#if specialSummary}
 												♿ No special-needs spot is free right now: {specialSummary}. See “♿
@@ -592,7 +607,11 @@ shown here and nowhere else.
 									</div>
 								{/if}
 								{#if data.spots.length === 0}
-									<p class="hint">No free spot left. Free or add one in the room editor.</p>
+									<p class="hint">
+										No free spot left. During Live Booking and after it, only a superuser in Staging
+										Mode can free or add one; hold spots for requests in time with ♿ SPECIAL in the
+										room editor (that works in every phase, TAKEN and deactivating don't).
+									</p>
 								{/if}
 							</form>
 						{/if}
@@ -608,6 +627,7 @@ shown here and nowhere else.
 		request={picker}
 		spots={data.spots}
 		sizes={data.roomSizes}
+		booked={data.roomBooked}
 		{specialFree}
 		{specialSummary}
 	/>

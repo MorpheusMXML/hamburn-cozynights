@@ -41,20 +41,17 @@ inside. The page renders one at a time, outside every form.
 	} from '$lib/accommodation';
 	import {
 		needsMet,
+		othersBooked,
 		placeOptions,
+		plannable,
+		specialCover,
 		proposePlan,
 		recommendRooms,
 		toPlace,
 		type NeedsMet,
 		type PlanMember
 	} from '$lib/group-plan';
-	import {
-		OTHER_NEED,
-		isAccessNeed,
-		requestKinds,
-		type SpecialNeed,
-		type SpotInfo
-	} from '$lib/special-needs';
+	import { OTHER_NEED, isAccessNeed, type SpecialNeed, type SpotInfo } from '$lib/special-needs';
 	import { needPill } from '$lib/need-pill';
 	import {
 		bestFits,
@@ -63,6 +60,7 @@ inside. The page renders one at a time, outside every form.
 		fitOf,
 		isFiltered,
 		passes,
+		pickNotes,
 		unitSpots,
 		type PickerFilter,
 		type PickerRequest
@@ -72,14 +70,17 @@ inside. The page renders one at a time, outside every form.
 		request,
 		spots,
 		sizes,
+		booked,
 		specialFree,
 		specialSummary
 	}: {
 		request: PickerRequest;
-		/** The free spots an admin can book (listAssignableSpots). */
+		/** The free spots an admin can book (listAssignableSpots), the locked 🔒 ones included. */
 		spots: SpotInfo[];
 		/** Room id → active spots (countRoomSpots), for "3 of 6 free". */
 		sizes: Record<string, number>;
+		/** Room id → spots booked by guests (countRoomSpots): "already booked by other guests". */
+		booked: Record<string, number>;
 		/** Free ♿ spots in the camp: none, and a line says why. */
 		specialFree: number;
 		/** Where the ♿ spots stand ("3 marked — 1 inactive, …"); '' when none is marked. */
@@ -91,7 +92,6 @@ inside. The page renders one at a time, outside every form.
 	const groupMode = $derived(request.mode === 'group' ? request : null);
 	/** Each need once: stored needs aren't deduplicated. */
 	const needs: SpecialNeed[] = $derived(spotMode ? [...new Set(spotMode.needs)] : []);
-	const access = $derived(requestKinds(needs).access);
 	const canFit = $derived(checkableNeeds(needs).length > 0);
 	const planned: Record<string, string> = $derived(spotMode?.planned ?? {});
 	/**
@@ -124,10 +124,7 @@ inside. The page renders one at a time, outside every form.
 	const members = $derived(groupMode?.members ?? []);
 	const placing = $derived(toPlace(members));
 	const keeping = $derived(members.filter((member) => !member.declined && member.crewSpotLabel));
-	const accessCount = $derived(
-		placing.filter((member) => requestKinds(member.needs).access).length
-	);
-	const options = $derived(groupMode ? placeOptions(spots, placing.length, accessCount) : []);
+	const options = $derived(groupMode ? placeOptions(spots, placing.length) : []);
 	const optionOf = $derived(new Map(options.map((option) => [option.key, option])));
 	let place = $state(untrack(() => (request.mode === 'group' ? request.place : '')));
 	/** No room chosen yet (''): no proposal. */
@@ -190,10 +187,16 @@ inside. The page renders one at a time, outside every form.
 		const offered = availableFilters(factsList);
 		return SPOT_FILTERS.filter((entry) => offered.includes(entry.value));
 	});
+	// The counts never count a spot the crew locked 🔒: it is out of service.
 	const wishCount = (wish: SpotFilter) =>
-		factsList.filter((facts) => spotMatchesFilter(wish, facts)).length;
-	const fittingCount = $derived(canFit ? spots.filter((spot) => fitOf(needs, spot).all).length : 0);
-	const specialCount = $derived(spots.filter((spot) => spot.special).length);
+		spots.filter((spot, index) => plannable(spot) && spotMatchesFilter(wish, factsList[index]))
+			.length;
+	const fittingCount = $derived(
+		canFit ? spots.filter((spot) => plannable(spot) && fitOf(needs, spot).all).length : 0
+	);
+	const specialCount = $derived(spots.filter((spot) => plannable(spot) && spot.special).length);
+	const freeCount = $derived(spots.filter(plannable).length);
+	const shownFree = $derived(shown.filter(plannable).length);
 
 	// ── The pick ─────────────────────────────────────────────────────────────
 	let selected = $state(untrack(() => (request.mode === 'spot' ? (request.selected ?? '') : '')));
@@ -298,17 +301,28 @@ inside. The page renders one at a time, outside every form.
 		].join(' · ');
 	}
 
-	function fitBadge(
-		key: string
-	): { text: string; tone: 'fits' | 'special' | 'locked' | 'small' } | null {
+	function fitBadge(key: string): { text: string; tone: 'fits' | 'small' } | null {
 		const option = optionOf.get(key);
 		if (!option || placing.length === 0) return null;
 		if (!option.fits) return { text: `too small for ${placing.length}`, tone: 'small' };
-		if (option.usesLocked) return { text: `fits all ${placing.length} · uses 🔒`, tone: 'locked' };
-		if (option.usesSpecial)
-			return { text: `fits all ${placing.length} · uses ♿`, tone: 'special' };
 		return { text: `fits all ${placing.length}`, tone: 'fits' };
 	}
+
+	/** "♿ 2 of 5": how many of the group the room's free ♿ spots take — the pool for them. */
+	function specialBadge(key: string): string {
+		const option = optionOf.get(key);
+		if (!option || placing.length === 0 || option.special === 0) return '';
+		return `♿ ${specialCover(option, placing.length)} of ${placing.length}`;
+	}
+
+	/** Other guests' bookings in the chosen room (never moved): '' for none. */
+	const othersNote = $derived.by(() => {
+		if (!groupMode || !place.startsWith('room:')) return '';
+		const n = othersBooked(place.slice('room:'.length), booked, members);
+		return n === 0
+			? ''
+			: `ℹ️ ${n} ${plural(n, 'spot', 'spots')} in this room ${plural(n, 'is', 'are')} already booked by other guests. Nobody is moved.`;
+	});
 
 	// ── The sheet ────────────────────────────────────────────────────────────
 	let sheet = $state<HTMLDivElement>();
@@ -376,6 +390,7 @@ inside. The page renders one at a time, outside every form.
 			type="button"
 			class="tile"
 			class:special={spot.special}
+			class:blocked={spot.locked}
 			class:mismatch={marks.some((mark) => !mark.ok)}
 			class:picked={selected === spot.bedId}
 			aria-pressed={selected === spot.bedId}
@@ -384,23 +399,30 @@ inside. The page renders one at a time, outside every form.
 			<span class="tile-head">
 				<span class="tile-name">{spot.spot || 'Spot'}</span>
 				{#if spot.special}<span class="tile-flag special-flag">♿</span>{/if}
-				{#if spot.locked}<span class="tile-flag" title="Locked">🔒</span>{/if}
+				{#if spot.locked}<span class="tile-flag" title="Blocked">🔒</span>{/if}
 			</span>
 			{#if context}<span class="tile-where">{spot.room} · {spot.house}</span>{/if}
 			<span class="tile-bed">{bedText(spot)}</span>
+			{#if spot.locked}<span class="tile-blocked">Blocked (out of service)</span>{/if}
 			{#each marks as mark (mark.text)}
 				<span class="tile-mark" class:ok={mark.ok}>{mark.ok ? '✓' : '✗'} {mark.text}</span>
 			{/each}
 			{#if owner}<span class="tile-owner" title={owner}>{`→ ${owner}`}</span>{/if}
 		</button>
 	{:else}
-		<div class="tile still" class:special={spot.special} class:planned={!!owner}>
+		<div
+			class="tile still"
+			class:special={spot.special}
+			class:blocked={spot.locked}
+			class:planned={!!owner}
+		>
 			<span class="tile-head">
 				<span class="tile-name">{spot.spot || 'Spot'}</span>
 				{#if spot.special}<span class="tile-flag special-flag">♿</span>{/if}
-				{#if spot.locked}<span class="tile-flag" title="Locked">🔒</span>{/if}
+				{#if spot.locked}<span class="tile-flag" title="Blocked">🔒</span>{/if}
 			</span>
 			<span class="tile-bed">{bedText(spot)}</span>
+			{#if spot.locked}<span class="tile-blocked">Blocked (out of service)</span>{/if}
 			{#if owner}<span class="tile-owner" title={owner}>{`→ ${owner}`}</span>{/if}
 		</div>
 	{/if}
@@ -440,7 +462,7 @@ inside. The page renders one at a time, outside every form.
 						{/if}
 					</div>
 					{#if spotMode.current}<p class="now">Now: {spotMode.current}</p>{/if}
-					{#if access && specialFree === 0}
+					{#if specialFree === 0}
 						<p class="hint">
 							{specialSummary
 								? `♿ No special-needs spot is free right now: ${specialSummary}.`
@@ -485,10 +507,10 @@ inside. The page renders one at a time, outside every form.
 				</label>
 				<p class="count" aria-live="polite">
 					{#if filtered}
-						{shown.length} of {spots.length} free shown ·
+						{shownFree} of {freeCount} free shown ·
 						<button type="button" class="link" onclick={clearFilters}>Show all</button>
 					{:else}
-						{spots.length} free {plural(spots.length, 'spot', 'spots')}
+						{freeCount} free {plural(freeCount, 'spot', 'spots')}
 					{/if}
 				</p>
 			</div>
@@ -619,7 +641,7 @@ inside. The page renders one at a time, outside every form.
 									<span class="meta"
 										>{room.free} of {room.size} free{room.special > 0
 											? ` · ♿ ${room.special}`
-											: ''}</span
+											: ''}{room.locked > 0 ? ` · 🔒 ${room.locked} blocked` : ''}</span
 									>
 									{#if feats.length > 0}
 										<ul class="feats" aria-label="What the room offers">
@@ -636,6 +658,9 @@ inside. The page renders one at a time, outside every form.
 								{#if groupMode && placing.length > 0}
 									<div class="room-action">
 										{#if roomBadge}<span class="badge {roomBadge.tone}">{roomBadge.text}</span>{/if}
+										{#if specialBadge(`room:${room.roomId}`)}<span class="badge special"
+												>{specialBadge(`room:${room.roomId}`)}</span
+											>{/if}
 										{#if roomNeeds}<span class="badge {roomNeeds.tone}">{roomNeeds.text}</span>{/if}
 										<button
 											type="button"
@@ -669,7 +694,8 @@ inside. The page renders one at a time, outside every form.
 			{:else}
 				<p class="empty">
 					{#if spots.length === 0}
-						No free spot left. Free or add one in the room editor.
+						No free spot left. During Live Booking and after it, only a superuser in Staging Mode
+						can free or add one; hold spots for requests in time with ♿ SPECIAL in the room editor.
 					{:else}
 						No free spot matches.
 						<button type="button" class="link" onclick={clearFilters}>Show all</button>
@@ -683,6 +709,7 @@ inside. The page renders one at a time, outside every form.
 				<div class="choice" aria-live="polite">
 					{#if selectedSpot}
 						{@const marks = fitMarks(selectedSpot)}
+						{@const notes = pickNotes(needs, selectedSpot)}
 						<p class="choice-label">
 							{selectedSpot.label}{selectedSpot.special ? ' ♿' : ''}{selectedSpot.locked
 								? ' 🔒'
@@ -701,12 +728,9 @@ inside. The page renders one at a time, outside every form.
 									: `Planned for ${planned[selectedSpot.bedId]}, who loses it and goes back to Keep as is.`}
 							</p>
 						{/if}
-						{#if selectedSpot.locked}
-							<p class="choice-detail warn-text">🔒 Locked by the crew.</p>
-						{/if}
-						{#if selectedSpot.special && !access}
+						{#if notes.blocked}
 							<p class="choice-detail warn-text">
-								♿ A special-needs spot, kept for guests who need one.
+								🔒 {selectedSpot.spot || 'This spot'} is blocked (out of service). Book it anyway?
 							</p>
 						{/if}
 					{:else}
@@ -727,6 +751,7 @@ inside. The page renders one at a time, outside every form.
 						</p>
 					{:else}
 						<p class="choice-label">{optionOf.get(place)?.label ?? ''}</p>
+						{#if othersNote}<p class="choice-detail info-line">{othersNote}</p>{/if}
 					{/if}
 					<ul class="preview" class:hidden={!place}>
 						{#each placing as member (member.requestId)}
@@ -1153,10 +1178,6 @@ inside. The page renders one at a time, outside every form.
 		border-color: var(--state-special);
 		color: #f9a8d4;
 	}
-	.badge.locked {
-		border-color: var(--state-locked);
-		color: var(--state-locked);
-	}
 	.badge.warn {
 		border-color: var(--state-filling);
 		color: #fbbf24;
@@ -1207,6 +1228,18 @@ inside. The page renders one at a time, outside every form.
 	}
 	.tile.mismatch:not(.picked) {
 		opacity: 0.7;
+	}
+	/* out of service: still there to pick on purpose, never suggested */
+	.tile.blocked {
+		border-style: dashed;
+		border-color: var(--state-locked);
+		background: var(--state-locked-soft);
+	}
+	.tile-blocked {
+		color: var(--state-locked);
+		font-weight: 700;
+		overflow-wrap: anywhere;
+		max-width: 100%;
 	}
 	.tile.picked {
 		border-color: #2dd4bf;
@@ -1292,6 +1325,9 @@ inside. The page renders one at a time, outside every form.
 		font-size: 0.85rem;
 		color: #a3a3a3;
 		overflow-wrap: anywhere;
+	}
+	.info-line {
+		color: #7dd3fc;
 	}
 	.warn-text {
 		color: #fbbf24;

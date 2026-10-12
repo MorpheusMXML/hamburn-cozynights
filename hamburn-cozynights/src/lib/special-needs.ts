@@ -24,7 +24,10 @@ import { PASS_ALPHABET } from './pass';
  * any migration: a value can be added here without one.
  */
 
-/** A personal need (a medical reason or a disability): the ♿ spots are kept for these. */
+/**
+ * A personal need (a medical reason or a disability). The ♿ spots are the pool
+ * for every request (Max, 2026-10-12); among them, these choose first.
+ */
 export const ACCESS_NEEDS = [
 	{ value: 'lower_bunk', label: 'A lower bunk or a bed without a ladder' },
 	{ value: 'step_free', label: 'Step-free access or the ground floor' },
@@ -33,7 +36,7 @@ export const ACCESS_NEEDS = [
 	{ value: 'stable_light', label: 'Stable light conditions' }
 ] as const;
 
-/** What the guest wrote themselves; when unclear, it counts as needing a ♿ spot. */
+/** What the guest wrote themselves; when unclear, it counts like a personal need. */
 export const OTHER_NEED = { value: 'other', label: 'Something else' } as const;
 
 /** The checkboxes of a personal need, in this order. */
@@ -42,7 +45,7 @@ export const PERSONAL_NEEDS = [...ACCESS_NEEDS, OTHER_NEED] as const;
 /**
  * Comes as the helper of someone with a personal need. No checkbox: choosing
  * the helper path stores this alone. A helper asks in a group with the person
- * they help, and never counts as needing a ♿ spot.
+ * they help, and gets a ♿ spot after the members with a personal need.
  */
 export const HELPER_NEED = {
 	value: 'helper',

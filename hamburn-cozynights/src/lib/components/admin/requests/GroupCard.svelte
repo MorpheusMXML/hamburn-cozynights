@@ -9,16 +9,18 @@
 	 * - Approve all waiting: only waiting requests; decided ones stay.
 	 * - Decline group: waiting and approved requests, except those with a spot
 	 *   the crew booked (release it first).
-	 * - The planner: one spot per member, first proposed for the snuggest place
-	 *   that fits everyone and gives them what they need (rankPlaces in
-	 *   $lib/group-plan). "Choose a room for the group" opens the spot picker
-	 *   (SpotPicker): put the group into a room or house there and book it in
-	 *   one go, or take the plan back here and change single rows ("Change"
-	 *   opens the picker for that member; picking a spot another member is
-	 *   planned on swaps the two). Without JavaScript each row is a plain list
-	 *   and the proposal for the snuggest place stands. Rows on "Keep as is"
-	 *   change nothing; what can be booked is booked, and a warning names who
-	 *   wasn't.
+	 * - The planner: one spot per member, first proposed for the best room that
+	 *   fits everyone — the most ♿ spots for the group, then what they need,
+	 *   then the snuggest (recommendRooms in $lib/group-plan); never a spot the
+	 *   crew locked 🔒. "Choose a room for the group" opens the spot picker
+	 *   (SpotPicker): put the group into any room there and book it in one go,
+	 *   or take the plan back here and change single rows ("Change" opens the
+	 *   picker for that member; picking a spot another member is planned on
+	 *   swaps the two). Without JavaScript each row is a plain list and the
+	 *   proposal for the recommended room stands. Rows on "Keep as is" change
+	 *   nothing; what can be booked is booked, and a warning names who wasn't.
+	 *   The booking's dialog names a locked spot, a clear mismatch (✗) and other
+	 *   guests in the room before anything is booked.
 	 *
 	 * The card's edge uses the state colours (src/routes/state.css): orange
 	 * while a member waits, green when approved, grey otherwise. Never the
@@ -30,13 +32,15 @@
 	import { needShort } from '$lib/accommodation';
 	import {
 		defaultPlace,
+		noPlanNote,
+		othersBooked,
 		placeOptions,
 		proposePlan,
 		repick,
 		toPlace,
 		type PlanMember
 	} from '$lib/group-plan';
-	import { fitOf, type PickerRequest } from '$lib/spot-picker';
+	import { fitOf, pickNotes, type PickerRequest } from '$lib/spot-picker';
 	import {
 		GROUP_MAX,
 		OTHER_NEED,
@@ -65,6 +69,7 @@
 		specialFree,
 		specialSummary,
 		isBookingActive,
+		roomBooked,
 		busy,
 		act,
 		pick
@@ -77,6 +82,8 @@
 		specialFree: number;
 		specialSummary: string;
 		isBookingActive: boolean;
+		/** Room id → spots booked by guests (countRoomSpots): "already booked by other guests". */
+		roomBooked: Record<string, number>;
 		/** A step is running somewhere on the page: every button waits. */
 		busy: string;
 		act: Act;
@@ -124,13 +131,12 @@
 			needs: m.needs,
 			declined: m.status === 'declined',
 			crewSpotLabel: crewSpot(m) && m.spot ? m.spot.label : '',
-			crewRoomId: crewSpot(m) && m.spot ? m.spot.roomId : ''
+			crewRoomId: crewSpot(m) && m.spot ? m.spot.roomId : '',
+			roomId: m.spot?.roomId ?? ''
 		}))
 	);
 	const placing = $derived(toPlace(planMembers));
-	const options = $derived(
-		placeOptions(spots, placing.length, placing.filter((m) => requestKinds(m.needs).access).length)
-	);
+	const options = $derived(placeOptions(spots, placing.length));
 	/**
 	 * The room the crew chose in the picker; null: the recommendation — the
 	 * best room that fits everyone (defaultPlace), or no plan at all when no
@@ -284,17 +290,20 @@
 	const spotText = (spot: SpotInfo | undefined) =>
 		spot ? `${spot.special ? '♿ ' : ''}${spot.label}${spot.locked ? ' 🔒' : ''}` : 'a spot';
 
+	/** "Ada → B2 · Room 2 · Villa (✗ No ladder)": a mismatch with what the member asked for shows. */
+	function pickText(member: AdminRequestView, bedId: string): string {
+		const spot = spotOf(bedId);
+		const mismatches = spot ? pickNotes(member.needs, spot).mismatches : [];
+		const marks = mismatches.length > 0 ? ` (✗ ${mismatches.join(', ✗ ')})` : '';
+		return `${nameOf(member)} → ${spotText(spot)}${marks}`;
+	}
+
 	/** From what the form sends, so the dialog names exactly what gets booked. */
 	function bookConfirmation(form: FormData): Confirmation {
 		const picked = members
 			.map((member) => ({ member, bedId: String(form.get(`bed_${member.id}`) ?? '') }))
 			.filter(({ member, bedId }) => bedId && member.status !== 'declined');
-		const list = picked
-			.map(
-				({ member, bedId }) =>
-					`${nameOf(member)} → ${spotText(spots.find((spot) => spot.bedId === bedId))}`
-			)
-			.join('; ');
+		const list = picked.map(({ member, bedId }) => pickText(member, bedId)).join('; ');
 		const moving = picked.filter(({ member }) => member.spot && !member.spot.assigned).length;
 		const approving = picked.filter(({ member }) => member.status === 'pending').length;
 		const closed = isBookingActive ? '' : ', although booking is closed';
@@ -317,21 +326,35 @@
 			without.length > 0
 				? ` ${without.map(nameOf).join(', ')} ${plural(without.length, 'gets', 'get')} no spot this time (Keep as is).`
 				: '';
-		const locked = picked.filter(({ bedId }) => spotOf(bedId)?.locked).length;
-		const lockedNote =
-			locked > 0
-				? ` ${locked} of the spots ${plural(locked, 'is', 'are')} locked 🔒 by the crew.`
+		// A spot the crew locked 🔒 is out of service: only on purpose, and the dialog says so.
+		const blocked = picked
+			.map(({ bedId }) => spotOf(bedId))
+			.filter((spot): spot is SpotInfo => !!spot && pickNotes([], spot).blocked);
+		const blockedNote =
+			blocked.length > 0
+				? ` 🔒 ${blocked.map((spot) => spot.label).join(', ')} ${plural(blocked.length, 'is', 'are')} blocked (out of service). Book ${plural(blocked.length, 'it', 'them')} anyway?`
 				: '';
 		const n = picked.length;
+		// Other guests in a room the group goes to: fine, nobody is moved — the dialog says so.
+		const roomIds = [...new Set(picked.map(({ bedId }) => spotOf(bedId)?.roomId ?? ''))];
+		const others = roomIds
+			.map((roomId) => ({ roomId, count: othersBooked(roomId, roomBooked, planMembers) }))
+			.filter(({ roomId, count }) => roomId && count > 0)
+			.map(({ roomId, count }) => {
+				const where = spots.find((spot) => spot.roomId === roomId);
+				const name = where ? `${where.room} · ${where.house}` : 'the room';
+				return ` ℹ️ ${count} ${plural(count, 'spot', 'spots')} in ${name} ${plural(count, 'is', 'are')} already booked by other guests; nobody is moved.`;
+			})
+			.join('');
 		// All in one room: the title says which.
-		const rooms = new Set(picked.map(({ bedId }) => spotOf(bedId)?.roomId ?? ''));
-		const room = n > 1 && rooms.size === 1 ? spotOf(picked[0].bedId) : undefined;
+		const room = n > 1 && roomIds.length === 1 ? spotOf(picked[0].bedId) : undefined;
+		const what = room
+			? `Book ${n} spots in ${room.room} · ${room.house}`
+			: `Book ${n} ${plural(n, 'spot', 'spots')} for the group`;
 		return {
-			title: room
-				? `Book ${n} spots in ${room.room} · ${room.house}?`
-				: `Book ${n} ${plural(n, 'spot', 'spots')} for the group?`,
-			message: `Booked right away${closed}: ${list}.${lockedNote}${moves}${approves}${left} Each guest gets a message with the booking pass.`,
-			label: 'Book them'
+			title: blocked.length > 0 ? `${what}, ${blocked.length} of them blocked?` : `${what}?`,
+			message: `Booked right away${closed}: ${list}.${blockedNote}${others}${moves}${approves}${left} Each guest gets a message with the booking pass.`,
+			label: blocked.length > 0 ? 'Book them anyway' : 'Book them'
 		};
 	}
 
@@ -463,7 +486,7 @@
 					<p class="where-line">
 						{#if place === null}
 							<span class="dim"
-								>{`No room has ${placing.length} free spots together: pick a spot for each with Change${edited ? ' (changed by hand)' : ''}.`}</span
+								>{`${noPlanNote(options, planMembers, spots)}${edited ? ' (changed by hand)' : ''}`}</span
 							>
 						{:else}
 							<span class="dim">Plan:</span>

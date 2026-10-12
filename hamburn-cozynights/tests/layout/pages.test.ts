@@ -138,6 +138,17 @@ async function openRouletteCheck(page: Page) {
 	await settle(page);
 }
 
+/**
+ * The stress room in the open spot picker: the only room of the stress house,
+ * where five other guests sleep and the crew locked Upper 1.
+ */
+function stressRoom(page: Page) {
+	return page
+		.locator(`.picker-sheet section.house[aria-label^="${TEXTS.houseLong.slice(0, 40)}"]`)
+		.locator('article.room')
+		.first();
+}
+
 const PAGES: PageCase[] = [
 	{ name: 'start page', path: () => '/', as: 'anonymous', phases: ALL_PHASES },
 	{ name: 'booking rules', path: () => '/booking-rules', as: 'anonymous', phases: ['closing'] },
@@ -828,6 +839,20 @@ const PAGES: PageCase[] = [
 			await page.getByRole('alertdialog').waitFor();
 		}
 	},
+	// A spot the crew locked 🔒 picked on purpose: the picker's footer warns
+	// (the stress room's Upper 1, out of service).
+	{
+		name: 'admin special-needs: blocked spot',
+		path: () => '/admin/requests',
+		as: 'admin',
+		open: async (page) => {
+			const request = page.locator('article.request.status-pending').first();
+			await request.locator('form.assign button.primary').click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.locator('button.tile.blocked').first().click();
+			await sheet.locator('.picker-foot .warn-text', { hasText: 'blocked' }).waitFor();
+		}
+	},
 	// Request groups and ♿ spots on the requests page: the full group (one
 	// member's ⋯ menu open), the group booking's confirmation, every ♿ spot.
 	{
@@ -868,6 +893,33 @@ const PAGES: PageCase[] = [
 			const sheet = page.locator('.picker-sheet');
 			await sheet.locator('.room-action button').first().click();
 			await sheet.locator('.tile.planned').first().waitFor();
+		}
+	},
+	// The group into a room where other guests sleep (the stress room): the
+	// picker's info line, then the booking's confirmation with it, the ✗ of
+	// what a spot misses and a long room name in the title.
+	{
+		name: 'admin special-needs: group picker, room with guests',
+		path: () => '/admin/requests',
+		as: 'admin',
+		open: async (page) => {
+			await page.locator(`#group-${camp.fullGroupId} .where button`).click();
+			const sheet = page.locator('.picker-sheet');
+			await stressRoom(page).locator('.room-action button').click();
+			await sheet.locator('.picker-foot .info-line').waitFor();
+		}
+	},
+	{
+		name: 'admin special-needs: group confirm, room with guests',
+		path: () => '/admin/requests',
+		as: 'admin',
+		open: async (page) => {
+			const group = page.locator(`#group-${camp.fullGroupId}`);
+			await group.locator('.where button').click();
+			await stressRoom(page).locator('.room-action button').click();
+			await page.locator('.picker-sheet').getByRole('button', { name: 'Edit the plan' }).click();
+			await group.locator('form.plan button.primary').click();
+			await page.getByRole('alertdialog').waitFor();
 		}
 	},
 	{

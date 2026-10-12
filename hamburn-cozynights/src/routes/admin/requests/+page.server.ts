@@ -4,6 +4,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { BedUnavailableError, ReleaseFailedError } from '$lib/server/booking';
 import { getBookingSettings } from '$lib/server/settings';
 import { needCapacity } from '$lib/accommodation';
+import { plannable } from '$lib/group-plan';
 import {
 	assignSpot,
 	countRoomSpots,
@@ -24,7 +25,7 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
 	setHeaders({ 'cache-control': 'no-store' });
 
 	try {
-		const [requests, spots, settings, groups, specialSpots, roomSizes] = await Promise.all([
+		const [requests, spots, settings, groups, specialSpots, roomSpots] = await Promise.all([
 			listRequests(locals.adminPb),
 			listAssignableSpots(locals.adminPb),
 			getBookingSettings(locals.pb),
@@ -43,10 +44,12 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
 		return {
 			requests,
 			spots,
-			capacity: needCapacity(open, spots),
+			// A spot the crew locked 🔒 is out of service: it never counts as free.
+			capacity: needCapacity(open, spots.filter(plannable)),
 			groups,
 			specialSpots,
-			roomSizes,
+			roomSizes: roomSpots.sizes,
+			roomBooked: roomSpots.booked,
 			requestsOpen: settings.requestsOpen,
 			isBookingActive: settings.isBookingActive
 		};

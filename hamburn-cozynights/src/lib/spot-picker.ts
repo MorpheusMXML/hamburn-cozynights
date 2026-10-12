@@ -11,13 +11,14 @@ import {
 	MATCHED_BY_HAND,
 	factsOf,
 	matchNeeds,
+	needShort,
 	spotMatchesFilter,
 	type NeedMatch,
 	type SpotFilter
 } from './accommodation';
 import { groupBunks } from './bunks';
-import { bySpot, specialPull, type PlanMember } from './group-plan';
-import { requestKinds, type SpecialNeed, type SpotInfo } from './special-needs';
+import { bySpot, plannable, type PlanMember } from './group-plan';
+import type { SpecialNeed, SpotInfo } from './special-needs';
 
 /** One card in a room: a free spot on its own, or a bunk bed with both levels free. */
 export type PickerUnit =
@@ -31,10 +32,12 @@ export interface PickerRoom {
 	kind: string;
 	/** Active spots in the room, free or not. */
 	size: number;
-	/** Free spots in it, whatever the filters show. */
+	/** Free spots in it, whatever the filters show — none the crew locked 🔒. */
 	free: number;
 	/** How many of the free ones are ♿ spots. */
 	special: number;
+	/** Free spots the crew locked 🔒 (out of service): shown, never counted as free. */
+	locked: number;
 	/** What the room offers (SpotInfo.roomFeatures). */
 	features: string[];
 	/** The cards the filters let through, in the room's order. */
@@ -45,7 +48,7 @@ export interface PickerHouse {
 	houseId: string;
 	name: string;
 	kind: string;
-	/** Free spots in the house, whatever the filters show. */
+	/** Free spots in the house, whatever the filters show — none the crew locked 🔒. */
 	free: number;
 	special: number;
 	rooms: PickerRoom[];
@@ -82,8 +85,10 @@ export function buildPlaces(
 			};
 			houses.set(spot.houseId, entry);
 		}
-		entry.house.free += 1;
-		if (spot.special) entry.house.special += 1;
+		if (plannable(spot)) {
+			entry.house.free += 1;
+			if (spot.special) entry.house.special += 1;
+		}
 		const list = entry.rooms.get(spot.roomId) ?? [];
 		list.push(spot);
 		entry.rooms.set(spot.roomId, list);
@@ -100,8 +105,9 @@ export function buildPlaces(
 				name: first.room || 'Room',
 				kind: first.roomKind ?? '',
 				size: Math.max(sizes[roomId] ?? 0, list.length),
-				free: list.length,
-				special: list.filter((spot) => spot.special).length,
+				free: list.filter(plannable).length,
+				special: list.filter((spot) => plannable(spot) && spot.special).length,
+				locked: list.filter((spot) => !plannable(spot)).length,
 				features: first.roomFeatures ?? [],
 				units: unitsOf(shown)
 			});
@@ -182,7 +188,7 @@ export interface SpotFit {
 	match: NeedMatch;
 	/** The request has needs the layout can answer, and the spot answers every one. */
 	all: boolean;
-	/** For the order: matchNeeds' score plus the pull of a ♿ spot (specialPull). */
+	/** For the order: matchNeeds' score. */
 	score: number;
 }
 
@@ -192,8 +198,21 @@ export function fitOf(needs: readonly SpecialNeed[], spot: SpotInfo): SpotFit {
 	return {
 		match,
 		all: checkable > 0 && match.fits.length >= checkable,
-		score: match.score + specialPull(spot, requestKinds(needs).access)
+		score: match.score
 	};
+}
+
+/** What the crew must know before it books a spot it picked by hand. */
+export interface PickNotes {
+	/** The crew locked it 🔒: out of service. Only a deliberate pick, with a warning. */
+	blocked: boolean;
+	/** What it clearly doesn't answer of the request ("No ladder"). */
+	mismatches: string[];
+}
+
+export function pickNotes(needs: readonly SpecialNeed[], spot: SpotInfo): PickNotes {
+	const { match } = fitOf([...new Set(needs)], spot);
+	return { blocked: !plannable(spot), mismatches: match.conflicts.map(needShort) };
 }
 
 /** Whether a spot gets a card under this filter, for a request with these needs. */
@@ -224,28 +243,31 @@ export function isFiltered(filter: PickerFilter): boolean {
 }
 
 /**
- * The few spots that answer a request best, for the strip above the houses:
- * no clear mismatch, and at least one need answered — or a ♿ spot, for a
- * request with something the guest needs. Never a spot the crew locked 🔒
- * (it stays in its room, marked). Best first; a tie keeps the camp's order.
- * Empty for a request only a person can match (a project, a group only).
+ * The few spots that suit a request best, for the strip above the houses:
+ * no clear mismatch, and a ♿ spot (the pool for special-needs requests, any
+ * kind) or at least one need answered. The ♿ spots first, then the most
+ * needs answered; a tie keeps the camp's order. Never a spot the crew locked
+ * 🔒 (it stays in its room, marked).
  */
 export function bestFits(
 	spots: readonly SpotInfo[],
 	needs: readonly SpecialNeed[],
 	limit = 6
 ): SpotInfo[] {
-	const access = requestKinds(needs).access;
-	if (!access && checkableNeeds(needs).length === 0) return [];
 	return spots
 		.map((spot) => ({ spot, fit: fitOf(needs, spot) }))
 		.filter(
 			({ spot, fit }) =>
-				!spot.locked &&
+				plannable(spot) &&
 				fit.match.conflicts.length === 0 &&
-				(fit.match.fits.length > 0 || (access && spot.special))
+				(spot.special || fit.match.fits.length > 0)
 		)
-		.sort((a, b) => b.fit.score - a.fit.score || bySpot(a.spot, b.spot))
+		.sort(
+			(a, b) =>
+				Number(b.spot.special) - Number(a.spot.special) ||
+				b.fit.score - a.fit.score ||
+				bySpot(a.spot, b.spot)
+		)
 		.slice(0, limit)
 		.map(({ spot }) => spot);
 }

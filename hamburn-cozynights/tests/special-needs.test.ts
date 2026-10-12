@@ -924,6 +924,15 @@ describe('special-needs requests', () => {
 		// taken and inactive spots: in the room's size only when active
 		c.pb.seed('beds', { label: 'B3', room: c.room.id, enabled: true, occupied: true, order: '' });
 		c.pb.seed('beds', { label: 'B4', room: c.room.id, enabled: false, occupied: false, order: '' });
+		// a guest's booking: counted as booked, TAKEN without a ticket is not
+		const guest = c.pb.seed('orders', { order_number: 'HB-2009', customer_name: 'Gus Guest' });
+		c.pb.seed('beds', {
+			label: 'B5',
+			room: c.room.id,
+			enabled: true,
+			occupied: true,
+			order: guest.id
+		});
 
 		const spots = await listAssignableSpots(c.pb as any);
 		expect(
@@ -939,7 +948,10 @@ describe('special-needs requests', () => {
 			],
 			['B2', 'house', 'room', c.special.id, ['ground_floor', 'toilets_inside'], ['toilets_inside']]
 		]);
-		expect(await countRoomSpots(c.pb as any)).toEqual({ [c.room.id]: 3 });
+		expect(await countRoomSpots(c.pb as any)).toEqual({
+			sizes: { [c.room.id]: 4 },
+			booked: { [c.room.id]: 1 }
+		});
 	});
 
 	it('sums a spot up without what its room or the spot itself switched off', async () => {
@@ -1056,7 +1068,7 @@ describe('special-needs requests', () => {
 		spot('B3', { occupied: true, order: bea.id }); // booked by a guest
 		spot('B4', { occupied: true }); // TAKEN without a ticket
 		spot('B5', { enabled: false }); // deactivated
-		spot('B6', { is_locked: true }); // free, but locked
+		spot('B6', { is_locked: true }); // free, but locked 🔒: out of service
 		const request = c.pb.seed('special_requests', { order: c.order.id, status: 'approved' });
 		await assignSpot(c.pb as any, admin, request.id, c.special.id);
 
@@ -1066,7 +1078,7 @@ describe('special-needs requests', () => {
 			['B3', 'booked', 'Bea Booker', false],
 			['B4', 'blocked', '', false],
 			['B5', 'inactive', '', false],
-			['B6', 'free', '', true]
+			['B6', 'locked', '', true]
 		]);
 		// the normal spot B2 is no ♿ spot
 		expect(spots.every((s) => s.special)).toBe(true);
