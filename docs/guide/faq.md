@@ -191,7 +191,7 @@ Every page of CozyNights links the **legal notice** (who runs it and how to reac
 ### Swapping spots
 
 ::: details I don't see "⇄ Ask to swap" on the taken spots
-You need a spot of your own (a swap trades yours for theirs), booking has to be live, and the crew may have paused swaps for a moment (**Swap requests** says so). If the crew picked your spot for you, set it aside or checked you in, your spot can't be swapped — your room page says so. See [Swapping spots](./swaps).
+You need a spot of your own (a swap trades yours for theirs), booking has to be live, and the crew may have paused swaps for a moment (**Swap requests** says so). If the crew set your spot aside or checked you in, your spot can't be swapped — your room page says so. A spot the crew picked for your special-needs request can be offered in a swap. See [Swapping spots](./swaps).
 :::
 
 ::: details I asked, but nobody answers

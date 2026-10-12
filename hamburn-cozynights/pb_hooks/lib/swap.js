@@ -11,8 +11,10 @@
 //
 // Only spots guests could book themselves change hands: enabled, not locked
 // (🔒), not a special-needs spot (♿), not the spot the crew booked for a
-// special-needs request, not checked in. Burner names are the tickets' own
-// (orders.burner_name), so they travel with their guests.
+// special-needs request, not checked in. One exception: the guest the crew
+// placed for a special-needs request may offer that spot themselves, on their
+// own decision (Max, 2026-10-13); nobody can ask them for it. Burner names
+// are the tickets' own (orders.burner_name), so they travel with their guests.
 //
 // A CommonJS module for PocketBase's JSVM, like notify.js.
 
@@ -70,15 +72,15 @@ function crewPickedBed(app, orderId) {
 
 /**
  * Whether this spot, held by this ticket, may change hands: '' when it may,
- * else 'moved' (another ticket holds it by now) or 'fixed'.
+ * else 'moved' (another ticket holds it by now) or 'fixed'. `offered`: the
+ * asker's own spot — the one the crew picked for their request counts too.
  */
-function spotProblem(app, bed, orderId) {
+function spotProblem(app, bed, orderId, offered) {
 	if (bed.getString('order') !== orderId) return 'moved';
 	if (bed.getString('checked_in_at')) return 'fixed';
-	if (!bed.getBool('enabled') || bed.getBool('is_locked') || bed.getBool('is_special')) {
-		return 'fixed';
-	}
-	if (crewPickedBed(app, orderId) === bed.id) return 'fixed';
+	if (!bed.getBool('enabled')) return 'fixed';
+	if (crewPickedBed(app, orderId) === bed.id) return offered ? '' : 'fixed';
+	if (bed.getBool('is_locked') || bed.getBool('is_special')) return 'fixed';
 	return '';
 }
 
@@ -99,8 +101,8 @@ function requestProblem(app, request, now) {
 		return 'moved'; // a spot is gone (it would have taken the request along)
 	}
 	return (
-		spotProblem(app, fromBed, request.getString('from_order')) ||
-		spotProblem(app, toBed, request.getString('to_order'))
+		spotProblem(app, fromBed, request.getString('from_order'), true) ||
+		spotProblem(app, toBed, request.getString('to_order'), false)
 	);
 }
 

@@ -182,6 +182,25 @@ describe('no swap, and why', () => {
 		expect(c.bedOf('b1').order).toBe('ada');
 	});
 
+	it('for the spot the crew picked for the asker’s request, ♿ or 🔒 too (Max, 2026-10-13)', () => {
+		for (const extra of [{}, { is_special: true }, { is_locked: true }]) {
+			const c = camp();
+			c.tables.special_requests.push({ id: 'sr', order: 'ada', status: 'approved', bed: 'b1' });
+			Object.assign(c.bedOf('b1'), extra);
+			expect(swap.acceptSwap(c.app, 'ask', 'bo'), JSON.stringify(extra)).toEqual({
+				ok: true,
+				voided: 2
+			});
+			expect(c.bedOf('b1').order).toBe('bo');
+			expect(c.bedOf('b2').order).toBe('ada');
+		}
+		// …but not once the asker checked in there
+		const c = camp();
+		c.tables.special_requests.push({ id: 'sr', order: 'ada', status: 'approved', bed: 'b1' });
+		c.bedOf('b1').checked_in_at = '2026-10-29 18:00:00.000Z';
+		expect(swap.acceptSwap(c.app, 'ask', 'bo')).toEqual({ ok: false, reason: 'fixed' });
+	});
+
 	it('not for a spot that can’t be swapped — and the request stays as it is', () => {
 		const cases: [string, (c: ReturnType<typeof camp>) => void][] = [
 			['locked', (c) => (c.bedOf('b2').is_locked = true)],

@@ -16,6 +16,10 @@
  *   swap requests is stored `quiet`: never shown to that guest nor sent to
  *   them, and it runs out like an unanswered request. The asker can't tell
  *   the difference.
+ * - The guest the crew placed for a special-needs request may still offer
+ *   that spot themselves, on their own decision, even against their request
+ *   (Max, 2026-10-13); nobody can ask them for it. The crew sees the new spot
+ *   on /admin/requests and can move them again.
  * - Nobody learns a ticket code, a name from the ticket list or an address:
  *   guests see each other's burner names, as on the room pages.
  */
@@ -133,6 +137,21 @@ export function toSwapSpot(bed: BedWithRoom | undefined | null): SwapSpot {
 }
 
 /**
+ * Whether a guest may offer this spot of theirs in a swap: one guests could
+ * book themselves, or the spot the crew picked for their special-needs request
+ * (even a ♿ or 🔒 one) — never one they checked in at.
+ */
+async function mayOffer(
+	adminPb: TypedPocketBase,
+	orderId: string,
+	bed: BedsResponse
+): Promise<boolean> {
+	if (bed.checked_in_at) return false;
+	if (isBedBookable(bed)) return true;
+	return bed.enabled !== false && (await isSpotFixed(adminPb, orderId, bed.id));
+}
+
+/**
  * Why a guest can't offer their own spot in a swap, in their words; '' when
  * they can. It is their own spot, so saying why is fine.
  */
@@ -142,10 +161,7 @@ async function ownSpotProblem(
 	bed: BedsResponse
 ): Promise<string> {
 	if (bed.checked_in_at) return CHECKED_IN_NOTE;
-	if (await isSpotFixed(adminPb, orderId, bed.id)) {
-		return 'The crew picked your spot for you, so only the crew can change it.';
-	}
-	if (!isBedBookable(bed)) {
+	if (!(await mayOffer(adminPb, orderId, bed))) {
 		return 'The crew set your spot aside for you, so it can’t be swapped. Please ask the crew.';
 	}
 	return '';
@@ -190,7 +206,7 @@ async function settle(adminPb: TypedPocketBase, rows: SwapRecord[], now: number)
 		else if (!fromBed || fromBed.order !== row.from_order) {
 			change = { status: 'void', ended: 'yours_moved' };
 		} else if (!toBed || toBed.order !== row.to_order) change = { status: 'void', ended: 'moved' };
-		else if (fromBed.checked_in_at || !isBedBookable(fromBed)) {
+		else if (!(await mayOffer(adminPb, row.from_order, fromBed))) {
 			change = { status: 'void', ended: 'yours_fixed' };
 		}
 		if (!change) continue;

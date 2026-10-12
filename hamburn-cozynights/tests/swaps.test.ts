@@ -213,12 +213,34 @@ describe('asking for a swap', () => {
 		const nobody: any = c.pb.seed('orders', { order_number: 'HB-9', customer_name: 'No Spot' });
 		expect((await refusal(c.ask(nobody, c.b2))).message).toMatch(/Book a spot first/);
 		expect((await refusal(c.ask(c.fi, c.b2))).message).toBe(CHECKED_IN_NOTE);
-		expect((await refusal(c.ask(c.di, c.b2))).message).toMatch(/crew picked your spot/);
 		expect((await refusal(c.ask(c.ed, c.b2))).message).toMatch(/set your spot aside/);
 		expect((await refusal(c.ask(c.ada, c.b7))).message).toMatch(/free right now/);
 		expect((await refusal(c.ask(c.ada, c.b1))).message).toMatch(/your own spot/);
 		expect((await refusal(c.ask(c.ada, c.b2, { note: 'www.example.org' }))).status).toBe(400);
 		expect(c.requests()).toHaveLength(0);
+	});
+
+	it('lets the guest the crew placed for a request offer that spot, ♿ too (Max, 2026-10-13)', async () => {
+		const c = camp();
+		// Di holds the ♿ spot the crew booked for her approved request
+		await c.ask(c.di, c.b2);
+		expect(c.requests()).toHaveLength(1);
+		expect(c.requests()[0]).toMatchObject({
+			from_order: c.di.id,
+			from_bed: c.b4.id,
+			to_bed: c.b2.id,
+			status: 'pending',
+			quiet: false
+		});
+		// it stays open on both sides: Bo can answer it, Di sees it waiting
+		const bo = await guestSwaps(c.pb as any, c.bo);
+		expect(bo.incoming).toHaveLength(1);
+		const di = await guestSwaps(c.pb as any, c.di);
+		expect(di.openOut).toBe(1);
+		expect(c.requests()[0].status).toBe('pending');
+		// nobody can ask Di for it: that request stays quiet
+		await c.ask(c.ada, c.b4);
+		expect(c.requests().find((r) => r.to_bed === c.b4.id)?.quiet).toBe(true);
 	});
 
 	it('allows three open requests, one per spot, and no second ask after a no', async () => {
@@ -391,9 +413,14 @@ describe('the room page and the hand-over', () => {
 		expect(ada.asked).toEqual({ [c.b2.id]: c.requests()[0].id });
 		expect(ada.openCount).toBe(1);
 
+		// the spot the crew picked for Di's request: hers to offer
 		const di = await roomSwaps(c.pb as any, LIVE, c.di, c.b4 as any);
-		expect(di.mine).toBeNull();
-		expect(di.why).toMatch(/crew picked/);
+		expect(di.mine?.label).toBe('B4 · Dorm #2 · Villa');
+		expect(di.why).toBe('');
+		// a 🔒 spot the crew set aside without a request: not
+		const ed = await roomSwaps(c.pb as any, LIVE, c.ed, c.b5 as any);
+		expect(ed.mine).toBeNull();
+		expect(ed.why).toMatch(/set your spot aside/);
 		const closed = await roomSwaps(
 			c.pb as any,
 			{ phase: 'closed', swapsOff: false },
