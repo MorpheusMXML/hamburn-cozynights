@@ -16,6 +16,7 @@ import { TEMPLATE_LIMITS } from '../../src/lib/template';
 import { BED_TYPES, DESCRIPTION_MAX, type BedType } from '../../src/lib/accommodation';
 import { TICKET_LIMITS } from '../../src/lib/tickets';
 import { SWAP_NOTE_MAX } from '../../src/lib/swaps';
+import { CONFIRMED_FIELDS } from '../../src/lib/booking-check';
 
 export const TEXTS = {
 	houseLong:
@@ -28,6 +29,8 @@ export const TEXTS = {
 	burnerWord: 'Supercalifragilisticexpialidocious',
 	burnerEmoji: '🦄✨ Unicorn Queen ✨🦄',
 	burnerMine: 'Sparkle Pony Extraordinaire',
+	// What the crew may rename "my" spot to: the "Your spot" chip on the house page.
+	spotLabelMine: 'Hängematte unten rechts am Fenster mit Seeblick',
 	customerLong: 'Maximilian-Alexander Freiherr von und zu Musterstadt-Langenhagen-Ost',
 	emailLong:
 		'maximilian.alexander.freiherr.von.und.zu.musterstadt@a-very-long-subdomain.example.org',
@@ -39,7 +42,9 @@ export const TEXTS = {
 	groupName: 'Kuschelzeltplatzverwaltungsgebäude Crew!',
 	groupNameOther: 'Supercalifragilisticexpialidocious Camp',
 	projectText:
-		'Our art project builds a glowing cardboard Kuschelzeltplatzverwaltungsgebäude: twelve of us need a room together, ideally close to the workshop tent and the lake. Any hut is fine!',
+		'Our art project builds a glowing cardboard Kuschelzeltplatzverwaltungsgebäude by the lake: the crew needs a room together and a bed close to the piece, or nobody can guard it at night. Any hut is fine!',
+	helperText:
+		'I help someone who uses a wheelchair at night, so I need to sleep in the same room or right next door. Thank you so much!',
 	// A swap note at the limit, with a compound word that may only break inside itself.
 	swapNote:
 		'Hey! Meine ganze Crew schläft im Kuschelzeltplatzverwaltungsgebäude nebenan – tauschen wir? Danke dir tausendmal!!! 🙏✨🦄 Glitter & Liebe!'
@@ -57,6 +62,9 @@ export const BED_LABELS = [
 	'1',
 	'Sofa'
 ] as const;
+
+/** The stress guest's ("my") spot. */
+export const MY_SPOT_LABEL = 'Lower 2';
 
 /**
  * The two bunk beds of the stress room, lower level first. Each tile mixes
@@ -78,6 +86,7 @@ for (const [what, value, max] of [
 	['customer name', TEXTS.customerLong, TICKET_LIMITS.nameLength],
 	['swap note', TEXTS.swapNote, SWAP_NOTE_MAX],
 	['e-mail', TEXTS.emailLong, TICKET_LIMITS.emailLength],
+	['spot label', TEXTS.spotLabelMine, TEMPLATE_LIMITS.bedLabelLength],
 	...BED_LABELS.map((label) => ['spot label', label, TEMPLATE_LIMITS.bedLabelLength] as const)
 ] as const) {
 	if (value.length > max) throw new Error(`stress ${what} is longer than the app allows: ${value}`);
@@ -102,9 +111,12 @@ export interface StressCamp {
 	/** Houses and rooms without the stress guest's spot (the "you already have a spot" banner). */
 	otherHouseIds: string[];
 	otherRoomIds: string[];
-	/** Cookie values (not headers) for the browser: the ticket codes. */
+	/** Cookie values (not headers) for the browser: the code and the server's signature. */
 	guestWithSpot: string;
 	guestWithoutSpot: string;
+	/** The ticket codes behind those two cookies, as a ticket list has them. */
+	guestWithSpotCode: string;
+	guestWithoutSpotCode: string;
 	/** Leads a full request group (GROUP_MAX members, names at the limit). */
 	guestWithRequest: string;
 	/** That full group (its card on /admin/requests is #group-<id>). */
@@ -137,9 +149,9 @@ export async function superuser(pbUrl: string, email: string, password: string) 
 export function stressTicketList(camp: StressCamp): string {
 	const rows = [
 		['Ticket code', 'E-mail', 'Name'],
-		[camp.guestWithSpot, `new.${TEXTS.emailLong}`, `${TEXTS.customerLong} der Zweite`],
-		[`${camp.guestWithSpot}-NEW`, TEXTS.emailLong, TEXTS.customerLong],
-		[`${camp.guestWithoutSpot}-NEW`, 'oe@example.org', 'Ö']
+		[camp.guestWithSpotCode, `new.${TEXTS.emailLong}`, `${TEXTS.customerLong} der Zweite`],
+		[`${camp.guestWithSpotCode}-NEW`, TEXTS.emailLong, TEXTS.customerLong],
+		[`${camp.guestWithoutSpotCode}-NEW`, 'oe@example.org', 'Ö']
 	];
 	return rows.map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n') + '\n';
 }
@@ -349,7 +361,7 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		await post(
 			base,
 			`/room/${room.id}?/bookBed`,
-			{ bedId: beds[label], guestName: burnerName },
+			{ bedId: beds[label], guestName: burnerName, ...CONFIRMED_FIELDS },
 			session.header
 		);
 		return { ...t, cookie: session.code, round: session.round };
@@ -358,7 +370,7 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 	await book('Lower 1', TEXTS.burnerWord);
 	await book('Kuschelzeltplatzverwaltungsbett', 'Ö');
 	await book('1', TEXTS.burnerEmoji);
-	const mine = await book('Lower 2', TEXTS.burnerMine, TEXTS.customerLong, TEXTS.emailLong);
+	const mine = await book(MY_SPOT_LABEL, TEXTS.burnerMine, TEXTS.customerLong, TEXTS.emailLong);
 	const passCode = (await pb.collection('orders').getOne(mine.order.id)).pass_code as string;
 
 	// Swap requests (docs/guide/booking.md "Swap spots"), through the app like a
@@ -379,16 +391,18 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		session(mine)
 	);
 
-	const guestWithoutSpot = (await guestLogin(base, (await ticket(pb)).code)).code;
+	const guestWithoutSpotCode = (await ticket(pb)).code;
+	const guestWithoutSpot = (await guestLogin(base, guestWithoutSpotCode)).code;
 
 	const adminEmail = `layout-admin-${tag}@mauersegler.art`;
 	const adminAuth = await adminSession(pb, 'admin', adminEmail);
 
 	// Special-needs requests (pending), written through the app like guests do.
-	// The requester asks for everything at once and starts a request group with
-	// a name at the limit; members join it with burner names at the limit until
-	// it is full. A second, smaller group shows its invite link (a full one
-	// doesn't), and the crew booked a ♿ spot for one of its members.
+	// The requester ticks every personal need at once and starts a request group
+	// with a name at the limit; members join it with burner names at the limit
+	// until it is full. A second, smaller group (an art project) shows its
+	// invite link (a full one doesn't), and the crew booked a ♿ spot for one of
+	// its members.
 	await setWindow(pb, { special_requests_open: true });
 	const send = async (code: string, fields: Record<string, string>, needs: string[] = []) => {
 		const session = await guestLogin(base, code);
@@ -411,26 +425,36 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 	const requester = await send(
 		asker.code,
 		{
+			about: 'personal',
 			text: TEXTS.requestText,
 			burnerName: TEXTS.burnerLong,
 			groupMode: 'start',
 			groupName: TEXTS.groupName
 		},
-		['lower_bunk', 'step_free', 'near_toilet', 'quiet', 'own_room']
+		['lower_bunk', 'step_free', 'near_toilet', 'quiet', 'stable_light', 'other']
 	);
 	const full = await groupOf(asker.order.id);
 	for (let n = 1; n < GROUP_MAX; n++) {
 		const member = await ticket(pb, n % 2 ? TEXTS.customerLong : 'Test Guest');
-		// two members say what they need themselves, the others nothing
+		// three members say what they need themselves (a personal need, a project,
+		// a helper), the others nothing
 		const own =
 			n === 1
-				? { text: TEXTS.requestText, needs: ['step_free', 'quiet'] }
+				? { about: 'personal', text: TEXTS.requestText, needs: ['step_free', 'quiet'] }
 				: n === 2
-					? { text: TEXTS.projectText, needs: ['close_together'] }
-					: { text: '', needs: [] };
+					? { about: 'project', text: TEXTS.projectText, needs: ['near_project'] }
+					: n === 3
+						? { about: 'helper', text: TEXTS.helperText, needs: [] }
+						: { about: '', text: '', needs: [] };
 		await send(
 			member.code,
-			{ groupMode: 'join', groupCode: full.code, burnerName: joinerName(n), text: own.text },
+			{
+				groupMode: 'join',
+				groupCode: full.code,
+				burnerName: joinerName(n),
+				about: own.about,
+				text: own.text
+			},
 			own.needs
 		);
 	}
@@ -439,12 +463,13 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 	const inGroup = await send(
 		starter.code,
 		{
+			about: 'project',
 			text: TEXTS.projectText,
 			burnerName: TEXTS.burnerWord,
 			groupMode: 'start',
 			groupName: TEXTS.groupNameOther
 		},
-		['own_room', 'close_together']
+		['own_room', 'near_project']
 	);
 	const open = await groupOf(starter.order.id);
 	const helper = await ticket(pb, TEXTS.customerLong);
@@ -477,6 +502,8 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		otherRoomIds,
 		guestWithSpot: mine.cookie,
 		guestWithoutSpot,
+		guestWithSpotCode: mine.code,
+		guestWithoutSpotCode,
 		guestWithRequest: requester.code,
 		fullGroupId: full.groupId,
 		guestInGroup: inGroup.code,

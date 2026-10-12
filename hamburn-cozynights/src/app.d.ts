@@ -33,6 +33,8 @@ declare global {
 			pendingAdmin: PendingAdmin | null;
 			// The session was valid, but the last Google sign-in is older than a week 📅
 			adminSignInExpired?: boolean;
+			// PocketBase didn't answer the session check: still signed in, no rights for this request 📡
+			adminUnchecked?: boolean;
 		}
 
 		// interface PageData {}

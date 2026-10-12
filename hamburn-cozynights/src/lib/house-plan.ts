@@ -1,7 +1,7 @@
 // src/lib/house-plan.ts
 /**
  * The house generator's plan (docs/admin/camp-layout.md): rooms entered as
- * size rows — "4 rooms × 6 beds 🪜", "2 rooms × 8 beds" — instead of one by
+ * size rows — "4 rooms × 6 beds 🔝", "2 rooms × 8 beds" — instead of one by
  * one. Pure code, shared by the size rows in the browser (live totals and
  * room numbers) and the server actions that create the rooms and spots
  * (src/lib/server/house-generator.ts), so both count the same way.

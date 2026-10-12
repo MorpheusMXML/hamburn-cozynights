@@ -15,9 +15,9 @@ Ticket holders pick their own bed on the Hamburn camp map. The crew builds the c
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ed?logo=docker&logoColor=white)
 
 [How booking works](https://morpheusmxml.github.io/hamburn-cozynights/guide/booking) ·
-[Admin guide](https://morpheusmxml.github.io/hamburn-cozynights/admin/) ·
-[Architecture](https://morpheusmxml.github.io/hamburn-cozynights/reference/architecture) ·
-[Local development](https://morpheusmxml.github.io/hamburn-cozynights/develop/)
+[Admin guide](https://cozynights.hamburn.de/admin/docs/admin/) ·
+[Architecture](docs/reference/architecture.md) ·
+[Local development](docs/develop/index.md)
 
 </div>
 
@@ -31,6 +31,7 @@ Ticket holders pick their own bed on the Hamburn camp map. The crew builds the c
 | 🎫  | **One ticket, one bed**      | No accounts or passwords for guests. The ticket code is the key, and it holds exactly one spot.        |
 | 🎰  | **Destiny Roulette**         | A neon slot machine for the undecided: pull the lever for a random free bed, then keep, type or roll a burner name; booked guests can leave no trace and respin. |
 | 🎆  | **Booking fireworks**        | Neon rockets rise from your new spot and burst like the cursor does; a fire finale ends the show.      |
+| 🧺  | **Make your bed**            | Every booking starts with dressing a neon bed in your own covers (pillow and blanket are provided) and a tick for the rules; the pass and every confirmation repeat what to pack. |
 | 🛠️  | **Staging, Live, Closed**    | The crew builds the layout in staging; a booking window opens and closes booking by timer, and closing freezes it. |
 | 🔐  | **Google Workspace sign-in** | Admins use their `@mauersegler.art` account. Newcomers request access, a superuser approves.           |
 | 💾  | **Layout templates**         | Export the camp as JSON; a file is compared with the camp and only the changes you pick are applied.   |
@@ -67,30 +68,30 @@ npm ci
 npm run dev              # http://localhost:5173
 ```
 
-The full walkthrough, including admin sign-in on your machine, is in [Local development](https://morpheusmxml.github.io/hamburn-cozynights/develop/).
+The full walkthrough, including admin sign-in on your machine, is in [Local development](docs/develop/index.md).
 
 ## 📚 Documentation
 
-The documentation lives in [`docs/`](docs/) and is published at **[morpheusmxml.github.io/hamburn-cozynights](https://morpheusmxml.github.io/hamburn-cozynights/)**.
+The documentation lives in [`docs/`](docs/). The **guest guide** is public at **[morpheusmxml.github.io/hamburn-cozynights](https://morpheusmxml.github.io/hamburn-cozynights/)**. The **admin guide** is served by the app itself, behind the admin login, at **[cozynights.hamburn.de/admin/docs](https://cozynights.hamburn.de/admin/docs/)**; *Under the hood* and *Develop* are part of it there. Here on GitHub, their Markdown sources are linked below.
 
-| Guide                                                                                       | Admin                                                                                           | Under the hood                                                                             | Develop                                                                                           |
-| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| [What is CozyNights?](https://morpheusmxml.github.io/hamburn-cozynights/guide/)             | [Control Center](https://morpheusmxml.github.io/hamburn-cozynights/admin/)                      | [Architecture](https://morpheusmxml.github.io/hamburn-cozynights/reference/architecture)   | [Local development](https://morpheusmxml.github.io/hamburn-cozynights/develop/)                   |
-| [Booking a bed](https://morpheusmxml.github.io/hamburn-cozynights/guide/booking)            | [Admin access & roles](https://morpheusmxml.github.io/hamburn-cozynights/admin/access)          | [Security & privacy](https://morpheusmxml.github.io/hamburn-cozynights/reference/security) | [Environments & deployment](https://morpheusmxml.github.io/hamburn-cozynights/develop/deployment) |
-| [Special-needs spot](https://morpheusmxml.github.io/hamburn-cozynights/guide/special-needs) | [Houses, rooms & spots](https://morpheusmxml.github.io/hamburn-cozynights/admin/camp-layout)    |                                                                                            | [Working on these docs](https://morpheusmxml.github.io/hamburn-cozynights/develop/docs)           |
-| [Staging, Live & Closed](https://morpheusmxml.github.io/hamburn-cozynights/guide/phases)    | [Layout templates](https://morpheusmxml.github.io/hamburn-cozynights/admin/templates)           | [Data model & templates](https://morpheusmxml.github.io/hamburn-cozynights/reference/data-model) | [Landing page title](https://morpheusmxml.github.io/hamburn-cozynights/develop/effigy-title)      |
-| [FAQ](https://morpheusmxml.github.io/hamburn-cozynights/guide/faq)                          | [Event checklist](https://morpheusmxml.github.io/hamburn-cozynights/admin/event-checklist)      |                                                                                            | [Testing & release checks](https://morpheusmxml.github.io/hamburn-cozynights/develop/testing)     |
-|                                                                                             | [Tickets & e-mail addresses](https://morpheusmxml.github.io/hamburn-cozynights/admin/tickets)   |                                                                                            | [Branches, integration & releases](https://morpheusmxml.github.io/hamburn-cozynights/develop/integration) |
-|                                                                                             | [Legal pages](https://morpheusmxml.github.io/hamburn-cozynights/admin/legal)                    |                                                                                            |                                                                                                   |
-|                                                                                             | [Notifications](https://morpheusmxml.github.io/hamburn-cozynights/admin/notifications)          |                                                                                            |                                                                                                   |
-|                                                                                             | [Booking passes](https://morpheusmxml.github.io/hamburn-cozynights/admin/passes)                |                                                                                            |                                                                                                   |
-|                                                                                             | [Special-needs requests](https://morpheusmxml.github.io/hamburn-cozynights/admin/special-needs) |                                                                                            |                                                                                                   |
+| Guide (public)                                                                              | Admin (sign-in)                                                                        | Under the hood                                         | Develop                                                         |
+| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------- |
+| [What is CozyNights?](https://morpheusmxml.github.io/hamburn-cozynights/guide/)             | [Control Center](https://cozynights.hamburn.de/admin/docs/admin/)                      | [Architecture](docs/reference/architecture.md)         | [Local development](docs/develop/index.md)                      |
+| [Booking a bed](https://morpheusmxml.github.io/hamburn-cozynights/guide/booking)            | [Admin access & roles](https://cozynights.hamburn.de/admin/docs/admin/access)          | [Security & privacy](docs/reference/security.md)       | [Environments & deployment](docs/develop/deployment.md)         |
+| [Special-needs spot](https://morpheusmxml.github.io/hamburn-cozynights/guide/special-needs) | [Houses, rooms & spots](https://cozynights.hamburn.de/admin/docs/admin/camp-layout)    | [Data model & templates](docs/reference/data-model.md) | [Working on these docs](docs/develop/docs.md)                   |
+| [Staging, Live & Closed](https://morpheusmxml.github.io/hamburn-cozynights/guide/phases)    | [Layout templates](https://cozynights.hamburn.de/admin/docs/admin/templates)           |                                                        | [Landing page title](docs/develop/effigy-title.md)              |
+| [FAQ](https://morpheusmxml.github.io/hamburn-cozynights/guide/faq)                          | [Event checklist](https://cozynights.hamburn.de/admin/docs/admin/event-checklist)      |                                                        | [Testing & release checks](docs/develop/testing.md)             |
+|                                                                                             | [Tickets & e-mail addresses](https://cozynights.hamburn.de/admin/docs/admin/tickets)   |                                                        | [Branches, integration & releases](docs/develop/integration.md) |
+|                                                                                             | [Legal pages](https://cozynights.hamburn.de/admin/docs/admin/legal)                    |                                                        |                                                                 |
+|                                                                                             | [Notifications](https://cozynights.hamburn.de/admin/docs/admin/notifications)          |                                                        |                                                                 |
+|                                                                                             | [Booking passes](https://cozynights.hamburn.de/admin/docs/admin/passes)                |                                                        |                                                                 |
+|                                                                                             | [Special-needs requests](https://cozynights.hamburn.de/admin/docs/admin/special-needs) |                                                        |                                                                 |
 
 ## 🗂️ Repository
 
 ```text
 .
-├── docs/                   documentation site (VitePress → GitHub Pages)
+├── docs/                   documentation (VitePress): guest guide → GitHub Pages, admin guide → the app
 ├── .github/workflows/      staging deploy, docs deploy
 └── hamburn-cozynights/     the app: SvelteKit + PocketBase
     ├── src/                routes, components, server logic

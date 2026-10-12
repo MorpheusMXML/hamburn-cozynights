@@ -5,25 +5,30 @@ is the only way a ♿ special-needs spot gets booked: the ♿ panel lists every
 one with its state, so none goes missing from the picker unexplained.
 Request groups get a card each above the lists, to decide and book for the
 whole group; every member's own card still works on its own.
+Spots are picked in the spot picker (SpotPicker): one sheet over the page
+with the free spots house by house, opened from a card. Without JavaScript
+each card keeps a plain list of the free spots (SpotSelect).
 A declined request can still be approved, from the ⋯ menu on its card:
 deliberately out of the way. What guests wrote may be health data; it is
 shown here and nowhere else.
 -->
 <script lang="ts">
+	import { onMount, tick } from 'svelte';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import type { ActionData, PageData } from './$types';
 	import { confirmDialog, toast } from '$lib/dialogs';
 	import {
+		BLOCKED_OK_ALL,
 		STATUS_LABELS,
-		isProjectNeed,
-		needLabel,
-		requestKinds,
-		type AdminRequestView,
-		type SpecialNeed
+		isOpenRequest,
+		type AdminRequestView
 	} from '$lib/special-needs';
+	import { needPill } from '$lib/need-pill';
+	import { pickNotes, type PickerRequest } from '$lib/spot-picker';
 	import GroupCard from '$lib/components/admin/requests/GroupCard.svelte';
 	import SpecialSpots from '$lib/components/admin/requests/SpecialSpots.svelte';
+	import SpotPicker from '$lib/components/admin/requests/SpotPicker.svelte';
 	import SpotSelect from '$lib/components/admin/requests/SpotSelect.svelte';
 
 	export let data: PageData;
@@ -31,6 +36,75 @@ shown here and nowhere else.
 	export let form: ActionData;
 
 	let busy = '';
+
+	// The spot picker needs JavaScript; without it every card keeps its list.
+	let mounted = false;
+	onMount(() => (mounted = true));
+
+	/** The open spot picker, or null. One at a time, over the whole page. */
+	let picker: PickerRequest | null = null;
+	/** The spot picked for a request's card, by request id, until it is booked. */
+	let chosen: Record<string, string> = {};
+	let assignForms: Record<string, HTMLFormElement> = {};
+
+	/** Opens the picker; it closes before the card hears what was picked. */
+	function pick(request: PickerRequest) {
+		if (request.mode === 'spot') {
+			const done = request.resolve;
+			picker = {
+				...request,
+				resolve: (bedId: string | null) => {
+					picker = null;
+					done(bedId);
+				}
+			};
+		} else {
+			const done = request.resolve;
+			picker = {
+				...request,
+				resolve: (choice: { place: string; book: boolean } | null) => {
+					picker = null;
+					done(choice);
+				}
+			};
+		}
+	}
+
+	/** The card's booking button, and the picker's for this request. */
+	function bookLabel(request: AdminRequestView, inPicker = false) {
+		if (request.status === 'pending') return 'Approve & book';
+		if (request.spot) return inPicker ? 'Move here' : 'Move';
+		return 'Book';
+	}
+
+	/** Picks a spot for the request; the pick is booked right away (the page asks first). */
+	function openSpotPicker(request: AdminRequestView) {
+		pick({
+			mode: 'spot',
+			who: who(request),
+			needs: request.needs,
+			current: request.spot
+				? `${request.spot.label} (${request.spot.assigned ? 'booked by the crew' : 'booked by the guest'})`
+				: '',
+			selected: chosen[request.id] ?? '',
+			action: bookLabel(request, true),
+			resolve: async (bedId) => {
+				if (!bedId) return;
+				chosen = { ...chosen, [request.id]: bedId };
+				await tick();
+				// The card's own button holds the focus: the confirmation hands it back there.
+				const form = assignForms[request.id];
+				form?.querySelector<HTMLButtonElement>('button.primary')?.focus();
+				form?.requestSubmit();
+			}
+		});
+	}
+
+	function forget(requestId: string) {
+		const rest = { ...chosen };
+		delete rest[requestId];
+		chosen = rest;
+	}
 
 	$: waiting = data.requests.filter((r) => r.status === 'pending');
 	$: approved = data.requests.filter((r) => r.status === 'approved');
@@ -42,12 +116,9 @@ shown here and nowhere else.
 	$: specialTotal = data.specialSpots.length;
 	$: specialFree = data.specialSpots.filter((spot) => spot.state === 'free').length;
 	$: specialSummary = summarizeSpecial(data.specialSpots.map((spot) => spot.state));
-	// Same "open" as the load: waiting, or approved without a spot from the crew.
-	$: specialAsked = data.requests.filter(
-		(r) =>
-			(r.status === 'pending' || (r.status === 'approved' && !r.spot?.assigned)) &&
-			requestKinds(r.needs).access
-	).length;
+	// Same "open" as the load. The ♿ spots are the pool for every request (Max,
+	// 2026-10-12), helpers and projects included.
+	$: specialAsked = data.requests.filter(isOpenRequest).length;
 
 	/** "3 marked — 1 booked by a guest, 1 blocked with TAKEN, 1 inactive"; '' when none is marked. */
 	function summarizeSpecial(states: string[]): string {
@@ -57,6 +128,7 @@ shown here and nowhere else.
 			[n('request'), 'booked through a request', 'booked through requests'],
 			[n('booked'), 'booked by a guest', 'booked by guests'],
 			[n('blocked'), 'blocked with TAKEN', 'blocked with TAKEN'],
+			[n('locked'), 'locked 🔒', 'locked 🔒'],
 			[n('inactive'), 'inactive', 'inactive']
 		] as const;
 		const why = parts
@@ -64,13 +136,6 @@ shown here and nowhere else.
 			.map(([count, one, many]) => `${count} ${count === 1 ? one : many}`);
 		return `${states.length} marked${why.length > 0 ? ` — ${why.join(', ')}` : ''}`;
 	}
-
-	/** A need of an art project or crew: a neutral pill with its own icon, not the ♿ pink. */
-	const PROJECT_ICONS: Record<string, string> = { own_room: '🎨', close_together: '👥' };
-	const pillText = (need: SpecialNeed) =>
-		isProjectNeed(need)
-			? `${PROJECT_ICONS[need] ?? ''} ${needLabel(need)}`.trim()
-			: needLabel(need);
 
 	const NO_CONNECTION = 'We could not reach the server, so nothing was changed. Try again.';
 
@@ -84,12 +149,13 @@ shown here and nowhere else.
 	 * `warning`, shown instead of the success toast.
 	 * @param options.reset false: keep the form as it is after a success (the
 	 *   group planner fills its rows from the page data itself)
+	 * @param options.after runs after a success, before the page data reloads
 	 */
 	function act(
 		key: string,
 		done: string | ((data: Record<string, unknown>) => string),
 		confirmation?: (form: FormData) => Confirmation,
-		options: { reset?: boolean } = {}
+		options: { reset?: boolean; after?: () => void } = {}
 	): SubmitFunction {
 		return async ({ cancel, formData }) => {
 			if (confirmation) {
@@ -124,6 +190,7 @@ shown here and nowhere else.
 				} else {
 					toast(typeof done === 'string' ? done : done(payload), 'success');
 				}
+				options.after?.();
 				await update({ reset: options.reset ?? true });
 			};
 		};
@@ -154,16 +221,36 @@ shown here and nowhere else.
 
 	const current = (id: string) => data.requests.find((r) => r.id === id);
 
+	/**
+	 * Also writes blockedOk: the 🔒 spot the dialog warns about, which the
+	 * server books only then (assignSpot) — so a spot locked after the page
+	 * loaded, which no dialog warned about, is refused.
+	 */
 	function assignConfirmation(id: string, form: FormData): Confirmation {
 		const request = current(id);
-		const spot = data.spots.find((s) => s.bedId === form.get('bedId'))?.label ?? 'The spot';
+		const picked = data.spots.find((s) => s.bedId === form.get('bedId'));
+		const spot = picked?.label ?? 'The spot';
 		const from = request?.spot ? `, and ${request.spot.label} becomes free` : '';
 		const closed = data.isBookingActive ? '' : ', although booking is closed';
 		const approves = request?.status === 'pending' ? ' The request is approved as well.' : '';
+		// Picked by hand: a spot out of service, or one that doesn't fit, says so before it books.
+		const notes = picked && request ? pickNotes(request.needs, picked) : null;
+		if (picked && notes?.blocked) form.set('blockedOk', picked.bedId);
+		else form.delete('blockedOk');
+		const blocked = notes?.blocked
+			? `🔒 ${spot} is blocked (out of service). Book it anyway? `
+			: '';
+		const mismatch = notes?.mismatches.length
+			? ` ✗ It doesn't answer what they asked for: ${notes.mismatches.join(', ')}.`
+			: '';
 		return {
-			title: request?.spot ? 'Move the guest?' : 'Book this spot for the guest?',
-			message: `${spot} is booked for this ticket right away${closed}${from}. The guest gets a message with the booking pass.${approves}`,
-			label: 'Book it'
+			title: notes?.blocked
+				? 'Book a blocked spot?'
+				: request?.spot
+					? 'Move the guest?'
+					: 'Book this spot for the guest?',
+			message: `${blocked}${spot} is booked for this ticket right away${closed}${from}.${mismatch} The guest gets a message with the booking pass.${approves}`,
+			label: notes?.blocked ? 'Book it anyway' : 'Book it'
 		};
 	}
 
@@ -222,10 +309,11 @@ shown here and nowhere else.
 	<a href="/admin" class="back">← Control Center</a>
 	<h1>Special-needs requests ♿</h1>
 	<p class="intro">
-		Guests ask for a fitting spot with their ticket code, also before booking opens: for something
-		they need, or for an art project or crew that wants a room or spots close together — on their
-		own or as a group. Approve or decline, then book a spot: that books it for the guest right away,
-		in Staging Mode too. Each guest gets a message about each decision and the booking.
+		Guests ask for a fitting spot with their ticket code, also before booking opens: for a personal
+		need, as the helper of someone with one, or for an art project or crew that needs a room or a
+		bed close to its piece — on their own or as a group. Approve or decline, then book a spot: that
+		books it for the guest right away, in Staging Mode too. Each guest gets a message about each
+		decision and the booking.
 	</p>
 
 	<section class="switch-card" class:open={data.requestsOpen}>
@@ -265,7 +353,7 @@ shown here and nowhere else.
 						<span class="numbers">
 							{specialFree} free for {specialAsked} open {specialAsked === 1
 								? 'request'
-								: 'requests'} with something they need
+								: 'requests'}
 						</span>
 						{#if specialFree < specialAsked}<span class="warn">⚠️ not enough</span>{/if}
 					</li>
@@ -321,8 +409,10 @@ shown here and nowhere else.
 					{specialFree}
 					{specialSummary}
 					isBookingActive={data.isBookingActive}
+					roomBooked={data.roomBooked}
 					{busy}
 					{act}
+					{pick}
 				/>
 			{/each}
 		</section>
@@ -372,7 +462,8 @@ shown here and nowhere else.
 						<ul class="needs">
 							<!-- unkeyed: stored needs aren't deduplicated, a key could clash -->
 							{#each request.needs as need}
-								<li class:project={isProjectNeed(need)}>{pillText(need)}</li>
+								{@const pill = needPill(need)}
+								<li class:project={pill.neutral}>{pill.text}</li>
 							{:else}
 								<li class="project">👥 Group only: nothing of their own</li>
 							{/each}
@@ -455,36 +546,88 @@ shown here and nowhere else.
 						</div>
 
 						{#if request.status !== 'declined'}
+							{@const choice = chosen[request.id]
+								? data.spots.find((spot) => spot.bedId === chosen[request.id])
+								: undefined}
 							<form
 								method="POST"
 								action="?/assign"
 								class="assign"
-								use:enhance={act(request.id, 'The spot is booked for the guest.', (sent) =>
-									assignConfirmation(request.id, sent)
+								bind:this={assignForms[request.id]}
+								use:enhance={act(
+									request.id,
+									'The spot is booked for the guest.',
+									(sent) => assignConfirmation(request.id, sent),
+									{ after: () => forget(request.id) }
 								)}
 							>
 								<input type="hidden" name="id" value={request.id} />
-								<label for="spot-{request.id}">{request.spot ? 'Move to' : 'Assign a spot'}</label>
-								<div class="row">
-									<SpotSelect
-										name="bedId"
-										id="spot-{request.id}"
-										spots={data.spots}
-										needs={request.needs}
-										{specialFree}
-										{specialSummary}
-										placeholder="Pick a free spot…"
-									/>
-									<button class="btn primary" disabled={!!busy}>
-										{request.status === 'pending'
-											? 'Approve & book'
-											: request.spot
-												? 'Move'
-												: 'Book'}
-									</button>
-								</div>
+								{#if mounted}
+									<input type="hidden" name="bedId" value={choice?.bedId ?? ''} />
+									<span class="assign-label">{request.spot ? 'Move to' : 'Assign a spot'}</span>
+									<div class="row">
+										{#if choice}
+											<p class="choice">
+												{choice.label}{choice.special ? ' ♿' : ''}{choice.locked ? ' 🔒' : ''}
+											</p>
+											<button class="btn primary" disabled={!!busy}>{bookLabel(request)}</button>
+											<button
+												type="button"
+												class="btn"
+												disabled={!!busy}
+												on:click={() => openSpotPicker(request)}>Change</button
+											>
+										{:else}
+											<button
+												type="button"
+												class="btn primary"
+												disabled={!!busy || data.spots.length === 0}
+												on:click={() => openSpotPicker(request)}
+											>
+												🛏️ {request.spot ? 'Choose where to move' : 'Choose a spot'}
+											</button>
+										{/if}
+									</div>
+									{#if specialFree === 0}
+										<p class="hint">
+											{#if specialSummary}
+												♿ No special-needs spot is free right now: {specialSummary}. See “♿
+												Special-needs spots” above.
+											{:else}
+												♿ No spot is marked as a special-needs spot yet: press ♿ SPECIAL on a spot
+												in the room editor.
+											{/if}
+										</p>
+									{/if}
+								{:else}
+									<label for="spot-{request.id}">{request.spot ? 'Move to' : 'Assign a spot'}</label
+									>
+									<div class="row">
+										<SpotSelect
+											name="bedId"
+											id="spot-{request.id}"
+											spots={data.spots}
+											needs={request.needs}
+											{specialFree}
+											{specialSummary}
+											placeholder="Pick a free spot…"
+										/>
+										<button class="btn primary" disabled={!!busy}>{bookLabel(request)}</button>
+									</div>
+									<!-- No dialog without JavaScript: the box confirms a spot out of service. -->
+									{#if data.spots.some((spot) => spot.locked)}
+										<label class="blocked-ok">
+											<input type="checkbox" name="blockedOk" value={BLOCKED_OK_ALL} />
+											Book a 🔒 blocked spot (out of service) anyway
+										</label>
+									{/if}
+								{/if}
 								{#if data.spots.length === 0}
-									<p class="hint">No free spot left. Free or add one in the room editor.</p>
+									<p class="hint">
+										No free spot left. During Live Booking and after it, only a superuser in Staging
+										Mode can free or add one; hold spots for requests in time with ♿ SPECIAL in the
+										room editor (that works in every phase, TAKEN and deactivating don't).
+									</p>
 								{/if}
 							</form>
 						{/if}
@@ -494,6 +637,17 @@ shown here and nowhere else.
 		{/if}
 	{/each}
 </div>
+
+{#if picker}
+	<SpotPicker
+		request={picker}
+		spots={data.spots}
+		sizes={data.roomSizes}
+		booked={data.roomBooked}
+		{specialFree}
+		{specialSummary}
+	/>
+{/if}
 
 <style>
 	.requests-page {
@@ -858,12 +1012,34 @@ shown here and nowhere else.
 		padding-top: 0.75rem;
 		border-top: 1px solid #222;
 	}
-	.assign label {
+	.assign label,
+	.assign-label {
 		font-weight: 800;
 		font-size: 0.8rem;
 		letter-spacing: 0.05em;
 		text-transform: uppercase;
 		color: #a3a3a3;
+	}
+	/* without JavaScript: the box that confirms a spot out of service */
+	.assign .blocked-ok {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
+		font-size: 0.85rem;
+		letter-spacing: normal;
+		text-transform: none;
+		color: #fbbf24;
+		overflow-wrap: anywhere;
+	}
+	/* the picked spot, waiting for its booking (the confirmation was cancelled) */
+	.choice {
+		flex: 1 1 14rem;
+		min-width: 0;
+		margin: 0;
+		align-self: center;
+		font-weight: 800;
+		overflow-wrap: anywhere;
 	}
 	.btn {
 		min-height: 44px;

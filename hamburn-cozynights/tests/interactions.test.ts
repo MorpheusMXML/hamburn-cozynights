@@ -7,6 +7,20 @@ import { actions as houseAdminActions } from '../src/routes/admin/house/[id]/+pa
 import { APP_SETTINGS_ID } from '../src/lib/server/constants';
 import { overrideProblem } from '../src/lib/accommodation';
 import { FakePb } from './fake-pb';
+import { CONFIRMED_FIELDS } from '../src/lib/booking-check';
+
+/** Booking requests without the check, or with half of it. */
+const HALF_CHECKS: Record<string, string>[] = [
+	{},
+	{ rulesConfirmed: 'yes' },
+	{ beddingConfirmed: 'yes' }
+];
+
+/** A booking request as the booking window sends it: with the bed made and the rules ticked. */
+function confirmed(formData: FormData): FormData {
+	for (const [field, value] of Object.entries(CONFIRMED_FIELDS)) formData.append(field, value);
+	return formData;
+}
 
 // Mock environment variables
 vi.mock('$env/dynamic/private', () => ({
@@ -43,6 +57,8 @@ describe('Interactions & Registration', () => {
 				throw Object.assign(new Error('not found'), { status: 404 });
 			}),
 			update: vi.fn(),
+			// POST /api/cozy/book: release, claim and name in one transaction
+			send: vi.fn(async () => ({ ok: true })),
 			filter: vi.fn((q: any) => q)
 		};
 		mockCookies = {
@@ -75,7 +91,11 @@ describe('Interactions & Registration', () => {
 			expect(e.status).toBe(303);
 		}
 
-		expect(mockCookies.set).toHaveBeenCalledWith('bookingCode', 'VALID-CODE', expect.any(Object));
+		expect(mockCookies.set).toHaveBeenCalledWith(
+			'bookingCode',
+			expect.stringMatching(/^VALID-CODE\.[A-Za-z0-9_-]{43}$/),
+			expect.any(Object)
+		);
 	});
 
 	it('should fail login with an invalid booking code', async () => {
@@ -119,6 +139,8 @@ describe('Room Load & Booking Logic', () => {
 				throw Object.assign(new Error('not found'), { status: 404 });
 			}),
 			update: vi.fn(),
+			// POST /api/cozy/book: release, claim and name in one transaction
+			send: vi.fn(async () => ({ ok: true })),
 			filter: vi.fn((q: any) => q),
 			// bookBed/unbookBed require a valid admin session before touching
 			// the database — see BookingService and room/[id]/+page.server.ts.
@@ -306,44 +328,77 @@ describe('Room Load & Booking Logic', () => {
 		const formData = new FormData();
 		formData.append('bedId', 'bed1');
 		formData.append('guestName', 'Alice');
-		const request = { formData: async () => formData } as any;
+		const request = { formData: async () => confirmed(formData) } as any;
 
 		const result = (await roomActions.bookBed({ request, locals: mockLocals } as any)) as any;
 		expect(result.success).toBe(true);
-		expect(mockAdminPb.update).toHaveBeenCalledWith(
-			'bed1',
-			expect.objectContaining({ occupied: true, order: 'order1' })
+		expect(mockAdminPb.send).toHaveBeenCalledWith(
+			'/api/cozy/book',
+			expect.objectContaining({
+				method: 'POST',
+				body: expect.objectContaining({ order: 'order1', bed: 'bed1', requireLive: true })
+			})
 		);
 	});
 
-	it('should refuse a locked bed for guests but allow it for admins', async () => {
+	it('should book a locked bed only with a crew ticket, not with an admin session', async () => {
 		const lockedBed = { id: 'bed1', occupied: false, is_locked: true, enabled: true };
 		const makeRequest = () => {
 			const formData = new FormData();
 			formData.append('bedId', 'bed1');
 			formData.append('guestName', 'Alice');
-			return { formData: async () => formData } as any;
+			return { formData: async () => confirmed(formData) } as any;
+		};
+		const book = (locals: any) => {
+			mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true }); // settings
+			return roomActions.bookBed({ request: makeRequest(), locals } as any);
 		};
 
-		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true });
-		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' });
+		// a guest's ticket: no
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1', email: 'a@example.org' });
 		mockAdminPb.getOne.mockResolvedValueOnce(lockedBed);
-		const guest = (await roomActions.bookBed({
-			request: makeRequest(),
-			locals: mockLocals
-		} as any)) as any;
+		const guest = (await book(mockLocals)) as any;
 		expect(guest.status).toBe(409);
-		expect(mockAdminPb.update).not.toHaveBeenCalled();
 
-		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true });
-		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' });
+		// an admin signed in to the admin area, but with a guest's ticket: still no
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1', email: 'a@example.org' });
 		mockAdminPb.getOne.mockResolvedValueOnce(lockedBed);
-		mockAdminPb.getFullList.mockResolvedValueOnce([]);
-		const admin = (await roomActions.bookBed({
-			request: makeRequest(),
-			locals: { ...mockLocals, admin: { email: 'max@mauersegler.art', role: 'admin' } }
-		} as any)) as any;
-		expect(admin.success).toBe(true);
+		const adminWithGuestTicket = (await book({
+			...mockLocals,
+			admin: { email: 'max@mauersegler.art', role: 'admin' }
+		})) as any;
+		expect(adminWithGuestTicket.status).toBe(409);
+		expect(mockAdminPb.send).not.toHaveBeenCalled();
+
+		// a ticket of the admin domain that no approved account has (pending, removed): no
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({
+			id: 'order1',
+			email: 'new@mauersegler.art'
+		});
+		mockAdminPb.getFullList.mockResolvedValueOnce([
+			{ email: 'max@mauersegler.art', role: 'admin' }
+		]); // the crew accounts
+		mockAdminPb.getOne.mockResolvedValueOnce(lockedBed);
+		const pending = (await book(mockLocals)) as any;
+		expect(pending.status).toBe(409);
+		expect(mockAdminPb.send).not.toHaveBeenCalled();
+
+		// the crew's own ticket, without any admin session: yes
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({
+			id: 'order1',
+			email: 'Max@mauersegler.art'
+		});
+		mockAdminPb.getFullList.mockResolvedValueOnce([
+			{ email: 'max@mauersegler.art', role: 'admin' }
+		]); // the crew accounts
+		mockAdminPb.getOne.mockResolvedValueOnce(lockedBed);
+		mockAdminPb.getFullList.mockResolvedValueOnce([]); // previous beds
+		const crew = (await book(mockLocals)) as any;
+		expect(crew.success).toBe(true);
+		expect(mockAdminPb.send).toHaveBeenCalledWith(
+			'/api/cozy/book',
+			expect.objectContaining({ body: expect.objectContaining({ allowLocked: true }) })
+		);
 	});
 
 	it('should refuse a deactivated bed', async () => {
@@ -353,13 +408,35 @@ describe('Room Load & Booking Logic', () => {
 
 		const formData = new FormData();
 		formData.append('bedId', 'bed1');
-		const request = { formData: async () => formData } as any;
+		const request = { formData: async () => confirmed(formData) } as any;
 
 		const result = (await roomActions.bookBed({ request, locals: mockLocals } as any)) as any;
 		expect(result.status).toBe(409);
 		expect(mockAdminPb.update).not.toHaveBeenCalled();
 	});
 
+	it('refuses a new spot without the check of the booking window, before touching the spot', async () => {
+		for (const fields of HALF_CHECKS) {
+			mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true });
+			mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' }); // the ticket, no spot yet
+			const formData = new FormData();
+			formData.append('bedId', 'bed1');
+			formData.append('guestName', 'Alice');
+			for (const [field, value] of Object.entries(fields)) formData.append(field, value);
+
+			const result = (await roomActions.bookBed({
+				request: { formData: async () => formData },
+				locals: mockLocals
+			} as any)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data).toMatchObject({ needsCheck: true });
+			expect(result.data.error).toMatch(/make your bed and confirm the rules/);
+		}
+		expect(mockAdminPb.getOne).not.toHaveBeenCalled(); // the spot was never read
+		expect(mockAdminPb.update).not.toHaveBeenCalled();
+	});
+
+	// A new name for the spot the ticket holds needs no check: these posts come without it.
 	it('lets a guest rename the spot they hold before booking opens, but not book one', async () => {
 		const post = (bedId: string, guestName: string) => {
 			const formData = new FormData();
@@ -369,7 +446,12 @@ describe('Room Load & Booking Logic', () => {
 		};
 
 		// Staging (booking not open yet); the ticket holds bed1, e.g. a handed-over
-		// ticket whose spot lost its name, or a spot the crew booked.
+		// ticket whose spot lost its name, or a spot the crew booked. The phase
+		// re-read inside bookBed sees Staging too, as on the server.
+		mockAdminPb.getOne.mockImplementation(async (id: string) => {
+			if (id === APP_SETTINGS_ID) return { is_booking_active: false };
+			throw Object.assign(new Error('not found'), { status: 404 });
+		});
 		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: false });
 		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' }); // order
 		mockAdminPb.getFirstListItem.mockResolvedValueOnce({
@@ -389,13 +471,16 @@ describe('Room Load & Booking Logic', () => {
 			locals: mockLocals
 		} as any)) as any;
 		expect(renamed.success).toBe(true);
-		expect(mockAdminPb.update).toHaveBeenCalledWith(
-			'order1',
-			expect.objectContaining({ burner_name: expect.any(String) })
+		// the route writes the new name; the spot is the ticket's, so it is no claim
+		expect(mockAdminPb.send).toHaveBeenCalledWith(
+			'/api/cozy/book',
+			expect.objectContaining({
+				body: expect.objectContaining({ order: 'order1', bed: 'bed1', name: expect.any(String) })
+			})
 		);
 
 		// Taking a spot stays a Live Booking thing.
-		mockAdminPb.update.mockClear();
+		mockAdminPb.send.mockClear();
 		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: false });
 		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' });
 		mockAdminPb.getFirstListItem.mockRejectedValueOnce({ status: 404 }); // holds no spot
@@ -405,7 +490,7 @@ describe('Room Load & Booking Logic', () => {
 		} as any)) as any;
 		expect(refused.status).toBe(403);
 		expect(refused.data.error).toMatch(/not open yet/);
-		expect(mockAdminPb.update).not.toHaveBeenCalled();
+		expect(mockAdminPb.send).not.toHaveBeenCalled();
 	});
 
 	it('refuses to rename once booking has closed, without looking anything up', async () => {
@@ -518,7 +603,9 @@ describe('Admin Management Actions', () => {
 	});
 
 	it('should delete a bed in staging mode', async () => {
-		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: false }); // Staging mode
+		mockPb.getOne
+			.mockResolvedValueOnce({ is_booking_active: false }) // Staging mode
+			.mockResolvedValueOnce({ id: 'bed1', order: '' }); // the spot holds no booking
 
 		const formData = new FormData();
 		formData.append('id', 'bed1');

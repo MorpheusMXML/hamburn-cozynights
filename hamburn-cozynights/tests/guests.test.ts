@@ -237,12 +237,41 @@ describe('filters, counts, search and sorting', () => {
 			openRequests: 1,
 			telegram: 1,
 			mailed: 1,
-			handedOver: 1
+			handedOver: 1,
+			unpaid: 0
 		});
 		// Every tile is a filter of the same name.
 		for (const tile of GUEST_TILES) {
 			expect(GUEST_FILTERS.some((filter) => filter.key === tile.key)).toBe(true);
 		}
+	});
+
+	it('keeps unpaid tickets in the totals, never under without a spot', () => {
+		const withUnpaid = describeGuests({
+			...records,
+			orders: [
+				...records.orders,
+				// not paid yet, and one that turned unpaid after its guest booked
+				{ ...records.orders[1], id: 'o5', order_number: 'HB-1005', unpaid: true },
+				{ ...records.orders[1], id: 'o6', order_number: 'HB-1006', unpaid: true }
+			] as unknown as GuestRecords['orders'],
+			beds: [...records.beds, { ...records.beds[0], id: 'b6', order: 'o6', checked_in_at: '' }]
+		});
+		const unpaid = withUnpaid.find((entry) => entry.id === 'o5')!;
+		expect(unpaid.unpaid).toBe(true);
+		expect(withUnpaid.find((entry) => entry.id === 'o1')!.unpaid).toBe(false);
+		expect(countGuests(withUnpaid)).toMatchObject({
+			tickets: 5,
+			withSpot: 3,
+			withoutSpot: 1,
+			unpaid: 2
+		});
+		const ids = (filter: (typeof GUEST_FILTERS)[number]['key']) =>
+			withUnpaid.filter((entry) => matchesGuestFilter(entry, filter)).map((entry) => entry.id);
+		expect(ids('nospot')).toEqual(['o2']);
+		expect(ids('unpaid')).toEqual(['o5', 'o6']);
+		// it can't book, so it doesn't need the crew once booking has closed
+		expect(guestRowState(unpaid, 'closed')).toBe('idle');
 	});
 
 	it('searches names and places, never the address or the code', () => {

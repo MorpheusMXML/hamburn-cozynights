@@ -16,9 +16,11 @@
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import { mapLookingAround } from '$lib/components/GuestTopBar.svelte';
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
-	import { invalidateAll } from '$app/navigation';
+	import { afterNavigate, invalidateAll } from '$app/navigation';
+	import { resyncOnce } from '$lib/waiting';
+	import { resyncDelay } from '$lib/booking-phase';
 
 	export let data: PageData;
 	$: ({ isBookingActive, phase, guestPhase, bookingUnlockAt } = data);
@@ -53,15 +55,32 @@
 		if (browser) mapLookingAround.set(false);
 	});
 
-	onMount(() => {
-		// Force a fresh fetch when entering the page
-		invalidateAll();
+	// No unconditional invalidateAll() when the page mounts: every way onto it
+	// brings fresh data already. A visit, a reload and the way in after signing
+	// in load it from the server (never from a cache: the load sends no-store);
+	// coming here from another page runs the server load again. A tab back from
+	// the back-forward cache, or from a while in the background, asks again
+	// through refreshOnReturn (+layout.svelte). Asking on every mount loaded
+	// the whole map twice per visit. Only data that is already old when the
+	// page shows it — a tap that preloaded it and became a scroll, minutes ago —
+	// is asked for once more. Its age comes from the browser's own clock
+	// (receivedAt, +page.ts): the server's clock may run ahead or behind. And
+	// only after the way here is complete: an invalidateAll() while SvelteKit
+	// still finishes the navigation aborts it.
+	const STALE_AFTER_MS = 30_000;
+	afterNavigate(() => {
+		if (Date.now() - data.receivedAt > STALE_AFTER_MS) invalidateAll();
 	});
 
 	let clickCount = 0;
 	let lastClickTime = 0;
 	let isShaking = false;
 	let shakeTimeout: ReturnType<typeof setTimeout>;
+
+	// Smashing the button shakes it (and calibrates intensely), but the map is
+	// asked again once every few seconds at most.
+	const RELOAD_EVERY_MS = 3000;
+	let lastReloadTime = 0;
 
 	function handleReloadSensors() {
 		const now = Date.now();
@@ -80,7 +99,10 @@
 			}, 500);
 		}
 
-		invalidateAll();
+		if (now - lastReloadTime >= RELOAD_EVERY_MS) {
+			lastReloadTime = now;
+			invalidateAll();
+		}
 	}
 </script>
 
@@ -112,7 +134,11 @@
 					{#if bookingUnlockAt}
 						<div class="timer-wrapper">
 							<h2 class="laser-text pink">IGNITION IN</h2>
-							<CountdownTimer targetDate={bookingUnlockAt} on:elapsed={() => invalidateAll()} />
+							<CountdownTimer
+								targetDate={bookingUnlockAt}
+								on:elapsed={() =>
+									resyncOnce(() => invalidateAll(), { gapMs: resyncDelay(0), kind: 'opening' })}
+							/>
 						</div>
 					{/if}
 

@@ -8,6 +8,10 @@ import { readBookings } from '$lib/server/bookings';
 import { NAMES_LOCKED, checkHouseName } from '$lib/server/names';
 import { formatSizes, readPlanForm, suggestSize } from '$lib/house-plan';
 import { GeneratorError, generateRooms } from '$lib/server/house-generator';
+import { withLocks } from '$lib/server/booking';
+import { logAdminEvent } from '$lib/server/admin-events';
+import { countHeld, releaseRefusal } from '$lib/server/held-spots';
+import { forgetCrewSpots } from '$lib/server/special-requests';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	// Security check 🛡️ (runs in parallel with the layout load)
@@ -122,7 +126,7 @@ export const actions: Actions = {
 	/**
 	 * ADD ROOMS: the size rows of the house generator ($lib/house-plan) —
 	 * "3 rooms × 4 beds", numbers after the house's last room, rolled names,
-	 * spots B1 … Bn (stacked in pairs with 🪜). All or nothing.
+	 * spots B1 … Bn (stacked in pairs with 🔝). All or nothing.
 	 */
 	createRooms: async ({ request, locals, params }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can create rooms.' });
@@ -171,11 +175,46 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const id = data.get('id') as string;
 		if (!id) return fail(400, { message: 'No room was selected. Reload the page and try again.' });
+		const admin = locals.admin;
 
+		const readBeds = () =>
+			locals.pb.collection('beds').getFullList<BedsResponse>({
+				filter: locals.pb.filter('room = {:id}', { id }),
+				fields: 'id,order'
+			});
 		try {
-			await locals.pb.collection('rooms').delete(id);
-			console.log(`[Action:deleteRoom] SUCCESS for ${id}`);
-			return { success: true };
+			// PocketBase deletes the room's spots with it, and their bookings. All
+			// of them are checked and deleted in their queues (sorted, like every
+			// write of several spots): a booking that comes in meanwhile is seen.
+			const ids = (await readBeds()).map((bed) => bed.id).sort();
+			return await withLocks(
+				ids.map((bedId) => `bed:${bedId}`),
+				async () => {
+					// Guest bookings go only with a superuser, crew-booked ones only
+					// when the confirmation said so ($lib/server/held-spots).
+					const held = await countHeld(locals.adminPb, await readBeds());
+					const refused = releaseRefusal(admin, held, data, 'This room');
+					if (refused) {
+						return fail(refused.status, {
+							message: refused.message,
+							crewBooked: refused.crewBooked
+						});
+					}
+					await locals.pb.collection('rooms').delete(id);
+					console.log(`[Action:deleteRoom] SUCCESS for ${id}`);
+					if (held.guest > 0) {
+						// PocketBase empties the requests' spots itself; this makes sure.
+						if (held.crewBedIds.length > 0) {
+							await forgetCrewSpots(locals.adminPb, held.crewBedIds);
+						}
+						await logAdminEvent(locals.adminPb, admin, 'room_deleted', id, {
+							released: held.guest,
+							crewReleased: held.crew
+						});
+					}
+					return { success: true };
+				}
+			);
 		} catch (err) {
 			console.error(`[Action:deleteRoom] FAILED for ${id}:`, err);
 			return fail(500, {

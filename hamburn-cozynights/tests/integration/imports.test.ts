@@ -8,7 +8,14 @@ import { spawnSync } from 'child_process';
 import path from 'path';
 import type PocketBase from 'pocketbase';
 import { BookingService } from '../../src/lib/server/booking';
-import { changeTicket, importRoster, searchTickets } from '../../src/lib/server/tickets';
+import {
+	changeTicket,
+	importRoster,
+	markTicketPaid,
+	previewRoster,
+	searchTickets
+} from '../../src/lib/server/tickets';
+import { defaultRosterSelection, parseRoster, readRosterFile } from '../../src/lib/tickets';
 import { applyTemplate, compareTemplate, exportTemplate } from '../../src/lib/server/template';
 import { findPass } from '../../src/lib/server/pass';
 import { defaultSelection } from '../../src/lib/template-diff';
@@ -64,6 +71,14 @@ beforeAll(async () => {
 	su = await serviceAccount();
 	booking = new BookingService(su as any);
 });
+
+/** A stored ticket by its code, straight from the database (whatever the sign-in thinks of it). */
+async function storedTicket(code: string) {
+	const found = await su
+		.collection('orders')
+		.getList(1, 1, { filter: su.filter('order_number = {:code}', { code }) });
+	return found.items[0] ?? null;
+}
 
 async function flush() {
 	return su.send('/api/cozy/notify/flush?force=1', { method: 'POST' });
@@ -236,6 +251,180 @@ describe('importing the ticket list', () => {
 		});
 		expect(await booking.getOrderByNumber(`SKIP-${tag}`)).toBeNull();
 	});
+
+	it('reads the pretix export: only new paid codes are created, changed addresses are offered', async () => {
+		const tag = uid().toUpperCase();
+		const same = await seedTicket(su);
+		const swapped = await seedTicket(su);
+		await su.collection('orders').update(same.order.id, { email: `same-${tag}@example.com` });
+		await su
+			.collection('orders')
+			.update(swapped.order.id, { email: `old-${tag.toLowerCase()}@example.com` });
+		const file = readRosterFile(
+			[
+				'Event slug,Event name,Order code,Status,Email',
+				`hamburn26,Hamburn 2026,${same.code},paid,SAME-${tag}@example.com`,
+				`hamburn26,Hamburn 2026,${swapped.code},paid,new-${tag}@example.com`,
+				`hamburn26,Hamburn 2026,P${tag},paid,fresh-${tag}@example.com`,
+				`hamburn26,Hamburn 2026,C${tag},canceled,gone-${tag}@example.com`
+			].join('\n')
+		);
+		if (!file.ok) throw new Error(file.error);
+
+		const { diff } = await previewRoster(su as any, file.rows);
+		expect(diff.unchanged.map((u) => u.code)).toEqual([same.code]);
+		expect(diff.changes.map((c) => [c.code, c.kind])).toEqual([
+			[swapped.code, 'changed'],
+			[`P${tag}`, 'new']
+		]);
+		expect(diff.changes[0]).toMatchObject({
+			before: { email: `old-${tag.toLowerCase()}@example.com` },
+			email: `new-${tag.toLowerCase()}@example.com`
+		});
+		expect(diff.leftOut).toEqual([{ line: 5, code: `C${tag}`, status: 'canceled', stored: false }]);
+		expect(diff.unpaid).toBe(0);
+
+		// the admin takes only the new ticket, not the changed address
+		const start = defaultRosterSelection(diff);
+		const outcome = await importRoster(su as any, file.rows, {
+			selected: start.selected.filter((key) => key === `p${tag.toLowerCase()}`),
+			newHolders: []
+		});
+		expect(outcome).toMatchObject({ created: 1, updated: 0, failed: [] });
+		expect(await booking.getOrderByNumber(`P${tag}`)).not.toBeNull();
+		expect(await booking.getOrderByNumber(`C${tag}`)).toBeNull();
+		expect((await su.collection('orders').getOne(swapped.order.id)).email).toBe(
+			`old-${tag.toLowerCase()}@example.com`
+		);
+
+		// a second run updates the chosen address and creates nothing twice
+		const again = await importRoster(su as any, file.rows, {
+			selected: [swapped.code.toLowerCase(), `p${tag.toLowerCase()}`],
+			newHolders: []
+		});
+		expect(again).toMatchObject({ created: 0, updated: 1, skipped: 1, failed: [] });
+		expect((await su.collection('orders').getOne(swapped.order.id)).email).toBe(
+			`new-${tag.toLowerCase()}@example.com`
+		);
+	});
+
+	it('brings in pending orders flagged unpaid, and frees them once a list says paid', async () => {
+		const tag = uid().toUpperCase();
+		const header = 'Order code,Status,Email';
+		const load = async (lines: string[]) => {
+			const file = readRosterFile([header, ...lines].join('\n'));
+			if (!file.ok) throw new Error(file.error);
+			const { diff } = await previewRoster(su as any, file.rows);
+			const start = defaultRosterSelection(diff);
+			const outcome = await importRoster(su as any, file.rows, { ...start, newHolders: [] });
+			return { diff, outcome };
+		};
+
+		const first = await load([`U${tag},pending,u-${tag}@example.com`, `P${tag},paid,`]);
+		expect(first.diff.unpaid).toBe(1);
+		expect(first.outcome).toMatchObject({ created: 2, unpaid: 1, nowPaid: 0, failed: [] });
+		expect((await storedTicket(`U${tag}`))?.unpaid).toBe(true);
+		expect((await storedTicket(`P${tag}`))?.unpaid).toBe(false);
+
+		// an empty status cell leaves the flag alone
+		const quiet = await load([`U${tag},,`]);
+		expect(quiet.diff.unchanged.map((u) => u.code)).toEqual([`U${tag}`]);
+		expect((await storedTicket(`U${tag}`))?.unpaid).toBe(true);
+
+		// paid now: the change is offered and ticked, the flag goes
+		const paid = await load([`U${tag},paid,`]);
+		expect(paid.diff.changes[0]).toMatchObject({
+			kind: 'changed',
+			unpaidChanged: true,
+			unpaid: false
+		});
+		expect(paid.outcome).toMatchObject({ updated: 1, nowPaid: 1, failed: [] });
+		expect((await storedTicket(`U${tag}`))?.unpaid).toBe(false);
+	});
+
+	it('keeps a ticket marked paid by hand paid through a list that still says pending', async () => {
+		const tag = uid().toUpperCase();
+		const header = 'Order code,Status,Email';
+		const load = async (lines: string[]) => {
+			const file = readRosterFile([header, ...lines].join('\n'));
+			if (!file.ok) throw new Error(file.error);
+			const { diff } = await previewRoster(su as any, file.rows);
+			const start = defaultRosterSelection(diff);
+			const outcome = await importRoster(su as any, file.rows, { ...start, newHolders: [] });
+			return { diff, outcome };
+		};
+		await load([`M${tag},pending,m-${tag}@example.com`]);
+		const id = (await storedTicket(`M${tag}`))!.id;
+
+		const marked = await markTicketPaid(su as any, id, true, 'crew@mauersegler.art');
+		expect(marked).toMatchObject({ paid: true, changed: true });
+		const stored = await storedTicket(`M${tag}`);
+		expect(stored).toMatchObject({ unpaid: false, marked_paid_by: 'crew@mauersegler.art' });
+		expect(Date.parse(stored!.marked_paid_at)).toBeGreaterThan(Date.now() - 60_000);
+		expect((await searchTickets(su as any, `M${tag}`)).tickets[0].paidByHand).toMatchObject({
+			by: 'crew@mauersegler.art'
+		});
+
+		// the shop still says pending: offered, not ticked, nothing changes
+		const still = await load([`M${tag},pending,`]);
+		expect(still.diff.changes[0]).toMatchObject({ undoesPaidByHand: true });
+		expect(still.outcome).toMatchObject({ updated: 0, failed: [] });
+		expect((await storedTicket(`M${tag}`))?.unpaid).toBe(false);
+
+		// the shop caught up: the mark goes (a real date field, cleared), the ticket stays paid
+		const caughtUp = await load([`M${tag},paid,`]);
+		expect(caughtUp.outcome).toMatchObject({ updated: 1, paidConfirmed: 1, failed: [] });
+		expect(await storedTicket(`M${tag}`)).toMatchObject({
+			unpaid: false,
+			marked_paid_at: '',
+			marked_paid_by: ''
+		});
+
+		// a mark can be taken back; a ticket the list says is paid can't
+		await su.collection('orders').update(id, { unpaid: true });
+		await markTicketPaid(su as any, id, true, 'crew@mauersegler.art');
+		const back = await markTicketPaid(su as any, id, false, 'crew@mauersegler.art');
+		expect(back.ticket).toMatchObject({ unpaid: true, paidByHand: null });
+		expect(await storedTicket(`M${tag}`)).toMatchObject({ unpaid: true, marked_paid_at: '' });
+		await load([`M${tag},paid,`]);
+		await expect(markTicketPaid(su as any, id, false, 'crew@mauersegler.art')).rejects.toThrow(
+			/Only a ticket marked paid here/
+		);
+	});
+});
+
+describe('the review of a new address', () => {
+	it('knows a ticket has a ♿ request, and does not tick its new address in advance', async () => {
+		const tag = uid().toLowerCase();
+		const withRequest = await seedTicket(su);
+		const plain = await seedTicket(su);
+		await su.collection('orders').update(withRequest.order.id, { email: `req-${tag}@example.com` });
+		await su.collection('orders').update(plain.order.id, { email: `plain-${tag}@example.com` });
+		const order = await su.collection('orders').getOne(withRequest.order.id);
+		await saveRequest(su as any, order as any, {
+			needs: ['step_free'],
+			text: 'Ground floor please',
+			burnerName: 'Rolling Thunder',
+			consent: true
+		});
+		const rows = [
+			{ line: 2, code: withRequest.code, email: `new-req-${tag}@example.com`, name: '' },
+			{ line: 3, code: plain.code, email: `new-plain-${tag}@example.com`, name: '' }
+		];
+		const { diff } = await previewRoster(su as any, rows);
+		const byCode = Object.fromEntries(diff.changes.map((c) => [c.code, c]));
+		expect(byCode[withRequest.code]).toMatchObject({
+			request: true,
+			hasSpot: false,
+			canBeNewHolder: true,
+			suggestNewHolder: true
+		});
+		expect(byCode[plain.code]).toMatchObject({ request: false, canBeNewHolder: false });
+		expect(defaultRosterSelection(diff)).toEqual({
+			selected: [plain.code.toLowerCase()],
+			newHolders: [withRequest.code.toLowerCase()]
+		});
+	});
 });
 
 describe('applying chosen template changes', () => {
@@ -388,6 +577,104 @@ describe('cozy-admin tickets import', () => {
 		expect(stored.pass_code).toBe(t.passCode);
 	});
 
+	it('reads the status column: paid comes in, pending comes in unpaid, cancelled stays out', async () => {
+		const tag = uid().toUpperCase();
+		const result = cozyAdmin(
+			['tickets', 'import', '-'],
+			[
+				'Event slug,Order code,Status,Email',
+				`hb,PAID${tag},paid,paid-${tag}@example.com`,
+				`hb,PEND${tag},pending,pend-${tag}@example.com`,
+				`hb,CANC${tag},canceled,canc-${tag}@example.com`
+			].join('\n')
+		);
+		expect(result.ok).toBe(true);
+		expect(result.out).toContain("1 ticket(s) unpaid: their codes can't sign in");
+		expect(result.out).toContain('1 line(s) left out: the order is neither paid nor pending');
+		expect((await storedTicket(`PAID${tag}`))?.unpaid).toBe(false);
+		expect((await storedTicket(`PEND${tag}`))?.unpaid).toBe(true);
+		expect(await storedTicket(`CANC${tag}`)).toBeNull();
+
+		// an empty status cell leaves the flag alone; a later list that says paid clears it
+		const again = (status: string) =>
+			cozyAdmin(['tickets', 'import', '-'], `Order code,Status,Email\nPEND${tag},${status},`);
+		expect(again('').ok).toBe(true);
+		expect((await storedTicket(`PEND${tag}`))?.unpaid).toBe(true);
+		const paid = again('paid');
+		expect(paid.out).toContain('1 ticket(s) paid now');
+		expect((await storedTicket(`PEND${tag}`))?.unpaid).toBe(false);
+		const back = again('n');
+		expect(back.out).toContain('1 ticket(s) no longer paid');
+		expect((await storedTicket(`PEND${tag}`))?.unpaid).toBe(true);
+	});
+
+	it('keeps a ticket marked paid by hand paid, says so, and drops the mark once the file says paid', async () => {
+		const tag = uid().toUpperCase();
+		const again = (status: string) =>
+			cozyAdmin(['tickets', 'import', '-'], `Order code,Status,Email\nHAND${tag},${status},`);
+		expect(again('pending').ok).toBe(true);
+		const id = (await storedTicket(`HAND${tag}`))!.id;
+		await markTicketPaid(su as any, id, true, 'crew@mauersegler.art');
+		expect(cozyAdmin(['tickets', 'list']).out).toMatch(new RegExp(`HAND${tag}.*PAID BY HAND`));
+
+		const pending = again('pending');
+		expect(pending.ok).toBe(true);
+		expect(pending.out).toContain(
+			'1 ticket(s) marked paid by hand stay paid although the file says pending'
+		);
+		expect(pending.out).not.toContain('no longer paid');
+		expect(await storedTicket(`HAND${tag}`)).toMatchObject({
+			unpaid: false,
+			marked_paid_by: 'crew@mauersegler.art'
+		});
+
+		const paid = again('paid');
+		expect(paid.out).toContain('1 ticket(s) marked paid by hand are paid in the file too');
+		expect(await storedTicket(`HAND${tag}`)).toMatchObject({
+			unpaid: false,
+			marked_paid_at: '',
+			marked_paid_by: ''
+		});
+		// without the mark, a later pending list locks the code again
+		expect(again('pending').out).toContain('1 ticket(s) no longer paid');
+		expect((await storedTicket(`HAND${tag}`))?.unpaid).toBe(true);
+	});
+
+	it('cleans cells like the app: a pasted zero-width character keeps a paid order paid', async () => {
+		const tag = uid().toUpperCase();
+		const zw = String.fromCharCode(0x200b);
+		const text = [
+			'Order code,Status,Email',
+			`${zw}ZW${tag} ,paid${zw}, ${zw}zw-${tag}@example.com`
+		].join('\n');
+		const app = parseRoster(text);
+		if (!app.ok) throw new Error(app.error);
+		expect(app.entries.map((e) => e.code)).toEqual([`ZW${tag}`]);
+
+		const result = cozyAdmin(['tickets', 'import', '-'], text);
+		expect(result.ok).toBe(true);
+		expect(result.out).not.toContain('unpaid');
+		expect(result.out).not.toContain('left out');
+
+		// a zero-width character in the HEADER: both still find the status column
+		const header = [
+			`Order code,Status${zw},Email`,
+			`ZH${tag},cancelled,zh-${tag}@example.com`,
+			`ZP${tag},paid,zp-${tag}@example.com`
+		].join('\n');
+		const appHeader = parseRoster(header);
+		if (!appHeader.ok) throw new Error(appHeader.error);
+		expect(appHeader.columns.status).toBe(1);
+		expect(appHeader.leftOut.map((u) => u.code)).toEqual([`ZH${tag}`]);
+		const cli = cozyAdmin(['tickets', 'import', '-'], header);
+		expect(cli.ok).toBe(true);
+		expect(cli.out).toContain('1 line(s) left out: the order is neither paid nor pending');
+		expect(await booking.getOrderByNumber(`ZH${tag}`)).toBeNull();
+		expect(await booking.getOrderByNumber(`ZP${tag}`)).not.toBeNull();
+		const order = await booking.getOrderByNumber(`ZW${tag}`);
+		expect(order?.email).toBe(`zw-${tag.toLowerCase()}@example.com`);
+	});
+
 	it('corrects an address when the ticket has nothing to lose', async () => {
 		const ticket = await seedTicket(su); // no spot, no pass, no chat, no request
 		const email = `typo-${uid()}@example.com`;
@@ -510,6 +797,26 @@ describe('cozy-admin tickets import', () => {
 		expect(mails).toHaveLength(1);
 		expect(mails[0].Subject).toContain('came with your ticket');
 		expect(await mailsTo(viaCli.email)).toHaveLength(1); // only the old confirmation
+	});
+
+	it('forget-contacts drops which admin marked a ticket paid by hand; the ticket stays paid', async () => {
+		const tag = uid().toUpperCase();
+		const result = cozyAdmin(
+			['tickets', 'import', '-'],
+			`Order code,Status,Email\nFORG${tag},pending,`
+		);
+		expect(result.ok).toBe(true);
+		const id = (await storedTicket(`FORG${tag}`))!.id;
+		await markTicketPaid(su as any, id, true, 'crew@mauersegler.art');
+
+		const output = cozyAdmin(['tickets', 'forget-contacts', '--yes']);
+		const counted = output.out.match(/(\d+) admin address\(es\) on tickets marked paid by hand/);
+		expect(counted, output.out).not.toBeNull();
+		expect(Number(counted![1])).toBeGreaterThanOrEqual(1);
+		const stored = await storedTicket(`FORG${tag}`);
+		expect(stored).toMatchObject({ unpaid: false, marked_paid_by: '' });
+		// when it happened stays: a later list that still says pending keeps it paid
+		expect(stored!.marked_paid_at).not.toBe('');
 	});
 });
 

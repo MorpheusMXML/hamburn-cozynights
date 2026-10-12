@@ -35,7 +35,7 @@
 			{#each warnings as warning}
 				<div class="house-node">
 					<div class="node-content">
-						<span class="icon">🛖</span>
+						<span class="icon">🏠</span>
 						<span class="name">{warning.name}</span>
 						{#if warning.noRooms}
 							<span class="error-tag">This house has no rooms yet.</span>

@@ -5,8 +5,8 @@ import { audienceBlocksPlugin, audienceSite, readAudience } from './audience.ts'
 const repo = 'https://github.com/MorpheusMXML/hamburn-cozynights';
 const pagesBase = '/hamburn-cozynights/';
 const pagesUrl = 'https://morpheusmxml.github.io/hamburn-cozynights/';
-// Until production has a domain, the public docs point to staging for the legal pages.
-const stagingAppUrl = 'https://test-cozynights.hamburn.de';
+// The live app: the public docs on GitHub Pages link its legal pages.
+const productionAppUrl = 'https://cozynights.hamburn.de';
 
 // One source tree, two sites (see develop/docs.md): DOCS_AUDIENCE picks who the
 // build is for, DOCS_BASE where it is served from. The defaults are what you
@@ -23,8 +23,8 @@ const siteUrl = process.env.DOCS_SITE_URL || (base === pagesBase ? pagesUrl : ''
 // The legal notice, privacy policy and booking rules are pages of the app, not of the docs
 // (the operator's details live in the app server's .env). Served by the app,
 // the docs link them on the same domain; on GitHub Pages they need the app's
-// address: DOCS_APP_URL, set as a repository variable for the Pages build.
-const appUrl = (process.env.DOCS_APP_URL || (base === pagesBase ? stagingAppUrl : '')).replace(
+// address: production, unless the repository variable DOCS_APP_URL says otherwise.
+const appUrl = (process.env.DOCS_APP_URL || (base === pagesBase ? productionAppUrl : '')).replace(
 	/\/$/,
 	''
 );

@@ -1,6 +1,6 @@
 <!--
 @component
-The small version counter: "v0.18.1" next to the title on the landing page,
+The small version counter: "v1.32.2" next to the title on the landing page,
 in the admin menu and in the footer. It links to the GitHub release of that
 version, and its tooltip names the build (commit and day), so a bug report
 can say exactly which build it saw.

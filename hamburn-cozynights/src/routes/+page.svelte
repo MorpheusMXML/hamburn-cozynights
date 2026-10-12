@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+	import { resyncOnce, startWait } from '$lib/waiting';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
-	import { countdownKind } from '$lib/booking-phase';
+	import { countdownKind, resyncDelay } from '$lib/booking-phase';
 	import { EVENT_YEAR } from '$lib/event';
 	import CountdownTimer from '$lib/components/CountdownTimer.svelte';
 	import EffigyTitle from '$lib/components/EffigyTitle.svelte';
@@ -15,6 +16,20 @@
 
 	export let data: PageData;
 	export let form: ActionData;
+
+	/** Every field either action (sign in, send me my code) may answer with. */
+	type LoginAnswer = Partial<{
+		code: string;
+		email: string;
+		error: string;
+		needEmail: boolean;
+		offerMail: boolean;
+		unpaid: boolean;
+		mailEmail: string;
+		mailError: string;
+		mailSent: boolean;
+	}>;
+	$: answer = (form ?? {}) as LoginAnswer;
 
 	const neonColors = ['#f472b6', '#2dd4bf', '#fb923c', '#a855f7', '#fff'];
 	let isHovering = false;
@@ -49,10 +64,25 @@
 	const SURROUNDING_BLANKS = /^[\s\u200B-\u200D\uFEFF]+|[\s\u200B-\u200D\uFEFF]+$/g;
 
 	let code = form?.code ?? '';
+	let email = (form as LoginAnswer | null)?.email ?? '';
 	let clientError = '';
 	let isSubmitting = false;
 
 	$: errorMessage = clientError || (isSubmitting ? '' : (form?.error ?? ''));
+
+	// After several wrong codes the server asks for the ticket's e-mail address
+	// as well, and offers to e-mail the code (src/lib/server/login-guard.ts).
+	// Both stay once shown: the "send me my code" answer replaces `form`.
+	let needEmail = false;
+	let offerMail = false;
+	let mailPanelClosed = false;
+	$: if (answer.needEmail) needEmail = true;
+	$: if (answer.offerMail) offerMail = true;
+	$: showMailPanel = offerMail && !mailPanelClosed && !answer.unpaid;
+
+	let mailEmail = '';
+	let mailSending = false;
+	$: if (answer.mailEmail !== undefined && !mailEmail) mailEmail = answer.mailEmail;
 
 	// The big countdown between the title and the ticket-code field: until
 	// booking opens, and while it is live until it closes. The start page has
@@ -76,7 +106,9 @@
 						: 'Please enter your ticket code first. After that you can open the map and pick your spot.'
 					: loginReason === 'out'
 						? 'Your ticket code was removed from this device. Enter it again whenever you want to change your spot.'
-						: '';
+						: loginReason === 'unpaid'
+							? "Your ticket is still unpaid, so this device was signed out. Please contact the Membership Team and settle your due invoice. As soon as it's paid, your code works here."
+							: '';
 
 	function checkTicketCode(value: string): string {
 		if (!value) return 'Please enter your ticket code.';
@@ -143,7 +175,9 @@
 				<CountdownTimer
 					targetDate={data.booking.next.at}
 					kind={countdown}
-					on:elapsed={() => invalidateAll()}
+					on:elapsed={() =>
+						// one refresh at a time; no veil here: it would cover the sign-in form
+						resyncOnce(() => invalidateAll(), { gapMs: resyncDelay(0) })}
 				/>
 			</div>
 		{/if}
@@ -160,6 +194,7 @@
 				action="?/login"
 				novalidate
 				class="input-group field-box"
+				class:with-email={needEmail}
 				class:has-error={!!errorMessage}
 				class:state-ring={!!errorMessage}
 				class:state-ring-alert={!!errorMessage}
@@ -175,11 +210,24 @@
 					}
 					code = cleaned;
 					formData.set('bookingCode', cleaned);
+					if (needEmail && !email.trim()) {
+						cancel();
+						showClientError(
+							'For your security, please enter your ticket code together with the e-mail address of your ticket.'
+						);
+						return;
+					}
 					clientError = '';
 					isSubmitting = true;
+					const waited = startWait('sign-in');
 
 					return async ({ result, update }) => {
 						isSubmitting = false;
+						// A redirect (to the map) keeps the wait until that page change is
+						// on its way: no countdown refresh may start in between and abort
+						// it (resyncOnce). Anything else ends it now, so a refused field
+						// can take the cursor.
+						if (result.type !== 'redirect') waited();
 						if (result.type === 'error') {
 							// Network hiccup or server crash: stay on the form instead of
 							// swapping the whole page for an error screen.
@@ -188,7 +236,11 @@
 							);
 							return;
 						}
-						await update({ reset: false });
+						try {
+							await update({ reset: false });
+						} finally {
+							waited();
+						}
 						if (result.type === 'failure') await revealInvalid(ticketForm);
 					};
 				}}
@@ -211,9 +263,29 @@
 					autocapitalize="characters"
 					autocorrect="off"
 					spellcheck="false"
-					enterkeyhint="go"
+					enterkeyhint={needEmail ? 'next' : 'go'}
 					maxlength="64"
 				/>
+				{#if needEmail}
+					<input
+						type="email"
+						name="email"
+						id="ticket-email"
+						class="email-input"
+						bind:value={email}
+						on:input={() => (clientError = '')}
+						placeholder="E-mail of your ticket"
+						aria-label="E-mail address of your ticket"
+						aria-invalid={errorMessage ? 'true' : undefined}
+						aria-describedby={errorMessage ? 'ticket-code-error' : undefined}
+						autocomplete="email"
+						autocapitalize="off"
+						autocorrect="off"
+						spellcheck="false"
+						enterkeyhint="go"
+						maxlength="254"
+					/>
+				{/if}
 				<div class="button-container">
 					{#if isHovering}
 						<div class="party-zone">
@@ -246,6 +318,68 @@
 				<p class="form-error" id="ticket-code-error" role="alert">
 					{errorMessage}
 				</p>
+			{/if}
+
+			{#if showMailPanel}
+				<!-- After a few wrong codes: the code by e-mail. The answer never says
+				     whether the address belongs to a ticket. -->
+				<aside class="mail-panel" aria-labelledby="mail-panel-title">
+					<div class="mail-panel-head">
+						<h2 id="mail-panel-title">Can't find your code? 📬</h2>
+						<button
+							type="button"
+							class="mail-panel-close"
+							aria-label="Close"
+							on:click={() => (mailPanelClosed = true)}>✕</button
+						>
+					</div>
+					{#if answer.mailSent}
+						<p class="mail-panel-text" role="status">
+							If this address belongs to a ticket, its code is on the way. It can take a few
+							minutes; please check your spam folder too.
+						</p>
+					{:else}
+						<p class="mail-panel-text">
+							Enter the e-mail address you bought your ticket with, and we send you its code.
+						</p>
+						<form
+							method="POST"
+							action="?/sendCode"
+							novalidate
+							class="mail-form"
+							use:enhance={() => {
+								mailSending = true;
+								return async ({ update }) => {
+									mailSending = false;
+									await update({ reset: false });
+								};
+							}}
+						>
+							<input
+								type="email"
+								name="email"
+								id="code-mail-email"
+								class="email-input"
+								bind:value={mailEmail}
+								placeholder="you@example.com"
+								aria-label="E-mail address of your ticket"
+								aria-invalid={answer.mailError ? 'true' : undefined}
+								aria-describedby={answer.mailError ? 'code-mail-error' : undefined}
+								autocomplete="email"
+								autocapitalize="off"
+								autocorrect="off"
+								spellcheck="false"
+								maxlength="254"
+							/>
+							<button type="submit" class="mail-send" disabled={mailSending}>
+								{mailSending ? 'SENDING…' : 'SEND ME MY CODE'}
+							</button>
+						</form>
+						{#if answer.mailError}
+							<p class="mail-panel-error" id="code-mail-error" role="alert">{answer.mailError}</p>
+						{/if}
+					{/if}
+				</aside>
 			{/if}
 
 			{#if data.hasTicket}
@@ -646,6 +780,107 @@
 
 	.continue-link:hover {
 		color: #fff;
+	}
+
+	/* Code and e-mail address: one field under the other, like on a phone. */
+	.input-group.with-email {
+		flex-direction: column;
+		gap: 10px;
+	}
+
+	.email-input {
+		text-transform: none;
+		letter-spacing: 0.5px;
+		font-weight: 700;
+	}
+
+	.mail-panel {
+		margin: 1rem 0 0;
+		padding: 1rem 1.1rem 1.1rem;
+		border-radius: 18px;
+		border: 1px solid #a855f7;
+		background: rgba(10, 4, 20, 0.88);
+		box-shadow: 0 0 30px rgba(168, 85, 247, 0.2);
+		text-align: left;
+	}
+
+	.mail-panel-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+	}
+
+	.mail-panel h2 {
+		margin: 0;
+		font-size: 1rem;
+		font-weight: 800;
+		color: #e9d5ff;
+	}
+
+	.mail-panel-close {
+		flex: none;
+		min-width: 44px;
+		min-height: 44px;
+		background: none;
+		border: 0;
+		color: #a3a3a3;
+		font-size: 1rem;
+		cursor: pointer;
+	}
+
+	.mail-panel-close:hover {
+		color: #fff;
+	}
+
+	.mail-panel-text {
+		margin: 0.35rem 0 0.8rem;
+		color: #e5e5e5;
+		font-size: 0.92rem;
+		line-height: 1.5;
+	}
+
+	.mail-form {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+
+	.mail-form input {
+		flex: 1 1 14rem;
+		padding: 0.9rem 1.1rem;
+		border-radius: 14px;
+		border: 1px solid #444;
+		background: rgba(0, 0, 0, 0.6);
+	}
+
+	.mail-form input:focus {
+		border-color: #a855f7;
+	}
+
+	.mail-send {
+		flex: 0 1 auto;
+		padding: 0.9rem 1.2rem;
+		border-radius: 14px;
+		border: 0;
+		background: #a855f7;
+		color: #fff;
+		font-size: 0.85rem;
+		font-weight: 900;
+		letter-spacing: 1px;
+		cursor: pointer;
+	}
+
+	.mail-send:disabled {
+		opacity: 0.6;
+		cursor: wait;
+	}
+
+	.mail-panel-error {
+		margin: 0.6rem 0 0;
+		color: #fecaca;
+		font-size: 0.88rem;
+		font-weight: 600;
 	}
 
 	.privacy-note {

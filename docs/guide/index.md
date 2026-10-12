@@ -20,8 +20,8 @@ CozyNights is the bed booking app for **Hamburn**, a regional burn in the spirit
 ```mermaid
 flowchart TB
   map["🗺️ Camp map"]
-  map --> h1["🛖 House: Neon Cave"]
-  map --> h2["🛖 House: Dust Lodge"]
+  map --> h1["🏠 House: Neon Cave"]
+  map --> h2["🏠 House: Dust Lodge"]
   h1 --> r1["🚪 Room #1"]
   h1 --> r2["🚪 Room #2"]
   r1 --> s1["🛏️ Spot B1"]
@@ -52,7 +52,7 @@ flowchart TB
    See [Houses, rooms & spots](../admin/camp-layout).
    <!-- /audience -->
 2. **Load the tickets.** The ticket list goes into the database, so every ticket code can sign in and confirmations reach the right address.
-3. **Special needs first.** Guests who need a particular spot, and art projects or crews who want to sleep together, ask the crew with their ticket code — on their own or as a group — and the crew books fitting spots for them before booking opens. See [Special needs & groups](./special-needs).
+3. **Special needs first.** Guests who need a particular spot for a medical reason or a disability, their helpers, and art projects or crews that need a room or a bed close to their piece ask the crew with their ticket code — on their own or as a group — and the crew books fitting spots for them before booking opens. See [Special needs & groups](./special-needs).
 4. **Announce the booking window.** An admin plans when booking opens and when it closes, and arms the timer. Guests see a countdown.
 5. **Booking opens.** Guests pick their beds; the layout is now frozen. A countdown shows when booking closes: big on the start page, in the top bar of every booking page. See [Staging, Live Booking & Closed](./phases).
 6. **Booking closes.** At the closing time the spots are final. Guests keep their spot and their booking pass.

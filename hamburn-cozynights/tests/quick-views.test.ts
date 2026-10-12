@@ -5,7 +5,15 @@ import { quickViews } from '../src/lib/quick-views';
 import type { LiveStats, OpsStats } from '../src/lib/live-stats';
 
 const ops = (tickets: Partial<OpsStats['tickets']> = {}, pending = 0): OpsStats => ({
-	tickets: { total: 20, withEmail: 18, telegram: 3, mailed: 5, ...tickets },
+	tickets: {
+		total: 20,
+		withEmail: 18,
+		telegram: 3,
+		mailed: 5,
+		unpaid: 0,
+		unpaidWithSpot: 0,
+		...tickets
+	},
 	requests: { pending, approved: 0, declined: 0 },
 	messages: { mailOn: true, telegramOn: true, queued: 0, retrying: 0, failed: 0 },
 	crew: { admins: 2, accessRequests: 0, alertsQueued: 0, alertsFailed: 0, alertsFailing: 0 }

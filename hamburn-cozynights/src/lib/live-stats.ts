@@ -38,6 +38,13 @@ export interface OpsStats {
 		telegram: Count;
 		/** Tickets that got at least one e-mail about their spot. */
 		mailed: Count;
+		/**
+		 * Tickets whose order isn't paid yet (orders.unpaid): their codes can't
+		 * sign in, so they can't book.
+		 */
+		unpaid: Count;
+		/** Of those, the ones that still hold a spot (booked before the order turned unpaid). */
+		unpaidWithSpot: Count;
 	};
 	requests: { pending: Count; approved: Count; declined: Count };
 	messages: {

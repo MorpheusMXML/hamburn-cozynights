@@ -3,7 +3,7 @@
 ADD ROOMS on a house page: the house generator's size rows for a house that
 stands already (docs/admin/camp-layout.md). Numbers continue after the
 house's last room, names are rolled, spots are B1 … Bn, stacked in pairs
-with 🪜. The server creates all of it or nothing (?/createRooms).
+with 🔝. The server creates all of it or nothing (?/createRooms).
 -->
 <script lang="ts">
 	import type { SubmitFunction } from '@sveltejs/kit';

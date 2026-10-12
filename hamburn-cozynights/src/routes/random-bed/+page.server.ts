@@ -1,7 +1,8 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { clearGuestSession, signInUrl } from '$lib/server/guest-session';
-import { getBookingSettings } from '$lib/server/settings';
+import { isCrewTicket } from '$lib/server/crew-ticket';
+import { getBookingSettings, SETTINGS_UNREACHABLE } from '$lib/server/settings';
 import { bookingRefusal } from '$lib/booking-phase';
 import {
 	BookingService,
@@ -18,6 +19,11 @@ import type { RouletteSpot } from '$lib/roulette';
 import type { BedsResponse, RoomsResponse, HousesResponse } from '$lib/pocketbase-types';
 import { readFilters, spotFacts, spotMatchesFilters, type SpotFilter } from '$lib/accommodation';
 import { readAvailableFilters } from '$lib/server/wishes';
+import { getLegalInfo } from '$lib/server/legal';
+import { BOOKING_CHECK_MISSING, bookingCheckPassed } from '$lib/booking-check';
+import { recordId } from '$lib/server/record-id';
+import { unheld } from '$lib/server/spot-holds';
+import { dropHoldAction, holdSpotAction } from '$lib/server/spot-hold-actions';
 
 type BedWithHouse = BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>;
 
@@ -32,6 +38,24 @@ function rouletteSpot(bed: BedWithHouse): RouletteSpot {
 		houseName: room?.expand?.house?.name ?? ''
 	};
 }
+
+/**
+ * What the drum needs of a free spot (rouletteSpot, and spotFacts for the
+ * wishes) — a camp of a few hundred spots in one read, so nothing more.
+ */
+const ROULETTE_FIELDS = [
+	'id',
+	'label',
+	'room',
+	'bed_type',
+	'features_off',
+	'expand.room.name',
+	'expand.room.room_number',
+	'expand.room.features',
+	'expand.room.features_off',
+	'expand.room.expand.house.name',
+	'expand.room.expand.house.features'
+].join(',');
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 const SIGNED_OUT =
@@ -60,6 +84,8 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 
 	try {
 		const settings = await getBookingSettings(locals.pb);
+		// Without a phase the machine would rest with "not open yet": say what is wrong.
+		if (!settings.known) throw error(503, UNAVAILABLE);
 		const { isBookingActive, phase, guestPhase } = settings;
 
 		const userBed = await locals.adminPb
@@ -74,21 +100,30 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 		// a roll can be repeated and the page works without JavaScript.
 		const wishes = readFilters(url.searchParams.get('w'));
 
-		// Only fetch the (possibly large) free-bed list when the user doesn't
-		// already have a spot — they can't spin again without Leave No Trace
-		// first, and the page reloads this list right after the sweep.
+		// Only fetch the (possibly large) free-bed list when the drum is in play:
+		// during Live Booking, for a guest without a spot — they can't spin again
+		// without Leave No Trace first, and the page reloads this list right
+		// after the sweep. Outside Live Booking the machine rests and shows none.
 		// Deactivated, locked and special-needs beds are never part of the roulette.
-		const allFree: BedWithHouse[] = userBed
-			? []
-			: // beds are admin-only in PocketBase: the service account reads them
-				await locals.adminPb.collection('beds').getFullList<BedWithHouse>({
-					filter: 'occupied = false && enabled = true && is_locked = false && is_special = false',
-					expand: 'room,room.house',
-					sort: 'label'
-				});
+		const allFree: BedWithHouse[] =
+			userBed || !isBookingActive
+				? []
+				: // beds are admin-only in PocketBase: the service account reads them,
+					// and only what the reels and the wishes need (ROULETTE_FIELDS)
+					await locals.adminPb.collection('beds').getFullList<BedWithHouse>({
+						filter: 'occupied = false && enabled = true && is_locked = false && is_special = false',
+						expand: 'room,room.house',
+						fields: ROULETTE_FIELDS,
+						sort: 'label'
+					});
+		// Spots other guests are booking right now ($lib/server/spot-holds) are
+		// free, but not up for grabs: they stay out of the drum and the counts,
+		// and the machine says how many there are when nothing else is left.
+		const open = unheld(allFree, order.id);
+		const beingBooked = allFree.length - open.length;
 		// The drum holds only the spots that fit the wishes (all of them without
 		// any); what a room or spot switched off (a superuser's call) never fits.
-		const freeBeds: RouletteSpot[] = allFree
+		const freeBeds: RouletteSpot[] = open
 			.filter(
 				(bed) =>
 					wishes.length === 0 ||
@@ -112,7 +147,7 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 		// What the wishes left in the drum, as the bar says it next to the chips.
 		const wishFit =
 			wishes.length > 0
-				? `${freeBeds.length} ${freeBeds.length === 1 ? 'spot' : 'spots'} in the drum of ${allFree.length} free`
+				? `${freeBeds.length} ${freeBeds.length === 1 ? 'spot' : 'spots'} in the drum of ${open.length} free`
 				: '';
 
 		// A guest with a spot sees it as the small booking pass, like on the
@@ -149,7 +184,9 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 			availableFilters,
 			wishFit,
 			/** All free spots, so the page can say how many the wishes left out. */
-			freeTotal: allFree.length,
+			freeTotal: open.length,
+			/** Free spots other guests are booking right now: "check back in a few minutes". */
+			beingBooked,
 			isBookingActive,
 			spotFixed,
 			// The crew checked the guest in at arrival: only the crew changes the spot now.
@@ -162,7 +199,9 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 			telegram,
 			// what the page says; what is allowed still follows `phase`
 			guestPhase,
-			userBed: userBed ? rouletteSpot(userBed) : null
+			userBed: userBed ? rouletteSpot(userBed) : null,
+			// the booking check links it in the rules box ($lib/booking-check)
+			codeOfConductUrl: getLegalInfo().codeOfConductUrl
 		};
 	} catch (err) {
 		console.error('[RandomBed] Load failed:', (err as Error)?.message);
@@ -180,11 +219,12 @@ export const actions: Actions = {
 			});
 		}
 
-		const { isBookingActive, guestPhase } = await getBookingSettings(locals.pb);
+		const { isBookingActive, guestPhase, reachable } = await getBookingSettings(locals.pb);
+		if (!reachable) return fail(503, { error: SETTINGS_UNREACHABLE });
 		if (!isBookingActive) return fail(403, { error: bookingRefusal(guestPhase) });
 
 		const formData = await request.formData();
-		const bedId = formData.get('bedId') as string;
+		const bedId = recordId(formData, 'bedId');
 		const guestName = ((formData.get('guestName') as string) || '').replace(/\s+/g, ' ').trim();
 
 		if (!locals.orderNumber) return fail(401, { error: SIGNED_OUT });
@@ -192,6 +232,10 @@ export const actions: Actions = {
 			return fail(400, {
 				error: 'The spin was incomplete, so nothing was booked. Please spin again.'
 			});
+		}
+		// The bed made and the rules confirmed, with every booking ($lib/booking-check).
+		if (!bookingCheckPassed(formData)) {
+			return fail(400, { error: BOOKING_CHECK_MISSING, needsCheck: true });
 		}
 
 		const bookingService = new BookingService(locals.adminPb);
@@ -216,7 +260,7 @@ export const actions: Actions = {
 			// two guests hitting "random bed" at the same moment can't both win the
 			// same bed, and one ticket can't end up with two beds.
 			await bookingService.bookBed(order, bedId, guestName.slice(0, 80), {
-				allowLocked: !!locals.admin,
+				allowLocked: await isCrewTicket(locals.adminPb, order),
 				requireLivePhase: true
 			});
 			return { success: true, bedId };
@@ -247,7 +291,8 @@ export const actions: Actions = {
 			});
 		}
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
+		const { isBookingActive, reachable } = await getBookingSettings(locals.pb);
+		if (!reachable) return fail(503, { error: SETTINGS_UNREACHABLE });
 		if (!isBookingActive) {
 			return fail(403, {
 				error:
@@ -258,7 +303,7 @@ export const actions: Actions = {
 		if (!locals.orderNumber) return fail(401, { error: SIGNED_OUT });
 
 		const formData = await request.formData();
-		const confirmedBedId = (formData.get('bedId') as string) || undefined;
+		const confirmedBedId = recordId(formData, 'bedId') || undefined;
 		const bookingService = new BookingService(locals.adminPb);
 
 		try {
@@ -282,5 +327,11 @@ export const actions: Actions = {
 				error: 'Your spot could not be released. It is still reserved for you. Please try again.'
 			});
 		}
-	}
+	},
+
+	/** The reels picked a spot: it is the guest's for a few minutes ($lib/server/spot-holds). */
+	holdSpot: async ({ request, locals }) => holdSpotAction(locals, request),
+
+	/** The guest left the machine: the spot is free again. */
+	dropHold: async ({ request, locals }) => dropHoldAction(locals, request)
 };

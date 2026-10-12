@@ -23,7 +23,13 @@
 	} from '$lib/accommodation';
 	import { fade, fly, scale, slide } from 'svelte/transition';
 	import { enhance } from '$app/forms';
-	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
+	import { alertDialog, confirmDialog, confirmWithOption, toast } from '$lib/dialogs';
+	import {
+		RELEASE_CREW_SPOTS,
+		crewSpotsCheckbox,
+		heldIn,
+		superuserOnlyNote
+	} from '$lib/held-spots';
 
 	export let data: PageData;
 	export let form: { message?: string } | null = null;
@@ -51,22 +57,44 @@
 	let deletingRoomId: string | null = null;
 
 	function deleteRoom(room: RoomCard): SubmitFunction {
-		return async ({ cancel }) => {
+		return async ({ cancel, formData }) => {
 			const spots = room.stats.total;
 			const booked = room.stats.occupied;
-			const confirmed = await confirmDialog(
+			// Guest bookings in it ($lib/held-spots): a regular admin is told that
+			// this is for superusers; a spot the crew booked for a special-needs
+			// request only goes when the superuser ticks it.
+			const held = heldIn((data.bookings ?? []).filter((row) => row.roomId === room.id));
+			if (held.guest > 0 && !isSuperuser) {
+				await alertDialog(superuserOnlyNote(held.guest), {
+					title: 'Room not deleted',
+					tone: 'warning'
+				});
+				cancel();
+				return;
+			}
+			const message =
 				`Room #${room.room_number} "${room.name}" is deleted together with its spots.` +
-					(booked > 0
-						? ` ${booked} of its ${spots} active spots ${booked === 1 ? 'is' : 'are'} booked: those bookings are deleted too and the guests have to book again.`
-						: '') +
-					' Ticket codes stay valid. This cannot be undone.',
-				{
-					title: 'Delete this room?',
-					tone: 'danger',
-					confirmLabel: 'Delete room',
-					cancelLabel: 'Keep it'
-				}
-			);
+				(booked > 0
+					? ` ${booked} of its ${spots} active spots ${booked === 1 ? 'is' : 'are'} booked: those bookings are deleted too and the guests have to book again.`
+					: '') +
+				' Ticket codes stay valid. This cannot be undone.';
+			const options = {
+				title: 'Delete this room?',
+				tone: 'danger' as const,
+				confirmLabel: 'Delete room',
+				cancelLabel: 'Keep it'
+			};
+			let confirmed: boolean;
+			if (held.crew > 0) {
+				const answer = await confirmWithOption(message, {
+					...options,
+					checkbox: crewSpotsCheckbox(held.crew)
+				});
+				confirmed = answer.confirmed;
+				if (answer.checked) formData.set(RELEASE_CREW_SPOTS, '1');
+			} else {
+				confirmed = await confirmDialog(message, options);
+			}
 			if (!confirmed) {
 				cancel();
 				return;
@@ -106,7 +134,7 @@
 			<span class="current">{house.name}</span>
 		</nav>
 		<h1>
-			<span class="house-icon">🛖</span>
+			<span class="house-icon">🏠</span>
 			<!-- In Staging Mode a click on the name renames the house. -->
 			<InlineRename
 				value={house.name}
@@ -200,7 +228,7 @@
 		{#if addOpen}
 			<div id="add-room" class="form-wrapper" transition:slide={{ duration: 180 }}>
 				<p class="section-hint">
-					One row per size: how many {roomsWord}, how many beds each, 🪜 for bunk beds. Numbers
+					One row per size: how many {roomsWord}, how many beds each, 🔝 for bunk beds. Numbers
 					continue after the last {roomWord(house.kind)}, names are rolled.
 				</p>
 				<AddRoomsForm

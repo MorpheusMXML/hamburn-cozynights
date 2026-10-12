@@ -115,7 +115,7 @@ describe('one ticket = one bed', () => {
 		}
 		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(first.order.id);
 
-		// admins may use locked beds
+		// a locked bed with allowLocked (a crew ticket, or the crew booking for a request)
 		await booking.bookBed(second.order as any, beds[1].id, 'Second', { allowLocked: true });
 		expect((await su.collection('beds').getOne(beds[1].id)).order).toBe(second.order.id);
 	});
@@ -232,5 +232,19 @@ describe('a booking that arrives as booking closes', () => {
 
 		await booking.bookBed(order as any, beds[0].id, 'Crew Pick');
 		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(true);
+	});
+
+	it('never frees the spot a guest renames in Staging (a crew-booked one, say)', async () => {
+		await setPhase({});
+		const { beds } = await seedHouse(su, 1);
+		const { order } = await seedTicket(su);
+		await booking.bookBed(order as any, beds[0].id, 'Crew Pick'); // the crew's booking
+
+		// the guest gives the spot a name on the room page: no claim, no phase undo
+		await booking.bookBed(order as any, beds[0].id, 'Neon Nebula', { requireLivePhase: true });
+		const bed = await su.collection('beds').getOne(beds[0].id);
+		expect(bed.occupied).toBe(true);
+		expect(bed.order).toBe(order.id);
+		expect((await su.collection('orders').getOne(order.id)).burner_name).not.toBe('');
 	});
 });

@@ -14,12 +14,40 @@ Check the code for typos: it's on your ticket and contains only letters, digits,
 The code contains a character that can't be part of a ticket code, often a space or a stray punctuation mark from copy and paste. Only letters, digits, `-` and `_` are allowed.
 :::
 
-::: details "Too many wrong ticket codes from your connection. Please wait up to 10 minutes…"
-After many wrong codes from the same network, CozyNights pauses sign-in attempts for a while to stop people from guessing codes. Wait a few minutes (at most ten) and try again. Correct codes never count towards this limit.
+::: details "Can't find your code?" and "…please enter your ticket code together with the e-mail address of your ticket."
+After three wrong codes the start page offers to e-mail you your code: enter the address you bought your ticket with, and it arrives within a few minutes (check your spam folder too). The page never says whether an address belongs to a ticket, so nobody can find out who has one. After five wrong codes, sign in with your code **and** that e-mail address for the next 30 minutes. This keeps strangers from guessing ticket codes.
+:::
+
+::: details "Too many wrong ticket codes from your connection. Please try again in …"
+After ten wrong codes from the same network, CozyNights pauses sign-in for 15 minutes, after three more for three hours. Wait, then sign in with your code and the e-mail address of your ticket, or let the start page e-mail you the code. Right codes never count as wrong ones.
+:::
+
+::: details "Your ticket is still unpaid…"
+The ticket shop has your order as not paid yet, so it can't book a bed. Contact the Membership Team and settle the invoice; once the crew loads the next ticket list, or marks your ticket paid after the Membership Team confirmed the payment, your code works.
 :::
 
 ::: details "The booking system is not reachable right now. Your code was not checked…"
 CozyNights couldn't reach its database for a moment. Your code is fine. Try again shortly.
+:::
+
+::: details "The booking system is not reachable right now. Nothing was changed…"
+CozyNights couldn't check for a moment whether booking is open, so it neither booked nor released anything: your spot is as it was. Try again in a moment.
+:::
+
+::: details What bedding do I need to bring?
+Pillow and blanket are provided. Bring your own covers: a **bed sheet** for the mattress, a **duvet cover** for the blanket and a **pillowcase**. A sleeping bag is fine instead of the duvet cover; the bed sheet and the pillowcase are still a must. Your booking pass and every e-mail about your spot say it again, for when you pack.
+:::
+
+::: details My cover won't go on the bed / hops back into the bag
+Every cover only goes on its own piece: the **bed sheet on the mattress** (the part under the pillow), the **duvet cover on the blanket**, the **pillowcase on the pillow**. Tap the cover, then its piece — or drag it straight there. The line under your bag says where a cover belongs when you try the wrong piece.
+:::
+
+::: details Why do I have to make my bed every time I book?
+Many guests are at Hamburn for the first time, and a bed without covers is a cold night. So every booking starts with making your bed and ends with a tick that you have read the Code of Conduct, the privacy policy and the booking rules — also when you move to another spot. Nothing about it is stored. If a booking didn't go through because someone was faster, the next spot you pick keeps your made bed and your tick, until you reload the page.
+:::
+
+::: details "Before a spot is yours, make your bed and confirm the rules in the booking window. Don't see them? Reload the page."
+The page was opened before the booking window had the bed and the rules box (for example a tab left open since before an update). Reload the page, then book again: the window shows both.
 :::
 
 ::: details A spot says nothing about its bed, or my wish finds no spot
@@ -32,6 +60,10 @@ Booking hasn't opened yet. Once the crew has armed the timer, a countdown shows 
 
 ::: details Where is the countdown?
 In the top bar of every booking page, fused with the phase pill: *opens in …* before booking opens, *closes in …* while it is live (red in the last hour). Tap it for the exact Berlin time. The start page shows the same countdown big, and the map counts down on its panel while booking is not open yet — there the bar shows the phase alone. No countdown anywhere means the crew hasn't armed the timer yet.
+:::
+
+::: details "Please allow us some time, we are processing your request."
+Your click reached CozyNights and is being worked on. At the opening, when hundreds of guests sign in and book in the same minute, that can take a few seconds. Stay on the page. When the card says *Please don't reload or close this page*, your sign-in, booking or release is already on its way: a reload neither stops it nor makes it faster. *Booking is opening* and *On our way* only load the page, and it continues by itself. If the card goes away with *We could not reach the server*, check your connection and open the room again: a booking that went through shows there as **Yours**.
 :::
 
 ::: details I can't book or change my spot any more ("Booking is closed")
@@ -79,7 +111,7 @@ Your ticket already holds a spot somewhere else. One ticket code = one spot: the
 :::
 
 ::: details Someone grabbed the bed I wanted at the same moment
-First come, first served. If two people click the same spot at the same time, exactly one of them gets it; the other sees _This spot is already claimed._ Pick another one.
+First come, first served, and whoever opens a spot's booking window first holds it for ten minutes, so nobody overtakes you while you make your bed. If two people tap the same spot at the same moment, exactly one of them gets it; the other sees _Someone beat you to this bed_. A spot that says **Bed being made** is someone else's for a few minutes: pick another one, or come back when its card says it is free again.
 :::
 
 ::: details I booked on another device
@@ -118,16 +150,20 @@ Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page
 Yes: send `/pass` to the bot and it sends your pass with its QR code as a picture. That works as soon as you have connected Telegram.
 :::
 
-::: details I need a special spot (lower bunk, step-free, close to a toilet, quiet)
-Ask the crew for a special-needs spot, even before booking opens: sign in with your ticket code and follow the ♿ link (*Special needs or a project? Ask the crew now* on the map before booking opens, ♿ **Special-needs spot** in the top bar of every booking page after that) while the crew accepts requests. See [Special needs & groups](./special-needs).
+::: details I need a special spot (lower bunk, step-free, close to a toilet, quiet, stable light)
+If you need it for a medical reason or a disability, ask the crew for a special-needs spot, even before booking opens: sign in with your ticket code and follow the ♿ link (*Special needs or a project? Ask the crew now* on the map before booking opens, ♿ **Special-needs spot** in the top bar of every booking page after that) while the crew accepts requests. See [Special needs & groups](./special-needs).
 :::
 
-::: details Can our art project get a room or spots together?
-Ask the crew with the same form: tick *A room just for our project or crew* or *Spots close to the people I come with* and tell them what your project is and how many of you there are. One of you starts a group and shares its link; everyone else joins with their own ticket code, up to 12 people. The crew decides on each request and tries to put the group close together; there is no claim to a particular room. See [Asking as a group](./special-needs#asking-as-a-group).
+::: details I come as the helper of someone with a special need. Can I sleep close to them?
+Ask the crew too, with your own ticket code: choose *I come as the helper of someone with a personal need* and tell the crew in a few words what they should know, for example that you need to sleep in the same room or close by — what, not why: no diagnoses or medical details, yours or theirs. A helper asks together with the person they help: join their group, or start one and share the link with them. See [Asking as a group](./special-needs#asking-as-a-group).
+:::
+
+::: details Can our art project or crew get a room, or a bed close to our piece?
+Ask the crew with the same form: choose *An art project or a crew*, tick *A room for our art project or crew* or *A bed close to our art piece or project*, and describe in at least 5 words what you need and why your art piece or project would be at risk without it. One of you starts a group and shares its link; the rest of the crew joins with their own ticket code, up to 5 people. The crew decides on each request and tries to put the group close together; there is no claim to a particular room or bed. See [Asking as a group](./special-needs#asking-as-a-group).
 :::
 
 ::: details My special-needs request won't send, or says the crew has already decided
-The form needs at least one ticked need (or *Something else*), a few words of text (5 to 500 characters) and the ticked consent box. When you join a group, or are in one already, ticking is optional, and so are the words as long as you tick nothing; starting a group needs both. *No group has this code* means a typo, or the group is gone: check the code with someone in the group. *This group is full* means 12 are in it already: contact the crew. *You can't join this group* means the crew took you out of it: contact the crew. *You sent your request 10 times within an hour* is a limit: it works again within the hour. *Special-needs requests are closed right now, so nothing was sent* means the crew stopped taking requests meanwhile: contact the crew. *The crew has already decided on your request* means it can't be changed anymore; the page shows the decision. If something changed, contact the crew. You can still withdraw the request.
+The form needs to know what your request is about, at least one ticked box on that path (or *Something else*; a helper ticks nothing), a few words of text (5 to 500 characters; for an art project or a crew at least 5 words) and the ticked consent box. A helper has to be in a group: join the group of the person you help, or start one. When you join a group, or are in one already, choosing and ticking are optional, and so are the words as long as you tick nothing (a helper always writes a few); whoever starts a group fills in the form like anyone asking alone. *No group has this code* means a typo, or the group is gone: check the code with someone in the group. *This group is full* means 5 are in it already: contact the crew. *You can't join this group* means the crew took you out of it: contact the crew. *You sent your request 10 times within an hour* is a limit: it works again within the hour. *Special-needs requests are closed right now, so nothing was sent* means the crew stopped taking requests meanwhile: contact the crew. *The crew has already decided on your request* means it can't be changed anymore; the page shows the decision. If something changed, contact the crew. You can still withdraw the request.
 :::
 
 ::: details A spot says "Blocked by admin" in violet
@@ -142,7 +178,7 @@ One colour, one meaning, on every page: **green** free, **red** taken by another
 Press the pause button ⏸ next to the title; your browser remembers it. If your device is set to reduce motion (for example on iPhone: Settings → Accessibility → Motion → Reduce Motion), the title doesn't move at all, and there are no fireworks after booking either. And if you like it: move the cursor over the standing letters or tap them to set them on fire yourself.
 :::
 
-::: details What is the small `v0.18.1` next to the title?
+::: details What is the small `v1.32.2` next to the title?
 The version of CozyNights you are looking at. It is also at the very end of every page (on the camp map only on wider screens); hover it to see the build, click it for what changed. If you report a problem, say which version you saw.
 :::
 
@@ -201,7 +237,7 @@ Structural changes only work in Staging Mode. During Live Booking and after book
 :::
 
 ::: details Guests can't book a spot
-First the phase: guests book only during 🎪 Live Booking. Then check the spot on its room page. Guests can't book **LOCKED 🔒**, **SPECIAL NEEDS ♿** or ⚪️ **INACTIVE 🧊** spots: unlock it, switch it back to normal with <kbd>♿ NORMAL</kbd>, or activate it with ⚡️ in Staging Mode. A ♿ spot stays out of reach for admins with a ticket code too: book it for a request on ♿ **Special needs**. New spots are active from the start, but a template import keeps the states stored in the file. See [Houses, rooms & spots](../admin/camp-layout#spots).
+First the phase: guests book only during 🎪 Live Booking. Then check the spot on its room page. Guests can't book **LOCKED 🔒**, **SPECIAL NEEDS ♿** or ⚪️ **INACTIVE 🧊** spots: unlock it, switch it back to normal with <kbd>♿ NORMAL</kbd>, or activate it with ⚡️ in Staging Mode. A 🔒 locked spot (a broken bed or one out of service) can still be booked with a crew ticket, a ticket whose e-mail is the address of an approved admin or superuser account; being signed in to the admin area doesn't matter, and with any other ticket it never works. A ♿ spot stays out of reach even for a crew ticket: book it for a request on ♿ **Special needs**. New spots are active from the start, but a template import keeps the states stored in the file. See [Houses, rooms & spots](../admin/camp-layout#spots).
 :::
 
 ::: details A house won't move when I drag it

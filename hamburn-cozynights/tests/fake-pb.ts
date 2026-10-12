@@ -2,8 +2,10 @@
 // unit tests of server code that reads and writes several collections. It
 // understands the filters the app writes (`a = {:x} && b != ""`, true/false,
 // quoted values), `expand` of single relations (also nested: "room.house"),
-// sorting by one field and unique indexes. Everything else is out of scope:
+// sorting by one field, unique indexes and the booking route (send). Everything else is out of scope:
 // the real database is covered by tests/integration.
+
+import { fakeBook, refusedBy } from './fake-book';
 
 type Row = Record<string, any>;
 
@@ -68,6 +70,22 @@ export class FakePb {
 
 	rows(collection: string): Row[] {
 		return this.tables[collection] ?? [];
+	}
+
+	/** The app's own PocketBase routes; only POST /api/cozy/book so far (tests/fake-book.ts). */
+	async send(path: string, options: Row = {}): Promise<Row> {
+		if (path !== '/api/cozy/book') throw new Error(`fake-pb: no route ${path}`);
+		const outcome = fakeBook(
+			{
+				bed: (id) => this.rows('beds').find((b) => b.id === id),
+				order: (id) => this.rows('orders').find((o) => o.id === id),
+				bedsOf: (orderId) => this.rows('beds').filter((b) => b.order === orderId),
+				settings: () => this.rows('app_settings')[0]
+			},
+			options.body ?? {}
+		);
+		if (!outcome.ok) throw refusedBy(outcome);
+		return outcome;
 	}
 
 	private expand(collection: string, row: Row, expand?: string): Row {

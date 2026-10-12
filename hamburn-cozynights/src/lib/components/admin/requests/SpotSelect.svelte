@@ -6,14 +6,16 @@
 	 * clearly doesn't ("✗ upper bunk"), so the crew reads the list instead of
 	 * remembering the camp.
 	 *
-	 * ♿ special-needs spots carry ♿ in their text. They come first for a
-	 * request with something the guest needs, and last for anything else (an
-	 * art project, a group only): they are kept for access needs. When none is
-	 * free, a line under the list says why — the ♿ panel above lists them all.
-	 * Used on each request card and in a group's planner (GroupCard).
+	 * ♿ special-needs spots carry ♿ in their text and come first: they are the
+	 * pool for special-needs requests (Max, 2026-10-12). A spot the crew locked
+	 * 🔒 says "blocked" and comes last of its group: out of service, only on
+	 * purpose. When no ♿ spot is free, a line under the list says why — the ♿
+	 * panel above lists them all. The list without JavaScript; with it, the
+	 * cards use the spot picker (SpotPicker). Used on each request card and in
+	 * a group's planner (GroupCard).
 	 */
 	import { factsOf, matchNeeds, needShort } from '$lib/accommodation';
-	import { requestKinds, type SpecialNeed, type SpotInfo } from '$lib/special-needs';
+	import type { SpecialNeed, SpotInfo } from '$lib/special-needs';
 
 	let {
 		name,
@@ -48,8 +50,6 @@
 		onpick?: (bedId: string) => void;
 	} = $props();
 
-	const access = $derived(requestKinds(needs).access);
-
 	function fitText(match: ReturnType<typeof matchNeeds>): string {
 		const parts = [
 			...match.fits.map((need) => `✓ ${needShort(need)}`),
@@ -58,30 +58,27 @@
 		return parts.length > 0 ? ` — ${parts.join(', ')}` : '';
 	}
 
-	/** One group of the list, best match first; a tie keeps the camp's natural order. */
+	/** One group of the list, best match first, blocked ones last; a tie keeps the camp's order. */
 	function ranked(special: boolean) {
 		return spots
 			.filter((spot) => spot.special === special)
 			.map((spot) => ({ spot, match: matchNeeds(needs, factsOf(spot.bedType, spot.features)) }))
-			.sort((a, b) => b.match.score - a.match.score)
+			.sort(
+				(a, b) => Number(a.spot.locked) - Number(b.spot.locked) || b.match.score - a.match.score
+			)
 			.map(({ spot, match }) => ({
 				bedId: spot.bedId,
-				text: `${special ? '♿ ' : ''}${spot.label}${spot.locked ? ' 🔒' : ''}${fitText(match)}`
+				text: `${special ? '♿ ' : ''}${spot.label}${spot.locked ? ' 🔒 blocked' : ''}${fitText(match)}`
 			}));
 	}
 
 	const groups = $derived.by(() => {
 		const specialSpots = ranked(true);
-		const special = {
-			label: access
-				? `♿ Special-needs spots (${specialSpots.length} free)`
-				: '♿ Special-needs spots (kept for access needs)',
-			entries: specialSpots
-		};
-		const other = { label: 'Other free spots', entries: ranked(false) };
-		return (access ? [special, other] : [other, special]).filter(
-			(group) => group.entries.length > 0
-		);
+		const free = specialSpots.length - spots.filter((s) => s.special && s.locked).length;
+		return [
+			{ label: `♿ Special-needs spots (${free} free)`, entries: specialSpots },
+			{ label: 'Other free spots', entries: ranked(false) }
+		].filter((group) => group.entries.length > 0);
 	});
 </script>
 
@@ -96,8 +93,8 @@
 			</optgroup>
 		{/each}
 	</select>
-	<!-- Only where a ♿ spot would come first: a request with something the guest needs. -->
-	{#if specialFree === 0 && access}
+	<!-- The ♿ spots are the pool for every special-needs request. -->
+	{#if specialFree === 0}
 		<p class="hint">
 			{#if specialSummary}
 				♿ No special-needs spot is free right now: {specialSummary}. See “♿ Special-needs spots”

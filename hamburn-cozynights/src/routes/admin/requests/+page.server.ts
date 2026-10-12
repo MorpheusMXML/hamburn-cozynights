@@ -4,8 +4,11 @@ import type { Actions, PageServerLoad } from './$types';
 import { BedUnavailableError, ReleaseFailedError } from '$lib/server/booking';
 import { getBookingSettings } from '$lib/server/settings';
 import { needCapacity } from '$lib/accommodation';
+import { plannable } from '$lib/group-plan';
+import { BLOCKED_OK_ALL, blockedConfirmed, isOpenRequest } from '$lib/special-needs';
 import {
 	assignSpot,
+	countRoomSpots,
 	decideRequest,
 	listAssignableSpots,
 	listRequests,
@@ -23,26 +26,28 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
 	setHeaders({ 'cache-control': 'no-store' });
 
 	try {
-		const [requests, spots, settings, groups, specialSpots] = await Promise.all([
+		const [requests, spots, settings, groups, specialSpots, roomSpots] = await Promise.all([
 			listRequests(locals.adminPb),
 			listAssignableSpots(locals.adminPb),
 			getBookingSettings(locals.pb),
 			listGroups(locals.adminPb),
 			// Every ♿ spot with its state: why one is missing from the picker.
-			listSpecialSpots(locals.adminPb)
+			listSpecialSpots(locals.adminPb),
+			// "3 of 6 free" on the picker's room cards.
+			countRoomSpots(locals.adminPb)
 		]);
 		// What the requests that still wait for a spot need, against the free spots
 		// that fit: the crew sees early when it has to free or mark more.
-		const open = requests.filter(
-			(request) =>
-				request.status === 'pending' || (request.status === 'approved' && !request.spot?.assigned)
-		);
+		const open = requests.filter(isOpenRequest);
 		return {
 			requests,
 			spots,
-			capacity: needCapacity(open, spots),
+			// A spot the crew locked 🔒 is out of service: it never counts as free.
+			capacity: needCapacity(open, spots.filter(plannable)),
 			groups,
 			specialSpots,
+			roomSizes: roomSpots.sizes,
+			roomBooked: roomSpots.booked,
 			requestsOpen: settings.requestsOpen,
 			isBookingActive: settings.isBookingActive
 		};
@@ -101,6 +106,20 @@ function readPicks(form: FormData): { requestId: string; bedId: string }[] | nul
 	return picks;
 }
 
+/**
+ * The locked 🔒 spots the crew confirmed booking anyway (field blockedOk):
+ * the bed ids the page's dialog warned about, comma-separated, or
+ * BLOCKED_OK_ALL from the checkbox of the page without JavaScript. Anything
+ * else is dropped.
+ */
+function readBlockedOk(form: FormData): string[] {
+	return form
+		.getAll('blockedOk')
+		.flatMap((value) => (typeof value === 'string' ? value.split(',') : []))
+		.map((value) => value.trim())
+		.filter((value) => value === BLOCKED_OK_ALL || RECORD_ID.test(value));
+}
+
 export const actions: Actions = {
 	toggleRequests: async ({ request, locals }) => {
 		if (!locals.admin) return fail(403, { error: 'Only admins can open or close requests.' });
@@ -140,7 +159,8 @@ export const actions: Actions = {
 		const bedId = recordId(form, 'bedId');
 		if (!id) return fail(400, { error: 'No request was selected. Reload the page.' });
 		if (!bedId) return fail(400, { error: 'Pick a spot from the list first.' });
-		return step('assign', () => assignSpot(locals.adminPb, admin, id, bedId));
+		const blockedOk = blockedConfirmed(readBlockedOk(form), bedId);
+		return step('assign', () => assignSpot(locals.adminPb, admin, id, bedId, { blockedOk }));
 	},
 
 	release: async ({ request, locals }) => {
@@ -187,7 +207,7 @@ export const actions: Actions = {
 		const picks = readPicks(form);
 		if (!picks) return fail(400, { error: 'No request was selected. Reload the page.' });
 		return step('assign group', async () => {
-			const outcome = await assignGroup(locals.adminPb, admin, id, picks);
+			const outcome = await assignGroup(locals.adminPb, admin, id, picks, readBlockedOk(form));
 			if (outcome.failed.length === 0) return outcome;
 			const tried = outcome.booked + outcome.failed.length;
 			const notBooked = outcome.failed

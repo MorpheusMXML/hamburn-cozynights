@@ -4,12 +4,13 @@
 // stress-data.ts) and resized from a small phone to a desktop; at each width
 // tests/layout/layout-check.ts measures the rendered text. A failure lists
 // what broke at which widths and attaches a screenshot with the spots outlined.
-import { test, expect, type Browser, type Page } from '@playwright/test';
+import { test, expect, type Browser, type Page, type Route } from '@playwright/test';
 import fs from 'fs';
 import type PocketBase from 'pocketbase';
 import { findLayoutProblems, type LayoutProblem } from './layout-check';
 import {
 	CAMP_FILE,
+	MY_SPOT_LABEL,
 	TEXTS,
 	setPhase,
 	stressLayoutFile,
@@ -70,6 +71,8 @@ interface PageCase {
 	checkedIn?: boolean;
 	/** What a checked-in case must show, so it proves its state (default: the guest's note). */
 	checkedInText?: RegExp;
+	/** The crew renamed the stress guest's spot to this; every other case gets MY_SPOT_LABEL back. */
+	spotLabel?: string;
 }
 
 /** The three phases, plus every armed timer (countdown box, countdown bar). */
@@ -88,6 +91,112 @@ async function unfoldAll(page: Page) {
 				.map((a) => a.finished.catch(() => undefined))
 		)
 	);
+}
+
+/** Each cover and the one piece of the bed it goes on (src/lib/booking-check.ts). */
+const COVER_ON = [
+	['Bed sheet', 'Mattress'],
+	['Duvet cover', 'Blanket'],
+	['Pillowcase', 'Pillow']
+] as const;
+
+/**
+ * The check before a new spot: every cover onto its own piece, by tapping
+ * the cover and then its place on the bed. The cases run with reduced motion,
+ * so a cover lands at once.
+ */
+async function makeTheBed(page: Page) {
+	for (const [cover, piece] of COVER_ON) {
+		await page.getByRole('button', { name: cover, exact: true }).click();
+		await page.getByRole('button', { name: piece, exact: true }).click();
+	}
+	await page.getByRole('button', { name: /I'll pack them/ }).waitFor();
+}
+
+/** Requests a case holds on their way (the wait veil); see holdRequests. */
+const heldRequests: Route[] = [];
+
+/**
+ * Holds every request that matches until the case ends, then fails it. A held
+ * request is never left to the closing browser: WebKit still sent a held
+ * booking to the server when its context closed, and the guest then had a
+ * spot in the cases after it.
+ */
+async function holdRequests(page: Page, match: (url: URL) => boolean) {
+	await page.route(match, (route) => {
+		heldRequests.push(route);
+	});
+}
+
+async function failHeldRequests() {
+	for (const route of heldRequests.splice(0)) await route.abort().catch(() => {});
+}
+
+/** Lets one-shot animations end, so the sweep measures boxes where they land. */
+async function settle(page: Page) {
+	await page.evaluate(() =>
+		Promise.all(
+			document
+				.getAnimations()
+				.filter((a) => a.effect?.getTiming().iterations !== Infinity)
+				.map((a) => a.finished.catch(() => undefined))
+		)
+	);
+}
+
+/**
+ * The roulette landed on a spot with a name on the plate: "Book it" opens the
+ * check. Its card scales in (220 ms): measured mid-way, an SVG label inside
+ * looked 3 px off its own box.
+ */
+/**
+ * The group guest opens the booking window of a free spot in the page's room
+ * (it holds the spot, $lib/server/spot-holds); the page then shows it as
+ * being booked. A ticket gets ten minutes per spot, and the suite runs longer
+ * than that: a spot this ticket can't hold again just tries the next one.
+ */
+async function holdASpot(page: Page) {
+	if (await page.locator('.bed-card.held').count()) return;
+	const roomPath = new URL(page.url()).pathname;
+	const spots = await page
+		.locator('.bed-card.free')
+		.evaluateAll((cards) => cards.map((card) => card.getAttribute('data-bed-id') ?? ''));
+	for (const bedId of spots) {
+		const res = await fetch(`${BASE}${roomPath}?/holdSpot`, {
+			method: 'POST',
+			headers: {
+				accept: 'application/json',
+				'x-sveltekit-action': 'true',
+				'content-type': 'application/x-www-form-urlencoded',
+				origin: BASE,
+				cookie: `bookingCode=${camp.guestInGroup}; bookingRound=${camp.guestRound}`
+			},
+			body: new URLSearchParams({ bedId }).toString()
+		});
+		if (!res.ok) throw new Error(`holding a spot → ${res.status}: ${await res.text()}`);
+		await page.reload({ waitUntil: 'networkidle' });
+		if (await page.locator('.bed-card.held').count()) return;
+	}
+	throw new Error('No spot of the room could be held for the group guest.');
+}
+
+async function openRouletteCheck(page: Page) {
+	await page.getByRole('button', { name: /^Spin/ }).click();
+	await page.locator('#guestName').fill('Layout Owl');
+	await page.getByRole('button', { name: /Book it/ }).click();
+	await page.locator('.check-card').waitFor();
+	await settle(page);
+}
+
+/**
+ * The stress room in the open spot picker: the only room of the stress house,
+ * where five other guests sleep and the crew locked Upper 1.
+ */
+function stressRoom(page: Page) {
+	return page
+		.locator(`.picker-sheet section.house[aria-label^="${TEXTS.houseLong.slice(0, 40)}"]`)
+		.locator('article.room')
+		.first();
 }
 
 const PAGES: PageCase[] = [
@@ -134,12 +243,94 @@ const PAGES: PageCase[] = [
 		phases: ALL_PHASES
 	},
 	{
+		// Another guest is booking a spot right now: its card makes its bed
+		// ("Bed being made", $lib/spot-hold) until it is booked or free again.
+		// In another house's room: the booking dialog cases need the free spots
+		// of the stress room for the guest without a spot.
+		name: 'room: a spot being booked',
+		path: (c) => `/room/${c.otherRoomIds[c.otherRoomIds.length - 1]}`,
+		as: 'guestWithSpot',
+		open: holdASpot
+	},
+	{
+		// A new spot starts with the check: make the bed (step 1).
 		name: 'room: booking dialog',
 		path: (c) => `/room/${c.roomId}`,
 		as: 'guestWithoutSpot',
 		open: async (page) => {
 			await page.locator('button.bed-card.free').first().click();
 			await page.getByRole('dialog').waitFor();
+		}
+	},
+	{
+		// A cover in hand on the wrong piece: the bed says where it goes.
+		name: 'room: booking dialog, wrong piece',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.locator('button.bed-card.free').first().click();
+			await page.getByRole('dialog').waitFor();
+			await page.getByRole('button', { name: 'Pillowcase', exact: true }).click();
+			await page.getByRole('button', { name: 'Blanket', exact: true }).click();
+			await page.locator('.make-bed .status', { hasText: "That's the blanket!" }).waitFor();
+		}
+	},
+	{
+		// The bed is made: the card asks to pack the three covers for real.
+		name: 'room: booking dialog, bed made',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.locator('button.bed-card.free').first().click();
+			await page.getByRole('dialog').waitFor();
+			await makeTheBed(page);
+		}
+	},
+	{
+		// Step 2: name and rules box, after Save without the tick (its message shows).
+		name: 'room: booking dialog, rules',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.locator('button.bed-card.free').first().click();
+			await page.getByRole('dialog').waitFor();
+			await makeTheBed(page);
+			await page.getByRole('button', { name: /I'll pack them/ }).click();
+			await page.getByRole('button', { name: 'Save Spot' }).click();
+			await page.locator('.rules-error').waitFor();
+		}
+	},
+	{
+		// A booking on its way (the opening rush): after a moment the wait veil
+		// ($lib/waiting) covers the page and asks the guest not to reload. The
+		// answer never comes here, so nothing is booked.
+		name: 'room: wait veil while booking',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.locator('button.bed-card.free').first().click();
+			await page.getByRole('dialog').waitFor();
+			await makeTheBed(page);
+			await page.getByRole('button', { name: /I'll pack them/ }).click();
+			await page.getByRole('checkbox', { name: /I've read and understood/ }).check();
+			await page.locator('#guestName').fill('Wait Veil');
+			await holdRequests(page, (url) => url.search.includes('/bookBed'));
+			await page.getByRole('button', { name: 'Save Spot' }).click();
+			await page.locator('.wait-veil', { hasText: 'Saving your spot' }).waitFor();
+		}
+	},
+	{
+		// A page change that takes a while: "On our way" over the house.
+		name: 'house: wait veil while a room loads',
+		path: (c) => `/house/${c.houseId}`,
+		as: 'guestWithSpot',
+		open: async (page) => {
+			await holdRequests(
+				page,
+				(url) => url.pathname.startsWith('/room/') && url.pathname.endsWith('/__data.json')
+			);
+			await page.locator('a[href^="/room/"]').first().click();
+			await page.locator('.wait-veil', { hasText: 'On our way' }).waitFor();
 		}
 	},
 	{
@@ -207,6 +398,29 @@ const PAGES: PageCase[] = [
 		}
 	},
 	{
+		// "Book it" opens the check over the machine: the bed first.
+		name: 'random spot: booking check',
+		path: () => '/random-bed',
+		as: 'guestWithoutSpot',
+		open: openRouletteCheck
+	},
+	{
+		// The bed is made; "Book it" without the tick shows why it waits.
+		name: 'random spot: booking check, rules',
+		path: () => '/random-bed',
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await openRouletteCheck(page);
+			await makeTheBed(page);
+			await page.getByRole('button', { name: /I'll pack them/ }).click();
+			await page
+				.locator('.check-card')
+				.getByRole('button', { name: /Book it/ })
+				.click();
+			await page.locator('.rules-error').waitFor();
+		}
+	},
+	{
 		// A guest with a spot: it stands on the reels, with the booking pass below.
 		name: 'random spot: my spot',
 		path: () => '/random-bed',
@@ -231,6 +445,17 @@ const PAGES: PageCase[] = [
 		as: 'guestWithSpot',
 		phases: ['live'],
 		checkedIn: true
+	},
+	// The room card with my spot says "Your spot · <label>"; a label the crew
+	// renamed to 50 characters must wrap inside the card, not widen the page.
+	{
+		name: 'house: my spot with a long label',
+		path: (c) => `/house/${c.houseId}`,
+		as: 'guestWithSpot',
+		spotLabel: TEXTS.spotLabelMine,
+		open: async (page) => {
+			await page.locator('.card.mine .mine-chip', { hasText: TEXTS.spotLabelMine }).waitFor();
+		}
 	},
 	{
 		name: 'house without my spot: checked in',
@@ -285,6 +510,36 @@ const PAGES: PageCase[] = [
 		open: async (page) => {
 			await page.getByRole('button', { name: 'Send request' }).click();
 			await page.locator('#consent-error').waitFor();
+		}
+	},
+	// The three paths of the form: each shows only its own checkboxes (with
+	// JavaScript), the helper's refusal sits at the group question.
+	{
+		name: 'special needs: a personal need',
+		path: () => '/special-needs',
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.getByLabel('A personal need: a medical reason or a disability').check();
+			await page.getByText('Stable light conditions').waitFor();
+		}
+	},
+	{
+		name: 'special needs: an art project',
+		path: () => '/special-needs',
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.getByLabel('An art project or a crew').check();
+			await page.getByText('A bed close to our art piece or project').waitFor();
+		}
+	},
+	{
+		name: 'special needs: a helper without a group',
+		path: () => '/special-needs',
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.getByLabel('I come as the helper of someone with a personal need').check();
+			await page.getByRole('button', { name: 'Send request' }).click();
+			await page.locator('#group-error').waitFor();
 		}
 	},
 	// Request groups (docs/guide/special-needs.md "Asking as a group"): a group
@@ -649,15 +904,46 @@ const PAGES: PageCase[] = [
 		}
 	},
 	{ name: 'admin special-needs requests', path: () => '/admin/requests', as: 'admin' },
+	// The spot picker (SpotPicker): houses, rooms and spots over the page;
+	// picking one and pressing its button books it after a confirmation.
+	{
+		name: 'admin special-needs: spot picker',
+		path: () => '/admin/requests',
+		as: 'admin',
+		open: async (page) => {
+			const request = page.locator('article.request.status-pending').first();
+			await request.locator('form.assign button.primary').click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.waitFor();
+			await sheet.locator('button.tile').first().click();
+			await sheet.locator('.picker-foot .choice-label').waitFor();
+		}
+	},
 	{
 		name: 'admin special-needs: confirm dialog',
 		path: () => '/admin/requests',
 		as: 'admin',
 		open: async (page) => {
 			const request = page.locator('article.request.status-pending').first();
-			await request.locator('select').selectOption({ index: 1 });
 			await request.locator('form.assign button.primary').click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.locator('button.tile').first().click();
+			await sheet.locator('.picker-foot button.primary').click();
 			await page.getByRole('alertdialog').waitFor();
+		}
+	},
+	// A spot the crew locked 🔒 picked on purpose: the picker's footer warns
+	// (the stress room's Upper 1, out of service).
+	{
+		name: 'admin special-needs: blocked spot',
+		path: () => '/admin/requests',
+		as: 'admin',
+		open: async (page) => {
+			const request = page.locator('article.request.status-pending').first();
+			await request.locator('form.assign button.primary').click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.locator('button.tile.blocked').first().click();
+			await sheet.locator('.picker-foot .warn-text', { hasText: 'blocked' }).waitFor();
 		}
 	},
 	// Request groups and ♿ spots on the requests page: the full group (one
@@ -679,7 +965,53 @@ const PAGES: PageCase[] = [
 		path: () => '/admin/requests',
 		as: 'admin',
 		open: async (page) => {
-			await page.locator(`#group-${camp.fullGroupId} form.plan button.primary`).click();
+			// A group sleeps in one room: when no room has space for all (as in the
+			// stress camp) there is no plan, so put as many as fit into one, then book.
+			const group = page.locator(`#group-${camp.fullGroupId}`);
+			await group.locator('.where button').click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.locator('.room-action button').first().click();
+			await sheet.getByRole('button', { name: 'Edit the plan' }).click();
+			await group.locator('form.plan button.primary').click();
+			await page.getByRole('alertdialog').waitFor();
+		}
+	},
+	// The picker for a whole group: a room chosen, its spots carry the names.
+	{
+		name: 'admin special-needs: group picker',
+		path: () => '/admin/requests',
+		as: 'admin',
+		open: async (page) => {
+			await page.locator(`#group-${camp.fullGroupId} .where button`).click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.locator('.room-action button').first().click();
+			await sheet.locator('.tile.planned').first().waitFor();
+		}
+	},
+	// The group into a room where other guests sleep (the stress room): the
+	// picker's info line, then the booking's confirmation with it, the ✗ of
+	// what a spot misses and a long room name in the title.
+	{
+		name: 'admin special-needs: group picker, room with guests',
+		path: () => '/admin/requests',
+		as: 'admin',
+		open: async (page) => {
+			await page.locator(`#group-${camp.fullGroupId} .where button`).click();
+			const sheet = page.locator('.picker-sheet');
+			await stressRoom(page).locator('.room-action button').click();
+			await sheet.locator('.picker-foot .info-line').waitFor();
+		}
+	},
+	{
+		name: 'admin special-needs: group confirm, room with guests',
+		path: () => '/admin/requests',
+		as: 'admin',
+		open: async (page) => {
+			const group = page.locator(`#group-${camp.fullGroupId}`);
+			await group.locator('.where button').click();
+			await stressRoom(page).locator('.room-action button').click();
+			await page.locator('.picker-sheet').getByRole('button', { name: 'Edit the plan' }).click();
+			await group.locator('form.plan button.primary').click();
 			await page.getByRole('alertdialog').waitFor();
 		}
 	},
@@ -724,28 +1056,38 @@ test.beforeAll(async () => {
 	pb = await superuser(PB_URL, process.env.PB_ADMIN_EMAIL!, process.env.PB_ADMIN_PASSWORD!);
 });
 
+// A case that failed before it closed its browser fails its held requests here.
+test.afterEach(failHeldRequests);
+
+// The other test files on this stack find the guest's spot as it was seeded.
+test.afterAll(async () => {
+	if (pb && camp) await setMySpot(false, MY_SPOT_LABEL);
+});
+
 /**
- * Checks the stress guest in, or takes the check-in back, straight in the
- * database, as the admin's pass check would. Every case sets it, so no case
- * depends on what an earlier one left behind (the run is split into shards).
+ * Checks the stress guest in, or takes the check-in back, and gives the spot
+ * its label, straight in the database, as the admin's pass check and a crew
+ * rename would. Every case sets both, so no case depends on what an earlier
+ * one left behind (the run is split into shards).
  */
-async function setCheckedIn(on: boolean) {
+async function setMySpot(checkedIn: boolean, label: string) {
 	const order = await pb
 		.collection('orders')
 		.getFirstListItem(pb.filter('pass_code = {:code}', { code: camp.passCode }));
 	const bed = await pb
 		.collection('beds')
 		.getFirstListItem(pb.filter('order = {:order}', { order: order.id }));
-	if (!!bed.checked_in_at === on) return;
-	await pb.collection('beds').update(
-		bed.id,
-		on
-			? {
-					checked_in_at: new Date().toISOString(),
-					checked_in_by: camp.adminEmail
-				}
-			: { checked_in_at: '', checked_in_by: '' }
-	);
+	const change: Record<string, string> = {};
+	if (!!bed.checked_in_at !== checkedIn) {
+		Object.assign(
+			change,
+			checkedIn
+				? { checked_in_at: new Date().toISOString(), checked_in_by: camp.adminEmail }
+				: { checked_in_at: '', checked_in_by: '' }
+		);
+	}
+	if (bed.label !== label) change.label = label;
+	if (Object.keys(change).length > 0) await pb.collection('beds').update(bed.id, change);
 }
 
 /**
@@ -846,7 +1188,7 @@ for (const pageCase of PAGES) {
 		const title = pageCase.phases ? `${pageCase.name} (${phase})` : pageCase.name;
 		test(title, async ({ browser }, testInfo) => {
 			await setPhase(pb, phase);
-			await setCheckedIn(!!pageCase.checkedIn);
+			await setMySpot(!!pageCase.checkedIn, pageCase.spotLabel ?? MY_SPOT_LABEL);
 			const context = await openAs(browser, pageCase.as);
 			const page = await context.newPage();
 			await page.setViewportSize({ width: 1280, height: 900 });
@@ -881,6 +1223,7 @@ for (const pageCase of PAGES) {
 					contentType: 'image/png'
 				});
 			}
+			await failHeldRequests();
 			await context.close();
 			expect(report(findings), 'text squeezed, cut off or pushed out').toBe('');
 		});

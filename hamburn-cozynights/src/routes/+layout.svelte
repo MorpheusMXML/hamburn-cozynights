@@ -4,6 +4,7 @@
 	import FairyBackground from '$lib/components/FairyBackground.svelte';
 	import BurnerTrail from '$lib/components/BurnerTrail.svelte';
 	import DialogHost from '$lib/components/DialogHost.svelte';
+	import WaitVeil from '$lib/components/WaitVeil.svelte';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import GuestTopBar from '$lib/components/GuestTopBar.svelte';
 	import { showTopBar } from '$lib/booking-phase';
@@ -67,6 +68,7 @@
 </div>
 
 <DialogHost />
+<WaitVeil />
 
 <style>
 	.app-root {

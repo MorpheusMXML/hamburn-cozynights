@@ -15,7 +15,11 @@
 		</style>
 		%sveltekit.head%
 	</head>
-	<body data-sveltekit-preload-data="hover">
+	<!-- Data is preloaded when a link is tapped or pressed, not when the mouse
+	     only passes over it: a hover ran a page's whole server load for nothing,
+	     and a click minutes later showed spots as they were back then. The code
+	     still loads on hover, as before (static files, no server load). -->
+	<body data-sveltekit-preload-data="tap" data-sveltekit-preload-code="hover">
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>

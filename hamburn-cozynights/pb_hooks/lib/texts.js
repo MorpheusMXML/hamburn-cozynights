@@ -55,6 +55,7 @@ const GROUPS = [
 	{ id: 'mail.released', channel: 'mail', title: 'E-mail · spot released' },
 	{ id: 'mail.request', channel: 'mail', title: 'E-mail · special-needs request' },
 	{ id: 'mail.swap', channel: 'mail', title: 'E-mail · swap requests' },
+	{ id: 'mail.code', channel: 'mail', title: 'E-mail · your ticket code' },
 	{ id: 'tg.common', channel: 'telegram', title: 'Telegram · in several messages' },
 	{ id: 'tg.connected', channel: 'telegram', title: 'Telegram · chat connected' },
 	{ id: 'tg.booked', channel: 'telegram', title: 'Telegram · spot booked' },
@@ -78,6 +79,8 @@ const TEXTS = [
 		text: 'You get this e-mail because this address belongs to your Hamburn ticket. CozyNights never asks you for your ticket code by e-mail.' },
 	{ key: 'mail.pass', group: 'mail.common', label: 'Booking pass', hint: 'In every message that shows the spot.', placeholders: ['passCode', 'passUrl'],
 		text: 'Your booking pass (code {passCode}): {passUrl} — show it when you arrive, if the crew asks.' },
+	{ key: 'mail.bedding', group: 'mail.common', label: 'Bedding to bring', hint: 'In every message that shows the spot, highlighted right under it. The booking pass and the booking window say the same (src/lib/booking-check.ts).', placeholders: [],
+		text: 'Please bring your own bed linen: a bed sheet, a duvet cover and a pillowcase. Pillow and blanket are provided. A sleeping bag is fine instead of the duvet cover; the bed sheet and the pillowcase are still a must.' },
 	{ key: 'mail.fixed', group: 'mail.common', label: 'A spot the crew booked: how to change it', hint: 'Instead of the usual "to change or release it" line, when the crew booked the spot for a special-needs request.', placeholders: ['roomUrl'],
 		text: 'The crew picked this spot for you, so please contact the crew to change it. Your room: {roomUrl}' },
 	{ key: 'mail.telegram', group: 'mail.common', label: 'Offer: updates on Telegram', hint: 'In every message that shows the spot, while the guest has no Telegram chat connected (and the bot is set up).', placeholders: ['telegramUrl'],
@@ -199,11 +202,23 @@ const TEXTS = [
 	{ key: 'mail.swapped.before', group: 'mail.swap', label: 'Swap done · the old spot', hint: '', placeholders: ['before'],
 		text: 'Your old spot, {before}, belongs to the other guest now.' },
 
+	// --- e-mail: the ticket code, on request ------------------------------------------
+	{ key: 'mail.code.subject', group: 'mail.code', label: 'Subject', hint: 'A guest who mistyped their code asked for it on the start page. Only ever to the address of a paid ticket.', placeholders: [],
+		text: 'Your CozyNights ticket code' },
+	{ key: 'mail.code.intro', group: 'mail.code', label: 'First line', hint: 'After the greeting; the codes follow, one row per paid ticket of this address.', placeholders: [],
+		text: 'someone — probably you — asked for the ticket code that belongs to this e-mail address:' },
+	{ key: 'mail.code.signin', group: 'mail.code', label: 'How to sign in', hint: '', placeholders: ['appUrl'],
+		text: 'To sign in, open {appUrl} and enter your ticket code.' },
+	{ key: 'mail.code.ignore', group: 'mail.code', label: 'If the guest didn\'t ask', hint: 'The last line.', placeholders: [],
+		text: 'Didn\'t ask for it? Then just ignore this e-mail: it came only to you, and nobody can sign in with your ticket without the code.' },
+
 	// --- Telegram: in several messages ------------------------------------------------
 	{ key: 'tg.pass', group: 'tg.common', label: 'Booking pass', hint: 'Below every message that shows the spot.', placeholders: ['passCode', 'passUrl'],
 		text: '🎫 Booking pass {passCode}:\n{passUrl}' },
 	{ key: 'tg.bed', group: 'tg.common', label: 'The bed', hint: 'Below the spot in every message that shows it, when the crew wrote down what kind of bed it is or what is at it.', placeholders: ['bed'],
 		text: '🛏 {bed}' },
+	{ key: 'tg.bedding', group: 'tg.common', label: 'Bedding to bring', hint: 'In every message that shows the spot, above the booking pass.', placeholders: [],
+		text: '🧺 Bring your own bed linen: a bed sheet, a duvet cover and a pillowcase. Pillow and blanket are provided; a sleeping bag can replace the duvet cover.' },
 	{ key: 'tg.before', group: 'tg.common', label: 'The old spot', hint: 'When the spot changed.', placeholders: ['before'],
 		text: 'Before: {before}' },
 	{ key: 'tg.contact_crew', group: 'tg.common', label: 'A spot the crew booked: how to change it', hint: 'When the crew booked the spot for a special-needs request.', placeholders: [],
@@ -245,9 +260,9 @@ const TEXTS = [
 
 	// --- Telegram: spot released ----------------------------------------------------------
 	{ key: 'tg.released.intro', group: 'tg.released', label: 'The message', hint: '', placeholders: ['before'],
-		text: '🫥 Your CozyNights spot was released: {before} is free again.' },
+		text: '💨 Your CozyNights spot was released: {before} is free again.' },
 	{ key: 'tg.released.intro_unknown', group: 'tg.released', label: 'The message when the old spot is unknown', hint: '', placeholders: [],
-		text: '🫥 Your CozyNights spot was released.' },
+		text: '💨 Your CozyNights spot was released.' },
 	{ key: 'tg.released.rebook', group: 'tg.released', label: 'Why, and how to book again', hint: '', placeholders: ['mapUrl'],
 		text: 'If you didn\'t do this yourself, the crew had to change the camp layout. Pick a new spot while booking is open: {mapUrl}' },
 	{ key: 'tg.released.approved_now', group: 'tg.released', label: 'Released while the request is approved right now', hint: 'Instead of the line above.', placeholders: [],

@@ -96,8 +96,8 @@
 				const made = (result.data ?? {}) as { rooms?: number; spots?: number };
 				toast(
 					made.rooms
-						? `🛖 "${name.trim()}" is up: ${made.rooms} ${roomWord(kind, made.rooms !== 1)}, ${made.spots ?? 0} spots. Drag its pin to the right place.`
-						: `🛖 "${name.trim()}" was created. Drag its pin to the right place.`,
+						? `🏠 "${name.trim()}" is up: ${made.rooms} ${roomWord(kind, made.rooms !== 1)}, ${made.spots ?? 0} spots. Drag its pin to the right place.`
+						: `🏠 "${name.trim()}" was created. Drag its pin to the right place.`,
 					'success',
 					7000
 				);
@@ -124,7 +124,7 @@
 		<a href="/admin/camp">Map & houses</a> <span class="sep">/</span>
 		<span class="current">New house</span>
 	</nav>
-	<h1>Add New House 🛖</h1>
+	<h1>Add New House 🏠</h1>
 	<p class="coords-display">Location: 📍 X: {x} / Y: {y}</p>
 	<p class="hint">You can drag the pin to another place on the Control Center map afterwards.</p>
 

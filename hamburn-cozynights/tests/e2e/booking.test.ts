@@ -4,6 +4,7 @@ import * as dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
+import { passBookingCheck } from './helpers';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,7 +90,8 @@ test.describe('Booking Flow', () => {
 		const bedLabel = await freeBed.locator('.label').innerText();
 		await freeBed.click();
 
-		// 5. In Modal, save the spot
+		// 5. In Modal, make the bed, tick the rules and save the spot
+		await passBookingCheck(page);
 		await page.fill('input[name="guestName"]', 'E2E Tester');
 		await page.click('.btn-confirm');
 

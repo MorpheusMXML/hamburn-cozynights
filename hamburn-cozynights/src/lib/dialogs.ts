@@ -119,6 +119,18 @@ export function chooseWithOption(
 	return open('confirm', message, options);
 }
 
+/**
+ * A confirm that also carries a switch, e.g. "release the special-needs spots
+ * too": whether it was confirmed, and how the switch stood then.
+ */
+export async function confirmWithOption(
+	message: string,
+	options: DialogOptions & { checkbox: DialogCheckbox }
+): Promise<{ confirmed: boolean; checked: boolean }> {
+	const outcome = await open('confirm', message, { ...options, altLabel: '' });
+	return { confirmed: outcome.choice === 'confirm', checked: outcome.checked };
+}
+
 /** English replacement for window.alert. Resolves when dismissed. */
 export async function alertDialog(message: string, options: DialogOptions = {}): Promise<void> {
 	await open('alert', message, options);

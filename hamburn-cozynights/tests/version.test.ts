@@ -15,7 +15,7 @@ import {
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
 describe('the app version', () => {
-	it('is the one in package.json, in the 0.<deploy>.<fix> shape', () => {
+	it('is the one in package.json, in the <line>.<deploy>.<fix> shape', () => {
 		expect(APP_VERSION).toBe(pkg.version);
 		expect(isReleaseVersion(APP_VERSION)).toBe(true);
 	});
@@ -46,6 +46,7 @@ describe('the app version', () => {
 
 	it('accepts only stamped versions', () => {
 		expect(isReleaseVersion('0.18.1')).toBe(true);
+		expect(isReleaseVersion('1.32.2')).toBe(true);
 		expect(isReleaseVersion('0.18')).toBe(false);
 		expect(isReleaseVersion('0.18.1-dev')).toBe(false);
 	});

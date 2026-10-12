@@ -12,11 +12,11 @@ data lives and how it is backed up: [Backups and where data lives](../develop/de
 | `houses`       | `name`, `x`, `y` (map position), `kind` (house, hut group, tent area, other), `features`, `description`, `floor_plans` (pictures in `static/floorplans/`) | no            | admins                                               | public read, admin write              |
 | `rooms`        | `name`, `room_number`, `house`, `amount_beds` (spots created with the room; an initial count only, not maintained: count the room's `beds`), `kind`, `features`, `description` (like a house), `features_off` (house features this room switches off for itself; superusers only) | no            | admins                                               | public read, admin write              |
 | `beds`         | `label`, `room`, `occupied`, `order`, `is_locked`, `enabled`, `is_special` (special-needs spot), `bed_type` (single bed, lower/upper bunk, half of a double bed, sofa, mattress, camp bed), `bunk_partner` (the other spot of a bunk bed, set on both spots), `features_off` (house or room features this spot switches off for itself; superusers only; a spot has no `features` of its own since `1760200000_no_power_socket.js`), `booked_at` (when the spot got its ticket, set by PocketBase), `checked_in_at` and `checked_in_by` (the check-in at arrival: when, which admin) | no      | admins; guest bookings via the app's service account; a check-in with the checking admin's own session (the service account only moves it along or clears it) | admin read, admin write (guests see spots only through the app) |
-| `orders`       | `order_number`, `order_hash`, `customer_name`, `burner_name` (encrypted), `email`, `pass_code` (booking pass, unique), `handed_over_at` (when the ticket was last passed on), `no_swap_requests` (the guest paused swap requests to them) | yes | the app's service account, `scripts/cozy-admin.sh tickets`; `pass_code` only by PocketBase | none (superusers only) |
+| `orders`       | `order_number`, `order_hash`, `customer_name`, `burner_name` (encrypted), `email`, `pass_code` (booking pass, unique), `handed_over_at` (when the ticket was last passed on), `no_swap_requests` (the guest paused swap requests to them), `unpaid` (the shop's order isn't paid yet: the code can't sign in), `marked_paid_at` and `marked_paid_by` (an admin marked it paid by hand: when, which admin) | yes | the app's service account, `scripts/cozy-admin.sh tickets`; `pass_code` only by PocketBase | none (superusers only) |
 | `app_settings` | the phase set by hand: `is_booking_active` (live), `booking_closed` (closed); the booking window: `booking_unlock_at`, `booking_close_at`, `booking_timer_paused`; `notify_mail`, `telegram_bot`, `special_requests_open`, `swaps_off` (the crew paused swap requests), `guest_round` (the booking round guests are signed in for; released bookings count it up) (single record `appsettings0123`) | no | admins (a phase switch right now: superusers only); PocketBase keeps the notification flags current | public read, admin write |
 | `admins`       | `email`, `name`, `role` (`pending`, `admin`, `superuser`), `last_sign_in`                | yes (email)   | Google sign-in, `scripts/cozy-admin.sh`              | none (sign-in creates `pending` only) |
 | `guest_notify` | per ticket: what was last confirmed by mail / Telegram (spot, special-needs request, and the hand-over the address was told about), when the next message is due, retries, the linked Telegram chat and a one-time link token (hashed) | yes (chat id) | PocketBase hooks; the app's service account (Telegram link) | none (superusers only) |
-| `special_requests` | per ticket at most one: `order`, `status` (`pending`, `approved`, `declined`), `needs` (what was ticked: something the guest needs, a project wish, or nothing for a request that only belongs to a group), `reason` and `burner_name` (all three encrypted; `needs` is padded to one length before encryption), `consent_at`, `decided_by`, `decided_at`, `bed` (the spot the crew booked for it), `request_group` (the request group it is in, if any) | yes (often health data) | the app's service account | none (superusers only) |
+| `special_requests` | per ticket at most one: `order`, `status` (`pending`, `approved`, `declined`), `needs` (what was ticked: something the guest needs, `helper`, a project wish, or nothing for a request that only belongs to a group), `reason` and `burner_name` (all three encrypted; `needs` is padded to one length before encryption), `consent_at`, `decided_by`, `decided_at`, `bed` (the spot the crew booked for it), `request_group` (the request group it is in, if any) | yes (often health data) | the app's service account | none (superusers only) |
 | `request_groups` | guests who ask together: `code` (8 characters from the booking pass alphabet, unique: the join token in the invite link), `name` (chosen by the guest who started it, encrypted), `removed` (the tickets the crew took out of the group: they can't join it again), `created`, `updated`. No status: decisions live on each member's request | yes (a name guests chose; who asks together with whom, through `special_requests.request_group`; who was taken out) | the app's service account; deleted by PocketBase once no request is in it | none (superusers only) |
 | `swap_requests` | a guest asks another to swap spots: `from_order`/`from_bed` (who asks, the spot they offer), `to_order`/`to_bed` (whom, the spot they would like), `status` (`pending`, `accepted`, `declined`, `withdrawn`, `expired`, `void`), `ended` (why a `void` one ended), `vibe`, `note` (encrypted), `quiet` (never shown or sent to the other guest), `expires_at`, `answered_at`, and the outbox of its messages (`notify_due`, `ask_mail`, `ask_tg`, `answer_mail`, `answer_tg`, retries) | yes (what guests write to each other) | the app's service account; the swap itself and its outbox by PocketBase | none (superusers only) |
 | `admin_events` | audit log: `action`, `actor`, `subject`, `details`, crew alert state                      | yes (admin emails) | PocketBase hooks; the app's service account      | none (superusers only)                |
@@ -51,18 +51,23 @@ brings back the empty collections and the field, never their records.
   when the bed is released or gets another ticket, unless that write brings a
   check-in along (the crew moving a guest who arrived). Guests can't release
   a checked-in spot; a ticket handed over to a new holder loses its check-in.
-- **One ticket, one spot, also on the server:** the room page refuses a second
-  spot while the ticket holds one (release first). A move whose release of
-  the old spot fails is undone, so a ticket never keeps two spots.
+- **One ticket, one spot, also in the database:** the room page refuses a second
+  spot while the ticket holds one (release first). A booking is one
+  transaction (`POST /api/cozy/book`, superusers only, `pb_hooks/lib/book.js`):
+  the ticket's old spot is released, the new one claimed and the burner name
+  written, all or nothing. A unique index on `beds.order` for booked spots
+  (`1761100000_one_spot_per_ticket.js`) refuses a second spot for a ticket
+  whoever writes it; a swap lets go of one spot's ticket first inside its
+  transaction.
 - **Only superusers release bookings:** the switch back to Staging Mode asks
   whether the guest bookings (and with them their check-ins) are released or
   stay while the layout is edited; spots the crew booked for special-needs
   requests stay either way. "Clear all bookings" does the same later and only
   works in Staging Mode. Both are superuser-only, in the app and in PocketBase.
 - **Guest messages follow the beds.** Every change of a bed's `order` (a booking, a move, a release, a deleted room) marks the ticket in `guest_notify` as due; PocketBase then sends one message per settled state. See [Notifications](../admin/notifications).
-- **Contact data is temporary.** `orders.email`, the Telegram links, all special-needs requests, all request groups and all swap requests are deleted after the event with `scripts/cozy-admin.sh tickets forget-contacts --yes`.
-- **One special-needs request per ticket** (unique index on `special_requests.order`); it goes with its ticket (cascade). The app takes the ticket from the guest's session, encrypts what the guest wrote and never logs it. There is no stored kind of request: whether it is about something the guest needs or about a project follows from the encrypted `needs` alone. See [Special-needs requests](../admin/special-needs).
-- **A ticket is in at most one request group**, through its request's `request_group`; a group holds at most 12 requests. The app checks and writes a join under a lock on the group (`group:<id>`, taken before the ticket and spot locks of a booking), so two joins can't both take the last place. A group has no status of its own: approving, declining or booking a group writes each member's request, the way the single-request actions do. **A group without requests is deleted** by PocketBase (`pb_hooks/cozy_groups.pb.js`, logic in `pb_hooks/lib/groups.js`) whichever way its last request left it — leaving, a withdrawal, a hand-over, a deleted ticket, `forget-contacts` — so nothing deletes a group that still has members.
+- **Contact data is temporary.** `orders.email`, `orders.marked_paid_by`, the Telegram links, all special-needs requests, all request groups and all swap requests are deleted after the event with `scripts/cozy-admin.sh tickets forget-contacts --yes`.
+- **One special-needs request per ticket** (unique index on `special_requests.order`); it goes with its ticket (cascade). The app takes the ticket from the guest's session, encrypts what the guest wrote and never logs it. There is no stored kind of request: whether it is about something the guest needs, a helper or a project follows from the encrypted `needs` alone, a JSON list of `lower_bunk`, `step_free`, `near_toilet`, `quiet`, `stable_light`, `other` (a personal need), `helper`, or `own_room`, `near_project` (an art project or a crew); old requests may also hold the retired `power` and `close_together`, which the form no longer offers. See [Special-needs requests](../admin/special-needs).
+- **A ticket is in at most one request group**, through its request's `request_group`; a group holds at most 5 requests (`GROUP_MAX`; the requests and groups from before v1.32.2 were test data, deleted by `pb_migrations/1760900000_clear_request_groups.js` and `1760910000_clear_special_requests.js`). The app checks and writes a join under a lock on the group (`group:<id>`, taken before the ticket and spot locks of a booking), so two joins can't both take the last place. A group has no status of its own: approving, declining or booking a group writes each member's request, the way the single-request actions do. **A group without requests is deleted** by PocketBase (`pb_hooks/cozy_groups.pb.js`, logic in `pb_hooks/lib/groups.js`) whichever way its last request left it — leaving, a withdrawal, a hand-over, a deleted ticket, `forget-contacts` — so nothing deletes a group that still has members.
 - **Orders are the ticket roster.** No admin action deletes them: "clear all
   bookings" and the template import only release beds and clear burner names,
   so every guest's code keeps working. A ticket handed over to a new holder
@@ -87,7 +92,7 @@ brings back the empty collections and the field, never their records.
   next free `room_number` (skipping the ones the house has), a rolled `name`
   (`src/lib/place-names.ts`, never one the house has), the `kind` its house
   implies and `amount_beds`, then its spots `B1 … Bn`, `enabled` and not
-  `occupied`; with 🪜 each pair gets `bunk_lower` / `bunk_upper` and
+  `occupied`; with 🔝 each pair gets `bunk_lower` / `bunk_upper` and
   `bunk_partner` on both spots. PocketBase has no transaction across
   requests: when a write fails, the rooms created so far are deleted again
   (their spots go with them) and a new house goes too, so nothing half-made
@@ -124,14 +129,21 @@ brings back the empty collections and the field, never their records.
   through (`bedRulesOut`). Nor is it ever step-free: the need *step-free
   access or the ground floor* and the wish *⬇️ Step-free* rule out a bed with
   a ladder even on the ground floor, which stays a fact about its room.
-  Four needs of the ♿ form are matched by hand only (`MATCHED_BY_HAND`):
-  *something else*, the two project wishes *a room just for our project or
-  crew* and *spots close to the people I come with*, and a power socket for
-  a medical device, which the form no longer offers since v0.30.0 but old
-  requests still carry. None of them gets a line of its own in *What the
-  open requests need*; *something else* and the old socket still count a
-  request as one for the ♿ spots, the project wishes don't (`requestKinds`
-  in `src/lib/special-needs.ts`).
+  Seven values of the ♿ form are matched by hand only (`MATCHED_BY_HAND`):
+  *something else* (`other`), *stable light conditions* (`stable_light`),
+  the helper (`helper`), the two project wishes *a room for our art project
+  or crew* (`own_room`) and *a bed close to our art piece or project*
+  (`near_project`), and two the form no longer offers but old requests
+  still carry: *spots close to the people I come with* (`close_together`)
+  and a power socket for a medical device (`power`, until v0.30.0). None of
+  them gets a line of its own in *What the open requests need*. The ♿ spots
+  are the pool for every request — a personal need, a helper, a project, a
+  group member — and the box's ♿ line counts every open request against the
+  free ones (locked 🔒 spots left out). `requestKinds` in
+  `src/lib/special-needs.ts` only decides who chooses first among them:
+  *something else*, *stable light conditions* and the old socket count as a
+  personal need, the helper and the project wishes don't (`proposePlan` in
+  `src/lib/group-plan.ts`).
 - **While booking is live or closed**, the structure is locked on the server:
   houses and rooms can't be added, moved, renamed or deleted, beds can't be
   added or deleted, and templates can't be imported (see

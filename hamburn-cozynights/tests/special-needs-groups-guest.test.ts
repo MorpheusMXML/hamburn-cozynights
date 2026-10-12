@@ -20,12 +20,12 @@ import { createLookupHash, decrypt, encrypt } from '../src/lib/server/crypto';
 import { APP_SETTINGS_ID } from '../src/lib/server/constants';
 import { safeReturnPath, signInUrl } from '../src/lib/server/guest-session';
 import { UNKNOWN_CODE } from '../src/lib/server/request-groups';
-import { GROUP_MAX } from '../src/lib/special-needs';
+import { GROUP_MAX, HELPER_NEEDS_GROUP } from '../src/lib/special-needs';
 import { actions, load } from '../src/routes/special-needs/+page.server';
 
 const CODE = 'KM7PQ2XR';
 const ORIGIN = 'https://cozynights.test';
-const TEXT = 'Our dome crew, six of us, we would love one room.';
+const TEXT = 'Our dome crew needs one room close to the dome.';
 
 function form(fields: Record<string, string | string[]>): FormData {
 	const data = new FormData();
@@ -191,6 +191,7 @@ describe('starting and joining from the request form', () => {
 		const ada = c.ticket('Ada Lovelace');
 		const other = c.ticket('Someone Else');
 		const result = await save(c, ada, {
+			about: 'project',
 			needs: ['own_room'],
 			text: TEXT,
 			groupMode: 'start',
@@ -227,8 +228,9 @@ describe('starting and joining from the request form', () => {
 		const c = camp();
 		const { group } = seedGroup(c, [{}]);
 		const bea = c.ticket('Bea Booker');
-		await save(c, bea, { needs: ['quiet'], text: 'A quiet room, please.', consent: 'yes' });
-		const result = await save(c, bea, { ...JOIN, needs: ['quiet'], text: 'A quiet room, please.' });
+		const quiet = { about: 'personal', needs: ['quiet'], text: 'A quiet area, please.' };
+		await save(c, bea, { ...quiet, consent: 'yes' });
+		const result = await save(c, bea, { ...JOIN, ...quiet });
 		expect(result).toEqual({ success: true, saved: 'updated', group: 'joined' });
 		expect(requestOf(c, bea).request_group).toBe(group.id);
 		expect(c.pb.rows('special_requests').filter((r) => r.order === bea.id)).toHaveLength(1);
@@ -258,8 +260,9 @@ describe('starting and joining from the request form', () => {
 		seedGroup(c, [{}]);
 		const bea = c.ticket('Bea Booker');
 		const fields = {
+			about: 'personal',
 			needs: ['quiet'],
-			text: 'A quiet room, please.',
+			text: 'A quiet area, please.',
 			burnerName: 'Neon Owl',
 			groupMode: 'join',
 			groupName: '',
@@ -271,8 +274,9 @@ describe('starting and joining from the request form', () => {
 		expect(unknown.data).toEqual({
 			errors: { groupCode: UNKNOWN_CODE },
 			values: {
+				about: 'personal',
 				needs: ['quiet'],
-				text: 'A quiet room, please.',
+				text: 'A quiet area, please.',
 				burnerName: 'Neon Owl',
 				groupMode: 'join',
 				groupName: '',
@@ -292,6 +296,7 @@ describe('starting and joining from the request form', () => {
 		const c = camp();
 		const ada = c.ticket('Ada Lovelace');
 		const result = await save(c, ada, {
+			about: 'project',
 			needs: ['own_room'],
 			text: TEXT,
 			groupMode: 'start',
@@ -315,7 +320,7 @@ describe('starting and joining from the request form', () => {
 		const bea = c.ticket('Bea Booker');
 		const result = await save(c, bea, JOIN);
 		expect(result.status).toBe(409);
-		expect(result.data.errors.groupCode).toMatch(/at most 12 people/);
+		expect(result.data.errors.groupCode).toMatch(new RegExp(`at most ${GROUP_MAX} people`));
 		expect(requestOf(c, bea)).toBeUndefined();
 	});
 
@@ -357,12 +362,125 @@ describe('starting and joining from the request form', () => {
 		expect(requestOf(c, bea)).toBeUndefined();
 
 		// only joining waits: a request without a group still goes through
-		const own = await save(c, bea, { needs: ['quiet'], text: 'A quiet room.', consent: 'yes' });
+		const own = await save(c, bea, {
+			about: 'personal',
+			needs: ['quiet'],
+			text: 'A quiet area.',
+			consent: 'yes'
+		});
 		expect(own).toEqual({ success: true, saved: 'created', group: null });
 		expect(requestOf(c, bea).request_group ?? '').not.toBe(group.id);
 		// another ticket is not affected
 		const cid = c.ticket('Cid Camper');
 		expect(await save(c, cid, JOIN)).toMatchObject({ success: true, group: 'joined' });
+	});
+});
+
+describe('a refused send without JavaScript', () => {
+	it('gives back the boxes ticked under another path, and saves only the chosen path', async () => {
+		const c = camp();
+		const bea = c.ticket('Bea Booker');
+		// the project radio by mistake, with personal boxes ticked
+		const wrong = await save(c, bea, {
+			about: 'project',
+			needs: ['quiet', 'near_toilet', 'power'],
+			text: 'A quiet area close to a toilet, please.',
+			consent: 'yes'
+		});
+		expect(wrong.status).toBe(400);
+		expect(wrong.data.errors).toEqual({
+			needs:
+				'Tick a room or a bed. You ticked “A quiet area”, “Close to a toilet” under another choice: choose the one that fits, or untick them.'
+		});
+		// a retired value is not given back
+		expect(wrong.data.values).toMatchObject({ about: 'project', needs: ['quiet', 'near_toilet'] });
+		expect(requestOf(c, bea)).toBeUndefined();
+
+		// switched to the personal path, sent again with every box as it came back
+		const fixed = await save(c, bea, {
+			about: 'personal',
+			needs: [...wrong.data.values.needs, 'own_room'],
+			text: 'A quiet area close to a toilet, please.',
+			consent: 'yes'
+		});
+		expect(fixed).toEqual({ success: true, saved: 'created', group: null });
+		expect(JSON.parse(decrypt(requestOf(c, bea).needs))).toEqual(['quiet', 'near_toilet']);
+	});
+});
+
+describe('a helper on the request form', () => {
+	const HELPER = {
+		about: 'helper',
+		text: 'I help Ada at night and need to sleep close by.',
+		consent: 'yes'
+	};
+
+	it('is refused without a group, at the group field, and keeps what was typed', async () => {
+		const c = camp();
+		const bea = c.ticket('Bea Booker');
+		const result = await save(c, bea, { ...HELPER, needs: ['lower_bunk'] });
+		expect(result.status).toBe(400);
+		expect(result.data.errors).toEqual({ group: HELPER_NEEDS_GROUP });
+		// the boxes come back as ticked (a browser without JavaScript shows them all)
+		expect(result.data.values).toMatchObject({
+			about: 'helper',
+			needs: ['lower_bunk'],
+			text: HELPER.text,
+			groupMode: 'none'
+		});
+		expect(requestOf(c, bea)).toBeUndefined();
+	});
+
+	it('joins the group of the person they help, stored as the helper alone', async () => {
+		const c = camp();
+		const { group } = seedGroup(c, [{ needs: encrypt(JSON.stringify(['step_free'])) }]);
+		const bea = c.ticket('Bea Booker');
+		// a box of another path, posted by a browser without JavaScript, is dropped
+		const result = await save(c, bea, { ...HELPER, ...JOIN, needs: ['own_room'] });
+		expect(result).toEqual({ success: true, saved: 'created', group: 'joined' });
+		const stored = requestOf(c, bea);
+		expect(stored.request_group).toBe(group.id);
+		expect(JSON.parse(decrypt(stored.needs))).toEqual(['helper']);
+		const { data } = await open(c, bea);
+		expect(data.request.needs).toEqual(['helper']);
+		expect(data.requestAbout).toBe('helper');
+	});
+
+	it('may start the group and share its link', async () => {
+		const c = camp();
+		const bea = c.ticket('Bea Booker');
+		const result = await save(c, bea, { ...HELPER, groupMode: 'start', groupName: 'Ada & Bea' });
+		expect(result).toEqual({ success: true, saved: 'created', group: 'started' });
+	});
+});
+
+describe('changing a request', () => {
+	it('preselects the path the stored request took', async () => {
+		const c = camp();
+		const cases: [string[], string | null][] = [
+			[['lower_bunk', 'other'], 'personal'],
+			[['stable_light'], 'personal'],
+			[['helper'], 'helper'],
+			[['near_project'], 'project'],
+			// from before the paths: what the guest needs wins, so changing it never drops it
+			[['close_together', 'quiet'], 'personal'],
+			[['lower_bunk', 'own_room'], 'personal'],
+			[['close_together'], 'project'],
+			// only part of a group
+			[[], null]
+		];
+		for (const [needs, about] of cases) {
+			const guest = c.ticket(`Guest ${needs.join(' ')}`);
+			c.pb.seed('special_requests', {
+				order: guest.id,
+				status: 'pending',
+				needs: needs.length ? encrypt(JSON.stringify(needs)) : ''
+			});
+			const { data } = await open(c, guest);
+			expect(data.requestAbout, needs.join(',')).toBe(about);
+		}
+		const { data } = await open(c, c.ticket('Nobody Yet'));
+		expect(data.requestAbout).toBeNull();
 	});
 });
 

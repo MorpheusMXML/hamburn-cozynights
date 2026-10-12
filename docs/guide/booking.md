@@ -4,6 +4,9 @@ All you need is the **ticket code** from your Hamburn ticket. There is no accoun
 
 Beds come with **Indoor memberships** only. Camper memberships (camper or tent) don't include a bed and don't need CozyNights.
 
+> [!IMPORTANT] Bring your own bedding
+> Pillow and blanket are provided. Bring your own covers: a **bed sheet** for the mattress, a **duvet cover** for the blanket and a **pillowcase**. A sleeping bag is fine instead of the duvet cover; the bed sheet and the pillowcase are still a must. Every booking reminds you: you [make your bed](#make-your-bed) before the spot is yours.
+
 > [!NOTE] Booking opens and closes at set times
 > Before booking opens, the start page and the (still blurred) map count down to the start; <kbd>🗺️ LOOK AROUND</kbd> lets you open houses and rooms already. You can already sign in with your code. While booking is open, the top bar of every booking page counts down to the close; after that, spots are final.
 
@@ -12,9 +15,9 @@ Beds come with **Indoor memberships** only. Camper memberships (camper or tent) 
 ```mermaid
 flowchart LR
   code["🎫 Ticket code"] --> map["🗺️ Camp map"]
-  map --> pick["🛖 House → 🚪 Room<br/>→ 🛏️ free spot"]
-  pick --> name["✍️ Burner name<br/>(optional)"] --> done["✅ Your Spot"]
-  map --> roulette["🎰 Destiny<br/>Roulette"] --> done
+  map --> pick["🏠 House → 🚪 Room<br/>→ 🛏️ free spot"]
+  pick --> bed["🧺 Make your bed"] --> name["✍️ Burner name (optional)<br/>☑️ the rules"] --> done["✅ Your Spot"]
+  map --> roulette["🎰 Destiny<br/>Roulette"] --> bed
 ```
 
 ## Step by step
@@ -23,7 +26,7 @@ flowchart LR
 
 1. **Enter your ticket code**
 
-   Open the CozyNights start page, type your code into the **TICKET CODE** field and press <kbd>ENTER THE DUST 🌵</kbd>. (The small `v0.18.1` at the top right of the title is the version you are looking at; it helps when you report a problem.)
+   Open the CozyNights start page, type your code into the **TICKET CODE** field and press <kbd>ENTER THE DUST 🌵</kbd>. (The small `v1.32.2` at the top right of the title is the version you are looking at; it helps when you report a problem.)
 
    If the code is refused, the box around it turns red and gives a short shake, the reason appears right under it, and the cursor is back in the field — fix the code and press the button again. The [FAQ](./faq#for-guests) explains every message.
 
@@ -33,7 +36,7 @@ flowchart LR
 
 2. **Find a house on the map**
 
-   Every pin is a house. **Teal** pins still have free spots, **red** pins have none left that you could book. Click a pin to open the house.
+   Every pin is a house. **Teal** pins still have free spots, **red** pins have none left that you could book. Click a pin to open the house. Once you hold a spot, your house is easy to find: turquoise rings keep rising from its pin and its name floats gently in a glowing turquoise frame (it stands still, just framed, when your device asks for reduced motion).
 
    ![Camp map during Live Booking](../assets/screenshots/guest-map-live.webp)
 
@@ -41,7 +44,7 @@ flowchart LR
 
 3. **Choose a room**
 
-   The house page lists its rooms with the number of free spots. Full rooms are marked **Full**.
+   The house page lists its rooms with the number of free spots. Full rooms are marked **Full**. The room that holds your spot lights up in turquoise, its frame breathes, and it says **Your spot · B1** with your spot's name.
 
    ![House page with room cards](../assets/screenshots/guest-house.webp)
 
@@ -53,15 +56,31 @@ flowchart LR
 
    ![Room page with free, occupied and reserved spots](../assets/screenshots/guest-room-available.webp)
 
-5. **Pick a burner name and book**
+5. <a id="make-your-bed"></a>**Make your bed**
 
-   Type the name other guests should see on your bed (up to 80 characters), or press <kbd>Roll a name 🎲</kbd> and let the slot machine pick one (something like *Dusty Unicorn, Keeper of the Moop #562*). A rolled name lands in the field, where you can still change it; <kbd>New Name 🎲</kbd> rolls again. Leave the field empty and press <kbd>Save Spot</kbd> and the machine rolls one for you first. <kbd>Save Spot</kbd> books the spot. The same dialog opens when you tap your own spot later to change the name.
+   The booking window starts with your bed. The hostel's pillow, blanket and mattress lie on it bare, and your three covers wait in **Your bag**: a bed sheet, a duvet cover and a pillowcase. Each cover only goes on its own piece: the **bed sheet on the mattress**, the **duvet cover on the blanket**, the **pillowcase on the pillow**. Drag a cover there, or tap it (it stands up in the bag) and then tap its place on the bed. The wrong piece shakes and says where the cover belongs — *That's the blanket! The bed sheet goes on the mattress.* — and the cover waits for the right one; a dragged cover hops back into the bag. Each cover that lands is named once more (*Bed sheet on the mattress ✓*), so you remember what to pack. With a keyboard: Enter on a cover, then Tab to its piece and Enter.
 
-   ![Booking dialog with the burner name field](../assets/screenshots/guest-booking-modal.webp)
+   When the bed is made, the window lists what to pack and <kbd>I'll pack them 🤝</kbd> takes you on. Pack them for real: pillow and blanket are provided, the covers are not. A sleeping bag is fine instead of the duvet cover; the bed sheet and the pillowcase are still a must.
+
+   ![Booking window, step 1: the bed sheet already on the mattress, the duvet cover in hand and the question where it goes](../assets/screenshots/guest-booking-bed.webp)
+
+6. **Pick a burner name, tick the rules and book**
+
+   Type the name other guests should see on your bed (up to 80 characters), or press <kbd>Roll a name 🎲</kbd> and let the slot machine pick one (something like *Dusty Unicorn, Keeper of the Moop #562*). A rolled name lands in the field, where you can still change it; <kbd>New Name 🎲</kbd> rolls again. Leave the field empty and press <kbd>Save Spot</kbd> and the machine rolls one for you first.
+
+   Below the name, tick the box: *I've read and understood the Code of Conduct, the privacy policy and, most importantly, the booking rules.* The three links open in a new tab, so the booking window stays as it is. Without the tick, <kbd>Save Spot</kbd> waits and says why. With it, <kbd>Save Spot</kbd> books the spot.
+
+   ![Booking window, step 2: burner name, the rules box and Save Spot](../assets/screenshots/guest-booking-modal.webp)
+
+   Every new spot asks for both again, also after a release or a respin. Only when a booking didn't go through (someone was faster), the next spot you pick skips the bed and keeps the tick, until you reload the page. Nothing about it is stored. Tapping your own spot later to change its name opens just the name and <kbd>Save Spot</kbd>.
+
+   **The spot is yours for ten minutes while you do all this.** As soon as the booking window opens, nobody else can book that spot; the window says *⏳ Held for you · 9:41* and turns orange in the last minute. Closing the window lets go of the spot right away, and opening it again within the ten minutes picks up the same clock, not a new one. Once the ten minutes are over, the spot is free for everyone again: you can still book it if nobody is faster, but it isn't held for you again for another ten minutes. Signing out lets go of it too. If someone else opened the spot just before you, the window shows a bed making itself and *Someone beat you to this bed*: pick another spot.
 
 </div>
 
 That's it: fireworks go up from your new spot 🎆, and the spot now shows **Yours** in turquoise, with your burner name. Above the spots, a **Welcome Home!** box holds your [booking pass](#your-booking-pass), the address your [confirmations](#confirmations) go to and the Telegram option.
+
+**When it's busy.** At the opening many guests arrive in the same minute, and a click can take a few seconds. Whenever something takes longer than a moment, a card with a small campfire covers the page: *Please allow us some time, we are processing your request.* After you signed in, booked or released a spot it adds, in yellow, *Please don't reload or close this page*: your request is already on its way, and a reload neither stops it nor makes it faster. While a page loads, or when booking opens, the card says there is no need to reload, the page continues by itself. After about 15 seconds it adds *Still working on it.*
 
 ## What the spots mean
 
@@ -69,14 +88,15 @@ That's it: fireworks go up from your new spot 🎆, and the spot now shows **You
 | --- | --- |
 | 🟢 **Available** · *Grab it now!* | Free. Click it to book. |
 | 🟢 **Available** · *Release your other spot first* | Free, but you already have a spot somewhere else, so it can't be clicked. One ticket code = one spot. |
-| 🩵 **Yours** · *your burner name* | That's you. Click it to rename it (any time until booking closes) or to release it (during Live Booking); the line under the name says which of the two it is right now. |
+| 💠 **Yours** · *your burner name* | That's you. Click it to rename it (any time until booking closes) or to release it (during Live Booking); the line under the name says which of the two it is right now. |
 | 🔴 **Occupied** · *a burner name* | Taken by another guest. *Mystery Burner* means the booking has no name, for example because its ticket changed hands. During Live Booking, while you hold a spot, it adds *⇄ Ask to swap*: tap it to ask its guest for a [swap](./swaps) (*⏳ Asked — waiting* once you did). |
+| 🟠 **Bed being made** · *Someone is fluffing the pillow…* | Another guest is booking this spot right now, so it is theirs for up to ten minutes. *Free again in 7 min if they wander off* says when it is free again if they don't book it. The room page checks every few seconds and shows the spot as it is once they booked or left. |
 | 🟣 **Blocked by admin** · *Not available* | Held back by the crew, for example a broken bed, a spot that isn't in use, one the crew took for itself or one kept for [guests with special needs and for projects](./special-needs): nobody books those directly, the crew hands them out. |
 | ⚪️ **Not open yet** · *Booking opens soon* | Booking hasn't opened yet. |
 | ⚪️ **Booking closed** · *Spots are final* | The booking window is over. |
 
 > [!NOTE] One colour, one meaning
-> Green, red, turquoise, violet and grey mean the same on every spot card in CozyNights, and the crew sees the same colours on their side. Pink is kept for ♿ special needs alone: the ♿ link on the map, nothing else.
+> Green, red, turquoise, violet, orange and grey mean the same on every spot card in CozyNights, and the crew sees the same colours on their side. Pink is kept for ♿ special needs alone: the ♿ link on the map, nothing else.
 
 ![A booked room: the Welcome Home box with the booking pass, the e-mail address and Telegram; your spot, other guests' burner names and spots blocked by admin](../assets/screenshots/guest-room.webp)
 
@@ -86,7 +106,7 @@ Houses and rooms can carry a few details, and spots say what kind of bed they ar
 
 | You see | Meaning |
 | --- | --- |
-| 🏠 House · 🛖 Hut group · ⛺ Tent area | What the place on the map is. A hut group is one pin with several huts; the map pin carries the icon, and the house page then asks you to choose a **hut**. |
+| 🏠 House · 🏘️ Hut group · ⛺ Tent area | What the place on the map is. A hut group is one pin with several huts; the map pin carries the icon, and the house page then asks you to choose a **hut**. |
 | ♿ Wheelchair accessible · ⬇️ Ground floor | A step-free way in with an accessible bathroom, or no stairs to the bed. An upper bunk is never ♿, however accessible its room is — the ladder is in the way — so its card says *no ♿ Wheelchair accessible* in such a room. |
 | 🚻 Toilets + showers inside · 🛁 Own bathroom | In the building itself, or in the room. Nothing written means the toilets are somewhere else on the site — the description usually says where. |
 | 🔥 Heated · ❄️ No heating | Late October nights are cold; this is worth reading. |
@@ -121,7 +141,9 @@ Then the burner name that goes with the spot:
 - If your ticket already has a burner name, it is filled in. Keep it or change it.
 - Type your own name into **Your burner name**, or press <kbd>🎲</kbd> to roll one (something like *Cosmic Coyote #562*). A rolled name can still be changed.
 - <kbd>SPIN AGAIN 🎰</kbd> spins for another spot and keeps the name.
-- <kbd>BOOK IT 🌵</kbd> books the spot. With the name field empty, the first tap rolls a name; the next one books.
+- <kbd>BOOK IT 🌵</kbd> opens the same check as on the room page, over the machine: [make your bed](#make-your-bed), then *One last tick* for the rules, and <kbd>BOOK IT 🌵</kbd> in that window books the spot. With the name field empty, the first tap rolls a name; the next one opens the check.
+
+The spot the reels stop on is held for you for ten minutes, like a spot whose booking window you open: *⏳ Held for you · 9:41* stands under <kbd>BOOK IT 🌵</kbd>. <kbd>SPIN AGAIN 🎰</kbd> lets go of it and holds the next one. Spots other guests are booking right now stay out of the drum; if one of them gets the spot while your reels still spin, the machine says *Someone else is making that bed right now. Spin again!*
 
 *Destiny Fulfilled!* Fireworks go up and your [booking pass](#your-booking-pass) prints out on the card, with <kbd>Visit My Room</kbd> and <kbd>Back to Map</kbd>.
 
@@ -129,7 +151,7 @@ The 🔈 button on the machine turns its sounds on: lever, reels and the jackpot
 
 ![Destiny Roulette after a spin: the spot on the three reels, the name plate with the dice, BOOK IT and SPIN AGAIN](../assets/screenshots/guest-roulette.webp)
 
-The roulette button is only on the map during Live Booking. Opened at another time, the machine rests with its lights down and says *Booking is not open yet. Come back when Live Booking starts.* or *Booking is closed. The roulette is resting until the next burn.*; with every spot taken, it says so and asks you to check back later.
+The roulette button is only on the map during Live Booking. Opened at another time, the machine rests with its lights down and says *Booking is not open yet. Come back when Live Booking starts.* or *Booking is closed. The roulette is resting until the next burn.*; with every spot taken, it says so and asks you to check back later. When the only free spots left are ones other guests are booking right now, it says *2 spots are being booked right now*: if nobody finishes, they are free again within ten minutes.
 
 ### Already booked? ✨ Leave No Trace & Respin
 
@@ -165,7 +187,7 @@ Booking, moving and releasing a spot only work during Live Booking; the burner n
 
 When your spot is booked, changes or is released, CozyNights sends an e-mail to the **address of your ticket**. You don't enter it anywhere; your room page shows where confirmations go, shortened like `m•••@example.com`. It usually arrives within a minute; right after booking opens, when many people book at once, it can take a few minutes. If the crew ever has to change the camp layout and your spot goes with it, you hear about it the same way, so you can pick a new one.
 
-Every e-mail that shows your spot also brings your [booking pass](#your-booking-pass): its QR code as a picture right inside the e-mail, its link and its short code. That e-mail is all you need to show at arrival. Some mail apps also list the picture as an attachment; the link works just as well.
+Every e-mail that shows your spot also brings your [booking pass](#your-booking-pass): its QR code as a picture right inside the e-mail, its link and its short code. That e-mail is all you need to show at arrival. Some mail apps also list the picture as an attachment; the link works just as well. Right under the spot, a highlighted line says what to pack: your bed sheet, duvet cover and pillowcase. Telegram messages say it too.
 
 **Your room page** is the room that holds your spot: the room link in every confirmation takes you there, and so does <kbd>Visit My Room</kbd> on the roulette page. Every other house and room shows a *You already have a spot* note with your spot as a small ticket; tapping it opens your booking pass.
 
@@ -175,7 +197,7 @@ Once you hold a spot, your room page shows <kbd>🎫 Show booking pass</kbd>, ev
 
 <p align="center"><img src="../assets/screenshots/guest-pass.webp" alt="A booking pass on a phone: house, room, spot, burner name, QR code and pass code" width="300" /></p>
 
-<kbd>Save QR code</kbd> stores the QR code as a picture (on a phone it goes to your photos), <kbd>Camp map</kbd> takes you back to the map. Before the check-in the pass stays valid when you move to another spot; the crew always sees the spot your ticket holds right now. Release your spot, and the same link says that your ticket holds no spot at the moment. The pass code is not your ticket code: it can only show your booking, never change it.
+Under the QR code, **Bring your own covers** lists the bed sheet, the duvet cover and the pillowcase, for the moment you pack. <kbd>Save QR code</kbd> stores the QR code as a picture (on a phone it goes to your photos), <kbd>Camp map</kbd> takes you back to the map. Before the check-in the pass stays valid when you move to another spot; the crew always sees the spot your ticket holds right now. Release your spot, and the same link says that your ticket holds no spot at the moment. The pass code is not your ticket code: it can only show your booking, never change it.
 
 ### Updates on Telegram
 

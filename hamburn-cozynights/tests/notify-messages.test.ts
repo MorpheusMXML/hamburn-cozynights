@@ -697,3 +697,88 @@ describe('the spot as currentSpot reads it from the records', () => {
 		);
 	});
 });
+
+// Max, 11 Oct 2026: everyone with a bed brings their own covers. Every message
+// that shows the spot says so — a guest packs with the e-mail in hand, and a
+// spot the crew booked or a ticket that was passed on never saw the booking
+// window's check (src/lib/booking-check.ts).
+describe('the bedding to bring', () => {
+	const texts = loadHookModule('lib/texts.js');
+	const defaultOf = (key: string) =>
+		texts.TEXTS.find((entry: { key: string }) => entry.key === key).text as string;
+	const MAIL = defaultOf('mail.bedding');
+	const TG = defaultOf('tg.bedding');
+	const approvedFixed: Req = { kind: 'approved', status: 'approved', fixed: true };
+	const full = (kind: string, withSpot: boolean, req: Req, previous = '') =>
+		notify.guestMail(cfg, kind, withSpot ? spot : null, previous, 'Ada', pass, req, {
+			telegram: false,
+			qr: true
+		});
+
+	it('is in every e-mail that shows the spot, as a box of its own right under it', () => {
+		const showing = {
+			booked: full('booked', true, none),
+			changed: full('changed', true, none, 'B9 · Loft #2 · Hut'),
+			swapped: full('swapped', true, none, 'B9 · Loft #2 · Hut'),
+			handed_over: full('handed_over', true, none),
+			crew_booked: full('', true, approvedFixed)
+		};
+		for (const [name, m] of Object.entries(showing)) {
+			expect(m.text, name).toContain(MAIL);
+			// the text part: a paragraph of its own between the spot's rows and the other lines
+			expect(m.text.indexOf(MAIL), name).toBeGreaterThan(m.text.indexOf('Spot:'));
+			expect(m.text.indexOf(MAIL), name).toBeLessThan(m.text.indexOf(pass.url));
+			expect(m.text, name).toContain('\n\n' + MAIL + '\n\n');
+			// the HTML: once, highlighted, after the table and the QR code
+			const box = m.html.indexOf('background:#f3ecff');
+			expect(m.html.split('background:#f3ecff').length - 1, name).toBe(1);
+			expect(box, name).toBeGreaterThan(m.html.indexOf('</table>'));
+			expect(box, name).toBeGreaterThan(m.html.indexOf('<img src="cid:'));
+			expect(box, name).toBeLessThan(m.html.indexOf(`<a href="${pass.url}"`));
+		}
+	});
+
+	it('is in no e-mail without a spot to show: a release, request news alone', () => {
+		const pending: Req = { kind: 'received', status: 'pending', fixed: false };
+		for (const m of [
+			full('released', false, none, 'B1 · Dorm #1 · Villa'),
+			full('', false, pending),
+			full('', true, { kind: 'approved', status: 'approved', fixed: false })
+		]) {
+			expect(m.text).not.toContain('bed linen');
+			expect(m.html).not.toContain('background:#f3ecff');
+		}
+	});
+
+	it('is a line above the pass in every Telegram message that shows the spot', () => {
+		const showing = {
+			booked: telegram('booked', true, none),
+			changed: telegram('changed', true, none, 'B9 · Loft #2 · Hut'),
+			swapped: telegram('swapped', true, none, 'B9 · Loft #2 · Hut'),
+			connected: telegram('connected', true, none),
+			crew_booked: telegram('', true, approvedFixed)
+		};
+		for (const [name, text] of Object.entries(showing)) {
+			expect(text, name).toContain('\n\n' + TG);
+			expect(text.indexOf(TG), name).toBeLessThan(text.indexOf('🎫'));
+		}
+		for (const text of [
+			telegram('released', false, none, 'B1 · Dorm #1 · Villa'),
+			telegram('connected', false, none),
+			telegram('', false, { kind: 'received', status: 'pending', fixed: false })
+		]) {
+			expect(text).not.toContain(TG);
+		}
+	});
+
+	it('is a text the crew can change on /admin/messages', () => {
+		const custom = {
+			...cfg,
+			texts: { 'mail.bedding': 'Bring your sheets!', 'tg.bedding': '🧺 Sheets!' }
+		};
+		const m = notify.guestMail(custom, 'booked', spot, '', 'Ada', pass, none);
+		expect(m.text).toContain('Bring your sheets!');
+		expect(m.text).not.toContain(MAIL);
+		expect(notify.guestTelegram(custom, 'booked', spot, '', pass, none)).toContain('🧺 Sheets!');
+	});
+});

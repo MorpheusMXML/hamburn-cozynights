@@ -1,6 +1,7 @@
 // src/routes/admin/tickets/+page.server.ts — the ticket roster in the admin
 // area (docs/admin/tickets.md): find a ticket, change its address, hand it over
-// to a new holder; superusers import the ticket shop's list after a review.
+// to a new holder, mark it paid by hand; superusers import the ticket shop's
+// list after a review.
 // Codes and addresses travel in POST bodies only, never in URLs (logs).
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -10,6 +11,7 @@ import {
 	TicketError,
 	changeTicket,
 	importRoster,
+	markTicketPaid,
 	openTicket,
 	previewRoster,
 	readRosterRows,
@@ -102,6 +104,37 @@ export const actions: Actions = {
 		}
 	},
 
+	/**
+	 * The Membership Team confirmed a payment in person: every admin can mark
+	 * the ticket paid (paid=1), and take back such a mark (paid=0).
+	 */
+	markPaid: async ({ locals, request }) => {
+		if (!locals.admin) return fail(403, { error: 'Only admins can change tickets.' });
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		if (!id) return fail(400, { error: 'No ticket was chosen. Search again.' });
+		const paid = form.get('paid') !== '0';
+
+		try {
+			const outcome = await markTicketPaid(locals.adminPb, id, paid, locals.admin.email);
+			if (outcome.changed) {
+				console.log(
+					`[Tickets] ${locals.admin.email} ${paid ? 'marked ticket paid' : 'set ticket back to unpaid'}: ${outcome.maskedCode}`
+				);
+				await logAdminEvent(
+					locals.adminPb,
+					locals.admin,
+					paid ? 'ticket_marked_paid' : 'ticket_marked_unpaid',
+					id,
+					{ ticket: outcome.maskedCode, hasSpot: !!outcome.ticket.spot }
+				);
+			}
+			return { paid: outcome };
+		} catch (err) {
+			return refuse(err, 'Mark paid');
+		}
+	},
+
 	previewRoster: async ({ locals, request }) => {
 		if (!locals.admin?.isSuperuser) {
 			return fail(403, { error: 'Only superusers can import the ticket list.' });
@@ -123,6 +156,8 @@ export const actions: Actions = {
 		const selected = readKeys(form.get('selected'));
 		const newHolders = readKeys(form.get('newHolders'));
 		const remove = readKeys(form.get('remove')) ?? [];
+		// 💳 Set back to unpaid, chosen per ticket marked paid by hand.
+		const undoPaid = readKeys(form.get('undoPaid')) ?? [];
 		if (!selected || !newHolders) {
 			return fail(400, { error: 'The chosen tickets did not arrive. Check the file again.' });
 		}
@@ -132,7 +167,12 @@ export const actions: Actions = {
 
 		try {
 			const rows = readRosterRows(form.get('rows'));
-			const outcome = await importRoster(locals.adminPb, rows, { selected, newHolders, remove });
+			const outcome = await importRoster(locals.adminPb, rows, {
+				selected,
+				newHolders,
+				remove,
+				undoPaid
+			});
 			console.log(
 				`[Tickets] ${locals.admin.email} imported the ticket list: ${outcome.created} new, ${outcome.updated} updated, ${outcome.removed} removed, ${outcome.failed.length} failed.`
 			);
@@ -144,7 +184,18 @@ export const actions: Actions = {
 					newHolders: outcome.newHolders,
 					requestsRemoved: outcome.requestsRemoved,
 					confirmations: outcome.confirmations,
+					paidConfirmed: outcome.paidConfirmed,
+					keptPaid: outcome.keptPaid,
+					paidUndone: outcome.paidUndone.length,
 					failed: outcome.failed.length
+				});
+			}
+			// A payment the crew confirmed by hand, taken back: one entry each,
+			// like on the ticket itself.
+			for (const ticket of outcome.paidUndone) {
+				await logAdminEvent(locals.adminPb, locals.admin, 'ticket_marked_unpaid', ticket.id, {
+					ticket: ticket.code,
+					via: 'import'
 				});
 			}
 			return { imported: outcome };

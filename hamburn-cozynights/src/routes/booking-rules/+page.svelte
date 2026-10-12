@@ -7,11 +7,13 @@ decided.
 -->
 <script lang="ts">
 	import LegalDocument from '$lib/components/LegalDocument.svelte';
+	import { BEDDING_PROVIDED, SLEEPING_BAG_NOTE } from '$lib/booking-check';
+	import { GROUP_MAX } from '$lib/special-needs';
 	import type { PageData } from './$types';
 
 	export let data: PageData;
 
-	const UPDATED = '4 October 2026';
+	const UPDATED = '11 October 2026';
 
 	$: legal = data.legal;
 	// Only the contact address matters here.
@@ -49,6 +51,10 @@ decided.
 	<ul>
 		<li>Booking opens at the time the countdown shows. First come, first served.</li>
 		<li>
+			Every booking asks you to make your bed and to confirm that you have read the Code of Conduct,
+			the privacy policy and these booking rules. Nothing about it is stored.
+		</li>
+		<li>
 			While booking is open you can change or release your bed. After that, the crew helps you.
 		</li>
 		<li>Destiny Roulette suggests a random free bed; it is only booked when you confirm.</li>
@@ -58,6 +64,12 @@ decided.
 		</li>
 		<li>Beds the crew holds back ("Blocked by admin") can't be booked.</li>
 	</ul>
+
+	<h2>Bring your own bedding</h2>
+	<p>
+		{BEDDING_PROVIDED} Bring your own covers: a <strong>bed sheet</strong> for the mattress, a
+		<strong>duvet cover</strong> for the blanket and a <strong>pillowcase</strong>. {SLEEPING_BAG_NOTE}
+	</p>
 
 	<h2>Special-needs spots</h2>
 	<ul>
@@ -71,10 +83,12 @@ decided.
 			you need; the crew decides and books a fitting spot for you.
 		</li>
 		<li>
-			Art projects, workshops, theme camps and crews can ask there too, on their own or as a group:
-			one of you starts the group and shares its link, the others join with their own ticket code.
-			The crew decides on each request and tries to put a group close together; there is no claim to
-			a particular room.
+			Guests with a personal need because of a medical reason or a disability can ask there, and so
+			can their helpers and art projects or crews who need a room or a bed close to their piece. A
+			helper and the person they help, or the crew of a project, ask as a group of at most {GROUP_MAX}
+			people: one of you starts the group and shares its link, the others join with their own ticket code.
+			The crew decides on each request and tries to put a group close together; there is no claim to a
+			particular room.
 		</li>
 		<li>A spot the crew booked for you can only be changed by the crew.</li>
 	</ul>

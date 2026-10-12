@@ -3,7 +3,7 @@
 The camp is a simple tree: **houses** on the map contain **rooms**, and rooms contain **spots**, one per bed.
 
 > [!IMPORTANT] Staging only
-> All structural changes need Staging Mode. During Live Booking and after booking closed the server refuses them. Only locking/unlocking 🔒, marking spots ♿ special or normal, the **details** below and [bunk beds](#bunk-beds) 🪜 still work. The pages show it: a line on top says whether the layout can be changed, and every locked button or field is greyed out with a padlock and [says why](./index#locked-not-now) when you try it. See [Staging, Live Booking & Closed](../guide/phases).
+> All structural changes need Staging Mode. During Live Booking and after booking closed the server refuses them. Only locking/unlocking 🔒, marking spots ♿ special or normal, the **details** below and [bunk beds](#bunk-beds) 🔝 still work. The pages show it: a line on top says whether the layout can be changed, and every locked button or field is greyed out with a padlock and [says why](./index#locked-not-now) when you try it. See [Staging, Live Booking & Closed](../guide/phases).
 
 ## Renaming ✏️ {#renaming}
 
@@ -31,14 +31,14 @@ The sidebar is a **house generator**: it builds the whole house in one go, rooms
 | Field | What it does |
 | --- | --- |
 | UNIT DESIGNATION | The house's name, already rolled for you: *Snoozy Sloth Lodge*, *Velvet Villa*. Keep it, roll again with <kbd>🎲</kbd> or type your own. Every house needs a name of its own. |
-| KIND | 🏠 House · 🛖 Hut group · ⛺ Tent area, or none (tap the chosen chip again). It sets the words (*4 huts × 8 beds*), the kind of the new rooms and the pin's icon, and a rolled name follows it (*Marmot Village*). *Other* is in [House details](#house-details). |
-| ROOMS & BEDS | One row per room size: **rooms** × **beds**, with <kbd>−</kbd> and <kbd>+</kbd>. The numbers can be typed too; <kbd>↑</kbd> / <kbd>↓</kbd> step by one, with <kbd>Shift</kbd> by five. <kbd>🪜</kbd> makes the rooms of that size bunk-bed rooms. <kbd>+ ANOTHER ROOM SIZE</kbd> adds a row, a copy of the one above (often the next floor); <kbd>✕</kbd> removes one. Without any row the house starts empty, and you add its rooms on its page later. |
+| KIND | 🏠 House · 🏘️ Hut group · ⛺ Tent area, or none (tap the chosen chip again). It sets the words (*4 huts × 8 beds*), the kind of the new rooms and the pin's icon, and a rolled name follows it (*Marmot Village*). *Other* is in [House details](#house-details). |
+| ROOMS & BEDS | One row per room size: **rooms** × **beds**, with <kbd>−</kbd> and <kbd>+</kbd>. The numbers can be typed too; <kbd>↑</kbd> / <kbd>↓</kbd> step by one, with <kbd>Shift</kbd> by five. <kbd>🔝</kbd> makes the rooms of that size bunk-bed rooms. <kbd>+ ANOTHER ROOM SIZE</kbd> adds a row, a copy of the one above (often the next floor); <kbd>✕</kbd> removes one. Without any row the house starts empty, and you add its rooms on its page later. |
 | NUMBERS FROM # | The first room number. Empty: 1. |
 | 🏢 FLOOR BLOCKS | Every size row starts its own block of numbers: 1–4, then 11–16, then 21–…; from three digits on, blocks of a hundred (101…, 201…). Off: 1, 2, 3 … straight through. |
 
 A line under the rows counts what <kbd>IGNITE HOUSE ✨</kbd> will build, with the room numbers: *= 12 rooms · 76 spots · 20 bunk beds #1–4 · #11–16 · #21–22*. When something is out of range it says what instead, and IGNITE refuses: a house holds up to 50 rooms, a room up to 50 beds, and one go makes at most 500 spots.
 
-- **Beds are sleeping places,** one spot each: a 6-bed room gets the spots **B1 … B6**. With <kbd>🪜</kbd> they are stacked in pairs right away, B1 + B2, B3 + B4, …, as [bunk beds](#bunk-beds); an odd last spot stays on its own. Without it the bed type stays open, as on any new spot, and [SPOT TYPES](#what-kind-of-bed-a-spot-is) sets it later.
+- **Beds are sleeping places,** one spot each: a 6-bed room gets the spots **B1 … B6**. With <kbd>🔝</kbd> they are stacked in pairs right away, B1 + B2, B3 + B4, …, as [bunk beds](#bunk-beds); an odd last spot stays on its own. Without it the bed type stays open, as on any new spot, and [SPOT TYPES](#what-kind-of-bed-a-spot-is) sets it later.
 - **Every room gets a rolled name,** in the style of the burner names: *Glitter Grotto*, *Snoozy Sloth Suite*; huts *Wobbly Wombat Hideout*, tents *Starry Yurt*. No name twice in a house. Change whatever you like afterwards: click a name ([Renaming](#renaming)), or roll a new one with <kbd>🎲</kbd> in the house's sidebar or in a room's [ROOM DETAILS](#room-details).
 - **Every new spot is active right away.**
 
@@ -53,17 +53,27 @@ After IGNITE the new pin stays selected; <kbd>MANAGE ROOMS ⚙️</kbd> in its s
 | Delete | <kbd>VANISH FROM PLAYA 🌪️</kbd> in the sidebar or <kbd>VANISH 🌪️</kbd> on the card, then confirm. |
 
 > [!CAUTION] Deleting is final
-> Deleting a house deletes all its rooms and spots too. Any test bookings on them are released first, and ticket codes stay valid. Not sure? [Export a template](./templates) before you delete.
+> Deleting a house deletes all its rooms and spots too. Bookings on them are released first, and ticket codes stay valid — guest bookings only by a superuser, see [Deleting or freeing booked spots](#booked-spots). Not sure? [Export a template](./templates) before you delete.
+> If one of its spots gets booked while the house is being deleted (the crew can book special-needs spots in every phase), the deletion stops at that spot: *A spot of this house was booked while it was being deleted, so the deletion stopped there …* Reload the page and decide about that booking first.
+
+### Deleting or freeing booked spots {#booked-spots}
+
+Deleting a house, a room or a spot, and 🔄 FREE on a spot, ends the guest bookings on it. So that a misclick costs nobody their spot:
+
+- **Only superusers** end guest bookings that way. A regular admin reads *Only a superuser can release them* in the dialog, and the server refuses the same way (*This room holds 2 guest bookings — only a superuser can release them.*). Spots marked 🔄 TAKEN hold no ticket: every admin can free or delete them.
+- **A spot the crew booked for a [special-needs request](./special-needs)** goes only when the superuser ticks *Release the special-needs spot the crew booked too* in the dialog. Without the tick nothing changes and the message says how many: *This house holds 1 spot the crew booked for special-needs requests, so nothing was changed.* Their requests stay approved and show *No spot yet*. The other way is <kbd>Release spot</kbd> on the requests page first.
+- **The crew chat hears about it**, with counts only: *🚪 Room deleted by …: 2 booking(s) released, 1 of them a special-needs spot the crew booked*. Deleting rooms and spots that held no guest booking is not reported.
+- **When the booking phase can't be read** (PocketBase not answering), deleting a house and 🔄 FREE refuse: *The booking phase could not be read, so nothing was changed. Try again in a moment.*
 
 ### House details 🏷️ {#house-details}
 
 **HOUSE DETAILS 🏷️** on the house page says what the place is like. Guests read it when they pick a spot, and the ♿ picker matches [special-needs requests](./special-needs) with it.
 
-The forms on the house and room pages (**HOUSE DETAILS**, **ADD ROOMS**, **ADD SPOT**, **ROOM DETAILS**, **SPOT TYPES**) start folded, so the rooms and spots are right below them, on a phone too. A folded title shows what is set, e.g. *🛖 Hut group · ♿ 🔥 · description*, *3 rooms so far* or *4 × lower bunk · 4 × upper bunk*. Tap the title or <kbd>+</kbd> to open a form, <kbd>−</kbd> to fold it again.
+The forms on the house and room pages (**HOUSE DETAILS**, **ADD ROOMS**, **ADD SPOT**, **ROOM DETAILS**, **SPOT TYPES**) start folded, so the rooms and spots are right below them, on a phone too. A folded title shows what is set, e.g. *🏘️ Hut group · ♿ 🔥 · description*, *3 rooms so far* or *4 × lower bunk · 4 × upper bunk*. Tap the title or <kbd>+</kbd> to open a form, <kbd>−</kbd> to fold it again.
 
 | Field | What it is |
 | --- | --- |
-| KIND | 🏠 House · 🛖 Hut group · ⛺ Tent area · 📍 Other. A **hut group** keeps one pin on the map and its huts are its rooms: the pin gets the 🛖 icon and the guest page says *Choose a hut*. |
+| KIND | 🏠 House · 🏘️ Hut group · ⛺ Tent area · 📍 Other. A **hut group** keeps one pin on the map and its huts are its rooms: the pin gets the 🏘️ icon and the guest page says *Choose a hut*. |
 | FEATURES | ♿ Wheelchair accessible · ⬇️ Ground floor · 🚻 Toilets + showers inside · 🔥 Heated · ❄️ No heating · 🤫 Quiet zone. Everything inside the house inherits them: a heated quiet house makes its rooms heated and quiet, and their spots too — except that an [upper bunk](#bunk-beds) never inherits ♿, and a room can switch one of them off for itself (a superuser's call, see [Room details](#room-details)). 🔥 Heated and ❄️ No heating rule each other out: ticking one clears the other (a hint under the boxes says so), and the server refuses a house that claims both. |
 | DESCRIPTION | Up to 500 characters of your own, shown to guests: *"Showers and toilets in the wash house, 50 m along the path."* |
 
@@ -83,11 +93,11 @@ Open a house with <kbd>MANAGE ROOMS ⚙️</kbd>, by clicking its card, or via <
 
 ### Add rooms
 
-**ADD ROOMS ➕** on the house page has the size rows of the [house generator](#create-a-house): **rooms** × **beds**, <kbd>🪜</kbd> for bunk beds, <kbd>+ ANOTHER ROOM SIZE</kbd>, **NUMBERS FROM #**, **🏢 FLOOR BLOCKS** and the same live count. It starts with one room like the ones the house has most of, in a hut group of 8-bed bunk huts *1 hut × 8 beds* with 🪜 on. A house without rooms opens the form by itself.
+**ADD ROOMS ➕** on the house page has the size rows of the [house generator](#create-a-house): **rooms** × **beds**, <kbd>🔝</kbd> for bunk beds, <kbd>+ ANOTHER ROOM SIZE</kbd>, **NUMBERS FROM #**, **🏢 FLOOR BLOCKS** and the same live count. It starts with one room like the ones the house has most of, in a hut group of 8-bed bunk huts *1 hut × 8 beds* with 🔝 on. A house without rooms opens the form by itself.
 
 - **Numbers** continue after the house's highest room number; with floor blocks at the next block (21 after 1–4 and 11–16). A number typed into NUMBERS FROM # is where they start; numbers the house uses already are skipped. Rooms are sorted by their number.
 - **Names** are rolled, never one the house has already. The toast after IGNITE names the new rooms.
-- **Spots** are **B1 … Bn**, stacked in pairs with 🪜.
+- **Spots** are **B1 … Bn**, stacked in pairs with 🔝.
 
 A house holds up to 50 rooms, a room up to 50 spots. In a hut group the form says *ADD HUTS* and <kbd>IGNITE 2 HUTS ✨</kbd>: the house's kind decides the wording. The rooms are created all together or not at all.
 
@@ -108,7 +118,7 @@ A house holds up to 50 rooms, a room up to 50 spots. In a hut group the form say
 
 ### Room cards
 
-Each card under **ACTIVE ROOMS 🚪** (or *huts*, *tents*, depending on the house's kind) shows the room number, name, its kind and features, what kind of beds it holds and **SPOTS CLAIMED 📊** (taken / active). Click a card or <kbd>MANAGE SPOTS 🛌</kbd> to manage its spots. Below the cards, **🛏️ Who is here** lists the house's bookings room by room: the guest, when they booked, the check-in (see [Bookings & check-ins](./bookings)). <kbd>VANISH ROOM 🌪️</kbd> deletes the room **with all its spots and any bookings on them**; the guests get a *spot was released* message, and their ticket codes stay valid.
+Each card under **ACTIVE ROOMS 🚪** (or *huts*, *tents*, depending on the house's kind) shows the room number, name, its kind and features, what kind of beds it holds and **SPOTS CLAIMED 📊** (taken / active). Click a card or <kbd>MANAGE SPOTS 🛌</kbd> to manage its spots. Below the cards, **🛏️ Who is here** lists the house's bookings room by room: the guest, when they booked, the check-in (see [Bookings & check-ins](./bookings)). <kbd>VANISH ROOM 🌪️</kbd> deletes the room **with all its spots and any bookings on them**; the guests get a *spot was released* message, and their ticket codes stay valid. Guest bookings go only with a superuser, see [Deleting or freeing booked spots](#booked-spots).
 
 ## Spots
 
@@ -130,11 +140,11 @@ Open a room by clicking its card on the house page.
 
 <kbd>🏷️ DETAILS</kbd> on a spot card opens its own editor: the **BED** (single bed, lower or upper bunk, one half of a double bed, sofa, mattress, camp bed), in Staging Mode its **LABEL** (clicking the label on the card does the same, see [Renaming](#renaming)), and the block **From the room and house**: greyed chips of what the spot inherits, i.e. the house's features minus what the room switched off, plus the room's own. A spot has no features of its own — everything it has comes from its room and house. Superusers get the same **off here** boxes and a <kbd>RESET</kbd> button as on a [room](#room-details) and may switch off anything that comes from the house or the room — say 🤫 Quiet zone on the bed by the door. Admins see the chips, superusers switch off and reset. On an **upper bunk** the room's ♿ Wheelchair accessible chip is struck through and says *never on an upper bunk*, with no *off here* box: the ladder rules it out, whatever the room says. The chip follows the **BED** field as you change it, before you save. Guests see the bed under the spot's label, and the ♿ picker uses it: *a lower bunk or a bed without a ladder* fits every bed but an upper bunk, and an upper bunk is never ♿ wheelchair accessible, whatever its room says (see [Bunk beds](#bunk-beds)). A spot that is part of a [bunk bed](#bunk-beds) gets its bed from the stacking: the **BED** field is greyed out there and says so.
 
-### Bunk beds 🪜 {#bunk-beds}
+### Bunk beds 🔝 {#bunk-beds}
 
 Two spots of a room can be **stacked** into one bunk bed: a lower bunk and an upper bunk. Both stay spots of their own — each keeps its label, its state and its 🔒 and ♿ marks, and guests book each on its own — they only get a level, and the room page shows the pair as one tile.
 
-**Stack two spots:** press <kbd>🪜 STACK</kbd> on the spot that becomes the **lower** bunk. Its card lights up and asks *Pick the spot that goes on top ▲*; every other spot on its own now offers <kbd>▲ PUT ON TOP</kbd>. Press that on the spot that becomes the **upper** bunk: the card lifts off, the two slide together into one tile, and the ladder between them draws itself. <kbd>CANCEL ✕</kbd>, <kbd>Esc</kbd> or <kbd>🪜 STACK</kbd> again leaves stacking without changing anything. <kbd>🪜 STACK</kbd> is greyed out while fewer than two spots of the room stand alone.
+**Stack two spots:** press <kbd>🔝 STACK</kbd> on the spot that becomes the **lower** bunk. Its card lights up and asks *Pick the spot that goes on top ▲*; every other spot on its own now offers <kbd>▲ PUT ON TOP</kbd>. Press that on the spot that becomes the **upper** bunk: the card lifts off, the two slide together into one tile, and the ladder between them draws itself. <kbd>CANCEL ✕</kbd>, <kbd>Esc</kbd> or <kbd>🔝 STACK</kbd> again leaves stacking without changing anything. <kbd>🔝 STACK</kbd> is greyed out while fewer than two spots of the room stand alone.
 
 **The tile** shows the upper bunk on top and the lower bunk below inside one turquoise outline, with the ladder, <kbd>⇅ SWAP</kbd> and <kbd>UNSTACK ⤴</kbd> on the strip between them. Each half carries a neutral chip, **▲ UPPER** or **▼ LOWER**, next to its state, and the same buttons as a spot on its own.
 
@@ -159,10 +169,10 @@ The status of a spot is written in [its state colour](./index#the-state-colours)
 | Admin card | Guests see |
 | --- | --- |
 | 🟢 **VACANT ✨** | 🟢 *Available*: they can book it. |
-| 🔴 **CLAIMED 👥** | 🔴 *Occupied* with the guest's burner name — 🩵 *Yours* for the guest who holds it. |
+| 🔴 **CLAIMED 👥** | 🔴 *Occupied* with the guest's burner name — 💠 *Yours* for the guest who holds it. |
 | 🟣 **BLOCKED 🛠** | 🟣 *Blocked by admin* · *Not available*: marked 🔄 TAKEN without a ticket. It counts as taken. |
 | 🟣 **LOCKED 🔒** | 🟣 *Blocked by admin* · *Not available*. It still counts as a spot, but never as a free one. The label hides whether it is also claimed or inactive; the dot still shows it. |
-| 🩷 **SPECIAL NEEDS ♿** | Like a locked spot: 🟣 *Blocked by admin* while it's free, never counted as free. Nobody books it on the guest pages, not even admins with a ticket code: the crew books it for [special-needs requests](./special-needs) on ♿ **Special needs**. Once booked, guests see the burner name, not the mark. |
+| 💗 **SPECIAL NEEDS ♿** | Like a locked spot: 🟣 *Blocked by admin* while it's free, never counted as free. Nobody books it on the guest pages, not even admins with a ticket code: the crew books it for [special-needs requests](./special-needs) on ♿ **Special needs**. Once booked, guests see the burner name, not the mark. |
 | ⚪️ **INACTIVE 🧊** | 🟣 *Blocked by admin* in its room. It isn't counted in any occupancy numbers (map, Control Center, house pages), the roulette never picks it, and nobody can book it. |
 
 Whatever the crew holds back — 🔄 TAKEN without a ticket, 🔒 locked, ♿ kept for requests, 🧊 inactive — reads the same to guests: *Blocked by admin*.
@@ -176,11 +186,11 @@ Whatever the crew holds back — 🔄 TAKEN without a ticket, 🔒 locked, ♿ k
 | ❄️ DEACTIVATE / ⚡️ ACTIVATE | Take the spot out of use / back in | <span class="no">✗</span> |
 | 🔄 TAKEN / FREE | Mark the spot as taken without a ticket (BLOCKED 🛠, *Blocked by admin* for guests), or free it | <span class="no">✗</span> |
 | 🏷️ DETAILS | Bed type of this spot, inherited features switched off (superusers), its label only in Staging Mode | <span class="yes">✓</span> allowed |
-| 🪜 STACK · ⇅ SWAP · UNSTACK ⤴ | Stack two spots into a [bunk bed](#bunk-beds), swap its levels, take it apart | <span class="yes">✓</span> allowed |
+| 🔝 STACK · ⇅ SWAP · UNSTACK ⤴ | Stack two spots into a [bunk bed](#bunk-beds), swap its levels, take it apart | <span class="yes">✓</span> allowed |
 | 🗑 DELETE | Delete the spot (its bunk partner, if any, stays as a spot on its own) | <span class="no">✗</span> |
 
 ::: tip Lock or deactivate?
-**Lock** a spot that exists but must not be booked by guests: a broken bed, or a bed kept for the crew. Guests see it as *Blocked by admin*. An admin who is signed in can still book a locked spot during Live Booking through the normal booking pages with a ticket code. A ♿ spot is different: nobody books it there, admins included; it is booked only for a request on ♿ **Special needs**.
+**Lock** a spot that exists but must not be booked: a broken bed, or one that is out of service. Guests see it as *Blocked by admin*. On the normal booking pages it can still be booked during Live Booking with a crew ticket, a ticket whose e-mail is the address of an approved admin or superuser account; being signed in to the admin area doesn't matter, and with any other ticket it never works. For someone without an admin account, unlock the spot for them or book it through a special-needs request. Spots kept for special needs are marked ♿, not locked: nobody books those on the booking pages, not even with a crew ticket; they are booked only for a request on ♿ **Special needs**.
 
 **Deactivate** a spot that isn't in use at all (yet). It no longer counts as a spot anywhere, and not even an admin can book it.
 :::
@@ -188,5 +198,5 @@ Whatever the crew holds back — 🔄 TAKEN without a ticket, 🔒 locked, ♿ k
 ::: details Marking a spot as taken without a ticket
 🔄 TAKEN marks a free spot as taken without attaching a ticket, for example to hold a bed during testing. The admin card says **BLOCKED 🛠** (violet), the booking lists show *🛠 Blocked · Blocked by admin*, and guests see *Blocked by admin* · *Not available*, like a locked spot. **Clear all bookings** and a superuser's switch back to Staging free these spots too. For beds that should stay unavailable, locking is the better choice. A ♿ spot marked TAKEN is not offered for [special-needs requests](./special-needs) until it is free again.
 
-🔄 FREE on a spot that a guest booked cancels that booking: the dialog *Cancel this guest's booking?* asks first (<kbd>Free the spot</kbd> / <kbd>Keep booking</kbd>), the guest gets a *spot was released* message, and their ticket code stays valid.
+🔄 FREE on a spot that a guest booked cancels that booking: the dialog *Cancel this guest's booking?* asks first (<kbd>Free the spot</kbd> / <kbd>Keep booking</kbd>), the guest gets a *spot was released* message, and their ticket code stays valid. Only a superuser can do that; 🗑 DELETE on a booked spot the same. See [Deleting or freeing booked spots](#booked-spots).
 :::

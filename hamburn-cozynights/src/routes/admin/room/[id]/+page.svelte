@@ -33,8 +33,20 @@
 	import { flip } from 'svelte/animate';
 	import { onMount, tick } from 'svelte';
 	import { enhance } from '$app/forms';
-	import { alertDialog, confirmDialog, toast } from '$lib/dialogs';
+	import {
+		alertDialog,
+		confirmDialog,
+		confirmWithOption,
+		toast,
+		type DialogOptions
+	} from '$lib/dialogs';
 	import { bookingsBySpot, guestLabel } from '$lib/bookings';
+	import {
+		RELEASE_CREW_SPOTS,
+		crewSpotsCheckbox,
+		heldIn,
+		superuserOnlyNote
+	} from '$lib/held-spots';
 
 	export let data: PageData;
 	export let form: { message?: string } | null = null;
@@ -144,7 +156,7 @@
 					await tick();
 					mergingId = null;
 					toast(
-						`🪜 ${plainName(target)} is now the upper bunk above ${source ? plainName(source) : 'its partner'}.`,
+						`🔝 ${plainName(target)} is now the upper bunk above ${source ? plainName(source) : 'its partner'}.`,
 						'success'
 					);
 					const drawn = drawnBunkId;
@@ -212,12 +224,45 @@
 			};
 	}
 
+	/**
+	 * The question before deleting or freeing a spot. With a guest's booking on
+	 * it ($lib/held-spots): a regular admin is told that this is for
+	 * superusers, and nothing is sent; a spot the crew booked for a
+	 * special-needs request only goes when the superuser ticks it.
+	 * @returns whether to send the form
+	 */
+	async function confirmSpot(
+		bed: Bed,
+		formData: FormData,
+		message: string,
+		options: DialogOptions & { title: string },
+		refusedTitle: string
+	): Promise<boolean> {
+		const row = bookingOf[bed.id];
+		const held = heldIn(row ? [row] : []);
+		if (held.guest > 0 && !isSuperuser) {
+			await alertDialog(superuserOnlyNote(held.guest), { title: refusedTitle, tone: 'warning' });
+			return false;
+		}
+		if (held.crew > 0) {
+			const { confirmed, checked } = await confirmWithOption(message, {
+				...options,
+				checkbox: crewSpotsCheckbox(held.crew)
+			});
+			if (confirmed && checked) formData.set(RELEASE_CREW_SPOTS, '1');
+			return confirmed;
+		}
+		return confirmDialog(message, options);
+	}
+
 	function toggleOccupied(bed: Bed): SubmitFunction {
-		return async ({ cancel }) => {
+		return async ({ cancel, formData }) => {
 			// A spot with a ticket attached is a guest's booking, not a test flag.
 			if (bed.occupied && bed.order) {
 				const guest = bookingOf[bed.id]?.guest;
-				const confirmed = await confirmDialog(
+				const confirmed = await confirmSpot(
+					bed,
+					formData,
 					`Spot ${spotName(bed)} was booked by ${guest ? guestLabel(guest) : 'a guest'}.` +
 						(bed.checked_in_at ? ' The guest is checked in, so they are on site.' : '') +
 						' Freeing it cancels that booking: the guest loses the spot and has to book again. Their ticket code stays valid.',
@@ -226,7 +271,8 @@
 						tone: 'danger',
 						confirmLabel: 'Free the spot',
 						cancelLabel: 'Keep booking'
-					}
+					},
+					'Spot not changed'
 				);
 				if (!confirmed) {
 					cancel();
@@ -241,9 +287,11 @@
 	}
 
 	function deleteSpot(bed: Bed): SubmitFunction {
-		return async ({ cancel }) => {
+		return async ({ cancel, formData }) => {
 			const partner = partnerOf(sortedBeds, bed.id);
-			const confirmed = await confirmDialog(
+			const confirmed = await confirmSpot(
+				bed,
+				formData,
 				`Spot ${spotName(bed)} is removed from this room.` +
 					(bed.occupied
 						? ' It is currently taken: that booking is deleted too and the guest has to book again.'
@@ -255,7 +303,8 @@
 					tone: 'danger',
 					confirmLabel: 'Delete spot',
 					cancelLabel: 'Keep it'
-				}
+				},
+				'Spot not deleted'
 			);
 			if (!confirmed) {
 				cancel();
@@ -442,7 +491,7 @@
 							: 'Stack another spot on top of this one: this spot becomes the lower bunk'}
 					on:click={() => (stackingId === bed.id ? leaveStacking() : (stackingId = bed.id))}
 				>
-					<span class="btn-emoji">🪜</span>
+					<span class="btn-emoji">🔝</span>
 					<span class="btn-text">STACK</span>
 				</button>
 			</div>

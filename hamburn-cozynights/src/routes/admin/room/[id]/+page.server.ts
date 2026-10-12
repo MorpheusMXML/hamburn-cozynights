@@ -1,8 +1,12 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { RoomsResponse, BedsResponse, HousesResponse } from '$lib/pocketbase-types';
-import { getBookingSettings } from '$lib/server/settings';
+import { getBookingSettings, PHASE_UNREADABLE, readPhaseStrict } from '$lib/server/settings';
 import { readBookings } from '$lib/server/bookings';
+import { withLock, withLocks } from '$lib/server/booking';
+import { logAdminEvent } from '$lib/server/admin-events';
+import { countHeld, releaseRefusal } from '$lib/server/held-spots';
+import { forgetCrewSpots } from '$lib/server/special-requests';
 import { NAMES_LOCKED, checkRoomName, checkSpotLabel } from '$lib/server/names';
 import { TEMPLATE_LIMITS, compareNatural } from '$lib/template';
 import { parseDetailsForm, parseSpotForm, type BedType } from '$lib/accommodation';
@@ -79,6 +83,24 @@ async function readRoomBeds(pb: App.Locals['pb'], roomId: string) {
 	return beds as (BedsResponse & BunkSpot)[];
 }
 
+/**
+ * Runs `step` in the queue (withLock) of every spot of the room, sorted like
+ * every write of several spots, with the spots read again inside: a guest's
+ * booking or another admin's change of one of them can't cross the writes
+ * and undo them (PocketBase saves the whole record on every update).
+ */
+async function withRoomBeds<T>(
+	pb: App.Locals['pb'],
+	roomId: string,
+	step: (beds: (BedsResponse & BunkSpot)[]) => Promise<T>
+): Promise<T> {
+	const ids = (await readRoomBeds(pb, roomId)).map((bed) => bed.id).sort();
+	return withLocks(
+		ids.map((id) => `bed:${id}`),
+		async () => step(await readRoomBeds(pb, roomId))
+	);
+}
+
 export const actions: Actions = {
 	createBed: async ({ request, params, locals }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can add spots.' });
@@ -145,11 +167,34 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const id = data.get('id') as string;
 		if (!id) return fail(400, { message: 'No spot was selected. Reload the page and try again.' });
+		const admin = locals.admin;
 
 		try {
-			await locals.pb.collection('beds').delete(id);
-			console.log(`[Action:deleteBed] SUCCESS for ${id}`);
-			return { success: true };
+			// Checked and deleted in the spot's queue: a booking that comes in
+			// meanwhile is seen, never deleted unasked.
+			return await withLock(`bed:${id}`, async () => {
+				const bed = await locals.pb
+					.collection('beds')
+					.getOne<BedsResponse>(id, { fields: 'id,order' });
+				// A guest's booking goes only with a superuser, a crew-booked one only
+				// when the confirmation said so ($lib/server/held-spots).
+				const held = await countHeld(locals.adminPb, [bed]);
+				const refused = releaseRefusal(admin, held, data, 'This spot');
+				if (refused) {
+					return fail(refused.status, { message: refused.message, crewBooked: refused.crewBooked });
+				}
+				await locals.pb.collection('beds').delete(id);
+				console.log(`[Action:deleteBed] SUCCESS for ${id}`);
+				if (held.guest > 0) {
+					// PocketBase empties the request's spot itself; this makes sure.
+					if (held.crewBedIds.length > 0) await forgetCrewSpots(locals.adminPb, held.crewBedIds);
+					await logAdminEvent(locals.adminPb, admin, 'spot_deleted', id, {
+						released: held.guest,
+						crewReleased: held.crew
+					});
+				}
+				return { success: true };
+			});
 		} catch (err) {
 			console.error(`[Action:deleteBed] FAILED for ${id}:`, err);
 			return fail(500, { message: SERVER_ERROR });
@@ -158,26 +203,59 @@ export const actions: Actions = {
 
 	toggleOccupied: async ({ request, locals }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can change spots.' });
+		const admin = locals.admin;
 
-		const { isLayoutLocked } = await getBookingSettings(locals.pb);
-		if (isLayoutLocked) return fail(403, { message: LOCKED_MESSAGE });
+		// Read now or not at all: freeing a spot is no layout change PocketBase
+		// would stop, so a phase that can't be read stops it here.
+		try {
+			if ((await readPhaseStrict(locals.pb)) !== 'staging') {
+				return fail(403, { message: LOCKED_MESSAGE });
+			}
+		} catch (err) {
+			console.error('[Action:toggleOccupied] The phase could not be read:', err);
+			return fail(503, { message: PHASE_UNREADABLE });
+		}
 
 		const data = await request.formData();
 		const id = data.get('id') as string;
 		const occupied = data.get('occupied') === 'true';
+		if (!id) return fail(400, { message: 'No spot was selected. Reload the page and try again.' });
 
-		console.log(
-			`[Action:toggleOccupied] Admin: ${locals.admin.email}, ID: ${id}, Target: ${!occupied}`
-		);
+		console.log(`[Action:toggleOccupied] Admin: ${admin.email}, ID: ${id}, Target: ${!occupied}`);
 
 		try {
-			// Freeing a spot also detaches the ticket that booked it. Otherwise the
-			// guest would keep "their" spot while everybody else sees it as free.
-			await locals.pb
-				.collection('beds')
-				.update(id, occupied ? { occupied: false, order: null } : { occupied: true });
-			console.log('[Action:toggleOccupied] SUCCESS.');
-			return { success: true };
+			// Checked and written in the spot's queue: what the rules see is what
+			// the write changes.
+			return await withLock(`bed:${id}`, async () => {
+				if (!occupied) {
+					await locals.pb.collection('beds').update(id, { occupied: true });
+					console.log('[Action:toggleOccupied] SUCCESS.');
+					return { success: true };
+				}
+				// Freeing a spot also detaches the ticket that booked it. Otherwise the
+				// guest would keep "their" spot while everybody else sees it as free.
+				// That ends a guest's booking: only with a superuser, a crew-booked one
+				// only when the confirmation said so ($lib/server/held-spots).
+				const bed = await locals.pb
+					.collection('beds')
+					.getOne<BedsResponse>(id, { fields: 'id,order' });
+				const held = await countHeld(locals.adminPb, [bed]);
+				const refused = releaseRefusal(admin, held, data, 'This spot');
+				if (refused) {
+					return fail(refused.status, { message: refused.message, crewBooked: refused.crewBooked });
+				}
+				await locals.pb.collection('beds').update(id, { occupied: false, order: null });
+				console.log('[Action:toggleOccupied] SUCCESS.');
+				if (held.guest > 0) {
+					// The request stays approved, with no spot yet (like Release spot).
+					if (held.crewBedIds.length > 0) await forgetCrewSpots(locals.adminPb, held.crewBedIds);
+					await logAdminEvent(locals.adminPb, admin, 'spot_freed', id, {
+						released: held.guest,
+						crewReleased: held.crew
+					});
+				}
+				return { success: true };
+			});
 		} catch (err) {
 			console.error('[Action:toggleOccupied] FAILED:', err);
 			return fail(500, { message: SERVER_ERROR });
@@ -195,7 +273,10 @@ export const actions: Actions = {
 		const enabled = data.get('enabled') === 'true';
 
 		try {
-			await locals.pb.collection('beds').update(id, { enabled: !enabled });
+			// In the spot's queue, like every write of a spot.
+			await withLock(`bed:${id}`, () =>
+				locals.pb.collection('beds').update(id, { enabled: !enabled })
+			);
 			return { success: true };
 		} catch (err) {
 			console.error('[Action:toggleEnabled] FAILED:', err);
@@ -216,7 +297,9 @@ export const actions: Actions = {
 		if (!id) return fail(400, { message: 'No spot was selected. Reload the page and try again.' });
 
 		try {
-			await locals.pb.collection('beds').update(id, { is_special: !isSpecial });
+			await withLock(`bed:${id}`, () =>
+				locals.pb.collection('beds').update(id, { is_special: !isSpecial })
+			);
 			return { success: true };
 		} catch (err) {
 			console.error('[Action:toggleSpecial] FAILED:', err);
@@ -312,17 +395,19 @@ export const actions: Actions = {
 		const id = String(data.get('id') ?? '');
 		if (!id) return fail(400, { message: 'No spot was selected. Reload the page and try again.' });
 		try {
-			const spot = await locals.pb
-				.collection('beds')
-				.getOne<BedsResponse>(id, { fields: 'id,room' });
-			// The room of the page, not one the form claims: a label is unique per room.
-			if (spot.room !== params.id) {
-				return fail(400, { message: 'This spot is not in this room. Reload the page.' });
-			}
-			const label = await checkSpotLabel(locals.pb, spot, data.get('label'));
-			if (!label.ok) return fail(400, { message: label.message });
-			await locals.pb.collection('beds').update(id, { label: label.value });
-			return { success: true };
+			return await withLock(`bed:${id}`, async () => {
+				const spot = await locals.pb
+					.collection('beds')
+					.getOne<BedsResponse>(id, { fields: 'id,room' });
+				// The room of the page, not one the form claims: a label is unique per room.
+				if (spot.room !== params.id) {
+					return fail(400, { message: 'This spot is not in this room. Reload the page.' });
+				}
+				const label = await checkSpotLabel(locals.pb, spot, data.get('label'));
+				if (!label.ok) return fail(400, { message: label.message });
+				await locals.pb.collection('beds').update(id, { label: label.value });
+				return { success: true };
+			});
 		} catch (err) {
 			console.error('[Action:renameSpot] FAILED:', err);
 			return fail(500, { message: SERVER_ERROR });
@@ -357,56 +442,60 @@ export const actions: Actions = {
 			);
 		}
 
-		// The level of a stacked spot comes from the stacking, not from the form.
-		// What it switches off and the label may still change.
-		try {
-			const stored = await locals.pb.collection('beds').getOne<BedsResponse>(id, {
-				fields: 'id,bed_type,bunk_partner'
-			});
-			if (stored.bunk_partner && (stored.bed_type ?? '') !== spot.value.bed_type) {
-				return fail(400, {
-					message:
-						'This spot is part of a bunk bed, so its level comes from the stacking. Unstack it to change the bed.'
+		// Checked and written in the spot's queue: a stacking or a booking of the
+		// spot at the same moment can't cross the check, nor undo the write.
+		return withLock(`bed:${id}`, async () => {
+			// The level of a stacked spot comes from the stacking, not from the form.
+			// What it switches off and the label may still change.
+			try {
+				const stored = await locals.pb.collection('beds').getOne<BedsResponse>(id, {
+					fields: 'id,bed_type,bunk_partner'
 				});
+				if (stored.bunk_partner && (stored.bed_type ?? '') !== spot.value.bed_type) {
+					return fail(400, {
+						message:
+							'This spot is part of a bunk bed, so its level comes from the stacking. Unstack it to change the bed.'
+					});
+				}
+			} catch (err) {
+				console.error('[Action:saveSpot] The spot could not be read:', err);
+				return fail(400, { message: 'The spot was not found. Reload the page and try again.' });
 			}
-		} catch (err) {
-			console.error('[Action:saveSpot] The spot could not be read:', err);
-			return fail(400, { message: 'The spot was not found. Reload the page and try again.' });
-		}
 
-		const { isLayoutLocked } = await getBookingSettings(locals.pb);
-		if (data.has('label') && !isLayoutLocked) {
-			const label = String(data.get('label') ?? '').trim();
-			if (!label) {
-				return fail(400, {
-					message: 'Enter a label for the spot, for example "B1" or "Top Bunk".'
+			const { isLayoutLocked } = await getBookingSettings(locals.pb);
+			if (data.has('label') && !isLayoutLocked) {
+				const label = String(data.get('label') ?? '').trim();
+				if (!label) {
+					return fail(400, {
+						message: 'Enter a label for the spot, for example "B1" or "Top Bunk".'
+					});
+				}
+				if (label.length > TEMPLATE_LIMITS.bedLabelLength) {
+					return fail(400, {
+						message: `The label is too long. Use at most ${TEMPLATE_LIMITS.bedLabelLength} characters.`
+					});
+				}
+				// The room of the page, not one the form claims: a label is unique per room.
+				const siblings = await locals.pb.collection('beds').getFullList<BedsResponse>({
+					filter: locals.pb.filter('room = {:id} && id != {:bed}', { id: params.id, bed: id }),
+					fields: 'id,label'
 				});
+				if (siblings.some((bed) => bed.label.trim().toLowerCase() === label.toLowerCase())) {
+					return fail(400, {
+						message: `This room already has a spot called "${label}". Pick another label.`
+					});
+				}
+				patch.label = label;
 			}
-			if (label.length > TEMPLATE_LIMITS.bedLabelLength) {
-				return fail(400, {
-					message: `The label is too long. Use at most ${TEMPLATE_LIMITS.bedLabelLength} characters.`
-				});
-			}
-			// The room of the page, not one the form claims: a label is unique per room.
-			const siblings = await locals.pb.collection('beds').getFullList<BedsResponse>({
-				filter: locals.pb.filter('room = {:id} && id != {:bed}', { id: params.id, bed: id }),
-				fields: 'id,label'
-			});
-			if (siblings.some((bed) => bed.label.trim().toLowerCase() === label.toLowerCase())) {
-				return fail(400, {
-					message: `This room already has a spot called "${label}". Pick another label.`
-				});
-			}
-			patch.label = label;
-		}
 
-		try {
-			await locals.pb.collection('beds').update(id, patch);
-			return { success: true };
-		} catch (err) {
-			console.error('[Action:saveSpot] FAILED:', err);
-			return fail(500, { message: SERVER_ERROR });
-		}
+			try {
+				await locals.pb.collection('beds').update(id, patch);
+				return { success: true };
+			} catch (err) {
+				console.error('[Action:saveSpot] FAILED:', err);
+				return fail(500, { message: SERVER_ERROR });
+			}
+		});
 	},
 
 	/**
@@ -434,17 +523,18 @@ export const actions: Actions = {
 		if (!bedType) return fail(400, { message: 'Pick what the spots of this room are.' });
 
 		try {
-			const beds = await readRoomBeds(locals.pb, params.id);
-			for (const [index, bed] of beds.entries()) {
-				const bed_type = bedType(index, beds.length);
-				let bunk_partner = '';
-				if (pattern === 'bunks' && bed_type) {
-					// Even index: the lower bunk, its partner is the next spot; odd
-					// index: the upper bunk above the spot before it.
-					bunk_partner = index % 2 === 0 ? beds[index + 1].id : beds[index - 1].id;
+			await withRoomBeds(locals.pb, params.id, async (beds) => {
+				for (const [index, bed] of beds.entries()) {
+					const bed_type = bedType(index, beds.length);
+					let bunk_partner = '';
+					if (pattern === 'bunks' && bed_type) {
+						// Even index: the lower bunk, its partner is the next spot; odd
+						// index: the upper bunk above the spot before it.
+						bunk_partner = index % 2 === 0 ? beds[index + 1].id : beds[index - 1].id;
+					}
+					await locals.pb.collection('beds').update(bed.id, { bed_type, bunk_partner });
 				}
-				await locals.pb.collection('beds').update(bed.id, { bed_type, bunk_partner });
-			}
+			});
 			return { success: true };
 		} catch (err) {
 			console.error('[Action:setBedTypes] FAILED:', err);
@@ -468,22 +558,24 @@ export const actions: Actions = {
 			return fail(400, { message: 'Pick the two spots to stack. Reload the page and try again.' });
 		}
 
+		const admin = locals.admin;
 		try {
-			const beds = await readRoomBeds(locals.pb, params.id);
-			const problem = stackProblem(beds, lower, upper);
-			if (problem) return fail(400, { message: problem });
+			return await withRoomBeds(locals.pb, params.id, async (beds) => {
+				const problem = stackProblem(beds, lower, upper);
+				if (problem) return fail(400, { message: problem });
 
-			const writes = stackWrites(lower, upper);
-			await locals.pb.collection('beds').update(writes.lower.id, {
-				bunk_partner: writes.lower.bunk_partner,
-				bed_type: writes.lower.bed_type
+				const writes = stackWrites(lower, upper);
+				await locals.pb.collection('beds').update(writes.lower.id, {
+					bunk_partner: writes.lower.bunk_partner,
+					bed_type: writes.lower.bed_type
+				});
+				await locals.pb.collection('beds').update(writes.upper.id, {
+					bunk_partner: writes.upper.bunk_partner,
+					bed_type: writes.upper.bed_type
+				});
+				console.log(`[Action:stackBunk] Admin: ${admin.email}, ${upper} above ${lower}`);
+				return { success: true };
 			});
-			await locals.pb.collection('beds').update(writes.upper.id, {
-				bunk_partner: writes.upper.bunk_partner,
-				bed_type: writes.upper.bed_type
-			});
-			console.log(`[Action:stackBunk] Admin: ${locals.admin.email}, ${upper} above ${lower}`);
-			return { success: true };
 		} catch (err) {
 			console.error('[Action:stackBunk] FAILED:', err);
 			return fail(500, { message: SERVER_ERROR });
@@ -497,18 +589,20 @@ export const actions: Actions = {
 		const id = String((await request.formData()).get('id') ?? '');
 		if (!id) return fail(400, { message: 'No spot was selected. Reload the page and try again.' });
 
+		const admin = locals.admin;
 		try {
-			const beds = await readRoomBeds(locals.pb, params.id);
-			const bunk = bunkOf(beds, id);
-			if (!bunk) {
-				return fail(400, { message: 'This spot is not part of a bunk bed. Reload the page.' });
-			}
-			for (const spot of [bunk.lower, bunk.upper]) {
-				const { id: spotId, ...patch } = unstackWrite(spot);
-				await locals.pb.collection('beds').update(spotId, patch);
-			}
-			console.log(`[Action:unstackBunk] Admin: ${locals.admin.email}, ${bunk.lower.id}`);
-			return { success: true };
+			return await withRoomBeds(locals.pb, params.id, async (beds) => {
+				const bunk = bunkOf(beds, id);
+				if (!bunk) {
+					return fail(400, { message: 'This spot is not part of a bunk bed. Reload the page.' });
+				}
+				for (const spot of [bunk.lower, bunk.upper]) {
+					const { id: spotId, ...patch } = unstackWrite(spot);
+					await locals.pb.collection('beds').update(spotId, patch);
+				}
+				console.log(`[Action:unstackBunk] Admin: ${admin.email}, ${bunk.lower.id}`);
+				return { success: true };
+			});
 		} catch (err) {
 			console.error('[Action:unstackBunk] FAILED:', err);
 			return fail(500, { message: SERVER_ERROR });
@@ -523,14 +617,19 @@ export const actions: Actions = {
 		if (!id) return fail(400, { message: 'No spot was selected. Reload the page and try again.' });
 
 		try {
-			const beds = await readRoomBeds(locals.pb, params.id);
-			const bunk = bunkOf(beds, id);
-			if (!bunk) {
-				return fail(400, { message: 'This spot is not part of a bunk bed. Reload the page.' });
-			}
-			await locals.pb.collection('beds').update(bunk.lower.id, { bed_type: BUNK_LEVEL_TYPE.upper });
-			await locals.pb.collection('beds').update(bunk.upper.id, { bed_type: BUNK_LEVEL_TYPE.lower });
-			return { success: true };
+			return await withRoomBeds(locals.pb, params.id, async (beds) => {
+				const bunk = bunkOf(beds, id);
+				if (!bunk) {
+					return fail(400, { message: 'This spot is not part of a bunk bed. Reload the page.' });
+				}
+				await locals.pb
+					.collection('beds')
+					.update(bunk.lower.id, { bed_type: BUNK_LEVEL_TYPE.upper });
+				await locals.pb
+					.collection('beds')
+					.update(bunk.upper.id, { bed_type: BUNK_LEVEL_TYPE.lower });
+				return { success: true };
+			});
 		} catch (err) {
 			console.error('[Action:swapBunk] FAILED:', err);
 			return fail(500, { message: SERVER_ERROR });
@@ -545,7 +644,9 @@ export const actions: Actions = {
 		if (!locals.admin) return fail(403, { message: 'Only admins can lock spots.' });
 
 		try {
-			await locals.pb.collection('beds').update(id, { is_locked: !isLocked });
+			await withLock(`bed:${id}`, () =>
+				locals.pb.collection('beds').update(id, { is_locked: !isLocked })
+			);
 			return { success: true };
 		} catch (err) {
 			console.error('[Action:toggleLocked] FAILED:', err);

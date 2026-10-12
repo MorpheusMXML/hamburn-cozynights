@@ -24,7 +24,7 @@ flowchart LR
 
 2. **Say hi (optional)**
 
-   The swap sheet shows the deal as two tickets: **You give** (your spot, turquoise) and **You get** (theirs, sky blue). Pick a vibe if you like — <kbd>👯 My crew sleeps nearby</kbd>, <kbd>🤫 Quiet corner, please</kbd>, <kbd>🌅 Early bird</kbd>, <kbd>🌙 Night owl</kbd>, <kbd>🪜 The other bunk level</kbd>, <kbd>🎁 Just asking nicely</kbd> — and write a few words, up to 140 characters. Links can't go in, and there is no need to explain why: a friendly word is enough.
+   The swap sheet shows the deal as two tickets: **You give** (your spot, turquoise) and **You get** (theirs, sky blue). Pick a vibe if you like — <kbd>👯 My crew sleeps nearby</kbd>, <kbd>🤫 Quiet corner, please</kbd>, <kbd>🌅 Early bird</kbd>, <kbd>🌙 Night owl</kbd>, <kbd>↕️ The other bunk level</kbd>, <kbd>🎁 Just asking nicely</kbd> — and write a few words, up to 140 characters. Links can't go in, and there is no need to explain why: a friendly word is enough.
 
    ![The swap sheet: You give B3, You get B1 (the lower bunk of Disco Owl), the vibe Night owl and a few words](../assets/screenshots/guest-swap-sheet.webp)
 

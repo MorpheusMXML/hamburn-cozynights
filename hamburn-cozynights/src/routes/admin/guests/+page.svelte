@@ -274,6 +274,7 @@
 							<span class="guest-burner">🔥 {row.burnerName}</span>
 						{/if}
 						<span class="guest-meta">{row.email || 'no e-mail'} · Ticket {row.ticket}</span>
+						{#if row.unpaid}<span class="tag danger">💳 unpaid: the code can't sign in</span>{/if}
 						{#if !row.hasEmail}<span class="tag danger">no e-mail address</span>{/if}
 						{#if row.request === 'pending'}
 							<span class="tag special">♿ request waits for a decision</span>

@@ -2,9 +2,10 @@
 # scripts/release.sh — stamp the version on the state that is about to be
 # deployed (docs/develop/deployment.md, "Versions and releases").
 #
-#   scripts/release.sh 0.18.1 "Deploy Nr. 18: admins see who booked each spot"
+#   scripts/release.sh 1.33.0 "Deploy Nr. 33: what it brings, in one line"
 #
-# The version follows the deploy numbering: 0.<deploy number>.<fix>. The
+# The version follows the deploy numbering: <line>.<deploy number>.<fix>,
+# line 0 before go-live, 1 from the go-live release v1.32.2 on. The
 # script writes it into package.json and package-lock.json, makes a SIGNED
 # commit and a SIGNED tag v<version>, and prints the push command. It pushes
 # nothing. Pushing the tag creates the GitHub release
@@ -18,14 +19,14 @@
 set -euo pipefail
 
 usage() {
-	echo "usage: scripts/release.sh <0.<deploy>.<fix>> [\"one line what this deploy brings\"]" >&2
+	echo "usage: scripts/release.sh <1.<deploy>.<fix>> [\"one line what this deploy brings\"]" >&2
 	exit 2
 }
 
 version="${1:-}"
 note="${2:-}"
 [[ -n "$version" ]] || usage
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a version: $version (expected e.g. 0.18.1)" >&2; exit 2; }
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a version: $version (expected e.g. 1.33.0)" >&2; exit 2; }
 tag="v$version"
 
 cd "$(dirname "$0")/.."
