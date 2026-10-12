@@ -111,9 +111,12 @@ export interface StressCamp {
 	/** Houses and rooms without the stress guest's spot (the "you already have a spot" banner). */
 	otherHouseIds: string[];
 	otherRoomIds: string[];
-	/** Cookie values (not headers) for the browser: the ticket codes. */
+	/** Cookie values (not headers) for the browser: the code and the server's signature. */
 	guestWithSpot: string;
 	guestWithoutSpot: string;
+	/** The ticket codes behind those two cookies, as a ticket list has them. */
+	guestWithSpotCode: string;
+	guestWithoutSpotCode: string;
 	/** Leads a full request group (GROUP_MAX members, names at the limit). */
 	guestWithRequest: string;
 	/** That full group (its card on /admin/requests is #group-<id>). */
@@ -146,9 +149,9 @@ export async function superuser(pbUrl: string, email: string, password: string) 
 export function stressTicketList(camp: StressCamp): string {
 	const rows = [
 		['Ticket code', 'E-mail', 'Name'],
-		[camp.guestWithSpot, `new.${TEXTS.emailLong}`, `${TEXTS.customerLong} der Zweite`],
-		[`${camp.guestWithSpot}-NEW`, TEXTS.emailLong, TEXTS.customerLong],
-		[`${camp.guestWithoutSpot}-NEW`, 'oe@example.org', 'Ö']
+		[camp.guestWithSpotCode, `new.${TEXTS.emailLong}`, `${TEXTS.customerLong} der Zweite`],
+		[`${camp.guestWithSpotCode}-NEW`, TEXTS.emailLong, TEXTS.customerLong],
+		[`${camp.guestWithoutSpotCode}-NEW`, 'oe@example.org', 'Ö']
 	];
 	return rows.map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n') + '\n';
 }
@@ -388,7 +391,8 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		session(mine)
 	);
 
-	const guestWithoutSpot = (await guestLogin(base, (await ticket(pb)).code)).code;
+	const guestWithoutSpotCode = (await ticket(pb)).code;
+	const guestWithoutSpot = (await guestLogin(base, guestWithoutSpotCode)).code;
 
 	const adminEmail = `layout-admin-${tag}@mauersegler.art`;
 	const adminAuth = await adminSession(pb, 'admin', adminEmail);
@@ -498,6 +502,8 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 		otherRoomIds,
 		guestWithSpot: mine.cookie,
 		guestWithoutSpot,
+		guestWithSpotCode: mine.code,
+		guestWithoutSpotCode,
 		guestWithRequest: requester.code,
 		fullGroupId: full.groupId,
 		guestInGroup: inGroup.code,

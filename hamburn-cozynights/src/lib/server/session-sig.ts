@@ -7,8 +7,7 @@
  * guessed ticket code gets no answer through the cookie (docs/reference/security.md).
  * The key is derived from ENCRYPTION_KEY; a new key signs every guest out once.
  *
- * Plain Node without SvelteKit imports: the layout tests sign their cookies
- * with it too.
+ * Plain Node without SvelteKit imports, so tests can use it directly.
  */
 import { createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
 
