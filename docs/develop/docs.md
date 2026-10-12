@@ -95,6 +95,9 @@ Everything below renders on this site. GitHub alerts, Mermaid diagrams, tables a
 > [!TIP] Button names
 > Write UI labels exactly as the app shows them, emoji included, so readers can find them on screen.
 
+> [!WARNING] Emoji every phone can draw
+> Use emoji up to Unicode 12 (2019), in the app and in the guides. Newer ones (the hut, the ladder, the light blue heart …) show as an empty square on phones older than iOS 14.2 or Android 11 and on Windows 10. `tests/emoji-support.test.ts` refuses them in the app, its mails and its Telegram texts.
+
 ## Screenshots
 
 Screenshots show demo data only, never real guests or tickets. Take them from a local stack at 1280 × 800, save them as WebP (quality around 80, under about 250 KB), and reference them with a relative path so they work on GitHub too.
@@ -107,7 +110,7 @@ Two copies, two purposes. **GitHub Pages** hosts the public guide for anyone, an
 
 - **Pull requests** build both audiences, so broken links or Markdown in either fail the check before merging.
 - **Pushes to `main`** build the public audience and deploy it to GitHub Pages.
-- **Version tags** (`v0.18.1`, made by `scripts/release.sh` on the state that is deployed) check out that tag, build the public audience from it and deploy it — so the Pages site describes the deployed state even while the release PR is still open. The paths filter doesn't apply to tags: every tag builds.
+- **Version tags** (`v1.32.2`, made by `scripts/release.sh` on the state that is deployed) check out that tag, build the public audience from it and deploy it — so the Pages site describes the deployed state even while the release PR is still open. The paths filter doesn't apply to tags: every tag builds.
 
 Two settings in the repository, once: the Pages source has to be **GitHub Actions** (Settings → Pages), and the `github-pages` environment has to allow deployments from tags (Settings → Environments → *github-pages* → *Deployment branches and tags* → add the tag pattern `v*`; the environment starts with `main` only, and a tag run would otherwise be refused with *not allowed to deploy to github-pages due to environment protection rules*).
 
@@ -118,13 +121,9 @@ Two settings in the repository, once: the Pages source has to be **GitHub Action
 Every page links the app's legal notice, privacy policy and booking rules: the home page in its footer, doc pages under their content (`.vitepress/theme/LegalLinks.vue`, because VitePress shows its footer only on pages without a sidebar). The pages themselves belong to the app, see [Legal pages](../admin/legal).
 
 - **Served by the app** (`/docs/`, `/admin/docs/`), the links point to `/legal-notice`, `/privacy` and `/booking-rules` on the same domain.
-- **On GitHub Pages** they need the app's address. The Pages build reads it from the repository variable `DOCS_APP_URL`; without it they point to staging. Once production is public (its [pre-launch gate](./deployment#pre-launch-gate) is off; before that, the links would end at the Google sign-in):
+- **On GitHub Pages** they need the app's address: production, `https://cozynights.hamburn.de`. The repository variable `DOCS_APP_URL` overrides it for the Pages build, for example to point at staging (`gh variable set DOCS_APP_URL --body "https://test-cozynights.hamburn.de"`, back with `gh variable delete DOCS_APP_URL`). The next docs deploy (a version tag, a push to `main` that touches `docs/`, or **Run workflow** on *Docs*) picks a change up.
 
-  ```bash
-  gh variable set DOCS_APP_URL --body "https://cozynights.hamburn.de"
-  ```
-
-  The next docs deploy (a version tag, a push to `main` that touches `docs/`, or **Run workflow** on *Docs*) picks it up.
+  While production's [pre-launch gate](./deployment#pre-launch-gate) is on, these links end at the Google sign-in, so Docs runs are left waiting at the `github-pages` approval until the gate is off. A waiting run can't simply be approved later: the site it built expires after a day (`upload-pages-artifact`), and the deploy then fails. Once the gate is off, cancel the waiting runs, start a fresh one (Actions → *Docs* → **Run workflow** on `main`) and approve that one.
 
 ## What doesn't belong here
 

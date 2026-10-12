@@ -542,7 +542,12 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 
 			const sent = await post(
 				'/special-needs?/save',
-				{ needs: 'step_free', text: 'Smoke: step-free access please.', consent: 'yes' },
+				{
+					about: 'personal',
+					needs: 'step_free',
+					text: 'Smoke: step-free access please.',
+					consent: 'yes'
+				},
 				cookie
 			);
 			expect(sent.status).toBe(200);
@@ -599,6 +604,7 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 			const started = await post(
 				'/special-needs?/save',
 				{
+					about: 'project',
 					needs: 'own_room',
 					text: 'Smoke: our art project needs a room.',
 					burnerName: 'Smoke Lead',

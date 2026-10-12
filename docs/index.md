@@ -49,7 +49,7 @@ features:
     linkText: The pass
   - icon: ♿
     title: Special needs & groups
-    details: Need a lower bunk, step-free access or a quiet room? Bringing an art project, a workshop or a crew? Ask the crew with your ticket code, on your own or as a group, even before booking opens.
+    details: Need a lower bunk, step-free access or a quiet area for a medical reason or a disability, or come as someone's helper? Here with an art project or a crew that needs a room or a bed close to its piece? Ask the crew with your ticket code, on your own or as a group, even before booking opens.
     link: /guide/special-needs
     linkText: Ask the crew
   - icon: 🔁

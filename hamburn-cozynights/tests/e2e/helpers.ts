@@ -67,12 +67,18 @@ export async function releaseTestBooking(pb: PocketBase) {
 
 /**
  * The check before every new spot (src/lib/booking-check.ts): makes the bed in
- * the booking window — every cover tapped onto its piece — promises to pack
- * them, and ticks the rules. The window then shows the burner name and Save.
+ * the booking window — each cover tapped, then its own piece of the bed —
+ * promises to pack them, and ticks the rules. The window then shows the
+ * burner name and Save.
  */
 export async function passBookingCheck(page: Page) {
-	for (const name of [/bed sheet/i, /duvet cover/i, /pillowcase/i]) {
-		await page.getByRole('button', { name }).click();
+	for (const [cover, piece] of [
+		['Bed sheet', 'Mattress'],
+		['Duvet cover', 'Blanket'],
+		['Pillowcase', 'Pillow']
+	]) {
+		await page.getByRole('button', { name: cover, exact: true }).click();
+		await page.getByRole('button', { name: piece, exact: true }).click();
 	}
 	await page.getByRole('button', { name: /I'll pack them/ }).click();
 	await page.getByRole('checkbox', { name: /I've read and understood/ }).check();

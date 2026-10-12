@@ -9,20 +9,34 @@
 	 * - Approve all waiting: only waiting requests; decided ones stay.
 	 * - Decline group: waiting and approved requests, except those with a spot
 	 *   the crew booked (release it first).
-	 * - The planner: one spot per member, first proposed for a place the crew
-	 *   picks under "Where:" (JavaScript only; without it the proposal for the
-	 *   snuggest fitting place stands). Rows on "Keep as is" change nothing;
-	 *   what can be booked is booked, and a warning names who wasn't.
+	 * - The planner: one spot per member, first proposed for the snuggest place
+	 *   that fits everyone and gives them what they need (rankPlaces in
+	 *   $lib/group-plan). "Choose a room for the group" opens the spot picker
+	 *   (SpotPicker): put the group into a room or house there and book it in
+	 *   one go, or take the plan back here and change single rows ("Change"
+	 *   opens the picker for that member; picking a spot another member is
+	 *   planned on swaps the two). Without JavaScript each row is a plain list
+	 *   and the proposal for the snuggest place stands. Rows on "Keep as is"
+	 *   change nothing; what can be booked is booked, and a warning names who
+	 *   wasn't.
 	 *
 	 * The card's edge uses the state colours (src/routes/state.css): orange
 	 * while a member waits, green when approved, grey otherwise. Never the
 	 * class `group` (a Tailwind utility) or `request` (the layout test's card).
 	 */
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { needShort } from '$lib/accommodation';
-	import { placeOptions, proposePlan, toPlace, type PlanMember } from '$lib/group-plan';
+	import {
+		defaultPlace,
+		placeOptions,
+		proposePlan,
+		repick,
+		toPlace,
+		type PlanMember
+	} from '$lib/group-plan';
+	import { fitOf, type PickerRequest } from '$lib/spot-picker';
 	import {
 		GROUP_MAX,
 		OTHER_NEED,
@@ -52,7 +66,8 @@
 		specialSummary,
 		isBookingActive,
 		busy,
-		act
+		act,
+		pick
 	}: {
 		group: AdminGroupView;
 		/** Every request of the page; the card takes its members from them. */
@@ -65,10 +80,12 @@
 		/** A step is running somewhere on the page: every button waits. */
 		busy: string;
 		act: Act;
+		/** Opens the page's spot picker. */
+		pick: (request: PickerRequest) => void;
 	} = $props();
 
-	// The "Where:" choice and the proposal need JavaScript; without it the
-	// rows keep the proposal they were rendered with.
+	// The spot picker and the proposal need JavaScript; without it the rows
+	// keep the proposal they were rendered with.
 	let mounted = $state(false);
 	onMount(() => (mounted = true));
 
@@ -106,7 +123,8 @@
 			name: nameOf(m),
 			needs: m.needs,
 			declined: m.status === 'declined',
-			crewSpotLabel: crewSpot(m) && m.spot ? m.spot.label : ''
+			crewSpotLabel: crewSpot(m) && m.spot ? m.spot.label : '',
+			crewRoomId: crewSpot(m) && m.spot ? m.spot.roomId : ''
 		}))
 	);
 	const placing = $derived(toPlace(planMembers));
@@ -114,16 +132,19 @@
 		placeOptions(spots, placing.length, placing.filter((m) => requestKinds(m.needs).access).length)
 	);
 	/**
-	 * null: the default, the snuggest place that fits everyone (sparing the ♿
-	 * spots when one can), else anywhere.
+	 * The room the crew chose in the picker; null: the recommendation — the
+	 * best room that fits everyone (defaultPlace), or no plan at all when no
+	 * room does (a group sleeps in one room; the crew splits it by hand).
 	 */
 	let chosenPlace = $state<string | null>(null);
 	const place = $derived(
 		chosenPlace !== null && options.some((option) => option.key === chosenPlace)
 			? chosenPlace
-			: (options.slice(1).find((option) => option.fits)?.key ?? '')
+			: defaultPlace(options, planMembers, spots)
 	);
-	const proposal = $derived(proposePlan(planMembers, spots, place));
+	const proposal: Record<string, string> = $derived(
+		place === null ? {} : proposePlan(planMembers, spots, place)
+	);
 	/** What the crew picked by hand, by request id; the proposal fills the rest. */
 	let edits = $state<Record<string, string>>({});
 	const valueOf = (requestId: string) => edits[requestId] ?? proposal[requestId] ?? '';
@@ -147,6 +168,75 @@
 	function pickPlace(key: string) {
 		chosenPlace = key;
 		edits = {};
+	}
+
+	let planForm = $state<HTMLFormElement>();
+	const edited = $derived(Object.keys(edits).length > 0);
+	const placeLabel = $derived(options.find((option) => option.key === place)?.label ?? '');
+	const spotOf = (bedId: string) =>
+		bedId ? spots.find((spot) => spot.bedId === bedId) : undefined;
+
+	/** The spot picker for the whole group: a room, then book or plan. */
+	function openGroupPicker() {
+		pick({
+			mode: 'group',
+			name: group.name,
+			members: planMembers,
+			place: place ?? '',
+			resolve: async (choice) => {
+				if (!choice) return;
+				pickPlace(choice.place);
+				await tick();
+				// The plan's button holds the focus: the confirmation hands it back there.
+				planForm?.querySelector<HTMLButtonElement>('.plan-foot button.primary')?.focus();
+				if (choice.book) planForm?.requestSubmit();
+			}
+		});
+	}
+
+	/**
+	 * The spot picker for one row. A spot another member is planned on swaps
+	 * the two, or sends the other back to "Keep as is" when this row had no
+	 * spot (repick); the picker says which before the crew takes it.
+	 */
+	function changeRow(member: PlanMember) {
+		const planned: Record<string, string> = {};
+		for (const other of planMembers) {
+			if (other.requestId === member.requestId || other.declined) continue;
+			const bedId = valueOf(other.requestId);
+			if (bedId) planned[bedId] = other.name;
+		}
+		const now = members.find((m) => m.id === member.requestId)?.spot;
+		pick({
+			mode: 'spot',
+			who: member.name,
+			needs: [...member.needs],
+			current: now
+				? `${now.label} (${now.assigned ? 'booked by the crew' : 'booked by the guest'})`
+				: '',
+			planned,
+			selected: valueOf(member.requestId),
+			action: 'Use this spot',
+			resolve: (bedId) => {
+				if (!bedId) return;
+				// The rows as they show now: a stale spot (taken meanwhile) counts as none.
+				const rows = Object.fromEntries(
+					planMembers
+						.filter((m) => !m.declined)
+						.map((m) => [m.requestId, spotOf(valueOf(m.requestId))?.bedId ?? ''])
+				);
+				edits = { ...edits, ...repick(rows, member.requestId, bedId).changes };
+			}
+		});
+	}
+
+	/** "✓ No ladder · ✗ Step-free": how a planned spot answers the member. */
+	function marksFor(member: PlanMember, spot: SpotInfo): string {
+		const { match } = fitOf(member.needs, spot);
+		return [
+			...match.fits.map((need) => `✓ ${needShort(need)}`),
+			...match.conflicts.map((need) => `✗ ${needShort(need)}`)
+		].join(' · ');
 	}
 
 	/** "No ladder, Quiet": what a member needs to sleep well, for the planner row. */
@@ -190,9 +280,9 @@
 		};
 	}
 
-	/** A picked spot in the dialog, ♿ marked like in the spot lists. */
+	/** A picked spot in the dialog, ♿ and 🔒 marked like in the spot lists. */
 	const spotText = (spot: SpotInfo | undefined) =>
-		spot ? `${spot.special ? '♿ ' : ''}${spot.label}` : 'a spot';
+		spot ? `${spot.special ? '♿ ' : ''}${spot.label}${spot.locked ? ' 🔒' : ''}` : 'a spot';
 
 	/** From what the form sends, so the dialog names exactly what gets booked. */
 	function bookConfirmation(form: FormData): Confirmation {
@@ -216,10 +306,31 @@
 			approving > 0
 				? ` ${approving} waiting ${plural(approving, 'request is', 'requests are')} approved as well.`
 				: '';
+		// Members who end up with no spot at all: the dialog names them.
+		const without = members.filter(
+			(member) =>
+				member.status !== 'declined' &&
+				!member.spot &&
+				!picked.some((entry) => entry.member.id === member.id)
+		);
+		const left =
+			without.length > 0
+				? ` ${without.map(nameOf).join(', ')} ${plural(without.length, 'gets', 'get')} no spot this time (Keep as is).`
+				: '';
+		const locked = picked.filter(({ bedId }) => spotOf(bedId)?.locked).length;
+		const lockedNote =
+			locked > 0
+				? ` ${locked} of the spots ${plural(locked, 'is', 'are')} locked 🔒 by the crew.`
+				: '';
 		const n = picked.length;
+		// All in one room: the title says which.
+		const rooms = new Set(picked.map(({ bedId }) => spotOf(bedId)?.roomId ?? ''));
+		const room = n > 1 && rooms.size === 1 ? spotOf(picked[0].bedId) : undefined;
 		return {
-			title: `Book ${n} ${plural(n, 'spot', 'spots')} for the group?`,
-			message: `Booked right away${closed}: ${list}.${moves}${approves} Each guest gets a message with the booking pass.`,
+			title: room
+				? `Book ${n} spots in ${room.room} · ${room.house}?`
+				: `Book ${n} ${plural(n, 'spot', 'spots')} for the group?`,
+			message: `Booked right away${closed}: ${list}.${lockedNote}${moves}${approves}${left} Each guest gets a message with the booking pass.`,
 			label: 'Book them'
 		};
 	}
@@ -249,9 +360,11 @@
 	<header>
 		<h3>👥 {group.name}</h3>
 		<p class="meta">
-			{members.length} of {GROUP_MAX} · code <span class="code">{group.code}</span> · started {when(
-				group.created
-			)}
+			{members.length > GROUP_MAX
+				? `${members.length} people, more than the ${GROUP_MAX} a group may have`
+				: `${members.length} of ${GROUP_MAX}`} · code <span class="code">{group.code}</span> ·
+			started
+			{when(group.created)}
 		</p>
 		<ul class="chips" aria-label="The group at a glance">
 			{#if waiting > 0}<li class="chip waiting">{waiting} waiting</li>{/if}
@@ -337,6 +450,7 @@
 		method="POST"
 		action="?/assignGroup"
 		class="plan"
+		bind:this={planForm}
 		use:enhance={act(`group-${group.id}`, bookDone, bookConfirmation, { reset: false })}
 	>
 		<input type="hidden" name="id" value={group.id} />
@@ -345,18 +459,23 @@
 			<p class="hint">Everyone in the group who isn't declined has a spot the crew booked.</p>
 		{:else}
 			{#if mounted}
-				<!-- Not sent: it only fills the rows below with a proposal. -->
 				<div class="where">
-					<label for="where-{group.id}">Where:</label>
-					<select
-						id="where-{group.id}"
-						value={place}
-						onchange={(event) => pickPlace(event.currentTarget.value)}
+					<p class="where-line">
+						{#if place === null}
+							<span class="dim"
+								>{`No room has ${placing.length} free spots together: pick a spot for each with Change${edited ? ' (changed by hand)' : ''}.`}</span
+							>
+						{:else}
+							<span class="dim">Plan:</span>
+							{placeLabel}{edited ? ' · changed by hand' : ''}
+						{/if}
+					</p>
+					<button
+						type="button"
+						class="btn"
+						disabled={!!busy || spots.length === 0}
+						onclick={openGroupPicker}>🏠 Choose a room for the group</button
 					>
-						{#each options as option (option.key)}
-							<option value={option.key}>{option.label}</option>
-						{/each}
-					</select>
 				</div>
 			{/if}
 			<ul class="plan-rows">
@@ -365,6 +484,44 @@
 						{#if member.declined}
 							<span class="plan-name">{member.name}</span>
 							<span class="dim">Declined — not booked.</span>
+						{:else if mounted}
+							{@const spot = spotOf(valueOf(member.requestId))}
+							{@const marks = spot ? marksFor(member, spot) : ''}
+							<input type="hidden" name="bed_{member.requestId}" value={spot?.bedId ?? ''} />
+							<span class="plan-name">
+								{member.name}{#if accessText(member)}<span class="plan-needs"
+										>{` · ♿ ${accessText(member)}`}</span
+									>{/if}
+							</span>
+							<span class="plan-spot" class:dim={!spot}>
+								{#if spot}
+									{`→ ${spot.label}${spot.special ? ' ♿' : ''}${spot.locked ? ' 🔒' : ''}`}{#if marks}<span
+											class="plan-marks">{` · ${marks}`}</span
+										>{/if}
+								{:else if member.crewSpotLabel}
+									Keeps {member.crewSpotLabel} (booked by the crew)
+								{:else}
+									Keep as is
+								{/if}
+							</span>
+							<span class="plan-tools">
+								<button
+									type="button"
+									class="btn small"
+									disabled={!!busy || spots.length === 0}
+									onclick={() => changeRow(member)}>Change</button
+								>
+								{#if spot}
+									<button
+										type="button"
+										class="btn small"
+										aria-label="Keep {member.name} as is"
+										title="Keep as is"
+										disabled={!!busy}
+										onclick={() => (edits[member.requestId] = '')}>✕</button
+									>
+								{/if}
+							</span>
 						{:else}
 							<label class="plan-name" for="plan-{member.requestId}">
 								{member.name}{#if accessText(member)}<span class="plan-needs"
@@ -634,20 +791,26 @@
 		gap: 0.4rem 0.75rem;
 		min-width: 0;
 	}
-	.where label {
-		font-weight: 700;
-	}
-	.where select {
+	.where-line {
 		flex: 1 1 16rem;
-		width: 100%;
 		min-width: 0;
-		min-height: 44px;
-		padding: 0 0.75rem;
-		border-radius: 10px;
-		border: 1px solid #333;
-		background: #0a0a0a;
-		color: #fff;
-		font: inherit;
+		margin: 0;
+		font-weight: 700;
+		overflow-wrap: anywhere;
+	}
+	.plan-spot {
+		flex: 2 1 16rem;
+		min-width: 0;
+		font-size: 0.9rem;
+		overflow-wrap: anywhere;
+	}
+	.plan-marks {
+		color: #a3a3a3;
+	}
+	.plan-tools {
+		display: flex;
+		gap: 0.4rem;
+		margin-left: auto;
 	}
 	.plan-rows {
 		list-style: none;
@@ -695,6 +858,11 @@
 		font: inherit;
 		font-weight: 800;
 		cursor: pointer;
+	}
+	.btn.small {
+		min-height: 36px;
+		padding: 0 0.8rem;
+		font-size: 0.85rem;
 	}
 	.btn.primary {
 		background: #2dd4bf;

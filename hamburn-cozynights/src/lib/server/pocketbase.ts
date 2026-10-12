@@ -21,12 +21,22 @@ adminPb.autoCancellation(false);
 // the server (e.g. the service account's password was rotated) still looks
 // valid for up to a day, so it is re-verified against PocketBase periodically.
 const REVALIDATE_AFTER_MS = 5 * 60 * 1000;
-// After a failed login, don't hammer PocketBase on every incoming request.
+// After a failed login or check, don't hammer PocketBase on every incoming request.
 const RETRY_AFTER_FAILURE_MS = 10 * 1000;
 
 let lastVerifiedAt = 0;
 let lastFailureAt = 0;
 let pending: Promise<void> | null = null;
+
+/**
+ * PocketBase turned the token down (401, 403, …), as opposed to not answering
+ * at all (status 0: down, restarting, unreachable), a server error (5xx) or a
+ * rate limit (429): none of those says anything about the token.
+ */
+export function tokenRejected(err: unknown): boolean {
+	const status = Number((err as { status?: unknown })?.status) || 0;
+	return status >= 400 && status < 500 && status !== 429;
+}
 
 async function authenticate(): Promise<void> {
 	const email = privateEnv.PB_ADMIN_EMAIL;
@@ -43,7 +53,16 @@ async function authenticate(): Promise<void> {
 				await adminPb.collection('_superusers').authRefresh();
 				lastVerifiedAt = Date.now();
 				return;
-			} catch {
+			} catch (err: any) {
+				if (!tokenRejected(err)) {
+					// PocketBase is down or restarting, the token is not the problem. Keep
+					// it: without it the app would talk to PocketBase unauthenticated, and
+					// the beds rule filters that down to an empty camp. With it, the app is
+					// back the moment PocketBase is. The check runs again a bit later.
+					lastFailureAt = Date.now();
+					console.error(`[PocketBase] Service account check failed, token kept: ${err?.message}`);
+					return;
+				}
 				adminPb.authStore.clear();
 			}
 		}
@@ -70,7 +89,8 @@ export async function getAdminPb(): Promise<TypedPocketBase> {
 	const now = Date.now();
 	const fresh = adminPb.authStore.isValid && now - lastVerifiedAt < REVALIDATE_AFTER_MS;
 	if (fresh) return adminPb;
-	if (!adminPb.authStore.isValid && now - lastFailureAt < RETRY_AFTER_FAILURE_MS) return adminPb;
+	// A failed login or check is retried after a pause, not on every request.
+	if (now - lastFailureAt < RETRY_AFTER_FAILURE_MS) return adminPb;
 
 	// Single flight: concurrent requests share one (re-)authentication.
 	if (!pending) {

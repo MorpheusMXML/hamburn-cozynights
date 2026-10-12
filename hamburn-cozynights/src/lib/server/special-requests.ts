@@ -68,11 +68,13 @@ type RequestWithOrder = SpecialRequestsResponse<{ order?: OrdersResponse }>;
 
 /**
  * The needs are padded to this length before they are encrypted: AES-GCM
- * keeps the length of the plaintext, and the length must not tell an access
- * request from a project request. JSON.parse ignores the trailing blanks, so
- * older, unpadded rows read the same.
+ * keeps the length of the plaintext, and the length must not tell a personal
+ * need from a helper or a project. JSON.parse ignores the trailing blanks, so
+ * older, unpadded rows read the same. Every value of the form and the retired
+ * ones together still fit (tests/special-needs.test.ts checks it): a longer
+ * list would not be cut, only padded no further.
  */
-const NEEDS_PADDED_LENGTH = 240;
+export const NEEDS_PADDED_LENGTH = 240;
 
 function isNotFound(err: unknown): boolean {
 	return (err as ClientResponseError | undefined)?.status === 404;
@@ -129,6 +131,14 @@ export function toSpot(bed: BedWithRoom): SpotInfo {
 			roomOff: room?.features_off,
 			spotOff: bed.features_off,
 			bedType: bed.bed_type
+		}),
+		bunkPartner: bed.bunk_partner ?? '',
+		houseKind: building?.kind ?? '',
+		roomKind: room?.kind ?? '',
+		roomFeatures: effectiveFeatures({
+			house: building?.features,
+			room: room?.features,
+			roomOff: room?.features_off
 		})
 	};
 }
@@ -430,6 +440,19 @@ export async function listAssignableSpots(adminPb: TypedPocketBase): Promise<Spo
 				compareNatural(a.room, b.room) ||
 				compareNatural(a.spot, b.spot)
 		);
+}
+
+/**
+ * How many active spots each room has, free or not: room id → count. The spot
+ * picker says "3 of 6 free" with it.
+ */
+export async function countRoomSpots(adminPb: TypedPocketBase): Promise<Record<string, number>> {
+	const beds = await adminPb
+		.collection('beds')
+		.getFullList({ filter: 'enabled = true', fields: 'room' });
+	const sizes: Record<string, number> = {};
+	for (const bed of beds) sizes[bed.room] = (sizes[bed.room] ?? 0) + 1;
+	return sizes;
 }
 
 /**

@@ -1,6 +1,6 @@
 # Special needs & groups
 
-Some spots are kept back for the crew to hand out: for guests who need something special — a lower bunk or a bed without a ladder, step-free access, a place close to a toilet, a quiet room — and for art projects, workshops, theme camps and crews who want a room of their own or spots close together. If that's you, **ask the crew, on your own or as a group, even before booking opens**.
+Beds at Hamburn are booked the same way by everyone, as a communal effort. A few spots are kept back for the crew to hand out where a regular booking won't do: for guests who need a particular kind of bed or place for a medical reason or a disability (a lower bunk or a bed without a ladder, step-free access, a place close to a toilet, a quiet area, stable light), for the helper who comes along with them, and for an art project or a crew that needs a room, or a bed close to its piece. If that's you, **ask the crew, on your own or as a group, even before booking opens**. The crew decides on every request.
 
 ## Asking for a spot
 
@@ -8,33 +8,39 @@ Some spots are kept back for the crew to hand out: for guests who need something
 
 1. **Sign in** on the start page with your ticket code.
 2. **Open the request page.** Before booking opens, the map shows ♿ **Special needs or a project? Ask the crew now**. During Live Booking and after it, the link ♿ **Special-needs spot** sits in the top bar of every booking page (on a phone it is just ♿). The link is there while the crew accepts requests.
-3. **Tick what your request is about.** The list has two parts, and you can tick in both: *Something I need to sleep well* — a lower bunk or a bed without a ladder (a stacked bunk bed tells the crew by itself which of its two spots is the lower one), step-free access or the ground floor, close to a toilet, a quiet room — and *An art project, a workshop, a theme camp or a crew* — a room just for your project or crew, spots close to the people you come with. *Something else* is for anything that doesn't fit.
-4. **Tell the crew in a few words** what they should know (5 to 500 characters; the form counts for you). For a project: what it is, how many of you there are, and a room or house you have in mind. For something you need: describe *what* you need, not *why* — no diagnoses or medical details, the crew doesn't need them.
+3. **Choose what your request is about.** There are three paths, and a request takes one of them; the form then shows the boxes of that path (without JavaScript it lists all three, and only the boxes under your choice count):
+   - *A personal need: a medical reason or a disability.* Tick what you need: *A lower bunk or a bed without a ladder* (a stacked bunk bed tells the crew by itself which of its two spots is the lower one), *Step-free access or the ground floor*, *Close to a toilet*, *A quiet area*, *Stable light conditions*, or *Something else* for anything that doesn't fit.
+   - *I come as the helper of someone with a personal need.* Nothing to tick. A helper asks together with the person they help, in one group: join their group, or start one and share the link with them (see [Asking as a group](#asking-as-a-group)).
+   - *An art project or a crew.* Tick *A room for our art project or crew*, *A bed close to our art piece or project*, or both.
+4. **Tell the crew in a few words** what they should know (5 to 500 characters; the form counts for you):
+   - For a personal need: describe *what* you need, not *why* — no diagnoses or medical details, the crew doesn't need them.
+   - As a helper: what the crew should know, for example that you need to sleep in the same room as the person you help, or close by. Here too *what*, not *why*: no diagnoses or medical details, yours or theirs.
+   - For an art project or a crew: at least 5 words on what you need and why your art piece or project would be at risk without it.
 5. Optionally enter the **burner name** for your spot (up to 80 characters). The crew's booking uses it unless your ticket already has a burner name. Others in your room see it next to your spot, and so does your group if you are in one. Leave it empty and you get a random one.
-6. **Asking together with others?** Leave it on *Just for me*, or start or join a group (see [Asking as a group](#asking-as-a-group)).
+6. **Asking together with others?** Leave it on *Just for me*, or start or join a group (see [Asking as a group](#asking-as-a-group)). As a helper, start or join one.
 7. Tick the **consent** box and press <kbd>Send request</kbd>.
 
 </div>
 
-![The special-needs form: what you need, a few words for the crew, an optional burner name and the consent box](../assets/screenshots/guest-special-needs.webp)
+![The top of the special-needs form: what your request is about, here a personal need with its boxes, a few words for the crew and an optional burner name](../assets/screenshots/guest-special-needs.webp)
 
-If something is missing, the form says so right where it is: the part to fix gets a red border, the reason appears under it, and the cursor jumps to the first one. Tick at least one thing (or *Something else*), write at least a few words, and tick the consent box, because without it the crew may not use what you wrote. Joining a group is the one exception: then ticking and writing are optional. Sending the form more than ten times within an hour is refused for a while.
+If something is missing, the form says so right where it is: the part to fix gets a red border, the reason appears under it, and the cursor jumps to the first one. Choose what your request is about (*Choose what your request is about.*), tick at least one box on that path (*Tick at least one thing. If none fits, tick "Something else".*; for a project: *Tick a room or a bed.*; boxes ticked only under another choice are named, so you can pick that one or untick them), write at least a few words — for an art project or a crew at least 5 — and tick the consent box, because without it the crew may not use what you wrote. A helper who is in no group reads *A helper asks together with the person they help: join their group, or start one and share the link.* Joining a group, or being in one already, is the one exception: then you may send without choosing a path, ticking or writing anything, and ask only as part of the group; a path chosen with nothing ticked counts the same. Sending the form more than ten times within an hour is refused for a while.
 
 Once it is sent, the page shows your request and its status, where messages about it go (the address of your ticket, shortened like `m•••@example.com`) and <kbd>Get updates on Telegram</kbd>. You get an e-mail that your request arrived, and another one when the crew has decided. The link now reads ♿ **See your special-needs request** on the map's panel and ♿ **My request** in the top bar, also when the crew no longer takes new requests.
 
 ## Asking as a group
 
-An art project, a workshop, a theme camp, a crew, or friends who want to sleep close together can ask as a **group**. Everyone in it asks with their own ticket code and has their own request; the group links them, so the crew looks at all of you together.
+A **group** is for a helper and the person they help, or for the crew of an art project. Everyone in it asks with their own ticket code and has their own request; the group links them, so the crew looks at all of you together. A helper always asks in a group.
 
 <div class="steps">
 
-1. **One of you starts the group.** On the form, under *Asking together with others?*, choose *Start a group* and give it a name (2 to 40 characters, for example your project's name; only your group and the crew see it). Fill in the rest as usual: tick what the group needs and tell the crew what your project is, so they know what the group is about.
-2. **Share the link.** After sending, the card **👥 Your group** shows the link to share (<kbd>📋 Copy link</kbd> copies it) and the group code, like `ABCD-EF23`. Anyone with the link or the code can join and sees the burner names in the group, so share it only with your people.
-3. **The others join.** They open the link — after signing in with their own ticket code, if the app asks for it, they land on the form with the code filled in — or they choose *Join a group* and type the code (upper or lower case, with or without the dash; a pasted link works too). Ticking and writing are optional when you join: tick only what you need yourself, and if you tick something, add a few words. In a group, one of you explaining the project is enough.
+1. **One of you starts the group** — the person with the personal need, their helper, or one of the project's crew. On the form, under *Asking together with others?*, choose *Start a group* and give it a name (2 to 40 characters, for example your project's name; no health details, only your group and the crew see it). Fill in the rest as usual: choose what your request is about, tick what you need and tell the crew in a few words, so they know what the group is about.
+2. **Share the link.** After sending, the card **👥 Your group** shows the link to share (<kbd>📋 Copy link</kbd> copies it) and the group code, like `ABCD-EF23`. Anyone with the link or the code can join and sees the burner names in the group, so share it only with the people it is for.
+3. **The others join.** They open the link — after signing in with their own ticket code, if the app asks for it, they land on the form with the code filled in — or they choose *Join a group* and type the code (upper or lower case, with or without the dash; a pasted link works too). When you join, you may leave the path open and ask only as part of the group, with nothing to tick or write; a path you chose but ticked nothing on counts the same. Whatever you tick wants a few words, as above. A helper chooses *I come as the helper of someone with a personal need* and always writes a few words. In a project's group, one of you explaining the project is enough.
 
 </div>
 
-The group card shows the group's name, how many of you are in it (*3 of 12 people*) and everyone's burner name, yours marked *(you)*; someone who left the burner name empty in their request shows as *A fellow burner*. A request that asks only as part of the group, with nothing ticked, says *Nothing ticked: you asked as part of your group.*
+The group card shows the group's name, how many of you are in it (*3 of 5 people*) and everyone's burner name, yours marked *(you)*; someone who left the burner name empty in their request shows as *A fellow burner*. A request that asks only as part of the group, with nothing ticked, says *Nothing ticked: you asked as part of your group.*
 
 Already sent a request on your own? While it waits for the crew and requests are open, press <kbd>Change request</kbd> (or the line *Asking together with others? Change your request to start or join a group.*) and start or join a group from there.
 
@@ -43,11 +49,11 @@ Already sent a request on your own? While it waits for the crew and requests are
 **Limits:**
 
 - **One group per ticket.** To switch groups, leave yours first.
-- **At most 12 people** in a group. A full group says so; ask the crew if more of you need to come along.
+- **At most 5 people** in a group. A full group says so (*This group is full: a group can have at most 5 people. Please contact the crew.*); ask the crew if more of you need to come along.
 - **Starting and joining** only work while requests are open and your request waits for the crew. Once the crew has decided on your request, it can't join a group anymore: if you'd like to sleep close to that group, contact the crew.
 - **Wrong codes:** *No group has this code* means a typo, or the group is gone (it is deleted when its last member leaves). After five wrong codes within 15 minutes the form asks you to wait 15 minutes. *You can't join this group* means the crew took you out of it: contact the crew.
 
-**Leaving:** <kbd>Leave the group</kbd> at the bottom of the group card, at any time, also when requests are closed. If your request was only about the group (nothing ticked), leaving deletes it; a spot the crew already booked for you stays yours, as an ordinary booking. Otherwise your own request stays with the crew, without the group, and the others no longer see your burner name. When the last person leaves, the group is deleted. If someone joins who doesn't belong, tell the crew: they can take them out of the group.
+**Leaving:** <kbd>Leave the group</kbd> at the bottom of the group card, at any time, also when requests are closed. If your request was only about the group (nothing ticked), leaving deletes it; a spot the crew already booked for you stays yours, as an ordinary booking. Otherwise your own request stays with the crew, without the group, and the others no longer see your burner name; as a helper, tell the crew whom you came to help. When the last person leaves, the group is deleted. If someone joins who doesn't belong, tell the crew: they can take them out of the group.
 
 ## What happens next
 

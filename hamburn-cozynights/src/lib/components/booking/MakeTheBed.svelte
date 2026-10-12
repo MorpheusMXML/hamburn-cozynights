@@ -2,25 +2,31 @@
 @component
 Make your bed: the bedding half of the check before every booking
 ($lib/booking-check). The hostel's pillow, blanket and mattress lie bare on
-a bed; the guest's three covers wait in their bag. A tap flies a cover onto
-its piece, a drag puts it there by hand: the duvet cover only fits the
-blanket and the pillowcase only the pillow, the sheet slips under anything.
-Once the bed is made, "I'll pack them" calls `onpacked`.
+a bed; the guest's three covers wait in their bag. Each cover only goes on
+its own piece (Max's "idiot check", 11 Oct 2026): the bed sheet on the
+mattress, the duvet cover on the blanket, the pillowcase on the pillow. Drag
+a cover there, or tap it and then tap its place on the bed. The wrong piece
+shakes and says where the cover belongs, and the cover waits for the right
+one. Once the bed is made, "I'll pack them" calls `onpacked`.
 
 Light on old phones: one inline SVG of plain shapes (no filters, patterns or
 canvas), every animation moves only transform and opacity, and none of them
 loops for long. Without the Web Animations API, or with reduced motion, a
-cover lands at once. Keyboard and screen readers: the covers are buttons,
-each places itself, and a live line says what is left.
+cover lands at once. Keyboard and screen readers: the covers are toggle
+buttons, the three pieces are buttons over the drawing, and a live line says
+what happened.
 -->
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import {
 		COVERS,
+		PICK_FIRST,
 		SLEEPING_BAG_NOTE,
 		coversLeftText,
 		dropResult,
+		pickedHint,
+		placedHint,
 		wrongDropHint,
 		type Cover
 	} from '$lib/booking-check';
@@ -41,11 +47,14 @@ each places itself, and a live line says what is left.
 	/** The drawing's coordinate space (the SVG's viewBox): the bed, the floor and the Zzz above it. */
 	const VIEW = { y: 18, w: 320, h: 150 };
 	/**
-	 * Where each piece lies in the drawing, topmost first: the pillow and the
-	 * blanket lie on the mattress. `cx`/`cy` is where a cover lands.
+	 * The three pieces, side by side and never overlapping: the pillow on top
+	 * of the mattress's left end, the mattress's face below it, the blanket
+	 * over the rest. The boxes are what a tap or a drop hits (a little more
+	 * than the drawing, for fingers); `cx`/`cy` is where a cover lands.
 	 */
 	const PIECES: {
 		piece: Piece;
+		name: string;
 		x: number;
 		y: number;
 		w: number;
@@ -53,12 +62,12 @@ each places itself, and a live line says what is left.
 		cx: number;
 		cy: number;
 	}[] = [
-		{ piece: 'pillow', x: 26, y: 58, w: 86, h: 40, cx: 69, cy: 78 },
-		{ piece: 'blanket', x: 110, y: 78, w: 190, h: 56, cx: 212, cy: 105 },
-		{ piece: 'mattress', x: 18, y: 86, w: 284, h: 40, cx: 74, cy: 106 }
+		{ piece: 'pillow', name: 'Pillow', x: 24, y: 40, w: 94, h: 53, cx: 69, cy: 78 },
+		{ piece: 'mattress', name: 'Mattress', x: 18, y: 93, w: 132, h: 49, cx: 86, cy: 107 },
+		{ piece: 'blanket', name: 'Blanket', x: 150, y: 70, w: 154, h: 72, cx: 223, cy: 105 }
 	];
-	/** Fingers are wider than a mouse pointer: a drop this close still counts (viewBox units). */
-	const SLACK = 10;
+	/** A drop just next to a piece still counts (viewBox units), if no piece is hit exactly. */
+	const SLACK = 8;
 	/** A press that moves this far (px) is a drag, not a tap. */
 	const DRAG_FROM = 6;
 	/** A click this soon after a drag ended belongs to the drag. */
@@ -73,24 +82,29 @@ each places itself, and a live line says what is left.
 	// duvet cover's starry sky (x, y, radius). Plain paths and circles.
 	const TICKING = Array.from({ length: 29 }, (_, i) => `M${31 + i * 9} 95V118`).join('');
 	const STARS: [number, number, number][] = [
-		[146, 100, 1.6],
-		[165, 115, 1.1],
-		[189, 101, 1.3],
-		[231, 100, 1.5],
-		[250, 114, 1.1],
-		[262, 103, 1],
-		[138, 111, 1],
-		[284, 113, 0.9]
+		[166, 100, 1.6],
+		[184, 118, 1.1],
+		[200, 99, 1.3],
+		[238, 99, 1.5],
+		[256, 119, 1.1],
+		[268, 104, 1],
+		[160, 112, 1],
+		[290, 116, 0.9]
 	];
 	const BLANKET =
-		'M112 88Q112 80 120 80L288 80Q296 80 296 88L296 125Q283 131 269 126Q255 121 241 127Q227 133 213 127Q199 121 185 127Q171 133 157 127Q143 121 131 126L126 128L126 96Q121 92 113 92Z';
+		'M134 88Q134 80 142 80L288 80Q296 80 296 88L296 125Q284 131 271 126Q258 121 245 127Q232 133 219 127Q206 121 193 127Q180 133 167 127Q158 123 153 126L150 128L150 96Q146 92 135 92Z';
 
 	let placed = $state<Record<Cover['id'], boolean>>({ sheet: false, duvet: false, case: false });
 	/** Covers on their way (a flight or a drag): their bag spot shows them lifted. */
 	let lifted = $state<Record<Cover['id'], boolean>>({ sheet: false, duvet: false, case: false });
+	/** The cover in the guest's hand (tapped in the bag), waiting for its place on the bed. */
+	let picked = $state<Cover['id'] | null>(null);
+	/** The piece that just refused a cover: it shakes for a moment. */
+	let nope = $state<Piece | null>(null);
 	let left = $derived(COVERS.filter((cover) => !placed[cover.id]).length);
 	let made = $derived(left === 0);
-	let hint = $state('');
+	/** The line under the bag: what to do, what went wrong, what went right. */
+	let status = $state<{ text: string; tone: 'ask' | 'nope' | 'ok' } | null>(null);
 	let announce = $state('');
 
 	interface Flight {
@@ -105,6 +119,7 @@ each places itself, and a live line says what is left.
 	let flights = $state<Flight[]>([]);
 	let bursts = $state<{ key: number; cover: Cover }[]>([]);
 	let nextKey = 0;
+	let nopeTimer: ReturnType<typeof setTimeout> | undefined;
 
 	let drag = $state<{ cover: Cover; at: Point; over: Piece | null; fits: boolean } | null>(null);
 	let press: { pointer: number; x: number; y: number; cover: Cover } | null = null;
@@ -113,7 +128,11 @@ each places itself, and a live line says what is left.
 	let root: HTMLDivElement;
 	let bed: SVGSVGElement;
 	const buttons: Partial<Record<Cover['id'], HTMLButtonElement>> = {};
+	const spots: Partial<Record<Piece, HTMLButtonElement>> = {};
 	let pledge = $state<HTMLButtonElement>();
+
+	const coverOn = (piece: Piece) => COVERS.find((cover) => cover.piece === piece)!;
+	const isCovered = (piece: Piece) => placed[coverOn(piece).id];
 
 	function quiet(): boolean {
 		return (
@@ -121,6 +140,11 @@ each places itself, and a live line says what is left.
 			window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
 			typeof Element.prototype.animate !== 'function'
 		);
+	}
+
+	function say(text: string, tone: 'ask' | 'nope' | 'ok') {
+		status = { text, tone };
+		announce = text;
 	}
 
 	/** A point inside the component, from a point on the screen. */
@@ -150,11 +174,12 @@ each places itself, and a live line says what is left.
 		if (!box.width || !box.height) return null;
 		const vx = ((x - box.left) / box.width) * VIEW.w;
 		const vy = VIEW.y + ((y - box.top) / box.height) * VIEW.h;
-		const hit = PIECES.find(
-			(p) =>
-				vx >= p.x - SLACK && vx <= p.x + p.w + SLACK && vy >= p.y - SLACK && vy <= p.y + p.h + SLACK
-		);
-		return hit?.piece ?? null;
+		const inside = (slack: number) =>
+			PIECES.find(
+				(p) =>
+					vx >= p.x - slack && vx < p.x + p.w + slack && vy >= p.y - slack && vy < p.y + p.h + slack
+			);
+		return (inside(0) ?? inside(SLACK))?.piece ?? null;
 	}
 
 	/** The cover is on its piece: count it, cheer, and move on. */
@@ -162,10 +187,13 @@ each places itself, and a live line says what is left.
 		if (placed[cover.id]) return;
 		placed[cover.id] = true;
 		lifted[cover.id] = false;
-		hint = '';
-		announce = made
-			? 'Bed made! Now pack a bed sheet, a duvet cover and a pillowcase.'
-			: `${cover.name} on the ${cover.piece}. ${coversLeftText(left)}.`;
+		if (picked === cover.id) picked = null;
+		if (made) {
+			status = null;
+			announce = 'Bed made! Now pack a bed sheet, a duvet cover and a pillowcase.';
+		} else {
+			say(placedHint(cover, left), 'ok');
+		}
 		if (!quiet()) {
 			const key = nextKey++;
 			bursts.push({ key, cover });
@@ -176,17 +204,18 @@ each places itself, and a live line says what is left.
 		} catch {
 			/* no vibration on this device */
 		}
-		void moveFocus(cover);
+		void moveFocus();
 	}
 
 	/**
-	 * Keeps the keyboard where it was going: from a placed cover to the next
-	 * one, and to "I'll pack them" once the bed is made. A guest who is busy
+	 * Keeps the keyboard where it was going: on to the next cover in the bag,
+	 * and to "I'll pack them" once the bed is made. A guest who is busy
 	 * elsewhere in the dialog keeps their focus.
 	 */
-	async function moveFocus(from: Cover) {
+	async function moveFocus() {
 		const active = document.activeElement;
-		if (active && active !== document.body && active !== buttons[from.id]) return;
+		const ours = !active || active === document.body || root.contains(active);
+		if (!ours) return;
 		await tick();
 		if (made) {
 			pledge?.focus();
@@ -194,6 +223,22 @@ each places itself, and a live line says what is left.
 		}
 		const next = COVERS.find((cover) => !placed[cover.id] && !lifted[cover.id]);
 		if (next) buttons[next.id]?.focus();
+	}
+
+	/** The piece refuses a cover: it shakes (again, if it still shakes) and says where the cover goes. */
+	function refuse(cover: Cover, piece: Piece) {
+		say(wrongDropHint(cover, piece), 'nope');
+		clearTimeout(nopeTimer);
+		nope = null;
+		requestAnimationFrame(() => {
+			nope = piece;
+			nopeTimer = setTimeout(() => (nope = null), 450);
+		});
+		try {
+			navigator.vibrate?.([10, 40, 10]);
+		} catch {
+			/* no vibration on this device */
+		}
 	}
 
 	function fly(cover: Cover, from: Point, to: Point, ms: number, home = false) {
@@ -208,7 +253,7 @@ each places itself, and a live line says what is left.
 		else put(flight.cover);
 	}
 
-	/** Plays one flight on its ghost: an arc for a tap, straight for a settle or the way home. */
+	/** Plays one flight on its ghost: an arc from the bag, straight for a settle or the way home. */
 	function flightPath(node: HTMLElement, flight: Flight) {
 		const at = ({ x, y }: Point, scale: number, turn: number) =>
 			`translate(${x - GHOST.w / 2}px, ${y - GHOST.h / 2}px) scale(${scale}) rotate(${turn}deg)`;
@@ -236,31 +281,73 @@ each places itself, and a live line says what is left.
 		return { destroy: () => animation.cancel() };
 	}
 
-	/** A tap, Enter or Space: the cover flies onto its piece. */
-	function tapCover(cover: Cover, event: MouseEvent) {
+	/**
+	 * A tap (or Enter/Space) on a cover in the bag picks it up; the same tap
+	 * again puts it back. From the keyboard, the focus moves on to the bed.
+	 */
+	async function tapCover(cover: Cover, event: MouseEvent) {
 		if (performance.now() - dragEndedAt < OWN_CLICK_MS) return;
 		if (placed[cover.id] || lifted[cover.id]) return;
-		if (quiet()) {
-			put(cover);
+		if (picked === cover.id) {
+			picked = null;
+			say(`${cover.name} back in the bag.`, 'ask');
 			return;
 		}
-		const icon = (event.currentTarget as HTMLElement).querySelector('.icon') ?? event.currentTarget;
-		fly(cover, centreOf(icon as Element), landingOf(cover.piece), FLY_MS);
+		picked = cover.id;
+		say(pickedHint(cover), 'ask');
+		// detail 0: Enter or Space, not a pointer
+		if (event.detail === 0) {
+			await tick();
+			PIECES.map((p) => spots[p.piece])
+				.find((spot) => spot && !spot.disabled)
+				?.focus();
+		}
+	}
+
+	/** A tap on a piece of the bed: the cover in hand goes there if it belongs there. */
+	function tapSpot(piece: Piece) {
+		if (!picked) {
+			say(PICK_FIRST, 'nope');
+			return;
+		}
+		const cover = COVERS.find((c) => c.id === picked)!;
+		if (dropResult(cover, piece) !== 'fits') {
+			refuse(cover, piece);
+			return;
+		}
+		picked = null;
+		const icon = buttons[cover.id]?.querySelector('.icon') ?? buttons[cover.id];
+		if (quiet() || !icon) put(cover);
+		else fly(cover, centreOf(icon), landingOf(piece), FLY_MS);
 	}
 
 	function pointerDown(cover: Cover, event: PointerEvent) {
 		if (placed[cover.id] || lifted[cover.id]) return;
 		if (event.pointerType === 'mouse' && event.button !== 0) return;
+		// One cover by hand at a time. A second finger on another cover would take
+		// over the press, the first finger's events would be ignored from then on,
+		// and its cover would stay lifted for good: no bed could be made any more.
+		// (A finger resting elsewhere on the screen is fine: only a press counts.)
+		if (press) return;
+		try {
+			(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+		} catch {
+			// Not a live pointer (setPointerCapture throws NotFoundError): a pointerdown
+			// sent by a script, with no up or cancel ever to come. Kept as a press, it
+			// would refuse every drag after it. A tap still picks the cover up.
+			return;
+		}
 		press = { pointer: event.pointerId, x: event.clientX, y: event.clientY, cover };
-		(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
 	}
 
 	function pointerMove(event: PointerEvent) {
 		if (!press || event.pointerId !== press.pointer) return;
 		if (!drag) {
 			if (Math.hypot(event.clientX - press.x, event.clientY - press.y) < DRAG_FROM) return;
+			// a drag takes the cover by hand: whatever was picked goes back
+			picked = null;
 			lifted[press.cover.id] = true;
-			hint = '';
+			status = null;
 		}
 		const over = pieceAt(event.clientX, event.clientY);
 		drag = {
@@ -271,14 +358,15 @@ each places itself, and a live line says what is left.
 		};
 	}
 
-	/** Letting go: on the right piece it settles there, anywhere else it flies home. */
+	/** Letting go: on its own piece it settles there, anywhere else it flies home. */
 	function pointerUp(event: PointerEvent, cancelled = false) {
 		if (!press || event.pointerId !== press.pointer) return;
 		const ended = drag;
-		const cover = press.cover;
+		// the cover the drag holds; without a drag the press's (a tap)
+		const cover = ended?.cover ?? press.cover;
 		press = null;
 		drag = null;
-		if (!ended) return; // a tap: the click after it flies the cover
+		if (!ended) return; // a tap: the click after it picks the cover up
 		dragEndedAt = performance.now();
 		const result = cancelled ? 'off' : dropResult(cover, ended.over);
 		const motion = !quiet();
@@ -287,119 +375,139 @@ each places itself, and a live line says what is left.
 			else put(cover);
 			return;
 		}
-		hint =
-			result === 'wrong' && ended.over
-				? wrongDropHint(cover, ended.over)
-				: cancelled
-					? ''
-					: 'Drop it on the bed — or just tap it.';
+		if (result === 'wrong' && ended.over) refuse(cover, ended.over);
+		else if (!cancelled)
+			say(
+				`Put it on its place on the bed — the ${cover.name.toLowerCase()} goes on the ${cover.piece}.`,
+				'nope'
+			);
 		const home = buttons[cover.id];
 		if (motion && home) fly(cover, ended.at, centreOf(home), HOME_MS, true);
 		else lifted[cover.id] = false;
 	}
 </script>
 
-<div class="make-bed" class:made bind:this={root}>
+<div class="make-bed" class:made class:picking={!!picked} bind:this={root}>
 	<h2 id={titleId} class="title">Make your bed <span aria-hidden="true">🛏️</span></h2>
 	<p class="lead">
-		The hostel provides the <strong>pillow</strong> and the <strong>blanket</strong>. The
-		<strong>covers</strong> come from your bag: tap each one, or drag it onto the bed.
+		The hostel provides the <strong>pillow</strong> and the <strong>blanket</strong>. Your bag holds
+		the <strong>covers</strong>: put each one on its own piece — drag it there, or tap the cover and
+		then its place on the bed.
 	</p>
 
 	<div class="stage">
-		<svg
-			bind:this={bed}
-			class="bed"
-			viewBox="0 {VIEW.y} {VIEW.w} {VIEW.h}"
-			aria-hidden="true"
-			focusable="false"
-		>
-			<ellipse class="floor" cx="160" cy="160" rx="150" ry="5" />
-			<rect class="frame" x="8" y="40" width="14" height="118" rx="5" />
-			<rect class="frame" x="298" y="80" width="14" height="78" rx="5" />
-			<rect class="rail" x="16" y="120" width="288" height="12" rx="3" />
-
-			<g
-				class="piece"
-				class:target={drag?.over === 'mattress' && drag.fits}
-				class:nope={drag?.over === 'mattress' && !drag.fits}
-			>
-				<rect class="bare" x="22" y="90" width="276" height="32" rx="10" />
-				<path class="texture" d={TICKING} />
-				<text class="label" x="74" y="110" text-anchor="middle">MATTRESS</text>
-			</g>
-			{#if placed.sheet}
-				<g class="cover-layer sheet">
-					<rect class="fabric" x="21" y="89" width="278" height="34" rx="11" />
-					<path class="seam" d="M30 118Q160 123 290 118" />
-					<path class="seam" d="M26 97q5-5 12-2M294 97q-5-5-12-2" />
-					<text class="label" x="74" y="110" text-anchor="middle">BED SHEET</text>
-				</g>
-			{/if}
-
-			<g
-				class="piece"
-				class:target={drag?.over === 'pillow' && drag.fits}
-				class:nope={drag?.over === 'pillow' && !drag.fits}
-			>
-				<rect class="bare" x="28" y="62" width="82" height="32" rx="16" />
-				<path class="texture" d="M38 71Q69 67 100 71" />
-				<text class="label" x="69" y="82" text-anchor="middle">PILLOW</text>
-			</g>
-			{#if placed.case}
-				<g class="cover-layer case">
-					<rect class="fabric" x="27" y="61" width="84" height="34" rx="17" />
-					<path class="seam" d="M99 63Q106 78 99 93" />
-					<text class="label" x="64" y="82" text-anchor="middle">PILLOWCASE</text>
-				</g>
-			{/if}
-
-			<g
-				class="piece"
-				class:target={drag?.over === 'blanket' && drag.fits}
-				class:nope={drag?.over === 'blanket' && !drag.fits}
-			>
-				<path class="bare" d={BLANKET} />
-				<path
-					class="texture"
-					d="M134 96H290M134 104H290M134 112H290M152 88V121M182 88V121M242 88V121M272 88V121"
-				/>
-				<text class="label" x="212" y="109" text-anchor="middle">BLANKET</text>
-			</g>
-			{#if placed.duvet}
-				<g class="cover-layer duvet">
-					<path class="fabric" d={BLANKET} />
-					<path
-						class="fold"
-						d="M112 88Q112 80 120 80L288 80Q296 80 296 88L296 93L113 93Q112 91 112 88Z"
-					/>
-					{#each STARS as [cx, cy, r], i (i)}
-						<circle class="star" {cx} {cy} {r} style="--i: {i}" />
-					{/each}
-					<path class="moon" d="M277 98a6 6 0 1 0 6 9.5a4.6 4.6 0 1 1-6-9.5Z" />
-					<text class="label" x="208" y="111" text-anchor="middle">DUVET COVER</text>
-				</g>
-			{/if}
-
-			{#if made}
-				<g class="zzz">
-					<text x="116" y="54" style="--i: 0">z</text>
-					<text x="127" y="42" style="--i: 1">z</text>
-					<text x="139" y="30" style="--i: 2">Z</text>
-				</g>
-			{/if}
-		</svg>
-
-		{#each bursts as burst (burst.key)}
-			{@const spot = PIECES.find((p) => p.piece === burst.cover.piece)!}
-			<span
-				class="burst {burst.cover.id}"
-				style="left: {(spot.cx / VIEW.w) * 100}%; top: {((spot.cy - VIEW.y) / VIEW.h) * 100}%"
+		<div class="bed-box">
+			<svg
+				bind:this={bed}
+				class="bed"
+				viewBox="0 {VIEW.y} {VIEW.w} {VIEW.h}"
 				aria-hidden="true"
+				focusable="false"
 			>
-				{#each [0, 1, 2, 3, 4, 5] as ray (ray)}<i style="--ray: {ray}"></i>{/each}
-			</span>
-		{/each}
+				<ellipse class="floor" cx="160" cy="160" rx="150" ry="5" />
+				<rect class="frame" x="8" y="40" width="14" height="118" rx="5" />
+				<rect class="frame" x="298" y="80" width="14" height="78" rx="5" />
+				<rect class="rail" x="16" y="120" width="288" height="12" rx="3" />
+
+				<g
+					class="piece"
+					class:target={drag?.over === 'mattress' && drag.fits}
+					class:nope={(drag?.over === 'mattress' && !drag.fits) || nope === 'mattress'}
+				>
+					<rect class="bare" x="22" y="90" width="276" height="32" rx="10" />
+					<path class="texture" d={TICKING} />
+					<text class="label" x="86" y="110" text-anchor="middle">MATTRESS</text>
+				</g>
+				{#if placed.sheet}
+					<g class="cover-layer sheet">
+						<rect class="fabric" x="21" y="89" width="278" height="34" rx="11" />
+						<path class="seam" d="M30 118Q160 123 290 118" />
+						<path class="seam" d="M26 97q5-5 12-2M294 97q-5-5-12-2" />
+						<text class="label" x="86" y="110" text-anchor="middle">BED SHEET</text>
+					</g>
+				{/if}
+
+				<g
+					class="piece"
+					class:target={drag?.over === 'pillow' && drag.fits}
+					class:nope={(drag?.over === 'pillow' && !drag.fits) || nope === 'pillow'}
+				>
+					<rect class="bare" x="28" y="62" width="82" height="32" rx="16" />
+					<path class="texture" d="M38 71Q69 67 100 71" />
+					<text class="label" x="69" y="82" text-anchor="middle">PILLOW</text>
+				</g>
+				{#if placed.case}
+					<g class="cover-layer case">
+						<rect class="fabric" x="27" y="61" width="84" height="34" rx="17" />
+						<path class="seam" d="M99 63Q106 78 99 93" />
+						<text class="label" x="64" y="82" text-anchor="middle">PILLOWCASE</text>
+					</g>
+				{/if}
+
+				<g
+					class="piece"
+					class:target={drag?.over === 'blanket' && drag.fits}
+					class:nope={(drag?.over === 'blanket' && !drag.fits) || nope === 'blanket'}
+				>
+					<path class="bare" d={BLANKET} />
+					<path
+						class="texture"
+						d="M156 96H290M156 104H290M156 112H290M176 88V121M206 88V121M236 88V121M266 88V121"
+					/>
+					<text class="label" x="223" y="109" text-anchor="middle">BLANKET</text>
+				</g>
+				{#if placed.duvet}
+					<g class="cover-layer duvet">
+						<path class="fabric" d={BLANKET} />
+						<path
+							class="fold"
+							d="M134 88Q134 80 142 80L288 80Q296 80 296 88L296 93L135 93Q134 91 134 88Z"
+						/>
+						{#each STARS as [cx, cy, r], i (i)}
+							<circle class="star" {cx} {cy} {r} style="--i: {i}" />
+						{/each}
+						<path class="moon" d="M277 98a6 6 0 1 0 6 9.5a4.6 4.6 0 1 1-6-9.5Z" />
+						<text class="label" x="223" y="111" text-anchor="middle">DUVET COVER</text>
+					</g>
+				{/if}
+
+				{#if made}
+					<g class="zzz">
+						<text x="116" y="54" style="--i: 0">z</text>
+						<text x="127" y="42" style="--i: 1">z</text>
+						<text x="139" y="30" style="--i: 2">Z</text>
+					</g>
+				{/if}
+			</svg>
+
+			<!-- The pieces as buttons, over the drawing: what a tap, the keyboard and
+			     a screen reader use. A covered piece is done. -->
+			{#each PIECES as p (p.piece)}
+				<button
+					type="button"
+					class="spot"
+					disabled={isCovered(p.piece) || made}
+					bind:this={spots[p.piece]}
+					style="left: {(p.x / VIEW.w) * 100}%; top: {((p.y - VIEW.y) / VIEW.h) *
+						100}%; width: {(p.w / VIEW.w) * 100}%; height: {(p.h / VIEW.h) * 100}%"
+					aria-label={isCovered(p.piece)
+						? `${p.name}: ${coverOn(p.piece).name.toLowerCase()} on`
+						: p.name}
+					onclick={() => tapSpot(p.piece)}
+				></button>
+			{/each}
+
+			{#each bursts as burst (burst.key)}
+				{@const spot = PIECES.find((p) => p.piece === burst.cover.piece)!}
+				<span
+					class="burst {burst.cover.id}"
+					style="left: {(spot.cx / VIEW.w) * 100}%; top: {((spot.cy - VIEW.y) / VIEW.h) * 100}%"
+					aria-hidden="true"
+				>
+					{#each [0, 1, 2, 3, 4, 5] as ray (ray)}<i style="--ray: {ray}"></i>{/each}
+				</span>
+			{/each}
+		</div>
 	</div>
 
 	{#if !made}
@@ -411,11 +519,11 @@ each places itself, and a live line says what is left.
 						type="button"
 						class="cover {cover.id}"
 						class:lifted={lifted[cover.id]}
+						class:picked={picked === cover.id}
 						disabled={placed[cover.id]}
 						bind:this={buttons[cover.id]}
-						aria-label={placed[cover.id]
-							? `${cover.name}: on the ${cover.piece}`
-							: `Put the ${cover.name.toLowerCase()} on the ${cover.piece}`}
+						aria-pressed={placed[cover.id] ? undefined : picked === cover.id}
+						aria-label={placed[cover.id] ? `${cover.name}: on the ${cover.piece}` : cover.name}
 						onclick={(event) => tapCover(cover, event)}
 						onpointerdown={(event) => pointerDown(cover, event)}
 						onpointermove={pointerMove}
@@ -435,13 +543,16 @@ each places itself, and a live line says what is left.
 				{/each}
 			</div>
 		</div>
-		<p class="status" class:hint={!!hint} aria-hidden="true">{hint || coversLeftText(left)}</p>
+		<p class="status {status?.tone ?? 'count'}" aria-hidden="true">
+			{status?.text || coversLeftText(left)}
+		</p>
 	{:else}
 		<div class="made-card" in:fade={{ duration: 220 }}>
 			<p class="made-title"><span aria-hidden="true">✨</span> Bed made!</p>
 			<p class="made-text">
-				Now pack these three for real: <strong>bed sheet</strong>, <strong>duvet cover</strong> and
-				<strong>pillowcase</strong>. Pillow and blanket are waiting for you.
+				Now pack these three for real: a <strong>bed sheet</strong> for the mattress, a
+				<strong>duvet cover</strong> for the blanket and a <strong>pillowcase</strong> for the pillow.
+				Pillow and blanket are waiting for you.
 			</p>
 			<p class="made-note"><span aria-hidden="true">🛌</span> {SLEEPING_BAG_NOTE}</p>
 			<button type="button" class="pledge" bind:this={pledge} onclick={() => onpacked()}>
@@ -548,11 +659,35 @@ each places itself, and a live line says what is left.
 		animation: made-glow 1.6s ease-out 2;
 	}
 
+	/* The drawing and the buttons over it share one box, so the buttons'
+	   percentages are the drawing's. */
+	.bed-box {
+		position: relative;
+	}
 	.bed {
 		display: block;
 		width: 100%;
 		height: auto;
 		overflow: visible;
+	}
+
+	/* The three pieces as buttons: invisible over the drawing, outlined when
+	   the keyboard is on one. */
+	.spot {
+		position: absolute;
+		padding: 0;
+		border: 0;
+		border-radius: 14px;
+		background: transparent;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+	.spot:disabled {
+		cursor: default;
+	}
+	.spot:focus-visible {
+		outline: 2px solid #fff;
+		outline-offset: -2px;
 	}
 	.floor {
 		fill: rgba(0, 0, 0, 0.45);
@@ -594,8 +729,13 @@ each places itself, and a live line says what is left.
 		stroke-width: 3px;
 		stroke-linejoin: round;
 	}
+	/* A cover in hand: the bare pieces light up, waiting for a tap. */
+	.make-bed.picking .bare {
+		stroke: #d8b4fe;
+	}
 	/* While a cover is dragged over a piece: a solid white edge when it fits
-	   there, red when it doesn't. */
+	   there, red when it doesn't. A piece that refuses a cover also shakes,
+	   once (transform only). */
 	.piece.target .bare {
 		stroke: #fff;
 		stroke-dasharray: none;
@@ -603,6 +743,9 @@ each places itself, and a live line says what is left.
 	.piece.nope .bare {
 		stroke: #fb7185;
 		stroke-dasharray: none;
+	}
+	.piece.nope {
+		animation: piece-shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97);
 	}
 
 	/* The covers: each comes on with a move of its own. */
@@ -787,6 +930,16 @@ each places itself, and a live line says what is left.
 		outline: 2px solid #fff;
 		outline-offset: 2px;
 	}
+	/* In hand: it stands up out of the bag until its place is tapped. */
+	.cover.picked {
+		transform: translateY(-4px);
+		border-width: 2px;
+		border-color: #fff;
+		background: #17121f;
+	}
+	.cover.picked:hover:not(:disabled) {
+		transform: translateY(-4px);
+	}
 	/* On its way to the bed: the bag keeps an empty spot. */
 	.cover.lifted .icon {
 		opacity: 0.15;
@@ -863,20 +1016,29 @@ each places itself, and a live line says what is left.
 		stroke: rgba(244, 114, 182, 0.8);
 	}
 
+	/* What to do next, what went wrong, what went right — or the count. */
 	.status {
 		margin: 0.55rem 0 0;
 		min-height: 1.3em;
-		font-size: 0.8rem;
+		font-size: 0.85rem;
 		font-weight: 800;
+		line-height: 1.4;
+		text-align: center;
+	}
+	.status.count {
+		font-size: 0.8rem;
 		letter-spacing: 1px;
 		text-transform: uppercase;
 		color: #8a8a8a;
-		text-align: center;
 	}
-	.status.hint {
+	.status.ask {
+		color: #e9d5ff;
+	}
+	.status.nope {
 		color: #fda4af;
-		text-transform: none;
-		letter-spacing: 0;
+	}
+	.status.ok {
+		color: #99f6e4;
 	}
 
 	/* The cover in the air. Absolute inside the component, moved by transform
@@ -1009,6 +1171,16 @@ each places itself, and a live line says what is left.
 			transform: rotate(calc(var(--ray) * 60deg)) translateY(-12px) scaleY(1);
 		}
 	}
+	@keyframes piece-shake {
+		20%,
+		60% {
+			transform: translateX(-4px);
+		}
+		40%,
+		80% {
+			transform: translateX(4px);
+		}
+	}
 	@keyframes made-glow {
 		50% {
 			opacity: 1;
@@ -1017,6 +1189,7 @@ each places itself, and a live line says what is left.
 
 	@media (prefers-reduced-motion: reduce) {
 		.cover-layer,
+		.piece.nope,
 		.make-bed.made .star,
 		.make-bed.made .stage::after,
 		.zzz text {
@@ -1027,6 +1200,7 @@ each places itself, and a live line says what is left.
 		}
 		.cover,
 		.cover:hover:not(:disabled),
+		.cover.picked,
 		.pledge:hover {
 			transform: none;
 			transition: none;

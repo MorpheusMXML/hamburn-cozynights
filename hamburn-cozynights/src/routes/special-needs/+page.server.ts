@@ -33,8 +33,11 @@ import {
 	cleanBurnerName,
 	formatGroupCode,
 	GROUP_MAX,
+	isFormNeed,
 	normalizeGroupCode,
 	parseRequestForm,
+	readRequestPath,
+	requestPath,
 	type RequestFormResult
 } from '$lib/special-needs';
 
@@ -55,7 +58,10 @@ const codeMisses = new FailureRateLimiter(5, 15 * 60 * 1000);
 /**
  * What the guest typed, sent back on a failure so nothing is lost (it's the
  * guest's own text). The group fields come back as typed, so a wrong code can
- * be corrected.
+ * be corrected; the path as chosen ('' for none). The boxes come back as
+ * ticked under every path, not only the ones the chosen path keeps: a guest
+ * without JavaScript who picked the wrong path switches it and sends again
+ * without ticking anything twice. Saving still keeps only the chosen path's.
  */
 function typedValues(parsed: RequestFormResult, form: FormData) {
 	const typed = (name: string) => {
@@ -63,7 +69,8 @@ function typedValues(parsed: RequestFormResult, form: FormData) {
 		return typeof value === 'string' ? value.trim().slice(0, 200) : '';
 	};
 	return {
-		needs: parsed.value.needs,
+		about: readRequestPath(form.get('about')) ?? '',
+		needs: [...new Set(form.getAll('needs'))].filter(isFormNeed),
 		text: parsed.value.text,
 		burnerName: parsed.value.burnerName,
 		groupMode: parsed.value.group.mode,
@@ -154,6 +161,8 @@ export const load: PageServerLoad = async ({ locals, cookies, setHeaders, url })
 
 		return {
 			request,
+			// the path the form preselects when the guest changes the request
+			requestAbout: request ? requestPath(request.needs) : null,
 			requestsOpen: settings.requestsOpen,
 			isBookingActive: settings.isBookingActive,
 			// what this page says about booking; Closed with an opening armed reads as "not open yet"

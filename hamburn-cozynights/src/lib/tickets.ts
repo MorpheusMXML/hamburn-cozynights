@@ -8,7 +8,7 @@
  *
  * The server CLI (`cozy-admin tickets import` in pb_hooks/cozy_admin.pb.js)
  * reads the same files by the same rules. Keep TICKET_CODE_PATTERN,
- * GUEST_EMAIL_PATTERN and TICKET_CSV_COLUMNS in sync with it;
+ * GUEST_EMAIL_PATTERN, TICKET_CSV_COLUMNS and PAID_ORDER_STATUSES in sync with it;
  * tests/tickets.test.ts compares them.
  */
 
@@ -39,16 +39,34 @@ export const TICKET_CSV_COLUMNS = {
 		'secret'
 	],
 	email: ['email', 'e-mail', 'mail', 'email address', 'e-mail address', 'attendee email'],
-	name: ['name', 'customer name', 'attendee', 'attendee name', 'full name']
+	name: ['name', 'customer name', 'attendee', 'attendee name', 'full name'],
+	status: ['status', 'order status', 'payment status']
 } as const;
+
+/**
+ * Order states (lower case) that make a ticket. A file with a status column
+ * (pretix exports "paid", "pending", "canceled", "expired") only brings in its
+ * paid orders; an empty cell counts as paid, like a file without the column.
+ */
+export const PAID_ORDER_STATUSES = ['paid', 'p', 'bezahlt'];
+
+/** The order is paid, or the file doesn't say. */
+export function isPaidStatus(raw: unknown): boolean {
+	const status = (typeof raw === 'string' ? raw : '').trim().toLowerCase();
+	return !status || PAID_ORDER_STATUSES.includes(status);
+}
 
 export type TicketColumn = keyof typeof TICKET_CSV_COLUMNS;
 
 /** Column index per field; -1 = not in the file. */
 export type ColumnMap = Record<TicketColumn, number>;
 
-/** Zero-width characters that copy & paste likes to bring along. */
-const INVISIBLE = /[\u200B-\u200D\uFEFF]/g;
+/**
+ * Zero-width characters that copy & paste likes to bring along. The server CLI
+ * strips the same ones (INVISIBLE_CHARS in pb_hooks/cozy_admin.pb.js).
+ */
+export const INVISIBLE_CHARS = /[\u200B-\u200D\uFEFF]/g;
+const INVISIBLE = INVISIBLE_CHARS;
 
 /** A ticket code as typed or pasted: without surrounding spaces and invisible characters. */
 export function cleanTicketCode(raw: unknown): string {
@@ -204,7 +222,7 @@ export function detectColumns(header: string[]): ColumnMap {
 	const names = header.map(headerKey);
 	const find = (column: TicketColumn) =>
 		names.findIndex((name) => (TICKET_CSV_COLUMNS[column] as readonly string[]).includes(name));
-	return { code: find('code'), email: find('email'), name: find('name') };
+	return { code: find('code'), email: find('email'), name: find('name'), status: find('status') };
 }
 
 /** Every header column that could hold this field: offered as choices in the review. */
@@ -215,13 +233,15 @@ export function candidateColumns(header: string[], column: TicketColumn): number
 		.map(({ index }) => index);
 }
 
-/** One data row of the file: the cells of the three columns that matter, as they are. */
+/** One data row of the file: the cells of the columns that matter, as they are. */
 export interface RosterRow {
 	/** Row in the file (the header is row 1), as a spreadsheet counts it. */
 	line: number;
 	code: string;
 	email: string;
 	name: string;
+	/** The order's state in the shop; '' or missing = no status column. */
+	status?: string;
 }
 
 export interface RosterEntry {
@@ -237,6 +257,14 @@ export interface RosterProblem {
 	line: number;
 	code: string;
 	message: string;
+}
+
+/** A row the shop lists as not paid (cancelled, pending, …): left out of the import. */
+export interface RosterUnpaid {
+	line: number;
+	code: string;
+	/** As the file writes it, in lower case. */
+	status: string;
 }
 
 export type RosterFileResult =
@@ -274,7 +302,12 @@ export function readRosterFile(text: string, columns?: Partial<ColumnMap>): Rost
 			chosen < header.length;
 		return valid ? chosen : detected[column];
 	};
-	const map: ColumnMap = { code: pick('code'), email: pick('email'), name: pick('name') };
+	const map: ColumnMap = {
+		code: pick('code'),
+		email: pick('email'),
+		name: pick('name'),
+		status: pick('status')
+	};
 	if (map.code < 0) {
 		return {
 			ok: false,
@@ -288,7 +321,14 @@ export function readRosterFile(text: string, columns?: Partial<ColumnMap>): Rost
 		if (isBlank(records[r])) continue;
 		const cell = (index: number) =>
 			index >= 0 && index < records[r].length ? records[r][index] : '';
-		rows.push({ line: r + 1, code: cell(map.code), email: cell(map.email), name: cell(map.name) });
+		const row: RosterRow = {
+			line: r + 1,
+			code: cell(map.code),
+			email: cell(map.email),
+			name: cell(map.name)
+		};
+		if (map.status >= 0) row.status = cell(map.status);
+		rows.push(row);
 	}
 	if (rows.length === 0) {
 		return { ok: false, header, error: 'The file has a header line but no tickets.' };
@@ -305,14 +345,17 @@ export function readRosterFile(text: string, columns?: Partial<ColumnMap>): Rost
 
 /**
  * Checks the rows. Broken ones become problems: they are listed and left out,
- * the rest can still be imported.
+ * the rest can still be imported. Orders the shop lists as not paid are left
+ * out too, as `unpaid`.
  */
 export function checkRosterRows(rows: RosterRow[]): {
 	entries: RosterEntry[];
 	problems: RosterProblem[];
+	unpaid: RosterUnpaid[];
 } {
 	const entries: RosterEntry[] = [];
 	const problems: RosterProblem[] = [];
+	const unpaid: RosterUnpaid[] = [];
 	const lineOfCode = new Map<string, number>();
 	for (const row of rows) {
 		const line = row.line;
@@ -323,8 +366,9 @@ export function checkRosterRows(rows: RosterRow[]): {
 		const code = clean(row.code);
 		const email = clean(row.email).toLowerCase();
 		const name = clean(row.name);
+		const status = clean(row.status ?? '').toLowerCase();
 
-		if (/[\r\n]/.test(`${row.code}${row.email}${row.name}`)) {
+		if (/[\r\n]/.test(`${row.code}${row.email}${row.name}${row.status ?? ''}`)) {
 			problems.push({
 				line,
 				code: code.split(/\s/)[0] ?? '',
@@ -338,6 +382,8 @@ export function checkRosterRows(rows: RosterRow[]): {
 				code,
 				message: 'invalid ticket code: only letters, digits, "-" and "_", at most 64 characters'
 			});
+		} else if (!isPaidStatus(status)) {
+			unpaid.push({ line, code, status: status.slice(0, 40) });
 		} else if (email && !isValidGuestEmail(email)) {
 			problems.push({ line, code, message: `invalid e-mail address "${email}"` });
 		} else if (name.length > TICKET_LIMITS.nameLength) {
@@ -357,7 +403,7 @@ export function checkRosterRows(rows: RosterRow[]): {
 			entries.push({ line, code, email, name });
 		}
 	}
-	return { entries, problems };
+	return { entries, problems, unpaid };
 }
 
 export type RosterParseResult =
@@ -367,6 +413,7 @@ export type RosterParseResult =
 			columns: ColumnMap;
 			entries: RosterEntry[];
 			problems: RosterProblem[];
+			unpaid: RosterUnpaid[];
 	  }
 	| { ok: false; error: string; header?: string[] };
 
@@ -389,6 +436,8 @@ export interface StoredTicket {
 	hasSpot: boolean;
 	/** A Telegram chat is linked for updates. */
 	telegram: boolean;
+	/** A ♿ special-needs request belongs to it. */
+	request: boolean;
 }
 
 export interface RosterChange {
@@ -408,12 +457,23 @@ export interface RosterChange {
 	nameChanged: boolean;
 	hasSpot: boolean;
 	telegram: boolean;
+	request: boolean;
 	/**
-	 * The address changes on a ticket that has something of its holder:
-	 * a spot or a Telegram link. The review offers to treat it as passed on.
+	 * The address changes on a ticket that has something of its holder: a
+	 * spot, a Telegram link or a ♿ request — also when it had no address yet
+	 * (the crew may have cleared a wrong one). Not ticked in advance
+	 * (defaultRosterSelection): taking it over needs a decision.
+	 */
+	needsTick: boolean;
+	/**
+	 * Like needsTick, but the address REPLACES one: only then can the ticket
+	 * go to somebody else, so only then the review offers 🔁 New holder.
 	 */
 	canBeNewHolder: boolean;
-	/** Pre-selected "passed on": address AND name change, like a ticket transfer in the shop. */
+	/**
+	 * Pre-selected "passed on": address AND name change, like a ticket transfer
+	 * in the shop — or the address changes and the file has no name to tell.
+	 */
 	suggestNewHolder: boolean;
 }
 
@@ -427,9 +487,14 @@ export interface RosterDiff {
 	 * the review ticks them for removal — which refers to `id`, because the
 	 * preview shortens their codes (previewRoster).
 	 */
-	notInFile: { id: string; code: string; hasSpot: boolean }[];
+	notInFile: { id: string; code: string; hasSpot: boolean; status?: string }[];
 	/** Addresses used by several tickets of the file (allowed, worth a look). */
 	sharedEmails: { email: string; codes: string[] }[];
+	/**
+	 * Rows the shop lists as not paid. `stored`: the ticket is in the database
+	 * (it is also under notInFile, where it can be deleted).
+	 */
+	unpaid: (RosterUnpaid & { stored: boolean })[];
 }
 
 /**
@@ -440,7 +505,8 @@ export interface RosterDiff {
 export function diffRoster(
 	entries: RosterEntry[],
 	stored: StoredTicket[],
-	problems: RosterProblem[] = []
+	problems: RosterProblem[] = [],
+	unpaid: RosterUnpaid[] = []
 ): RosterDiff {
 	const byKey = new Map<string, StoredTicket[]>();
 	for (const ticket of stored) {
@@ -492,6 +558,8 @@ export function diffRoster(
 				nameChanged: false,
 				hasSpot: false,
 				telegram: false,
+				request: false,
+				needsTick: false,
 				canBeNewHolder: false,
 				suggestNewHolder: false
 			});
@@ -508,7 +576,8 @@ export function diffRoster(
 			unchanged.push({ code: entry.code, line: entry.line });
 			continue;
 		}
-		const canBeNewHolder = emailChanged && !!ticket.email && (ticket.hasSpot || ticket.telegram);
+		const needsTick = emailChanged && (ticket.hasSpot || ticket.telegram || ticket.request);
+		const canBeNewHolder = needsTick && !!ticket.email;
 		changes.push({
 			key,
 			id: ticket.id,
@@ -522,15 +591,28 @@ export function diffRoster(
 			nameChanged,
 			hasSpot: ticket.hasSpot,
 			telegram: ticket.telegram,
+			request: ticket.request,
+			needsTick,
 			canBeNewHolder,
 			suggestNewHolder:
-				canBeNewHolder && nameChanged && ticket.name !== defaultTicketName(ticket.code)
+				canBeNewHolder &&
+				(entry.name ? nameChanged && ticket.name !== defaultTicketName(ticket.code) : true)
 		});
 	}
 
+	const statusOf = new Map(unpaid.map((row) => [row.code.toLowerCase(), row.status]));
 	const notInFile = stored
 		.filter((ticket) => !inFile.has(ticket.code.toLowerCase()))
-		.map((ticket) => ({ id: ticket.id, code: ticket.code, hasSpot: ticket.hasSpot }))
+		.map((ticket) => {
+			const status = statusOf.get(ticket.code.toLowerCase());
+			const item: RosterDiff['notInFile'][number] = {
+				id: ticket.id,
+				code: ticket.code,
+				hasSpot: ticket.hasSpot
+			};
+			if (status) item.status = status;
+			return item;
+		})
 		.sort((a, b) => a.code.localeCompare(b.code, 'en', { numeric: true }));
 
 	const codesByEmail = new Map<string, string[]>();
@@ -545,16 +627,30 @@ export function diffRoster(
 		.map(([email, codes]) => ({ email, codes }));
 
 	allProblems.sort((a, b) => a.line - b.line);
-	return { changes, unchanged, problems: allProblems, notInFile, sharedEmails };
+	const storedKeys = new Set(byKey.keys());
+	return {
+		changes,
+		unchanged,
+		problems: allProblems,
+		notInFile,
+		sharedEmails,
+		unpaid: unpaid.map((row) => ({ ...row, stored: storedKeys.has(row.code.toLowerCase()) }))
+	};
 }
 
-/** Selection the review starts with: every new and changed ticket. */
+/**
+ * Selection the review starts with: every new and changed ticket — except a
+ * new address on a ticket that carries something of its holder (a spot, a
+ * Telegram link, a ♿ request), also where it had none before (needsTick). Taking that over can mean a hand-over, or undo
+ * an address the crew corrected in the app, so it needs a deliberate tick.
+ * Its 🔁 New holder switch is still preset, for when it is ticked.
+ */
 export function defaultRosterSelection(diff: RosterDiff): {
 	selected: string[];
 	newHolders: string[];
 } {
 	return {
-		selected: diff.changes.map((change) => change.key),
+		selected: diff.changes.filter((change) => !change.needsTick).map((c) => c.key),
 		newHolders: diff.changes.filter((change) => change.suggestNewHolder).map((c) => c.key)
 	};
 }

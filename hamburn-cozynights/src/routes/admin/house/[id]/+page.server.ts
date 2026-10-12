@@ -122,7 +122,7 @@ export const actions: Actions = {
 	/**
 	 * ADD ROOMS: the size rows of the house generator ($lib/house-plan) —
 	 * "3 rooms × 4 beds", numbers after the house's last room, rolled names,
-	 * spots B1 … Bn (stacked in pairs with 🪜). All or nothing.
+	 * spots B1 … Bn (stacked in pairs with 🔝). All or nothing.
 	 */
 	createRooms: async ({ request, locals, params }) => {
 		if (!locals.admin) return fail(403, { message: 'Only admins can create rooms.' });

@@ -6,8 +6,9 @@
  * `__APP_COMMIT__` and `__APP_BUILT_AT__` (declared in src/app.d.ts) that
  * `$lib/version` reads.
  *
- * The version follows the deploy numbering: 0.<deploy number>.<fix>, so
- * "Deploy Nr. 18" is v0.18.0 and a fix on top of it v0.18.1. It is stamped
+ * The version follows the deploy numbering: <line>.<deploy number>.<fix>
+ * (line 0 before go-live, 1 from v1.32.2 on), so "Deploy Nr. 33" is v1.33.0
+ * and a fix on top of it v1.33.1. It is stamped
  * with scripts/release.sh, which also creates the tag the GitHub release is
  * made from (.github/workflows/release.yml).
  *

@@ -40,7 +40,17 @@ import {
 	type SpecialNeed,
 	type SpotInfo
 } from '../src/lib/special-needs';
-import { ANYWHERE, placeOptions, proposePlan, type PlanMember } from '../src/lib/group-plan';
+import {
+	ANYWHERE,
+	defaultPlace,
+	needsMet,
+	placeOptions,
+	proposePlan,
+	rankPlaces,
+	recommendRooms,
+	repick,
+	type PlanMember
+} from '../src/lib/group-plan';
 import { PASS_ALPHABET } from '../src/lib/pass';
 
 const admin = {
@@ -252,8 +262,26 @@ describe('joining a group', () => {
 		).catch((err) => err);
 		expect(refused).toBeInstanceOf(GroupFieldError);
 		expect(refused).toMatchObject({ field: 'groupCode', status: 409 });
-		expect(refused.message).toMatch(/at most 12 people/);
+		expect(refused.message).toMatch(new RegExp(`at most ${GROUP_MAX} people`));
 		expect(c.pb.rows('special_requests')).toHaveLength(GROUP_MAX);
+	});
+
+	it('keeps everyone in a group from before the limit went down, and lets nobody new in', async () => {
+		const { group, requests } = seedGroup(
+			c,
+			Array.from({ length: GROUP_MAX + 2 }, () => ({}))
+		);
+		const bea = c.ticket('Bea Booker');
+		const refused = await saveGuestRequest(
+			c.pb as any,
+			bea,
+			input({ mode: 'join', code: group.code })
+		).catch((err) => err);
+		expect(refused).toMatchObject({ field: 'groupCode', status: 409 });
+		expect(c.pb.rows('special_requests')).toHaveLength(GROUP_MAX + 2);
+		const view = await getGuestGroup(c.pb as any, requests[0].order, ORIGIN);
+		expect(view).toMatchObject({ max: GROUP_MAX, full: true });
+		expect(view?.members).toHaveLength(GROUP_MAX + 2);
 	});
 
 	it('refuses another group while in one', async () => {
@@ -760,10 +788,12 @@ describe('the group planner', () => {
 			['house:hA', true]
 		]);
 		expect(nobodyNeeds[3].label).toBe('Dorm #1 · Villa — 4 free (♿ 2) · fits all 4 · uses ♿');
+		expect(nobodyNeeds.map((o) => o.usesSpecial)).toEqual([false, false, false, true, true]);
 		// two members need something: the ♿ spots are theirs, so rA is the snuggest
 		const twoNeed = placeOptions(rooms, 4, 2);
 		expect(twoNeed.map((o) => o.key)).toEqual(['', 'room:rA', 'room:rB', 'house:hA', 'house:hB']);
 		expect(twoNeed[1].label).toBe('Dorm #1 · Villa — 4 free (♿ 2) · fits all 4');
+		expect(twoNeed[1].usesSpecial).toBe(false);
 		// the default proposal for the project group books no ♿ spot
 		const four = ['m1', 'm2', 'm3', 'm4'].map((id) => member(id, ['own_room']));
 		const plan = proposePlan(four, rooms, nobodyNeeds.slice(1).find((o) => o.fits)!.key);
@@ -776,6 +806,16 @@ describe('the group planner', () => {
 		// someone who needs something gets the ♿ spot
 		const needy = proposePlan([member('m1'), member('m2', ['quiet'])], SPOTS, 'room:r2');
 		expect(needy).toEqual({ m1: 'b2', m2: 'b1' });
+	});
+
+	it('places a helper like anyone without needs: the ♿ spot goes to the one they help', () => {
+		// the helper first in the group, the one they help second
+		const pair = [member('helper', ['helper']), member('helped', ['stable_light'])];
+		expect(proposePlan(pair, SPOTS, 'room:r2')).toEqual({ helper: 'b2', helped: 'b1' });
+		// a helper alone never takes the ♿ spot either
+		expect(proposePlan([member('helper', ['helper'])], SPOTS, 'room:r2')).toEqual({
+			helper: 'b2'
+		});
 	});
 
 	it('gives the lower bunk to the member who needs it', () => {
@@ -808,6 +848,213 @@ describe('the group planner', () => {
 			kept: ''
 		});
 		expect(Object.values(proposePlan(three, SPOTS, 'room:gone'))).toEqual(['', '', '']);
+	});
+
+	it('suggests the places that answer what the members need first', () => {
+		// Dorm #2 is quiet; m1 needs quiet, the others nothing
+		const quiet = SPOTS.map((s) => (s.roomId === 'r2' ? { ...s, features: ['quiet'] } : s));
+		const members = [member('m1', ['quiet']), member('m2'), member('m3')];
+		const options = placeOptions(quiet, 3, 1);
+		expect(options.map((o) => o.key)).toEqual([
+			'',
+			'room:r3',
+			'room:r2',
+			'house:h2',
+			'house:h1',
+			'room:r1'
+		]);
+		expect(needsMet(members, quiet, 'room:r3')).toEqual({ met: 0, of: 1 });
+		expect(needsMet(members, quiet, 'room:r2')).toEqual({ met: 1, of: 1 });
+		// places that fit everyone, those that answer the needs first, else placeOptions' order
+		expect(
+			rankPlaces(options, members, quiet).map((o) => [o.key, o.needs.met, o.needs.of])
+		).toEqual([
+			['room:r2', 1, 1],
+			['house:h1', 1, 1],
+			['room:r3', 0, 1],
+			['house:h2', 0, 1]
+		]);
+		expect(defaultPlace(options, members, quiet)).toBe('room:r2');
+		// nobody needs anything: the snuggest place that fits, as before
+		expect(rankPlaces(options, three, quiet).map((o) => o.key)).toEqual([
+			'room:r3',
+			'room:r2',
+			'house:h2',
+			'house:h1'
+		]);
+		expect(defaultPlace(options, three, quiet)).toBe('room:r3');
+		// no place fits everyone: no plan
+		expect(defaultPlace(placeOptions(quiet, 12), members, quiet)).toBeNull();
+	});
+
+	it('recommends one room only: when just a whole house fits everyone, there is no plan', () => {
+		// Villa: Dorm #1 has 2 free, Dorm #2 has 4 — the house fits 5, no room does
+		const five = ['m1', 'm2', 'm3', 'm4', 'm5'].map((id) => member(id));
+		const options = placeOptions(SPOTS, 5);
+		expect(options.find((o) => o.key === 'house:h1')).toMatchObject({ fits: true });
+		expect(recommendRooms(options, five, SPOTS)).toEqual([]);
+		expect(defaultPlace(options, five, SPOTS)).toBeNull();
+		// three fit into Den or Dorm #2: rooms only, the snuggest first
+		expect(recommendRooms(placeOptions(SPOTS, 3), three, SPOTS).map((o) => o.key)).toEqual([
+			'room:r3',
+			'room:r2'
+		]);
+	});
+
+	it('takes a spot the crew locked only when nothing else is left, and says so', () => {
+		// Room 2: 4 free, B1 + B2 locked; Room 3: 5 free, none locked — one house
+		const at = (roomId: string, room: string) => ({ roomId, room, houseId: 'h1', house: 'Villa' });
+		const locked = [
+			...['B1', 'B2', 'B3', 'B4'].map((label, i) =>
+				spot(`r2-${i + 1}`, 'r1', label, {
+					...at('rq2', 'Room 2'),
+					label: `${label} · Room 2 · Villa`,
+					locked: i < 2
+				})
+			),
+			...['B1', 'B2', 'B3', 'B4', 'B5'].map((label, i) =>
+				spot(`r3-${i + 1}`, 'r1', label, {
+					...at('rq3', 'Room 3'),
+					label: `${label} · Room 3 · Villa`
+				})
+			)
+		];
+		const four = ['m1', 'm2', 'm3', 'm4'].map((id) => member(id));
+		const options = placeOptions(locked, 4);
+		// Room 2 is the snuggest, but only with its locked spots: it comes after the rest
+		expect(options.map((o) => [o.key, o.usesLocked])).toEqual([
+			['', false],
+			['room:rq3', false],
+			['house:h1', false],
+			['room:rq2', true]
+		]);
+		expect(options[3].label).toBe('Room 2 · Villa — 4 free · fits all 4 · uses 🔒');
+		expect(defaultPlace(options, four, locked)).toBe('room:rq3');
+		// put into Room 2 anyway: the open spots first, the locked ones only for the rest
+		expect(proposePlan(four, locked, 'room:rq2')).toEqual({
+			m1: 'r2-3',
+			m2: 'r2-4',
+			m3: 'r2-1',
+			m4: 'r2-2'
+		});
+		// the whole house never needs them
+		expect(
+			Object.values(proposePlan(four, locked, 'house:h1')).every((bedId) => bedId.startsWith('r3-'))
+		).toBe(true);
+		// a place that needs a locked spot comes last, even when it answers the needs
+		const quiet = locked.map((s) => (s.roomId === 'rq2' ? { ...s, features: ['quiet'] } : s));
+		const needy = [member('m1', ['quiet']), member('m2'), member('m3'), member('m4')];
+		expect(rankPlaces(placeOptions(quiet, 4, 1), needy, quiet).map((o) => o.key)).toEqual([
+			'house:h1',
+			'room:rq3',
+			'room:rq2'
+		]);
+	});
+
+	it('says when a room would give a ♿ spot to someone who needs none, also next to a locked spot', () => {
+		// Room A: a1 + a2 plain, a3 plain but locked, a4 ♿; Room B: 5 plain — a group of 3, no needs
+		const at = (roomId: string, room: string, label: string) => ({
+			roomId,
+			room,
+			houseId: 'h1',
+			house: 'Villa',
+			label: `${label} · ${room} · Villa`
+		});
+		const spots = [
+			spot('a1', 'r1', 'A1', at('ra', 'Room A', 'A1')),
+			spot('a2', 'r1', 'A2', at('ra', 'Room A', 'A2')),
+			spot('a3', 'r1', 'A3', { ...at('ra', 'Room A', 'A3'), locked: true }),
+			spot('a4', 'r1', 'A4', { ...at('ra', 'Room A', 'A4'), special: true }),
+			...['B1', 'B2', 'B3', 'B4', 'B5'].map((label, i) =>
+				spot(`b${i + 1}`, 'r1', label, at('rb', 'Room B', label))
+			)
+		];
+		const options = placeOptions(spots, 3);
+		expect(options.map((o) => [o.key, o.usesSpecial, o.usesLocked])).toEqual([
+			['', false, false],
+			['room:rb', false, false],
+			['house:h1', false, false],
+			['room:ra', true, false]
+		]);
+		expect(options[3].label).toBe('Room A · Villa — 4 free (♿ 1) · fits all 3 · uses ♿');
+		expect(defaultPlace(options, three, spots)).toBe('room:rb');
+		// the label says what the plan would do there: the ♿ spot before the locked one
+		expect(proposePlan(three, spots, 'room:ra')).toEqual({ m1: 'a1', m2: 'a2', m3: 'a4' });
+		// with someone who needs something, the ♿ spot is theirs: a clean fit
+		expect(placeOptions(spots, 3, 1).find((o) => o.key === 'room:ra')).toMatchObject({
+			usesSpecial: false,
+			usesLocked: false
+		});
+		const needy = [member('m1', ['step_free']), member('m2'), member('m3')];
+		expect(proposePlan(needy, spots, 'room:ra')).toEqual({ m1: 'a4', m2: 'a1', m3: 'a2' });
+	});
+
+	it('spreads a group over a house into the room with the most open spots, locked ones last', () => {
+		// Room X: 4 free, x3 + x4 locked; Room Y: 3 free, all open — a group of 3
+		const at = (roomId: string, room: string, label: string) => ({
+			roomId,
+			room,
+			houseId: 'hx',
+			house: 'Hut',
+			label: `${label} · ${room} · Hut`
+		});
+		const spots = [
+			spot('x1', 'r1', 'B1', at('rx', 'Room X', 'B1')),
+			spot('x2', 'r1', 'B2', at('rx', 'Room X', 'B2')),
+			spot('x3', 'r1', 'B3', { ...at('rx', 'Room X', 'B3'), locked: true }),
+			spot('x4', 'r1', 'B4', { ...at('rx', 'Room X', 'B4'), locked: true }),
+			spot('y1', 'r1', 'B1', at('ry', 'Room Y', 'B1')),
+			spot('y2', 'r1', 'B2', at('ry', 'Room Y', 'B2')),
+			spot('y3', 'r1', 'B3', at('ry', 'Room Y', 'B3'))
+		];
+		expect(proposePlan(three, spots, 'house:hx')).toEqual({ m1: 'y1', m2: 'y2', m3: 'y3' });
+		// a fourth member: Room Y is full, Room X's open spot comes before its locked ones
+		expect(Object.values(proposePlan([...three, member('m4')], spots, 'house:hx'))).toEqual([
+			'y1',
+			'y2',
+			'y3',
+			'x1'
+		]);
+	});
+
+	it('keeps the rest of a group with the members the crew booked already', () => {
+		// Room X (Villa): the crew booked two members there, 4 spots still free;
+		// Room Z (Hut): exactly 3 free — three members still need a spot
+		const at = (roomId: string, label: string) => ({
+			roomId,
+			room: roomId === 'rx' ? 'Room X' : 'Room Z',
+			houseId: roomId === 'rx' ? 'hx' : 'hz',
+			house: roomId === 'rx' ? 'Villa' : 'Hut',
+			label: `${label} · ${roomId === 'rx' ? 'Room X · Villa' : 'Room Z · Hut'}`
+		});
+		const spots = [
+			...['B3', 'B4', 'B5', 'B6'].map((label, i) =>
+				spot(`x${i + 3}`, 'r1', label, at('rx', label))
+			),
+			...['B1', 'B2', 'B3'].map((label, i) => spot(`z${i + 1}`, 'r1', label, at('rz', label)))
+		];
+		const booked = (id: string, label: string) =>
+			member(id, [], { crewSpotLabel: `${label} · Room X · Villa`, crewRoomId: 'rx' });
+		const group = [booked('k1', 'B1'), booked('k2', 'B2'), ...three];
+		const options = placeOptions(spots, 3);
+		// on their own, the three would go to the snuggest room, Room Z …
+		expect(defaultPlace(options, three, spots)).toBe('room:rz');
+		// … but two of the group sleep in Room X already: the rest joins them
+		expect(recommendRooms(options, group, spots).map((o) => o.key)).toEqual(['room:rx', 'room:rz']);
+		expect(defaultPlace(options, group, spots)).toBe('room:rx');
+		// Room X can't take the rest: no plan, the rows start on Keep as is
+		const fewer = spots.filter((s) => s.bedId !== 'x5' && s.bedId !== 'x6');
+		expect(defaultPlace(placeOptions(fewer, 3), group, fewer)).toBeNull();
+	});
+
+	it('swaps two planned spots, and sends a member back to Keep as is when the other row had none', () => {
+		const plan = { a: 'b1', b: 'b2', c: '' };
+		expect(repick(plan, 'a', 'b2')).toEqual({ changes: { a: 'b2', b: 'b1' }, bumped: '' });
+		// c had no spot: a loses b1 and keeps nothing
+		expect(repick(plan, 'c', 'b1')).toEqual({ changes: { c: 'b1', a: '' }, bumped: 'a' });
+		// a free spot nobody is planned on
+		expect(repick(plan, 'c', 'b9')).toEqual({ changes: { c: 'b9' }, bumped: '' });
+		expect(repick(plan, 'a', 'b1')).toEqual({ changes: { a: 'b1' }, bumped: '' });
 	});
 
 	it('proposes the same, whatever order the spots come in', () => {

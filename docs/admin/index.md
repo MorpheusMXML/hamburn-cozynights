@@ -8,7 +8,7 @@ After signing in you land in the **Control Center** at `/admin`: the booking win
 
 Every admin page has the same **status bar** on top and the same **menu**.
 
-**The status bar** is the same at every width. On the left, the booking phase as a pill in its colour — 🛠 IN PREPARATION (the pill's name for Staging Mode, the same as the guests read), 🎪 LIVE or 🔒 CLOSED — fused with the countdown: *OPENS IN 1d 23:59:57* while a timer is armed, *CLOSES IN …* during Live Booking (red in the last hour). Tap it for the exact time (*Booking opens … Berlin time*, or *Live Booking ends …*); <kbd>Esc</kbd> or a tap elsewhere closes it. Without an armed timer the pill alone leads to the [booking window](#booking-window). On the right: the app's version, e.g. `v0.18.1` (hover it for the build, click it for the release notes on GitHub; quote it when you report a problem), three quick links — 🎟 the [check-in desk](./passes#checking-guests-in), 💬 the [message texts](./notifications#message-texts) and ♿ the [special-needs requests](./special-needs) with the number waiting for a decision (pink) —, the account you're signed in with (a ⚡️ in front of it for superusers) and <kbd>Eject 🚀</kbd> to sign out. On a phone the bar takes two rows and keeps to the essentials: the account hides, Eject is its rocket, the pill its icon; pointing at them still names the account. The guests' top bar stays away from the admin area — the status bar carries the countdown itself.
+**The status bar** is the same at every width. On the left, the booking phase as a pill in its colour — 🛠 IN PREPARATION (the pill's name for Staging Mode, the same as the guests read), 🎪 LIVE or 🔒 CLOSED — fused with the countdown: *OPENS IN 1d 23:59:57* while a timer is armed, *CLOSES IN …* during Live Booking (red in the last hour). Tap it for the exact time (*Booking opens … Berlin time*, or *Live Booking ends …*); <kbd>Esc</kbd> or a tap elsewhere closes it. Without an armed timer the pill alone leads to the [booking window](#booking-window). On the right: the app's version, e.g. `v1.32.2` (hover it for the build, click it for the release notes on GitHub; quote it when you report a problem), three quick links — 🎟 the [check-in desk](./passes#checking-guests-in), 💬 the [message texts](./notifications#message-texts) and ♿ the [special-needs requests](./special-needs) with the number waiting for a decision (pink) —, the account you're signed in with (a ⚡️ in front of it for superusers) and <kbd>Eject 🚀</kbd> to sign out. On a phone the bar takes two rows and keeps to the essentials: the account hides, Eject is its rocket, the pill its icon; pointing at them still names the account. The guests' top bar stays away from the admin area — the status bar carries the countdown itself.
 
 **The menu** holds the pages. On a wide screen (from about 1100 px) it is a **sidebar** on the left, with the *Admin* tag and your role (ADMIN or SUPERUSER ⚡️) at its head; <kbd>« Shrink menu</kbd> at its foot shrinks it to its icons (pointing at an icon names it) and <kbd>»</kbd> brings the names back — the browser remembers your choice. On phones and tablets the same menu is a drawer: <kbd>☰</kbd> at the left end of the status bar slides it in, <kbd>✕</kbd>, <kbd>Esc</kbd> or a tap next to it closes it again, and so does following a link.
 
@@ -95,7 +95,7 @@ true:
 | 🔑 *… admin sign-ins wait for a superuser's approval* | Somebody signed in with Google without an invite. | [Admin access](./access) |
 | 🎟 *… tickets have no spot, and booking is closed* | After booking closed: guests with a ticket but no spot. | *Who* — the [Guests](./guests) page, tickets without a spot |
 | ⏳ *… guest messages are being retried* | A delivery failed and waits for its next try. | [Notifications](./notifications) |
-| 🛖 *… houses have no active spots* | Houses without spots (orange in Staging, where they can still be fixed). | – |
+| 🏠 *… houses have no active spots* | Houses without spots (orange in Staging, where they can still be fixed). | – |
 | 🎟 *… tickets have no spot yet* | During Live Booking: guests who still have to book. | *Who* — the [Guests](./guests) page, tickets without a spot |
 | 📭 *… tickets have no e-mail address* | E-mail to guests is on, until booking closes. | *Which* — the [Guests](./guests) page, tickets without an address |
 | 🚪 *… booked guests are not checked in yet* | After booking closed, once the first guest was checked in. | *Who* — the [bookings list](./bookings), still to arrive |
@@ -183,9 +183,9 @@ a bunk bed is a neutral white outline.
 | 🟢 Green | **Open, free** — a house with free spots and nothing booked yet; a free spot (VACANT ✨, *Available* for guests) |
 | 🟠 Orange | **Filling** — booked and free spots side by side; also a warning, something not allowed right now |
 | 🔴 Red | **Full, booked, occupied** — a house with nothing left to book; a booked spot (CLAIMED 👥, *Occupied* for guests); a ticket that holds a spot |
-| 🩵 Turquoise | **Checked in**; a guest's own spot (*Yours*); and the colour of Staging Mode |
+| 💠 Turquoise | **Checked in**; a guest's own spot (*Yours*); and the colour of Staging Mode |
 | 🟣 Violet | **Held back** — locked 🔒 or marked 🔄 TAKEN by the crew (BLOCKED 🛠), *Blocked by admin* for guests |
-| 🩷 Pink | **♿ Special needs, and nothing else** — spots kept for requests, the requests and their count, the ♿ links |
+| 💗 Pink | **♿ Special needs, and nothing else** — spots kept for requests, the requests and their count, the ♿ links |
 | 🟡 Yellow | **Live Booking** — the phase pill and the countdown to the closing time |
 | ⚪️ Grey | **Not set up, inactive, not now** — a house without active spots; a switched-off spot (INACTIVE 🧊); a spot that can't be booked yet or any more; light grey for Closed |
 
@@ -257,7 +257,7 @@ Pins are teal while a house has free spots, red when none is left, and grey whil
 
 | Gesture | Result |
 | --- | --- |
-| **Click an empty place** | Sidebar *GENERATE SANCTUARY*, the [house generator](./camp-layout#create-a-house): a rolled name, the kind, and the rooms as size rows (*4 rooms × 6 beds 🪜*), then <kbd>IGNITE HOUSE ✨</kbd>. |
+| **Click an empty place** | Sidebar *GENERATE SANCTUARY*, the [house generator](./camp-layout#create-a-house): a rolled name, the kind, and the rooms as size rows (*4 rooms × 6 beds 🔝*), then <kbd>IGNITE HOUSE ✨</kbd>. |
 | **Drag a house** | Moves it. The new position is saved when you let go. |
 | **Arrow keys** on a selected pin | Move it one unit per press (with <kbd>Shift</kbd>: ten), saved when you let go of the key. |
 | **Click a house** | Sidebar *HOUSE INTEL*: rename it (<kbd>SYNC MODULE ✨</kbd>; or click its name on the house page, see [Renaming](./camp-layout#renaming)), type an exact **MAP POSITION 📍** (X 0–1000, Y 0–700) and press <kbd>MOVE PIN</kbd>, see **WHO IS HERE 🛏️** (the house's bookings room by room, see [Bookings & check-ins](./bookings)), <kbd>MANAGE ROOMS ⚙️</kbd>, or <kbd>VANISH FROM PLAYA 🌪️</kbd> to delete it. Moves are saved right away. |

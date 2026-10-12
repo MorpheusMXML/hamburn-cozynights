@@ -8,12 +8,15 @@ import {
 	COVERS,
 	CONFIRMED,
 	CONFIRMED_FIELDS,
+	PICK_FIRST,
 	SLEEPING_BAG_NOTE,
 	bookingCheckPassed,
 	carriedCheck,
 	carryCheck,
 	coversLeftText,
 	dropResult,
+	pickedHint,
+	placedHint,
 	useUpCheck,
 	wrongDropHint
 } from '../src/lib/booking-check';
@@ -51,16 +54,19 @@ describe('making the bed', () => {
 		]);
 	});
 
-	it('takes the sheet anywhere on the bed, the other covers only on their piece', () => {
-		for (const piece of ['mattress', 'blanket', 'pillow'] as const) {
-			expect(dropResult(cover('sheet'), piece)).toBe('fits');
+	// Max's "idiot check": every cover only on its own piece, the sheet too.
+	it('takes every cover only on its own piece', () => {
+		const pieces = ['mattress', 'blanket', 'pillow'] as const;
+		for (const c of COVERS) {
+			for (const piece of pieces) {
+				expect(dropResult(c, piece), `${c.name} on the ${piece}`).toBe(
+					piece === c.piece ? 'fits' : 'wrong'
+				);
+			}
+			expect(dropResult(c, null)).toBe('off');
 		}
-		expect(dropResult(cover('duvet'), 'blanket')).toBe('fits');
-		expect(dropResult(cover('duvet'), 'pillow')).toBe('wrong');
-		expect(dropResult(cover('duvet'), 'mattress')).toBe('wrong');
-		expect(dropResult(cover('case'), 'pillow')).toBe('fits');
-		expect(dropResult(cover('case'), 'blanket')).toBe('wrong');
-		for (const c of COVERS) expect(dropResult(c, null)).toBe('off');
+		expect(dropResult(cover('sheet'), 'blanket')).toBe('wrong');
+		expect(dropResult(cover('sheet'), 'pillow')).toBe('wrong');
 	});
 
 	it('tells the guest where a cover goes instead', () => {
@@ -70,6 +76,19 @@ describe('making the bed', () => {
 		expect(wrongDropHint(cover('duvet'), 'pillow')).toBe(
 			"That's the pillow! The duvet cover goes on the blanket."
 		);
+		expect(wrongDropHint(cover('sheet'), 'blanket')).toBe(
+			"That's the blanket! The bed sheet goes on the mattress."
+		);
+	});
+
+	it('asks where a cover in hand goes, and repeats where it went', () => {
+		expect(pickedHint(cover('case'))).toBe(
+			'Where does the pillowcase go? Tap its place on the bed.'
+		);
+		expect(PICK_FIRST).toMatch(/Pick a cover from your bag first/);
+		expect(placedHint(cover('sheet'), 2)).toBe('Bed sheet on the mattress ✓ · 2 covers to go');
+		expect(placedHint(cover('duvet'), 1)).toBe('Duvet cover on the blanket ✓ · 1 cover to go');
+		expect(placedHint(cover('case'), 0)).toBe('Pillowcase on the pillow ✓');
 	});
 
 	it('counts down to a made bed', () => {

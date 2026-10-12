@@ -18,6 +18,7 @@ import { PASS_ALPHABET } from '../../src/lib/pass';
 import {
 	assignSpot,
 	decideRequest,
+	getGuestRequest,
 	saveRequest,
 	withdrawRequest
 } from '../../src/lib/server/special-requests';
@@ -133,7 +134,7 @@ async function crewTexts(): Promise<string> {
 	return (await telegramTo(CREW_CHAT)).map((m) => m.text).join('\n---\n');
 }
 
-const GROUP_NAME = 'Glitter Dome Workshop';
+const GROUP_NAME = 'Glitter Dome Crew';
 
 /** A code no group has (yet): for groups written straight into the database. */
 function randomCode(): string {
@@ -212,6 +213,44 @@ describe('special-needs requests in the database', () => {
 		expect(JSON.stringify(stored)).not.toContain('Rolling Thunder');
 		expect(JSON.stringify(stored)).not.toContain('step_free');
 		expect(stored?.consent_at).toBeTruthy();
+	});
+
+	it('store every path alike: a personal need, a helper in a group, an art project', async () => {
+		const [lead, helper, project] = [
+			await seedTicket(su),
+			await seedTicket(su),
+			await seedTicket(su)
+		];
+		const { group } = await startGroup(lead.order, GROUP_NAME, {
+			...INPUT,
+			needs: ['step_free', 'quiet', 'stable_light', 'other']
+		});
+		await saveGuestRequest(su as any, helper.order, {
+			needs: ['helper'],
+			text: 'I need to sleep close to the person I help.',
+			burnerName: '',
+			consent: true,
+			group: { mode: 'join', code: group.code }
+		});
+		await saveRequest(su as any, project.order as any, {
+			needs: ['own_room', 'near_project'],
+			text: 'Our crew has to guard the dome at night.',
+			burnerName: '',
+			consent: true
+		});
+		const rows = await Promise.all([lead, helper, project].map((t) => requestOf(t.order.id)));
+		// one length for every path: the ciphertext tells nothing of what was asked
+		expect(new Set(rows.map((row) => row!.needs.length)).size).toBe(1);
+		const stored = JSON.stringify(rows);
+		for (const value of ['stable_light', 'helper', 'near_project', 'own_room', 'guard']) {
+			expect(stored).not.toContain(value);
+		}
+		expect(rows[1]!.request_group).toBe(group.id);
+		expect((await getGuestRequest(su as any, helper.order.id))?.needs).toEqual(['helper']);
+		expect((await getGuestRequest(su as any, project.order.id))?.needs).toEqual([
+			'own_room',
+			'near_project'
+		]);
 	});
 
 	it('allow one request per ticket and go with the ticket', async () => {

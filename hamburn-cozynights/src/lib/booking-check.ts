@@ -68,20 +68,33 @@ export const SLEEPING_BAG_NOTE =
 	'A sleeping bag is fine instead of the duvet cover; the bed sheet and the pillowcase are still a must.';
 
 /**
- * Where a cover dropped on the bed lands: the sheet slips under everything,
- * so any part of the bed takes it; the duvet cover only fits the blanket and
- * the pillowcase only the pillow. 'wrong' is another piece of the bed, 'off'
- * is next to the bed.
+ * Where a cover put on the bed lands — dragged there, or tapped and then its
+ * place tapped. Only its own piece takes it (Max, 11 Oct 2026: "the idiot
+ * check"): the bed sheet the mattress, the duvet cover the blanket, the
+ * pillowcase the pillow. 'wrong' is another piece of the bed, 'off' is next
+ * to the bed.
  */
 export function dropResult(cover: Cover, piece: Cover['piece'] | null): 'fits' | 'wrong' | 'off' {
 	if (!piece) return 'off';
-	if (cover.id === 'sheet' || cover.piece === piece) return 'fits';
-	return 'wrong';
+	return cover.piece === piece ? 'fits' : 'wrong';
 }
 
-/** The friendly nudge after a cover was dropped on the wrong piece. */
+/** The friendly nudge after a cover went to the wrong piece: it says where it belongs. */
 export function wrongDropHint(cover: Cover, piece: Cover['piece']): string {
 	return `That's the ${piece}! The ${cover.name.toLowerCase()} goes on the ${cover.piece}.`;
+}
+
+/** A cover was picked up from the bag: where does it go? */
+export function pickedHint(cover: Cover): string {
+	return `Where does the ${cover.name.toLowerCase()} go? Tap its place on the bed.`;
+}
+
+/** A piece of the bed was tapped with nothing in hand. */
+export const PICK_FIRST = 'Pick a cover from your bag first, then tap where it goes.';
+
+/** A cover is on its piece: say it once more, it is what guests should remember. */
+export function placedHint(cover: Cover, left: number): string {
+	return `${cover.name} on the ${cover.piece} ✓${left > 0 ? ` · ${coversLeftText(left)}` : ''}`;
 }
 
 /** "2 covers to go" — what is still in the bag. */

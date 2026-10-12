@@ -1,7 +1,7 @@
 <!--
 @component
 The size rows of the house generator (docs/admin/camp-layout.md): one row
-per room size — "4 rooms × 6 beds", 🪜 for bunk beds — plus where the room
+per room size — "4 rooms × 6 beds", 🔝 for bunk beds — plus where the room
 numbers start and whether every size opens its own block of numbers. The
 line underneath counts live what IGNITE will build ($lib/house-plan), with
 the room numbers it will use.
@@ -127,7 +127,7 @@ The parent binds `sizes`, `floors` and `firstNumber` and reads `plan` and
 							aria-label="Bunk beds in size {i + 1}"
 							title="Bunk beds: B1 + B2 stacked, B3 + B4, …"
 							on:click={() => toggleBunks(i)}
-							{...lockAttrs(lock)}><span aria-hidden="true">🪜</span></button
+							{...lockAttrs(lock)}><span aria-hidden="true">🔝</span></button
 						>
 						<button
 							type="button"

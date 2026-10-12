@@ -1,6 +1,6 @@
 <!--
 @component
-The house generator's kind: 🏠 House · 🛖 Hut group · ⛺ Tent area, or none
+The house generator's kind: 🏠 House · 🏘️ Hut group · ⛺ Tent area, or none
 (tap the chosen one again). It decides the rooms' word ("huts") and kind,
 the pin's icon and the rolled names; HOUSE DETAILS can change it later,
 where "Other" is on the list too.

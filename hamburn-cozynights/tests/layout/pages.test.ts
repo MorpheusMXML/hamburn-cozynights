@@ -10,6 +10,7 @@ import type PocketBase from 'pocketbase';
 import { findLayoutProblems, type LayoutProblem } from './layout-check';
 import {
 	CAMP_FILE,
+	MY_SPOT_LABEL,
 	TEXTS,
 	setPhase,
 	stressLayoutFile,
@@ -70,6 +71,8 @@ interface PageCase {
 	checkedIn?: boolean;
 	/** What a checked-in case must show, so it proves its state (default: the guest's note). */
 	checkedInText?: RegExp;
+	/** The crew renamed the stress guest's spot to this; every other case gets MY_SPOT_LABEL back. */
+	spotLabel?: string;
 }
 
 /** The three phases, plus every armed timer (countdown box, countdown bar). */
@@ -90,23 +93,49 @@ async function unfoldAll(page: Page) {
 	);
 }
 
+/** Each cover and the one piece of the bed it goes on (src/lib/booking-check.ts). */
+const COVER_ON = [
+	['Bed sheet', 'Mattress'],
+	['Duvet cover', 'Blanket'],
+	['Pillowcase', 'Pillow']
+] as const;
+
 /**
- * The check before a new spot (src/lib/booking-check.ts): every cover onto the
- * bed. The cases run with reduced motion, so a tapped cover lands at once.
+ * The check before a new spot: every cover onto its own piece, by tapping
+ * the cover and then its place on the bed. The cases run with reduced motion,
+ * so a cover lands at once.
  */
 async function makeTheBed(page: Page) {
-	for (const name of [/bed sheet/i, /duvet cover/i, /pillowcase/i]) {
-		await page.getByRole('button', { name }).click();
+	for (const [cover, piece] of COVER_ON) {
+		await page.getByRole('button', { name: cover, exact: true }).click();
+		await page.getByRole('button', { name: piece, exact: true }).click();
 	}
 	await page.getByRole('button', { name: /I'll pack them/ }).waitFor();
 }
 
-/** The roulette landed on a spot with a name on the plate: "Book it" opens the check. */
+/** Lets one-shot animations end, so the sweep measures boxes where they land. */
+async function settle(page: Page) {
+	await page.evaluate(() =>
+		Promise.all(
+			document
+				.getAnimations()
+				.filter((a) => a.effect?.getTiming().iterations !== Infinity)
+				.map((a) => a.finished.catch(() => undefined))
+		)
+	);
+}
+
+/**
+ * The roulette landed on a spot with a name on the plate: "Book it" opens the
+ * check. Its card scales in (220 ms): measured mid-way, an SVG label inside
+ * looked 3 px off its own box.
+ */
 async function openRouletteCheck(page: Page) {
 	await page.getByRole('button', { name: /^Spin/ }).click();
 	await page.locator('#guestName').fill('Layout Owl');
 	await page.getByRole('button', { name: /Book it/ }).click();
 	await page.locator('.check-card').waitFor();
+	await settle(page);
 }
 
 const PAGES: PageCase[] = [
@@ -160,6 +189,19 @@ const PAGES: PageCase[] = [
 		open: async (page) => {
 			await page.locator('button.bed-card.free').first().click();
 			await page.getByRole('dialog').waitFor();
+		}
+	},
+	{
+		// A cover in hand on the wrong piece: the bed says where it goes.
+		name: 'room: booking dialog, wrong piece',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.locator('button.bed-card.free').first().click();
+			await page.getByRole('dialog').waitFor();
+			await page.getByRole('button', { name: 'Pillowcase', exact: true }).click();
+			await page.getByRole('button', { name: 'Blanket', exact: true }).click();
+			await page.locator('.make-bed .status', { hasText: "That's the blanket!" }).waitFor();
 		}
 	},
 	{
@@ -300,6 +342,17 @@ const PAGES: PageCase[] = [
 		phases: ['live'],
 		checkedIn: true
 	},
+	// The room card with my spot says "Your spot · <label>"; a label the crew
+	// renamed to 50 characters must wrap inside the card, not widen the page.
+	{
+		name: 'house: my spot with a long label',
+		path: (c) => `/house/${c.houseId}`,
+		as: 'guestWithSpot',
+		spotLabel: TEXTS.spotLabelMine,
+		open: async (page) => {
+			await page.locator('.card.mine .mine-chip', { hasText: TEXTS.spotLabelMine }).waitFor();
+		}
+	},
 	{
 		name: 'house without my spot: checked in',
 		path: (c) => `/house/${c.otherHouseIds[0]}`,
@@ -353,6 +406,36 @@ const PAGES: PageCase[] = [
 		open: async (page) => {
 			await page.getByRole('button', { name: 'Send request' }).click();
 			await page.locator('#consent-error').waitFor();
+		}
+	},
+	// The three paths of the form: each shows only its own checkboxes (with
+	// JavaScript), the helper's refusal sits at the group question.
+	{
+		name: 'special needs: a personal need',
+		path: () => '/special-needs',
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.getByLabel('A personal need: a medical reason or a disability').check();
+			await page.getByText('Stable light conditions').waitFor();
+		}
+	},
+	{
+		name: 'special needs: an art project',
+		path: () => '/special-needs',
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.getByLabel('An art project or a crew').check();
+			await page.getByText('A bed close to our art piece or project').waitFor();
+		}
+	},
+	{
+		name: 'special needs: a helper without a group',
+		path: () => '/special-needs',
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.getByLabel('I come as the helper of someone with a personal need').check();
+			await page.getByRole('button', { name: 'Send request' }).click();
+			await page.locator('#group-error').waitFor();
 		}
 	},
 	// Request groups (docs/guide/special-needs.md "Asking as a group"): a group
@@ -717,14 +800,31 @@ const PAGES: PageCase[] = [
 		}
 	},
 	{ name: 'admin special-needs requests', path: () => '/admin/requests', as: 'admin' },
+	// The spot picker (SpotPicker): houses, rooms and spots over the page;
+	// picking one and pressing its button books it after a confirmation.
+	{
+		name: 'admin special-needs: spot picker',
+		path: () => '/admin/requests',
+		as: 'admin',
+		open: async (page) => {
+			const request = page.locator('article.request.status-pending').first();
+			await request.locator('form.assign button.primary').click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.waitFor();
+			await sheet.locator('button.tile').first().click();
+			await sheet.locator('.picker-foot .choice-label').waitFor();
+		}
+	},
 	{
 		name: 'admin special-needs: confirm dialog',
 		path: () => '/admin/requests',
 		as: 'admin',
 		open: async (page) => {
 			const request = page.locator('article.request.status-pending').first();
-			await request.locator('select').selectOption({ index: 1 });
 			await request.locator('form.assign button.primary').click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.locator('button.tile').first().click();
+			await sheet.locator('.picker-foot button.primary').click();
 			await page.getByRole('alertdialog').waitFor();
 		}
 	},
@@ -747,8 +847,27 @@ const PAGES: PageCase[] = [
 		path: () => '/admin/requests',
 		as: 'admin',
 		open: async (page) => {
-			await page.locator(`#group-${camp.fullGroupId} form.plan button.primary`).click();
+			// A group sleeps in one room: when no room has space for all (as in the
+			// stress camp) there is no plan, so put as many as fit into one, then book.
+			const group = page.locator(`#group-${camp.fullGroupId}`);
+			await group.locator('.where button').click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.locator('.room-action button').first().click();
+			await sheet.getByRole('button', { name: 'Edit the plan' }).click();
+			await group.locator('form.plan button.primary').click();
 			await page.getByRole('alertdialog').waitFor();
+		}
+	},
+	// The picker for a whole group: a room chosen, its spots carry the names.
+	{
+		name: 'admin special-needs: group picker',
+		path: () => '/admin/requests',
+		as: 'admin',
+		open: async (page) => {
+			await page.locator(`#group-${camp.fullGroupId} .where button`).click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.locator('.room-action button').first().click();
+			await sheet.locator('.tile.planned').first().waitFor();
 		}
 	},
 	{
@@ -792,28 +911,35 @@ test.beforeAll(async () => {
 	pb = await superuser(PB_URL, process.env.PB_ADMIN_EMAIL!, process.env.PB_ADMIN_PASSWORD!);
 });
 
+// The other test files on this stack find the guest's spot as it was seeded.
+test.afterAll(async () => {
+	if (pb && camp) await setMySpot(false, MY_SPOT_LABEL);
+});
+
 /**
- * Checks the stress guest in, or takes the check-in back, straight in the
- * database, as the admin's pass check would. Every case sets it, so no case
- * depends on what an earlier one left behind (the run is split into shards).
+ * Checks the stress guest in, or takes the check-in back, and gives the spot
+ * its label, straight in the database, as the admin's pass check and a crew
+ * rename would. Every case sets both, so no case depends on what an earlier
+ * one left behind (the run is split into shards).
  */
-async function setCheckedIn(on: boolean) {
+async function setMySpot(checkedIn: boolean, label: string) {
 	const order = await pb
 		.collection('orders')
 		.getFirstListItem(pb.filter('pass_code = {:code}', { code: camp.passCode }));
 	const bed = await pb
 		.collection('beds')
 		.getFirstListItem(pb.filter('order = {:order}', { order: order.id }));
-	if (!!bed.checked_in_at === on) return;
-	await pb.collection('beds').update(
-		bed.id,
-		on
-			? {
-					checked_in_at: new Date().toISOString(),
-					checked_in_by: camp.adminEmail
-				}
-			: { checked_in_at: '', checked_in_by: '' }
-	);
+	const change: Record<string, string> = {};
+	if (!!bed.checked_in_at !== checkedIn) {
+		Object.assign(
+			change,
+			checkedIn
+				? { checked_in_at: new Date().toISOString(), checked_in_by: camp.adminEmail }
+				: { checked_in_at: '', checked_in_by: '' }
+		);
+	}
+	if (bed.label !== label) change.label = label;
+	if (Object.keys(change).length > 0) await pb.collection('beds').update(bed.id, change);
 }
 
 /**
@@ -914,7 +1040,7 @@ for (const pageCase of PAGES) {
 		const title = pageCase.phases ? `${pageCase.name} (${phase})` : pageCase.name;
 		test(title, async ({ browser }, testInfo) => {
 			await setPhase(pb, phase);
-			await setCheckedIn(!!pageCase.checkedIn);
+			await setMySpot(!!pageCase.checkedIn, pageCase.spotLabel ?? MY_SPOT_LABEL);
 			const context = await openAs(browser, pageCase.as);
 			const page = await context.newPage();
 			await page.setViewportSize({ width: 1280, height: 900 });

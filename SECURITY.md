@@ -15,7 +15,7 @@ We answer within a few days and fix confirmed problems before the next deploy. R
 
 - The app and its PocketBase hooks and migrations in this repository.
 - The staging server itself is **not** in scope for public testing; server-side findings are tracked privately.
-- What the app deliberately does *not* protect against is written down in the docs: [Security & privacy](https://morpheusmxml.github.io/hamburn-cozynights/reference/security).
+- What the app deliberately does *not* protect against is written down in the docs: [Security & privacy](docs/reference/security.md).
 
 ## Supported versions
 

@@ -26,6 +26,10 @@ CozyNights couldn't reach its database for a moment. Your code is fine. Try agai
 Pillow and blanket are provided. Bring your own covers: a **bed sheet** for the mattress, a **duvet cover** for the blanket and a **pillowcase**. A sleeping bag is fine instead of the duvet cover; the bed sheet and the pillowcase are still a must. Your booking pass and every e-mail about your spot say it again, for when you pack.
 :::
 
+::: details My cover won't go on the bed / hops back into the bag
+Every cover only goes on its own piece: the **bed sheet on the mattress** (the part under the pillow), the **duvet cover on the blanket**, the **pillowcase on the pillow**. Tap the cover, then its piece — or drag it straight there. The line under your bag says where a cover belongs when you try the wrong piece.
+:::
+
 ::: details Why do I have to make my bed every time I book?
 Many guests are at Hamburn for the first time, and a bed without covers is a cold night. So every booking starts with making your bed and ends with a tick that you have read the Code of Conduct, the privacy policy and the booking rules — also when you move to another spot. Nothing about it is stored. If a booking didn't go through because someone was faster, the next spot you pick keeps your made bed and your tick, until you reload the page.
 :::
@@ -130,16 +134,20 @@ Press <kbd>Turn off</kbd> next to "Updates on Telegram are on" on your room page
 Yes: send `/pass` to the bot and it sends your pass with its QR code as a picture. That works as soon as you have connected Telegram.
 :::
 
-::: details I need a special spot (lower bunk, step-free, close to a toilet, quiet)
-Ask the crew for a special-needs spot, even before booking opens: sign in with your ticket code and follow the ♿ link (*Special needs or a project? Ask the crew now* on the map before booking opens, ♿ **Special-needs spot** in the top bar of every booking page after that) while the crew accepts requests. See [Special needs & groups](./special-needs).
+::: details I need a special spot (lower bunk, step-free, close to a toilet, quiet, stable light)
+If you need it for a medical reason or a disability, ask the crew for a special-needs spot, even before booking opens: sign in with your ticket code and follow the ♿ link (*Special needs or a project? Ask the crew now* on the map before booking opens, ♿ **Special-needs spot** in the top bar of every booking page after that) while the crew accepts requests. See [Special needs & groups](./special-needs).
 :::
 
-::: details Can our art project get a room or spots together?
-Ask the crew with the same form: tick *A room just for our project or crew* or *Spots close to the people I come with* and tell them what your project is and how many of you there are. One of you starts a group and shares its link; everyone else joins with their own ticket code, up to 12 people. The crew decides on each request and tries to put the group close together; there is no claim to a particular room. See [Asking as a group](./special-needs#asking-as-a-group).
+::: details I come as the helper of someone with a special need. Can I sleep close to them?
+Ask the crew too, with your own ticket code: choose *I come as the helper of someone with a personal need* and tell the crew in a few words what they should know, for example that you need to sleep in the same room or close by — what, not why: no diagnoses or medical details, yours or theirs. A helper asks together with the person they help: join their group, or start one and share the link with them. See [Asking as a group](./special-needs#asking-as-a-group).
+:::
+
+::: details Can our art project or crew get a room, or a bed close to our piece?
+Ask the crew with the same form: choose *An art project or a crew*, tick *A room for our art project or crew* or *A bed close to our art piece or project*, and describe in at least 5 words what you need and why your art piece or project would be at risk without it. One of you starts a group and shares its link; the rest of the crew joins with their own ticket code, up to 5 people. The crew decides on each request and tries to put the group close together; there is no claim to a particular room or bed. See [Asking as a group](./special-needs#asking-as-a-group).
 :::
 
 ::: details My special-needs request won't send, or says the crew has already decided
-The form needs at least one ticked need (or *Something else*), a few words of text (5 to 500 characters) and the ticked consent box. When you join a group, or are in one already, ticking is optional, and so are the words as long as you tick nothing; starting a group needs both. *No group has this code* means a typo, or the group is gone: check the code with someone in the group. *This group is full* means 12 are in it already: contact the crew. *You can't join this group* means the crew took you out of it: contact the crew. *You sent your request 10 times within an hour* is a limit: it works again within the hour. *Special-needs requests are closed right now, so nothing was sent* means the crew stopped taking requests meanwhile: contact the crew. *The crew has already decided on your request* means it can't be changed anymore; the page shows the decision. If something changed, contact the crew. You can still withdraw the request.
+The form needs to know what your request is about, at least one ticked box on that path (or *Something else*; a helper ticks nothing), a few words of text (5 to 500 characters; for an art project or a crew at least 5 words) and the ticked consent box. A helper has to be in a group: join the group of the person you help, or start one. When you join a group, or are in one already, choosing and ticking are optional, and so are the words as long as you tick nothing (a helper always writes a few); whoever starts a group fills in the form like anyone asking alone. *No group has this code* means a typo, or the group is gone: check the code with someone in the group. *This group is full* means 5 are in it already: contact the crew. *You can't join this group* means the crew took you out of it: contact the crew. *You sent your request 10 times within an hour* is a limit: it works again within the hour. *Special-needs requests are closed right now, so nothing was sent* means the crew stopped taking requests meanwhile: contact the crew. *The crew has already decided on your request* means it can't be changed anymore; the page shows the decision. If something changed, contact the crew. You can still withdraw the request.
 :::
 
 ::: details A spot says "Blocked by admin" in violet
@@ -154,7 +162,7 @@ One colour, one meaning, on every page: **green** free, **red** taken by another
 Press the pause button ⏸ next to the title; your browser remembers it. If your device is set to reduce motion (for example on iPhone: Settings → Accessibility → Motion → Reduce Motion), the title doesn't move at all, and there are no fireworks after booking either. And if you like it: move the cursor over the standing letters or tap them to set them on fire yourself.
 :::
 
-::: details What is the small `v0.18.1` next to the title?
+::: details What is the small `v1.32.2` next to the title?
 The version of CozyNights you are looking at. It is also at the very end of every page (on the camp map only on wider screens); hover it to see the build, click it for what changed. If you report a problem, say which version you saw.
 :::
 

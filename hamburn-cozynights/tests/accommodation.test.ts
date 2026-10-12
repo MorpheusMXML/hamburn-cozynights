@@ -386,19 +386,36 @@ describe('how a spot answers a need', () => {
 		expect(needFit('near_toilet', facts('', ['toilets_inside']))).toBe('fits');
 	});
 
-	it('leaves a power socket, "something else" and what projects ask for to the crew', () => {
-		expect(MATCHED_BY_HAND).toEqual(['power', 'other', 'own_room', 'close_together']);
+	it('leaves a power socket, stable light, "something else", helpers and what projects ask for to the crew', () => {
+		expect(MATCHED_BY_HAND).toEqual([
+			'power',
+			'stable_light',
+			'other',
+			'helper',
+			'own_room',
+			'near_project',
+			'close_together'
+		]);
 		// nobody knows where the sockets are: no spot fits, none conflicts
 		const everything = facts('single', ['wheelchair', 'own_bathroom', 'heated', 'quiet']);
 		expect(needFit('power', everything)).toBe('unknown');
 		// what the guest wrote themselves is for a human to read
 		expect(needFit('other', facts('bunk_lower', ['quiet']))).toBe('unknown');
-		// a room of their own or spots together: a question of who else sleeps where
-		for (const need of ['own_room', 'close_together'] as SpecialNeed[]) {
+		// no feature says how the light is
+		expect(needFit('stable_light', everything)).toBe('unknown');
+		// a room of their own, a bed by their piece, spots together, a helper close
+		// to the one they help: a question of who else sleeps where
+		for (const need of ['own_room', 'near_project', 'close_together', 'helper'] as SpecialNeed[]) {
 			expect(needFit(need, everything)).toBe('unknown');
 			expect(needFit(need, facts('bunk_upper'))).toBe('unknown');
 		}
-		expect(matchNeeds(['own_room', 'close_together'], everything).score).toBe(0);
+		expect(matchNeeds(['own_room', 'near_project', 'close_together'], everything).score).toBe(0);
+		expect(matchNeeds(['helper'], facts('bunk_upper'))).toEqual({
+			fits: [],
+			conflicts: [],
+			unknown: ['helper'],
+			score: 0
+		});
 	});
 
 	it('scores a spot by what it answers, and a conflict costs a point', () => {
@@ -432,17 +449,23 @@ describe('how a spot answers a need', () => {
 		]);
 	});
 
-	it('never counts project requests against the ♿ spots', () => {
+	it('never counts project or helper requests against the ♿ spots', () => {
 		const open = [
 			{ needs: ['own_room'] as SpecialNeed[] },
+			{ needs: ['near_project'] as SpecialNeed[] },
+			{ needs: ['helper'] as SpecialNeed[] },
 			{ needs: ['close_together', 'quiet'] as SpecialNeed[] },
+			{ needs: ['stable_light'] as SpecialNeed[] },
 			{ needs: [] as SpecialNeed[] }
 		];
 		const spots = [{ bedType: 'single', features: ['quiet'] }];
+		// "A quiet area" still matches the spots with the quiet feature
 		expect(needCapacity(open, spots)).toEqual([
-			{ need: 'quiet', label: 'A quiet room', asked: 1, fitting: 1, short: false }
+			{ need: 'quiet', label: 'A quiet area', asked: 1, fitting: 1, short: false }
 		]);
-		expect(needCapacity([{ needs: ['own_room', 'close_together'] }], spots)).toEqual([]);
+		expect(
+			needCapacity([{ needs: ['own_room', 'near_project', 'close_together', 'helper'] }], spots)
+		).toEqual([]);
 	});
 });
 
@@ -513,7 +536,7 @@ describe('summaries', () => {
 
 	it('folds the details of a house or room into one line', () => {
 		expect(detailsSummary('house', 'hut_group', ['heated', 'wheelchair'], 'By the lake')).toBe(
-			'🛖 Hut group · ♿ 🔥 · description'
+			'🏘️ Hut group · ♿ 🔥 · description'
 		);
 		// a room-only feature on a house is dropped, blank text is no description
 		expect(detailsSummary('house', '', ['own_bathroom'], '  ')).toBe('');

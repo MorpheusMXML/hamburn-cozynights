@@ -10,6 +10,10 @@ Plain SVG renders and hit-tests the same in all engines.
 Place it inside a `<g transform="translate(x y)">`: the pin is drawn around the
 origin. The glow uses the gradients `#marker-glow-{available|full|empty}` that
 Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
+
+The house that holds the signed-in guest's spot (`mine`) sends slow turquoise
+rings out of its pin and its name floats and glows, so it is found at a glance.
+Only transform and opacity move; with reduced motion it stands still, outlined.
 -->
 <svelte:options namespace="svg" />
 
@@ -23,6 +27,8 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 	export let kind = '';
 	/** No free spot here fits what the guest is looking for. */
 	export let faded = false;
+	/** The signed-in guest's spot is in this house. */
+	export let mine = false;
 	export let status: HouseMarkerStatus | string = 'available';
 	export let labelPosition: 'top' | 'bottom' = 'bottom';
 	export let hovered = false;
@@ -98,10 +104,15 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 	class:occupied={isOccupied}
 	class:empty={isEmpty}
 	class:faded
+	class:mine
 >
 	<!-- The only hit target: big enough for a thumb, also where the label isn't. -->
 	<circle class="hit" r={hitRadius} fill="transparent" pointer-events="all" />
 
+	{#if mine}
+		<circle class="beacon" r="12" pointer-events="none" />
+		<circle class="beacon second" r="12" pointer-events="none" />
+	{/if}
 	<circle class="glow" r="24" fill="url(#marker-glow-{glowId})" pointer-events="none" />
 	<circle class="pulse" r="12" pointer-events="none" />
 	<circle class="pin" r="9" pointer-events="none" />
@@ -119,15 +130,29 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 	{/if}
 
 	<g class="label" transform="translate(0 {labelY})" pointer-events="none">
-		<rect x={labelX} y="0" width={labelWidth} height={LABEL_HEIGHT} rx="4" />
-		<text
-			x={labelX + labelWidth / 2}
-			y={LABEL_HEIGHT / 2}
-			font-size={FONT_SIZE}
-			text-anchor="middle"
-			dominant-baseline="central"
-			use:measure={label}>{label}</text
-		>
+		<!-- The float animates this group's CSS transform, which would replace an
+		     SVG transform attribute: the placement stays on the group above. -->
+		<g class="float">
+			{#if mine}
+				<rect
+					class="mine-ring"
+					x={labelX - 3}
+					y="-3"
+					width={labelWidth + 6}
+					height={LABEL_HEIGHT + 6}
+					rx="6"
+				/>
+			{/if}
+			<rect class="plate" x={labelX} y="0" width={labelWidth} height={LABEL_HEIGHT} rx="4" />
+			<text
+				x={labelX + labelWidth / 2}
+				y={LABEL_HEIGHT / 2}
+				font-size={FONT_SIZE}
+				text-anchor="middle"
+				dominant-baseline="central"
+				use:measure={label}>{label}</text
+			>
+		</g>
 	</g>
 </g>
 
@@ -171,7 +196,7 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 		opacity: 0;
 	}
 
-	.label rect {
+	.label .plate {
 		fill: rgba(10, 10, 10, 0.92);
 		stroke: #333;
 		stroke-width: 1;
@@ -195,13 +220,44 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 	.marker.hovered .pulse {
 		animation: marker-pulse 1s infinite;
 	}
-	.marker.hovered .label rect {
+	.marker.hovered .label .plate {
 		fill: #000;
 		stroke: #f472b6;
 		stroke-width: 2;
 	}
 	.marker.hovered .label text {
 		fill: #fff;
+	}
+
+	/* Mine: the turquoise of "yours" everywhere (state.css, --state-checked-in). */
+	.marker.mine {
+		--mine: #2dd4bf;
+	}
+	.beacon {
+		fill: none;
+		stroke: var(--mine);
+		stroke-width: 2;
+		opacity: 0;
+		animation: mine-beacon 2.8s ease-out infinite;
+	}
+	.beacon.second {
+		animation-delay: 1.4s;
+	}
+	.marker.mine .label .plate {
+		stroke: var(--mine);
+		stroke-width: 1.5;
+	}
+	.marker.mine .label text {
+		fill: #fff;
+	}
+	.mine-ring {
+		fill: none;
+		stroke: var(--mine);
+		stroke-width: 1.5;
+		animation: mine-breathe 2.8s ease-in-out infinite;
+	}
+	.marker.mine .float {
+		animation: mine-float 2.8s ease-in-out infinite;
 	}
 
 	.marker.dragging .pin {
@@ -222,12 +278,52 @@ Map.svelte defines once (CSS filters on SVG children are unreliable in WebKit).
 		}
 	}
 
+	@keyframes mine-beacon {
+		0% {
+			transform: scale(1);
+			opacity: 0.85;
+		}
+		100% {
+			transform: scale(2.6);
+			opacity: 0;
+		}
+	}
+	@keyframes mine-breathe {
+		0%,
+		100% {
+			opacity: 0.9;
+		}
+		50% {
+			opacity: 0.3;
+		}
+	}
+	@keyframes mine-float {
+		0%,
+		100% {
+			transform: translateY(0);
+		}
+		50% {
+			transform: translateY(-2px);
+		}
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		.pin {
 			transition: none;
 		}
-		.marker.hovered .pulse {
+		.marker.hovered .pulse,
+		.marker.mine .float,
+		.mine-ring {
 			animation: none;
+		}
+		/* No rings going out: one still ring around the pin says the same. */
+		.beacon {
+			animation: none;
+			transform: scale(1.6);
+			opacity: 0.7;
+		}
+		.beacon.second {
+			display: none;
 		}
 	}
 </style>

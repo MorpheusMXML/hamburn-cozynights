@@ -603,12 +603,24 @@ const CSV_COLUMNS = {
 		'secret'
 	],
 	email: ['email', 'e-mail', 'mail', 'email address', 'e-mail address', 'attendee email'],
-	name: ['name', 'customer name', 'attendee', 'attendee name', 'full name']
+	name: ['name', 'customer name', 'attendee', 'attendee name', 'full name'],
+	status: ['status', 'order status', 'payment status']
 };
 
+// Zero-width characters that copy & paste brings along. Every cell is cleaned
+// like the app does (clean() in src/lib/tickets.ts): these out first, then the
+// spaces — String.trim keeps them. tests/tickets.test.ts compares both.
+const INVISIBLE_CHARS = /[\u200B-\u200D\uFEFF]/g;
+
+// Order states that make a ticket; with a status column only these rows are
+// imported (an empty cell counts as paid). Same list as src/lib/tickets.ts.
+const PAID_ORDER_STATUSES = ['paid', 'p', 'bezahlt'];
+
 function cozyCsvColumns(header) {
+	// Like the app: invisible characters out of the header too (readRosterFile).
 	const names = header.map((h) =>
 		String(h)
+			.replace(INVISIBLE_CHARS, '')
 			.trim()
 			.toLowerCase()
 			.replace(/[_\s]+/g, ' ')
@@ -650,18 +662,25 @@ const cozyTicketsImport = new Command({
 		const problems = [];
 		const entries = [];
 		const lineOfCode = {};
+		let unpaid = 0;
 		for (let r = 1; r < rows.length; r++) {
 			const line = r + 1;
-			const cell = (idx) => (idx >= 0 && idx < rows[r].length ? String(rows[r][idx]).trim() : '');
-			const code = cell(cols.code).replace(/[\u200B-\u200D\uFEFF]/g, '');
+			const cell = (idx) =>
+				idx >= 0 && idx < rows[r].length
+					? String(rows[r][idx]).replace(INVISIBLE_CHARS, '').trim()
+					: '';
+			const code = cell(cols.code);
 			const email = cell(cols.email).toLowerCase();
 			const name = cell(cols.name);
+			const status = cell(cols.status).toLowerCase();
 			if (/[\r\n]/.test(rows[r].join(''))) {
 				problems.push(
 					'line ' + line + ': a cell spans several lines (a quote that is never closed?)'
 				);
 			} else if (!TICKET_CODE_PATTERN.test(code)) {
 				problems.push('line ' + line + ': invalid ticket code "' + code + '"');
+			} else if (status && PAID_ORDER_STATUSES.indexOf(status) < 0) {
+				unpaid++;
 			} else if (email && !cozyValidGuestEmail(email)) {
 				problems.push('line ' + line + ': invalid e-mail address "' + email + '"');
 			} else if (name.length > MAX_TICKET_LABEL) {
@@ -838,6 +857,9 @@ const cozyTicketsImport = new Command({
 		}
 		if (counts.withoutEmail > 0) {
 			cmd.println('  ' + counts.withoutEmail + ' line(s) without an e-mail address');
+		}
+		if (unpaid > 0) {
+			cmd.println('  ' + unpaid + ' line(s) left out: the order is not paid (status column)');
 		}
 		const codesByEmail = {};
 		for (const entry of entries) {

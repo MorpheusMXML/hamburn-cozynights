@@ -8,6 +8,7 @@ decided.
 <script lang="ts">
 	import LegalDocument from '$lib/components/LegalDocument.svelte';
 	import { BEDDING_PROVIDED, SLEEPING_BAG_NOTE } from '$lib/booking-check';
+	import { GROUP_MAX } from '$lib/special-needs';
 	import type { PageData } from './$types';
 
 	export let data: PageData;
@@ -82,10 +83,12 @@ decided.
 			you need; the crew decides and books a fitting spot for you.
 		</li>
 		<li>
-			Art projects, workshops, theme camps and crews can ask there too, on their own or as a group:
-			one of you starts the group and shares its link, the others join with their own ticket code.
-			The crew decides on each request and tries to put a group close together; there is no claim to
-			a particular room.
+			Guests with a personal need because of a medical reason or a disability can ask there, and so
+			can their helpers and art projects or crews who need a room or a bed close to their piece. A
+			helper and the person they help, or the crew of a project, ask as a group of at most {GROUP_MAX}
+			people: one of you starts the group and shares its link, the others join with their own ticket code.
+			The crew decides on each request and tries to put a group close together; there is no claim to a
+			particular room.
 		</li>
 		<li>A spot the crew booked for you can only be changed by the crew.</li>
 	</ul>

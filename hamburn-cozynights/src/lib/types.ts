@@ -18,6 +18,8 @@ export type HouseData = HousesResponse & {
 	 * the map is filtered (src/routes/map/+page.server.ts).
 	 */
 	fittingFree?: number;
+	/** The signed-in guest's spot is in this house (getFullTree with an orderId). */
+	mine?: boolean;
 };
 
 /**

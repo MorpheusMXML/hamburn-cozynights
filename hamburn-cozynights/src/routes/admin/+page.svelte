@@ -254,7 +254,7 @@
 
 			{#if layoutChanged}
 				<p class="layout-changed" role="status">
-					🛖 The camp layout changed while this page was open.
+					🏕️ The camp layout changed while this page was open.
 					<button class="btn-inline" on:click={() => invalidateAll()}>Reload the page</button>
 					to see the houses themselves.
 				</p>

@@ -11,7 +11,7 @@ Used for the forms on the admin house and room pages (docs/admin/camp-layout.md)
 	export let open = false;
 	/** The id of the body this button shows and hides. */
 	export let controls: string;
-	/** What is set, shown only while folded, e.g. "🛖 Hut group · ♿ 🔥". */
+	/** What is set, shown only while folded, e.g. "🏘️ Hut group · ♿ 🔥". */
 	export let summary = '';
 </script>
 

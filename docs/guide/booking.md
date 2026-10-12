@@ -15,7 +15,7 @@ Beds come with **Indoor memberships** only. Camper memberships (camper or tent) 
 ```mermaid
 flowchart LR
   code["🎫 Ticket code"] --> map["🗺️ Camp map"]
-  map --> pick["🛖 House → 🚪 Room<br/>→ 🛏️ free spot"]
+  map --> pick["🏠 House → 🚪 Room<br/>→ 🛏️ free spot"]
   pick --> bed["🧺 Make your bed"] --> name["✍️ Burner name (optional)<br/>☑️ the rules"] --> done["✅ Your Spot"]
   map --> roulette["🎰 Destiny<br/>Roulette"] --> bed
 ```
@@ -26,7 +26,7 @@ flowchart LR
 
 1. **Enter your ticket code**
 
-   Open the CozyNights start page, type your code into the **TICKET CODE** field and press <kbd>ENTER THE DUST 🌵</kbd>. (The small `v0.18.1` at the top right of the title is the version you are looking at; it helps when you report a problem.)
+   Open the CozyNights start page, type your code into the **TICKET CODE** field and press <kbd>ENTER THE DUST 🌵</kbd>. (The small `v1.32.2` at the top right of the title is the version you are looking at; it helps when you report a problem.)
 
    If the code is refused, the box around it turns red and gives a short shake, the reason appears right under it, and the cursor is back in the field — fix the code and press the button again. The [FAQ](./faq#for-guests) explains every message.
 
@@ -36,7 +36,7 @@ flowchart LR
 
 2. **Find a house on the map**
 
-   Every pin is a house. **Teal** pins still have free spots, **red** pins have none left that you could book. Click a pin to open the house.
+   Every pin is a house. **Teal** pins still have free spots, **red** pins have none left that you could book. Click a pin to open the house. Once you hold a spot, your house is easy to find: turquoise rings keep rising from its pin and its name floats gently in a glowing turquoise frame (it stands still, just framed, when your device asks for reduced motion).
 
    ![Camp map during Live Booking](../assets/screenshots/guest-map-live.webp)
 
@@ -44,7 +44,7 @@ flowchart LR
 
 3. **Choose a room**
 
-   The house page lists its rooms with the number of free spots. Full rooms are marked **Full**.
+   The house page lists its rooms with the number of free spots. Full rooms are marked **Full**. The room that holds your spot lights up in turquoise, its frame breathes, and it says **Your spot · B1** with your spot's name.
 
    ![House page with room cards](../assets/screenshots/guest-house.webp)
 
@@ -58,11 +58,11 @@ flowchart LR
 
 5. <a id="make-your-bed"></a>**Make your bed**
 
-   The booking window starts with your bed. The hostel's pillow, blanket and mattress lie on it bare, and your three covers wait in **Your bag**: a bed sheet, a duvet cover and a pillowcase. Tap each cover, or drag it onto the bed: the duvet cover goes on the blanket, the pillowcase on the pillow, and the sheet slips under everything. Drop one on the wrong piece and it hops back into the bag with a hint.
+   The booking window starts with your bed. The hostel's pillow, blanket and mattress lie on it bare, and your three covers wait in **Your bag**: a bed sheet, a duvet cover and a pillowcase. Each cover only goes on its own piece: the **bed sheet on the mattress**, the **duvet cover on the blanket**, the **pillowcase on the pillow**. Drag a cover there, or tap it (it stands up in the bag) and then tap its place on the bed. The wrong piece shakes and says where the cover belongs — *That's the blanket! The bed sheet goes on the mattress.* — and the cover waits for the right one; a dragged cover hops back into the bag. Each cover that lands is named once more (*Bed sheet on the mattress ✓*), so you remember what to pack. With a keyboard: Enter on a cover, then Tab to its piece and Enter.
 
    When the bed is made, the window lists what to pack and <kbd>I'll pack them 🤝</kbd> takes you on. Pack them for real: pillow and blanket are provided, the covers are not. A sleeping bag is fine instead of the duvet cover; the bed sheet and the pillowcase are still a must.
 
-   ![Booking window, step 1: the bare bed and the three covers in your bag](../assets/screenshots/guest-booking-bed.webp)
+   ![Booking window, step 1: the bed sheet already on the mattress, the duvet cover in hand and the question where it goes](../assets/screenshots/guest-booking-bed.webp)
 
 6. **Pick a burner name, tick the rules and book**
 
@@ -84,7 +84,7 @@ That's it: fireworks go up from your new spot 🎆, and the spot now shows **You
 | --- | --- |
 | 🟢 **Available** · *Grab it now!* | Free. Click it to book. |
 | 🟢 **Available** · *Release your other spot first* | Free, but you already have a spot somewhere else, so it can't be clicked. One ticket code = one spot. |
-| 🩵 **Yours** · *your burner name* | That's you. Click it to rename it (any time until booking closes) or to release it (during Live Booking); the line under the name says which of the two it is right now. |
+| 💠 **Yours** · *your burner name* | That's you. Click it to rename it (any time until booking closes) or to release it (during Live Booking); the line under the name says which of the two it is right now. |
 | 🔴 **Occupied** · *a burner name* | Taken by another guest. *Mystery Burner* means the booking has no name, for example because its ticket changed hands. During Live Booking, while you hold a spot, it adds *⇄ Ask to swap*: tap it to ask its guest for a [swap](./swaps) (*⏳ Asked — waiting* once you did). |
 | 🟣 **Blocked by admin** · *Not available* | Held back by the crew, for example a broken bed, a spot that isn't in use, one the crew took for itself or one kept for [guests with special needs and for projects](./special-needs): nobody books those directly, the crew hands them out. |
 | ⚪️ **Not open yet** · *Booking opens soon* | Booking hasn't opened yet. |
@@ -101,7 +101,7 @@ Houses and rooms can carry a few details, and spots say what kind of bed they ar
 
 | You see | Meaning |
 | --- | --- |
-| 🏠 House · 🛖 Hut group · ⛺ Tent area | What the place on the map is. A hut group is one pin with several huts; the map pin carries the icon, and the house page then asks you to choose a **hut**. |
+| 🏠 House · 🏘️ Hut group · ⛺ Tent area | What the place on the map is. A hut group is one pin with several huts; the map pin carries the icon, and the house page then asks you to choose a **hut**. |
 | ♿ Wheelchair accessible · ⬇️ Ground floor | A step-free way in with an accessible bathroom, or no stairs to the bed. An upper bunk is never ♿, however accessible its room is — the ladder is in the way — so its card says *no ♿ Wheelchair accessible* in such a room. |
 | 🚻 Toilets + showers inside · 🛁 Own bathroom | In the building itself, or in the room. Nothing written means the toilets are somewhere else on the site — the description usually says where. |
 | 🔥 Heated · ❄️ No heating | Late October nights are cold; this is worth reading. |

@@ -249,9 +249,9 @@ const TEXTS = [
 
 	// --- Telegram: spot released ----------------------------------------------------------
 	{ key: 'tg.released.intro', group: 'tg.released', label: 'The message', hint: '', placeholders: ['before'],
-		text: '🫥 Your CozyNights spot was released: {before} is free again.' },
+		text: '💨 Your CozyNights spot was released: {before} is free again.' },
 	{ key: 'tg.released.intro_unknown', group: 'tg.released', label: 'The message when the old spot is unknown', hint: '', placeholders: [],
-		text: '🫥 Your CozyNights spot was released.' },
+		text: '💨 Your CozyNights spot was released.' },
 	{ key: 'tg.released.rebook', group: 'tg.released', label: 'Why, and how to book again', hint: '', placeholders: ['mapUrl'],
 		text: 'If you didn\'t do this yourself, the crew had to change the camp layout. Pick a new spot while booking is open: {mapUrl}' },
 	{ key: 'tg.released.approved_now', group: 'tg.released', label: 'Released while the request is approved right now', hint: 'Instead of the line above.', placeholders: [],

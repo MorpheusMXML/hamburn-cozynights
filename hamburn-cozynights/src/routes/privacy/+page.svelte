@@ -10,7 +10,7 @@ variables in the server's .env (`$lib/server/legal`).
 
 	export let data: PageData;
 
-	const UPDATED = '5 October 2026';
+	const UPDATED = '11 October 2026';
 	const GOOGLE_PRIVACY = 'https://policies.google.com/privacy?hl=en';
 	const GITHUB_PRIVACY =
 		'https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement';
@@ -133,14 +133,15 @@ variables in the server's .env (`$lib/server/legal`).
 
 	<h2 id="special-needs">Special-needs requests and groups</h2>
 	<p>
-		If you need a special spot, for example a lower bunk, step-free access or a quiet room, you can
-		ask the crew for one on the page <a href="/special-needs">Special-needs spot</a> while the crew accepts
-		requests. Art projects, workshops, theme camps and crews can ask for a room or for spots close to
-		each other the same way. For a request we process:
+		Guests with a personal need because of a medical reason or a disability (for example a lower
+		bunk, step-free access or a quiet area), their helpers, and art projects or crews can ask the
+		crew for a room or a bed on the page <a href="/special-needs">Special-needs spot</a> while the crew
+		accepts requests. For a request we process:
 	</p>
 	<ul>
 		<li>
-			what you <strong>tick</strong> as your needs and what you <strong>write</strong> about them;
+			what your request is about and what you <strong>tick</strong> as your needs, and what you
+			<strong>write</strong> about them;
 		</li>
 		<li>the <strong>burner name</strong> for the spot, if you enter one;</li>
 		<li>when you sent or changed the request and gave your consent;</li>
@@ -158,7 +159,9 @@ variables in the server's .env (`$lib/server/legal`).
 		What you write may be information about your health, a special category of personal data (Art. 9
 		GDPR). We therefore only process it with your explicit consent (Art. 6(1)(a) and Art. 9(2)(a)
 		GDPR), which you give with the checkbox in the form. We ask what you need, not why: please don't
-		tell us diagnoses. Booking the spot for you is part of allocating the beds (Art. 6(1)(b) GDPR).
+		tell us diagnoses. As a helper, please don't write about the health of the person you help: they
+		tell the crew themselves, in their own request. Booking the spot for you is part of allocating
+		the beds (Art. 6(1)(b) GDPR).
 	</p>
 	<p>
 		Only crew members with access to the administration can read your request. What you tick and
