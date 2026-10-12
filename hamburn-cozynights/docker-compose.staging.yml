@@ -64,6 +64,8 @@ services:
       # Sending pace (defaults: the loop runs 50 s per minute, 20 mails/minute).
       COZY_NOTIFY_LOOP_SECONDS: ${COZY_NOTIFY_LOOP_SECONDS:-}
       COZY_MAILS_PER_MINUTE: ${COZY_MAILS_PER_MINUTE:-}
+      # healthchecks.io ping URL for the notification loop's heartbeat (optional)
+      COZY_HEARTBEAT_URL: ${COZY_HEARTBEAT_URL:-}
       # NOTE: never pass PB_ADMIN_EMAIL/PB_ADMIN_PASSWORD to this container —
       # the image's entrypoint would re-upsert that superuser on every start,
       # which revokes the app's cached service-account token, and it runs that
@@ -71,6 +73,21 @@ services:
       # once the settings are encrypted.
     security_opt:
       - no-new-privileges:true
+    # Runtime limits (v1.32.3): a crash-looping or runaway container must not
+    # take the shared host with it. Logs are capped (json-file grows without
+    # bound otherwise). 30 s to stop: a booking in flight finishes before
+    # SIGKILL. PocketBase needs no Linux capabilities (tested 0.40.4: starts,
+    # migrates and writes /pb_data with all dropped).
+    cap_drop:
+      - ALL
+    stop_grace_period: 30s
+    mem_limit: 1g
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     ports:
       # Only reachable from the host itself (SSH tunnel for the dashboard at /_/),
       # never from the internet.
@@ -151,6 +168,16 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # Runtime limits, see pocketbase above. adapter-node waits up to 30 s for
+    # requests in flight; Docker's default would kill it after 10 s.
+    stop_grace_period: 30s
+    mem_limit: 1536m
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     ports:
       # Only reachable from the host itself; nginx reverse-proxies to this.
       - '127.0.0.1:3001:3000'
