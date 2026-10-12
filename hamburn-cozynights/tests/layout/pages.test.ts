@@ -4,7 +4,7 @@
 // stress-data.ts) and resized from a small phone to a desktop; at each width
 // tests/layout/layout-check.ts measures the rendered text. A failure lists
 // what broke at which widths and attaches a screenshot with the spots outlined.
-import { test, expect, type Browser, type Page } from '@playwright/test';
+import { test, expect, type Browser, type Page, type Route } from '@playwright/test';
 import fs from 'fs';
 import type PocketBase from 'pocketbase';
 import { findLayoutProblems, type LayoutProblem } from './layout-check';
@@ -111,6 +111,25 @@ async function makeTheBed(page: Page) {
 		await page.getByRole('button', { name: piece, exact: true }).click();
 	}
 	await page.getByRole('button', { name: /I'll pack them/ }).waitFor();
+}
+
+/** Requests a case holds on their way (the wait veil); see holdRequests. */
+const heldRequests: Route[] = [];
+
+/**
+ * Holds every request that matches until the case ends, then fails it. A held
+ * request is never left to the closing browser: WebKit still sent a held
+ * booking to the server when its context closed, and the guest then had a
+ * spot in the cases after it.
+ */
+async function holdRequests(page: Page, match: (url: URL) => boolean) {
+	await page.route(match, (route) => {
+		heldRequests.push(route);
+	});
+}
+
+async function failHeldRequests() {
+	for (const route of heldRequests.splice(0)) await route.abort().catch(() => {});
 }
 
 /** Lets one-shot animations end, so the sweep measures boxes where they land. */
@@ -295,10 +314,7 @@ const PAGES: PageCase[] = [
 			await page.getByRole('button', { name: /I'll pack them/ }).click();
 			await page.getByRole('checkbox', { name: /I've read and understood/ }).check();
 			await page.locator('#guestName').fill('Wait Veil');
-			await page.route(
-				(url) => url.search.includes('/bookBed'),
-				() => {}
-			);
+			await holdRequests(page, (url) => url.search.includes('/bookBed'));
 			await page.getByRole('button', { name: 'Save Spot' }).click();
 			await page.locator('.wait-veil', { hasText: 'Saving your spot' }).waitFor();
 		}
@@ -309,9 +325,9 @@ const PAGES: PageCase[] = [
 		path: (c) => `/house/${c.houseId}`,
 		as: 'guestWithSpot',
 		open: async (page) => {
-			await page.route(
-				(url) => url.pathname.startsWith('/room/') && url.pathname.endsWith('/__data.json'),
-				() => {}
+			await holdRequests(
+				page,
+				(url) => url.pathname.startsWith('/room/') && url.pathname.endsWith('/__data.json')
 			);
 			await page.locator('a[href^="/room/"]').first().click();
 			await page.locator('.wait-veil', { hasText: 'On our way' }).waitFor();
@@ -1040,6 +1056,9 @@ test.beforeAll(async () => {
 	pb = await superuser(PB_URL, process.env.PB_ADMIN_EMAIL!, process.env.PB_ADMIN_PASSWORD!);
 });
 
+// A case that failed before it closed its browser fails its held requests here.
+test.afterEach(failHeldRequests);
+
 // The other test files on this stack find the guest's spot as it was seeded.
 test.afterAll(async () => {
 	if (pb && camp) await setMySpot(false, MY_SPOT_LABEL);
@@ -1204,6 +1223,7 @@ for (const pageCase of PAGES) {
 					contentType: 'image/png'
 				});
 			}
+			await failHeldRequests();
 			await context.close();
 			expect(report(findings), 'text squeezed, cut off or pushed out').toBe('');
 		});
