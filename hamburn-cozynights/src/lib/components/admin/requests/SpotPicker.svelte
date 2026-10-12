@@ -779,6 +779,13 @@ inside. The page renders one at a time, outside every form.
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
+		/* the last resort on a small screen, where a group's names on top and its
+		   plan at the bottom leave the spots less than their 12rem: the whole
+		   sheet scrolls */
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		scrollbar-width: thin;
+		scrollbar-color: #3f3f46 transparent;
 		background: #0d0d0f;
 		border: 1px solid #333;
 		border-radius: 18px;
@@ -905,21 +912,32 @@ inside. The page renders one at a time, outside every form.
 		color: #fff;
 		font: inherit;
 	}
+	/*
+	 * A row of chips never takes more than about two lines: with many houses
+	 * (60 on a test stack) the rows filled the sheet and left the spots no room.
+	 * More chips scroll inside the row, the wheel scrolls it, and the half line
+	 * at its bottom shows there are more. The 3px inset keeps a focus ring
+	 * inside the scroll box.
+	 */
 	.chips {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.4rem;
 		min-width: 0;
+		max-height: calc(2.5 * 36px + 2 * 0.4rem + 6px);
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		scrollbar-width: thin;
+		scrollbar-color: #3f3f46 transparent;
+		padding: 3px;
+		margin: -3px;
 	}
-	/* short of room, each row of chips scrolls sideways instead of filling the sheet */
+	/* short of room, each row of chips is one line that scrolls sideways */
 	@media (max-width: 700px), (max-height: 860px) {
 		.chips {
 			flex-wrap: nowrap;
 			overflow-x: auto;
-			overscroll-behavior-x: contain;
-			scrollbar-width: thin;
-			scrollbar-color: #3f3f46 transparent;
-			padding-bottom: 4px;
+			padding-bottom: 7px;
 		}
 		.chip {
 			flex: none;
@@ -978,7 +996,8 @@ inside. The page renders one at a time, outside every form.
 
 	.picker-body {
 		flex: 1 1 auto;
-		min-height: 0;
+		/* the spots always keep room for at least one room card (see .picker-sheet) */
+		min-height: 12rem;
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		scrollbar-color: #3f3f46 transparent;
