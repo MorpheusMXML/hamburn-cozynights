@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+	import { startWait, waitWhile } from '$lib/waiting';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
@@ -174,7 +175,8 @@
 				<CountdownTimer
 					targetDate={data.booking.next.at}
 					kind={countdown}
-					on:elapsed={() => invalidateAll()}
+					on:elapsed={() =>
+						countdown === 'closes' ? invalidateAll() : waitWhile('opening', invalidateAll())}
 				/>
 			</div>
 		{/if}
@@ -216,9 +218,11 @@
 					}
 					clientError = '';
 					isSubmitting = true;
+					const waited = startWait('sign-in');
 
 					return async ({ result, update }) => {
 						isSubmitting = false;
+						waited();
 						if (result.type === 'error') {
 							// Network hiccup or server crash: stay on the form instead of
 							// swapping the whole page for an error screen.

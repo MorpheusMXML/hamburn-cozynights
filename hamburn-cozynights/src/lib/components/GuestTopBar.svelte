@@ -35,6 +35,7 @@ chips, unless the guest put the panel away to look around.
 	import { cubicOut } from 'svelte/easing';
 	import { browser } from '$app/environment';
 	import { invalidateAll } from '$app/navigation';
+	import { waitWhile } from '$lib/waiting';
 	import { page } from '$app/state';
 	import CountdownDigits from './CountdownDigits.svelte';
 	import VersionBadge from './VersionBadge.svelte';
@@ -128,7 +129,8 @@ chips, unless the guest put the panel away to look around.
 		if (now - lastReload >= resyncDelay(attempts)) {
 			lastReload = now;
 			attempts += 1;
-			invalidateAll();
+			if (kind === 'opens') waitWhile('opening', invalidateAll());
+			else invalidateAll();
 		}
 	});
 

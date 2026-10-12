@@ -282,6 +282,42 @@ const PAGES: PageCase[] = [
 		}
 	},
 	{
+		// A booking on its way (the opening rush): after a moment the wait veil
+		// ($lib/waiting) covers the page and asks the guest not to reload. The
+		// answer never comes here, so nothing is booked.
+		name: 'room: wait veil while booking',
+		path: (c) => `/room/${c.roomId}`,
+		as: 'guestWithoutSpot',
+		open: async (page) => {
+			await page.locator('button.bed-card.free').first().click();
+			await page.getByRole('dialog').waitFor();
+			await makeTheBed(page);
+			await page.getByRole('button', { name: /I'll pack them/ }).click();
+			await page.getByRole('checkbox', { name: /I've read and understood/ }).check();
+			await page.locator('#guestName').fill('Wait Veil');
+			await page.route(
+				(url) => url.search.includes('/bookBed'),
+				() => {}
+			);
+			await page.getByRole('button', { name: 'Save Spot' }).click();
+			await page.locator('.wait-veil', { hasText: 'Saving your spot' }).waitFor();
+		}
+	},
+	{
+		// A page change that takes a while: "On our way" over the house.
+		name: 'house: wait veil while a room loads',
+		path: (c) => `/house/${c.houseId}`,
+		as: 'guestWithSpot',
+		open: async (page) => {
+			await page.route(
+				(url) => url.pathname.startsWith('/room/') && url.pathname.endsWith('/__data.json'),
+				() => {}
+			);
+			await page.locator('a[href^="/room/"]').first().click();
+			await page.locator('.wait-veil', { hasText: 'On our way' }).waitFor();
+		}
+	},
+	{
 		// The same dialog before booking opens: only the burner name can change
 		// there, so it has one button less than during Live Booking.
 		name: 'room: rename dialog before booking opens',

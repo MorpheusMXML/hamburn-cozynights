@@ -13,6 +13,7 @@ No Trace to give it up and spin again.
 	import { onMount, tick, untrack } from 'svelte';
 	import { fade, scale } from 'svelte/transition';
 	import { deserialize, enhance } from '$app/forms';
+	import { startWait } from '$lib/waiting';
 	import { invalidateAll } from '$app/navigation';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import type { SpotFilter } from '$lib/accommodation';
@@ -398,9 +399,11 @@ No Trace to give it up and spin again.
 		bookingError = '';
 		isBooking = true;
 		const origin = centerOf(submitter) ?? centerOf(glassEl);
+		const waited = startWait('booking');
 
 		return async ({ result }) => {
 			isBooking = false;
+			waited();
 			checkOpen = false;
 			if (result.type === 'success') {
 				// Booked: the server ended the hold already.

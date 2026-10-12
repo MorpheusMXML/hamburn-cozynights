@@ -19,6 +19,7 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { invalidateAll } from '$app/navigation';
+	import { waitWhile } from '$lib/waiting';
 
 	export let data: PageData;
 	$: ({ isBookingActive, phase, guestPhase, bookingUnlockAt } = data);
@@ -129,7 +130,10 @@
 					{#if bookingUnlockAt}
 						<div class="timer-wrapper">
 							<h2 class="laser-text pink">IGNITION IN</h2>
-							<CountdownTimer targetDate={bookingUnlockAt} on:elapsed={() => invalidateAll()} />
+							<CountdownTimer
+								targetDate={bookingUnlockAt}
+								on:elapsed={() => waitWhile('opening', invalidateAll())}
+							/>
 						</div>
 					{/if}
 

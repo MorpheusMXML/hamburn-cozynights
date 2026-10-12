@@ -18,6 +18,7 @@
 	} from '$lib/booking-check';
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import { enhance } from '$app/forms';
+	import { startWait } from '$lib/waiting';
 	import { invalidateAll } from '$app/navigation';
 	import { onDestroy, onMount, tick } from 'svelte';
 	import { fade } from 'svelte/transition';
@@ -502,9 +503,11 @@
 								}
 								bannerError = '';
 								isSaving = true;
+								const waited = startWait('releasing');
 
 								return async ({ result, update }) => {
 									isSaving = false;
+									waited();
 									if (result.type === 'failure') {
 										bannerError = failureMessage(
 											result,
@@ -992,9 +995,11 @@
 						}
 						modalError = '';
 						isSaving = true;
+						const waited = startWait(releasing ? 'releasing' : 'booking');
 
 						return async ({ result, update }) => {
 							isSaving = false;
+							waited();
 							if (result.type === 'failure') {
 								modalError = failureMessage(
 									result,
