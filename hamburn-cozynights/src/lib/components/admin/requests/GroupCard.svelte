@@ -123,7 +123,8 @@
 			name: nameOf(m),
 			needs: m.needs,
 			declined: m.status === 'declined',
-			crewSpotLabel: crewSpot(m) && m.spot ? m.spot.label : ''
+			crewSpotLabel: crewSpot(m) && m.spot ? m.spot.label : '',
+			crewRoomId: crewSpot(m) && m.spot ? m.spot.roomId : ''
 		}))
 	);
 	const placing = $derived(toPlace(planMembers));

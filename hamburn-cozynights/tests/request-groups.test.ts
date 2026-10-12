@@ -1017,6 +1017,36 @@ describe('the group planner', () => {
 		]);
 	});
 
+	it('keeps the rest of a group with the members the crew booked already', () => {
+		// Room X (Villa): the crew booked two members there, 4 spots still free;
+		// Room Z (Hut): exactly 3 free — three members still need a spot
+		const at = (roomId: string, label: string) => ({
+			roomId,
+			room: roomId === 'rx' ? 'Room X' : 'Room Z',
+			houseId: roomId === 'rx' ? 'hx' : 'hz',
+			house: roomId === 'rx' ? 'Villa' : 'Hut',
+			label: `${label} · ${roomId === 'rx' ? 'Room X · Villa' : 'Room Z · Hut'}`
+		});
+		const spots = [
+			...['B3', 'B4', 'B5', 'B6'].map((label, i) =>
+				spot(`x${i + 3}`, 'r1', label, at('rx', label))
+			),
+			...['B1', 'B2', 'B3'].map((label, i) => spot(`z${i + 1}`, 'r1', label, at('rz', label)))
+		];
+		const booked = (id: string, label: string) =>
+			member(id, [], { crewSpotLabel: `${label} · Room X · Villa`, crewRoomId: 'rx' });
+		const group = [booked('k1', 'B1'), booked('k2', 'B2'), ...three];
+		const options = placeOptions(spots, 3);
+		// on their own, the three would go to the snuggest room, Room Z …
+		expect(defaultPlace(options, three, spots)).toBe('room:rz');
+		// … but two of the group sleep in Room X already: the rest joins them
+		expect(recommendRooms(options, group, spots).map((o) => o.key)).toEqual(['room:rx', 'room:rz']);
+		expect(defaultPlace(options, group, spots)).toBe('room:rx');
+		// Room X can't take the rest: no plan, the rows start on Keep as is
+		const fewer = spots.filter((s) => s.bedId !== 'x5' && s.bedId !== 'x6');
+		expect(defaultPlace(placeOptions(fewer, 3), group, fewer)).toBeNull();
+	});
+
 	it('swaps two planned spots, and sends a member back to Keep as is when the other row had none', () => {
 		const plan = { a: 'b1', b: 'b2', c: '' };
 		expect(repick(plan, 'a', 'b2')).toEqual({ changes: { a: 'b2', b: 'b1' }, bumped: '' });

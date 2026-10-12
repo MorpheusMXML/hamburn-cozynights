@@ -582,9 +582,15 @@ inside. The page renders one at a time, outside every form.
 						{/each}
 					</div>
 				</section>
-			{:else if groupMode && placing.length > 0}
+			{:else if groupMode && placing.length > 0 && fitRooms.size === 0}
+				<!-- Counted without the filter, like the card's "No room has …" (defaultPlace null). -->
 				<p class="no-room">
 					{`No room has ${placing.length} free spots together. Put as many as fit into one room here, then pick the others' spots in the group's card with Change.`}
+				</p>
+			{:else if groupMode && placing.length > 0}
+				<p class="hidden-rooms">
+					{`The filter hides the ${plural(fitRooms.size, 'room', 'rooms')} for all ${placing.length} ·`}
+					<button type="button" class="link" onclick={clearFilters}>Show all</button>
 				</p>
 			{/if}
 
@@ -1034,6 +1040,12 @@ inside. The page renders one at a time, outside every form.
 		border: 1px solid rgba(251, 146, 60, 0.4);
 		background: rgba(251, 146, 60, 0.08);
 		color: #fed7aa;
+		font-size: 0.9rem;
+		overflow-wrap: anywhere;
+	}
+	.hidden-rooms {
+		margin: 0;
+		color: #a3a3a3;
 		font-size: 0.9rem;
 		overflow-wrap: anywhere;
 	}

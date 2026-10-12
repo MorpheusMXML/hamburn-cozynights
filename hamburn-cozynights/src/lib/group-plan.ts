@@ -19,6 +19,8 @@ export interface PlanMember {
 	declined: boolean;
 	/** The spot the crew booked for the request ('' for none): the member keeps it. */
 	crewSpotLabel: string;
+	/** The room of that spot ('' or left out for none): the rest of the group belongs there. */
+	crewRoomId?: string;
 }
 
 /** A place the group could sleep in, for the planner's "Where:" choice. */
@@ -365,20 +367,47 @@ export function recommendRooms(
 	members: PlanMember[],
 	spots: SpotInfo[]
 ): (PlaceOption & { needs: NeedsMet })[] {
-	return rankPlaces(options, members, spots).filter((option) => option.key.startsWith('room:'));
+	const rooms = rankPlaces(options, members, spots).filter((option) =>
+		option.key.startsWith('room:')
+	);
+	// Where members sleep already (a spot the crew booked) comes first: the
+	// rest of the group joins them there.
+	const anchors = anchorRooms(members);
+	const order = (key: string) => {
+		const index = anchors.indexOf(key.slice('room:'.length));
+		return index < 0 ? anchors.length : index;
+	};
+	return anchors.length === 0 ? rooms : rooms.sort((a, b) => order(a.key) - order(b.key));
+}
+
+/** The rooms where members sleep in a spot the crew booked, most members first. */
+function anchorRooms(members: PlanMember[]): string[] {
+	const counts = new Map<string, number>();
+	for (const member of members) {
+		if (member.declined || !member.crewSpotLabel || !member.crewRoomId) continue;
+		counts.set(member.crewRoomId, (counts.get(member.crewRoomId) ?? 0) + 1);
+	}
+	return [...counts.entries()]
+		.sort((a, b) => b[1] - a[1] || compareNatural(a[0], b[0]))
+		.map(([roomId]) => roomId);
 }
 
 /**
  * Where the plan starts: the best room that fits everyone (recommendRooms),
  * or null when no room does — then there is no plan, and the crew picks a
- * spot for each member.
+ * spot for each member. When the crew booked some members already, only a
+ * room they sleep in can take the rest (else null: the rows start on Keep as
+ * is), so the plan never splits a group that has started in one room.
  */
 export function defaultPlace(
 	options: PlaceOption[],
 	members: PlanMember[],
 	spots: SpotInfo[]
 ): string | null {
-	return recommendRooms(options, members, spots)[0]?.key ?? null;
+	const rooms = recommendRooms(options, members, spots);
+	const anchors = anchorRooms(members);
+	if (anchors.length === 0) return rooms[0]?.key ?? null;
+	return rooms.find((option) => anchors.includes(option.key.slice('room:'.length)))?.key ?? null;
 }
 
 /**
