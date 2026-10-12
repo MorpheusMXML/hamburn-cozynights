@@ -21,7 +21,7 @@ import {
 } from '$lib/server/booking';
 import { clearGuestSession, signInUrl } from '$lib/server/guest-session';
 import { isCrewTicket } from '$lib/server/crew-ticket';
-import { getBookingSettings } from '$lib/server/settings';
+import { getBookingSettings, SETTINGS_UNREACHABLE } from '$lib/server/settings';
 import { bookingRefusal } from '$lib/booking-phase';
 import {
 	disconnectTelegram,
@@ -86,6 +86,10 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				expand: 'order'
 			})
 		]);
+
+		// Without a phase the page would tell the guest "booking is not open"
+		// and offer nothing: say what is really wrong.
+		if (!settings.known) throw error(503, UNAVAILABLE);
 
 		// PocketBase sorts labels as text (B1, B10, B2); the page shows and pairs
 		// them in the order people count in (B1, B2, …, B10).
@@ -219,7 +223,10 @@ export const actions: Actions = {
 			});
 		}
 
-		const { isBookingActive, phase } = await getBookingSettings(locals.pb);
+		const settings = await getBookingSettings(locals.pb);
+		// No phase, no decision: neither a booking nor a refusal that isn't true.
+		if (!settings.reachable) return fail(503, { error: SETTINGS_UNREACHABLE });
+		const { isBookingActive, phase } = settings;
 		// Closed: nothing changes any more, not even a name. Outside Live Booking
 		// only the burner name of the spot the ticket already holds may change
 		// (decided below, once that spot is known): a handed-over ticket comes
@@ -349,7 +356,8 @@ export const actions: Actions = {
 			});
 		}
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
+		const { isBookingActive, reachable } = await getBookingSettings(locals.pb);
+		if (!reachable) return fail(503, { error: SETTINGS_UNREACHABLE });
 		if (!isBookingActive) {
 			return fail(403, {
 				error:

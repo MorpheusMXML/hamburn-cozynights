@@ -2,7 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { clearGuestSession, signInUrl } from '$lib/server/guest-session';
 import { isCrewTicket } from '$lib/server/crew-ticket';
-import { getBookingSettings } from '$lib/server/settings';
+import { getBookingSettings, SETTINGS_UNREACHABLE } from '$lib/server/settings';
 import { bookingRefusal } from '$lib/booking-phase';
 import {
 	BookingService,
@@ -37,6 +37,24 @@ function rouletteSpot(bed: BedWithHouse): RouletteSpot {
 	};
 }
 
+/**
+ * What the drum needs of a free spot (rouletteSpot, and spotFacts for the
+ * wishes) — a camp of a few hundred spots in one read, so nothing more.
+ */
+const ROULETTE_FIELDS = [
+	'id',
+	'label',
+	'room',
+	'bed_type',
+	'features_off',
+	'expand.room.name',
+	'expand.room.room_number',
+	'expand.room.features',
+	'expand.room.features_off',
+	'expand.room.expand.house.name',
+	'expand.room.expand.house.features'
+].join(',');
+
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 const SIGNED_OUT =
 	'You are not signed in anymore. Go to the start page and enter your ticket code again.';
@@ -64,6 +82,8 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 
 	try {
 		const settings = await getBookingSettings(locals.pb);
+		// Without a phase the machine would rest with "not open yet": say what is wrong.
+		if (!settings.known) throw error(503, UNAVAILABLE);
 		const { isBookingActive, phase, guestPhase } = settings;
 
 		const userBed = await locals.adminPb
@@ -78,18 +98,22 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 		// a roll can be repeated and the page works without JavaScript.
 		const wishes = readFilters(url.searchParams.get('w'));
 
-		// Only fetch the (possibly large) free-bed list when the user doesn't
-		// already have a spot — they can't spin again without Leave No Trace
-		// first, and the page reloads this list right after the sweep.
+		// Only fetch the (possibly large) free-bed list when the drum is in play:
+		// during Live Booking, for a guest without a spot — they can't spin again
+		// without Leave No Trace first, and the page reloads this list right
+		// after the sweep. Outside Live Booking the machine rests and shows none.
 		// Deactivated, locked and special-needs beds are never part of the roulette.
-		const allFree: BedWithHouse[] = userBed
-			? []
-			: // beds are admin-only in PocketBase: the service account reads them
-				await locals.adminPb.collection('beds').getFullList<BedWithHouse>({
-					filter: 'occupied = false && enabled = true && is_locked = false && is_special = false',
-					expand: 'room,room.house',
-					sort: 'label'
-				});
+		const allFree: BedWithHouse[] =
+			userBed || !isBookingActive
+				? []
+				: // beds are admin-only in PocketBase: the service account reads them,
+					// and only what the reels and the wishes need (ROULETTE_FIELDS)
+					await locals.adminPb.collection('beds').getFullList<BedWithHouse>({
+						filter: 'occupied = false && enabled = true && is_locked = false && is_special = false',
+						expand: 'room,room.house',
+						fields: ROULETTE_FIELDS,
+						sort: 'label'
+					});
 		// The drum holds only the spots that fit the wishes (all of them without
 		// any); what a room or spot switched off (a superuser's call) never fits.
 		const freeBeds: RouletteSpot[] = allFree
@@ -186,7 +210,8 @@ export const actions: Actions = {
 			});
 		}
 
-		const { isBookingActive, guestPhase } = await getBookingSettings(locals.pb);
+		const { isBookingActive, guestPhase, reachable } = await getBookingSettings(locals.pb);
+		if (!reachable) return fail(503, { error: SETTINGS_UNREACHABLE });
 		if (!isBookingActive) return fail(403, { error: bookingRefusal(guestPhase) });
 
 		const formData = await request.formData();
@@ -257,7 +282,8 @@ export const actions: Actions = {
 			});
 		}
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
+		const { isBookingActive, reachable } = await getBookingSettings(locals.pb);
+		if (!reachable) return fail(503, { error: SETTINGS_UNREACHABLE });
 		if (!isBookingActive) {
 			return fail(403, {
 				error:

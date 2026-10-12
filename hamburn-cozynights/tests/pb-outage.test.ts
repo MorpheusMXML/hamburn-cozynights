@@ -162,6 +162,39 @@ describe('service account through a PocketBase outage', () => {
 		expect(pb.refresh).toHaveBeenCalledTimes(1);
 	});
 
+	it('gives the sign-in and the five-minute check five seconds each', async () => {
+		const timeout = vi.spyOn(AbortSignal, 'timeout');
+		const { getAdminPb } = await freshModule();
+		await getAdminPb();
+		expect(pb.login).toHaveBeenCalledWith(
+			'admin@test.com',
+			'password',
+			expect.objectContaining({ signal: expect.any(AbortSignal) })
+		);
+		vi.advanceTimersByTime(5 * 60 * 1000 + 1);
+		await getAdminPb();
+		expect(pb.refresh).toHaveBeenCalledWith(
+			expect.objectContaining({ signal: expect.any(AbortSignal) })
+		);
+		expect(timeout.mock.calls.map(([ms]) => ms)).toEqual([5000, 5000]);
+	});
+
+	it('keeps the token when the check runs out of time, like when PocketBase is down', async () => {
+		const { getAdminPb } = await freshModule();
+		await getAdminPb();
+		vi.advanceTimersByTime(5 * 60 * 1000 + 1);
+		// What the SDK makes of an aborted fetch: status 0, no answer at all.
+		pb.refresh.mockImplementationOnce(async () => {
+			throw Object.assign(new Error('The operation was aborted due to timeout'), {
+				status: 0,
+				name: 'TimeoutError'
+			});
+		});
+		const client = await getAdminPb();
+		expect(client.authStore.isValid).toBe(true);
+		expect(pb.login).toHaveBeenCalledTimes(1);
+	});
+
 	it('tells a refused token from a PocketBase that does not answer', async () => {
 		const { tokenRejected } = await freshModule();
 		for (const status of [400, 401, 403, 404]) {

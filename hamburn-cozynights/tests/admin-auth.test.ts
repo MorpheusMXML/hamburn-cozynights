@@ -11,8 +11,10 @@ vi.mock('$env/dynamic/private', () => ({
 	}
 }));
 
-// The service account is irrelevant for these tests.
-vi.mock('$lib/server/pocketbase', () => ({
+// The service account is irrelevant for these tests; the rest of the module
+// (tokenRejected, the time limits) is the real one.
+vi.mock('$lib/server/pocketbase', async (importOriginal) => ({
+	...(await importOriginal<typeof import('../src/lib/server/pocketbase')>()),
 	PB_URL: 'http://127.0.0.1:8090',
 	getAdminPb: vi.fn(async () => ({ authStore: { isValid: true } }))
 }));
@@ -160,7 +162,14 @@ describe('hooks.server handle', () => {
 		refreshSpy.mockRestore();
 	});
 
-	function makeEvent(path: string, { method = 'GET', cookie = '' } = {}) {
+	function makeEvent(
+		path: string,
+		{
+			method = 'GET',
+			cookie = '',
+			headers = {}
+		}: { method?: string; cookie?: string; headers?: Record<string, string> } = {}
+	) {
 		const url = new URL(`http://localhost${path}`);
 		const cookieMap: Record<string, string> = {};
 		for (const part of cookie.split(';').filter(Boolean)) {
@@ -169,7 +178,7 @@ describe('hooks.server handle', () => {
 		}
 		return {
 			url,
-			request: new Request(url, { method, headers: cookie ? { cookie } : {} }),
+			request: new Request(url, { method, headers: { ...headers, ...(cookie ? { cookie } : {}) } }),
 			cookies: makeCookies(cookieMap),
 			locals: {} as any
 		} as any;
@@ -301,7 +310,72 @@ describe('hooks.server handle', () => {
 
 		expect(response.status).toBe(403);
 		expect(event.locals.admin).toBeNull();
+		expect(event.locals.adminUnchecked).toBe(false);
 		expect(event.locals.pb.authStore.isValid).toBe(false);
+
+		// a page request ends the session for good: the cookie is cleared
+		const page = makeEvent('/admin', { cookie: authCookie(ADMIN_RECORD) });
+		const cleared = await handle({ event: page, resolve });
+		expect(cleared.headers.get('set-cookie')).toContain('Expires=Thu, 01 Jan 1970');
+	});
+
+	it('keeps the session through a PocketBase hiccup: cookie untouched, no rights for this request', async () => {
+		const resolve = vi.fn(async () => new Response('ok'));
+		for (const status of [0, 429, 500, 503]) {
+			refreshSpy.mockRejectedValue(new ClientResponseError({ status }));
+			const event = makeEvent('/admin', { cookie: authCookie(ADMIN_RECORD) });
+			const response = await handle({ event, resolve });
+
+			// the page request reaches the layout, which says what is wrong
+			expect(response.status, `status ${status}`).toBe(200);
+			expect(event.locals.admin).toBeNull();
+			expect(event.locals.adminUnchecked).toBe(true);
+			// nothing goes to PocketBase with the admin's token in this request
+			expect(event.locals.pb.authStore.isValid).toBe(false);
+			// neither renewed nor cleared: signed in again with the next request
+			expect(response.headers.get('set-cookie'), `status ${status}`).toBeNull();
+		}
+		// the check gives up after five seconds, like the service account's
+		expect(refreshSpy).toHaveBeenCalledWith(
+			expect.objectContaining({ signal: expect.any(AbortSignal) })
+		);
+	});
+
+	it('answers an admin action during the hiccup with the reason instead of the login page', async () => {
+		refreshSpy.mockRejectedValue(new ClientResponseError({ status: 0 }));
+		const resolve = vi.fn(async () => new Response('ok'));
+
+		const action = makeEvent('/admin', {
+			method: 'POST',
+			cookie: authCookie(ADMIN_RECORD),
+			headers: { 'x-sveltekit-action': 'true' }
+		});
+		const response = await handle({ event: action, resolve });
+		expect(response.status).toBe(503);
+		// an action result of type "error": use:enhance shows its message
+		expect(await response.json()).toEqual({
+			type: 'error',
+			error: { message: expect.stringContaining('PocketBase is not reachable right now') }
+		});
+		expect(response.headers.get('set-cookie')).toBeNull();
+
+		const api = makeEvent('/admin/api/stats', { cookie: authCookie(ADMIN_RECORD) });
+		const apiResponse = await handle({ event: api, resolve });
+		expect(apiResponse.status).toBe(503);
+		expect(await apiResponse.text()).toContain('You are still signed in');
+		expect(resolve).not.toHaveBeenCalled();
+	});
+
+	it('still signs out while PocketBase does not answer', async () => {
+		refreshSpy.mockRejectedValue(new ClientResponseError({ status: 0 }));
+		const event = makeEvent('/admin/logout', { method: 'POST', cookie: authCookie(ADMIN_RECORD) });
+		// what the logout action does (src/routes/admin/logout/+page.server.ts)
+		const resolve = vi.fn(async (e: any) => {
+			e.locals.pb.authStore.clear();
+			return new Response(null, { status: 303, headers: { location: '/admin/login' } });
+		});
+		const response = await handle({ event, resolve });
+		expect(response.headers.get('set-cookie')).toContain('Expires=Thu, 01 Jan 1970');
 	});
 });
 
@@ -321,6 +395,28 @@ describe('admin layout', () => {
 			} as any) as any
 		);
 		expect(redirect).toEqual({ status: 303, location: '/admin/login?error=reauth' });
+	});
+
+	it('says PocketBase is not reachable instead of sending a signed-in admin through Google again', async () => {
+		for (const path of ['/admin', '/admin/camp', '/admin/login']) {
+			await expect(
+				adminLayoutLoad({
+					locals: { admin: null, adminUnchecked: true },
+					url: new URL(`http://x${path}`)
+				} as any) as any,
+				path
+			).rejects.toMatchObject({
+				status: 503,
+				body: { message: expect.stringContaining('You are still signed in') }
+			});
+		}
+		// signing out stays possible
+		expect(
+			await (adminLayoutLoad({
+				locals: { admin: null, adminUnchecked: true },
+				url: new URL('http://x/admin/logout')
+			} as any) as any)
+		).toMatchObject({ admin: null });
 	});
 
 	it('exposes only email, name and role', async () => {
@@ -610,7 +706,13 @@ describe('superuser-only dashboard actions', () => {
 			delete: vi.fn(async () => ({})),
 			create: vi.fn(async () => ({ id: 'new' }))
 		};
-		return { pb: { collection: vi.fn(() => service) } as any, service };
+		// The safety backup before a release (src/lib/server/template.ts, createSafetyBackup).
+		const backups = {
+			create: vi.fn(async (_name: string) => {}),
+			getFullList: vi.fn(async () => [] as { key: string }[]),
+			delete: vi.fn(async () => {})
+		};
+		return { pb: { collection: vi.fn(() => service), backups } as any, service, backups };
 	}
 
 	const crew = {
@@ -644,7 +746,13 @@ describe('superuser-only dashboard actions', () => {
 			locals: { pb, adminPb: pb, admin: boss }
 		} as any);
 
-		expect(result).toEqual({ success: true, released: 1, kept: 1, namesLeft: 0 });
+		expect(result).toEqual({
+			success: true,
+			released: 1,
+			kept: 1,
+			namesLeft: 0,
+			backup: expect.stringMatching(/^pre-release-\d{8}-\d{6}-\d{3}\.zip$/)
+		});
 		expect(service.update).toHaveBeenCalledWith('bed1', { occupied: false, order: null });
 		expect(service.update).toHaveBeenCalledWith('order1', { burner_name: '' });
 		expect(service.delete).not.toHaveBeenCalled();

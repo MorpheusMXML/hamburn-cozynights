@@ -127,6 +127,13 @@ export function checkGoogleIdentity(meta: Record<string, any> | undefined): Admi
 	return null;
 }
 
+/**
+ * What an admin reads when PocketBase didn't answer the session check
+ * (hooks.server.ts): the session is kept, only this request couldn't run.
+ */
+export const ADMIN_SESSION_UNCHECKED =
+	'PocketBase is not reachable right now, so your sign-in could not be checked. You are still signed in: try again in a moment.';
+
 /** Paths under /admin that are reachable without an admin session. */
 export function isPublicAdminPath(pathname: string): boolean {
 	return pathname === '/admin/login' || pathname === '/admin/logout';

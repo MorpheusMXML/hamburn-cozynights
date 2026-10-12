@@ -109,6 +109,7 @@ Access requests, approvals, role changes, removals and every admin sign-in show 
 - A session lasts **three days** and is renewed every time you use the admin area.
 - **Once a week you sign in with Google again**, even if you use the admin area every day (**WEEKLY CHECK 🔐**). That's when Google applies what the Workspace decided: a suspended account is out, required 2-Step Verification is asked for.
 - <kbd>Eject 🚀</kbd> in the top-right corner signs you out.
+- **A database hiccup doesn't sign you out.** Only PocketBase turning your session down ends it. When it doesn't answer (a restart, a moment of heavy load), the page says *PocketBase is not reachable right now, so your sign-in could not be checked. You are still signed in: try again in a moment.* and nothing you clicked was done; the next request finds you signed in.
 - The session cookie can't be read by scripts on the page and is only sent over HTTPS.
 
 ## Sign-in messages

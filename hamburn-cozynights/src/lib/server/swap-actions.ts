@@ -8,7 +8,7 @@
 import { fail, type ActionFailure } from '@sveltejs/kit';
 import type { OrdersResponse } from '$lib/pocketbase-types';
 import { BookingService } from '$lib/server/booking';
-import { getBookingSettings } from '$lib/server/settings';
+import { getBookingSettings, SETTINGS_UNREACHABLE } from '$lib/server/settings';
 import {
 	acceptSwap,
 	askForSwap,
@@ -53,6 +53,7 @@ export async function askSwapAction(locals: App.Locals, request: Request) {
 	if (!bedId) return fail(400, { error: 'No spot was selected. Close this and tap a taken spot.' });
 	return forGuest(locals, 'Asking', async (order) => {
 		const settings = await getBookingSettings(locals.pb);
+		if (!settings.reachable) return fail(503, { error: SETTINGS_UNREACHABLE });
 		const id = await askForSwap(locals.adminPb, settings, order, bedId, {
 			vibe: form.get('vibe'),
 			note: form.get('note')
@@ -75,6 +76,7 @@ export async function acceptSwapAction(locals: App.Locals, request: Request) {
 	if (!id) return fail(400, { error: 'No request was selected. Reload the page.' });
 	return forGuest(locals, 'Accepting', async (order) => {
 		const settings = await getBookingSettings(locals.pb);
+		if (!settings.reachable) return fail(503, { error: SETTINGS_UNREACHABLE });
 		const { gained, gave } = await acceptSwap(locals.adminPb, settings, order, id);
 		return { success: true, swapped: id, gained, gave };
 	});

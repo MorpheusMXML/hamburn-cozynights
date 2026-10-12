@@ -30,6 +30,10 @@ The ticket shop has your order as not paid yet, so it can't book a bed. Contact 
 CozyNights couldn't reach its database for a moment. Your code is fine. Try again shortly.
 :::
 
+::: details "The booking system is not reachable right now. Nothing was changed…"
+CozyNights couldn't check for a moment whether booking is open, so it neither booked nor released anything: your spot is as it was. Try again in a moment.
+:::
+
 ::: details What bedding do I need to bring?
 Pillow and blanket are provided. Bring your own covers: a **bed sheet** for the mattress, a **duvet cover** for the blanket and a **pillowcase**. A sleeping bag is fine instead of the duvet cover; the bed sheet and the pillowcase are still a must. Your booking pass and every e-mail about your spot say it again, for when you pack.
 :::

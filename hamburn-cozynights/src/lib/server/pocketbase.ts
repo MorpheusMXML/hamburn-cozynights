@@ -9,12 +9,42 @@ import type { TypedPocketBase } from '$lib/pocketbase-types';
  */
 export const PB_URL = privateEnv.PB_URL || 'http://127.0.0.1:8090';
 
+/** A read (GET, HEAD) that has no answer after this long gives up. */
+export const READ_TIMEOUT_MS = 10 * 1000;
+/** The same for checking a session or signing in (POST, but no record changes). */
+export const AUTH_TIMEOUT_MS = 5 * 1000;
+
+/**
+ * Gives every read of `client` a time limit. A PocketBase that hangs
+ * (overloaded, half restarted) would otherwise hold the request — and the
+ * guest waiting for the page — until the proxy gives up; this way the page
+ * says "not reachable" after 10 s and the next try can work. Writes (POST,
+ * PATCH, DELETE) never get one: a booking, a release or a swap must run to
+ * the end, and one cut off halfway may have happened anyway. A signal the
+ * caller passed is kept.
+ */
+export function limitReads<T extends PocketBase>(client: T): T {
+	client.beforeSend = (url, options) => {
+		const method = String(options.method ?? 'GET').toUpperCase();
+		if ((method === 'GET' || method === 'HEAD') && !options.signal) {
+			options.signal = AbortSignal.timeout(READ_TIMEOUT_MS);
+		}
+		return { url, options };
+	};
+	return client;
+}
+
+/** Options for an auth call (authRefresh, authWithPassword) that gives up after AUTH_TIMEOUT_MS. */
+export function authTimeout(): { signal: AbortSignal } {
+	return { signal: AbortSignal.timeout(AUTH_TIMEOUT_MS) };
+}
+
 // Global singleton instance, shared across all concurrent requests from all
 // users. Auto-cancellation is designed for a single browser client deduping
 // its own rapid-fire requests — on a shared server instance it instead cancels
 // unrelated users' in-flight requests that happen to hit the same endpoint
 // shape at the same time, surfacing as random "autocancelled" failures.
-export const adminPb = new PocketBase(PB_URL) as TypedPocketBase;
+export const adminPb = limitReads(new PocketBase(PB_URL) as TypedPocketBase);
 adminPb.autoCancellation(false);
 
 // `authStore.isValid` only checks the token's local expiry. A token revoked on
@@ -50,7 +80,8 @@ async function authenticate(): Promise<void> {
 	try {
 		if (adminPb.authStore.isValid) {
 			try {
-				await adminPb.collection('_superusers').authRefresh();
+				// Gives up after 5 s like a PocketBase that is down: the token stays.
+				await adminPb.collection('_superusers').authRefresh(authTimeout());
 				lastVerifiedAt = Date.now();
 				return;
 			} catch (err: any) {
@@ -67,7 +98,7 @@ async function authenticate(): Promise<void> {
 			}
 		}
 
-		await adminPb.collection('_superusers').authWithPassword(email, password);
+		await adminPb.collection('_superusers').authWithPassword(email, password, authTimeout());
 		if (!adminPb.authStore.isValid) {
 			// e.g. a proxy answered with an HTML page instead of the PocketBase API
 			throw new Error(`no token received from ${PB_URL}`);
