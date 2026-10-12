@@ -8,10 +8,18 @@
 //
 // A ticket that holds two spots already can't be fixed by a rule: which one
 // is theirs is a crew decision (Max, 2026-10-12). The migration then stops
-// with the tickets and spots in the message — PocketBase doesn't start, the
-// deploy rolls back, nothing changes. Free the spot that is wrong (dashboard
-// over the tunnel, or the camp map) and deploy again. The deploy runbook
-// checks this before the deploy (deploy/README.md, "Vor einem Release").
+// with the tickets and spots in the message, and PocketBase doesn't start.
+// What happens next depends on the deploy script: the hardened one (from
+// v1.32.3 on) rolls back to the previous image; the OLD one, which deploys
+// v1.32.3 itself, does not — the site stays down until someone acts. So the
+// read-only pre-check comes first, before every release (deploy/README.md,
+// "Vor einem Release"). Free the spot that is wrong (camp map, or the
+// dashboard over the tunnel) and deploy again.
+//
+// A rollback of the app image to v1.32.2 or older keeps this index (PocketBase
+// never runs a down branch then), and that code claims the new spot before
+// it releases the old one: moves and swaps would fail. After such a rollback,
+// delete idx_beds_order_unique in the dashboard (deploy/README.md, Rollback).
 //
 // Swaps write in an order the index allows (pb_hooks/lib/swap.js). Down
 // removes the index.
