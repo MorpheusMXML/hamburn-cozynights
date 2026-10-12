@@ -14,8 +14,9 @@ export type HouseData = HousesResponse & {
 	freeBeds: number;
 	isBookable?: boolean;
 	/**
-	 * Free spots that fit the wishes the guest picked on the map; only set while
-	 * the map is filtered (src/routes/map/+page.server.ts).
+	 * Free spots that fit the wishes the guest picked on the map, while the map
+	 * is filtered. The map page sends it on its own per-house summary (MapHouse
+	 * in src/routes/map/+page.server.ts), which Map.svelte reads like this type.
 	 */
 	fittingFree?: number;
 	/** The signed-in guest's spot is in this house (getFullTree with an orderId). */

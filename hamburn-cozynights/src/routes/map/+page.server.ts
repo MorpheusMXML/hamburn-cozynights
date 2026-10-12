@@ -9,6 +9,28 @@ import { readAvailableFilters } from '$lib/server/wishes';
 import { passSummary } from '$lib/server/pass';
 import { openingCountdownAt } from '$lib/booking-phase';
 import { readFilters, spotFacts, spotMatchesFilters, type SpotFilter } from '$lib/accommodation';
+import type { HouseData } from '$lib/types';
+
+/**
+ * A house as the camp map draws it: the pin and its name, the glow (spots in
+ * all, spots free), the hut-group icon, the guest's own house, and while the
+ * map is filtered how many free spots fit the wishes. Nothing else of the
+ * camp goes to the browser: the whole tree, every room and spot record, was
+ * ~107 KB per visit for the 297 spots of Hamburn 2026, and the house and room
+ * pages read their own rooms and spots when the guest opens them.
+ */
+export interface MapHouse {
+	id: string;
+	name: string;
+	x: number;
+	y: number;
+	kind: string;
+	totalBeds: number;
+	freeBeds: number;
+	mine: boolean;
+	/** Only while the map is filtered (`?w=`): free spots that answer every wish. */
+	fittingFree?: number;
+}
 
 /**
  * Free spots of a house that answer every wish the guest picked. The tree
@@ -35,6 +57,22 @@ function countFitting(house: { features?: string[]; rooms: any[] }, wishes: Spot
 			).length,
 		0
 	);
+}
+
+/** The summary of one house of the tree (see MapHouse). */
+function mapHouse(house: HouseData, wishes: SpotFilter[]): MapHouse {
+	const summary: MapHouse = {
+		id: house.id,
+		name: house.name,
+		x: house.x ?? 0,
+		y: house.y ?? 0,
+		kind: house.kind ?? '',
+		totalBeds: house.totalBeds,
+		freeBeds: house.freeBeds,
+		mine: !!house.mine
+	};
+	if (wishes.length > 0) summary.fittingFree = countFitting(house, wishes);
+	return summary;
 }
 
 /** What the wishes found, as the top bar says it next to the chips. */
@@ -69,7 +107,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		if (!locals.adminPb.authStore.isValid) throw new Error('service account not signed in');
 		// Only the guest's own house learns that it holds their spot (`mine`).
 		const inventory = new InventoryService(locals.adminPb);
-		let houses = await inventory.getFullTree({ orderId: locals.order?.id });
+		let tree = await inventory.getFullTree({ orderId: locals.order?.id });
 		const [{ isBookingActive, phase, guestPhase, next }, availableFilters] = await Promise.all([
 			getBookingSettings(locals.pb),
 			// The wish chips of the top bar: only the wishes some spot answers.
@@ -78,17 +116,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 		if (phase !== 'staging') {
 			// The layout is final: leave out unconfigured houses (live and closed).
-			houses = houses.filter((h) => h.isBookable);
+			tree = tree.filter((h) => h.isBookable);
 		}
 
 		// What the guest is looking for. Strict on purpose: a spot nobody described
 		// never matches, so a wish never promises something the crew never wrote down.
 		const wishes = readFilters(url.searchParams.get('w'));
-		let wishFit = '';
-		if (wishes.length > 0) {
-			houses = houses.map((house) => ({ ...house, fittingFree: countFitting(house, wishes) }));
-			wishFit = wishFitText(houses.filter((house) => (house.fittingFree ?? 0) > 0).length);
-		}
+		// The tree stays here: the map gets one small summary per house.
+		const houses = tree.map((house) => mapHouse(house, wishes));
+		const wishFit =
+			wishes.length > 0
+				? wishFitText(houses.filter((house) => (house.fittingFree ?? 0) > 0).length)
+				: '';
 
 		// Closed: the panel over the map shows the guest's spot as a small booking
 		// pass. The ticket was read once per request in hooks.server.ts; whether

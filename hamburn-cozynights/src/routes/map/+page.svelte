@@ -16,7 +16,7 @@
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import { mapLookingAround } from '$lib/components/GuestTopBar.svelte';
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
 	import { invalidateAll } from '$app/navigation';
 
@@ -53,15 +53,24 @@
 		if (browser) mapLookingAround.set(false);
 	});
 
-	onMount(() => {
-		// Force a fresh fetch when entering the page
-		invalidateAll();
-	});
+	// No invalidateAll() when the page mounts: every way onto it brings fresh
+	// data already. A visit, a reload and the way in after signing in load it
+	// from the server; coming here from another page (a link, Back) runs the
+	// server load again, as SvelteKit keeps no data of a page the guest left,
+	// and links preload on tap only (app.html), so no data hovered minutes ago
+	// is shown. A tab back from the back-forward cache, or from a while in the
+	// background, asks again through refreshOnReturn (+layout.svelte). Asking
+	// here as well loaded the whole map twice on every visit.
 
 	let clickCount = 0;
 	let lastClickTime = 0;
 	let isShaking = false;
 	let shakeTimeout: ReturnType<typeof setTimeout>;
+
+	// Smashing the button shakes it (and calibrates intensely), but the map is
+	// asked again once every few seconds at most.
+	const RELOAD_EVERY_MS = 3000;
+	let lastReloadTime = 0;
 
 	function handleReloadSensors() {
 		const now = Date.now();
@@ -80,7 +89,10 @@
 			}, 500);
 		}
 
-		invalidateAll();
+		if (now - lastReloadTime >= RELOAD_EVERY_MS) {
+			lastReloadTime = now;
+			invalidateAll();
+		}
 	}
 </script>
 
