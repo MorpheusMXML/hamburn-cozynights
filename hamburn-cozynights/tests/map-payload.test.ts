@@ -67,8 +67,16 @@ function hamburnCamp({ phase = 'live' } = {}) {
 	return { pb, order, locals };
 }
 
+/** The headers the load sets, of the last call. */
+let headers: Record<string, string> = {};
 const mapAt = (locals: object, search = '') =>
-	mapLoad({ url: new URL(`http://test.local/map${search}`), locals } as any) as Promise<any>;
+	mapLoad({
+		url: new URL(`http://test.local/map${search}`),
+		locals,
+		setHeaders: (set: Record<string, string>) => {
+			headers = { ...headers, ...set };
+		}
+	} as any) as Promise<any>;
 
 describe('the camp map payload', () => {
 	beforeEach(() => forgetAvailableFilters());
@@ -155,9 +163,22 @@ describe('the camp map payload', () => {
 });
 
 describe('loading the map', () => {
-	it('loads once per visit: no invalidateAll() when the page mounts', () => {
+	it('loads once per visit: asks again on mount only for data that is already old', () => {
 		const page = read('src/routes/map/+page.svelte');
-		expect(page).not.toMatch(/onMount\(\s*(\(\)\s*=>\s*\{?[^}]*?)?invalidateAll/s);
+		// the one onMount reload is guarded by the data's age
+		expect(page).toMatch(
+			/onMount\(\(\) => \{\s*if \(data\.loadedAt && Date\.now\(\) - data\.loadedAt > STALE_AFTER_MS\) invalidateAll\(\);/
+		);
+		expect(page.match(/onMount\(/g)).toHaveLength(1);
+	});
+
+	it('is never served from a cache, and says when it was read', async () => {
+		const { locals } = hamburnCamp();
+		headers = {};
+		const before = Date.now();
+		const data = await mapAt(locals);
+		expect(headers['cache-control']).toBe('private, no-store');
+		expect(data.loadedAt).toBeGreaterThanOrEqual(before);
 	});
 
 	it('preloads page data on tap, not on hover', () => {

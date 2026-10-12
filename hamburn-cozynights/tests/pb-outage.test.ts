@@ -241,7 +241,7 @@ describe('guest map through a PocketBase outage', () => {
 			guestSignOut: false
 		};
 		await expect(
-			load({ url: new URL('http://test.local/map'), locals } as any)
+			load({ url: new URL('http://test.local/map'), locals, setHeaders: () => {} } as any)
 		).rejects.toMatchObject({ status: 503 });
 		expect(collection).not.toHaveBeenCalled();
 	});

@@ -16,7 +16,7 @@
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import { mapLookingAround } from '$lib/components/GuestTopBar.svelte';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { invalidateAll } from '$app/navigation';
 
@@ -53,14 +53,19 @@
 		if (browser) mapLookingAround.set(false);
 	});
 
-	// No invalidateAll() when the page mounts: every way onto it brings fresh
-	// data already. A visit, a reload and the way in after signing in load it
-	// from the server; coming here from another page (a link, Back) runs the
-	// server load again, as SvelteKit keeps no data of a page the guest left,
-	// and links preload on tap only (app.html), so no data hovered minutes ago
-	// is shown. A tab back from the back-forward cache, or from a while in the
-	// background, asks again through refreshOnReturn (+layout.svelte). Asking
-	// here as well loaded the whole map twice on every visit.
+	// No unconditional invalidateAll() when the page mounts: every way onto it
+	// brings fresh data already. A visit, a reload and the way in after signing
+	// in load it from the server (never from a cache: the load sends no-store);
+	// coming here from another page runs the server load again. A tab back from
+	// the back-forward cache, or from a while in the background, asks again
+	// through refreshOnReturn (+layout.svelte). Asking on every mount loaded
+	// the whole map twice per visit. Only data that is already old when the
+	// page shows it — a tap that preloaded it and became a scroll, minutes ago —
+	// is asked for once more.
+	const STALE_AFTER_MS = 30_000;
+	onMount(() => {
+		if (data.loadedAt && Date.now() - data.loadedAt > STALE_AFTER_MS) invalidateAll();
+	});
 
 	let clickCount = 0;
 	let lastClickTime = 0;

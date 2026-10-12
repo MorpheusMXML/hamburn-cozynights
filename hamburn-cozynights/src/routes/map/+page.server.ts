@@ -94,7 +94,10 @@ async function closedPanelPass(locals: App.Locals, order: OrdersResponse) {
 	}
 }
 
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ locals, url, setHeaders }) => {
+	// Free spots change by the second: never from a cache (a Back after the
+	// back-forward cache dropped the page would otherwise show the old map).
+	setHeaders({ 'cache-control': 'private, no-store' });
 	// The ticket list or the booking round ended this session: say so on the
 	// start page instead of showing the map as if nobody had ever signed in.
 	if (locals.guestSignOut) throw redirect(303, signInUrl(locals));
@@ -149,7 +152,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			// only an armed opening still ahead: a paused or elapsed time shows no countdown
 			bookingUnlockAt: openingCountdownAt(phase, next),
 			pass,
-			noSpot
+			noSpot,
+			// when these numbers were read, for the page's freshness check on mount
+			loadedAt: Date.now()
 		};
 	} catch (err) {
 		console.error('[Map] Load failed:', (err as Error)?.message);
