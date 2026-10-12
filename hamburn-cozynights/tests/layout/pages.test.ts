@@ -847,7 +847,14 @@ const PAGES: PageCase[] = [
 		path: () => '/admin/requests',
 		as: 'admin',
 		open: async (page) => {
-			await page.locator(`#group-${camp.fullGroupId} form.plan button.primary`).click();
+			// A group sleeps in one room: when no room has space for all (as in the
+			// stress camp) there is no plan, so put as many as fit into one, then book.
+			const group = page.locator(`#group-${camp.fullGroupId}`);
+			await group.locator('.where button').click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.locator('.room-action button').first().click();
+			await sheet.getByRole('button', { name: 'Edit the plan' }).click();
+			await group.locator('form.plan button.primary').click();
 			await page.getByRole('alertdialog').waitFor();
 		}
 	},

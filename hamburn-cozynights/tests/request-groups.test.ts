@@ -47,6 +47,7 @@ import {
 	placeOptions,
 	proposePlan,
 	rankPlaces,
+	recommendRooms,
 	repick,
 	type PlanMember
 } from '../src/lib/group-plan';
@@ -882,8 +883,22 @@ describe('the group planner', () => {
 			'house:h1'
 		]);
 		expect(defaultPlace(options, three, quiet)).toBe('room:r3');
-		// no place fits everyone: anywhere
-		expect(defaultPlace(placeOptions(quiet, 12), members, quiet)).toBe('');
+		// no place fits everyone: no plan
+		expect(defaultPlace(placeOptions(quiet, 12), members, quiet)).toBeNull();
+	});
+
+	it('recommends one room only: when just a whole house fits everyone, there is no plan', () => {
+		// Villa: Dorm #1 has 2 free, Dorm #2 has 4 — the house fits 5, no room does
+		const five = ['m1', 'm2', 'm3', 'm4', 'm5'].map((id) => member(id));
+		const options = placeOptions(SPOTS, 5);
+		expect(options.find((o) => o.key === 'house:h1')).toMatchObject({ fits: true });
+		expect(recommendRooms(options, five, SPOTS)).toEqual([]);
+		expect(defaultPlace(options, five, SPOTS)).toBeNull();
+		// three fit into Den or Dorm #2: rooms only, the snuggest first
+		expect(recommendRooms(placeOptions(SPOTS, 3), three, SPOTS).map((o) => o.key)).toEqual([
+			'room:r3',
+			'room:r2'
+		]);
 	});
 
 	it('takes a spot the crew locked only when nothing else is left, and says so', () => {

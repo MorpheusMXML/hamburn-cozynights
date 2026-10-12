@@ -354,15 +354,31 @@ export function rankPlaces(
 }
 
 /**
- * Where the plan starts: the first ranked place (rankPlaces), else anywhere
- * (''). The crew picks another one in the spot picker.
+ * The rooms to recommend for a group, best first: rooms that fit everyone,
+ * ranked by rankPlaces (none of the crew's locked 🔒 spots needed, then the
+ * members' needs, then the snuggest). A group sleeps in one room (Max,
+ * 2026-10-12): houses and "anywhere" are no recommendation — when no room
+ * fits everyone, the crew picks the spots one by one.
+ */
+export function recommendRooms(
+	options: PlaceOption[],
+	members: PlanMember[],
+	spots: SpotInfo[]
+): (PlaceOption & { needs: NeedsMet })[] {
+	return rankPlaces(options, members, spots).filter((option) => option.key.startsWith('room:'));
+}
+
+/**
+ * Where the plan starts: the best room that fits everyone (recommendRooms),
+ * or null when no room does — then there is no plan, and the crew picks a
+ * spot for each member.
  */
 export function defaultPlace(
 	options: PlaceOption[],
 	members: PlanMember[],
 	spots: SpotInfo[]
-): string {
-	return rankPlaces(options, members, spots)[0]?.key ?? '';
+): string | null {
+	return recommendRooms(options, members, spots)[0]?.key ?? null;
 }
 
 /**

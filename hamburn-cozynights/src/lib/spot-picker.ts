@@ -254,8 +254,8 @@ export function bestFits(
  * What the requests page asks the picker for:
  * - spot: one spot for one person — a request's card (books right away, a
  *   confirmation follows) or a row of a group's plan (only fills the row);
- * - group: a room or house for a whole request group; $lib/group-plan
- *   proposes who sleeps where, then the crew books it or edits the plan.
+ * - group: a room for a whole request group; $lib/group-plan proposes who
+ *   sleeps where, then the crew books it or edits the plan.
  * The page wraps `resolve` so the picker closes first; null = closed without
  * a choice.
  */
@@ -281,7 +281,7 @@ export type PickerRequest =
 			name: string;
 			/** Every member (PlanMember); only those toPlace() returns get a spot. */
 			members: PlanMember[];
-			/** The place the plan proposes now: '', 'room:<id>' or 'house:<id>'. */
+			/** The room the plan proposes now ('room:<id>'), '' for none. */
 			place: string;
 			/** `book`: book the proposal right away (a confirmation follows); else only plan it. */
 			resolve: (choice: { place: string; book: boolean } | null) => void;

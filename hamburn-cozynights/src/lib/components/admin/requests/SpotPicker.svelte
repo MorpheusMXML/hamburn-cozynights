@@ -10,9 +10,13 @@ spots only, one house — and to pick from ($lib/spot-picker).
   of their own. The button at the bottom takes the pick: on a request's card
   it books right away (the page asks first), in a group's plan it only fills
   the member's row.
-- group: a room, or a whole house, for a request group. "Put the group here"
-  proposes who sleeps where ($lib/group-plan) and writes the names on the
-  spots; then book it in one go, or edit the plan in the group's card.
+- group: a room for a request group — a group sleeps in one room (Max,
+  2026-10-12). The rooms that fit everyone are suggested first; "Put the
+  group here" proposes who sleeps where ($lib/group-plan) and writes the
+  names on the spots; then book it in one go, or edit the plan in the
+  group's card. A room too small for everyone takes as many as fit, the
+  crew picks the others' spots in the card ("Change"); nothing splits a
+  group by itself.
 
 Escape, ✕, Cancel or the backdrop close it without a choice; Tab stays
 inside. The page renders one at a time, outside every form.
@@ -39,7 +43,7 @@ inside. The page renders one at a time, outside every form.
 		needsMet,
 		placeOptions,
 		proposePlan,
-		rankPlaces,
+		recommendRooms,
 		toPlace,
 		type NeedsMet,
 		type PlanMember
@@ -126,18 +130,18 @@ inside. The page renders one at a time, outside every form.
 	const options = $derived(groupMode ? placeOptions(spots, placing.length, accessCount) : []);
 	const optionOf = $derived(new Map(options.map((option) => [option.key, option])));
 	let place = $state(untrack(() => (request.mode === 'group' ? request.place : '')));
+	/** No room chosen yet (''): no proposal. */
 	const proposal: Record<string, string> = $derived(
-		groupMode ? proposePlan(members, spots, place) : {}
+		groupMode && place ? proposePlan(members, spots, place) : {}
 	);
 	const placed = $derived(placing.filter((member) => proposal[member.requestId]).length);
-	const anywhere = $derived(optionOf.get(''));
-	/** Does anyone to place need something the layout can tell? Then each place says how it does. */
+	/** Does anyone to place need something the layout can tell? Then each room says how it does. */
 	const anyNeeds = $derived(placing.some((member) => checkableNeeds(member.needs).length > 0));
 	const needsAt: Map<string, NeedsMet> = $derived(
 		new Map(
 			anyNeeds
 				? options
-						.filter((option) => option.key)
+						.filter((option) => option.key.startsWith('room:'))
 						.map((option) => [option.key, needsMet(members, spots, option.key)] as const)
 				: []
 		)
@@ -169,20 +173,12 @@ inside. The page renders one at a time, outside every form.
 	const shownIds = $derived(new Set(shown.map((spot) => spot.bedId)));
 	const houses = $derived(buildPlaces(spots, sizes, (spot) => shownIds.has(spot.bedId)));
 	const allHouses = $derived(buildPlaces(spots, sizes));
-	/**
-	 * The places that fit everyone, those that answer every member's needs
-	 * first — among the places the filter shows.
-	 */
+	/** The rooms that fit everyone, best first (recommendRooms) — among those the filter shows. */
 	const suggestions = $derived.by(() => {
 		if (!groupMode) return [];
 		const rooms = new Set(shown.map((spot) => spot.roomId));
-		const inHouses = new Set(shown.map((spot) => spot.houseId));
-		return rankPlaces(options, members, spots)
-			.filter((option) =>
-				option.key.startsWith('room:')
-					? rooms.has(option.key.slice('room:'.length))
-					: inHouses.has(option.key.slice('house:'.length))
-			)
+		return recommendRooms(options, members, spots)
+			.filter((option) => rooms.has(option.key.slice('room:'.length)))
 			.slice(0, 3);
 	});
 	const best = $derived(spotMode && !roomsThatFit ? bestFits(shown, needs) : []);
@@ -568,9 +564,9 @@ inside. The page renders one at a time, outside every form.
 				</section>
 			{/if}
 
-			{#if groupMode && placing.length > 0 && (suggestions.length > 0 || anywhere)}
+			{#if groupMode && placing.length > 0 && suggestions.length > 0}
 				<section class="best" aria-labelledby="best-title">
-					<h3 id="best-title">Suggested for {placing.length}</h3>
+					<h3 id="best-title">Rooms for all {placing.length}</h3>
 					<div class="suggestions">
 						{#each suggestions as option (option.key)}
 							{@const needs = needsBadge(option.key)}
@@ -584,21 +580,15 @@ inside. The page renders one at a time, outside every form.
 									>{/if}</button
 							>
 						{/each}
-						{#if anywhere}
-							<button
-								type="button"
-								class="suggestion"
-								aria-pressed={place === ''}
-								onclick={() => (place = '')}>{anywhere.label}</button
-							>
-						{/if}
 					</div>
 				</section>
+			{:else if groupMode && placing.length > 0}
+				<p class="no-room">
+					{`No room has ${placing.length} free spots together. Put as many as fit into one room here, then pick the others' spots in the group's card with Change.`}
+				</p>
 			{/if}
 
 			{#each houses as house (house.houseId)}
-				{@const houseBadge = groupMode ? fitBadge(`house:${house.houseId}`) : null}
-				{@const houseNeeds = groupMode ? needsBadge(`house:${house.houseId}`) : null}
 				<section class="house" aria-label={house.name}>
 					<header class="house-head">
 						<h3>
@@ -608,16 +598,6 @@ inside. The page renders one at a time, outside every form.
 						<span class="meta"
 							>{house.free} free{house.special > 0 ? ` · ♿ ${house.special}` : ''}</span
 						>
-						{#if groupMode && placing.length > 0}
-							{#if houseBadge}<span class="badge {houseBadge.tone}">{houseBadge.text}</span>{/if}
-							{#if houseNeeds}<span class="badge {houseNeeds.tone}">{houseNeeds.text}</span>{/if}
-							<button
-								type="button"
-								class="btn small"
-								aria-pressed={place === `house:${house.houseId}`}
-								onclick={() => (place = `house:${house.houseId}`)}>Spread over the house</button
-							>
-						{/if}
 					</header>
 					<div class="rooms">
 						{#each house.rooms as room (room.roomId)}
@@ -658,7 +638,9 @@ inside. The page renders one at a time, outside every form.
 											onclick={() => (place = `room:${room.roomId}`)}
 											>{place === `room:${room.roomId}`
 												? '✓ The group goes here'
-												: 'Put the group here'}</button
+												: room.free >= placing.length
+													? 'Put the group here'
+													: `Put ${room.free} of ${placing.length} here`}</button
 										>
 									</div>
 								{/if}
@@ -733,8 +715,14 @@ inside. The page renders one at a time, outside every form.
 				</div>
 			{:else if groupMode}
 				<div class="choice" aria-live="polite">
-					<p class="choice-label">{optionOf.get(place)?.label ?? 'Pick a room or a house'}</p>
-					<ul class="preview">
+					{#if !place}
+						<p class="choice-detail">
+							Pick a room for the group. One that fits everyone books in one go.
+						</p>
+					{:else}
+						<p class="choice-label">{optionOf.get(place)?.label ?? ''}</p>
+					{/if}
+					<ul class="preview" class:hidden={!place}>
 						{#each placing as member (member.requestId)}
 							{@const bedId = proposal[member.requestId]}
 							{@const marks = bedId ? memberMarks(member, bedId) : ''}
@@ -1038,6 +1026,19 @@ inside. The page renders one at a time, outside every form.
 	}
 	.suggestion-needs.fits {
 		color: var(--state-open);
+	}
+	.no-room {
+		margin: 0;
+		padding: 0.75rem;
+		border-radius: 14px;
+		border: 1px solid rgba(251, 146, 60, 0.4);
+		background: rgba(251, 146, 60, 0.08);
+		color: #fed7aa;
+		font-size: 0.9rem;
+		overflow-wrap: anywhere;
+	}
+	.preview.hidden {
+		display: none;
 	}
 	.suggestion[aria-pressed='true'] {
 		border-color: #2dd4bf;

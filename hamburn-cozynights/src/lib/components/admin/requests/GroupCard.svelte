@@ -29,7 +29,6 @@
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { needShort } from '$lib/accommodation';
 	import {
-		ANYWHERE,
 		defaultPlace,
 		placeOptions,
 		proposePlan,
@@ -132,8 +131,9 @@
 		placeOptions(spots, placing.length, placing.filter((m) => requestKinds(m.needs).access).length)
 	);
 	/**
-	 * null: the default, the snuggest place that fits everyone and answers
-	 * their needs (sparing the ♿ spots when one can), else anywhere.
+	 * The room the crew chose in the picker; null: the recommendation — the
+	 * best room that fits everyone (defaultPlace), or no plan at all when no
+	 * room does (a group sleeps in one room; the crew splits it by hand).
 	 */
 	let chosenPlace = $state<string | null>(null);
 	const place = $derived(
@@ -141,7 +141,9 @@
 			? chosenPlace
 			: defaultPlace(options, planMembers, spots)
 	);
-	const proposal = $derived(proposePlan(planMembers, spots, place));
+	const proposal: Record<string, string> = $derived(
+		place === null ? {} : proposePlan(planMembers, spots, place)
+	);
 	/** What the crew picked by hand, by request id; the proposal fills the rest. */
 	let edits = $state<Record<string, string>>({});
 	const valueOf = (requestId: string) => edits[requestId] ?? proposal[requestId] ?? '';
@@ -169,17 +171,17 @@
 
 	let planForm = $state<HTMLFormElement>();
 	const edited = $derived(Object.keys(edits).length > 0);
-	const placeLabel = $derived(options.find((option) => option.key === place)?.label ?? ANYWHERE);
+	const placeLabel = $derived(options.find((option) => option.key === place)?.label ?? '');
 	const spotOf = (bedId: string) =>
 		bedId ? spots.find((spot) => spot.bedId === bedId) : undefined;
 
-	/** The spot picker for the whole group: a room or house, then book or plan. */
+	/** The spot picker for the whole group: a room, then book or plan. */
 	function openGroupPicker() {
 		pick({
 			mode: 'group',
 			name: group.name,
 			members: planMembers,
-			place,
+			place: place ?? '',
 			resolve: async (choice) => {
 				if (!choice) return;
 				pickPlace(choice.place);
@@ -458,8 +460,14 @@
 			{#if mounted}
 				<div class="where">
 					<p class="where-line">
-						<span class="dim">Plan:</span>
-						{placeLabel}{edited ? ' · changed by hand' : ''}
+						{#if place === null}
+							<span class="dim"
+								>{`No room has ${placing.length} free spots together: pick a spot for each with Change${edited ? ' (changed by hand)' : ''}.`}</span
+							>
+						{:else}
+							<span class="dim">Plan:</span>
+							{placeLabel}{edited ? ' · changed by hand' : ''}
+						{/if}
 					</p>
 					<button
 						type="button"
