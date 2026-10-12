@@ -180,7 +180,7 @@ Whatever the crew holds back — 🔄 TAKEN without a ticket, 🔒 locked, ♿ k
 | 🗑 DELETE | Delete the spot (its bunk partner, if any, stays as a spot on its own) | <span class="no">✗</span> |
 
 ::: tip Lock or deactivate?
-**Lock** a spot that exists but must not be booked by guests: a broken bed, or a bed kept for the crew. Guests see it as *Blocked by admin*. An admin who is signed in can still book a locked spot during Live Booking through the normal booking pages with a ticket code. A ♿ spot is different: nobody books it there, admins included; it is booked only for a request on ♿ **Special needs**.
+**Lock** a spot that exists but must not be booked: a broken bed, or one that is out of service. Guests see it as *Blocked by admin*. On the normal booking pages it can still be booked during Live Booking with a crew ticket, a ticket whose e-mail is the address of an approved admin or superuser account; being signed in to the admin area doesn't matter, and with any other ticket it never works. For someone without an admin account, unlock the spot for them or book it through a special-needs request. Spots kept for special needs are marked ♿, not locked: nobody books those on the booking pages, not even with a crew ticket; they are booked only for a request on ♿ **Special needs**.
 
 **Deactivate** a spot that isn't in use at all (yet). It no longer counts as a spot anywhere, and not even an admin can book it.
 :::

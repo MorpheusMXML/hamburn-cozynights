@@ -593,7 +593,7 @@ describe('special-needs beds in booking and counts', () => {
 		expect(isBedBookable(bed, { allowLocked: true })).toBe(false);
 		expect(isBedBookable(bed, { allowSpecial: true })).toBe(true);
 		expect(isBedBookable({ enabled: true, is_locked: false })).toBe(true);
-		// a locked spot stays for admins with a ticket
+		// a locked spot stays bookable with allowLocked (a crew ticket, the crew's request flow)
 		const locked = { enabled: true, is_locked: true, is_special: false };
 		expect(isBedBookable(locked)).toBe(false);
 		expect(isBedBookable(locked, { allowLocked: true })).toBe(true);
@@ -614,7 +614,8 @@ describe('special-needs beds in booking and counts', () => {
 		// a crew ticket: its e-mail is the address of an approved admin account
 		c.pb.seed('admins', { email: 'max@mauersegler.art', role: 'admin' });
 		await c.pb.collection('orders').update(c.order.id, { email: 'max@mauersegler.art' });
-		const locals = { pb: c.pb, adminPb: c.pb, orderNumber: c.code, admin };
+		// no admin session: the ticket alone decides
+		const locals = { pb: c.pb, adminPb: c.pb, orderNumber: c.code, admin: null };
 
 		const { load } = await import('../src/routes/room/[id]/+page.server');
 		const data: any = await load({
@@ -646,6 +647,30 @@ describe('special-needs beds in booking and counts', () => {
 		} as any);
 		expect(locked).toEqual({ success: true });
 		expect(c.pb.rows('beds').find((b) => b.id === c.normal.id)!.order).toBe(c.order.id);
+	});
+
+	it('show a locked spot as free on the room page only to a crew ticket, never to an admin session', async () => {
+		const c = camp({ is_booking_active: true });
+		await c.pb.collection('beds').update(c.normal.id, { is_locked: true });
+		c.pb.seed('admins', { email: 'max@mauersegler.art', role: 'admin' });
+		const { load } = await import('../src/routes/room/[id]/+page.server');
+		// (the house page's free count takes the same flag from isCrewTicket; the
+		// fake PocketBase can't follow its room.house filter)
+		const lockedBookable = async (adminSession: unknown) => {
+			const locals = { pb: c.pb, adminPb: c.pb, orderNumber: c.code, admin: adminSession };
+			const room: any = await load({
+				params: { id: c.room.id },
+				locals,
+				cookies: { delete: () => {} }
+			} as any);
+			return room.beds.find((b: any) => b.label === 'B2').bookable;
+		};
+
+		// a guest's ticket, with an admin signed in: the locked spot is taken
+		expect(await lockedBookable(admin)).toBe(false);
+		// the admin's own ticket, without a session: it is free
+		await c.pb.collection('orders').update(c.order.id, { email: 'max@mauersegler.art' });
+		expect(await lockedBookable(null)).toBe(true);
 	});
 
 	it('never count as free', () => {

@@ -115,7 +115,7 @@ describe('one ticket = one bed', () => {
 		}
 		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(first.order.id);
 
-		// admins may use locked beds
+		// a locked bed with allowLocked (a crew ticket, or the crew booking for a request)
 		await booking.bookBed(second.order as any, beds[1].id, 'Second', { allowLocked: true });
 		expect((await su.collection('beds').getOne(beds[1].id)).order).toBe(second.order.id);
 	});
