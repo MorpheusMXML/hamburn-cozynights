@@ -6,10 +6,13 @@
 // on it). And the refresh after a countdown runs one at a time.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import {
 	MAX_PAGE_WAIT_MS,
 	MAX_WAIT_MS,
 	WAIT_TEXTS,
+	focusBack,
 	followPageChange,
 	resyncOnce,
 	startWait,
@@ -202,6 +205,54 @@ describe('the refresh after a countdown', () => {
 		await settle();
 	});
 
+	it('waits while a page change is on its way: a refresh would abort it', async () => {
+		// at the opening: signed in, the redirect to the map is in flight
+		const nav = deferred();
+		followPageChange(nav.promise, () => {});
+		const refresh = vi.fn(() => Promise.resolve());
+		expect(resyncOnce(refresh, { gapMs: 0 })).toBe(false);
+		nav.fulfil();
+		await settle();
+		expect(resyncOnce(refresh, { gapMs: 0 })).toBe(true);
+		expect(refresh).toHaveBeenCalledTimes(1);
+		await settle();
+	});
+
+	it('waits for an aborted page change to settle, and for a replaced one no longer', async () => {
+		const aborted = deferred();
+		followPageChange(aborted.promise, () => {});
+		expect(resyncOnce(() => Promise.resolve(), { gapMs: 0 })).toBe(false);
+		aborted.reject(new Error('navigation aborted'));
+		await settle();
+
+		const replaced = deferred();
+		const stop = followPageChange(replaced.promise, () => {});
+		expect(resyncOnce(() => Promise.resolve(), { gapMs: 0 })).toBe(false);
+		stop();
+		stop(); // more calls change nothing
+		expect(resyncOnce(() => Promise.resolve(), { gapMs: 0 })).toBe(true);
+		await settle();
+	});
+
+	it('waits for a page change that never settles only until its cap', () => {
+		// the same hour as beforeEach set, now with timers too
+		const t = Date.now();
+		vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+		vi.setSystemTime(t);
+		followPageChange(new Promise(() => {}), () => {});
+		expect(resyncOnce(() => new Promise(() => {}), { gapMs: 0 })).toBe(false);
+		vi.advanceTimersByTime(MAX_PAGE_WAIT_MS);
+		expect(resyncOnce(() => Promise.resolve(), { gapMs: 0 })).toBe(true);
+	});
+
+	it('waits while a sent form is on its way (signing in)', async () => {
+		const end = startWait('sign-in');
+		expect(resyncOnce(() => Promise.resolve(), { gapMs: 0 })).toBe(false);
+		end();
+		expect(resyncOnce(() => Promise.resolve(), { gapMs: 0 })).toBe(true);
+		await settle();
+	});
+
 	it('covers the page with "Booking is opening" only when asked to', async () => {
 		const run = deferred();
 		expect(resyncOnce(() => run.promise, { gapMs: 0, kind: 'opening' })).toBe(true);
@@ -215,5 +266,48 @@ describe('the refresh after a countdown', () => {
 		expect(get(waits)).toEqual([]);
 		quiet.fulfil();
 		await settle();
+	});
+});
+
+describe('the focus after the veil', () => {
+	const same = { fromUrl: 'https://c.example/room/a', toUrl: 'https://c.example/room/a' };
+
+	it('goes back where it was when the wait ended on the same page', () => {
+		expect(focusBack({ ...same, hadFocus: true, focusLost: true })).toBe(true);
+	});
+
+	it('stays where SvelteKit put it after a page change', () => {
+		expect(
+			focusBack({
+				fromUrl: 'https://c.example/map',
+				toUrl: 'https://c.example/house/h1',
+				hadFocus: true,
+				focusLost: true
+			})
+		).toBe(false);
+	});
+
+	it('leaves it alone when nothing had it, or something else took it', () => {
+		expect(focusBack({ ...same, hadFocus: false, focusLost: true })).toBe(false);
+		expect(focusBack({ ...same, hadFocus: true, focusLost: false })).toBe(false);
+	});
+
+	it('is what the veil does, with the page address before and after', () => {
+		const veil = readFileSync(
+			path.resolve(__dirname, '../src/lib/components/WaitVeil.svelte'),
+			'utf8'
+		);
+		expect(veil).toMatch(/const fromUrl = untrack\(\(\) => page\.url\.href\);/);
+		expect(veil).toMatch(/focusBack\(\{\s*fromUrl,\s*toUrl: untrack\(\(\) => page\.url\.href\)/);
+	});
+});
+
+describe('signing in at the opening', () => {
+	it('keeps the sign-in wait through the redirect to the map', () => {
+		const start = readFileSync(path.resolve(__dirname, '../src/routes/+page.svelte'), 'utf8');
+		expect(start).toMatch(/if \(result\.type !== 'redirect'\) waited\(\);/);
+		expect(start).toMatch(
+			/try \{\s*await update\(\{ reset: false \}\);\s*\} finally \{\s*waited\(\);\s*\}/
+		);
 	});
 });

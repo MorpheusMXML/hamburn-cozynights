@@ -10,13 +10,15 @@
   layout.
 -->
 <script lang="ts">
-	import { navigating } from '$app/state';
+	import { untrack } from 'svelte';
+	import { navigating, page } from '$app/state';
 	import {
 		HIDE_GRACE_MS,
 		SHOW_AFTER_MS,
 		STILL_AFTER_MS,
 		STILL_TEXT,
 		WAIT_TEXTS,
+		focusBack,
 		followPageChange,
 		waitKind,
 		waits,
@@ -89,20 +91,26 @@
 	// While the veil covers the page, the page is inert: no tabbing to a button
 	// under it. It ends with the wait itself, not after the short grace, so a
 	// form can put the cursor into a refused field right away; the focus goes
-	// back where it was if nothing else took it.
+	// back where it was if the wait ended on the same page and nothing else
+	// took it (focusBack). After a page change SvelteKit has set the focus.
 	let covering = $derived(!!shown && !!kind);
 	$effect(() => {
 		if (!covering) return;
 		const root = document.querySelector<HTMLElement>('.app-root');
 		if (!root) return;
 		const before = document.activeElement;
+		const fromUrl = untrack(() => page.url.href);
 		root.inert = true;
 		return () => {
 			root.inert = false;
 			const now = document.activeElement;
-			if (before instanceof HTMLElement && before.isConnected && (!now || now === document.body)) {
-				before.focus({ preventScroll: true });
-			}
+			const back = focusBack({
+				fromUrl,
+				toUrl: untrack(() => page.url.href),
+				hadFocus: before instanceof HTMLElement && before.isConnected,
+				focusLost: !now || now === document.body
+			});
+			if (back) (before as HTMLElement).focus({ preventScroll: true });
 		};
 	});
 </script>

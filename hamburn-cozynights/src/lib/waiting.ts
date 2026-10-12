@@ -15,7 +15,7 @@
  * `followPageChange`). Background requests (the spot hold, the holds refresh,
  * a refresh on return to the tab) never start a wait.
  */
-import { writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 
 export type WaitKind = 'sign-in' | 'booking' | 'releasing' | 'opening' | 'loading';
 
@@ -130,6 +130,9 @@ export function waitKind(sent: Wait[], change: PageChange | null): WaitKind | nu
 	return 'loading';
 }
 
+/** Page changes being followed right now (followPageChange). */
+let pageChanges = 0;
+
 /**
  * Follows one page change until its `complete` promise settles, either way,
  * then calls `ended` (once). SvelteKit 2.70 leaves `navigating` on the target
@@ -137,7 +140,8 @@ export function waitKind(sent: Wait[], change: PageChange | null): WaitKind | nu
  * opening resync): only its `complete` says it is over (it rejects with
  * "navigation aborted"). A change that never settles ends after `capMs`. The
  * returned function stops following without calling `ended`: a newer page
- * change took over.
+ * change took over. While a page change is followed, resyncOnce starts no
+ * refresh.
  */
 export function followPageChange(
 	complete: Promise<unknown>,
@@ -145,17 +149,22 @@ export function followPageChange(
 	capMs = MAX_PAGE_WAIT_MS
 ): () => void {
 	let live = true;
-	const end = () => {
-		if (!live) return;
+	pageChanges += 1;
+	/** Stops following, once; true the first time. */
+	const stop = () => {
+		if (!live) return false;
 		live = false;
 		clearTimeout(timer);
-		ended();
+		pageChanges -= 1;
+		return true;
+	};
+	const end = () => {
+		if (stop()) ended();
 	};
 	const timer = setTimeout(end, capMs);
 	complete.then(end, end);
 	return () => {
-		live = false;
-		clearTimeout(timer);
+		stop();
 	};
 }
 
@@ -169,14 +178,18 @@ let resyncEnded = 0;
  * time. A refresh started while another runs would make SvelteKit drop the
  * older answer, and with answers slower than the retry interval (the opening
  * rush) none would ever land. Starts nothing while one runs, or within
- * `gapMs` after the last one ended. With `kind`, the wait veil covers it.
- * True when a refresh was started.
+ * `gapMs` after the last one ended. Nor while a page change or a sent form is
+ * on its way: SvelteKit's invalidateAll() takes over the navigation token and
+ * aborts a navigation in flight — at the opening, the redirect to the map
+ * right after signing in. With `kind`, the wait veil covers it. True when a
+ * refresh was started.
  */
 export function resyncOnce(
 	refresh: () => Promise<unknown>,
 	{ gapMs, kind = null, now = Date.now() }: { gapMs: number; kind?: WaitKind | null; now?: number }
 ): boolean {
-	if (resyncing || now - resyncEnded < gapMs) return false;
+	if (resyncing || pageChanges > 0 || get(waits).length > 0) return false;
+	if (now - resyncEnded < gapMs) return false;
 	const work = kind ? waitWhile(kind, refresh()) : refresh();
 	resyncing = work
 		.catch(() => undefined)
@@ -185,4 +198,19 @@ export function resyncOnce(
 			resyncEnded = Date.now();
 		});
 	return true;
+}
+
+/**
+ * Whether the veil gives the focus back to where it was when it covered the
+ * page: only when the wait ended on the same page (after a page change
+ * SvelteKit has already put the focus at the start of the new page), when
+ * something had the focus, and when nothing else took it meanwhile.
+ */
+export function focusBack(o: {
+	fromUrl: string;
+	toUrl: string;
+	hadFocus: boolean;
+	focusLost: boolean;
+}): boolean {
+	return o.fromUrl === o.toUrl && o.hadFocus && o.focusLost;
 }

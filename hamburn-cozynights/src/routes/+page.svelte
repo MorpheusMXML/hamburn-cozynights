@@ -223,7 +223,11 @@
 
 					return async ({ result, update }) => {
 						isSubmitting = false;
-						waited();
+						// A redirect (to the map) keeps the wait until that page change is
+						// on its way: no countdown refresh may start in between and abort
+						// it (resyncOnce). Anything else ends it now, so a refused field
+						// can take the cursor.
+						if (result.type !== 'redirect') waited();
 						if (result.type === 'error') {
 							// Network hiccup or server crash: stay on the form instead of
 							// swapping the whole page for an error screen.
@@ -232,7 +236,11 @@
 							);
 							return;
 						}
-						await update({ reset: false });
+						try {
+							await update({ reset: false });
+						} finally {
+							waited();
+						}
 						if (result.type === 'failure') await revealInvalid(ticketForm);
 					};
 				}}
