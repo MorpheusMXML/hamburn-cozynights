@@ -431,7 +431,7 @@
 			<DropZone
 				accept=".csv,.tsv,.txt,text/csv,text/plain"
 				label="Drop the ticket list (CSV) here"
-				hint="or tap to choose it · only code, e-mail and name leave your browser"
+				hint="or tap to choose it · only code, e-mail, name and order status leave your browser"
 				fileName={file?.name ?? ''}
 				busy={checking}
 				disabled={importing}
