@@ -40,6 +40,19 @@ describe('crew chat texts', () => {
 		expect(text).toBe('🎟️ Ticket H••• changed by crew@mauersegler.art: name');
 	});
 
+	it('report a ticket marked paid by hand, and set back to unpaid', () => {
+		expect(
+			eventText(event('ticket_marked_paid', 'crew@mauersegler.art', 'abc', { ticket: 'H•••' }))
+		).toBe(
+			'💳 Ticket H••• marked paid by crew@mauersegler.art: payment confirmed in person, its code signs in now'
+		);
+		expect(
+			eventText(event('ticket_marked_unpaid', 'crew@mauersegler.art', 'abc', { ticket: 'H•••' }))
+		).toBe(
+			"💳 Ticket H••• set back to unpaid by crew@mauersegler.art: its code can't sign in any more"
+		);
+	});
+
 	it('report a ticket list import and an applied template', () => {
 		expect(
 			eventText(

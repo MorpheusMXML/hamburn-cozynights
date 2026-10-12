@@ -7,6 +7,7 @@
 	import FoldPanel from '$lib/components/admin/FoldPanel.svelte';
 	import DropZone from '$lib/components/admin/DropZone.svelte';
 	import TicketCard from '$lib/components/admin/TicketCard.svelte';
+	import { formatBerlin } from '$lib/booking-phase';
 	import {
 		TICKET_LIMITS,
 		defaultRosterSelection,
@@ -226,6 +227,7 @@
 		: '';
 	$: unpaidCount = preview?.diff.unpaid ?? 0;
 	$: paymentChanges = updates.some((change) => change.unpaidChanged);
+	$: paidByHandChanges = updates.some((change) => change.undoesPaidByHand);
 	$: swappable = updates.filter((change) => change.canBeNewHolder);
 	$: allHandedOver = swappable.length > 0 && swappable.every((c) => newHolders.has(c.key));
 	$: chosenHolders = chosen.filter(
@@ -448,6 +450,12 @@
 								? 'its code signs'
 								: 'their codes sign'} in again.
 						{/if}
+						{#if imported.paidConfirmed}
+							{plural(imported.paidConfirmed, 'ticket')} marked paid by hand {imported.paidConfirmed ===
+							1
+								? 'is'
+								: 'are'} paid in the shop too.
+						{/if}
 						{#if imported.skipped}{plural(imported.skipped, 'ticket')} needed nothing anymore.{/if}
 					</span>
 					{#if imported.failed.length > 0}
@@ -611,7 +619,9 @@
 						<FoldPanel
 							nested
 							tone="changed"
-							title={updates.every((c) => !c.nameChanged && !c.unpaidChanged)
+							title={updates.every(
+								(c) => !c.nameChanged && !c.unpaidChanged && !c.confirmsPaidByHand
+							)
 								? 'Different e-mail address'
 								: 'Changed tickets'}
 							summary={`${updates.filter((c) => selected.has(c.key)).length} of ${updates.length} chosen`}
@@ -638,6 +648,11 @@
 								{#if paymentChanges}
 									💳 The shop's order changed between paid and unpaid: an unpaid ticket's code can't
 									sign in.
+								{/if}
+								{#if paidByHandChanges}
+									✋ Tickets an admin marked paid by hand start unticked when the file still says
+									pending: the shop may not know about the payment yet. Tick one only if it really
+									isn't paid.
 								{/if}
 							</p>
 							{#if swappable.length > 1}
@@ -680,9 +695,19 @@
 												{/if}
 												{#if change.unpaidChanged}
 													<span
-														>💳 <s>{change.unpaid ? 'paid' : 'unpaid'}</s> →
+														>💳 <s
+															>{change.undoesPaidByHand
+																? 'paid by hand'
+																: change.unpaid
+																	? 'paid'
+																	: 'unpaid'}</s
+														>
+														→
 														<b>{change.unpaid ? "unpaid: the code can't sign in" : 'paid'}</b></span
 													>
+												{/if}
+												{#if change.confirmsPaidByHand}
+													<span>💳 <s>paid by hand</s> → <b>paid in the shop</b></span>
 												{/if}
 											</span>
 										</label>
@@ -698,6 +723,13 @@
 											{#if change.request}<span class="tag">♿ special-needs request</span>{/if}
 											{#if change.unpaid && !change.unpaidChanged}
 												<span class="tag unpaid">💳 unpaid</span>
+											{/if}
+											{#if change.undoesPaidByHand && change.paidByHand}
+												<span class="tag paid-by-hand"
+													>✋ marked paid by hand {formatBerlin(change.paidByHand.at, {
+														year: false
+													})}{change.paidByHand.by ? ` by ${change.paidByHand.by}` : ''}</span
+												>
 											{/if}
 											{#if change.canBeNewHolder}
 												<button
@@ -1178,6 +1210,10 @@
 	.tag.unpaid {
 		border-color: rgba(248, 113, 113, 0.5);
 		color: #fca5a5;
+	}
+	.tag.paid-by-hand {
+		border-color: rgba(74, 222, 128, 0.4);
+		color: #86efac;
 	}
 	.holder {
 		min-height: 34px;

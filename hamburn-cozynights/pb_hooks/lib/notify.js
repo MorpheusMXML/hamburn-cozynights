@@ -671,6 +671,22 @@ function eventText(ev, cfg) {
 				'🎟️ Ticket ' + (d.ticket || subject) + ' changed' + by + ': ' + (parts.join('; ') || '-')
 			);
 		}
+		case 'ticket_marked_paid':
+			return (
+				'💳 Ticket ' +
+				(d.ticket || subject) +
+				' marked paid' +
+				by +
+				': payment confirmed in person, its code signs in now'
+			);
+		case 'ticket_marked_unpaid':
+			return (
+				'💳 Ticket ' +
+				(d.ticket || subject) +
+				' set back to unpaid' +
+				by +
+				": its code can't sign in any more"
+			);
 		case 'tickets_imported':
 			return (
 				'📥 Ticket list imported' +

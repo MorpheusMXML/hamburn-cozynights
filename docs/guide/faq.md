@@ -23,7 +23,7 @@ After ten wrong codes from the same network, CozyNights pauses sign-in for 15 mi
 :::
 
 ::: details "Your ticket is still unpaid…"
-The ticket shop has your order as not paid yet, so it can't book a bed. Contact the Membership Team and settle the invoice; once the crew loads the next ticket list, your code works.
+The ticket shop has your order as not paid yet, so it can't book a bed. Contact the Membership Team and settle the invoice; once the crew loads the next ticket list, or marks your ticket paid after the Membership Team confirmed the payment, your code works.
 :::
 
 ::: details "The booking system is not reachable right now. Your code was not checked…"

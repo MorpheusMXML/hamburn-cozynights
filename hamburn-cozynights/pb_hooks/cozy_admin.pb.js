@@ -27,7 +27,8 @@
 //                                                 create ticket codes (--email: one code only)
 //      cozy-admin tickets import <file.csv|->     create/update tickets with e-mail addresses
 //                                                 from a CSV roster (code, email, name, status;
-//                                                 pending orders come in unpaid: no sign-in)
+//                                                 pending orders come in unpaid: no sign-in;
+//                                                 a ticket marked paid by hand stays paid)
 //      cozy-admin tickets generate <count> [--prefix TEST] [--name <label>]
 //                                                 create random codes like TEST-7F3K9Q
 //      cozy-admin tickets list                    ticket codes, sign-ins, booked beds, contacts
@@ -620,7 +621,11 @@ const INVISIBLE_CHARS = /[\u200B-\u200D\uFEFF]/g;
 // orders make a ticket; orders waiting for their payment make one flagged
 // `unpaid` (its code can't sign in until a later list says paid); any other
 // state (cancelled, expired, …) leaves the row out. An empty cell says
-// nothing: a new ticket counts as paid, a stored one keeps what it has.
+// nothing: a new ticket counts as paid, a stored one keeps what it has. A
+// ticket an admin marked paid by hand (orders.marked_paid_at, Tickets page)
+// stays paid when the list still says pending — the app's review offers that
+// change unticked, and this import has no per-row choice — and a list that
+// says paid drops the mark.
 const PAID_ORDER_STATUSES = ['paid', 'p', 'bezahlt'];
 const UNPAID_ORDER_STATUSES = ['pending', 'n', 'offen', 'unpaid', 'ausstehend'];
 
@@ -734,7 +739,11 @@ const cozyTicketsImport = new Command({
 			// payment state this import changes
 			unpaid: 0,
 			nowUnpaid: 0,
-			nowPaid: 0
+			nowPaid: 0,
+			// marked paid by hand on the Tickets page: kept paid although the file
+			// says pending, or paid in the file too (the mark goes)
+			keptPaid: 0,
+			paidConfirmed: 0
 		};
 		// Tickets whose address would change although they still carry something
 		// of their holder. Without --hand-over the whole file is refused: the CLI
@@ -812,9 +821,19 @@ const cozyTicketsImport = new Command({
 						exact.set('customer_name', entry.name);
 						changed = true;
 					}
-					// A paid order frees the code, a pending one locks it again.
+					// A paid order frees the code, a pending one locks it again —
+					// except a payment the crew confirmed by hand.
 					const wasUnpaid = exact.getBool('unpaid');
-					const unpaid = entry.unpaid === null ? wasUnpaid : entry.unpaid;
+					const listed = entry.unpaid === null ? wasUnpaid : entry.unpaid;
+					const byHand = !wasUnpaid && exact.getString('marked_paid_at') !== '';
+					const unpaid = listed && !byHand;
+					if (listed && byHand) counts.keptPaid++;
+					if (byHand && entry.unpaid === false) {
+						exact.set('marked_paid_at', '');
+						exact.set('marked_paid_by', '');
+						changed = true;
+						counts.paidConfirmed++;
+					}
 					if (unpaid !== wasUnpaid) {
 						exact.set('unpaid', unpaid);
 						changed = true;
@@ -899,6 +918,21 @@ const cozyTicketsImport = new Command({
 		}
 		if (counts.nowPaid > 0) {
 			cmd.println('  ' + counts.nowPaid + ' ticket(s) paid now: their codes sign in again');
+		}
+		if (counts.keptPaid > 0) {
+			cmd.println(
+				'  ' +
+					counts.keptPaid +
+					' ticket(s) marked paid by hand stay paid although the file says pending: ' +
+					'mark them paid in the ticket shop too (or set them back on the Tickets page)'
+			);
+		}
+		if (counts.paidConfirmed > 0) {
+			cmd.println(
+				'  ' +
+					counts.paidConfirmed +
+					' ticket(s) marked paid by hand are paid in the file too: the mark is gone'
+			);
 		}
 		if (leftOut > 0) {
 			cmd.println(
@@ -994,7 +1028,13 @@ cozyTickets.addCommand(
 				} catch (_) {
 					hasCodeMails = false;
 				}
+				// Which admin marked a ticket paid by hand (an address too); when
+				// stays. A database from before v1.32.3 has no such field.
+				const hasPaidMarks = !!$app
+					.findCollectionByNameOrId('orders')
+					.fields.getByName('marked_paid_by');
 				let emails = 0;
+				let paidMarks = 0;
 				let links = 0;
 				let requests = 0;
 				let groups = 0;
@@ -1005,6 +1045,13 @@ cozyTickets.addCommand(
 						t.set('email', '');
 						txApp.save(t);
 						emails++;
+					}
+					if (hasPaidMarks) {
+						for (const t of txApp.findRecordsByFilter('orders', "marked_paid_by != ''", '', 0, 0)) {
+							t.set('marked_paid_by', '');
+							txApp.save(t);
+							paidMarks++;
+						}
 					}
 					// Counted before the requests go: the groups hook (pb_hooks/cozy_groups.pb.js)
 					// deletes most of them together with their last request.
@@ -1051,9 +1098,11 @@ cozyTickets.addCommand(
 						groups +
 						' request group(s), ' +
 						swaps +
-						' swap request(s) and ' +
+						' swap request(s), ' +
 						codeMails +
-						' "send me my code" request(s); the ticket codes and bookings are kept'
+						' "send me my code" request(s) and ' +
+						paidMarks +
+						' admin address(es) on tickets marked paid by hand; the ticket codes and bookings are kept'
 				);
 			}
 		});
@@ -1167,7 +1216,7 @@ cozyTickets.addCommand(
 					' unpaid'
 			);
 			cmd.println(
-				'CODES (used = signed in at least once, i.e. the lookup hash is stored; UNPAID = the order is not paid yet, the code cannot sign in)'
+				'CODES (used = signed in at least once, i.e. the lookup hash is stored; UNPAID = the order is not paid yet, the code cannot sign in; PAID BY HAND = an admin marked it paid on the Tickets page)'
 			);
 			if (readable.length === 0) cmd.println('  (none)');
 			for (const t of readable) {
@@ -1180,7 +1229,11 @@ cozyTickets.addCommand(
 						(booked[t.id] ? 'yes' : 'no ') +
 						'  tg=' +
 						(telegram[t.id] ? 'yes' : 'no ') +
-						(t.getBool('unpaid') ? '  UNPAID' : '') +
+						(t.getBool('unpaid')
+							? '  UNPAID'
+							: t.getString('marked_paid_at') !== ''
+								? '  PAID BY HAND'
+								: '') +
 						'  ' +
 						t.getString('customer_name') +
 						(t.getString('email') ? '  <' + t.getString('email') + '>' : '')

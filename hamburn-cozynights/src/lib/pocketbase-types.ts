@@ -185,6 +185,9 @@ export type OrdersRecord = {
 	order_hash?: string;
 	/** The ticket shop's order isn't paid yet: the code can't sign in (pb_migrations/1761000000_ticket_sign_in.js). */
 	unpaid?: boolean;
+	/** An admin marked the ticket paid by hand: when, and who (pb_migrations/1761200000_ticket_paid_by_hand.js). */
+	marked_paid_at?: IsoDateString;
+	marked_paid_by?: string;
 	updated: IsoAutoDateString;
 };
 

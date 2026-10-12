@@ -52,7 +52,7 @@ Next to them:
 | Field | Does |
 | --- | --- |
 | **House** | One house, or all. Tickets without a spot belong to no house, so they only show under *All houses*; the counts follow the choice. |
-| **Show** | The tiles' filters, plus *Got an e-mail* (the address got a booking e-mail), *Handed over* (the ticket was passed on to somebody else) and *Unpaid* (the order isn't paid yet). |
+| **Show** | The tiles' filters, plus *Got an e-mail* (the address got a booking e-mail), *Handed over* (the ticket was passed on to somebody else) and *Unpaid* (the order isn't paid yet; <kbd>Ticket →</kbd> opens it, where an admin can [mark it paid](./tickets#mark-a-ticket-paid)). |
 | **Order** | *Guest name* (named tickets first, then the ones that only have a code), *Newest booking first* or *Newest ticket first*. |
 | **Find a guest or spot** | Every word must appear in the holder's name, the burner name, the spot, room or house; accents don't matter (*walder* finds *Wälderhaus*). The search never looks at e-mail addresses or ticket codes: both are masked in the rows, and a box that finds a code would be a way to guess one. |
 | <kbd>↻ Refresh</kbd> | Asks the server for the list again, right now (see below). |

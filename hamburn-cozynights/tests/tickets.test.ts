@@ -43,6 +43,7 @@ const stored = (code: string, extra: Partial<StoredTicket> = {}): StoredTicket =
 	telegram: false,
 	request: false,
 	unpaid: false,
+	paidByHand: null,
 	...extra
 });
 
@@ -494,6 +495,50 @@ describe('diffRoster', () => {
 		expect(diff.unpaid).toBe(3);
 		expect(defaultRosterSelection(diff).selected).toEqual(['r-paid', 'r-lock']);
 	});
+
+	it('keeps a payment marked by hand unless the review ticks it back, and drops the mark once the shop says paid', () => {
+		const mark = { at: '2026-10-12 18:00:00.000Z', by: 'crew@mauersegler.art' };
+		const file = entries(
+			'code,status,email\nH-PEND,pending,\nH-PAID,paid,\nH-KEEP,,\nH-BOTH,pending,new@x.de\nH-OLD,pending,'
+		);
+		const diff = diffRoster(
+			file.entries,
+			[
+				stored('H-PEND', { paidByHand: mark }),
+				stored('H-PAID', { paidByHand: mark }),
+				// an empty status cell says nothing about the payment
+				stored('H-KEEP', { paidByHand: mark }),
+				stored('H-BOTH', { paidByHand: mark, email: 'old@x.de' }),
+				// a mark left on a ticket that is unpaid again counts for nothing
+				stored('H-OLD', { unpaid: true, paidByHand: mark })
+			],
+			file.problems,
+			file.leftOut
+		);
+		const byCode = Object.fromEntries(diff.changes.map((c) => [c.code, c]));
+		expect(Object.keys(byCode)).toEqual(['H-PEND', 'H-PAID', 'H-BOTH']);
+		expect(byCode['H-PEND']).toMatchObject({
+			kind: 'changed',
+			unpaid: true,
+			unpaidChanged: true,
+			paidByHand: mark,
+			undoesPaidByHand: true,
+			confirmsPaidByHand: false,
+			needsTick: false
+		});
+		expect(byCode['H-PAID']).toMatchObject({
+			unpaid: false,
+			unpaidChanged: false,
+			undoesPaidByHand: false,
+			confirmsPaidByHand: true
+		});
+		expect(byCode['H-BOTH']).toMatchObject({ emailChanged: true, undoesPaidByHand: true });
+		expect(diff.unchanged.map((u) => u.code)).toEqual(['H-KEEP', 'H-OLD']);
+		// only H-OLD is unpaid with what starts ticked: the others stay paid
+		expect(diff.unpaid).toBe(1);
+		// the shop catching up is ticked; a list that still says pending is not
+		expect(defaultRosterSelection(diff).selected).toEqual(['h-paid']);
+	});
 });
 
 describe('maskTicketCode', () => {
@@ -538,7 +583,18 @@ describe('same rules as the server CLI (pb_hooks/cozy_admin.pb.js)', () => {
 			/status && !pending && PAID_ORDER_STATUSES\.indexOf\(status\) < 0\) \{\s*leftOut\+\+;/
 		);
 		expect(source).toMatch(/const unpaid = status \? pending : null;/);
-		expect(source).toMatch(/const unpaid = entry\.unpaid === null \? wasUnpaid : entry\.unpaid;/);
+		expect(source).toMatch(/const listed = entry\.unpaid === null \? wasUnpaid : entry\.unpaid;/);
+	});
+
+	it('keeps a payment marked by hand like the app does, without a per-row choice', () => {
+		// pending in the file: stays paid (the app's review offers it unticked)
+		expect(source).toMatch(
+			/const byHand = !wasUnpaid && exact\.getString\('marked_paid_at'\) !== '';\s*const unpaid = listed && !byHand;/
+		);
+		// paid in the file: the mark goes, like the app's confirmsPaidByHand
+		expect(source).toMatch(
+			/if \(byHand && entry\.unpaid === false\) \{\s*exact\.set\('marked_paid_at', ''\);\s*exact\.set\('marked_paid_by', ''\);/
+		);
 	});
 
 	it('cleans every cell the same way: invisible characters out, then the spaces', () => {

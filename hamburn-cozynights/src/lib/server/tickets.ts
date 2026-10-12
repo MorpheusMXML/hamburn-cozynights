@@ -4,7 +4,8 @@
  * (docs/admin/tickets.md): find a ticket by its code or e-mail address, change
  * its address and name, hand it over to a new holder, and import the ticket
  * shop's CSV list after a review — orders that aren't paid yet included,
- * flagged `unpaid` so their codes can't sign in. Orders are superuser-only in
+ * flagged `unpaid` so their codes can't sign in — and mark such a ticket paid
+ * by hand when the payment was confirmed in person. Orders are superuser-only in
  * PocketBase, so everything here runs on the app's service account; the
  * callers check the admin's rights first.
  *
@@ -37,11 +38,13 @@ import {
 	isValidGuestEmail,
 	maskTicketCode,
 	normalizeEmail,
+	type PaidByHand,
 	type RosterImportOutcome,
 	type RosterPreview,
 	type RosterRow,
 	type StoredTicket,
 	type TicketChangeOutcome,
+	type TicketPaidOutcome,
 	type TicketSearch,
 	type TicketSpot,
 	type TicketView
@@ -64,6 +67,16 @@ export class TicketError extends Error {
 }
 
 const isNotFound = (err: unknown) => (err as ClientResponseError | undefined)?.status === 404;
+
+/** The fields of a ticket that the admin area shows (describeTicket). */
+const TICKET_FIELDS =
+	'id,order_number,order_hash,customer_name,email,burner_name,pass_code,unpaid,marked_paid_at,marked_paid_by';
+
+/** The mark of a ticket an admin marked paid by hand; null once it is unpaid again. */
+function paidByHandOf(order: OrdersResponse): PaidByHand | null {
+	if (order.unpaid || !order.marked_paid_at) return null;
+	return { at: order.marked_paid_at, by: order.marked_paid_by ?? '' };
+}
 
 type BedWithRoom = BedsResponse<{ room?: RoomsResponse<{ house?: HousesResponse }> }>;
 
@@ -123,6 +136,7 @@ async function describeTicket(
 		email: order.email ?? '',
 		signedIn: !!order.order_hash,
 		unpaid: !!order.unpaid,
+		paidByHand: paidByHandOf(order),
 		spot,
 		burnerName,
 		telegram: links.length > 0,
@@ -137,7 +151,7 @@ async function describeTicket(
  */
 async function loadSearchIndex(adminPb: TypedPocketBase): Promise<OrdersResponse[]> {
 	return adminPb.collection('orders').getFullList<OrdersResponse>({
-		fields: 'id,order_number,order_hash,customer_name,email,burner_name,pass_code,unpaid',
+		fields: TICKET_FIELDS,
 		batch: 1000,
 		requestKey: null
 	});
@@ -209,7 +223,7 @@ export async function openTicket(adminPb: TypedPocketBase, raw: unknown): Promis
 	let order: OrdersResponse;
 	try {
 		order = await adminPb.collection('orders').getOne<OrdersResponse>(id, {
-			fields: 'id,order_number,order_hash,customer_name,email,burner_name,pass_code,unpaid',
+			fields: TICKET_FIELDS,
 			requestKey: null
 		});
 	} catch (err) {
@@ -350,13 +364,92 @@ export async function changeTicket(
 	};
 }
 
+/**
+ * Marks an unpaid ticket paid by hand: the Membership Team confirmed the
+ * payment in person, while the ticket shop still lists the order as pending.
+ * Its code signs in right away (the guest session checks `unpaid` on every
+ * request). The mark remembers when and by whom, so a later ticket list that
+ * still says pending doesn't lock the code again unnoticed (diffRoster).
+ *
+ * `paid: false` takes such a mark back: the code can't sign in any more, and
+ * a guest who is signed in is signed out. Only a mark made here can be taken
+ * back — about every other ticket the ticket list decides.
+ */
+export async function markTicketPaid(
+	adminPb: TypedPocketBase,
+	rawId: unknown,
+	paid: boolean,
+	adminEmail: string
+): Promise<TicketPaidOutcome> {
+	const id = typeof rawId === 'string' ? rawId.trim() : '';
+	if (!/^[a-z0-9]{1,30}$/.test(id)) throw new TicketError('No ticket was chosen. Search again.');
+
+	// Read, checked and written in the ticket's queue (withLock), like every
+	// write of a ticket: a booking or an address change at the same moment
+	// can't undo it, nor it them (PocketBase saves the whole record).
+	const readTicket = async () => {
+		try {
+			return await adminPb.collection('orders').getOne<OrdersResponse>(id, {
+				fields: TICKET_FIELDS,
+				requestKey: null
+			});
+		} catch (err) {
+			if (isNotFound(err)) {
+				throw new TicketError('This ticket no longer exists. Search again.', 404);
+			}
+			throw err;
+		}
+	};
+	const known = await readTicket();
+	const { order, changed } = await withLock(`order:${known.id}`, async () => {
+		const order = await readTicket();
+		if (paid) {
+			if (!order.unpaid) return { order, changed: false };
+			const marked = await adminPb.collection('orders').update<OrdersResponse>(
+				order.id,
+				{
+					unpaid: false,
+					marked_paid_at: new Date().toISOString(),
+					marked_paid_by: adminEmail.slice(0, 320)
+				},
+				{ fields: TICKET_FIELDS }
+			);
+			return { order: marked, changed: true };
+		}
+		if (order.unpaid) return { order, changed: false };
+		if (!order.marked_paid_at) {
+			throw new TicketError(
+				'The ticket list shows this ticket as paid, so it stays paid. Only a ticket marked paid here can be set back.',
+				409
+			);
+		}
+		const unmarked = await adminPb
+			.collection('orders')
+			.update<OrdersResponse>(
+				order.id,
+				{ unpaid: true, marked_paid_at: '', marked_paid_by: '' },
+				{ fields: TICKET_FIELDS }
+			);
+		return { order: unmarked, changed: true };
+	});
+
+	// Masked like a search by address, as after an address change: the page
+	// keeps showing the code the admin typed.
+	return {
+		ticket: await describeTicket(adminPb, order, true),
+		maskedCode: maskTicketCode(order.order_number ?? ''),
+		paid,
+		changed
+	};
+}
+
 // --- the roster import ------------------------------------------------------------
 
 /** Every stored ticket, with what the review needs to know about it. */
 export async function loadStoredTickets(adminPb: TypedPocketBase): Promise<StoredTicket[]> {
 	const [orders, beds, links, requests] = await Promise.all([
 		adminPb.collection('orders').getFullList<OrdersResponse>({
-			fields: 'id,order_number,email,customer_name,unpaid',
+			fields: 'id,order_number,email,customer_name,unpaid,marked_paid_at,marked_paid_by',
 			batch: 1000,
 			requestKey: null
 		}),
@@ -389,7 +482,8 @@ export async function loadStoredTickets(adminPb: TypedPocketBase): Promise<Store
 			hasSpot: booked.has(order.id),
 			telegram: linked.has(order.id),
 			request: requested.has(order.id),
-			unpaid: !!order.unpaid
+			unpaid: !!order.unpaid,
+			paidByHand: paidByHandOf(order)
 		}));
 }
 
@@ -515,6 +609,7 @@ export async function importRoster(
 			confirmations: 0,
 			unpaid: 0,
 			nowPaid: 0,
+			paidConfirmed: 0,
 			skipped: wanted.size - todo.length,
 			failed: []
 		};
@@ -539,6 +634,12 @@ export async function importRoster(
 				if (change.emailChanged) data.email = change.email;
 				if (change.nameChanged) data.customer_name = change.name;
 				if (change.unpaidChanged) data.unpaid = change.unpaid;
+				// Marked paid by hand: the list caught up (paid), or the review
+				// ticked it back to unpaid on purpose. Either way the mark is done.
+				if (change.confirmsPaidByHand || change.undoesPaidByHand) {
+					data.marked_paid_at = '';
+					data.marked_paid_by = '';
+				}
 				let requestRemoved = false;
 				if (newHolder) {
 					Object.assign(data, newHolderFields());
@@ -562,6 +663,7 @@ export async function importRoster(
 					if (change.unpaid) outcome.unpaid++;
 					else outcome.nowPaid++;
 				}
+				if (change.confirmsPaidByHand) outcome.paidConfirmed++;
 			} catch (err) {
 				console.error(`[Tickets] Import of ${maskTicketCode(change.code)} failed:`, err);
 				outcome.failed.push({ code: change.code, error: describeError(err) });

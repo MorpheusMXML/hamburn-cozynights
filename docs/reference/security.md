@@ -27,7 +27,7 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 
   More than 200 wrong codes within 10 minutes over all connections is an attack, not typos: for 30 minutes every sign-in needs the e-mail address as well, and the crew chat hears about it once. A right code never counts. It doesn't reset the count either, or a guesser with a ticket of their own could reset it between guesses. The counts live in the app's memory and start over when it restarts.
 - **Your code by e-mail.** The start page sends a ticket's codes to its e-mail address on request (*Can't find your code?*). It answers the same whether the address belongs to a paid ticket or not, and one address gets at most one such e-mail in 30 minutes and three a day.
-- **Unpaid tickets can't sign in.** The ticket list brings in orders that aren't paid yet, marked unpaid; their code gets a request to settle the invoice with the Membership Team instead of a session.
+- **Unpaid tickets can't sign in.** The ticket list brings in orders that aren't paid yet, marked unpaid; their code gets a request to settle the invoice with the Membership Team instead of a session. An admin can mark such a ticket paid by hand once the payment is confirmed in person; the ticket keeps who did it and when, and the audit log and the crew group hear about it.
 
 ### Names and visibility
 

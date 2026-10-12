@@ -12,6 +12,9 @@ export type AdminEventAction =
 	| 'spot_deleted'
 	| 'spot_freed'
 	| 'ticket_updated'
+	// A ticket marked paid by hand on the Tickets page, or set back to unpaid.
+	| 'ticket_marked_paid'
+	| 'ticket_marked_unpaid'
 	| 'tickets_imported'
 	| 'special_request_approved'
 	| 'special_request_declined'
