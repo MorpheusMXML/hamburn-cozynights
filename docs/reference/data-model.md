@@ -131,10 +131,14 @@ brings back the empty collections and the field, never their records.
   (`near_project`), and two the form no longer offers but old requests
   still carry: *spots close to the people I come with* (`close_together`)
   and a power socket for a medical device (`power`, until v0.30.0). None of
-  them gets a line of its own in *What the open requests need*; *something
-  else*, *stable light conditions* and the old socket still count a request
-  as one for the ♿ spots, the helper and the project wishes don't
-  (`requestKinds` in `src/lib/special-needs.ts`).
+  them gets a line of its own in *What the open requests need*. The ♿ spots
+  are the pool for every request — a personal need, a helper, a project, a
+  group member — and the box's ♿ line counts every open request against the
+  free ones (locked 🔒 spots left out). `requestKinds` in
+  `src/lib/special-needs.ts` only decides who chooses first among them:
+  *something else*, *stable light conditions* and the old socket count as a
+  personal need, the helper and the project wishes don't (`proposePlan` in
+  `src/lib/group-plan.ts`).
 - **While booking is live or closed**, the structure is locked on the server:
   houses and rooms can't be added, moved, renamed or deleted, beds can't be
   added or deleted, and templates can't be imported (see
