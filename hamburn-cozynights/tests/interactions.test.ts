@@ -57,6 +57,8 @@ describe('Interactions & Registration', () => {
 				throw Object.assign(new Error('not found'), { status: 404 });
 			}),
 			update: vi.fn(),
+			// POST /api/cozy/book: release, claim and name in one transaction
+			send: vi.fn(async () => ({ ok: true })),
 			filter: vi.fn((q: any) => q)
 		};
 		mockCookies = {
@@ -137,6 +139,8 @@ describe('Room Load & Booking Logic', () => {
 				throw Object.assign(new Error('not found'), { status: 404 });
 			}),
 			update: vi.fn(),
+			// POST /api/cozy/book: release, claim and name in one transaction
+			send: vi.fn(async () => ({ ok: true })),
 			filter: vi.fn((q: any) => q),
 			// bookBed/unbookBed require a valid admin session before touching
 			// the database — see BookingService and room/[id]/+page.server.ts.
@@ -328,9 +332,12 @@ describe('Room Load & Booking Logic', () => {
 
 		const result = (await roomActions.bookBed({ request, locals: mockLocals } as any)) as any;
 		expect(result.success).toBe(true);
-		expect(mockAdminPb.update).toHaveBeenCalledWith(
-			'bed1',
-			expect.objectContaining({ occupied: true, order: 'order1' })
+		expect(mockAdminPb.send).toHaveBeenCalledWith(
+			'/api/cozy/book',
+			expect.objectContaining({
+				method: 'POST',
+				body: expect.objectContaining({ order: 'order1', bed: 'bed1', requireLive: true })
+			})
 		);
 	});
 
@@ -361,7 +368,7 @@ describe('Room Load & Booking Logic', () => {
 			admin: { email: 'max@mauersegler.art', role: 'admin' }
 		})) as any;
 		expect(adminWithGuestTicket.status).toBe(409);
-		expect(mockAdminPb.update).not.toHaveBeenCalled();
+		expect(mockAdminPb.send).not.toHaveBeenCalled();
 
 		// a ticket of the admin domain that no approved account has (pending, removed): no
 		mockAdminPb.getFirstListItem.mockResolvedValueOnce({
@@ -374,7 +381,7 @@ describe('Room Load & Booking Logic', () => {
 		mockAdminPb.getOne.mockResolvedValueOnce(lockedBed);
 		const pending = (await book(mockLocals)) as any;
 		expect(pending.status).toBe(409);
-		expect(mockAdminPb.update).not.toHaveBeenCalled();
+		expect(mockAdminPb.send).not.toHaveBeenCalled();
 
 		// the crew's own ticket, without any admin session: yes
 		mockAdminPb.getFirstListItem.mockResolvedValueOnce({
@@ -388,6 +395,10 @@ describe('Room Load & Booking Logic', () => {
 		mockAdminPb.getFullList.mockResolvedValueOnce([]); // previous beds
 		const crew = (await book(mockLocals)) as any;
 		expect(crew.success).toBe(true);
+		expect(mockAdminPb.send).toHaveBeenCalledWith(
+			'/api/cozy/book',
+			expect.objectContaining({ body: expect.objectContaining({ allowLocked: true }) })
+		);
 	});
 
 	it('should refuse a deactivated bed', async () => {
@@ -460,15 +471,16 @@ describe('Room Load & Booking Logic', () => {
 			locals: mockLocals
 		} as any)) as any;
 		expect(renamed.success).toBe(true);
-		expect(mockAdminPb.update).toHaveBeenCalledWith(
-			'order1',
-			expect.objectContaining({ burner_name: expect.any(String) })
+		// the route writes the new name; the spot is the ticket's, so it is no claim
+		expect(mockAdminPb.send).toHaveBeenCalledWith(
+			'/api/cozy/book',
+			expect.objectContaining({
+				body: expect.objectContaining({ order: 'order1', bed: 'bed1', name: expect.any(String) })
+			})
 		);
-		// the spot stays the guest's: a rename is no claim the phase check undoes
-		expect(mockAdminPb.update).not.toHaveBeenCalledWith('bed1', { occupied: false, order: null });
 
 		// Taking a spot stays a Live Booking thing.
-		mockAdminPb.update.mockClear();
+		mockAdminPb.send.mockClear();
 		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: false });
 		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' });
 		mockAdminPb.getFirstListItem.mockRejectedValueOnce({ status: 404 }); // holds no spot
@@ -478,7 +490,7 @@ describe('Room Load & Booking Logic', () => {
 		} as any)) as any;
 		expect(refused.status).toBe(403);
 		expect(refused.data.error).toMatch(/not open yet/);
-		expect(mockAdminPb.update).not.toHaveBeenCalled();
+		expect(mockAdminPb.send).not.toHaveBeenCalled();
 	});
 
 	it('refuses to rename once booking has closed, without looking anything up', async () => {

@@ -7,13 +7,7 @@ import type {
 } from '$lib/pocketbase-types';
 import { createLookupHash, encrypt } from '$lib/server/crypto';
 import { CHECKED_IN_NOTE } from '$lib/check-in';
-import { APP_SETTINGS_ID } from '$lib/server/constants';
-import {
-	bookingRefusal,
-	effectivePhase,
-	windowFromRecord,
-	type BookingPhase
-} from '$lib/booking-phase';
+import { bookingRefusal, type BookingPhase } from '$lib/booking-phase';
 
 /**
  * Thrown when a bed can no longer be booked (already taken by someone else,
@@ -21,8 +15,21 @@ import {
  * from real infrastructure/DB errors so callers can show the right message.
  */
 export class BedUnavailableError extends Error {}
-/** The new spot was claimed, but the previous one could not be released: the claim was undone. */
+/**
+ * A booking whose previous spot couldn't be released. Bookings are one
+ * PocketBase transaction now (POST /api/cozy/book), so nothing throws it any
+ * more; the routes still name it in their error handling.
+ */
 export class ReleaseFailedError extends Error {}
+
+/** What POST /api/cozy/book answers (pb_hooks/lib/book.js REFUSALS). */
+type BookOutcome =
+	| { ok: true; reason?: undefined; phase?: undefined }
+	| {
+			ok: false;
+			reason: 'gone' | 'taken' | 'unavailable' | 'closed' | 'checked_in';
+			phase?: BookingPhase;
+	  };
 /**
  * The guest confirmed deleting one spot, but the ticket holds another one by
  * now (booked in a second tab): nothing was released.
@@ -109,7 +116,7 @@ export function lockCount(): number {
 }
 
 /** Several locks, taken in the order given. */
-function withLocks<T>(keys: string[], fn: () => Promise<T>): Promise<T> {
+export function withLocks<T>(keys: string[], fn: () => Promise<T>): Promise<T> {
 	return keys.reduceRight<() => Promise<T>>((inner, key) => () => withLock(key, inner), fn)();
 }
 
@@ -200,28 +207,6 @@ export class BookingService {
 	}
 
 	/**
-	 * The booking phase straight from app_settings, or null when the record
-	 * can't be read. Deliberately not getBookingSettings: that answers
-	 * "staging" for a failed read, and a database hiccup must never undo a
-	 * booking that is perfectly fine. Only a phase it actually read counts.
-	 */
-	private async readPhase(): Promise<BookingPhase | null> {
-		try {
-			const settings = await this.adminPb
-				.collection('app_settings')
-				// requestKey null: a parallel booking reads this too, never cancel it.
-				.getOne(APP_SETTINGS_ID, { requestKey: null });
-			return effectivePhase(windowFromRecord(settings));
-		} catch (err) {
-			console.error(
-				'[Booking] Could not re-read the booking phase after the claim, letting it stand:',
-				(err as Error)?.message
-			);
-			return null;
-		}
-	}
-
-	/**
 	 * Finds the bed currently booked for a specific order.
 	 * @param orderId The ID of the order to check.
 	 * @returns The bed record if one exists for this order, or null.
@@ -254,7 +239,7 @@ export class BookingService {
 	 * @throws {CheckedInError} if the ticket's current spot is checked in and
 	 *   `allowCheckedIn` isn't set.
 	 * @throws {BookingClosedError} if `requireLivePhase` is set and booking is
-	 *   no longer open; the claim is undone first.
+	 *   not open when PocketBase writes the booking; nothing changed.
 	 */
 	async bookBed(
 		order: OrdersResponse,
@@ -296,69 +281,48 @@ export class BookingService {
 				const arrived = previousBeds.find((prev) => !!prev.checked_in_at);
 				if (arrived && !options.allowCheckedIn) throw new CheckedInError();
 
-				// Claim the new spot first: if that fails, the guest keeps the old one.
-				await this.adminPb.collection('beds').update(bedId, {
-					occupied: true,
-					order: order.id,
-					...(arrived
-						? { checked_in_at: arrived.checked_in_at, checked_in_by: arrived.checked_in_by ?? '' }
-						: {})
-				});
-
-				// The route checked the phase before this request queued up behind
-				// the locks. Switching back to Staging writes app_settings first and
-				// releases the bookings right after (src/routes/admin/+page.server.ts),
-				// so a guest who was waiting here could otherwise slip a booking in
-				// behind the release and keep it in an empty camp. A new name for the
-				// spot the ticket already holds is no claim: renaming works in every
-				// phase but Closed (the route refuses that), so the undo must never
-				// free that spot — it may be one the crew booked for a request.
-				if (options.requireLivePhase && !renaming) {
-					const phase = await this.readPhase();
-					if (phase && phase !== 'live') {
-						await this.adminPb
-							.collection('beds')
-							.update(bedId, { occupied: false, order: null })
-							.catch((undoErr) =>
-								console.error(
-									`[Booking] Booking closed mid-claim and undoing spot ${bedId} of order ${order.id} failed too — it may still look booked:`,
-									(undoErr as Error)?.message
-								)
-							);
-						throw new BookingClosedError(bookingRefusal(phase));
-					}
-				}
-
-				await this.adminPb.collection('orders').update(order.id, {
-					burner_name: encrypt(guestName)
-				});
-
-				// Release any other bed of this order. If that fails, the ticket
-				// would hold two beds: undo the new claim instead, so the guest
-				// keeps the old spot and nothing has changed.
+				// Release, claim and name in ONE PocketBase transaction
+				// (pb_hooks/lib/book.js): a crash or a failed write never leaves the
+				// ticket with two spots, none, or a spot without its name. PocketBase
+				// checks again, with the phase as it is at that moment: switching back
+				// to Staging writes app_settings first and releases the bookings right
+				// after (src/routes/admin/+page.server.ts), so a guest who waited here
+				// can't slip a booking in behind the release. A new name for the spot
+				// the ticket already holds is no claim and works in every phase but
+				// Closed (the route refuses that).
+				let outcome: BookOutcome;
 				try {
-					for (const prevBed of previousBeds) {
-						await this.adminPb
-							.collection('beds')
-							.update(prevBed.id, { occupied: false, order: null });
-					}
+					outcome = await this.adminPb.send<BookOutcome>('/api/cozy/book', {
+						method: 'POST',
+						body: {
+							order: order.id,
+							bed: bedId,
+							name: encrypt(guestName),
+							requireLive: !!options.requireLivePhase,
+							allowLocked: !!options.allowLocked,
+							allowSpecial: !!options.allowSpecial,
+							allowCheckedIn: !!options.allowCheckedIn
+						},
+						requestKey: null
+					});
 				} catch (err) {
-					console.error(
-						`[Booking] Could not release the previous spot of order ${order.id}, undoing the new claim:`,
-						(err as Error)?.message
-					);
-					await this.adminPb
-						.collection('beds')
-						.update(bedId, { occupied: false, order: null })
-						.catch((undoErr) =>
-							console.error(
-								`[Booking] Undo failed too — order ${order.id} may hold two spots (${bedId} and ${previousBeds.map((b) => b.id).join(', ')}):`,
-								(undoErr as Error)?.message
-							)
-						);
-					throw new ReleaseFailedError(
-						'Your previous spot could not be released, so nothing was changed. Try again in a moment.'
-					);
+					const refused = (err as ClientResponseError | undefined)?.response as
+						BookOutcome | undefined;
+					if ((err as ClientResponseError)?.status !== 409 || !refused?.reason) throw err;
+					outcome = refused;
+				}
+				if (outcome.ok) return;
+				switch (outcome.reason) {
+					case 'closed':
+						throw new BookingClosedError(bookingRefusal(outcome.phase ?? 'staging'));
+					case 'checked_in':
+						throw new CheckedInError();
+					case 'gone':
+						throw Object.assign(new Error('This spot or ticket does not exist.'), { status: 404 });
+					case 'taken':
+						throw new BedUnavailableError('This spot is already claimed.');
+					default:
+						throw new BedUnavailableError('This spot is not available.');
 				}
 			})
 		);

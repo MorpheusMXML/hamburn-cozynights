@@ -160,6 +160,22 @@ gh run watch
 Der Branch muss diesen Workflow enthalten, also auf einem `main` ab diesem
 Stand basieren.
 
+### Vor einem Release: ein Platz pro Ticket
+
+Seit v1.32.3 erzwingt die Datenbank „ein Platz pro Ticket“ (Unique-Index auf
+`beds.order`, Migration `1761100000_one_spot_per_ticket.js`). Hält ein Ticket
+schon zwei Plätze, bricht die Migration ab und nennt Ticket und Plätze:
+PocketBase startet nicht, der Deploy rollt zurück. Darum vor dem Deploy als
+root prüfen, auf einer Kopie (ändert nichts; keine Ausgabe = sauber):
+
+```bash
+D=$(docker volume inspect -f '{{.Mountpoint}}' hamburn-cozynights_pb_data_staging) && sqlite3 -readonly "$D/data.db" ".backup /tmp/cozy-precheck.db" && sqlite3 -readonly /tmp/cozy-precheck.db "SELECT \"order\", COUNT(*), GROUP_CONCAT(label || ' (' || id || ')', ', ') FROM beds WHERE \"order\" != '' GROUP BY \"order\" HAVING COUNT(*) > 1;"; rm -f /tmp/cozy-precheck.db
+```
+
+Für Produktion dasselbe mit `cozynights-production_pb_data`. Steht dort eine
+Zeile, entscheidet die Crew, welcher Platz falsch ist, und gibt ihn frei
+(Lageplan oder Dashboard über den Tunnel); danach deployen.
+
 ## Rollback
 
 **Code:** Den Workflow auf einem älteren Branch oder Commit erneut starten.

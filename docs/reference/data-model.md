@@ -51,9 +51,14 @@ brings back the empty collections and the field, never their records.
   when the bed is released or gets another ticket, unless that write brings a
   check-in along (the crew moving a guest who arrived). Guests can't release
   a checked-in spot; a ticket handed over to a new holder loses its check-in.
-- **One ticket, one spot, also on the server:** the room page refuses a second
-  spot while the ticket holds one (release first). A move whose release of
-  the old spot fails is undone, so a ticket never keeps two spots.
+- **One ticket, one spot, also in the database:** the room page refuses a second
+  spot while the ticket holds one (release first). A booking is one
+  transaction (`POST /api/cozy/book`, superusers only, `pb_hooks/lib/book.js`):
+  the ticket's old spot is released, the new one claimed and the burner name
+  written, all or nothing. A unique index on `beds.order` for booked spots
+  (`1761100000_one_spot_per_ticket.js`) refuses a second spot for a ticket
+  whoever writes it; a swap lets go of one spot's ticket first inside its
+  transaction.
 - **Only superusers release bookings:** the switch back to Staging Mode asks
   whether the guest bookings (and with them their check-ins) are released or
   stay while the layout is edited; spots the crew booked for special-needs

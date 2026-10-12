@@ -4,11 +4,11 @@ import {
 	BookingService,
 	BedUnavailableError,
 	BookingClosedError,
-	ReleaseFailedError,
 	lockCount,
 	withLock
 } from '../src/lib/server/booking';
 import { recordId } from '../src/lib/server/record-id';
+import { fakeBook, refusedBy } from './fake-book';
 import { APP_SETTINGS_ID } from '../src/lib/server/constants';
 import { FailureRateLimiter } from '../src/lib/server/rate-limit';
 import { berlinLocalToIso, isoToBerlinLocal } from '../src/lib/time';
@@ -18,23 +18,21 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 /**
- * Minimal in-memory stand-in for the PocketBase beds/orders collections, with
- * I/O latency. `settings` is the app_settings record BookingService re-reads
- * after a claim; null makes that read fail.
+ * Minimal in-memory stand-in for the PocketBase beds collection and the
+ * booking route (POST /api/cozy/book, tests/fake-book.ts), with I/O latency.
+ * `settings` is the app_settings record the route reads when it writes.
  */
 function makeFakePb(
 	beds: Record<string, any>[],
-	settings: Record<string, any> | null = { is_booking_active: true }
+	settings: Record<string, any> = { is_booking_active: true }
 ) {
 	const tick = () => new Promise((resolve) => setTimeout(resolve, Math.random() * 5));
 	const byId = new Map(beds.map((b) => [b.id, { ...b }]));
+	const orders = new Map<string, Record<string, any>>();
 	const service = (name: string) => ({
 		getOne: async (id: string) => {
 			await tick();
-			if (id === APP_SETTINGS_ID) {
-				if (!settings) throw { status: 500 };
-				return { ...settings };
-			}
+			if (id === APP_SETTINGS_ID) return { ...settings };
 			const bed = byId.get(id);
 			if (!bed) throw { status: 404 };
 			return { ...bed };
@@ -54,9 +52,24 @@ function makeFakePb(
 	const pb = {
 		collection: (name: string) => service(name),
 		filter: (expr: string, params: Record<string, string>) =>
-			expr.replace(/\{:(\w+)\}/g, (_, key) => `'${params[key]}'`)
+			expr.replace(/\{:(\w+)\}/g, (_, key) => `'${params[key]}'`),
+		send: async (path: string, options: { body: Record<string, any> }) => {
+			await tick();
+			if (path !== '/api/cozy/book') throw new Error(`no route ${path}`);
+			const outcome = fakeBook(
+				{
+					bed: (id) => byId.get(id),
+					order: (id) => (orders.has(id) ? orders.get(id) : orders.set(id, { id }).get(id)),
+					bedsOf: (orderId) => [...byId.values()].filter((b) => b.order === orderId),
+					settings: () => settings
+				},
+				options.body
+			);
+			if (!outcome.ok) throw refusedBy(outcome);
+			return outcome;
+		}
 	};
-	return { pb: pb as any, byId };
+	return { pb: pb as any, byId, settings };
 }
 
 /**
@@ -69,7 +82,7 @@ describe('BookingService: booking closes while a guest waits for the lock', () =
 	const order = { id: 'order1' } as any;
 	const free = () => [{ id: 'bed1', occupied: false, order: '', enabled: true }];
 
-	it('undoes the claim and refuses when booking is no longer open', async () => {
+	it('refuses when booking is no longer open, and writes nothing', async () => {
 		for (const phase of [{}, { booking_closed: true }]) {
 			const { pb, byId } = makeFakePb(free(), { is_booking_active: false, ...phase });
 			const service = new BookingService(pb);
@@ -79,7 +92,7 @@ describe('BookingService: booking closes while a guest waits for the lock', () =
 			).rejects.toBeInstanceOf(BookingClosedError);
 
 			// Nothing is left behind for the release loop to miss.
-			expect(byId.get('bed1')).toMatchObject({ occupied: false, order: null });
+			expect(byId.get('bed1')).toMatchObject({ occupied: false, order: '' });
 		}
 	});
 
@@ -96,13 +109,20 @@ describe('BookingService: booking closes while a guest waits for the lock', () =
 		expect(byId.get('bed1')).toMatchObject({ occupied: true, order: 'order1' });
 	});
 
-	it('lets the booking stand when the phase itself cannot be read', async () => {
-		// getBookingSettings answers "staging" for a failed read; undoing a
-		// perfectly good booking over a database hiccup would be worse than the
-		// rare stray one this guards against.
-		const { pb, byId } = makeFakePb(free(), null);
-		await new BookingService(pb).bookBed(order, 'bed1', 'Alice', { requireLivePhase: true });
+	it('checks the phase when PocketBase writes the booking, not when the request came in', async () => {
+		const { pb, byId, settings } = makeFakePb([
+			...free(),
+			{ id: 'bed2', occupied: false, order: '', enabled: true }
+		]);
+		const service = new BookingService(pb);
+		const first = service.bookBed(order, 'bed1', 'Alice', { requireLivePhase: true });
+		// The second waits for the ticket's lock; meanwhile the crew switches back to Staging.
+		const second = service.bookBed(order, 'bed2', 'Alice', { requireLivePhase: true });
+		await first;
+		settings.is_booking_active = false;
+		await expect(second).rejects.toBeInstanceOf(BookingClosedError);
 		expect(byId.get('bed1')).toMatchObject({ occupied: true, order: 'order1' });
+		expect(byId.get('bed2')).toMatchObject({ occupied: false, order: '' });
 	});
 
 	it('leaves the crew alone: they book in any phase', async () => {
@@ -146,34 +166,19 @@ describe('BookingService: one ticket code = one booking', () => {
 		expect(['a', 'b']).toContain(byId.get('bed1')!.order);
 	});
 
-	it('undoes the new claim when the previous spot cannot be released (never two beds)', async () => {
+	it('changes nothing when the booking transaction fails (never two spots, never none)', async () => {
 		const { pb, byId } = makeFakePb([
 			{ id: 'bed1', occupied: true, order: 'order1', enabled: true },
 			{ id: 'bed2', occupied: false, order: '', enabled: true }
 		]);
-		const original = pb.collection.bind(pb);
-		let failOnce = true;
-		pb.collection = (name: string) => {
-			const service = original(name);
-			if (name !== 'beds') return service;
-			return {
-				...service,
-				update: async (id: string, data: Record<string, any>) => {
-					if (id === 'bed1' && failOnce) {
-						failOnce = false;
-						throw new Error('database gone away');
-					}
-					return service.update(id, data);
-				}
-			};
+		pb.send = async () => {
+			throw Object.assign(new Error('database gone away'), { status: 500 });
 		};
-		const service = new BookingService(pb);
-
-		await expect(service.bookBed({ id: 'order1' } as any, 'bed2', 'Alice')).rejects.toBeInstanceOf(
-			ReleaseFailedError
-		);
+		await expect(
+			new BookingService(pb).bookBed({ id: 'order1' } as any, 'bed2', 'Alice')
+		).rejects.toMatchObject({ status: 500 });
 		expect(byId.get('bed1')).toMatchObject({ occupied: true, order: 'order1' });
-		expect(byId.get('bed2')).toMatchObject({ occupied: false, order: null });
+		expect(byId.get('bed2')).toMatchObject({ occupied: false, order: '' });
 	});
 
 	it('treats infrastructure errors as errors, not as "code not found"', async () => {

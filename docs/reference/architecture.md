@@ -214,9 +214,9 @@ sequenceDiagram
 
 - **No double bookings.** Requests for the same ticket or the same spot run one after another, and availability is re-checked inside that queue. Two guests clicking the same bed at the same moment: exactly one wins.
 - **One ticket, one spot.** Even parallel requests from the same ticket end with a single booked spot.
-- **Claim first, then release.** If something fails midway, a guest keeps their old spot rather than ending up with none.
+- **All or nothing.** Releasing the old spot, claiming the new one and writing the burner name are one PocketBase transaction (`POST /api/cozy/book`), which also checks the phase at the moment it writes. If anything fails, nothing changes: a guest never ends up with two spots, none, or a spot without its name. A unique index on `beds.order` is the database's own guard for "one ticket, one spot".
 - **Every new spot comes with the check.** The booking window sends `rulesConfirmed` and `beddingConfirmed` with the booking: the guest made the bed and ticked the rules. Without both, the room page and the roulette refuse a new spot before touching it (*Before a spot is yours, make your bed…*); a new burner name for the spot the ticket holds needs neither, and so do the crew's bookings. Nothing about it is stored.
-- **Single instance.** The queue lives in the app process, which matches the deployment of exactly one app container per environment.
+- **Single instance.** The queue lives in the app process, which matches the deployment of exactly one app container per environment. A second instance would lose the queue's order, but not the database's guarantees above.
 - **A booking window without a scheduler.** The phase is *the one set by hand, unless the armed timer's opening or closing time has passed* (`src/lib/booking-phase.ts`). It is evaluated on every request, so nothing has to run at the opening or closing moment; open pages reload their data when their countdown ends. Admins enter the times in Europe/Berlin time. PocketBase's notification loop only *announces* a reached time to the crew group.
 
 ## Repository layout
