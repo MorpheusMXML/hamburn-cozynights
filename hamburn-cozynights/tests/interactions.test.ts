@@ -431,7 +431,12 @@ describe('Room Load & Booking Logic', () => {
 		};
 
 		// Staging (booking not open yet); the ticket holds bed1, e.g. a handed-over
-		// ticket whose spot lost its name, or a spot the crew booked.
+		// ticket whose spot lost its name, or a spot the crew booked. The phase
+		// re-read inside bookBed sees Staging too, as on the server.
+		mockAdminPb.getOne.mockImplementation(async (id: string) => {
+			if (id === APP_SETTINGS_ID) return { is_booking_active: false };
+			throw Object.assign(new Error('not found'), { status: 404 });
+		});
 		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: false });
 		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' }); // order
 		mockAdminPb.getFirstListItem.mockResolvedValueOnce({
@@ -455,6 +460,8 @@ describe('Room Load & Booking Logic', () => {
 			'order1',
 			expect.objectContaining({ burner_name: expect.any(String) })
 		);
+		// the spot stays the guest's: a rename is no claim the phase check undoes
+		expect(mockAdminPb.update).not.toHaveBeenCalledWith('bed1', { occupied: false, order: null });
 
 		// Taking a spot stays a Live Booking thing.
 		mockAdminPb.update.mockClear();

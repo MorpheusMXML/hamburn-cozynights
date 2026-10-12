@@ -272,7 +272,8 @@ export class BookingService {
 				// Availability is about claiming a spot. Renaming the one the ticket
 				// already holds stays possible, e.g. a special-needs spot the crew
 				// booked for the guest.
-				if (bed.order !== order.id && !isBedBookable(bed, options)) {
+				const renaming = bed.order === order.id;
+				if (!renaming && !isBedBookable(bed, options)) {
 					throw new BedUnavailableError('This spot is not available.');
 				}
 
@@ -302,8 +303,11 @@ export class BookingService {
 				// the locks. Switching back to Staging writes app_settings first and
 				// releases the bookings right after (src/routes/admin/+page.server.ts),
 				// so a guest who was waiting here could otherwise slip a booking in
-				// behind the release and keep it in an empty camp.
-				if (options.requireLivePhase) {
+				// behind the release and keep it in an empty camp. A new name for the
+				// spot the ticket already holds is no claim: renaming works in every
+				// phase but Closed (the route refuses that), so the undo must never
+				// free that spot — it may be one the crew booked for a request.
+				if (options.requireLivePhase && !renaming) {
 					const phase = await this.readPhase();
 					if (phase && phase !== 'live') {
 						await this.adminPb
