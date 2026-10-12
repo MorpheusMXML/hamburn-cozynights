@@ -105,8 +105,11 @@ variables in the server's .env (`$lib/server/legal`).
 	<p>Only Indoor memberships include a bed. For them we process:</p>
 	<ul>
 		<li>
-			your <strong>ticket code</strong> and the <strong>email address</strong> of your order. We take
-			both from the ticket shop in which you bought your membership;
+			your <strong>ticket code</strong>, the <strong>email address</strong> and, if the ticket shop
+			has it, the <strong>name</strong> of your order, and whether the order is
+			<strong>paid</strong>. We take them from the ticket shop in which you bought your membership.
+			If you pay in person, the crew notes that the payment was confirmed (when, and which crew
+			member did it);
 		</li>
 		<li>the <strong>bed</strong> you choose and when you booked it;</li>
 		<li>
@@ -137,8 +140,8 @@ variables in the server's .env (`$lib/server/legal`).
 	</p>
 	<p>
 		We delete bookings, burner names, special-needs requests, request groups, swap requests and the
-		ticket list with its email addresses{#if notify.telegram}, linked Telegram chats{/if} as soon as we
-		no longer need them, {legal.deletionPeriod}.
+		ticket list with its email addresses, names and payment notes{#if notify.telegram}, linked
+			Telegram chats{/if} as soon as we no longer need them, {legal.deletionPeriod}.
 	</p>
 
 	<h2 id="special-needs">Special-needs requests and groups</h2>
