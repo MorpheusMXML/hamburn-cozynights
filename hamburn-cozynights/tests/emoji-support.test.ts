@@ -14,42 +14,60 @@ const APP = fileURLToPath(new URL('../', import.meta.url));
 const FOLDERS = ['src', 'pb_hooks'];
 const EXTENSIONS = /\.(svelte|ts|js|json|html|css)$/;
 
+/** The emoji planes: everything from U+1F000 up to the end of U+1FBFF. */
+const PLANE = [0x1f000, 0x1fbff];
+
 /**
- * Code points that came with Unicode 13.0 or later (Age ≥ 13 in the Unicode
- * Character Database), in the emoji planes. Generated with Perl's
- * Unicode::UCD on 2026-10-11, Unicode 16 assignments.
+ * What Unicode 12.1 (2019) had assigned in those planes (Age ≤ 12.1 in the
+ * Unicode Character Database), the only code points allowed there. Anything
+ * else is refused, unassigned ones included, so the emoji every new Unicode
+ * version brings fail without this list changing. Generated with Perl's
+ * Unicode::UCD (Age property) on 2026-10-12.
  */
-const TOO_NEW: [number, number][] = [
-	[0x1f10d, 0x1f10f],
-	[0x1f16d, 0x1f16f],
-	[0x1f1ad, 0x1f1ad],
-	[0x1f6d6, 0x1f6d7],
-	[0x1f6dc, 0x1f6df],
-	[0x1f6fb, 0x1f6fc],
-	[0x1f774, 0x1f776],
-	[0x1f77b, 0x1f77f],
-	[0x1f7d9, 0x1f7d9],
-	[0x1f7f0, 0x1f7f0],
-	[0x1f8b0, 0x1f8bb],
-	[0x1f8c0, 0x1f8c1],
-	[0x1f90c, 0x1f90c],
-	[0x1f972, 0x1f972],
-	[0x1f977, 0x1f979],
-	[0x1f9a3, 0x1f9a4],
-	[0x1f9ab, 0x1f9ad],
-	[0x1f9cb, 0x1f9cc],
-	[0x1fa74, 0x1fa77],
-	[0x1fa7b, 0x1fa7c],
-	[0x1fa83, 0x1fa89],
-	[0x1fa8f, 0x1fa8f],
-	[0x1fa96, 0x1fac6],
-	[0x1face, 0x1fadc],
-	[0x1fadf, 0x1fae9],
-	[0x1faf0, 0x1faf8]
+const ALLOWED: [number, number][] = [
+	[0x1f000, 0x1f02b],
+	[0x1f030, 0x1f093],
+	[0x1f0a0, 0x1f0ae],
+	[0x1f0b1, 0x1f0bf],
+	[0x1f0c1, 0x1f0cf],
+	[0x1f0d1, 0x1f0f5],
+	[0x1f100, 0x1f10c],
+	[0x1f110, 0x1f16c],
+	[0x1f170, 0x1f1ac],
+	[0x1f1e6, 0x1f202],
+	[0x1f210, 0x1f23b],
+	[0x1f240, 0x1f248],
+	[0x1f250, 0x1f251],
+	[0x1f260, 0x1f265],
+	[0x1f300, 0x1f6d5],
+	[0x1f6e0, 0x1f6ec],
+	[0x1f6f0, 0x1f6fa],
+	[0x1f700, 0x1f773],
+	[0x1f780, 0x1f7d8],
+	[0x1f7e0, 0x1f7eb],
+	[0x1f800, 0x1f80b],
+	[0x1f810, 0x1f847],
+	[0x1f850, 0x1f859],
+	[0x1f860, 0x1f887],
+	[0x1f890, 0x1f8ad],
+	[0x1f900, 0x1f90b],
+	[0x1f90d, 0x1f971],
+	[0x1f973, 0x1f976],
+	[0x1f97a, 0x1f9a2],
+	[0x1f9a5, 0x1f9aa],
+	[0x1f9ae, 0x1f9ca],
+	[0x1f9cd, 0x1fa53],
+	[0x1fa60, 0x1fa6d],
+	[0x1fa70, 0x1fa73],
+	[0x1fa78, 0x1fa7a],
+	[0x1fa80, 0x1fa82],
+	[0x1fa90, 0x1fa95]
 ];
 
 const tooNew = (codePoint: number) =>
-	TOO_NEW.some(([from, to]) => codePoint >= from && codePoint <= to);
+	codePoint >= PLANE[0] &&
+	codePoint <= PLANE[1] &&
+	!ALLOWED.some(([from, to]) => codePoint >= from && codePoint <= to);
 
 function files(folder: string): string[] {
 	const root = path.join(APP, folder);
@@ -65,6 +83,13 @@ describe('emoji every device can draw', () => {
 		expect(tooNew('🏘️'.codePointAt(0)!)).toBe(false);
 		expect(tooNew('🔝'.codePointAt(0)!)).toBe(false);
 		expect(tooNew('🧺'.codePointAt(0)!)).toBe(false);
+		expect(tooNew('🩺'.codePointAt(0)!)).toBe(false);
+		// Unicode 17 (2025) and code points nobody has assigned yet
+		expect(tooNew(0x1f6d8)).toBe(true);
+		expect(tooNew(0x1fa8e)).toBe(true);
+		expect(tooNew(0x1fbff)).toBe(true);
+		// outside the emoji planes: ♿ and the like are old enough
+		expect(tooNew('♿'.codePointAt(0)!)).toBe(false);
 	});
 
 	it('uses none from Unicode 13 or later in the app, its mails or its Telegram texts', () => {

@@ -376,9 +376,14 @@
 		border-color: var(--state);
 		box-shadow: 0 10px 20px var(--state-soft);
 	}
+	/* A crew-renamed spot label runs up to 50 characters: the chip wraps
+	   (state-chip itself stays on one line everywhere else). */
 	.mine-chip {
 		display: inline-block;
+		max-width: 100%;
 		margin: -0.25rem 0 0.85rem;
+		white-space: normal;
+		overflow-wrap: anywhere;
 	}
 
 	.card-header {

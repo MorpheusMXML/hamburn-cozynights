@@ -29,6 +29,8 @@ export const TEXTS = {
 	burnerWord: 'Supercalifragilisticexpialidocious',
 	burnerEmoji: '🦄✨ Unicorn Queen ✨🦄',
 	burnerMine: 'Sparkle Pony Extraordinaire',
+	// What the crew may rename "my" spot to: the "Your spot" chip on the house page.
+	spotLabelMine: 'Hängematte unten rechts am Fenster mit Seeblick',
 	customerLong: 'Maximilian-Alexander Freiherr von und zu Musterstadt-Langenhagen-Ost',
 	emailLong:
 		'maximilian.alexander.freiherr.von.und.zu.musterstadt@a-very-long-subdomain.example.org',
@@ -61,6 +63,9 @@ export const BED_LABELS = [
 	'Sofa'
 ] as const;
 
+/** The stress guest's ("my") spot. */
+export const MY_SPOT_LABEL = 'Lower 2';
+
 /**
  * The two bunk beds of the stress room, lower level first. Each tile mixes
  * states: a locked upper bunk over a spot another guest booked, and a booked
@@ -81,6 +86,7 @@ for (const [what, value, max] of [
 	['customer name', TEXTS.customerLong, TICKET_LIMITS.nameLength],
 	['swap note', TEXTS.swapNote, SWAP_NOTE_MAX],
 	['e-mail', TEXTS.emailLong, TICKET_LIMITS.emailLength],
+	['spot label', TEXTS.spotLabelMine, TEMPLATE_LIMITS.bedLabelLength],
 	...BED_LABELS.map((label) => ['spot label', label, TEMPLATE_LIMITS.bedLabelLength] as const)
 ] as const) {
 	if (value.length > max) throw new Error(`stress ${what} is longer than the app allows: ${value}`);
@@ -361,7 +367,7 @@ export async function seedStressCamp(base: string, pb: PocketBase): Promise<Stre
 	await book('Lower 1', TEXTS.burnerWord);
 	await book('Kuschelzeltplatzverwaltungsbett', 'Ö');
 	await book('1', TEXTS.burnerEmoji);
-	const mine = await book('Lower 2', TEXTS.burnerMine, TEXTS.customerLong, TEXTS.emailLong);
+	const mine = await book(MY_SPOT_LABEL, TEXTS.burnerMine, TEXTS.customerLong, TEXTS.emailLong);
 	const passCode = (await pb.collection('orders').getOne(mine.order.id)).pass_code as string;
 
 	// Swap requests (docs/guide/booking.md "Swap spots"), through the app like a

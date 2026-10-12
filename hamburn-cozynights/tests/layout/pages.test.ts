@@ -10,6 +10,7 @@ import type PocketBase from 'pocketbase';
 import { findLayoutProblems, type LayoutProblem } from './layout-check';
 import {
 	CAMP_FILE,
+	MY_SPOT_LABEL,
 	TEXTS,
 	setPhase,
 	stressLayoutFile,
@@ -70,6 +71,8 @@ interface PageCase {
 	checkedIn?: boolean;
 	/** What a checked-in case must show, so it proves its state (default: the guest's note). */
 	checkedInText?: RegExp;
+	/** The crew renamed the stress guest's spot to this; every other case gets MY_SPOT_LABEL back. */
+	spotLabel?: string;
 }
 
 /** The three phases, plus every armed timer (countdown box, countdown bar). */
@@ -338,6 +341,17 @@ const PAGES: PageCase[] = [
 		as: 'guestWithSpot',
 		phases: ['live'],
 		checkedIn: true
+	},
+	// The room card with my spot says "Your spot · <label>"; a label the crew
+	// renamed to 50 characters must wrap inside the card, not widen the page.
+	{
+		name: 'house: my spot with a long label',
+		path: (c) => `/house/${c.houseId}`,
+		as: 'guestWithSpot',
+		spotLabel: TEXTS.spotLabelMine,
+		open: async (page) => {
+			await page.locator('.card.mine .mine-chip', { hasText: TEXTS.spotLabelMine }).waitFor();
+		}
 	},
 	{
 		name: 'house without my spot: checked in',
@@ -890,28 +904,35 @@ test.beforeAll(async () => {
 	pb = await superuser(PB_URL, process.env.PB_ADMIN_EMAIL!, process.env.PB_ADMIN_PASSWORD!);
 });
 
+// The other test files on this stack find the guest's spot as it was seeded.
+test.afterAll(async () => {
+	if (pb && camp) await setMySpot(false, MY_SPOT_LABEL);
+});
+
 /**
- * Checks the stress guest in, or takes the check-in back, straight in the
- * database, as the admin's pass check would. Every case sets it, so no case
- * depends on what an earlier one left behind (the run is split into shards).
+ * Checks the stress guest in, or takes the check-in back, and gives the spot
+ * its label, straight in the database, as the admin's pass check and a crew
+ * rename would. Every case sets both, so no case depends on what an earlier
+ * one left behind (the run is split into shards).
  */
-async function setCheckedIn(on: boolean) {
+async function setMySpot(checkedIn: boolean, label: string) {
 	const order = await pb
 		.collection('orders')
 		.getFirstListItem(pb.filter('pass_code = {:code}', { code: camp.passCode }));
 	const bed = await pb
 		.collection('beds')
 		.getFirstListItem(pb.filter('order = {:order}', { order: order.id }));
-	if (!!bed.checked_in_at === on) return;
-	await pb.collection('beds').update(
-		bed.id,
-		on
-			? {
-					checked_in_at: new Date().toISOString(),
-					checked_in_by: camp.adminEmail
-				}
-			: { checked_in_at: '', checked_in_by: '' }
-	);
+	const change: Record<string, string> = {};
+	if (!!bed.checked_in_at !== checkedIn) {
+		Object.assign(
+			change,
+			checkedIn
+				? { checked_in_at: new Date().toISOString(), checked_in_by: camp.adminEmail }
+				: { checked_in_at: '', checked_in_by: '' }
+		);
+	}
+	if (bed.label !== label) change.label = label;
+	if (Object.keys(change).length > 0) await pb.collection('beds').update(bed.id, change);
 }
 
 /**
@@ -1012,7 +1033,7 @@ for (const pageCase of PAGES) {
 		const title = pageCase.phases ? `${pageCase.name} (${phase})` : pageCase.name;
 		test(title, async ({ browser }, testInfo) => {
 			await setPhase(pb, phase);
-			await setCheckedIn(!!pageCase.checkedIn);
+			await setMySpot(!!pageCase.checkedIn, pageCase.spotLabel ?? MY_SPOT_LABEL);
 			const context = await openAs(browser, pageCase.as);
 			const page = await context.newPage();
 			await page.setViewportSize({ width: 1280, height: 900 });
