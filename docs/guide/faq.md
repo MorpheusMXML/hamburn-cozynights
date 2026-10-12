@@ -15,7 +15,7 @@ The code contains a character that can't be part of a ticket code, often a space
 :::
 
 ::: details "Can't find your code?" and "…please enter your ticket code together with the e-mail address of your ticket."
-After three wrong codes the start page offers to e-mail you your code: enter the address you bought your ticket with, and it arrives within a few minutes (check your spam folder too). The page never says whether an address belongs to a ticket, so nobody can find out who has one. After five wrong codes, sign in with your code **and** that e-mail address for the next 30 minutes. This keeps strangers from guessing ticket codes.
+After three wrong codes the start page offers to e-mail you your code: enter the address you bought your ticket with, and it arrives within a few minutes (check your spam folder too). The card opens by itself the first time; on later visits it starts folded, and the ▾ arrow next to *Can't find your code? 📬* opens it. The page never says whether an address belongs to a ticket, so nobody can find out who has one. After five wrong codes, sign in with that e-mail address **and** your code for the next 30 minutes: the address goes in the first field, the code in the second. This keeps strangers from guessing ticket codes.
 :::
 
 ::: details "Too many wrong ticket codes from your connection. Please try again in …"

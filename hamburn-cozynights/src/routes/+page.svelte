@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { browser } from '$app/environment';
 	import { invalidateAll } from '$app/navigation';
 	import { resyncOnce, startWait } from '$lib/waiting';
 	import { page } from '$app/stores';
@@ -11,6 +12,7 @@
 	import EffigyTitle from '$lib/components/EffigyTitle.svelte';
 	import LegalLinks from '$lib/components/LegalLinks.svelte';
 	import { revealInvalid } from '$lib/field-alert';
+	import { firstCodeMailOffer } from '$lib/code-mail-offer';
 	import MadeInHamburg from '$lib/components/MadeInHamburg.svelte';
 	import type { ActionData, PageData } from './$types';
 
@@ -75,10 +77,20 @@
 	// Both stay once shown: the "send me my code" answer replaces `form`.
 	let needEmail = false;
 	let offerMail = false;
-	let mailPanelClosed = false;
 	$: if (answer.needEmail) needEmail = true;
 	$: if (answer.offerMail) offerMail = true;
-	$: showMailPanel = offerMail && !mailPanelClosed && !answer.unpaid;
+	$: showMailPanel = offerMail && !answer.unpaid;
+
+	// The card opens by itself the first time a device gets it, and starts
+	// folded every later time; its arrow opens and folds it ($lib/code-mail-offer).
+	let mailPanelOpen = true;
+	let mailOfferCounted = false;
+	$: if (offerMail && !mailOfferCounted) {
+		mailOfferCounted = true;
+		mailPanelOpen = browser ? firstCodeMailOffer() : true;
+	}
+	// What the card's own form answered stays in sight.
+	$: if (answer.mailSent || answer.mailError) mailPanelOpen = true;
 
 	let mailEmail = '';
 	let mailSending = false;
@@ -119,6 +131,14 @@
 	}
 
 	let ticketForm: HTMLFormElement;
+	let codeInput: HTMLInputElement;
+
+	/** "Next" on the e-mail field goes on to an empty code field instead of sending. */
+	function emailKeydown(event: KeyboardEvent) {
+		if (event.key !== 'Enter' || code.trim()) return;
+		event.preventDefault();
+		codeInput.focus();
+	}
 
 	async function showClientError(message: string) {
 		clientError = message;
@@ -201,6 +221,14 @@
 				data-state={errorMessage ? 'danger' : undefined}
 				bind:this={ticketForm}
 				use:enhance={({ formData, cancel }) => {
+					// In the order of the fields: the e-mail address first, then the code.
+					if (needEmail && !email.trim()) {
+						cancel();
+						showClientError(
+							'For your security, please enter your ticket code together with the e-mail address of your ticket.'
+						);
+						return;
+					}
 					const cleaned = code.replace(SURROUNDING_BLANKS, '');
 					const problem = checkTicketCode(cleaned);
 					if (problem) {
@@ -210,13 +238,6 @@
 					}
 					code = cleaned;
 					formData.set('bookingCode', cleaned);
-					if (needEmail && !email.trim()) {
-						cancel();
-						showClientError(
-							'For your security, please enter your ticket code together with the e-mail address of your ticket.'
-						);
-						return;
-					}
 					clientError = '';
 					isSubmitting = true;
 					const waited = startWait('sign-in');
@@ -249,10 +270,33 @@
 					<!-- where the guest came from (a link in a confirmation), checked on the server -->
 					<input type="hidden" name="next" value={data.next} />
 				{/if}
+				<!-- After several wrong codes: the ticket's e-mail address first, then the code. -->
+				{#if needEmail}
+					<input
+						type="email"
+						name="email"
+						id="ticket-email"
+						class="email-input"
+						bind:value={email}
+						on:input={() => (clientError = '')}
+						on:keydown={emailKeydown}
+						placeholder="E-mail of your ticket"
+						aria-label="E-mail address of your ticket"
+						aria-invalid={errorMessage ? 'true' : undefined}
+						aria-describedby={errorMessage ? 'ticket-code-error' : undefined}
+						autocomplete="email"
+						autocapitalize="off"
+						autocorrect="off"
+						spellcheck="false"
+						enterkeyhint="next"
+						maxlength="254"
+					/>
+				{/if}
 				<input
 					type="text"
 					name="bookingCode"
 					id="ticket-code"
+					bind:this={codeInput}
 					bind:value={code}
 					on:input={() => (clientError = '')}
 					placeholder="TICKET CODE"
@@ -263,29 +307,9 @@
 					autocapitalize="characters"
 					autocorrect="off"
 					spellcheck="false"
-					enterkeyhint={needEmail ? 'next' : 'go'}
+					enterkeyhint="go"
 					maxlength="64"
 				/>
-				{#if needEmail}
-					<input
-						type="email"
-						name="email"
-						id="ticket-email"
-						class="email-input"
-						bind:value={email}
-						on:input={() => (clientError = '')}
-						placeholder="E-mail of your ticket"
-						aria-label="E-mail address of your ticket"
-						aria-invalid={errorMessage ? 'true' : undefined}
-						aria-describedby={errorMessage ? 'ticket-code-error' : undefined}
-						autocomplete="email"
-						autocapitalize="off"
-						autocorrect="off"
-						spellcheck="false"
-						enterkeyhint="go"
-						maxlength="254"
-					/>
-				{/if}
 				<div class="button-container">
 					{#if isHovering}
 						<div class="party-zone">
@@ -323,62 +347,67 @@
 			{#if showMailPanel}
 				<!-- After a few wrong codes: the code by e-mail. The answer never says
 				     whether the address belongs to a ticket. -->
-				<aside class="mail-panel" aria-labelledby="mail-panel-title">
-					<div class="mail-panel-head">
-						<h2 id="mail-panel-title">Can't find your code? 📬</h2>
+				<aside class="mail-panel" class:folded={!mailPanelOpen} aria-labelledby="mail-panel-title">
+					<h2 class="mail-panel-head" id="mail-panel-title">
 						<button
 							type="button"
-							class="mail-panel-close"
-							aria-label="Close"
-							on:click={() => (mailPanelClosed = true)}>✕</button
+							class="mail-panel-toggle"
+							aria-expanded={mailPanelOpen}
+							aria-controls="mail-panel-body"
+							on:click={() => (mailPanelOpen = !mailPanelOpen)}
 						>
-					</div>
-					{#if answer.mailSent}
-						<p class="mail-panel-text" role="status">
-							If this address belongs to a ticket, its code is on the way. It can take a few
-							minutes; please check your spam folder too.
-						</p>
-					{:else}
-						<p class="mail-panel-text">
-							Enter the e-mail address you bought your ticket with, and we send you its code.
-						</p>
-						<form
-							method="POST"
-							action="?/sendCode"
-							novalidate
-							class="mail-form"
-							use:enhance={() => {
-								mailSending = true;
-								return async ({ update }) => {
-									mailSending = false;
-									await update({ reset: false });
-								};
-							}}
-						>
-							<input
-								type="email"
-								name="email"
-								id="code-mail-email"
-								class="email-input"
-								bind:value={mailEmail}
-								placeholder="you@example.com"
-								aria-label="E-mail address of your ticket"
-								aria-invalid={answer.mailError ? 'true' : undefined}
-								aria-describedby={answer.mailError ? 'code-mail-error' : undefined}
-								autocomplete="email"
-								autocapitalize="off"
-								autocorrect="off"
-								spellcheck="false"
-								maxlength="254"
-							/>
-							<button type="submit" class="mail-send" disabled={mailSending}>
-								{mailSending ? 'SENDING…' : 'SEND ME MY CODE'}
-							</button>
-						</form>
-						{#if answer.mailError}
-							<p class="mail-panel-error" id="code-mail-error" role="alert">{answer.mailError}</p>
+							<span>Can't find your code? 📬</span>
+							<span class="mail-panel-arrow" aria-hidden="true">▾</span>
+						</button>
+					</h2>
+					<div id="mail-panel-body" hidden={!mailPanelOpen}>
+						{#if answer.mailSent}
+							<p class="mail-panel-text" role="status">
+								If this address belongs to a ticket, its code is on the way. It can take a few
+								minutes; please check your spam folder too.
+							</p>
+						{:else}
+							<p class="mail-panel-text">
+								Enter the e-mail address you bought your ticket with, and we send you its code.
+							</p>
+							<form
+								method="POST"
+								action="?/sendCode"
+								novalidate
+								class="mail-form"
+								use:enhance={() => {
+									mailSending = true;
+									return async ({ update }) => {
+										mailSending = false;
+										await update({ reset: false });
+									};
+								}}
+							>
+								<input
+									type="email"
+									name="email"
+									id="code-mail-email"
+									class="email-input"
+									bind:value={mailEmail}
+									placeholder="you@example.com"
+									aria-label="E-mail address of your ticket"
+									aria-invalid={answer.mailError ? 'true' : undefined}
+									aria-describedby={answer.mailError ? 'code-mail-error' : undefined}
+									autocomplete="email"
+									autocapitalize="off"
+									autocorrect="off"
+									spellcheck="false"
+									maxlength="254"
+								/>
+								<button type="submit" class="mail-send" disabled={mailSending}>
+									{mailSending ? 'SENDING…' : 'SEND ME MY CODE'}
+								</button>
+							</form>
+							{#if answer.mailError}
+								<p class="mail-panel-error" id="code-mail-error" role="alert">{answer.mailError}</p>
+							{/if}
 						{/if}
-					{/if}
+					</div>
 				</aside>
 			{/if}
 
@@ -782,10 +811,17 @@
 		color: #fff;
 	}
 
-	/* Code and e-mail address: one field under the other, like on a phone. */
+	/* E-mail address and code: one field under the other, like on a phone. */
 	.input-group.with-email {
 		flex-direction: column;
 		gap: 10px;
+	}
+
+	/* The button below them gets the whole width and its height back, as on a
+	   phone; side by side it takes both from the row. */
+	.input-group.with-email button[type='submit'] {
+		width: 100%;
+		padding: 1.2rem;
 	}
 
 	.email-input {
@@ -804,33 +840,57 @@
 		text-align: left;
 	}
 
+	/* Folded: only the title row with its arrow. */
+	.mail-panel.folded {
+		padding: 0.3rem 1.1rem;
+	}
+
 	.mail-panel-head {
+		margin: 0;
+		font-size: 1rem;
+		font-weight: 800;
+	}
+
+	/* The whole title row opens and folds the card. */
+	.mail-panel-toggle {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.75rem;
-	}
-
-	.mail-panel h2 {
-		margin: 0;
-		font-size: 1rem;
-		font-weight: 800;
-		color: #e9d5ff;
-	}
-
-	.mail-panel-close {
-		flex: none;
-		min-width: 44px;
+		width: 100%;
 		min-height: 44px;
-		background: none;
+		padding: 0;
 		border: 0;
-		color: #a3a3a3;
-		font-size: 1rem;
+		border-radius: 0;
+		background: none;
+		color: #e9d5ff;
+		font: inherit;
+		letter-spacing: normal;
+		text-align: left;
+		text-transform: none;
+		white-space: normal;
 		cursor: pointer;
 	}
 
-	.mail-panel-close:hover {
+	.mail-panel-toggle:hover {
 		color: #fff;
+	}
+
+	.mail-panel-arrow {
+		flex: none;
+		color: #a855f7;
+		font-size: 1.1rem;
+		transition: transform 0.2s;
+	}
+
+	.mail-panel-toggle[aria-expanded='true'] .mail-panel-arrow {
+		transform: rotate(180deg);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.mail-panel-arrow {
+			transition: none;
+		}
 	}
 
 	.mail-panel-text {
