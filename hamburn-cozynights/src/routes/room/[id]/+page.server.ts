@@ -20,6 +20,7 @@ import {
 	randomBurnerName
 } from '$lib/server/booking';
 import { clearGuestSession, signInUrl } from '$lib/server/guest-session';
+import { isCrewTicket } from '$lib/server/crew-ticket';
 import { getBookingSettings } from '$lib/server/settings';
 import { bookingRefusal } from '$lib/booking-phase';
 import {
@@ -68,6 +69,9 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 		throw redirect(303, '/?login=expired');
 	}
 
+	// A blocked 🔒 spot is bookable only with a crew ticket ($lib/server/crew-ticket).
+	const crewTicket = await isCrewTicket(locals.adminPb, order);
+
 	try {
 		const [settings, userBed, room, beds] = await Promise.all([
 			getBookingSettings(locals.pb),
@@ -106,7 +110,7 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				id: bed.id,
 				label: bed.label,
 				occupied: !!bed.occupied,
-				bookable: !bed.occupied && isBedBookable(bed, { allowLocked: !!locals.admin }),
+				bookable: !bed.occupied && isBedBookable(bed, { allowLocked: crewTicket }),
 				blocked: !!bed.occupied && !bed.order,
 				burnerName,
 				// What kind of bed it is: the room's and the house's features are
@@ -266,7 +270,7 @@ export const actions: Actions = {
 			// authoritatively inside bookBed, under per-order and per-bed locks —
 			// and so is the phase, which can close while this waits for them.
 			await bookingService.bookBed(order, bedId, guestName, {
-				allowLocked: !!locals.admin,
+				allowLocked: await isCrewTicket(locals.adminPb, order),
 				requireLivePhase: true
 			});
 			return { success: true };

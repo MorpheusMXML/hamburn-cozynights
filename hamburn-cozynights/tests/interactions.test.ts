@@ -330,7 +330,7 @@ describe('Room Load & Booking Logic', () => {
 		);
 	});
 
-	it('should refuse a locked bed for guests but allow it for admins', async () => {
+	it('should book a locked bed only with a crew ticket, not with an admin session', async () => {
 		const lockedBed = { id: 'bed1', occupied: false, is_locked: true, enabled: true };
 		const makeRequest = () => {
 			const formData = new FormData();
@@ -338,26 +338,52 @@ describe('Room Load & Booking Logic', () => {
 			formData.append('guestName', 'Alice');
 			return { formData: async () => confirmed(formData) } as any;
 		};
+		const book = (locals: any) => {
+			mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true }); // settings
+			return roomActions.bookBed({ request: makeRequest(), locals } as any);
+		};
 
-		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true });
-		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' });
+		// a guest's ticket: no
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1', email: 'a@example.org' });
 		mockAdminPb.getOne.mockResolvedValueOnce(lockedBed);
-		const guest = (await roomActions.bookBed({
-			request: makeRequest(),
-			locals: mockLocals
-		} as any)) as any;
+		const guest = (await book(mockLocals)) as any;
 		expect(guest.status).toBe(409);
+
+		// an admin signed in to the admin area, but with a guest's ticket: still no
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1', email: 'a@example.org' });
+		mockAdminPb.getOne.mockResolvedValueOnce(lockedBed);
+		const adminWithGuestTicket = (await book({
+			...mockLocals,
+			admin: { email: 'max@mauersegler.art', role: 'admin' }
+		})) as any;
+		expect(adminWithGuestTicket.status).toBe(409);
 		expect(mockAdminPb.update).not.toHaveBeenCalled();
 
-		mockPb.getOne.mockResolvedValueOnce({ is_booking_active: true });
-		mockAdminPb.getFirstListItem.mockResolvedValueOnce({ id: 'order1' });
+		// a ticket of the admin domain that no approved account has (pending, removed): no
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({
+			id: 'order1',
+			email: 'new@mauersegler.art'
+		});
+		mockAdminPb.getFullList.mockResolvedValueOnce([
+			{ email: 'max@mauersegler.art', role: 'admin' }
+		]); // the crew accounts
 		mockAdminPb.getOne.mockResolvedValueOnce(lockedBed);
-		mockAdminPb.getFullList.mockResolvedValueOnce([]);
-		const admin = (await roomActions.bookBed({
-			request: makeRequest(),
-			locals: { ...mockLocals, admin: { email: 'max@mauersegler.art', role: 'admin' } }
-		} as any)) as any;
-		expect(admin.success).toBe(true);
+		const pending = (await book(mockLocals)) as any;
+		expect(pending.status).toBe(409);
+		expect(mockAdminPb.update).not.toHaveBeenCalled();
+
+		// the crew's own ticket, without any admin session: yes
+		mockAdminPb.getFirstListItem.mockResolvedValueOnce({
+			id: 'order1',
+			email: 'Max@mauersegler.art'
+		});
+		mockAdminPb.getFullList.mockResolvedValueOnce([
+			{ email: 'max@mauersegler.art', role: 'admin' }
+		]); // the crew accounts
+		mockAdminPb.getOne.mockResolvedValueOnce(lockedBed);
+		mockAdminPb.getFullList.mockResolvedValueOnce([]); // previous beds
+		const crew = (await book(mockLocals)) as any;
+		expect(crew.success).toBe(true);
 	});
 
 	it('should refuse a deactivated bed', async () => {

@@ -58,7 +58,7 @@ export type AdminLoginError =
 	| 'not_recorded'
 	| 'failed';
 
-const APPROVED_ROLES: readonly string[] = ['superuser', 'admin'];
+export const APPROVED_ROLES: readonly string[] = ['superuser', 'admin'];
 const PENDING_ROLE = 'pending';
 
 export function isAdminDomainEmail(email: unknown): boolean {

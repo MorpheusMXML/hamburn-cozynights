@@ -115,7 +115,7 @@ function isNotFound(err: unknown): boolean {
  * Whether a guest may book this bed at all (independent of occupancy).
  * Locked spots and special-needs spots are for the crew to hand out: guests
  * see both as "Blocked by admin".
- * @param options.allowLocked an admin with a ticket may book a locked 🔒 spot
+ * @param options.allowLocked a crew ticket ($lib/server/crew-ticket) or the crew on /admin/requests may book a locked 🔒 spot
  * @param options.allowSpecial only the crew's request flow books a ♿ spot
  *   (assignSpot, src/lib/server/special-requests.ts) — on the guest pages it
  *   stays closed for admins with a ticket too, so it is still free when a
@@ -237,7 +237,7 @@ export class BookingService {
 	 * @param order The order record of the user making the booking.
 	 * @param bedId The ID of the bed to be claimed.
 	 * @param guestName The burner name chosen by the user.
-	 * @param options.allowLocked Admins may book locked beds.
+	 * @param options.allowLocked Locked beds too: a crew ticket ($lib/server/crew-ticket), or the crew booking for a request.
 	 * @param options.allowSpecial Only the crew's request flow books ♿ beds
 	 *   (special-needs spots).
 	 * @param options.allowCheckedIn The crew may move a guest who is checked in

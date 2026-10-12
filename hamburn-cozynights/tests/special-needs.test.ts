@@ -608,9 +608,12 @@ describe('special-needs beds in booking and counts', () => {
 		).toBe(false);
 	});
 
-	it('stay closed on the room page for an admin with a ticket; a locked spot does not', async () => {
+	it('stay closed on the room page even for a crew ticket; a locked spot does not', async () => {
 		const c = camp({ is_booking_active: true });
 		await c.pb.collection('beds').update(c.normal.id, { is_locked: true });
+		// a crew ticket: its e-mail is the address of an approved admin account
+		c.pb.seed('admins', { email: 'max@mauersegler.art', role: 'admin' });
+		await c.pb.collection('orders').update(c.order.id, { email: 'max@mauersegler.art' });
 		const locals = { pb: c.pb, adminPb: c.pb, orderNumber: c.code, admin };
 
 		const { load } = await import('../src/routes/room/[id]/+page.server');

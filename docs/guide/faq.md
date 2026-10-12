@@ -221,7 +221,7 @@ Structural changes only work in Staging Mode. During Live Booking and after book
 :::
 
 ::: details Guests can't book a spot
-First the phase: guests book only during 🎪 Live Booking. Then check the spot on its room page. Guests can't book **LOCKED 🔒**, **SPECIAL NEEDS ♿** or ⚪️ **INACTIVE 🧊** spots: unlock it, switch it back to normal with <kbd>♿ NORMAL</kbd>, or activate it with ⚡️ in Staging Mode. A ♿ spot stays out of reach for admins with a ticket code too: book it for a request on ♿ **Special needs**. New spots are active from the start, but a template import keeps the states stored in the file. See [Houses, rooms & spots](../admin/camp-layout#spots).
+First the phase: guests book only during 🎪 Live Booking. Then check the spot on its room page. Guests can't book **LOCKED 🔒**, **SPECIAL NEEDS ♿** or ⚪️ **INACTIVE 🧊** spots: unlock it, switch it back to normal with <kbd>♿ NORMAL</kbd>, or activate it with ⚡️ in Staging Mode. A 🔒 locked spot (a broken bed or one out of service) can still be booked with a crew ticket, a ticket whose e-mail is the address of an approved admin or superuser account; being signed in to the admin area doesn't matter, and with any other ticket it never works. A ♿ spot stays out of reach even for a crew ticket: book it for a request on ♿ **Special needs**. New spots are active from the start, but a template import keeps the states stored in the file. See [Houses, rooms & spots](../admin/camp-layout#spots).
 :::
 
 ::: details A house won't move when I drag it

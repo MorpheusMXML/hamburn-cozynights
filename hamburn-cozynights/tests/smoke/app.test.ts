@@ -667,7 +667,7 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		}
 	});
 
-	it('keeps ♿ spots for the crew: an admin with a ticket books 🔒 spots but never a ♿ one', async () => {
+	it('keeps ♿ spots for the crew, and 🔒 spots for crew tickets: an admin session books neither', async () => {
 		const { room, beds } = await seedHouse(su, 2);
 		await su.collection('beds').update(beds[0].id, { is_special: true });
 		await su.collection('beds').update(beds[1].id, { is_locked: true });
@@ -684,13 +684,25 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		expect(special.status).toBe(409);
 		expect((await su.collection('beds').getOne(beds[0].id)).occupied).toBe(false);
 
+		// a guest's ticket, even with an admin signed in: no blocked spot
 		const locked = await post(
 			`/room/${room.id}?/bookBed`,
 			{ bedId: beds[1].id, ...CONFIRMED_FIELDS },
 			cookie
 		);
-		expect(locked.status).toBe(200);
-		expect((await su.collection('beds').getOne(beds[1].id)).order).toBe(ticket.order.id);
+		expect(locked.status).toBe(409);
+		expect((await su.collection('beds').getOne(beds[1].id)).occupied).toBe(false);
+
+		// the admin's own ticket (its e-mail is the account's), no admin session needed
+		const own = await seedTicket(su);
+		await su.collection('orders').update(own.order.id, { email: admin.email });
+		const ownLocked = await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[1].id, ...CONFIRMED_FIELDS },
+			await guestLogin(own.code)
+		);
+		expect(ownLocked.status).toBe(200);
+		expect((await su.collection('beds').getOne(beds[1].id)).order).toBe(own.order.id);
 	});
 
 	it('lets admins find a ticket and change its address; the ticket list is for superusers', async () => {

@@ -1,6 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { clearGuestSession, signInUrl } from '$lib/server/guest-session';
+import { isCrewTicket } from '$lib/server/crew-ticket';
 import { getBookingSettings } from '$lib/server/settings';
 import { bookingRefusal } from '$lib/booking-phase';
 import {
@@ -224,7 +225,7 @@ export const actions: Actions = {
 			// two guests hitting "random bed" at the same moment can't both win the
 			// same bed, and one ticket can't end up with two beds.
 			await bookingService.bookBed(order, bedId, guestName.slice(0, 80), {
-				allowLocked: !!locals.admin,
+				allowLocked: await isCrewTicket(locals.adminPb, order),
 				requireLivePhase: true
 			});
 			return { success: true, bedId };
