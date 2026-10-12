@@ -149,7 +149,7 @@ The 🔈 button on the machine turns its sounds on: lever, reels and the jackpot
 
 ![Destiny Roulette after a spin: the spot on the three reels, the name plate with the dice, BOOK IT and SPIN AGAIN](../assets/screenshots/guest-roulette.webp)
 
-The roulette button is only on the map during Live Booking. Opened at another time, the machine rests with its lights down and says *Booking is not open yet. Come back when Live Booking starts.* or *Booking is closed. The roulette is resting until the next burn.*; with every spot taken, it says so and asks you to check back later.
+The roulette button is only on the map during Live Booking. Opened at another time, the machine rests with its lights down and says *Booking is not open yet. Come back when Live Booking starts.* or *Booking is closed. The roulette is resting until the next burn.*; with every spot taken, it says so and asks you to check back later. When the only free spots left are ones other guests are booking right now, it says *2 spots are being booked right now*: if nobody finishes, they are free again within ten minutes.
 
 ### Already booked? ✨ Leave No Trace & Respin
 
