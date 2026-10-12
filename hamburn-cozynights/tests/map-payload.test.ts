@@ -9,6 +9,7 @@ import { APP_SETTINGS_ID } from '../src/lib/server/constants';
 import { InventoryService } from '../src/lib/server/inventory';
 import { forgetAvailableFilters } from '../src/lib/server/wishes';
 import { load as mapLoad } from '../src/routes/map/+page.server';
+import { load as universalLoad } from '../src/routes/map/+page';
 
 const root = path.resolve(__dirname, '..');
 const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
@@ -163,22 +164,33 @@ describe('the camp map payload', () => {
 });
 
 describe('loading the map', () => {
-	it('loads once per visit: asks again on mount only for data that is already old', () => {
+	it('loads once per visit: asks again only for data that is already old', () => {
 		const page = read('src/routes/map/+page.svelte');
-		// the one onMount reload is guarded by the data's age
+		// after the navigation is complete (a refresh during it aborts it), and
+		// by the browser's own clock (receivedAt, +page.ts), never the server's
 		expect(page).toMatch(
-			/onMount\(\(\) => \{\s*if \(data\.loadedAt && Date\.now\(\) - data\.loadedAt > STALE_AFTER_MS\) invalidateAll\(\);/
+			/afterNavigate\(\(\) => \{\s*if \(Date\.now\(\) - data\.receivedAt > STALE_AFTER_MS\) invalidateAll\(\);/
 		);
-		expect(page.match(/onMount\(/g)).toHaveLength(1);
+		expect(page).not.toMatch(/onMount\(/);
+		expect(page).not.toMatch(/loadedAt/);
 	});
 
-	it('is never served from a cache, and says when it was read', async () => {
+	it('is never served from a cache', async () => {
 		const { locals } = hamburnCamp();
 		headers = {};
-		const before = Date.now();
-		const data = await mapAt(locals);
+		await mapAt(locals);
 		expect(headers['cache-control']).toBe('private, no-store');
-		expect(data.loadedAt).toBeGreaterThanOrEqual(before);
+	});
+
+	it('notes when the browser got the data, by the browser clock', async () => {
+		const before = Date.now();
+		const data = (await universalLoad({ data: { houses: [] } } as never)) as Record<
+			string,
+			unknown
+		>;
+		expect(data.houses).toEqual([]);
+		expect(data.receivedAt).toBeGreaterThanOrEqual(before);
+		expect(data.receivedAt).toBeLessThanOrEqual(Date.now());
 	});
 
 	it('preloads page data on tap, not on hover', () => {

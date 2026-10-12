@@ -11,8 +11,9 @@
  *
  * Two sources: a form the guest sent (`startWait`/`waitWhile` in its enhance
  * callback: sign-in, booking, release) and a page change of the guest pages
- * (SvelteKit's `navigating`). Background requests (the spot hold, the holds
- * refresh, a refresh on return to the tab) never start a wait.
+ * (SvelteKit's `navigating`, followed until its `complete` settles, see
+ * `followPageChange`). Background requests (the spot hold, the holds refresh,
+ * a refresh on return to the tab) never start a wait.
  */
 import { writable } from 'svelte/store';
 
@@ -69,6 +70,11 @@ export const HIDE_GRACE_MS = 200;
  * nginx gives up after 60 s, so the page has its answer long before.
  */
 export const MAX_WAIT_MS = 90_000;
+/**
+ * A page change ends by itself after this long: the slowest page load at the
+ * 400-guest load test took 26 s, nginx gives up after 60 s.
+ */
+export const MAX_PAGE_WAIT_MS = 45_000;
 
 interface Wait {
 	id: number;
@@ -122,4 +128,61 @@ export function waitKind(sent: Wait[], change: PageChange | null): WaitKind | nu
 	if (NOT_A_GUEST_PAGE.test(change.to.pathname)) return null;
 	if (change.from && change.from.pathname === change.to.pathname) return null;
 	return 'loading';
+}
+
+/**
+ * Follows one page change until its `complete` promise settles, either way,
+ * then calls `ended` (once). SvelteKit 2.70 leaves `navigating` on the target
+ * of a navigation that an invalidateAll() aborted (a holds refresh, the
+ * opening resync): only its `complete` says it is over (it rejects with
+ * "navigation aborted"). A change that never settles ends after `capMs`. The
+ * returned function stops following without calling `ended`: a newer page
+ * change took over.
+ */
+export function followPageChange(
+	complete: Promise<unknown>,
+	ended: () => void,
+	capMs = MAX_PAGE_WAIT_MS
+): () => void {
+	let live = true;
+	const end = () => {
+		if (!live) return;
+		live = false;
+		clearTimeout(timer);
+		ended();
+	};
+	const timer = setTimeout(end, capMs);
+	complete.then(end, end);
+	return () => {
+		live = false;
+		clearTimeout(timer);
+	};
+}
+
+/** The refresh after a countdown ended, while it runs. */
+let resyncing: Promise<unknown> | null = null;
+/** When the last one ended (ms). */
+let resyncEnded = 0;
+
+/**
+ * Asks the server for the new phase after a countdown ended, one refresh at a
+ * time. A refresh started while another runs would make SvelteKit drop the
+ * older answer, and with answers slower than the retry interval (the opening
+ * rush) none would ever land. Starts nothing while one runs, or within
+ * `gapMs` after the last one ended. With `kind`, the wait veil covers it.
+ * True when a refresh was started.
+ */
+export function resyncOnce(
+	refresh: () => Promise<unknown>,
+	{ gapMs, kind = null, now = Date.now() }: { gapMs: number; kind?: WaitKind | null; now?: number }
+): boolean {
+	if (resyncing || now - resyncEnded < gapMs) return false;
+	const work = kind ? waitWhile(kind, refresh()) : refresh();
+	resyncing = work
+		.catch(() => undefined)
+		.finally(() => {
+			resyncing = null;
+			resyncEnded = Date.now();
+		});
+	return true;
 }

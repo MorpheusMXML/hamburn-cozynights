@@ -152,9 +152,7 @@ export const load: PageServerLoad = async ({ locals, url, setHeaders }) => {
 			// only an armed opening still ahead: a paused or elapsed time shows no countdown
 			bookingUnlockAt: openingCountdownAt(phase, next),
 			pass,
-			noSpot,
-			// when these numbers were read, for the page's freshness check on mount
-			loadedAt: Date.now()
+			noSpot
 		};
 	} catch (err) {
 		console.error('[Map] Load failed:', (err as Error)?.message);

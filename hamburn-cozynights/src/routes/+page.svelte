@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
-	import { startWait, waitWhile } from '$lib/waiting';
+	import { resyncOnce, startWait } from '$lib/waiting';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
-	import { countdownKind } from '$lib/booking-phase';
+	import { countdownKind, resyncDelay } from '$lib/booking-phase';
 	import { EVENT_YEAR } from '$lib/event';
 	import CountdownTimer from '$lib/components/CountdownTimer.svelte';
 	import EffigyTitle from '$lib/components/EffigyTitle.svelte';
@@ -176,7 +176,8 @@
 					targetDate={data.booking.next.at}
 					kind={countdown}
 					on:elapsed={() =>
-						countdown === 'closes' ? invalidateAll() : waitWhile('opening', invalidateAll())}
+						// one refresh at a time; no veil here: it would cover the sign-in form
+						resyncOnce(() => invalidateAll(), { gapMs: resyncDelay(0) })}
 				/>
 			</div>
 		{/if}

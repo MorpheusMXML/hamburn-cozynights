@@ -16,10 +16,11 @@
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import { mapLookingAround } from '$lib/components/GuestTopBar.svelte';
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
-	import { invalidateAll } from '$app/navigation';
-	import { waitWhile } from '$lib/waiting';
+	import { afterNavigate, invalidateAll } from '$app/navigation';
+	import { resyncOnce } from '$lib/waiting';
+	import { resyncDelay } from '$lib/booking-phase';
 
 	export let data: PageData;
 	$: ({ isBookingActive, phase, guestPhase, bookingUnlockAt } = data);
@@ -62,10 +63,13 @@
 	// through refreshOnReturn (+layout.svelte). Asking on every mount loaded
 	// the whole map twice per visit. Only data that is already old when the
 	// page shows it — a tap that preloaded it and became a scroll, minutes ago —
-	// is asked for once more.
+	// is asked for once more. Its age comes from the browser's own clock
+	// (receivedAt, +page.ts): the server's clock may run ahead or behind. And
+	// only after the way here is complete: an invalidateAll() while SvelteKit
+	// still finishes the navigation aborts it.
 	const STALE_AFTER_MS = 30_000;
-	onMount(() => {
-		if (data.loadedAt && Date.now() - data.loadedAt > STALE_AFTER_MS) invalidateAll();
+	afterNavigate(() => {
+		if (Date.now() - data.receivedAt > STALE_AFTER_MS) invalidateAll();
 	});
 
 	let clickCount = 0;
@@ -132,7 +136,8 @@
 							<h2 class="laser-text pink">IGNITION IN</h2>
 							<CountdownTimer
 								targetDate={bookingUnlockAt}
-								on:elapsed={() => waitWhile('opening', invalidateAll())}
+								on:elapsed={() =>
+									resyncOnce(() => invalidateAll(), { gapMs: resyncDelay(0), kind: 'opening' })}
 							/>
 						</div>
 					{/if}

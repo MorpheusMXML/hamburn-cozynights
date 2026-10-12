@@ -4,8 +4,10 @@
   page says that it's on its way and whether a reload would hurt. A little
   campfire burns inside a ring in the app's colours. Only transform and
   opacity move; with reduced motion the fire just sits there. The veil also
-  keeps a second tap off the page while the first one is still on its way.
-  Mounted once in the root layout.
+  keeps a second tap (and the keyboard: the page under it is inert) off the
+  page while the first one is still on its way. A screen reader hears the
+  text from a status line that is always there. Mounted once in the root
+  layout.
 -->
 <script lang="ts">
 	import { navigating } from '$app/state';
@@ -15,19 +17,35 @@
 		STILL_AFTER_MS,
 		STILL_TEXT,
 		WAIT_TEXTS,
+		followPageChange,
 		waitKind,
 		waits,
+		type PageChange,
 		type WaitKind
 	} from '$lib/waiting';
 
-	let kind = $derived(
-		waitKind(
-			$waits,
-			navigating.to
-				? { from: navigating.from?.url, to: navigating.to.url, willUnload: navigating.willUnload }
-				: null
-		)
-	);
+	/**
+	 * The page change on its way, until its `complete` settles. Not
+	 * `navigating.to` alone: after an aborted navigation SvelteKit leaves it on
+	 * the dead target for good (see followPageChange).
+	 */
+	let pageChange = $state<PageChange | null>(null);
+	$effect(() => {
+		const to = navigating.to;
+		const complete = navigating.complete;
+		if (!to || !complete) {
+			pageChange = null;
+			return;
+		}
+		pageChange = {
+			from: navigating.from?.url ?? null,
+			to: to.url,
+			willUnload: navigating.willUnload ?? false
+		};
+		return followPageChange(complete, () => (pageChange = null));
+	});
+
+	let kind = $derived(waitKind($waits, pageChange));
 
 	/** What the veil shows; set once a wait has lasted SHOW_AFTER_MS. */
 	let shown = $state<WaitKind | null>(null);
@@ -62,12 +80,41 @@
 	});
 
 	let text = $derived(shown ? WAIT_TEXTS[shown] : null);
+	let spoken = $derived(
+		text
+			? [`${text.title}.`, text.body, still ? STILL_TEXT : '', text.note].filter(Boolean).join(' ')
+			: ''
+	);
+
+	// While the veil covers the page, the page is inert: no tabbing to a button
+	// under it. It ends with the wait itself, not after the short grace, so a
+	// form can put the cursor into a refused field right away; the focus goes
+	// back where it was if nothing else took it.
+	let covering = $derived(!!shown && !!kind);
+	$effect(() => {
+		if (!covering) return;
+		const root = document.querySelector<HTMLElement>('.app-root');
+		if (!root) return;
+		const before = document.activeElement;
+		root.inert = true;
+		return () => {
+			root.inert = false;
+			const now = document.activeElement;
+			if (before instanceof HTMLElement && before.isConnected && (!now || now === document.body)) {
+				before.focus({ preventScroll: true });
+			}
+		};
+	});
 </script>
 
+<!-- Always there, so a screen reader announces the text when it arrives. -->
+<p class="sr-only" role="status" aria-live="polite" data-layout-ignore>{spoken}</p>
+
 {#if text}
-	<!-- data-layout-overlay: the layout test counts the page under it as covered on purpose -->
-	<div class="wait-veil" data-layout-overlay>
-		<div class="wait-card" role="status" aria-live="polite">
+	<!-- data-layout-overlay: the layout test counts the page under it as covered on purpose.
+	     aria-hidden: the status line above says the same. -->
+	<div class="wait-veil" data-layout-overlay aria-hidden="true">
+		<div class="wait-card">
 			<svg class="wait-fire" viewBox="0 0 64 64" width="72" height="72" aria-hidden="true">
 				<defs>
 					<linearGradient id="wait-ring" x1="0" y1="0" x2="1" y2="1">
