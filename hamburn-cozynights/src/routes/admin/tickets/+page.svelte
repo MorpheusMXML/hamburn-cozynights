@@ -221,9 +221,11 @@
 	$: newState = groupState(newOnes, selected);
 	$: updateState = groupState(updates, selected);
 	// Svelte trims the space at the start of an {#if} block: the note brings its own.
-	$: unpaidStoredNote = preview?.diff.unpaid.some((row) => row.stored)
+	$: leftOutStoredNote = preview?.diff.leftOut.some((row) => row.stored)
 		? ' Those marked 🗄 are still in the database — delete them under “Not in the file”.'
 		: '';
+	$: unpaidCount = preview?.diff.unpaid ?? 0;
+	$: paymentChanges = updates.some((change) => change.unpaidChanged);
 	$: swappable = updates.filter((change) => change.canBeNewHolder);
 	$: allHandedOver = swappable.length > 0 && swappable.every((c) => newHolders.has(c.key));
 	$: chosenHolders = chosen.filter(
@@ -436,6 +438,16 @@
 						{#if imported.removed}
 							{plural(imported.removed, 'cancelled ticket')} deleted.
 						{/if}
+						{#if imported.unpaid}
+							{plural(imported.unpaid, 'ticket')} unpaid: {imported.unpaid === 1
+								? "its code can't"
+								: "their codes can't"} sign in yet.
+						{/if}
+						{#if imported.nowPaid}
+							{plural(imported.nowPaid, 'ticket')} paid now: {imported.nowPaid === 1
+								? 'its code signs'
+								: 'their codes sign'} in again.
+						{/if}
 						{#if imported.skipped}{plural(imported.skipped, 'ticket')} needed nothing anymore.{/if}
 					</span>
 					{#if imported.failed.length > 0}
@@ -511,7 +523,7 @@
 					<ul class="summary-chips" aria-label="What the file changes">
 						<li class="new">{plural(newOnes.length, 'new ticket')}</li>
 						<li class="changed">{plural(updates.length, 'change')}</li>
-						{#if diff.unpaid.length}<li>{diff.unpaid.length} not paid</li>{/if}
+						{#if diff.leftOut.length}<li>{diff.leftOut.length} cancelled or expired</li>{/if}
 						<li>{diff.unchanged.length} unchanged</li>
 						{#if diff.problems.length}<li class="bad">
 								{plural(diff.problems.length, 'problem')}
@@ -519,6 +531,14 @@
 						{#if diff.notInFile.length}<li>{diff.notInFile.length} not in the file</li>{/if}
 						{#if chosenRemovals}<li class="bad">{plural(chosenRemovals, 'to delete')}</li>{/if}
 					</ul>
+
+					{#if unpaidCount > 0}
+						<p class="unpaid-note">
+							💳 {unpaidCount === 1
+								? "1 unpaid — its code can't sign in until a later list shows it as paid."
+								: `${unpaidCount} unpaid — their codes can't sign in until a later list shows them as paid.`}
+						</p>
+					{/if}
 
 					{#if changes.length === 0}
 						<p class="all-set">
@@ -576,6 +596,11 @@
 												>{isDefaultName(change) ? 'no name' : change.name}</span
 											>
 										</label>
+										{#if change.unpaid}
+											<div class="row-extra">
+												<span class="tag unpaid">💳 unpaid: the code can't sign in yet</span>
+											</div>
+										{/if}
 									</li>
 								{/each}
 							</ul>
@@ -586,7 +611,7 @@
 						<FoldPanel
 							nested
 							tone="changed"
-							title={updates.every((c) => !c.nameChanged)
+							title={updates.every((c) => !c.nameChanged && !c.unpaidChanged)
 								? 'Different e-mail address'
 								: 'Changed tickets'}
 							summary={`${updates.filter((c) => selected.has(c.key)).length} of ${updates.length} chosen`}
@@ -609,6 +634,10 @@
 									🔁 <b>New holder</b> also disconnects the old holder's Telegram, makes a new booking
 									pass and forgets the burner name, special-needs request and check-in; the spot stays
 									with the ticket.
+								{/if}
+								{#if paymentChanges}
+									💳 The shop's order changed between paid and unpaid: an unpaid ticket's code can't
+									sign in.
 								{/if}
 							</p>
 							{#if swappable.length > 1}
@@ -649,6 +678,12 @@
 														→ <b>{change.name}</b></span
 													>
 												{/if}
+												{#if change.unpaidChanged}
+													<span
+														>💳 <s>{change.unpaid ? 'paid' : 'unpaid'}</s> →
+														<b>{change.unpaid ? "unpaid: the code can't sign in" : 'paid'}</b></span
+													>
+												{/if}
 											</span>
 										</label>
 										<div class="row-extra">
@@ -661,6 +696,9 @@
 											{/if}
 											{#if change.telegram}<span class="tag">💬 Telegram linked</span>{/if}
 											{#if change.request}<span class="tag">♿ special-needs request</span>{/if}
+											{#if change.unpaid && !change.unpaidChanged}
+												<span class="tag unpaid">💳 unpaid</span>
+											{/if}
 											{#if change.canBeNewHolder}
 												<button
 													type="button"
@@ -681,19 +719,20 @@
 						</FoldPanel>
 					{/if}
 
-					{#if diff.unpaid.length > 0}
+					{#if diff.leftOut.length > 0}
 						<FoldPanel
 							nested
 							tone="muted"
-							title="Not paid"
-							summary={`${diff.unpaid.length} row(s) left out`}
+							title="Cancelled or expired"
+							summary={`${diff.leftOut.length} row(s) left out`}
 							open={false}
 						>
 							<p class="hint">
-								The shop lists these orders as cancelled, pending or expired: they are not imported.{unpaidStoredNote}
+								The shop lists these orders as neither paid nor waiting for the payment (cancelled,
+								expired, …): they are not imported.{leftOutStoredNote}
 							</p>
 							<ul class="plain">
-								{#each diff.unpaid as row (row.line)}
+								{#each diff.leftOut as row (row.line)}
 									<li>
 										Row {row.line}, <code>{row.code}</code>: {row.status}{row.stored ? ' 🗄' : ''}
 									</li>
@@ -830,9 +869,9 @@
 			{:else if !fileError && !checking}
 				<p class="hint">
 					Export the ticket list from the ticket shop as CSV, with the ticket code and the holder's
-					e-mail address (name and order status columns are optional; with a status, only paid
-					orders come in), and drop it here. Nothing changes before you press Import. Loading the
-					same file again later only shows what changed.
+					e-mail address (name and order status columns are optional; with a status, pending orders
+					come in unpaid and cancelled ones stay out), and drop it here. Nothing changes before you
+					press Import. Loading the same file again later only shows what changed.
 				</p>
 			{/if}
 		{/if}
@@ -1023,6 +1062,12 @@
 		color: #86efac;
 		font-size: 0.9rem;
 	}
+	.unpaid-note {
+		margin: 0;
+		color: #fca5a5;
+		font-size: 0.85rem;
+		line-height: 1.5;
+	}
 	.filter {
 		min-height: 42px;
 		padding: 0 0.8rem;
@@ -1129,6 +1174,10 @@
 		border: 1px solid #2a2a2a;
 		border-radius: 999px;
 		padding: 0.15rem 0.55rem;
+	}
+	.tag.unpaid {
+		border-color: rgba(248, 113, 113, 0.5);
+		color: #fca5a5;
 	}
 	.holder {
 		min-height: 34px;

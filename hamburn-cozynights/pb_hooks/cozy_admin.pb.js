@@ -26,14 +26,16 @@
 //      cozy-admin tickets add <code> [<code> ...] [--name <label>] [--email <address>]
 //                                                 create ticket codes (--email: one code only)
 //      cozy-admin tickets import <file.csv|->     create/update tickets with e-mail addresses
-//                                                 from a CSV roster (code, email, name)
+//                                                 from a CSV roster (code, email, name, status;
+//                                                 pending orders come in unpaid: no sign-in)
 //      cozy-admin tickets generate <count> [--prefix TEST] [--name <label>]
 //                                                 create random codes like TEST-7F3K9Q
 //      cozy-admin tickets list                    ticket codes, sign-ins, booked beds, contacts
 //      cozy-admin tickets remove <code> [<code> ...]  delete tickets that hold no bed
 //      cozy-admin tickets forget-contacts --yes   after the event: delete all guest e-mail
 //                                                 addresses, Telegram links, special-needs
-//                                                 requests, request groups and swap requests
+//                                                 requests, request groups, swap requests
+//                                                 and "send me my code" requests
 //
 //    Notifications (pb_hooks/cozy_notify.pb.js):
 //
@@ -390,11 +392,13 @@ function cozyFindTicketsIgnoringCase(app, code) {
 	);
 }
 
-function cozyNewTicket(app, collection, code, label, email) {
+function cozyNewTicket(app, collection, code, label, email, unpaid) {
 	const rec = new Record(collection);
 	rec.set('order_number', code);
 	rec.set('customer_name', label || 'Ticket ' + code);
 	if (email) rec.set('email', email);
+	// The shop's order isn't paid yet: the code can't sign in (orders.unpaid).
+	if (unpaid) rec.set('unpaid', true);
 	app.save(rec);
 }
 
@@ -612,9 +616,13 @@ const CSV_COLUMNS = {
 // spaces — String.trim keeps them. tests/tickets.test.ts compares both.
 const INVISIBLE_CHARS = /[\u200B-\u200D\uFEFF]/g;
 
-// Order states that make a ticket; with a status column only these rows are
-// imported (an empty cell counts as paid). Same list as src/lib/tickets.ts.
+// Order states of the status column, same lists as src/lib/tickets.ts: paid
+// orders make a ticket; orders waiting for their payment make one flagged
+// `unpaid` (its code can't sign in until a later list says paid); any other
+// state (cancelled, expired, …) leaves the row out. An empty cell says
+// nothing: a new ticket counts as paid, a stored one keeps what it has.
 const PAID_ORDER_STATUSES = ['paid', 'p', 'bezahlt'];
+const UNPAID_ORDER_STATUSES = ['pending', 'n', 'offen', 'unpaid', 'ausstehend'];
 
 function cozyCsvColumns(header) {
 	// Like the app: invisible characters out of the header too (readRosterFile).
@@ -662,7 +670,7 @@ const cozyTicketsImport = new Command({
 		const problems = [];
 		const entries = [];
 		const lineOfCode = {};
-		let unpaid = 0;
+		let leftOut = 0;
 		for (let r = 1; r < rows.length; r++) {
 			const line = r + 1;
 			const cell = (idx) =>
@@ -673,14 +681,15 @@ const cozyTicketsImport = new Command({
 			const email = cell(cols.email).toLowerCase();
 			const name = cell(cols.name);
 			const status = cell(cols.status).toLowerCase();
+			const pending = UNPAID_ORDER_STATUSES.indexOf(status) >= 0;
 			if (/[\r\n]/.test(rows[r].join(''))) {
 				problems.push(
 					'line ' + line + ': a cell spans several lines (a quote that is never closed?)'
 				);
 			} else if (!TICKET_CODE_PATTERN.test(code)) {
 				problems.push('line ' + line + ': invalid ticket code "' + code + '"');
-			} else if (status && PAID_ORDER_STATUSES.indexOf(status) < 0) {
-				unpaid++;
+			} else if (status && !pending && PAID_ORDER_STATUSES.indexOf(status) < 0) {
+				leftOut++;
 			} else if (email && !cozyValidGuestEmail(email)) {
 				problems.push('line ' + line + ': invalid e-mail address "' + email + '"');
 			} else if (name.length > MAX_TICKET_LABEL) {
@@ -696,7 +705,9 @@ const cozyTicketsImport = new Command({
 				);
 			} else {
 				lineOfCode[code.toLowerCase()] = line;
-				entries.push({ line: line, code: code, email: email, name: name });
+				// null: the file doesn't say (empty cell) — the stored ticket keeps its state
+				const unpaid = status ? pending : null;
+				entries.push({ line: line, code: code, email: email, name: name, unpaid: unpaid });
 			}
 		}
 		if (problems.length > 0) {
@@ -718,7 +729,12 @@ const cozyTicketsImport = new Command({
 			unchanged: 0,
 			confirmations: 0,
 			withoutEmail: 0,
-			handedOver: 0
+			handedOver: 0,
+			// tickets of the file that are unpaid afterwards, and the ones whose
+			// payment state this import changes
+			unpaid: 0,
+			nowUnpaid: 0,
+			nowPaid: 0
 		};
 		// Tickets whose address would change although they still carry something
 		// of their holder. Without --hand-over the whole file is refused: the CLI
@@ -745,8 +761,9 @@ const cozyTicketsImport = new Command({
 						throw new Error(conflict);
 					}
 					if (!exact) {
-						cozyNewTicket(txApp, collection, entry.code, entry.name, entry.email);
+						cozyNewTicket(txApp, collection, entry.code, entry.name, entry.email, entry.unpaid);
 						counts.created++;
+						if (entry.unpaid) counts.unpaid++;
 						continue;
 					}
 					// Empty cells leave the stored value alone.
@@ -795,6 +812,16 @@ const cozyTicketsImport = new Command({
 						exact.set('customer_name', entry.name);
 						changed = true;
 					}
+					// A paid order frees the code, a pending one locks it again.
+					const wasUnpaid = exact.getBool('unpaid');
+					const unpaid = entry.unpaid === null ? wasUnpaid : entry.unpaid;
+					if (unpaid !== wasUnpaid) {
+						exact.set('unpaid', unpaid);
+						changed = true;
+						if (unpaid) counts.nowUnpaid++;
+						else counts.nowPaid++;
+					}
+					if (unpaid) counts.unpaid++;
 					if (changed) {
 						txApp.save(exact);
 						counts.updated++;
@@ -858,8 +885,27 @@ const cozyTicketsImport = new Command({
 		if (counts.withoutEmail > 0) {
 			cmd.println('  ' + counts.withoutEmail + ' line(s) without an e-mail address');
 		}
-		if (unpaid > 0) {
-			cmd.println('  ' + unpaid + ' line(s) left out: the order is not paid (status column)');
+		if (counts.unpaid > 0) {
+			cmd.println(
+				'  ' +
+					counts.unpaid +
+					" ticket(s) unpaid: their codes can't sign in until a later list shows them as paid"
+			);
+		}
+		if (counts.nowUnpaid > 0) {
+			cmd.println(
+				'  ' + counts.nowUnpaid + ' ticket(s) no longer paid: their codes stop signing in'
+			);
+		}
+		if (counts.nowPaid > 0) {
+			cmd.println('  ' + counts.nowPaid + ' ticket(s) paid now: their codes sign in again');
+		}
+		if (leftOut > 0) {
+			cmd.println(
+				'  ' +
+					leftOut +
+					' line(s) left out: the order is neither paid nor pending, e.g. cancelled (status column)'
+			);
 		}
 		const codesByEmail = {};
 		for (const entry of entries) {
@@ -922,12 +968,12 @@ cozyTickets.addCommand(
 		const forget = new Command({
 			use: 'forget-contacts',
 			short:
-				'After the event: delete every e-mail address, Telegram link, special-needs request, request group and swap request of the tickets',
+				'After the event: delete every e-mail address, Telegram link, special-needs request, request group, swap request and "send me my code" request of the tickets',
 			run: (cmd, args) => {
 				if (args.length !== 0 || !cmd.flags().getBool('yes')) {
 					cozyFail(
 						cmd,
-						'this deletes the e-mail address of every ticket, every Telegram link, every special-needs request, every request group and every swap request (ticket codes and bookings stay) — run it with --yes'
+						'this deletes the e-mail address of every ticket, every Telegram link, every special-needs request, every request group, every swap request and every "send me my code" request (ticket codes and bookings stay) — run it with --yes'
 					);
 				}
 				cozyCollection(cmd, 'guest_notify');
@@ -940,11 +986,20 @@ cozyTickets.addCommand(
 				} catch (_) {
 					hasGroups = false;
 				}
+				// "Send me my code" requests hold e-mail addresses; a database from
+				// before v1.32.4 has none.
+				let hasCodeMails = true;
+				try {
+					$app.findCollectionByNameOrId('code_mails');
+				} catch (_) {
+					hasCodeMails = false;
+				}
 				let emails = 0;
 				let links = 0;
 				let requests = 0;
 				let groups = 0;
 				let swaps = 0;
+				let codeMails = 0;
 				$app.runInTransaction((txApp) => {
 					for (const t of txApp.findRecordsByFilter('orders', "email != ''", '', 0, 0)) {
 						t.set('email', '');
@@ -977,6 +1032,13 @@ cozyTickets.addCommand(
 						if (n.getString('tg_chat')) links++;
 						txApp.delete(n);
 					}
+					// The addresses guests typed to get their code again, sent or not.
+					if (hasCodeMails) {
+						for (const m of txApp.findRecordsByFilter('code_mails', "id != ''", '', 0, 0)) {
+							txApp.delete(m);
+							codeMails++;
+						}
+					}
 				});
 				cmd.println(
 					'deleted ' +
@@ -987,9 +1049,11 @@ cozyTickets.addCommand(
 						requests +
 						' special-needs request(s), ' +
 						groups +
-						' request group(s) and ' +
+						' request group(s), ' +
 						swaps +
-						' swap request(s); the ticket codes and bookings are kept'
+						' swap request(s) and ' +
+						codeMails +
+						' "send me my code" request(s); the ticket codes and bookings are kept'
 				);
 			}
 		});
@@ -1098,9 +1162,13 @@ cozyTickets.addCommand(
 					tickets.filter((t) => t.getString('email') !== '').length +
 					' with e-mail, ' +
 					Object.keys(telegram).length +
-					' with Telegram'
+					' with Telegram, ' +
+					tickets.filter((t) => t.getBool('unpaid')).length +
+					' unpaid'
 			);
-			cmd.println('CODES (used = signed in at least once, i.e. the lookup hash is stored)');
+			cmd.println(
+				'CODES (used = signed in at least once, i.e. the lookup hash is stored; UNPAID = the order is not paid yet, the code cannot sign in)'
+			);
 			if (readable.length === 0) cmd.println('  (none)');
 			for (const t of readable) {
 				cmd.println(
@@ -1112,6 +1180,7 @@ cozyTickets.addCommand(
 						(booked[t.id] ? 'yes' : 'no ') +
 						'  tg=' +
 						(telegram[t.id] ? 'yes' : 'no ') +
+						(t.getBool('unpaid') ? '  UNPAID' : '') +
 						'  ' +
 						t.getString('customer_name') +
 						(t.getString('email') ? '  <' + t.getString('email') + '>' : '')

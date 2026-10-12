@@ -3,9 +3,10 @@
  * The ticket roster (collection `orders`) for the admin area
  * (docs/admin/tickets.md): find a ticket by its code or e-mail address, change
  * its address and name, hand it over to a new holder, and import the ticket
- * shop's CSV list after a review. Orders are superuser-only in PocketBase, so
- * everything here runs on the app's service account; the callers check the
- * admin's rights first.
+ * shop's CSV list after a review — orders that aren't paid yet included,
+ * flagged `unpaid` so their codes can't sign in. Orders are superuser-only in
+ * PocketBase, so everything here runs on the app's service account; the
+ * callers check the admin's rights first.
  *
  * E-mails go out from PocketBase: a new address on a ticket that holds a spot
  * gets a confirmation (pb_hooks/cozy_notify.pb.js).
@@ -121,6 +122,7 @@ async function describeTicket(
 		name,
 		email: order.email ?? '',
 		signedIn: !!order.order_hash,
+		unpaid: !!order.unpaid,
 		spot,
 		burnerName,
 		telegram: links.length > 0,
@@ -135,7 +137,7 @@ async function describeTicket(
  */
 async function loadSearchIndex(adminPb: TypedPocketBase): Promise<OrdersResponse[]> {
 	return adminPb.collection('orders').getFullList<OrdersResponse>({
-		fields: 'id,order_number,order_hash,customer_name,email,burner_name,pass_code',
+		fields: 'id,order_number,order_hash,customer_name,email,burner_name,pass_code,unpaid',
 		batch: 1000,
 		requestKey: null
 	});
@@ -207,7 +209,7 @@ export async function openTicket(adminPb: TypedPocketBase, raw: unknown): Promis
 	let order: OrdersResponse;
 	try {
 		order = await adminPb.collection('orders').getOne<OrdersResponse>(id, {
-			fields: 'id,order_number,order_hash,customer_name,email,burner_name,pass_code',
+			fields: 'id,order_number,order_hash,customer_name,email,burner_name,pass_code,unpaid',
 			requestKey: null
 		});
 	} catch (err) {
@@ -342,7 +344,7 @@ export async function changeTicket(
 export async function loadStoredTickets(adminPb: TypedPocketBase): Promise<StoredTicket[]> {
 	const [orders, beds, links, requests] = await Promise.all([
 		adminPb.collection('orders').getFullList<OrdersResponse>({
-			fields: 'id,order_number,email,customer_name',
+			fields: 'id,order_number,email,customer_name,unpaid',
 			batch: 1000,
 			requestKey: null
 		}),
@@ -374,7 +376,8 @@ export async function loadStoredTickets(adminPb: TypedPocketBase): Promise<Store
 			name: order.customer_name ?? '',
 			hasSpot: booked.has(order.id),
 			telegram: linked.has(order.id),
-			request: requested.has(order.id)
+			request: requested.has(order.id),
+			unpaid: !!order.unpaid
 		}));
 }
 
@@ -419,9 +422,9 @@ export async function previewRoster(
 	adminPb: TypedPocketBase,
 	rows: RosterRow[]
 ): Promise<RosterPreview> {
-	const { entries, problems, unpaid } = checkRosterRows(rows);
+	const { entries, problems, leftOut } = checkRosterRows(rows);
 	const stored = await loadStoredTickets(adminPb);
-	const diff = diffRoster(entries, stored, problems, unpaid);
+	const diff = diffRoster(entries, stored, problems, leftOut);
 	// The file doesn't have these codes: only show enough to recognise them. The
 	// id stays, so the review can tick one for removal.
 	diff.notInFile = diff.notInFile.map((ticket) => ({
@@ -474,9 +477,9 @@ export async function importRoster(
 	}
 	importRunning = true;
 	try {
-		const { entries, problems, unpaid } = checkRosterRows(rows);
+		const { entries, problems, leftOut } = checkRosterRows(rows);
 		const stored = await loadStoredTickets(adminPb);
-		const diff = diffRoster(entries, stored, problems, unpaid);
+		const diff = diffRoster(entries, stored, problems, leftOut);
 		const wanted = new Set(options.selected.map((key) => String(key).toLowerCase()));
 		const handOver = new Set(options.newHolders.map((key) => String(key).toLowerCase()));
 		const todo = diff.changes.filter((change) => wanted.has(change.key));
@@ -498,6 +501,8 @@ export async function importRoster(
 			newHolders: 0,
 			requestsRemoved: 0,
 			confirmations: 0,
+			unpaid: 0,
+			nowPaid: 0,
 			skipped: wanted.size - todo.length,
 			failed: []
 		};
@@ -508,9 +513,12 @@ export async function importRoster(
 					await adminPb.collection('orders').create({
 						order_number: change.code,
 						customer_name: change.name,
-						email: change.email
+						email: change.email,
+						// Not paid yet: the code can't sign in until a later list says paid.
+						...(change.unpaid ? { unpaid: true } : {})
 					});
 					outcome.created++;
+					if (change.unpaid) outcome.unpaid++;
 					return;
 				}
 				const id = change.id as string;
@@ -518,6 +526,7 @@ export async function importRoster(
 				const data: Record<string, string | boolean> = {};
 				if (change.emailChanged) data.email = change.email;
 				if (change.nameChanged) data.customer_name = change.name;
+				if (change.unpaidChanged) data.unpaid = change.unpaid;
 				let requestRemoved = false;
 				if (newHolder) {
 					Object.assign(data, newHolderFields());
@@ -535,6 +544,10 @@ export async function importRoster(
 					if (requestRemoved) outcome.requestsRemoved++;
 				}
 				if (change.emailChanged && change.email && change.hasSpot) outcome.confirmations++;
+				if (change.unpaidChanged) {
+					if (change.unpaid) outcome.unpaid++;
+					else outcome.nowPaid++;
+				}
 			} catch (err) {
 				console.error(`[Tickets] Import of ${maskTicketCode(change.code)} failed:`, err);
 				outcome.failed.push({ code: change.code, error: describeError(err) });

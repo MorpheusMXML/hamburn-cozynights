@@ -8,8 +8,8 @@
  *
  * The server CLI (`cozy-admin tickets import` in pb_hooks/cozy_admin.pb.js)
  * reads the same files by the same rules. Keep TICKET_CODE_PATTERN,
- * GUEST_EMAIL_PATTERN, TICKET_CSV_COLUMNS and PAID_ORDER_STATUSES in sync with it;
- * tests/tickets.test.ts compares them.
+ * GUEST_EMAIL_PATTERN, TICKET_CSV_COLUMNS, PAID_ORDER_STATUSES and
+ * UNPAID_ORDER_STATUSES in sync with it; tests/tickets.test.ts compares them.
  */
 
 /** Same as the guest sign-in (src/routes/+page.server.ts): anything else can't be typed in. */
@@ -44,16 +44,34 @@ export const TICKET_CSV_COLUMNS = {
 } as const;
 
 /**
- * Order states (lower case) that make a ticket. A file with a status column
- * (pretix exports "paid", "pending", "canceled", "expired") only brings in its
- * paid orders; an empty cell counts as paid, like a file without the column.
+ * Order states (lower case) in a file's status column. pretix exports "paid",
+ * "pending", "canceled" and "expired" (or p, n, c, e); German exports say
+ * bezahlt, offen, storniert, abgelaufen.
+ *
+ * - Paid: the ticket comes in, its code signs in.
+ * - Waiting for the payment (UNPAID_ORDER_STATUSES): the ticket comes in
+ *   flagged `unpaid` (orders.unpaid); its code can't sign in until a later
+ *   list shows the order as paid.
+ * - Anything else (cancelled, expired, refunded, …): the row is left out.
+ *
+ * An empty cell says nothing, like a file without the column: a new ticket
+ * counts as paid, a stored one keeps what it has (empty cells never change a
+ * ticket).
  */
 export const PAID_ORDER_STATUSES = ['paid', 'p', 'bezahlt'];
+export const UNPAID_ORDER_STATUSES = ['pending', 'n', 'offen', 'unpaid', 'ausstehend'];
+
+const orderStatus = (raw: unknown) => (typeof raw === 'string' ? raw : '').trim().toLowerCase();
 
 /** The order is paid, or the file doesn't say. */
 export function isPaidStatus(raw: unknown): boolean {
-	const status = (typeof raw === 'string' ? raw : '').trim().toLowerCase();
+	const status = orderStatus(raw);
 	return !status || PAID_ORDER_STATUSES.includes(status);
+}
+
+/** The order waits for its payment: the ticket comes in, but its code can't sign in yet. */
+export function isUnpaidStatus(raw: unknown): boolean {
+	return UNPAID_ORDER_STATUSES.includes(orderStatus(raw));
 }
 
 export type TicketColumn = keyof typeof TICKET_CSV_COLUMNS;
@@ -251,6 +269,12 @@ export interface RosterEntry {
 	email: string;
 	/** '' = empty cell (keeps a stored name). */
 	name: string;
+	/**
+	 * true: the shop lists the order as not paid yet; false: as paid. Missing
+	 * when the file doesn't say (empty cell, no status column): a new ticket
+	 * counts as paid, a stored one keeps what it has.
+	 */
+	unpaid?: boolean;
 }
 
 export interface RosterProblem {
@@ -259,8 +283,8 @@ export interface RosterProblem {
 	message: string;
 }
 
-/** A row the shop lists as not paid (cancelled, pending, …): left out of the import. */
-export interface RosterUnpaid {
+/** A row the shop lists as neither paid nor waiting for the payment (cancelled, expired, …): left out. */
+export interface RosterLeftOut {
 	line: number;
 	code: string;
 	/** As the file writes it, in lower case. */
@@ -345,17 +369,18 @@ export function readRosterFile(text: string, columns?: Partial<ColumnMap>): Rost
 
 /**
  * Checks the rows. Broken ones become problems: they are listed and left out,
- * the rest can still be imported. Orders the shop lists as not paid are left
- * out too, as `unpaid`.
+ * the rest can still be imported. Orders the shop lists as cancelled, expired
+ * and the like are left out too, as `leftOut`; orders that wait for their
+ * payment come in as entries with `unpaid`.
  */
 export function checkRosterRows(rows: RosterRow[]): {
 	entries: RosterEntry[];
 	problems: RosterProblem[];
-	unpaid: RosterUnpaid[];
+	leftOut: RosterLeftOut[];
 } {
 	const entries: RosterEntry[] = [];
 	const problems: RosterProblem[] = [];
-	const unpaid: RosterUnpaid[] = [];
+	const leftOut: RosterLeftOut[] = [];
 	const lineOfCode = new Map<string, number>();
 	for (const row of rows) {
 		const line = row.line;
@@ -382,8 +407,8 @@ export function checkRosterRows(rows: RosterRow[]): {
 				code,
 				message: 'invalid ticket code: only letters, digits, "-" and "_", at most 64 characters'
 			});
-		} else if (!isPaidStatus(status)) {
-			unpaid.push({ line, code, status: status.slice(0, 40) });
+		} else if (!isPaidStatus(status) && !isUnpaidStatus(status)) {
+			leftOut.push({ line, code, status: status.slice(0, 40) });
 		} else if (email && !isValidGuestEmail(email)) {
 			problems.push({ line, code, message: `invalid e-mail address "${email}"` });
 		} else if (name.length > TICKET_LIMITS.nameLength) {
@@ -400,10 +425,12 @@ export function checkRosterRows(rows: RosterRow[]): {
 			});
 		} else {
 			lineOfCode.set(code.toLowerCase(), line);
-			entries.push({ line, code, email, name });
+			const entry: RosterEntry = { line, code, email, name };
+			if (status) entry.unpaid = isUnpaidStatus(status);
+			entries.push(entry);
 		}
 	}
-	return { entries, problems, unpaid };
+	return { entries, problems, leftOut };
 }
 
 export type RosterParseResult =
@@ -413,7 +440,7 @@ export type RosterParseResult =
 			columns: ColumnMap;
 			entries: RosterEntry[];
 			problems: RosterProblem[];
-			unpaid: RosterUnpaid[];
+			leftOut: RosterLeftOut[];
 	  }
 	| { ok: false; error: string; header?: string[] };
 
@@ -438,6 +465,8 @@ export interface StoredTicket {
 	telegram: boolean;
 	/** A ♿ special-needs request belongs to it. */
 	request: boolean;
+	/** The shop's order isn't paid yet (orders.unpaid): the code can't sign in. */
+	unpaid: boolean;
 }
 
 export interface RosterChange {
@@ -455,6 +484,10 @@ export interface RosterChange {
 	before: { email: string; name: string } | null;
 	emailChanged: boolean;
 	nameChanged: boolean;
+	/** What the ticket will be afterwards: not paid yet, so its code can't sign in. */
+	unpaid: boolean;
+	/** The payment state changes (changed tickets only): paid → unpaid, or back. */
+	unpaidChanged: boolean;
 	hasSpot: boolean;
 	telegram: boolean;
 	request: boolean;
@@ -491,10 +524,17 @@ export interface RosterDiff {
 	/** Addresses used by several tickets of the file (allowed, worth a look). */
 	sharedEmails: { email: string; codes: string[] }[];
 	/**
-	 * Rows the shop lists as not paid. `stored`: the ticket is in the database
-	 * (it is also under notInFile, where it can be deleted).
+	 * Rows the shop lists as cancelled, expired, …: left out. `stored`: the
+	 * ticket is in the database (it is also under notInFile, where it can be
+	 * deleted).
 	 */
-	unpaid: (RosterUnpaid & { stored: boolean })[];
+	leftOut: (RosterLeftOut & { stored: boolean })[];
+	/**
+	 * Tickets of the file that are unpaid once it is imported: new ones the shop
+	 * lists as not paid yet, and stored ones that are (or turn) unpaid. Their
+	 * codes can't sign in until a later list shows them as paid.
+	 */
+	unpaid: number;
 }
 
 /**
@@ -506,7 +546,7 @@ export function diffRoster(
 	entries: RosterEntry[],
 	stored: StoredTicket[],
 	problems: RosterProblem[] = [],
-	unpaid: RosterUnpaid[] = []
+	leftOut: RosterLeftOut[] = []
 ): RosterDiff {
 	const byKey = new Map<string, StoredTicket[]>();
 	for (const ticket of stored) {
@@ -520,6 +560,7 @@ export function diffRoster(
 	const unchanged: RosterDiff['unchanged'] = [];
 	const allProblems = [...problems];
 	const inFile = new Set<string>();
+	let unpaid = 0;
 
 	for (const entry of entries) {
 		const key = entry.code.toLowerCase();
@@ -545,6 +586,7 @@ export function diffRoster(
 		}
 
 		if (exact.length === 0) {
+			if (entry.unpaid) unpaid++;
 			changes.push({
 				key,
 				id: null,
@@ -556,6 +598,8 @@ export function diffRoster(
 				before: null,
 				emailChanged: !!entry.email,
 				nameChanged: false,
+				unpaid: !!entry.unpaid,
+				unpaidChanged: false,
 				hasSpot: false,
 				telegram: false,
 				request: false,
@@ -572,7 +616,12 @@ export function diffRoster(
 		// Stored addresses may differ in case only (typed in the dashboard): no change.
 		const emailChanged = email.toLowerCase() !== ticket.email.toLowerCase();
 		const nameChanged = name !== ticket.name;
-		if (!emailChanged && !nameChanged) {
+		// A paid order frees the code, a pending one locks it again; an empty
+		// status cell leaves the ticket as it is.
+		const isUnpaid = entry.unpaid ?? ticket.unpaid;
+		const unpaidChanged = isUnpaid !== ticket.unpaid;
+		if (isUnpaid) unpaid++;
+		if (!emailChanged && !nameChanged && !unpaidChanged) {
 			unchanged.push({ code: entry.code, line: entry.line });
 			continue;
 		}
@@ -589,6 +638,8 @@ export function diffRoster(
 			before: { email: ticket.email, name: ticket.name },
 			emailChanged,
 			nameChanged,
+			unpaid: isUnpaid,
+			unpaidChanged,
 			hasSpot: ticket.hasSpot,
 			telegram: ticket.telegram,
 			request: ticket.request,
@@ -600,7 +651,7 @@ export function diffRoster(
 		});
 	}
 
-	const statusOf = new Map(unpaid.map((row) => [row.code.toLowerCase(), row.status]));
+	const statusOf = new Map(leftOut.map((row) => [row.code.toLowerCase(), row.status]));
 	const notInFile = stored
 		.filter((ticket) => !inFile.has(ticket.code.toLowerCase()))
 		.map((ticket) => {
@@ -634,7 +685,8 @@ export function diffRoster(
 		problems: allProblems,
 		notInFile,
 		sharedEmails,
-		unpaid: unpaid.map((row) => ({ ...row, stored: storedKeys.has(row.code.toLowerCase()) }))
+		leftOut: leftOut.map((row) => ({ ...row, stored: storedKeys.has(row.code.toLowerCase()) })),
+		unpaid
 	};
 }
 
@@ -677,6 +729,11 @@ export interface TicketView {
 	email: string;
 	/** The code was used to sign in at least once. */
 	signedIn: boolean;
+	/**
+	 * The shop's order isn't paid yet: the code can't sign in until a later
+	 * ticket list shows it as paid.
+	 */
+	unpaid: boolean;
 	spot: TicketSpot | null;
 	burnerName: string;
 	telegram: boolean;
@@ -731,6 +788,10 @@ export interface RosterImportOutcome {
 	requestsRemoved: number;
 	/** New addresses of tickets that hold a spot: they get a confirmation. */
 	confirmations: number;
+	/** Tickets created or updated that are unpaid now: their codes can't sign in. */
+	unpaid: number;
+	/** Tickets that were unpaid and are paid now: their codes sign in again. */
+	nowPaid: number;
 	/** Selected, but nothing (or no longer anything) to change. */
 	skipped: number;
 	failed: { code: string; error: string }[];

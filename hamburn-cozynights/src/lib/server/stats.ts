@@ -162,6 +162,8 @@ export async function readStatsRecords(pb: TypedPocketBase) {
  */
 export const OPS_FILTERS = {
 	ticketsWithEmail: "email != ''",
+	ticketsUnpaid: 'unpaid = true',
+	spotsOfUnpaid: 'order.unpaid = true',
 	telegram: "tg_chat != ''",
 	mailed: "mail_sent != ''",
 	queued: "due != ''",
@@ -253,6 +255,8 @@ export async function readOpsStats(pb: TypedPocketBase): Promise<OpsStats> {
 		settings,
 		total,
 		withEmail,
+		unpaid,
+		unpaidWithSpot,
 		telegram,
 		mailed,
 		queued,
@@ -267,6 +271,8 @@ export async function readOpsStats(pb: TypedPocketBase): Promise<OpsStats> {
 		readSettings(),
 		count('orders'),
 		count('orders', OPS_FILTERS.ticketsWithEmail),
+		count('orders', OPS_FILTERS.ticketsUnpaid),
+		count('beds', OPS_FILTERS.spotsOfUnpaid),
 		count('guest_notify', OPS_FILTERS.telegram),
 		count('guest_notify', OPS_FILTERS.mailed),
 		count('guest_notify', OPS_FILTERS.queued),
@@ -290,7 +296,7 @@ export async function readOpsStats(pb: TypedPocketBase): Promise<OpsStats> {
 	const approved =
 		roles.superuser === null || roles.admin === null ? null : roles.superuser + roles.admin;
 	return {
-		tickets: { total, withEmail, telegram, mailed },
+		tickets: { total, withEmail, telegram, mailed, unpaid, unpaidWithSpot },
 		requests,
 		messages: {
 			mailOn: !!settings?.notify_mail,

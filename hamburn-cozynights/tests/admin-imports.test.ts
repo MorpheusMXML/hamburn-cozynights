@@ -103,6 +103,7 @@ describe('finding tickets', () => {
 			name: 'Ada Lovelace',
 			email: 'ada@example.org',
 			signedIn: true,
+			unpaid: false,
 			spot: { house: 'Neon Cave', room: 'Bunks #1', spot: 'B1', roomId: 'r1', checkIn: null },
 			burnerName: 'Sparkle',
 			telegram: true,
@@ -366,6 +367,42 @@ describe('importing the ticket list', () => {
 		});
 		expect(outcome.created).toBe(1);
 		expect(outcome.failed).toEqual([{ code: 'HB-2000', error: 'name: refused by test' }]);
+	});
+
+	it('creates pending orders unpaid, and frees them once a later list says paid', async () => {
+		const first = await importRoster(
+			db.pb,
+			[
+				{ line: 2, code: 'HB-1003', email: '', name: '', status: 'pending' },
+				{ line: 3, code: 'HB-3000', email: '', name: '', status: 'offen' },
+				{ line: 4, code: 'HB-3001', email: '', name: '', status: 'cancelled' }
+			],
+			{ selected: ['hb-1003', 'hb-3000', 'hb-3001'], newHolders: [] }
+		);
+		expect(first).toMatchObject({
+			created: 1,
+			updated: 1,
+			unpaid: 2,
+			nowPaid: 0,
+			skipped: 1,
+			failed: []
+		});
+		expect(order('o3').unpaid).toBe(true);
+		expect(db.data.orders.find((o) => o.order_number === 'HB-3000')).toMatchObject({
+			unpaid: true
+		});
+		expect(db.data.orders.some((o) => o.order_number === 'HB-3001')).toBe(false);
+		// the admin sees it on the ticket
+		expect((await searchTickets(db.pb, 'HB-3000')).tickets[0].unpaid).toBe(true);
+
+		const paid = await importRoster(
+			db.pb,
+			[{ line: 2, code: 'HB-1003', email: '', name: '', status: 'paid' }],
+			{ selected: ['hb-1003'], newHolders: [] }
+		);
+		expect(paid).toMatchObject({ updated: 1, unpaid: 0, nowPaid: 1, failed: [] });
+		expect(order('o3').unpaid).toBe(false);
+		expect((await searchTickets(db.pb, 'HB-1003')).tickets[0].unpaid).toBe(false);
 	});
 
 	it('checks the shape of what the browser sent', () => {

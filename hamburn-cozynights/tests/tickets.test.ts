@@ -10,6 +10,7 @@ import {
 	TICKET_CODE_PATTERN,
 	TICKET_CSV_COLUMNS,
 	TICKET_LIMITS,
+	UNPAID_ORDER_STATUSES,
 	candidateColumns,
 	checkRosterRows,
 	defaultRosterSelection,
@@ -18,6 +19,8 @@ import {
 	diffRoster,
 	displayTicketName,
 	holderName,
+	isPaidStatus,
+	isUnpaidStatus,
 	maskTicketCode,
 	maskedTicketLabel,
 	parseCsv,
@@ -39,6 +42,7 @@ const stored = (code: string, extra: Partial<StoredTicket> = {}): StoredTicket =
 	hasSpot: false,
 	telegram: false,
 	request: false,
+	unpaid: false,
 	...extra
 });
 
@@ -232,15 +236,48 @@ describe('checkRosterRows', () => {
 		expect(problems[4].message).toContain('row 2');
 	});
 
-	it('leaves out orders that are not paid, without calling them problems', () => {
+	it('brings in pending orders as unpaid and leaves out cancelled ones, without calling them problems', () => {
 		const file = entries(
-			'Event slug,Order code,Status,Email\nhb,AB1,paid,a@x.de\nhb,AB2,canceled,b@x.de\nhb,AB3,Pending,c@x.de\nhb,AB4,,d@x.de\nhb,AB5,PAID,e@x.de'
+			'Event slug,Order code,Status,Email\nhb,AB1,paid,a@x.de\nhb,AB2,canceled,b@x.de\nhb,AB3,Pending,c@x.de\nhb,AB4,,d@x.de\nhb,AB5,PAID,e@x.de\nhb,AB6,expired,f@x.de'
 		);
-		expect(file.entries.map((e) => e.code)).toEqual(['AB1', 'AB4', 'AB5']);
+		expect(file.entries.map((e) => [e.code, e.unpaid])).toEqual([
+			['AB1', false],
+			['AB3', true],
+			// an empty cell says nothing: a new ticket counts as paid, a stored one keeps its state
+			['AB4', undefined],
+			['AB5', false]
+		]);
 		expect(file.problems).toEqual([]);
-		expect(file.unpaid).toEqual([
+		expect(file.leftOut).toEqual([
 			{ line: 3, code: 'AB2', status: 'canceled' },
-			{ line: 4, code: 'AB3', status: 'pending' }
+			{ line: 7, code: 'AB6', status: 'expired' }
+		]);
+	});
+
+	it('knows the order states of pretix and of German exports', () => {
+		for (const status of ['paid', 'p', 'Bezahlt', ' PAID ', '']) {
+			expect([status, isPaidStatus(status), isUnpaidStatus(status)]).toEqual([status, true, false]);
+		}
+		for (const status of ['pending', 'n', 'offen', 'Unpaid', 'ausstehend']) {
+			expect([status, isPaidStatus(status), isUnpaidStatus(status)]).toEqual([status, false, true]);
+		}
+		for (const status of ['canceled', 'c', 'expired', 'e', 'storniert', 'abgelaufen', 'refunded']) {
+			expect([status, isPaidStatus(status), isUnpaidStatus(status)]).toEqual([
+				status,
+				false,
+				false
+			]);
+		}
+	});
+
+	it('checks an unpaid row like a paid one', () => {
+		const file = entries('code,status,email\nU-1,pending,broken\nU-2,pending,u@x.de\nU-2,n,v@x.de');
+		expect(file.entries).toEqual([
+			{ line: 3, code: 'U-2', email: 'u@x.de', name: '', unpaid: true }
+		]);
+		expect(file.problems.map((p) => [p.line, p.message.split(' ')[0]])).toEqual([
+			[2, 'invalid'],
+			[4, 'the']
 		]);
 	});
 });
@@ -391,17 +428,71 @@ describe('diffRoster', () => {
 		});
 	});
 
-	it('marks stored tickets the shop cancelled, and creates nothing for unpaid orders', () => {
+	it('marks stored tickets the shop cancelled, and creates nothing for cancelled orders', () => {
 		const file = entries('code,status,email\nP-1,paid,a@x.de\nP-2,canceled,b@x.de\nP-3,expired,');
-		const diff = diffRoster(file.entries, [stored('P-2')], file.problems, file.unpaid);
+		const diff = diffRoster(file.entries, [stored('P-2')], file.problems, file.leftOut);
 		expect(diff.changes.map((c) => c.code)).toEqual(['P-1']);
 		expect(diff.notInFile).toEqual([
 			{ id: 'id-P-2', code: 'P-2', hasSpot: false, status: 'canceled' }
 		]);
-		expect(diff.unpaid).toEqual([
+		expect(diff.leftOut).toEqual([
 			{ line: 3, code: 'P-2', status: 'canceled', stored: true },
 			{ line: 4, code: 'P-3', status: 'expired', stored: false }
 		]);
+		expect(diff.unpaid).toBe(0);
+	});
+
+	it('creates a pending order as a new unpaid ticket, ticked like any new one', () => {
+		const file = entries('code,status,email\nN-1,pending,a@x.de\nN-2,paid,b@x.de\nN-3,,c@x.de');
+		const diff = diffRoster(file.entries, [], file.problems, file.leftOut);
+		expect(diff.changes.map((c) => [c.code, c.kind, c.unpaid, c.unpaidChanged])).toEqual([
+			['N-1', 'new', true, false],
+			['N-2', 'new', false, false],
+			['N-3', 'new', false, false]
+		]);
+		expect(diff.unpaid).toBe(1);
+		expect(defaultRosterSelection(diff).selected).toEqual(['n-1', 'n-2', 'n-3']);
+	});
+
+	it('changes a stored ticket between paid and unpaid when a later list says so', () => {
+		const file = entries(
+			'code,status,email\nR-PAID,paid,\nR-LOCK,pending,\nR-SAME,pending,\nR-KEEP,,\nR-BOTH,paid,new@x.de'
+		);
+		const diff = diffRoster(
+			file.entries,
+			[
+				stored('R-PAID', { unpaid: true }),
+				stored('R-LOCK', { hasSpot: true }),
+				stored('R-SAME', { unpaid: true }),
+				// an empty status cell leaves an unpaid ticket unpaid
+				stored('R-KEEP', { unpaid: true }),
+				stored('R-BOTH', { unpaid: true, email: 'old@x.de', hasSpot: true })
+			],
+			file.problems,
+			file.leftOut
+		);
+		const byCode = Object.fromEntries(diff.changes.map((c) => [c.code, c]));
+		expect(Object.keys(byCode)).toEqual(['R-PAID', 'R-LOCK', 'R-BOTH']);
+		expect(byCode['R-PAID']).toMatchObject({
+			kind: 'changed',
+			unpaid: false,
+			unpaidChanged: true,
+			emailChanged: false,
+			nameChanged: false,
+			needsTick: false
+		});
+		expect(byCode['R-LOCK']).toMatchObject({ unpaid: true, unpaidChanged: true, needsTick: false });
+		// the new address on a booked ticket still needs a deliberate tick
+		expect(byCode['R-BOTH']).toMatchObject({
+			unpaid: false,
+			unpaidChanged: true,
+			emailChanged: true,
+			needsTick: true
+		});
+		expect(diff.unchanged.map((u) => u.code)).toEqual(['R-SAME', 'R-KEEP']);
+		// unpaid once imported: R-LOCK, R-SAME, R-KEEP
+		expect(diff.unpaid).toBe(3);
+		expect(defaultRosterSelection(diff).selected).toEqual(['r-paid', 'r-lock']);
 	});
 });
 
@@ -432,9 +523,22 @@ describe('same rules as the server CLI (pb_hooks/cozy_admin.pb.js)', () => {
 		expect(String(constant('GUEST_EMAIL_PATTERN'))).toBe(String(GUEST_EMAIL_PATTERN));
 	});
 
-	it('knows the same column names and paid order states', () => {
+	it('knows the same column names and order states', () => {
 		expect(constant('CSV_COLUMNS')).toEqual(TICKET_CSV_COLUMNS);
 		expect(constant('PAID_ORDER_STATUSES')).toEqual(PAID_ORDER_STATUSES);
+		expect(constant('UNPAID_ORDER_STATUSES')).toEqual(UNPAID_ORDER_STATUSES);
+		// no state is both
+		expect(PAID_ORDER_STATUSES.filter((s) => UNPAID_ORDER_STATUSES.includes(s))).toEqual([]);
+	});
+
+	it('sorts the rows by the same rule: pending in as unpaid, other states out, empty says nothing', () => {
+		// the CLI's row check and what it stores
+		expect(source).toMatch(/const pending = UNPAID_ORDER_STATUSES\.indexOf\(status\) >= 0;/);
+		expect(source).toMatch(
+			/status && !pending && PAID_ORDER_STATUSES\.indexOf\(status\) < 0\) \{\s*leftOut\+\+;/
+		);
+		expect(source).toMatch(/const unpaid = status \? pending : null;/);
+		expect(source).toMatch(/const unpaid = entry\.unpaid === null \? wasUnpaid : entry\.unpaid;/);
 	});
 
 	it('cleans every cell the same way: invisible characters out, then the spaces', () => {
@@ -445,8 +549,10 @@ describe('same rules as the server CLI (pb_hooks/cozy_admin.pb.js)', () => {
 		);
 		const file = parseRoster(`code,status,email\nZ-1, paid${ZWSP} ,${ZWSP}a@x.de`);
 		if (!file.ok) throw new Error(file.error);
-		expect(file.entries).toEqual([{ line: 2, code: 'Z-1', email: 'a@x.de', name: '' }]);
-		expect(file.unpaid).toEqual([]);
+		expect(file.entries).toEqual([
+			{ line: 2, code: 'Z-1', email: 'a@x.de', name: '', unpaid: false }
+		]);
+		expect(file.leftOut).toEqual([]);
 	});
 });
 

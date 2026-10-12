@@ -136,13 +136,13 @@ Counts for the whole camp — the House filter doesn't touch them:
 
 | Card | Counts |
 | --- | --- |
-| 🎟 **Tickets** | Loaded, with a spot, without a spot, with an e-mail address, Telegram linked. |
+| 🎟 **Tickets** | Loaded, with a spot, without a spot (unpaid tickets left out: they can't book), unpaid, with an e-mail address, Telegram linked. |
 | ✉️ **Guest messages** | Whether e-mail and the Telegram bot are on; guests e-mailed; messages waiting to go out, being retried, failed for good. |
 | ♿ **Special-needs requests** | Waiting for a decision, approved, declined. |
 | 👥 **Crew** | Admins, sign-ins waiting for approval, crew alerts waiting and failed (red only while no alert has got through since). |
 
 An underlined line is a link: *Loaded*, *With a spot*, *Without a spot*,
-*Telegram linked* and *Guests e-mailed* open the [guest list](./guests) with
+*Unpaid*, *Telegram linked* and *Guests e-mailed* open the [guest list](./guests) with
 that filter, *Waiting for a decision* the requests. <kbd>Find a ticket →</kbd>
 under the tickets card opens [Tickets](./tickets).
 

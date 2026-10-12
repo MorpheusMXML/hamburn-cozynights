@@ -231,7 +231,15 @@ describe('the house table', () => {
 const ops = (
 	overrides: Partial<{ [K in keyof OpsStats]: Partial<OpsStats[K]> }> = {}
 ): OpsStats => ({
-	tickets: { total: 10, withEmail: 10, telegram: 0, mailed: 0, ...overrides.tickets },
+	tickets: {
+		total: 10,
+		withEmail: 10,
+		telegram: 0,
+		mailed: 0,
+		unpaid: 0,
+		unpaidWithSpot: 0,
+		...overrides.tickets
+	},
 	requests: { pending: 0, approved: 0, declined: 0, ...overrides.requests },
 	messages: {
 		mailOn: true,
@@ -330,6 +338,24 @@ describe('what needs attention', () => {
 			text: '1 ticket has no spot, and booking is closed.'
 		});
 		expect(attentionItems(stats, 'staging')).toEqual([]);
+	});
+
+	it('leaves unpaid tickets out of the ones without a spot: their codes cannot sign in', () => {
+		// 10 tickets, 6 with a spot; 3 unpaid, one of them still holding the spot it booked
+		const stats = camp({
+			ticketsWithSpot: 6,
+			ops: ops({ tickets: { unpaid: 3, unpaidWithSpot: 1 } })
+		});
+		expect(ticketsWithoutSpot(stats)).toBe(2);
+		expect(attentionItems(stats, 'live')).toContainEqual(
+			expect.objectContaining({ key: 'tickets-to-book', text: '2 tickets have no spot yet.' })
+		);
+		expect(
+			attentionItems(camp({ ticketsWithSpot: 8, ops: ops({ tickets: { unpaid: 2 } }) }), 'closed')
+		).toEqual([]);
+		// not readable (a database from before the field): nothing is left out
+		const unknown = ops({ tickets: { unpaid: null, unpaidWithSpot: null } });
+		expect(ticketsWithoutSpot({ ticketsWithSpot: 6, ops: unknown })).toBe(4);
 	});
 
 	it('counts guests still to arrive only once check-in has started', () => {

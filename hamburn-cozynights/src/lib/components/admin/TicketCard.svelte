@@ -151,6 +151,14 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 			{#if ticket.codeMasked}<span class="hidden-note">code hidden</span>{/if}
 		</div>
 		<ul class="chips" aria-label="Ticket state">
+			{#if ticket.unpaid}
+				<li
+					class="bad"
+					title="The ticket shop lists the order as not paid yet: the code can't sign in until a later ticket list shows it as paid."
+				>
+					💳 Unpaid
+				</li>
+			{/if}
 			<li class:good={ticket.signedIn}>{ticket.signedIn ? '✓ Signed in' : 'Never signed in'}</li>
 			{#if ticket.spot}
 				<li class="good">
@@ -316,6 +324,10 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 	.chips li.good {
 		border-color: rgba(74, 222, 128, 0.4);
 		color: #86efac;
+	}
+	.chips li.bad {
+		border-color: rgba(248, 113, 113, 0.5);
+		color: #fca5a5;
 	}
 	.chips a {
 		color: inherit;

@@ -11,14 +11,14 @@ The page **changes nothing**. Every row only links to the page that does: the ti
 
 | Column | What you see |
 | --- | --- |
-| **Guest** | The ticket holder's name, else the burner name, else *Ticket H•••*. Under it 🔥 the burner name (when the ticket has both), the masked e-mail address and the masked ticket code: *m•••@example.org · Ticket H•••*. Tags: *no e-mail address* (red), ♿ *request waits for a decision*, ♿ *request approved* (pink), ♿ *request declined* (grey). |
+| **Guest** | The ticket holder's name, else the burner name, else *Ticket H•••*. Under it 🔥 the burner name (when the ticket has both), the masked e-mail address and the masked ticket code: *m•••@example.org · Ticket H•••*. Tags: 💳 *unpaid: the code can't sign in* (red, the ticket shop's order isn't paid yet — see [Tickets](./tickets#load-the-ticket-list)), *no e-mail address* (red), ♿ *request waits for a decision*, ♿ *request approved* (pink), ♿ *request declined* (grey). |
 | **Spot** | *B1 · Blue Room #2 · Villa*, linked to the room page, and *booked Mon 21 Sep · 14:02*. ♿ *assigned through a request* when the crew booked it for a request, ♿ *special-needs spot* when it is one. Without a spot: *No spot*. |
 | **Check-in** | ✅ with the time and *by crew@…*; *not yet* while the spot waits for the guest; — without a spot. |
 | **Messages** | ✉️ *mailed to m•••@…* once a booking e-mail went to that address, else ✉️ *no e-mail sent*. 💬 *Telegram linked* when a chat is connected. ⏳ *message queued* while one waits to be sent or retried, ⚠️ *delivery failed* when the last one could not be delivered and is not retried any more. See [Notifications](./notifications#when-something-doesn-t-arrive). |
 | **Ticket** | *imported* when the ticket list brought it, *handed over 3 days ago* if it was passed on, and *signed in* or *never signed in*. |
 | **Links** | <kbd>Ticket →</kbd> opens the full ticket card on [Tickets](./tickets) (address, pass code, hand-over). <kbd>Room →</kbd> opens the spot's room page. <kbd>Requests →</kbd> leads to the [requests page](./special-needs#_3-decide-and-book) when the ticket has a request. |
 
-The row's left edge carries [the state colour](./index#the-state-colours): **turquoise** the guest is checked in, **red** the ticket holds a spot, **grey** it holds none — **orange** once booking has closed, because then a ticket without a spot needs the crew. A line above the tiles says what the list means in the current phase.
+The row's left edge carries [the state colour](./index#the-state-colours): **turquoise** the guest is checked in, **red** the ticket holds a spot, **grey** it holds none — **orange** once booking has closed, because then a ticket without a spot needs the crew (an unpaid one stays grey: it can't book). A line above the tiles says what the list means in the current phase.
 
 ## What is masked, and why
 
@@ -41,7 +41,7 @@ The seven counts on top are buttons: press one and the list narrows to it, press
 | Tile | Counts |
 | --- | --- |
 | **tickets** | Every ticket |
-| **with a spot** / **without a spot** | Tickets that hold a spot / hold none |
+| **with a spot** / **without a spot** | Tickets that hold a spot / hold none and could book one. Unpaid tickets are never *without a spot*: their codes can't sign in. |
 | **checked in** | Guests the crew checked in at arrival |
 | **no e-mail** | Tickets without an address: nobody can e-mail them |
 | **♿ open requests** | Special-needs requests waiting for a decision (approved and declined ones show as tags on the rows, and are reached with <kbd>Requests →</kbd>) |
@@ -52,7 +52,7 @@ Next to them:
 | Field | Does |
 | --- | --- |
 | **House** | One house, or all. Tickets without a spot belong to no house, so they only show under *All houses*; the counts follow the choice. |
-| **Show** | The tiles' filters, plus *Got an e-mail* (the address got a booking e-mail) and *Handed over* (the ticket was passed on to somebody else). |
+| **Show** | The tiles' filters, plus *Got an e-mail* (the address got a booking e-mail), *Handed over* (the ticket was passed on to somebody else) and *Unpaid* (the order isn't paid yet). |
 | **Order** | *Guest name* (named tickets first, then the ones that only have a code), *Newest booking first* or *Newest ticket first*. |
 | **Find a guest or spot** | Every word must appear in the holder's name, the burner name, the spot, room or house; accents don't matter (*walder* finds *Wälderhaus*). The search never looks at e-mail addresses or ticket codes: both are masked in the rows, and a box that finds a code would be a way to guess one. |
 | <kbd>↻ Refresh</kbd> | Asks the server for the list again, right now (see below). |

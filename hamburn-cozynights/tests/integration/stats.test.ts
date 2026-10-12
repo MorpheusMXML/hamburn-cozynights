@@ -46,7 +46,7 @@ describe('the camp-wide counts in the real PocketBase', () => {
 			ops.messages.failed,
 			...Object.values(ops.crew)
 		];
-		expect(counts).toHaveLength(15);
+		expect(counts).toHaveLength(17);
 		for (const count of counts) expect(typeof count).toBe('number');
 	});
 
@@ -85,6 +85,17 @@ describe('the camp-wide counts in the real PocketBase', () => {
 		await su.collection('orders').update(mailed.id, { email: 'intel@example.com' });
 		expect(await selects('orders', OPS_FILTERS.ticketsWithEmail, plain.id)).toBe(false);
 		expect(await selects('orders', OPS_FILTERS.ticketsWithEmail, mailed.id)).toBe(true);
+
+		// unpaid tickets, and the spots they still hold (orders.unpaid)
+		const { order: unpaid } = await seedTicket(su);
+		await su.collection('orders').update(unpaid.id, { unpaid: true });
+		expect(await selects('orders', OPS_FILTERS.ticketsUnpaid, unpaid.id)).toBe(true);
+		expect(await selects('orders', OPS_FILTERS.ticketsUnpaid, plain.id)).toBe(false);
+		const { beds } = await seedHouse(su, 2);
+		await su.collection('beds').update(beds[0].id, { order: unpaid.id, occupied: true });
+		await su.collection('beds').update(beds[1].id, { order: plain.id, occupied: true });
+		expect(await selects('beds', OPS_FILTERS.spotsOfUnpaid, beds[0].id)).toBe(true);
+		expect(await selects('beds', OPS_FILTERS.spotsOfUnpaid, beds[1].id)).toBe(false);
 
 		const alert = (alert_status: string) =>
 			su.collection('admin_events').create({ action: 'intel_test', actor: 'test', alert_status });

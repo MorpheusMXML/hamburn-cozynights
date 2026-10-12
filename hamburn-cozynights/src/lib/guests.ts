@@ -46,6 +46,11 @@ export interface GuestRow {
 	hasEmail: boolean;
 	/** The guest signed in with this ticket at least once. */
 	signedIn: boolean;
+	/**
+	 * The shop's order isn't paid yet (orders.unpaid): the code can't sign in,
+	 * so the ticket can't book. Left out of "without a spot".
+	 */
+	unpaid: boolean;
 	/** When the ticket was imported (ISO). */
 	imported: string;
 	/** When the ticket was passed on to somebody else (ISO), '' when never. */
@@ -71,7 +76,11 @@ export interface GuestRow {
 export const GUEST_FILTERS = [
 	{ key: 'all', label: 'All', title: 'Every ticket' },
 	{ key: 'spot', label: 'With a spot', title: 'Tickets that hold a spot' },
-	{ key: 'nospot', label: 'Without a spot', title: 'Tickets that hold no spot' },
+	{
+		key: 'nospot',
+		label: 'Without a spot',
+		title: "Tickets that hold no spot (not the unpaid ones: they can't book)"
+	},
 	{ key: 'checkedin', label: 'Checked in', title: 'Guests the crew checked in at arrival' },
 	{ key: 'noemail', label: 'No e-mail', title: 'Tickets without an e-mail address' },
 	{
@@ -81,7 +90,16 @@ export const GUEST_FILTERS = [
 	},
 	{ key: 'telegram', label: 'Telegram', title: 'Tickets with a linked Telegram chat' },
 	{ key: 'mailed', label: 'Got an e-mail', title: 'Tickets whose address got a booking e-mail' },
-	{ key: 'handedover', label: 'Handed over', title: 'Tickets that were passed on to somebody else' }
+	{
+		key: 'handedover',
+		label: 'Handed over',
+		title: 'Tickets that were passed on to somebody else'
+	},
+	{
+		key: 'unpaid',
+		label: 'Unpaid',
+		title: "Tickets whose order isn't paid yet: their codes can't sign in"
+	}
 ] as const;
 export type GuestFilter = (typeof GUEST_FILTERS)[number]['key'];
 
@@ -122,7 +140,8 @@ export function matchesGuestFilter(row: GuestRow, filter: GuestFilter): boolean 
 		case 'spot':
 			return row.spot !== null;
 		case 'nospot':
-			return row.spot === null;
+			// Only tickets that could book: an unpaid code can't sign in.
+			return row.spot === null && !row.unpaid;
 		case 'checkedin':
 			return row.checkIn !== null;
 		case 'noemail':
@@ -135,6 +154,8 @@ export function matchesGuestFilter(row: GuestRow, filter: GuestFilter): boolean 
 			return row.notify.mailed;
 		case 'handedover':
 			return !!row.handedOverAt;
+		case 'unpaid':
+			return row.unpaid;
 		default:
 			return true;
 	}
@@ -194,6 +215,7 @@ export function sortGuests(rows: GuestRow[], sort: GuestSort): GuestRow[] {
 export interface GuestCounts {
 	tickets: number;
 	withSpot: number;
+	/** Paid tickets without a spot: the ones that can still book. */
 	withoutSpot: number;
 	checkedIn: number;
 	noEmail: number;
@@ -202,6 +224,8 @@ export interface GuestCounts {
 	telegram: number;
 	mailed: number;
 	handedOver: number;
+	/** Tickets whose order isn't paid yet: counted under `tickets`, never as without a spot. */
+	unpaid: number;
 }
 
 export function countGuests(rows: GuestRow[]): GuestCounts {
@@ -214,12 +238,14 @@ export function countGuests(rows: GuestRow[]): GuestCounts {
 		openRequests: 0,
 		telegram: 0,
 		mailed: 0,
-		handedOver: 0
+		handedOver: 0,
+		unpaid: 0
 	};
 	for (const row of rows) {
 		counts.tickets++;
 		if (row.spot) counts.withSpot++;
-		else counts.withoutSpot++;
+		else if (!row.unpaid) counts.withoutSpot++;
+		if (row.unpaid) counts.unpaid++;
 		if (row.checkIn) counts.checkedIn++;
 		if (!row.hasEmail) counts.noEmail++;
 		if (row.request === 'pending') counts.openRequests++;
@@ -270,14 +296,18 @@ export function guestTileState(key: GuestFilter, phase: BookingPhase): string {
 	}
 }
 
-/** The colour of a row: checked in, holds a spot, or holds none (see guestTileState). */
+/**
+ * The colour of a row: checked in, holds a spot, or holds none (see
+ * guestTileState). An unpaid ticket without a spot stays grey: it can't book,
+ * so it doesn't need the crew.
+ */
 export function guestRowState(
-	row: Pick<GuestRow, 'spot' | 'checkIn'>,
+	row: Pick<GuestRow, 'spot' | 'checkIn' | 'unpaid'>,
 	phase: BookingPhase
 ): string {
 	if (row.checkIn) return 'checked-in';
 	if (row.spot) return 'full';
-	return phase === 'closed' ? 'warning' : 'idle';
+	return phase === 'closed' && !row.unpaid ? 'warning' : 'idle';
 }
 
 /** Filter, search and sort in one go: what the list shows. */

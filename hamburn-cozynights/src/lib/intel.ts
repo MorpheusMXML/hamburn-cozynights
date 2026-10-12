@@ -420,10 +420,18 @@ export function attentionItems(stats: LiveStats, phase: BookingPhase): Attention
 	return items;
 }
 
-/** Tickets without a spot: the roster minus the tickets that have one. 0 when unknown. */
+/**
+ * Tickets without a spot that could book one: the roster minus the tickets
+ * that have one, minus the unpaid ones without one (their codes can't sign
+ * in). The guest list's "without a spot" counts the same. 0 when unknown.
+ */
 export function ticketsWithoutSpot(stats: Pick<LiveStats, 'ops' | 'ticketsWithSpot'>): number {
-	const total = stats.ops?.tickets.total;
-	return typeof total === 'number' ? Math.max(0, total - stats.ticketsWithSpot) : 0;
+	const tickets = stats.ops?.tickets;
+	const total = tickets?.total;
+	if (typeof total !== 'number') return 0;
+	// Not readable (a database from before orders.unpaid): nothing to leave out.
+	const unpaidWithoutSpot = Math.max(0, (tickets?.unpaid ?? 0) - (tickets?.unpaidWithSpot ?? 0));
+	return Math.max(0, total - stats.ticketsWithSpot - unpaidWithoutSpot);
 }
 
 /** A count for the page: "—" when PocketBase could not answer it. */

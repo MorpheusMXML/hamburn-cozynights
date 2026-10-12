@@ -224,10 +224,16 @@ function opsPb(
 	} = {}
 ) {
 	const data: Record<string, Record<string, unknown>[]> = {
+		// o2 and o3 aren't paid yet; o3 still holds the spot it booked before
 		orders: [
-			{ id: 'o1', email: 'a@example.org' },
-			{ id: 'o2', email: '' },
-			{ id: 'o3', email: 'c@example.org' }
+			{ id: 'o1', email: 'a@example.org', unpaid: false },
+			{ id: 'o2', email: '', unpaid: true },
+			{ id: 'o3', email: 'c@example.org', unpaid: true }
+		],
+		beds: [
+			{ id: 'b1', order: 'o1' },
+			{ id: 'b3', order: 'o3' },
+			{ id: 'b9', order: '' }
 		],
 		guest_notify: [
 			{ id: 'n1', due: '', attempts: 0, tg_chat: '42', mail_sent: '2026-09-20 10:00:00.000Z' },
@@ -257,6 +263,8 @@ function opsPb(
 	// The filters readOpsStats sends, and which records each one selects.
 	const FILTERS: Record<string, (record: Record<string, unknown>) => boolean> = {
 		"email != ''": (r) => r.email !== '',
+		'unpaid = true': (r) => r.unpaid === true,
+		'order.unpaid = true': (r) => data.orders.some((o) => o.id === r.order && o.unpaid === true),
 		"tg_chat != ''": (r) => r.tg_chat !== '',
 		"mail_sent != ''": (r) => r.mail_sent !== '',
 		"due != ''": (r) => r.due !== '',
@@ -318,7 +326,7 @@ describe('the camp-wide counts', () => {
 	it('counts tickets, messages, requests and the crew', async () => {
 		const ops = await readOpsStats(opsPb());
 		expect(ops).toEqual({
-			tickets: { total: 3, withEmail: 2, telegram: 1, mailed: 1 },
+			tickets: { total: 3, withEmail: 2, telegram: 1, mailed: 1, unpaid: 2, unpaidWithSpot: 1 },
 			requests: { pending: 2, approved: 1, declined: 0 },
 			messages: { mailOn: true, telegramOn: false, queued: 2, retrying: 1, failed: 1 },
 			crew: { admins: 3, accessRequests: 1, alertsQueued: 1, alertsFailed: 2, alertsFailing: 1 }
