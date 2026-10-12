@@ -420,12 +420,17 @@ run "deploy $BAD"
 expect_rc 1
 expect_head "$B"
 expect_count 1 "build "
-expect_event "up @$BAD app=img1 sha=$BAD nobuild=0"
+expect_event "up @$BAD app=img1 sha=$BAD nobuild=0 recreate=0"
 expect_event "tag hamburn-cozynights-app:prev hamburn-cozynights-app:latest"
-expect_event "up @$B app=img0 sha=$B nobuild=1"
+# recreated: PocketBase must load $B's hooks again (compose sees no change)
+expect_event "up @$B app=img0 sha=$B nobuild=1 recreate=1"
 expect_order "up @$BAD" "up @$B"
 expect_out "rollback to $B succeeded"
 expect_healthy
+# only this deploy's container logs, never older lines
+expect_event "logs --since 20"
+expect_count 2 "logs --since"
+expect_count 2 "logs "
 end
 
 begin "health check fails, no app container ran before → rollback rebuilds the old commit"
@@ -437,7 +442,7 @@ expect_rc 1
 expect_head "$B"
 expect_out "no :prev image of this deploy"
 expect_event "build $B -> img2 @$B"
-expect_event "up @$B app=img2 sha=$B nobuild=0"
+expect_event "up @$B app=img2 sha=$B nobuild=0 recreate=1"
 expect_healthy
 end
 
@@ -515,8 +520,36 @@ else
 fi
 expect_rc 143
 expect_head "$B"
-expect_event "up @$B app=img0 sha=$B nobuild=1"
+expect_event "up @$B app=img0 sha=$B nobuild=1 recreate=1"
 expect_no_event "WOKE UP"
+expect_no_leftover
+expect_healthy
+end
+
+begin "a second kill -- -<pid> during the restore doesn't cut it short → restored → exit 143"
+reset "$B" "UP_TIMEOUT=120"
+knob hang_up
+knob slow_up 3
+"${DEPLOY_RUN[@]}" SSH_ORIGINAL_COMMAND="deploy $N1" /usr/local/bin/deploy-cozynights-staging >"$T/out" 2>&1 &
+fg=$!
+if wait_for 15 "$S/events.log" "up HANGS"; then
+	pid="$(grep -oE 'pid [0-9]+' "$(latest_log)" | head -n1 | cut -d' ' -f2)"
+	kill -TERM -- "-$pid"
+	if wait_for 15 "$S/events.log" "up SLOW @$B"; then
+		kill -TERM -- "-$pid" 2>/dev/null
+		kill -INT -- "-$pid" 2>/dev/null
+	else
+		nok "the restore never started its compose up"
+	fi
+fi
+wait "$fg"
+rc=$?
+cp "$(latest_log)" "$T/out"
+expect_rc 143
+expect_head "$B"
+expect_event "up @$B app=img0 sha=$B nobuild=1 recreate=1"
+expect_out "restored: $B is running and healthy"
+expect_out "exit 143"
 expect_no_leftover
 expect_healthy
 end
@@ -683,6 +716,16 @@ expect_rc 0
 expect_head "$N1"
 expect_out "WARNING: downgrade"
 expect_out "signatures ok: 1 commit(s), 1 by a trusted key"
+expect_no_out "idx_beds_order_unique"
+end
+
+begin "downgrade across 1761100000 with ALLOW_DOWNGRADE=1 → deployed, with the index warning"
+reset "$MIG" ALLOW_DOWNGRADE=1
+run "deploy $B"
+expect_rc 0
+expect_head "$B"
+expect_out "changed pb_migrations/ — going back to $B"
+expect_out "the index idx_beds_order_unique stays"
 end
 
 # ── Signature gate ──────────────────────────────────────────────────────────

@@ -142,18 +142,21 @@ stop_up() {
 	fi
 }
 
-# What the rollback leaves behind in the database: PocketBase never runs a
-# migration's down branch, and the old code has no file for it.
+# What going back leaves behind in the database: PocketBase never runs a
+# migration's down branch, and the older code has no file for it. Arguments:
+# the newer and the older commit — a rollback goes from $sha back to $prev
+# (the default), a downgrade on purpose from $prev to $sha.
 migration_warning() {
-	if [[ -z "$(git -C "$APP_DIR" diff --name-only "$prev" "$sha" -- hamburn-cozynights/pb_migrations/ 2>/dev/null)" ]]; then
+	local newer="${1:-$sha}" older="${2:-$prev}"
+	if [[ -z "$(git -C "$APP_DIR" diff --name-only "$older" "$newer" -- hamburn-cozynights/pb_migrations/ 2>/dev/null)" ]]; then
 		return 0
 	fi
-	log "WARNING: $sha changed pb_migrations/ — the rollback restores the code, not the database."
-	log "If $prev fails on the new schema, restore the snapshot ${backup:-in $BACKUP_DIR} (deploy/README.md, Rollback → Daten)."
+	log "WARNING: $newer changed pb_migrations/ — going back to $older restores the code, not the database."
+	log "If $older fails on the new schema, restore the snapshot ${backup:-in $BACKUP_DIR} (deploy/README.md, Rollback → Daten)."
 	local added
-	added="$(git -C "$APP_DIR" diff --name-only --diff-filter=A "$prev" "$sha" -- hamburn-cozynights/pb_migrations/ 2>/dev/null || true)"
+	added="$(git -C "$APP_DIR" diff --name-only --diff-filter=A "$older" "$newer" -- hamburn-cozynights/pb_migrations/ 2>/dev/null || true)"
 	if [[ $'\n'"$added"$'\n' == *"/1761100000_one_spot_per_ticket.js"$'\n'* ]]; then
-		log "WARNING: $prev does not have 1761100000_one_spot_per_ticket.js: the index idx_beds_order_unique stays (if PocketBase applied it) — drop it before the old code moves bookings: see deploy/README.md Rollback."
+		log "WARNING: $older does not have 1761100000_one_spot_per_ticket.js: the index idx_beds_order_unique stays (if PocketBase applied it) — drop it before the old code moves bookings: see deploy/README.md Rollback."
 	fi
 }
 
@@ -168,6 +171,9 @@ healthy() {
 # Back to $prev after the new stack was started: checkout first (PocketBase
 # bind-mounts pb_hooks/ and pb_migrations/ from it), then the :prev image under
 # the running tag, `up -d --no-build`. Rebuilds $prev only without a :prev image.
+# --force-recreate: compose recreates a container only when its config
+# changed, and swapping the bind-mounted files changes nothing it sees, so
+# PocketBase (--hooksWatch=false) would keep running $sha's hooks.
 rollback() {
 	if ! git -C "$APP_DIR" checkout --quiet --detach "$prev"; then
 		log "checkout of $prev FAILED — the stack stays as it is"
@@ -176,10 +182,10 @@ rollback() {
 	if [[ -n "$prev_image" ]] && docker image inspect "$prev_image" >/dev/null 2>&1 &&
 		docker tag "$prev_image" "$app_image"; then
 		log "app image: $prev_image → $app_image (no rebuild)"
-		compose_up --no-build --remove-orphans
+		compose_up --no-build --force-recreate --remove-orphans
 	else
 		log "no :prev image of this deploy — rebuilding $prev"
-		GIT_SHA="$prev" compose build app && compose_up --remove-orphans
+		GIT_SHA="$prev" compose build app && compose_up --force-recreate --remove-orphans
 	fi
 }
 
@@ -239,6 +245,10 @@ cleanup_gnupg() {
 # shellcheck disable=SC2329 # runs from the traps below
 on_exit() {
 	local rc=$?
+	# A second TERM or INT (another `kill -- -<pid>`) must not end the restore
+	# halfway: ignored from here on. Commands started from here inherit that;
+	# the bounded `compose up` runs in timeout's own process group anyway.
+	trap '' TERM INT
 	trap - EXIT ERR
 	set +e
 	stop_up
@@ -594,6 +604,9 @@ fi
 
 log "starting stack"
 phase=3
+# The logs below are shown from here on only: older PocketBase lines (admin
+# e-mails in its request log) don't belong in a deploy log or an Actions log.
+up_started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 if compose_up --remove-orphans; then
 	if healthy; then
 		# Only this stack's old images: both stacks share one Docker daemon, and
@@ -601,6 +614,8 @@ if compose_up --remove-orphans; then
 		phase=9
 		docker image prune -f --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" >/dev/null ||
 			log "WARNING: image prune failed (the deploy itself is fine)"
+		# A downgrade on purpose is a way back too: the same warning as a rollback.
+		if ((downgrade)); then migration_warning "$prev" "$sha"; fi
 		log "deployed $sha"
 		exit 0
 	fi
@@ -608,8 +623,8 @@ if compose_up --remove-orphans; then
 else
 	log "starting the new stack failed — rolling back to $prev"
 fi
-compose logs --tail 40 pocketbase || true
-compose logs --tail 40 app || true
+compose logs --since "$up_started" --tail 40 pocketbase || true
+compose logs --since "$up_started" --tail 40 app || true
 migration_warning
 if rollback && healthy; then
 	log "rollback to $prev succeeded"

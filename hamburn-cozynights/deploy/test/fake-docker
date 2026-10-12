@@ -16,6 +16,7 @@
 #   knob_fail_build, knob_slow_build (seconds), knob_bad_sha (a SHA whose image
 #   is unhealthy), knob_fail_pull, knob_fail_snapshot, knob_slow_snapshot
 #   (seconds), knob_fail_stop (stops, then fails), knob_fail_up (once),
+#   knob_slow_up (seconds: an `up` that doesn't hang takes that long),
 #   knob_hang_up (once) / knob_hang_up_always: `up` never returns, like
 #   depends_on waiting for a PocketBase that crash-loops (sleep 3601, so the
 #   tests can see a left-over process), knob_all_bad: nothing gets healthy
@@ -103,8 +104,10 @@ if [[ "${1:-}" == compose ]]; then
 		;;
 	up)
 		nobuild=0
+		recreate=0
 		for a in "$@"; do
 			if [[ "$a" == --no-build ]]; then nobuild=1; fi
+			if [[ "$a" == --force-recreate ]]; then recreate=1; fi
 		done
 		if knob fail_up; then
 			rm -f "$S/knob_fail_up"
@@ -119,6 +122,10 @@ if [[ "${1:-}" == compose ]]; then
 			event "up WOKE UP (never killed)"
 			exit 0
 		fi
+		if knob slow_up; then
+			event "up SLOW @$(head_of "$dir")"
+			sleep "$(cat "$S/knob_slow_up")"
+		fi
 		if ! id="$(resolve "$proj-app")"; then
 			echo "fake: no image $proj-app" >&2
 			exit 1
@@ -126,9 +133,10 @@ if [[ "${1:-}" == compose ]]; then
 		echo "$id" >"$S/app_container"
 		echo 1 >"$S/pb_running"
 		if [[ "$(image_field "$id" 3)" == 1 ]] || knob all_bad; then rm -f "$S/health"; else touch "$S/health"; fi
-		event "up @$(head_of "$dir") app=$id sha=$(image_field "$id" 2) nobuild=$nobuild"
+		event "up @$(head_of "$dir") app=$id sha=$(image_field "$id" 2) nobuild=$nobuild recreate=$recreate"
 		;;
 	logs)
+		event "logs $*"
 		echo "fake app log line"
 		;;
 	*)

@@ -459,36 +459,67 @@ ls -1t "$BK"/pb_data-*.tar.gz | head -n1
    `PREV` muss mit `current:` aus dem Actions-Log übereinstimmen; ist es leer
    oder anders, von Hand setzen: `PREV=<40-stellige SHA aus current:>`.
 
-3. Zurück auf `PREV`, das vorige Image neu bauen (`:latest` ist das neue) und
-   starten. PocketBase startet dabei mit den Migrationen und Hooks von `PREV`
-   (Bind-Mount aus dem Checkout):
+3. **Erst prüfen, dann starten:** Welche Migrationen hat PocketBase
+   angewendet, die `PREV` nicht kennt? Vor jedem Start auf `PREV` prüfen,
+   denn ein Restore verwirft alles, was danach geschrieben wird. Der Checkout
+   steht noch auf dem neuen Commit, darum der Vergleich mit `PREV` aus git
+   (keine Ausgabe = keine):
+
+```bash
+D=$(docker volume inspect -f '{{.Mountpoint}}' "$VOL") && sqlite3 -readonly "$D/data.db" ".backup /tmp/cozy-mig.db" && comm -23 <(sqlite3 -readonly /tmp/cozy-mig.db "SELECT file FROM _migrations WHERE file LIKE '%.js';" | LC_ALL=C sort) <(sudo -u deploy git -C "$APP_DIR" ls-tree --name-only "$PREV" hamburn-cozynights/pb_migrations/ | sed 's#.*/##' | LC_ALL=C sort); rm -f /tmp/cozy-mig.db
+```
+
+   | Ausgabe | Restore? | Danach |
+   | --- | --- | --- |
+   | nichts | nein (`RESTORE=0`) | Schritt 4 |
+   | nur Dateien aus `1761000000_ticket_sign_in.js`, `1761100000_one_spot_per_ticket.js` (beide v1.32.3) und `1761200000_ticket_paid_by_hand.js` | nein (`RESTORE=0`): alle drei fügen nur hinzu (Felder, eine Collection, einen Index), der ältere Code lässt Felder und Collection links liegen | Schritt 4; steht `1761100000_…` dabei, danach den Index löschen (4c) |
+   | etwas anderes | ja (`RESTORE=1`) | Schritt 4 mit 4a |
+
+   Scheitert eine Migration, nimmt PocketBase alle neuen Migrationen dieses
+   Starts zusammen zurück; dann steht dort nichts.
+
+```bash
+RESTORE=0   # bzw. RESTORE=1 laut Tabelle
+```
+
+4. Zurück auf `PREV` und das vorige Image neu bauen (`:latest` ist das neue):
 
 ```bash
 sudo -u deploy git -C "$APP_DIR" checkout --quiet --detach "$PREV"
 cd "$APP_DIR/hamburn-cozynights"
 GIT_SHA=$PREV docker compose -f "$F" build app
-timeout 600 docker compose -f "$F" up -d --remove-orphans
+```
+
+   **4a — nur bei `RESTORE=1`:** das Archiv dieses Deploys zurück, bevor
+   PocketBase auf `PREV` startet. Erst das Archiv bestimmen und prüfen:
+
+```bash
+BACKUP=$(ls -1t "$BK"/pb_data-*-"${PREV:0:7}".tar.gz 2>/dev/null | head -n1); echo "BACKUP=$BACKUP"
+test -s "$BACKUP" && tar tzf "$BACKUP" >/dev/null && echo "Archiv lesbar"
+```
+
+   Nur wenn dort `Archiv lesbar` steht: stoppen, leeren und einspielen. Die
+   Prüfung steht noch einmal vor dem Löschen; `backups/` (die ZIPs von
+   PocketBase, nicht im Archiv) bleibt:
+
+```bash
+docker compose -f "$F" stop app pocketbase
+test -s "$BACKUP" && tar tzf "$BACKUP" >/dev/null && docker run --rm -v "$VOL":/pb_data -v "$BK":/backup:ro alpine:3.21 sh -c "find /pb_data -mindepth 1 -maxdepth 1 ! -name backups -exec rm -rf {} + && tar xzf /backup/$(basename "$BACKUP") -C /pb_data" && echo eingespielt
+```
+
+   **4b — starten.** `--force-recreate`, damit PocketBase die Hooks von
+   `PREV` lädt (der Bind-Mount allein startet es nicht neu):
+
+```bash
+timeout 600 docker compose -f "$F" up -d --force-recreate --remove-orphans
 curl -s "$HEALTH"; echo   # "status":"ok" und "commit" = $PREV
 ```
 
-   Kommt `up` auch so nicht hoch: `docker compose -f "$F" logs --tail 50 pocketbase`.
+   Kommt `up` auch so nicht hoch: `docker compose -f "$F" logs --since 15m --tail 50 pocketbase`.
 
-4. Datenbank: Nur wenn eine Migration des Releases angewendet wurde, das
-   Archiv dieses Deploys einspielen. Scheitert eine Migration, nimmt
-   PocketBase alle neuen Migrationen dieses Starts zusammen zurück; dann gibt
-   es nichts einzuspielen. Prüfen (Migrationen in der Datenbank, die `PREV`
-   nicht kennt; keine Ausgabe = keine):
-
-```bash
-D=$(docker volume inspect -f '{{.Mountpoint}}' "$VOL") && sqlite3 -readonly "$D/data.db" ".backup /tmp/cozy-mig.db" && comm -23 <(sqlite3 -readonly /tmp/cozy-mig.db "SELECT file FROM _migrations WHERE file LIKE '%.js';" | LC_ALL=C sort) <(ls "$APP_DIR/hamburn-cozynights/pb_migrations" | LC_ALL=C sort); rm -f /tmp/cozy-mig.db
-```
-
-   Steht dort etwas: Abschnitt Rollback → Daten mit
-   `BACKUP=` dem neuesten `pb_data-*-<erste 7 Zeichen von PREV>.tar.gz` aus
-   Schritt 2 (verwirft, was seit dem Snapshot geschrieben wurde — während des
-   kaputten Deploys in der Regel nichts). Steht dort nur
-   `1761100000_one_spot_per_ticket.js`, reicht statt des Restores, den Index
-   zu löschen (Rollback → „Nach einem Rollback über v1.32.3“).
+   **4c — nur wenn Schritt 3 `1761100000_one_spot_per_ticket.js` zeigte:**
+   den Index löschen, Abschnitt Rollback → „Nach einem Rollback über
+   v1.32.3“ (sonst scheitern Platzwechsel und Tausch auf `PREV`).
 
 5. Ursache beheben (meist: ein Ticket mit zwei Plätzen, Prüfung „Vor einem
    Release“), dann den Release-Deploy noch einmal starten. Ein noch laufender
@@ -515,7 +546,7 @@ D=$(docker volume inspect -f '{{.Mountpoint}}' "$VOL") && sqlite3 -readonly "$D/
 | 14 | Signatur- oder Pin-Config kaputt (Schlüsselbund, Fingerprints, gpg, Pin-Datei) | unverändert |
 | 15 | unerwarteter Fehler, Zeile und Befehl im Log | vom Trap wiederhergestellt |
 | 16 | auch der alte Stand kam nicht hoch (Rollback unhealthy oder sein `up` lief in `UP_TIMEOUT`), oder der Trap konnte ihn nicht herstellen | **Handarbeit:** Log lesen (`manual intervention needed`) |
-| 129/130/143 | durch ein Signal beendet (`kill -- -<pid>`) | vom Trap wiederhergestellt |
+| 129/130/143 | durch ein Signal beendet (`kill -- -<pid>`) | vom Trap wiederhergestellt (ein zweites Signal währenddessen wird ignoriert) |
 
 ## Deployen
 
@@ -572,7 +603,8 @@ prüfen und erst danach deployen.
 **Automatisch:** Scheitert der Health-Check oder kommt `docker compose up -d`
 nicht binnen `UP_TIMEOUT` (300 s) zurück, checkt das Skript den vorigen Commit
 aus und startet das Image, das vor dem Deploy lief (`<image>:prev`), ohne
-Neubau (Exit 1). Nur wenn es keins gibt (vorher lief keine App), baut es den
+Neubau (Exit 1); PocketBase wird dabei neu erstellt, damit es die Hooks des
+vorigen Commits lädt. Nur wenn es keins gibt (vorher lief keine App), baut es den
 vorigen Commit neu. Kommt auch der vorige Stand nicht hoch (auch dessen `up`
 ist begrenzt), endet es mit Exit 16 und `manual intervention needed`: dann im
 Log `compose logs` von PocketBase lesen (häufig: falscher `PB_ENCRYPTION_KEY`
@@ -613,8 +645,10 @@ Down-Zweig einer Migration aus: Hat es `1761100000_one_spot_per_ticket.js`
 angewendet, bleibt der Unique-Index `idx_beds_order_unique` in der Datenbank.
 Der alte Code belegt beim Umbuchen erst den neuen Platz und gibt dann den alten
 frei; mit dem Index scheitern so Platzwechsel und Tausch („UNIQUE constraint
-failed“). Das Skript meldet den Fall im Log
-(`the index idx_beds_order_unique stays`). Prüfen, als root (keine Ausgabe =
+failed“). Das Skript meldet den Fall im Log, beim automatischen Rollback
+wie beim Downgrade mit `ALLOW_DOWNGRADE`
+(`the index idx_beds_order_unique stays`); von Hand zurück meldet niemand
+etwas. Prüfen, als root (keine Ausgabe =
 kein Index, nichts zu tun; Produktion: `cozynights-production_pb_data`):
 
 ```bash
