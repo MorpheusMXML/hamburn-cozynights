@@ -391,7 +391,7 @@ inside. The page renders one at a time, outside every form.
 			{#each marks as mark (mark.text)}
 				<span class="tile-mark" class:ok={mark.ok}>{mark.ok ? '✓' : '✗'} {mark.text}</span>
 			{/each}
-			{#if owner}<span class="tile-owner">{`→ ${owner}`}</span>{/if}
+			{#if owner}<span class="tile-owner" title={owner}>{`→ ${owner}`}</span>{/if}
 		</button>
 	{:else}
 		<div class="tile still" class:special={spot.special} class:planned={!!owner}>
@@ -401,7 +401,7 @@ inside. The page renders one at a time, outside every form.
 				{#if spot.locked}<span class="tile-flag" title="Locked">🔒</span>{/if}
 			</span>
 			<span class="tile-bed">{bedText(spot)}</span>
-			{#if owner}<span class="tile-owner">{`→ ${owner}`}</span>{/if}
+			{#if owner}<span class="tile-owner" title={owner}>{`→ ${owner}`}</span>{/if}
 		</div>
 	{/if}
 {/snippet}
@@ -1230,11 +1230,15 @@ inside. The page renders one at a time, outside every form.
 	.tile-mark.ok {
 		color: #86efac;
 	}
+	/* One line: a long burner name ends in "…" (the full name is its title and
+	   stands in the footer's who-goes-where list) instead of one word per line. */
 	.tile-owner {
 		color: #2dd4bf;
 		font-weight: 800;
-		overflow-wrap: anywhere;
 		max-width: 100%;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	.empty {
 		margin: 2rem 0;
