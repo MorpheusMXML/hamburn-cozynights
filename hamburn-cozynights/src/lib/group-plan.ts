@@ -79,6 +79,8 @@ interface Place {
 	special: number;
 	/** Free spots the crew locked 🔒. */
 	locked: number;
+	/** How many of the locked ones are ♿ spots. */
+	lockedSpecial: number;
 }
 
 function describe(
@@ -115,12 +117,19 @@ export function placeOptions(spots: SpotInfo[], size: number, accessCount = 0): 
 	const count = (
 		key: string,
 		spot: SpotInfo,
-		make: () => Omit<Place, 'free' | 'special' | 'locked'>
+		make: () => Omit<Place, 'free' | 'special' | 'locked' | 'lockedSpecial'>
 	) => {
-		const place = places.get(key) ?? { ...make(), free: 0, special: 0, locked: 0 };
+		const place = places.get(key) ?? {
+			...make(),
+			free: 0,
+			special: 0,
+			locked: 0,
+			lockedSpecial: 0
+		};
 		place.free += 1;
 		if (spot.special) place.special += 1;
 		if (spot.locked) place.locked += 1;
+		if (spot.special && spot.locked) place.lockedSpecial += 1;
 		places.set(key, place);
 	};
 	for (const spot of spots) {
@@ -144,15 +153,32 @@ export function placeOptions(spots: SpotInfo[], size: number, accessCount = 0): 
 		}
 	}
 
-	/** The spots there for this group: the plain ones, and ♿ ones for who needs something. */
-	const usable = (place: Place) =>
-		place.free - place.special + Math.min(place.special, accessCount);
+	/** The open spots there: plain ones, and ♿ ones nobody locked. */
+	const open = (place: Place) => {
+		const special = place.special - place.lockedSpecial;
+		return { plain: place.free - place.locked - special, special };
+	};
+	/** What the group can take there without a problem: plain spots, ♿ ones for who needs something. */
+	const usable = (place: Place) => {
+		const { plain, special } = open(place);
+		return plain + Math.min(special, accessCount);
+	};
+	/**
+	 * What the proposal would have to do there, counted the way proposePlan
+	 * chooses: members who need something take the open ♿ spots first, then
+	 * plain ones; the others plain ones first, then the open ♿ ones; a locked
+	 * spot only when nothing else is left (lockedPull).
+	 */
 	const flags = (place: Place) => {
-		const fits = place.free >= size;
-		return {
-			usesSpecial: fits && usable(place) < size,
-			usesLocked: fits && place.free - place.locked < size
-		};
+		if (place.free < size) return { usesSpecial: false, usesLocked: false };
+		const { plain, special } = open(place);
+		const needers = Math.min(accessCount, size);
+		const neederSpecial = Math.min(special, needers);
+		const neederPlain = Math.min(plain, needers - neederSpecial);
+		const otherPlain = Math.min(plain - neederPlain, size - needers);
+		const otherSpecial = Math.min(special - neederSpecial, size - needers - otherPlain);
+		const onLocked = size - neederSpecial - neederPlain - otherPlain - otherSpecial;
+		return { usesSpecial: otherSpecial > 0, usesLocked: onLocked > 0 };
 	};
 	const rank = (place: Place) => {
 		const room = place.kind === 'room' ? 0 : 1;
@@ -194,8 +220,9 @@ export function placeOptions(spots: SpotInfo[], size: number, accessCount = 0): 
 
 /**
  * The spots of a place, in the order the proposal tries them: natural order;
- * in a whole house the rooms with the most free spots first, so the group
- * packs into the fewest rooms.
+ * in a whole house the rooms with the most open (not locked) free spots
+ * first, so the group packs into the fewest rooms, and each room's locked
+ * spots after its open ones.
  */
 function candidates(spots: SpotInfo[], placeKey: string): SpotInfo[] {
 	if (!placeKey) return [...spots].sort(bySpot);
@@ -204,12 +231,19 @@ function candidates(spots: SpotInfo[], placeKey: string): SpotInfo[] {
 	if (kind !== 'house') return [];
 	const inHouse = spots.filter((spot) => spot.houseId === id);
 	const free = new Map<string, number>();
-	for (const spot of inHouse) free.set(spot.roomId, (free.get(spot.roomId) ?? 0) + 1);
+	const open = new Map<string, number>();
+	for (const spot of inHouse) {
+		free.set(spot.roomId, (free.get(spot.roomId) ?? 0) + 1);
+		if (!spot.locked) open.set(spot.roomId, (open.get(spot.roomId) ?? 0) + 1);
+	}
+	const count = (counts: Map<string, number>, spot: SpotInfo) => counts.get(spot.roomId) ?? 0;
 	return inHouse.sort(
 		(a, b) =>
-			(free.get(b.roomId) ?? 0) - (free.get(a.roomId) ?? 0) ||
+			count(open, b) - count(open, a) ||
+			count(free, b) - count(free, a) ||
 			compareNatural(a.room, b.room) ||
 			compareNatural(a.roomId, b.roomId) ||
+			Number(a.locked) - Number(b.locked) ||
 			compareNatural(a.spot, b.spot)
 	);
 }
