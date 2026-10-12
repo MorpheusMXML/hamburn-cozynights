@@ -33,7 +33,7 @@ flowchart LR
 
 ## Deploying to staging
 
-Staging is deployed **on demand** with a button in GitHub Actions. It runs **`integration/staging`** (see [Branches, integration & releases](./integration)): deploying a single feature branch would drop every other feature from the server.
+Staging is deployed **on demand** with a button in GitHub Actions. It runs **`integration/staging`** (see [Branches, integration & releases](./integration)): deploying a single feature branch would drop every other feature from the server, and the server's deploy script refuses anything that is not on `integration/staging` or `main`.
 
 Since 24 September 2026 `integration/staging` is protected like `main`: **a direct push is refused, every deploy goes through a pull request.** The branch rule stayed, the required approvals were set to zero and code-owner review switched off, so the pull request is a formality you merge yourself — but the route is fixed:
 
@@ -76,7 +76,7 @@ flowchart TD
   secrets --> approve
   approve --> server["🖥️ deploy — on the server, via a key that can only start the deploy script:<br/>check out the commit · build the image · back up PocketBase · restart"]
   server --> health{"Health check<br/>within 60 s"}
-  health -- fails --> rollback["↩ Previous commit restarted,<br/>job turns red"]
+  health -- fails --> rollback["↩ Previous commit restarted<br/>from its kept image, job turns red"]
   health -- ok --> smoke["🔎 smoke — read-only checks against<br/>test-cozynights.hamburn.de from the outside"]
   smoke -- ok --> done["✅ Deployed"]
   smoke -- fails --> red["❌ Run turns red; the new version stays up,<br/>look at the site"]
@@ -88,12 +88,39 @@ The old containers keep serving while the new image builds.
 - **`verify`** reuses [`.github/workflows/ci.yml`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/.github/workflows/ci.yml), the workflow behind the `Verify` check on every pull request: all of it for a commit the gate found no green run for, otherwise the secrets scan only. What it runs is described in [Testing & release checks](./testing).
 - **`deploy`** waits for approval in the `staging` GitHub environment, then runs the deploy script on the server.
 - **`smoke`** runs `npm run smoke:remote` against the live site: pages are served, `/api/health` confirms the service account, a ticket lookup reaches the database, the admin login page offers Google sign-in, the admin area is closed, the security headers are present and PocketBase is not reachable from outside. Read-only, no credentials.
-- The script **refuses to deploy** and changes nothing if the server checkout has local changes, the build fails, or the backup can't be written.
+- The script **refuses to deploy** and changes nothing if the server checkout has local changes, the commit fails one of the checks below, the build fails, or the backup can't be written. What it checks and how it recovers is described in [The deploy script on the server](#the-deploy-script-on-the-server).
 - The **PocketBase version** comes from the compose file of the deployed commit. It is pinned and never updated implicitly.
 - The **data volume** is pinned by name (`hamburn-cozynights_pb_data_staging`). Without that, its real name would follow `COMPOSE_PROJECT_NAME`, and a deploy run with a different project name would come up with an empty database.
 - The **app container** gets only the variables it reads (PocketBase URL and service account, `ENCRYPTION_KEY`, `ORIGIN`, the `LEGAL_*` values). The rest of `.env` — Google client secret, SMTP password, bot token — goes to PocketBase only. A new `LEGAL_*` key has to be added to the compose file too, next to `deploy/staging.env.template`.
 - **PocketBase's settings are encrypted** with `PB_ENCRYPTION_KEY` from `.env` (`--encryptionEnv` in the compose file). The value is required: a deploy without it stops at the build step, before anything is touched. See [PocketBase settings key](#pocketbase-settings-key).
 - The one-time server setup, restoring a data backup, and maintenance are in the operator runbook [`hamburn-cozynights/deploy/README.md`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md) (German).
+
+### The deploy script on the server
+
+`deploy/deploy-staging.sh` is the forced command of the deploy key: GitHub Actions can only hand it a commit SHA. Before it touches anything it refuses, with its own exit code, a commit that
+
+| Check | Config on the server | Exit |
+| --- | --- | --- |
+| is not on one of the allowed branches | `REQUIRE_BRANCH` — `"integration/staging main"` on staging, `main` on production | 10 |
+| is older than the running one (an ancestor of it) | a deliberate code rollback sets `ALLOW_DOWNGRADE=1` for that one run | 11 |
+| carries a commit without a trusted signature (see below) | `TRUSTED_GNUPGHOME`, `TRUSTED_SIGNERS`, `TRUSTED_MERGE_SIGNERS` | 12 |
+| changes the compose file root has not approved | `/etc/cozynights/<compose file>.sha256` or `COMPOSE_PIN` | 13 |
+
+Exit 14 means that signature or pin configuration itself is broken. The older codes stay: 2 usage, 3 another deploy runs, 4 local changes, 5 commit not on origin, 6 build failed, 7 no PocketBase volume, 8 snapshot helper not pulled, 9 snapshot failed, 1 health check failed (or `up` timed out) and rolled back. Exit 15 is an unexpected error the trap recovered from, and **exit 16 means the previous version did not come back either** — someone has to look at the server (the log ends with `manual intervention needed`).
+
+- **Signatures.** Every new commit (`git rev-list <running>..<target>`, or the target itself for a redeploy or a downgrade) must be signed by the maintainer's key; a merge commit may instead be signed by GitHub's web-flow key, but only if it is a clean merge: `git merge-tree` of its two parents must give exactly its tree, so no conflict resolution and no extra content can hide in a merge made on github.com. Dependabot commits, web edits and squash merges are signed by GitHub as plain commits and have to be re-signed by the maintainer before they can be deployed. The public keys live in a root-owned keyring on the server; the script verifies against a private copy of it per run.
+- **Compose pin.** The `deploy` user is in the `docker` group, and Docker is root on a server that also runs the team's password manager: a compose file with `privileged: true` or a host mount would be root. With a pin, the sha256 of the compose file in the commit must match the one root approved; on a mismatch the script prints the hash, the `git diff` to review and the one command that approves it.
+- **Detached from SSH.** The deploy runs in its own session with its output in `deploy-<UTC>-<sha7>.log` in the stack's backup folder (the last 20 are kept); the SSH side only streams that log and returns the deploy's exit code. A dropped connection or the action's timeout leaves the deploy running to its end, rollback included.
+- **Nothing half-done.** An EXIT trap catches every early end after the checkout — a refusal, an unexpected error (exit 15) or a signal (a second one during the restore is ignored): it checks the previous commit out again *before* PocketBase starts (its hooks and migrations are bind-mounted from the checkout), puts the image tag back and starts PocketBase again.
+- **Rollback without a rebuild.** Before building, the image the app container runs is tagged `<image>:prev`. A failed health check checks out the previous commit, retags `:prev` and runs `up -d --no-build --force-recreate` (compose would leave PocketBase running on the new hooks: swapping its bind-mounted files is no change it sees); only without a `:prev` (no app ran before) is the previous commit rebuilt. The image prune after a deploy removes dangling images only, so `:prev` survives it.
+- **No endless `up`.** The app waits for a healthy PocketBase (`depends_on: service_healthy`), so a PocketBase that crash-loops — a migration that throws, a hook that does not load, a wrong `PB_ENCRYPTION_KEY` — makes `docker compose up -d` wait for ever. Every `up`, the rollback's included, is bounded by `UP_TIMEOUT` (300 s); a timed-out `up` counts as failed and triggers the rollback. A running deploy is stopped with `kill -- -<pid>` (its process group, the pid is in the log); the trap then restores the previous version.
+- **The database is not rolled back.** PocketBase never runs a migration's down branch when older code starts again. When a rollback (or a downgrade with `ALLOW_DOWNGRADE`) crosses v1.32.3, the unique index `idx_beds_order_unique` stays and blocks the older code from moving bookings; the script says so in the log, and the runbook (section *Rollback*) shows how to drop it in the dashboard — and that it has to be re-created by hand before v1.32.3 goes live again, because an applied migration never runs twice.
+
+The detached run, the trap, the image rollback and the downgrade refusal are always on. The branch rule, the signature gate and the compose pin stay off until root configures them, so an existing setup keeps working with the new script. Setup, the exit-code table and the switch-over are in the runbook, sections *Einrichtung* (step 5), *Umstieg auf das gehärtete Deploy-Skript* and *Exit-Codes*. The script has its own test harness that runs in a throwaway `debian:12` container with a stub `docker` and throwaway signing keys: `bash hamburn-cozynights/deploy/test/deploy-script.test.sh`.
+
+### Container limits
+
+Both compose files give PocketBase and the app the same runtime limits, so a crash-looping or runaway container can't take the shared host down with it: logs capped at 3 × 10 MB per container, `stop_grace_period: 30s` (a booking in flight finishes before the container is killed; Docker's default is 10 s), `mem_limit` 1 GB for PocketBase and 1.5 GB for the app, `pids_limit: 256`, and every Linux capability dropped (`cap_drop: ALL`, with `no-new-privileges`).
 
 ### nginx in front of the app
 
@@ -103,6 +130,10 @@ The vhost in [`deploy/nginx/test-cozynights.hamburn.de.conf`](https://github.com
 - `proxy_buffer_size 16k`, because a signed-in browser's response headers (session cookie, SvelteKit's `Link` preload header, the CSP headers) exceed nginx's default 4 KB buffer, which shows up as a `502 Bad Gateway` for admins only ("upstream sent too big header" in the error log). The hardening file sets it for every proxied vhost.
 - HTTP/2 on the `listen` lines. nginx 1.22 (Debian 12) takes the protocol there; the `http2 on;` directive only exists from 1.25.1.
 - The per-address request limit: `location /` allows 20 requests per second with a burst of 60 and answers `429` beyond that, using the zone `perip` declared in the hardening file. The content-hashed build assets under `/_app/` are exempt, so a page load with its roughly 25 files never trips the limit for several guests behind one address. The app's own limits for ticket-code and pass guessing are separate and stricter.
+
+- Ready for the opening rush: `gzip` for JSON, JavaScript, CSS and SVG (page data and scripts travel compressed), and a `keepalive` pool to the app, so a burst of clicks doesn't open a new connection each.
+- `/_app/remote/` answers `404` before the app sees it. CozyNights has no remote functions, but SvelteKit would still run its request handling for that path, guest cookie check included, outside the per-address limit that exempts `/_app/`.
+- A friendly page while the app is down. `error_page 502 504` serves `/var/www/cozynights/cozy-down.html` (a copy of [`deploy/nginx/cozy-down.html`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/nginx/cozy-down.html)), which says the site is back in a moment and reloads itself after 15 seconds, instead of nginx's bare *Bad Gateway* during a deploy or a restart.
 
 After editing: `nginx -t && systemctl reload nginx`.
 
@@ -123,7 +154,7 @@ Every deploy carries a version in the shape **`<line>.<deploy number>.<fix>`**: 
 - as a small badge next to the title on the start page, in the footer at the end of every other page (on the map, which has no end, from 400 px wide) and in the admin menu — hover it for the build (commit and day), click it for the release notes on GitHub;
 - in `GET /api/health`, as `version` and `commit`, so the [deploy runbook](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/README.md) can compare it with the release that was just approved.
 
-The version lives in `package.json` and is baked into the build together with the commit (`build-info.ts`; the deploy script passes the commit as the Docker build argument `GIT_SHA`). The script that does that is the installed copy the deploy key's forced command runs — `/usr/local/bin/deploy-cozynights-staging` and `/usr/local/bin/deploy-cozynights-production` on the server — **not** the one in the checkout, and never a copy under another path: after changing `deploy/deploy-staging.sh`, install it again, otherwise the server keeps running the old one (an image built without `GIT_SHA`, for example, shows the version with an empty commit). Each copy comes from the branch its stack deploys: staging's from `integration/staging`, so a changed script runs on staging first, production's from `main` once the change is released (commands for both in the runbook, section *Wartung*). For staging:
+The version lives in `package.json` and is baked into the build together with the commit (`build-info.ts`; the deploy script passes the commit as the Docker build argument `GIT_SHA`). The script that does that is the installed copy the deploy key's forced command runs — `/usr/local/bin/deploy-cozynights-staging` and `/usr/local/bin/deploy-cozynights-production` on the server — **not** the one in the checkout, and never a copy under another path: after changing `deploy/deploy-staging.sh`, install it again, otherwise the server keeps running the old one (an image built without `GIT_SHA`, for example, shows the version with an empty commit). Each copy comes from the branch its stack deploys: staging's from `integration/staging`, so a changed script runs on staging first, production's from `main` once the change is released (commands for both in the runbook, section *Wartung*). A changed script is installed **after** the release that brings it was deployed with the old copy; then the stack's redeploy of the running commit is the dry run of the new one, on staging before production. For v1.32.3 (signature gate, compose pin) the exact order is in the runbook, section *Umstieg auf das gehärtete Deploy-Skript*: the one-spot-per-ticket check first (the old script does not roll back a failing migration), the release deploy with the old copy, the new nginx vhost with its maintenance page, then the new script, keys and pins, then the dry run. For staging:
 
 ```bash
 # on the server as root, the install step of the runbook's one-time setup
@@ -224,13 +255,13 @@ Production runs on the same server as staging, as a stack of its own. The one-ti
 | | Staging | Production |
 | --- | --- | --- |
 | Address | `test-cozynights.hamburn.de` | `cozynights.hamburn.de` |
-| Deploys | any branch, in practice `integration/staging` | `main` only |
+| Deploys | `integration/staging` or `main` | `main` only |
 | Compose file | `docker-compose.staging.yml` | `docker-compose.production.yml` |
 | Workflow · GitHub environment | `deploy-staging.yml` · `staging` | `deploy-production.yml` · `production` |
 | Server config | `/etc/cozynights/deploy-staging.conf` | `/etc/cozynights/deploy-production.conf` |
 | `.env` template | `deploy/staging.env.template` | `deploy/production.env.template` |
 
-- **Only released code.** Three independent locks keep everything but `main` out: the workflow refuses any other ref, the GitHub environment `production` admits only `main` and waits for a reviewer, and the server's deploy script refuses a commit that is not on `origin/main` (`REQUIRE_BRANCH=main` in its config). The release PR from `integration/staging` to `main` decides *what* can go live; the deploy run, approved separately, decides *when*.
+- **Only released code.** Three independent locks keep everything but `main` out: the workflow refuses any other ref, the GitHub environment `production` admits only `main` and waits for a reviewer, and the server's deploy script refuses a commit that is not on `origin/main` (`REQUIRE_BRANCH=main` in its config). On top of that the script refuses downgrades, commits without a trusted signature and unapproved compose files ([The deploy script on the server](#the-deploy-script-on-the-server)). The release PR from `integration/staging` to `main` decides *what* can go live; the deploy run, approved separately, decides *when*.
 - **One deploy script, one copy per stack.** `deploy/deploy-staging.sh` is installed as `/usr/local/bin/deploy-cozynights-<env>`, from the branch that stack deploys (see [Versions and releases](#versions-and-releases)), and reads `/etc/cozynights/deploy-<env>.conf`, so each stack's forced-command key can only ever deploy that stack. Every stack except staging has to name its compose file, backup folder, health URL and PocketBase container, or the script refuses to start: a staging default there would stop the wrong database. Old images are pruned per compose project, because both stacks share one Docker daemon.
 - **Smoke test.** After the deploy the workflow checks from outside that `/api/health` answers with the deployed commit. The full read-only smoke test (`npm run smoke:remote`) runs once the site is public; while the pre-launch gate is on, the workflow only checks that the gate sends visitors to Google.
 

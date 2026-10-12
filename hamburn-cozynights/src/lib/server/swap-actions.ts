@@ -8,7 +8,7 @@
 import { fail, type ActionFailure } from '@sveltejs/kit';
 import type { OrdersResponse } from '$lib/pocketbase-types';
 import { BookingService } from '$lib/server/booking';
-import { getBookingSettings } from '$lib/server/settings';
+import { getBookingSettings, SETTINGS_UNREACHABLE } from '$lib/server/settings';
 import {
 	acceptSwap,
 	askForSwap,
@@ -17,6 +17,7 @@ import {
 	SwapError,
 	withdrawSwap
 } from '$lib/server/swaps';
+import { recordId } from '$lib/server/record-id';
 
 const SIGNED_OUT =
 	'You are not signed in anymore. Go to the start page and enter your ticket code again.';
@@ -24,12 +25,6 @@ const CODE_UNKNOWN = 'Your ticket code was not found. Go to the start page and e
 const UNAVAILABLE = 'The booking system is not reachable right now. Nothing was changed.';
 
 type Failure = ActionFailure<{ error: string }>;
-
-/** A record id from the form, or '' for anything that isn't one. */
-function recordId(form: FormData, name: string): string {
-	const value = form.get(name);
-	return typeof value === 'string' && /^[a-z0-9]{1,32}$/.test(value) ? value : '';
-}
 
 /** Runs `step` for the signed-in guest's ticket and turns what can go wrong into a failure. */
 async function forGuest<T>(
@@ -58,6 +53,7 @@ export async function askSwapAction(locals: App.Locals, request: Request) {
 	if (!bedId) return fail(400, { error: 'No spot was selected. Close this and tap a taken spot.' });
 	return forGuest(locals, 'Asking', async (order) => {
 		const settings = await getBookingSettings(locals.pb);
+		if (!settings.reachable) return fail(503, { error: SETTINGS_UNREACHABLE });
 		const id = await askForSwap(locals.adminPb, settings, order, bedId, {
 			vibe: form.get('vibe'),
 			note: form.get('note')
@@ -80,6 +76,7 @@ export async function acceptSwapAction(locals: App.Locals, request: Request) {
 	if (!id) return fail(400, { error: 'No request was selected. Reload the page.' });
 	return forGuest(locals, 'Accepting', async (order) => {
 		const settings = await getBookingSettings(locals.pb);
+		if (!settings.reachable) return fail(503, { error: SETTINGS_UNREACHABLE });
 		const { gained, gave } = await acceptSwap(locals.adminPb, settings, order, id);
 		return { success: true, swapped: id, gained, gave };
 	});

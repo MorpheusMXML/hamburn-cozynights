@@ -6,7 +6,15 @@ export type AdminEventAction =
 	| 'bookings_cleared'
 	| 'template_imported'
 	| 'house_deleted'
+	// Guest bookings ended by deleting a room or spot, or by freeing a spot on
+	// the room page (superusers only, $lib/server/held-spots): counts only.
+	| 'room_deleted'
+	| 'spot_deleted'
+	| 'spot_freed'
 	| 'ticket_updated'
+	// A ticket marked paid by hand on the Tickets page, or set back to unpaid.
+	| 'ticket_marked_paid'
+	| 'ticket_marked_unpaid'
 	| 'tickets_imported'
 	| 'special_request_approved'
 	| 'special_request_declined'
@@ -23,7 +31,12 @@ export type AdminEventAction =
 	| 'request_group_member_removed';
 
 /** What guests do that the crew hears about. Never with names or what they wrote. */
-export type GuestEventAction = 'special_request_new' | 'special_request_withdrawn';
+export type GuestEventAction =
+	| 'special_request_new'
+	| 'special_request_withdrawn'
+	// The start page saw more than 200 wrong ticket codes within 10 minutes
+	// ($lib/server/login-guard): counts only.
+	| 'sign_in_guard';
 
 /** admin_events.actor and .subject (pb_migrations/1759000000_notifications.js). */
 const MAX_TEXT = 320;

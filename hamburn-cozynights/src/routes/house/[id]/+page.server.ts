@@ -4,7 +4,8 @@ import type { PageServerLoad, Actions } from './$types';
 import type { HousesResponse, RoomsResponse, BedsResponse } from '$lib/pocketbase-types';
 import { BookingService, CheckedInError, isBedBookable } from '$lib/server/booking';
 import { clearGuestSession, signInUrl } from '$lib/server/guest-session';
-import { getBookingSettings } from '$lib/server/settings';
+import { isCrewTicket } from '$lib/server/crew-ticket';
+import { getBookingSettings, SETTINGS_UNREACHABLE } from '$lib/server/settings';
 import { isSpotFixed, SPOT_FIXED_MESSAGE } from '$lib/server/special-requests';
 import { passSummary } from '$lib/server/pass';
 import {
@@ -56,9 +57,12 @@ export const load: PageServerLoad = async ({ params, locals, cookies, url }) => 
 			bookingService.getBedForOrder(order.id)
 		]);
 
+		// Without a phase the page would say "booking is not open": say what is wrong.
+		if (!settings.known) throw error(503, UNAVAILABLE);
+
 		// Calculate occupancy 👥 (deactivated beds don't exist for guests,
-		// locked ones count as taken)
-		const allowLocked = !!locals.admin;
+		// locked ones count as taken, but free for a crew ticket: $lib/server/crew-ticket)
+		const allowLocked = await isCrewTicket(locals.adminPb, order);
 		// Wishes the guest picked on the map, carried over in the link.
 		const wishes = readFilters(url.searchParams.get('w'));
 		const houseFeatures = house.features;
@@ -153,7 +157,8 @@ export const actions: Actions = {
 			});
 		}
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
+		const { isBookingActive, reachable } = await getBookingSettings(locals.pb);
+		if (!reachable) return fail(503, { error: SETTINGS_UNREACHABLE });
 		if (!isBookingActive) {
 			return fail(403, {
 				error:

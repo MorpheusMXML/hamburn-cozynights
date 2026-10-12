@@ -3,9 +3,11 @@
  * The ticket roster (collection `orders`) for the admin area
  * (docs/admin/tickets.md): find a ticket by its code or e-mail address, change
  * its address and name, hand it over to a new holder, and import the ticket
- * shop's CSV list after a review. Orders are superuser-only in PocketBase, so
- * everything here runs on the app's service account; the callers check the
- * admin's rights first.
+ * shop's CSV list after a review — orders that aren't paid yet included,
+ * flagged `unpaid` so their codes can't sign in — and mark such a ticket paid
+ * by hand when the payment was confirmed in person. Orders are superuser-only in
+ * PocketBase, so everything here runs on the app's service account; the
+ * callers check the admin's rights first.
  *
  * E-mails go out from PocketBase: a new address on a ticket that holds a spot
  * gets a confirmation (pb_hooks/cozy_notify.pb.js).
@@ -19,7 +21,7 @@ import type {
 	TypedPocketBase
 } from '$lib/pocketbase-types';
 import { createLookupHash, decrypt } from '$lib/server/crypto';
-import { BookingService } from '$lib/server/booking';
+import { BookingService, withLock } from '$lib/server/booking';
 import { disconnectTelegram } from '$lib/server/notifications';
 import { checkInOf } from '$lib/server/pass';
 import { forgetRequest } from '$lib/server/special-requests';
@@ -36,11 +38,13 @@ import {
 	isValidGuestEmail,
 	maskTicketCode,
 	normalizeEmail,
+	type PaidByHand,
 	type RosterImportOutcome,
 	type RosterPreview,
 	type RosterRow,
 	type StoredTicket,
 	type TicketChangeOutcome,
+	type TicketPaidOutcome,
 	type TicketSearch,
 	type TicketSpot,
 	type TicketView
@@ -63,6 +67,16 @@ export class TicketError extends Error {
 }
 
 const isNotFound = (err: unknown) => (err as ClientResponseError | undefined)?.status === 404;
+
+/** The fields of a ticket that the admin area shows (describeTicket). */
+const TICKET_FIELDS =
+	'id,order_number,order_hash,customer_name,email,burner_name,pass_code,unpaid,marked_paid_at,marked_paid_by';
+
+/** The mark of a ticket an admin marked paid by hand; null once it is unpaid again. */
+function paidByHandOf(order: OrdersResponse): PaidByHand | null {
+	if (order.unpaid || !order.marked_paid_at) return null;
+	return { at: order.marked_paid_at, by: order.marked_paid_by ?? '' };
+}
 
 type BedWithRoom = BedsResponse<{ room?: RoomsResponse<{ house?: HousesResponse }> }>;
 
@@ -121,6 +135,8 @@ async function describeTicket(
 		name,
 		email: order.email ?? '',
 		signedIn: !!order.order_hash,
+		unpaid: !!order.unpaid,
+		paidByHand: paidByHandOf(order),
 		spot,
 		burnerName,
 		telegram: links.length > 0,
@@ -135,7 +151,7 @@ async function describeTicket(
  */
 async function loadSearchIndex(adminPb: TypedPocketBase): Promise<OrdersResponse[]> {
 	return adminPb.collection('orders').getFullList<OrdersResponse>({
-		fields: 'id,order_number,order_hash,customer_name,email,burner_name,pass_code',
+		fields: TICKET_FIELDS,
 		batch: 1000,
 		requestKey: null
 	});
@@ -207,7 +223,7 @@ export async function openTicket(adminPb: TypedPocketBase, raw: unknown): Promis
 	let order: OrdersResponse;
 	try {
 		order = await adminPb.collection('orders').getOne<OrdersResponse>(id, {
-			fields: 'id,order_number,order_hash,customer_name,email,burner_name,pass_code',
+			fields: TICKET_FIELDS,
 			requestKey: null
 		});
 	} catch (err) {
@@ -280,44 +296,56 @@ export async function changeTicket(
 	const email = readEmailInput(input.email);
 	const typedName = readNameInput(input.name);
 
-	let order: OrdersResponse;
-	try {
-		order = await adminPb.collection('orders').getOne<OrdersResponse>(id);
-	} catch (err) {
-		if (isNotFound(err)) {
-			throw new TicketError('This ticket no longer exists. Search again.', 404);
+	const readTicket = async () => {
+		try {
+			return await adminPb.collection('orders').getOne<OrdersResponse>(id);
+		} catch (err) {
+			if (isNotFound(err)) {
+				throw new TicketError('This ticket no longer exists. Search again.', 404);
+			}
+			throw err;
 		}
-		throw err;
-	}
-
-	const code = order.order_number ?? '';
-	const name = typedName || defaultTicketName(code);
-	const emailBefore = order.email ?? '';
-	const emailChanged = email !== emailBefore.toLowerCase();
-	const nameChanged = name !== order.customer_name;
-
-	const data: Record<string, string | boolean> = {};
-	if (emailChanged) data.email = email;
-	if (nameChanged) data.customer_name = name;
-	if (input.newHolder) Object.assign(data, newHolderFields());
+	};
+	const before = await readTicket();
 
 	let requestRemoved = false;
 	let checkInReset = false;
-	if (Object.keys(data).length > 0) {
-		if (input.newHolder) {
-			// Telegram first: no update about the new holder may reach the old chat.
-			await disconnectTelegram(adminPb, order.id);
-			// Then the old holder's special-needs request (their health data):
-			// before the address changes, so the new holder is never told its
-			// status. A spot the crew booked stays, as an ordinary booking.
-			requestRemoved = await forgetRequest(adminPb, order.id);
-			// The old holder's swap requests, with what they wrote.
-			await forgetSwaps(adminPb, order.id);
-			// The old holder's check-in: the new holder hasn't arrived yet.
-			checkInReset = await new BookingService(adminPb).resetCheckIn(order.id);
-		}
-		order = await adminPb.collection('orders').update<OrdersResponse>(order.id, data);
+	if (input.newHolder) {
+		// Telegram first: no update about the new holder may reach the old chat.
+		await disconnectTelegram(adminPb, before.id);
+		// Then the old holder's special-needs request (their health data):
+		// before the address changes, so the new holder is never told its
+		// status. A spot the crew booked stays, as an ordinary booking.
+		requestRemoved = await forgetRequest(adminPb, before.id);
+		// The old holder's swap requests, with what they wrote.
+		await forgetSwaps(adminPb, before.id);
+		// The old holder's check-in: the new holder hasn't arrived yet. Before
+		// the ticket's own write below, never inside it: this takes the
+		// ticket's queue itself.
+		checkInReset = await new BookingService(adminPb).resetCheckIn(before.id);
 	}
+
+	// Read, compared and written in the ticket's queue (withLock): a booking
+	// or a guest's switch of the same ticket at the same moment can't undo the
+	// change, nor the change them (PocketBase saves the whole record).
+	const changed = await withLock(`order:${before.id}`, async () => {
+		let order = await readTicket();
+		const code = order.order_number ?? '';
+		const name = typedName || defaultTicketName(code);
+		const emailBefore = order.email ?? '';
+		const emailChanged = email !== emailBefore.toLowerCase();
+		const nameChanged = name !== order.customer_name;
+
+		const data: Record<string, string | boolean> = {};
+		if (emailChanged) data.email = email;
+		if (nameChanged) data.customer_name = name;
+		if (input.newHolder) Object.assign(data, newHolderFields());
+		if (Object.keys(data).length > 0) {
+			order = await adminPb.collection('orders').update<OrdersResponse>(order.id, data);
+		}
+		return { order, code, emailBefore, emailChanged, nameChanged };
+	});
+	const { order, code, emailBefore, emailChanged, nameChanged } = changed;
 
 	// Masked like a search by address: the answer to a change must not hand out
 	// the code of a ticket the admin only found by its address. The page keeps
@@ -336,13 +364,92 @@ export async function changeTicket(
 	};
 }
 
+/**
+ * Marks an unpaid ticket paid by hand: the Membership Team confirmed the
+ * payment in person, while the ticket shop still lists the order as pending.
+ * Its code signs in right away (the guest session checks `unpaid` on every
+ * request). The mark remembers when and by whom, so a later ticket list that
+ * still says pending doesn't lock the code again unnoticed (diffRoster).
+ *
+ * `paid: false` takes such a mark back: the code can't sign in any more, and
+ * a guest who is signed in is signed out. Only a mark made here can be taken
+ * back — about every other ticket the ticket list decides.
+ */
+export async function markTicketPaid(
+	adminPb: TypedPocketBase,
+	rawId: unknown,
+	paid: boolean,
+	adminEmail: string
+): Promise<TicketPaidOutcome> {
+	const id = typeof rawId === 'string' ? rawId.trim() : '';
+	if (!/^[a-z0-9]{1,30}$/.test(id)) throw new TicketError('No ticket was chosen. Search again.');
+
+	// Read, checked and written in the ticket's queue (withLock), like every
+	// write of a ticket: a booking or an address change at the same moment
+	// can't undo it, nor it them (PocketBase saves the whole record).
+	const readTicket = async () => {
+		try {
+			return await adminPb.collection('orders').getOne<OrdersResponse>(id, {
+				fields: TICKET_FIELDS,
+				requestKey: null
+			});
+		} catch (err) {
+			if (isNotFound(err)) {
+				throw new TicketError('This ticket no longer exists. Search again.', 404);
+			}
+			throw err;
+		}
+	};
+	const known = await readTicket();
+	const { order, changed } = await withLock(`order:${known.id}`, async () => {
+		const order = await readTicket();
+		if (paid) {
+			if (!order.unpaid) return { order, changed: false };
+			const marked = await adminPb.collection('orders').update<OrdersResponse>(
+				order.id,
+				{
+					unpaid: false,
+					marked_paid_at: new Date().toISOString(),
+					marked_paid_by: adminEmail.slice(0, 320)
+				},
+				{ fields: TICKET_FIELDS }
+			);
+			return { order: marked, changed: true };
+		}
+		if (order.unpaid) return { order, changed: false };
+		if (!order.marked_paid_at) {
+			throw new TicketError(
+				'The ticket list shows this ticket as paid, so it stays paid. Only a ticket marked paid here can be set back.',
+				409
+			);
+		}
+		const unmarked = await adminPb
+			.collection('orders')
+			.update<OrdersResponse>(
+				order.id,
+				{ unpaid: true, marked_paid_at: '', marked_paid_by: '' },
+				{ fields: TICKET_FIELDS }
+			);
+		return { order: unmarked, changed: true };
+	});
+
+	// Masked like a search by address, as after an address change: the page
+	// keeps showing the code the admin typed.
+	return {
+		ticket: await describeTicket(adminPb, order, true),
+		maskedCode: maskTicketCode(order.order_number ?? ''),
+		paid,
+		changed
+	};
+}
+
 // --- the roster import ------------------------------------------------------------
 
 /** Every stored ticket, with what the review needs to know about it. */
 export async function loadStoredTickets(adminPb: TypedPocketBase): Promise<StoredTicket[]> {
 	const [orders, beds, links, requests] = await Promise.all([
 		adminPb.collection('orders').getFullList<OrdersResponse>({
-			fields: 'id,order_number,email,customer_name',
+			fields: 'id,order_number,email,customer_name,unpaid,marked_paid_at,marked_paid_by',
 			batch: 1000,
 			requestKey: null
 		}),
@@ -374,7 +481,9 @@ export async function loadStoredTickets(adminPb: TypedPocketBase): Promise<Store
 			name: order.customer_name ?? '',
 			hasSpot: booked.has(order.id),
 			telegram: linked.has(order.id),
-			request: requested.has(order.id)
+			request: requested.has(order.id),
+			unpaid: !!order.unpaid,
+			paidByHand: paidByHandOf(order)
 		}));
 }
 
@@ -419,9 +528,9 @@ export async function previewRoster(
 	adminPb: TypedPocketBase,
 	rows: RosterRow[]
 ): Promise<RosterPreview> {
-	const { entries, problems, unpaid } = checkRosterRows(rows);
+	const { entries, problems, leftOut } = checkRosterRows(rows);
 	const stored = await loadStoredTickets(adminPb);
-	const diff = diffRoster(entries, stored, problems, unpaid);
+	const diff = diffRoster(entries, stored, problems, leftOut);
 	// The file doesn't have these codes: only show enough to recognise them. The
 	// id stays, so the review can tick one for removal.
 	diff.notInFile = diff.notInFile.map((ticket) => ({
@@ -459,12 +568,15 @@ let importRunning = false;
  * Imports the selected rows. They are checked and compared again here — the
  * review in the browser is only a courtesy — so a ticket that changed
  * meanwhile gets what the file says, and one that needs nothing anymore is
- * skipped.
+ * skipped. A ticket marked paid by hand stays paid unless it is in
+ * `undoPaid`: the review showed it as such and 💳 Set back to unpaid was
+ * chosen. A selected key alone says nothing about the payment — the mark may
+ * be newer than the review.
  */
 export async function importRoster(
 	adminPb: TypedPocketBase,
 	rows: RosterRow[],
-	options: { selected: string[]; newHolders: string[]; remove?: string[] }
+	options: { selected: string[]; newHolders: string[]; remove?: string[]; undoPaid?: string[] }
 ): Promise<RosterImportOutcome> {
 	if (importRunning) {
 		throw new TicketError(
@@ -474,22 +586,27 @@ export async function importRoster(
 	}
 	importRunning = true;
 	try {
-		const { entries, problems, unpaid } = checkRosterRows(rows);
+		const { entries, problems, leftOut } = checkRosterRows(rows);
 		const stored = await loadStoredTickets(adminPb);
-		const diff = diffRoster(entries, stored, problems, unpaid);
+		const diff = diffRoster(entries, stored, problems, leftOut);
 		const wanted = new Set(options.selected.map((key) => String(key).toLowerCase()));
 		const handOver = new Set(options.newHolders.map((key) => String(key).toLowerCase()));
+		const undo = new Set((options.undoPaid ?? []).map((key) => String(key).toLowerCase()));
 		const todo = diff.changes.filter((change) => wanted.has(change.key));
 		// Tickets the file no longer lists, ticked for removal in the review. They
 		// are named by id: the review only ever sees their codes shortened. What
 		// the browser sends is a wish — only a ticket that is really missing from
 		// the file and really holds no spot is deleted. Its Telegram link and its
 		// special-needs request go with it (both cascade in PocketBase).
+		// A ticket marked paid by hand stays too: the crew confirmed its payment,
+		// so the mark has to be taken back on its ticket first.
 		const drop = new Set((options.remove ?? []).map((key) => String(key)));
 		const gone = new Set(diff.notInFile.filter((t) => !t.hasSpot).map((t) => t.id));
-		const cancelled = drop.size
+		const wished = drop.size
 			? stored.filter((ticket) => !ticket.hasSpot && drop.has(ticket.id) && gone.has(ticket.id))
 			: [];
+		const cancelled = wished.filter((ticket) => !ticket.paidByHand);
+		const paidKept = wished.filter((ticket) => !!ticket.paidByHand);
 
 		const outcome: RosterImportOutcome = {
 			created: 0,
@@ -498,8 +615,16 @@ export async function importRoster(
 			newHolders: 0,
 			requestsRemoved: 0,
 			confirmations: 0,
+			unpaid: 0,
+			nowPaid: 0,
+			paidConfirmed: 0,
+			keptPaid: 0,
+			paidUndone: [],
 			skipped: wanted.size - todo.length,
-			failed: []
+			failed: paidKept.map((ticket) => ({
+				code: maskTicketCode(ticket.code),
+				error: 'marked paid by hand — set it back to unpaid on its ticket first, then delete it'
+			}))
 		};
 
 		await inPool(todo, IMPORT_CONCURRENCY, async (change) => {
@@ -508,16 +633,31 @@ export async function importRoster(
 					await adminPb.collection('orders').create({
 						order_number: change.code,
 						customer_name: change.name,
-						email: change.email
+						email: change.email,
+						// Not paid yet: the code can't sign in until a later list says paid.
+						...(change.unpaid ? { unpaid: true } : {})
 					});
 					outcome.created++;
+					if (change.unpaid) outcome.unpaid++;
 					return;
 				}
 				const id = change.id as string;
 				const newHolder = change.canBeNewHolder && handOver.has(change.key);
+				const undoPaid = change.undoesPaidByHand && undo.has(change.key);
+				const keepPaid = change.undoesPaidByHand && !undoPaid;
 				const data: Record<string, string | boolean> = {};
 				if (change.emailChanged) data.email = change.email;
 				if (change.nameChanged) data.customer_name = change.name;
+				if (change.unpaidChanged && !keepPaid) data.unpaid = change.unpaid;
+				// Marked paid by hand: the list caught up (paid), or the review
+				// chose to set it back to unpaid. Either way the mark is done.
+				if (change.confirmsPaidByHand || undoPaid) {
+					data.marked_paid_at = '';
+					data.marked_paid_by = '';
+				}
+				if (keepPaid) outcome.keptPaid++;
+				// Only the payment would have changed, and it stays.
+				if (Object.keys(data).length === 0 && !newHolder) return;
 				let requestRemoved = false;
 				if (newHolder) {
 					Object.assign(data, newHolderFields());
@@ -526,15 +666,23 @@ export async function importRoster(
 					// address changes (see changeTicket)
 					requestRemoved = await forgetRequest(adminPb, id);
 					await forgetSwaps(adminPb, id);
+					// takes the ticket's queue itself: before the write below, never inside it
 					await new BookingService(adminPb).resetCheckIn(id);
 				}
-				await adminPb.collection('orders').update(id, data);
+				// In the ticket's queue, like every write of a ticket.
+				await withLock(`order:${id}`, () => adminPb.collection('orders').update(id, data));
 				outcome.updated++;
 				if (newHolder) {
 					outcome.newHolders++;
 					if (requestRemoved) outcome.requestsRemoved++;
 				}
 				if (change.emailChanged && change.email && change.hasSpot) outcome.confirmations++;
+				if (change.unpaidChanged && !keepPaid) {
+					if (change.unpaid) outcome.unpaid++;
+					else outcome.nowPaid++;
+				}
+				if (change.confirmsPaidByHand) outcome.paidConfirmed++;
+				if (undoPaid) outcome.paidUndone.push({ id, code: maskTicketCode(change.code) });
 			} catch (err) {
 				console.error(`[Tickets] Import of ${maskTicketCode(change.code)} failed:`, err);
 				outcome.failed.push({ code: change.code, error: describeError(err) });
@@ -543,7 +691,7 @@ export async function importRoster(
 
 		await inPool(cancelled, IMPORT_CONCURRENCY, async (ticket) => {
 			try {
-				await adminPb.collection('orders').delete(ticket.id);
+				await withLock(`order:${ticket.id}`, () => adminPb.collection('orders').delete(ticket.id));
 				outcome.removed++;
 			} catch (err) {
 				// Shortened like everywhere else about these tickets: the review

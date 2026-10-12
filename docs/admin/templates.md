@@ -66,6 +66,7 @@ flowchart LR
 - **Bookings stay** on every spot that is not removed, also on moved houses and renamed rooms.
 - **Removing booked spots** releases those bookings. The guests get a *spot was released* e-mail, their burner names are forgotten, and their ticket codes stay valid. You confirm this in a dialog first; without removals, applying needs no extra click.
 - **A backup comes first.** Its name is shown afterwards (`pre-import-….zip`); a superuser can restore it in the PocketBase dashboard under Settings → Backups. The ten newest of these backups are kept, older ones are removed. If the backup fails, nothing happens and you may choose to apply without one.
+- **Not right before an opening.** While an armed opening is less than five minutes away, applying is refused (*Booking opens in 3 minutes: a template import now could still be running when the first guests book. Pause the timer first, or wait until booking has opened.*).
 - **One import at a time.** While another import runs, applying is refused with *Another import is running right now. Wait until it has finished, then check the layout before you import again.*
 - **New parts are created all or nothing:** if the database refuses one, everything created so far is removed again and the camp is unchanged. Changes and removals that fail afterwards are listed; the rest stays applied.
 - **Bunk beds come last.** A partner is named by its label, so the pairings are written once both spots of a pair exist. Only spots you chose are paired; PocketBase completes the other side of each pair.

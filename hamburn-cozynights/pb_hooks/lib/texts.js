@@ -55,6 +55,7 @@ const GROUPS = [
 	{ id: 'mail.released', channel: 'mail', title: 'E-mail · spot released' },
 	{ id: 'mail.request', channel: 'mail', title: 'E-mail · special-needs request' },
 	{ id: 'mail.swap', channel: 'mail', title: 'E-mail · swap requests' },
+	{ id: 'mail.code', channel: 'mail', title: 'E-mail · your ticket code' },
 	{ id: 'tg.common', channel: 'telegram', title: 'Telegram · in several messages' },
 	{ id: 'tg.connected', channel: 'telegram', title: 'Telegram · chat connected' },
 	{ id: 'tg.booked', channel: 'telegram', title: 'Telegram · spot booked' },
@@ -200,6 +201,16 @@ const TEXTS = [
 		text: 'your swap went through — this is your spot now:' },
 	{ key: 'mail.swapped.before', group: 'mail.swap', label: 'Swap done · the old spot', hint: '', placeholders: ['before'],
 		text: 'Your old spot, {before}, belongs to the other guest now.' },
+
+	// --- e-mail: the ticket code, on request ------------------------------------------
+	{ key: 'mail.code.subject', group: 'mail.code', label: 'Subject', hint: 'A guest who mistyped their code asked for it on the start page. Only ever to the address of a paid ticket.', placeholders: [],
+		text: 'Your CozyNights ticket code' },
+	{ key: 'mail.code.intro', group: 'mail.code', label: 'First line', hint: 'After the greeting; the codes follow, one row per paid ticket of this address.', placeholders: [],
+		text: 'someone — probably you — asked for the ticket code that belongs to this e-mail address:' },
+	{ key: 'mail.code.signin', group: 'mail.code', label: 'How to sign in', hint: '', placeholders: ['appUrl'],
+		text: 'To sign in, open {appUrl} and enter your ticket code.' },
+	{ key: 'mail.code.ignore', group: 'mail.code', label: 'If the guest didn\'t ask', hint: 'The last line.', placeholders: [],
+		text: 'Didn\'t ask for it? Then just ignore this e-mail: it came only to you, and nobody can sign in with your ticket without the code.' },
 
 	// --- Telegram: in several messages ------------------------------------------------
 	{ key: 'tg.pass', group: 'tg.common', label: 'Booking pass', hint: 'Below every message that shows the spot.', placeholders: ['passCode', 'passUrl'],

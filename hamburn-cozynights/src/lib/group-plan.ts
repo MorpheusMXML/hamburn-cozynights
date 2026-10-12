@@ -6,9 +6,15 @@
  * without I/O, shared by the admin page (also in the browser) and the unit
  * tests. Deterministic: the same group and the same spots always give the
  * same proposal.
+ *
+ * Max's rules (2026-10-12, v1.32.3): a group sleeps in one room; the ♿ spots
+ * are the pool for special-needs requests, so a plan fills them first (the
+ * members who need something get the fitting ones); a spot the crew locked 🔒
+ * is out of service — never planned, never counted as free, only picked by
+ * hand on purpose.
  */
 import { MATCHED_BY_HAND, factsOf, matchNeeds } from './accommodation';
-import { isAccessNeed, requestKinds, type SpecialNeed, type SpotInfo } from './special-needs';
+import { requestKinds, type SpecialNeed, type SpotInfo } from './special-needs';
 import { compareNatural } from './template';
 
 /** A member of the group, as the planner needs it. */
@@ -21,6 +27,8 @@ export interface PlanMember {
 	crewSpotLabel: string;
 	/** The room of that spot ('' or left out for none): the rest of the group belongs there. */
 	crewRoomId?: string;
+	/** The room the member sleeps in now, booked by anyone ('' or left out for none). */
+	roomId?: string;
 }
 
 /** A place the group could sleep in, for the planner's "Where:" choice. */
@@ -28,16 +36,14 @@ export interface PlaceOption {
 	/** '' (anywhere), 'room:<id>' or 'house:<id>' */
 	key: string;
 	label: string;
-	/** Free spots there (♿ spots included). */
+	/** Free spots there that a plan may use: none the crew locked 🔒 (♿ spots included). */
 	free: number;
 	/** How many of them are ♿ spots. */
 	special: number;
+	/** Free spots the crew locked 🔒: out of service, never counted as free. */
+	locked: number;
 	/** Enough free spots for everyone to place. */
 	fits: boolean;
-	/** It fits only by giving ♿ spots to members who need nothing ("uses ♿"). */
-	usesSpecial: boolean;
-	/** It fits only by using spots the crew locked 🔒 ("uses 🔒"). */
-	usesLocked: boolean;
 }
 
 export const ANYWHERE = 'Anywhere: the best free spot for each';
@@ -53,23 +59,8 @@ export const bySpot = (a: SpotInfo, b: SpotInfo) =>
 	compareNatural(a.room, b.room) ||
 	compareNatural(a.spot, b.spot);
 
-/**
- * What a ♿ spot adds to how well it fits someone: a little for a member who
- * needs something (it is kept for them), a lot less for anyone else. The
- * planner and the spot picker rank with it.
- */
-export function specialPull(spot: Pick<SpotInfo, 'special'>, access: boolean): number {
-	return spot.special ? (access ? 0.5 : -2) : 0;
-}
-
-/**
- * What a spot the crew locked 🔒 adds to how well it fits: so much less that
- * the plan takes one only when nothing else is left (the crew may hold it
- * back for a reason, or it is broken). The crew can still pick it by hand.
- */
-export function lockedPull(spot: Pick<SpotInfo, 'locked'>): number {
-	return spot.locked ? -100 : 0;
-}
+/** A spot a plan may use: free and not locked 🔒 (out of service). */
+export const plannable = (spot: Pick<SpotInfo, 'locked'>) => !spot.locked;
 
 interface Place {
 	kind: 'room' | 'house';
@@ -79,59 +70,39 @@ interface Place {
 	room: string;
 	free: number;
 	special: number;
-	/** Free spots the crew locked 🔒. */
 	locked: number;
-	/** How many of the locked ones are ♿ spots. */
-	lockedSpecial: number;
 }
 
-function describe(
-	name: string,
-	free: number,
-	special: number,
-	size: number,
-	flags: { usesSpecial: boolean; usesLocked: boolean }
-): string {
+function describe(name: string, free: number, special: number, size: number): string {
 	return (
 		`${name} — ${free} free` +
 		(special > 0 ? ` (♿ ${special})` : '') +
-		(free >= size ? ` · fits all ${size}` : ' · too small') +
-		(flags.usesSpecial ? ' · uses ♿' : '') +
-		(flags.usesLocked ? ' · uses 🔒' : '')
+		(free >= size ? ` · fits all ${size}` : ' · too small')
 	);
 }
 
 /**
  * Every room and every house with free spots, plus "Anywhere" first. Then the
- * rooms that fit everyone, the snuggest first; then the houses that fit,
- * also the snuggest first; then the rest, the roomiest first. A place that
- * only fits by giving ♿ spots to members who need nothing comes after the
- * places that fit without (rooms, then houses), marked "uses ♿"; one that
- * only fits by using spots the crew locked 🔒 comes after those, marked
- * "uses 🔒".
+ * rooms that fit everyone — the most ♿ spots for the group first, then the
+ * snuggest; then the houses that fit, the same way; then the rest, the
+ * roomiest first. Spots the crew locked 🔒 count for nothing: a place fits
+ * with its other free spots, or not at all.
  * @param spots the free spots an admin can book (listAssignableSpots)
  * @param size how many members need a spot (toPlace)
- * @param accessCount how many of them need something (requestKinds().access):
- *   the ♿ spots a place may give the group without wasting one
  */
-export function placeOptions(spots: SpotInfo[], size: number, accessCount = 0): PlaceOption[] {
+export function placeOptions(spots: SpotInfo[], size: number): PlaceOption[] {
 	const places = new Map<string, Place>();
 	const count = (
 		key: string,
 		spot: SpotInfo,
-		make: () => Omit<Place, 'free' | 'special' | 'locked' | 'lockedSpecial'>
+		make: () => Omit<Place, 'free' | 'special' | 'locked'>
 	) => {
-		const place = places.get(key) ?? {
-			...make(),
-			free: 0,
-			special: 0,
-			locked: 0,
-			lockedSpecial: 0
-		};
-		place.free += 1;
-		if (spot.special) place.special += 1;
-		if (spot.locked) place.locked += 1;
-		if (spot.special && spot.locked) place.lockedSpecial += 1;
+		const place = places.get(key) ?? { ...make(), free: 0, special: 0, locked: 0 };
+		if (!plannable(spot)) place.locked += 1;
+		else {
+			place.free += 1;
+			if (spot.special) place.special += 1;
+		}
 		places.set(key, place);
 	};
 	for (const spot of spots) {
@@ -155,109 +126,134 @@ export function placeOptions(spots: SpotInfo[], size: number, accessCount = 0): 
 		}
 	}
 
-	/** The open spots there: plain ones, and ♿ ones nobody locked. */
-	const open = (place: Place) => {
-		const special = place.special - place.lockedSpecial;
-		return { plain: place.free - place.locked - special, special };
-	};
-	/** What the group can take there without a problem: plain spots, ♿ ones for who needs something. */
-	const usable = (place: Place) => {
-		const { plain, special } = open(place);
-		return plain + Math.min(special, accessCount);
-	};
-	/**
-	 * What the proposal would have to do there, counted the way proposePlan
-	 * chooses: members who need something take the open ♿ spots first, then
-	 * plain ones; the others plain ones first, then the open ♿ ones; a locked
-	 * spot only when nothing else is left (lockedPull).
-	 */
-	const flags = (place: Place) => {
-		if (place.free < size) return { usesSpecial: false, usesLocked: false };
-		const { plain, special } = open(place);
-		const needers = Math.min(accessCount, size);
-		const neederSpecial = Math.min(special, needers);
-		const neederPlain = Math.min(plain, needers - neederSpecial);
-		const otherPlain = Math.min(plain - neederPlain, size - needers);
-		const otherSpecial = Math.min(special - neederSpecial, size - needers - otherPlain);
-		const onLocked = size - neederSpecial - neederPlain - otherPlain - otherSpecial;
-		return { usesSpecial: otherSpecial > 0, usesLocked: onLocked > 0 };
-	};
-	const rank = (place: Place) => {
-		const room = place.kind === 'room' ? 0 : 1;
-		if (place.free < size) return 6;
-		const { usesSpecial, usesLocked } = flags(place);
-		if (usesLocked) return 4 + room;
-		return usesSpecial ? 2 + room : room;
-	};
-	const sorted = [...places.values()].sort(
-		(a, b) =>
-			rank(a) - rank(b) ||
-			(rank(a) < 6 ? usable(a) - usable(b) || a.free - b.free : b.free - a.free) ||
-			(a.kind === b.kind ? 0 : a.kind === 'room' ? -1 : 1) ||
-			compareNatural(a.house, b.house) ||
-			compareNatural(a.room, b.room)
-	);
+	const rank = (place: Place) => (place.free < size ? 2 : place.kind === 'room' ? 0 : 1);
+	const sorted = [...places.values()]
+		.filter((place) => place.free > 0)
+		.sort(
+			(a, b) =>
+				rank(a) - rank(b) ||
+				(rank(a) < 2
+					? specialCover(b, size) - specialCover(a, size) || a.free - b.free
+					: b.free - a.free) ||
+				(a.kind === b.kind ? 0 : a.kind === 'room' ? -1 : 1) ||
+				compareNatural(a.house, b.house) ||
+				compareNatural(a.room, b.room)
+		);
 
-	const special = spots.filter((spot) => spot.special).length;
+	const open = spots.filter(plannable);
 	return [
 		{
 			key: '',
 			label: ANYWHERE,
-			free: spots.length,
-			special,
-			fits: spots.length >= size,
-			usesSpecial: false,
-			usesLocked: false
+			free: open.length,
+			special: open.filter((spot) => spot.special).length,
+			locked: spots.length - open.length,
+			fits: open.length >= size
 		},
 		...sorted.map((place) => ({
 			key: place.key,
-			label: describe(place.name, place.free, place.special, size, flags(place)),
+			label: describe(place.name, place.free, place.special, size),
 			free: place.free,
 			special: place.special,
-			fits: place.free >= size,
-			...flags(place)
+			locked: place.locked,
+			fits: place.free >= size
 		}))
 	];
 }
 
+/** How many of the group a place's free ♿ spots take: the pool for special-needs requests. */
+export function specialCover(place: Pick<PlaceOption, 'special'>, size: number): number {
+	return Math.min(place.special, size);
+}
+
 /**
- * The spots of a place, in the order the proposal tries them: natural order;
- * in a whole house the rooms with the most open (not locked) free spots
- * first, so the group packs into the fewest rooms, and each room's locked
- * spots after its open ones.
+ * The spots of a place a plan may use, in the order the proposal tries them
+ * (after the ♿ spots, proposePlan): natural order; in a whole house the
+ * rooms with the most free spots first, so the group packs into the fewest
+ * rooms. Never a spot the crew locked 🔒.
  */
 function candidates(spots: SpotInfo[], placeKey: string): SpotInfo[] {
-	if (!placeKey) return [...spots].sort(bySpot);
+	const open = spots.filter(plannable);
+	if (!placeKey) return open.sort(bySpot);
 	const [, kind, id] = /^(room|house):(.+)$/.exec(placeKey) ?? [];
-	if (kind === 'room') return spots.filter((spot) => spot.roomId === id).sort(bySpot);
+	if (kind === 'room') return open.filter((spot) => spot.roomId === id).sort(bySpot);
 	if (kind !== 'house') return [];
-	const inHouse = spots.filter((spot) => spot.houseId === id);
+	const inHouse = open.filter((spot) => spot.houseId === id);
 	const free = new Map<string, number>();
-	const open = new Map<string, number>();
-	for (const spot of inHouse) {
-		free.set(spot.roomId, (free.get(spot.roomId) ?? 0) + 1);
-		if (!spot.locked) open.set(spot.roomId, (open.get(spot.roomId) ?? 0) + 1);
-	}
-	const count = (counts: Map<string, number>, spot: SpotInfo) => counts.get(spot.roomId) ?? 0;
+	for (const spot of inHouse) free.set(spot.roomId, (free.get(spot.roomId) ?? 0) + 1);
 	return inHouse.sort(
 		(a, b) =>
-			count(open, b) - count(open, a) ||
-			count(free, b) - count(free, a) ||
+			(free.get(b.roomId) ?? 0) - (free.get(a.roomId) ?? 0) ||
 			compareNatural(a.room, b.room) ||
 			compareNatural(a.roomId, b.roomId) ||
-			Number(a.locked) - Number(b.locked) ||
 			compareNatural(a.spot, b.spot)
 	);
 }
 
+/** A member to place, with what the plan compares (proposePlan). */
+interface Placing {
+	member: PlanMember;
+	index: number;
+	/** Each need once: stored needs aren't deduplicated. */
+	needs: SpecialNeed[];
+	/** The needs the layout can answer (not MATCHED_BY_HAND), like needsMet counts them. */
+	checkable: SpecialNeed[];
+	/** A personal need (requestKinds): among the ♿ spots, these come first. */
+	access: boolean;
+}
+
+type Facts = ReturnType<typeof factsOf>;
+
+/**
+ * How well a spot suits a member, for the first pick: no clear mismatch
+ * first, then a ♿ spot (the pool for special-needs requests), then the most
+ * needs it answers (matchNeeds).
+ */
+function suits(needs: readonly SpecialNeed[], spot: SpotInfo, facts: Facts) {
+	const match = matchNeeds(needs, facts);
+	return [match.conflicts.length === 0 ? 1 : 0, spot.special ? 1 : 0, match.score];
+}
+
+/**
+ * What one member on one spot adds to a plan, to compare two plans field by
+ * field (more is better): no clear mismatch (✗), a ♿ spot, everything the
+ * layout can tell of the member's needs answered (like needsMet), the needs
+ * it answers, a ♿ spot for a member with a personal need.
+ */
+function worth(placing: Placing, spot: SpotInfo, facts: Facts): number[] {
+	const match = matchNeeds(placing.needs, facts);
+	const met =
+		placing.checkable.length > 0 && placing.checkable.every((need) => match.fits.includes(need));
+	return [
+		match.conflicts.length > 0 ? -1 : 0,
+		spot.special ? 1 : 0,
+		met ? 1 : 0,
+		match.fits.length,
+		placing.access && spot.special ? 1 : 0
+	];
+}
+
+function better(a: number[], b: number[]): boolean {
+	for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] > b[i];
+	return false;
+}
+
+const plus = (a: number[], b: number[]) => a.map((value, i) => value + b[i]);
+
 /**
  * One spot per member to place, from the place's free spots: request id →
  * bed id, '' for a member that keeps their spot, is declined, or finds no
- * spot left. Members with an access need choose first (the most needs at the
- * top), each the best remaining spot by matchNeeds; a ♿ spot counts extra
- * for a member who needs something and against one who doesn't, and a spot
- * the crew locked 🔒 is taken only when nothing else is left (lockedPull). A
- * tie goes to the place order, which keeps bunk pairs together.
+ * spot left. Never a spot the crew locked 🔒. What makes a plan better, in
+ * this order: fewer clear mismatches (✗); more members on ♿ spots, the pool
+ * for every special-needs request; more members whose needs the layout can
+ * tell are all answered; more needs answered; the ♿ spots with the members
+ * who have a personal need (worth). First each member picks in turn — those
+ * with needs the layout can check first, then the other personal needs,
+ * then everyone else — and then the plan repairs what that order got wrong:
+ * a member moves to a spot nobody has, or two members swap, whenever that
+ * makes the plan better. In a whole house a ♿ spot comes first whichever
+ * room it is in. A tie goes to the place order, which keeps bunk pairs
+ * together.
  */
 export function proposePlan(
 	members: PlanMember[],
@@ -269,35 +265,81 @@ export function proposePlan(
 
 	const pool = candidates(spots, placeKey);
 	const facts = pool.map((spot) => factsOf(spot.bedType, spot.features));
-	const taken = new Set<number>();
-	const queue = toPlace(members)
-		.map((member, index) => ({
-			member,
-			index,
-			access: requestKinds(member.needs).access,
-			accessNeeds: member.needs.filter(isAccessNeed).length
-		}))
+	const queue: Placing[] = toPlace(members)
+		.map((member, index) => {
+			const needs = [...new Set(member.needs)];
+			return {
+				member,
+				index,
+				needs,
+				checkable: needs.filter((need) => !MATCHED_BY_HAND.includes(need)),
+				access: requestKinds(needs).access
+			};
+		})
 		.sort(
 			(a, b) =>
-				Number(b.access) - Number(a.access) || b.accessNeeds - a.accessNeeds || a.index - b.index
+				b.checkable.length - a.checkable.length ||
+				Number(b.access) - Number(a.access) ||
+				a.index - b.index
 		);
 
-	for (const { member, access } of queue) {
+	// The first pick: one member after the other, each the best spot left.
+	const at: number[] = queue.map(() => -1);
+	const used = new Set<number>();
+	queue.forEach((placing, q) => {
 		let best = -1;
-		let bestScore = -Infinity;
+		let bestSuit: number[] = [];
 		pool.forEach((spot, index) => {
-			if (taken.has(index)) return;
-			const score =
-				matchNeeds(member.needs, facts[index]).score + specialPull(spot, access) + lockedPull(spot);
-			if (score > bestScore) {
+			if (used.has(index)) return;
+			const suit = suits(placing.needs, spot, facts[index]);
+			if (best < 0 || better(suit, bestSuit)) {
 				best = index;
-				bestScore = score;
+				bestSuit = suit;
 			}
 		});
-		if (best < 0) continue;
-		taken.add(best);
-		plan[member.requestId] = pool[best].bedId;
-	}
+		if (best < 0) return;
+		used.add(best);
+		at[q] = best;
+	});
+
+	// The repair: each change makes the plan strictly better, so it ends.
+	const known = new Map<number, number[]>();
+	const value = (q: number, j: number) => {
+		const key = q * pool.length + j;
+		let found = known.get(key);
+		if (!found) {
+			found = worth(queue[q], pool[j], facts[j]);
+			known.set(key, found);
+		}
+		return found;
+	};
+	const repairOnce = (): boolean => {
+		for (let q = 0; q < queue.length; q++) {
+			const j = at[q];
+			if (j < 0) continue;
+			for (let k = 0; k < pool.length; k++) {
+				if (used.has(k) || !better(value(q, k), value(q, j))) continue;
+				used.delete(j);
+				used.add(k);
+				at[q] = k;
+				return true;
+			}
+			for (let r = q + 1; r < queue.length; r++) {
+				const k = at[r];
+				if (k < 0) continue;
+				if (!better(plus(value(q, k), value(r, j)), plus(value(q, j), value(r, k)))) continue;
+				at[q] = k;
+				at[r] = j;
+				return true;
+			}
+		}
+		return false;
+	};
+	while (repairOnce());
+
+	queue.forEach((placing, q) => {
+		if (at[q] >= 0) plan[placing.member.requestId] = pool[at[q]].bedId;
+	});
 	return plan;
 }
 
@@ -332,16 +374,16 @@ export function needsMet(members: PlanMember[], spots: SpotInfo[], placeKey: str
 
 /**
  * The places to suggest first, from placeOptions' list: the places that fit
- * everyone — those that need no spot the crew locked 🔒 first, then those
- * that answer every member's needs ahead of the rest, each in placeOptions'
- * order (the snuggest first, sparing the ♿ spots). "Anywhere" is not among
- * them.
+ * everyone — the most of the group on ♿ spots first, then those that answer
+ * every member's needs, then the most needs answered, each in placeOptions'
+ * order (the snuggest first). "Anywhere" is not among them.
  */
 export function rankPlaces(
 	options: PlaceOption[],
 	members: PlanMember[],
 	spots: SpotInfo[]
 ): (PlaceOption & { needs: NeedsMet })[] {
+	const size = toPlace(members).length;
 	const full = (needs: NeedsMet) => (needs.of === 0 || needs.met === needs.of ? 1 : 0);
 	// sort() is stable: places that answer the needs equally keep placeOptions' order.
 	return options
@@ -349,7 +391,7 @@ export function rankPlaces(
 		.map((option) => ({ ...option, needs: needsMet(members, spots, option.key) }))
 		.sort(
 			(a, b) =>
-				Number(a.usesLocked) - Number(b.usesLocked) ||
+				specialCover(b, size) - specialCover(a, size) ||
 				full(b.needs) - full(a.needs) ||
 				b.needs.met - a.needs.met
 		);
@@ -357,10 +399,11 @@ export function rankPlaces(
 
 /**
  * The rooms to recommend for a group, best first: rooms that fit everyone,
- * ranked by rankPlaces (none of the crew's locked 🔒 spots needed, then the
- * members' needs, then the snuggest). A group sleeps in one room (Max,
- * 2026-10-12): houses and "anywhere" are no recommendation — when no room
- * fits everyone, the crew picks the spots one by one.
+ * ranked by rankPlaces (the most ♿ spots for the group, then the members'
+ * needs, then the snuggest). A group sleeps in one room (Max, 2026-10-12):
+ * houses and "anywhere" are no recommendation — when no room fits everyone,
+ * the crew picks the spots one by one. Any room that fits stays the crew's
+ * to choose; this is only the order.
  */
 export function recommendRooms(
 	options: PlaceOption[],
@@ -429,4 +472,61 @@ export function repick(
 	if (!other) return { changes, bumped: '' };
 	changes[other] = mine;
 	return { changes, bumped: mine ? '' : other };
+}
+
+/** "Ada", "Ada and Bo", "Ada, Bo and Cy". */
+function joinNames(names: string[]): string {
+	return names.length <= 1
+		? (names[0] ?? '')
+		: `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/**
+ * Why there is no plan, for the line on the group's card ('' when there is
+ * one): no room has space for everyone — or one does, but the plan stays
+ * with the room where the crew booked members already, and that one has no
+ * space for the rest ("is full" only when it has no free spot at all).
+ */
+export function noPlanNote(
+	options: PlaceOption[],
+	members: PlanMember[],
+	spots: SpotInfo[]
+): string {
+	if (defaultPlace(options, members, spots) !== null) return '';
+	const rest = toPlace(members).length;
+	const anchors = anchorRooms(members);
+	if (anchors.length > 0 && recommendRooms(options, members, spots).length > 0) {
+		const names = members
+			.filter((m) => !m.declined && m.crewSpotLabel && anchors.includes(m.crewRoomId ?? ''))
+			.map((m) => m.name);
+		const who = joinNames(names);
+		const free = (roomId: string) =>
+			options.find((option) => option.key === `room:${roomId}`)?.free ?? 0;
+		const one = anchors.length === 1;
+		const where = one
+			? `The room where ${who} ${names.length === 1 ? 'sleeps' : 'sleep'}`
+			: `The rooms where ${who} sleep`;
+		const then = 'choose a room for the rest, or pick each with Change.';
+		if (anchors.every((roomId) => free(roomId) === 0)) {
+			return `${where} ${one ? 'is' : 'are'} full: ${then}`;
+		}
+		const left = one ? ` (${free(anchors[0])} free)` : '';
+		return `${where} ${one ? 'has' : 'have'} no space for all ${rest} others${left}: ${then}`;
+	}
+	return `No room has ${rest} free spots together: pick a spot for each with Change.`;
+}
+
+/**
+ * How many spots of a room other guests booked: its bookings minus the
+ * members of the group who sleep there. Booking a group into such a room is
+ * fine — nobody is moved — the picker and the dialog only say so.
+ * @param booked room id → booked spots (countRoomSpots)
+ */
+export function othersBooked(
+	roomId: string,
+	booked: Readonly<Record<string, number>>,
+	members: Pick<PlanMember, 'roomId'>[]
+): number {
+	const ours = members.filter((member) => member.roomId === roomId).length;
+	return Math.max(0, (booked[roomId] ?? 0) - ours);
 }

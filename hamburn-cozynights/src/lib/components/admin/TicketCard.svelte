@@ -1,15 +1,17 @@
 <!--
 @component
 One ticket in the admin's ticket search: what it holds, its e-mail address and
-name to edit in place, and the hand-over to a new holder ("passed on"). Saves
-through ?/update of the ticket page and fires `saved` with the fresh ticket.
+name to edit in place, the hand-over to a new holder ("passed on"), and — for
+an unpaid ticket — "Mark as paid" when the payment was confirmed in person.
+Saves through ?/update and ?/markPaid of the ticket page and fires `saved`
+with the fresh ticket.
 -->
 <script lang="ts">
 	import { applyAction, enhance } from '$app/forms';
 	import { createEventDispatcher } from 'svelte';
 	import { slide } from 'svelte/transition';
 	import type { SubmitFunction } from '@sveltejs/kit';
-	import { toast } from '$lib/dialogs';
+	import { confirmDialog, toast } from '$lib/dialogs';
 	import { revealInvalid } from '$lib/field-alert';
 	import { formatBerlin } from '$lib/booking-phase';
 	import {
@@ -17,6 +19,7 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 		isValidGuestEmail,
 		normalizeEmail,
 		type TicketChangeOutcome,
+		type TicketPaidOutcome,
 		type TicketView
 	} from '$lib/tickets';
 
@@ -28,6 +31,7 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 	let name = ticket.name;
 	let newHolder = false;
 	let saving = false;
+	let marking = false;
 	let error = '';
 	// Punish late: half an address is not an error yet. A field turns red once
 	// it was left, or when saving was tried — and turns back the moment it's fixed.
@@ -103,6 +107,53 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 		return '✅ Saved.';
 	}
 
+	function paidMessage(outcome: TicketPaidOutcome): string {
+		if (!outcome.changed) {
+			return outcome.paid ? 'This ticket is already paid.' : 'This ticket is already unpaid.';
+		}
+		return outcome.paid
+			? '💳 Marked paid: the code signs in now.'
+			: "💳 Set back to unpaid: the code can't sign in any more.";
+	}
+
+	/** "Mark as paid" and taking such a mark back: asks first, then ?/markPaid. */
+	const submitPaid: SubmitFunction = async ({ cancel, formData }) => {
+		const paid = formData.get('paid') !== '0';
+		const ok = paid
+			? await confirmDialog(
+					'Only when the Membership Team confirmed the payment. The code can sign in and book right away. The ticket shop still lists the order as pending: mark it paid there too — until then, the ticket list offers to set this ticket back, unticked.',
+					{ title: '💳 Mark this ticket paid?', tone: 'warning', confirmLabel: 'Mark as paid' }
+				)
+			: await confirmDialog(
+					"The code can't sign in any more, and a guest who is signed in is signed out. The spot stays with the ticket.",
+					{ title: '💳 Set back to unpaid?', tone: 'danger', confirmLabel: 'Set back to unpaid' }
+				);
+		if (!ok) {
+			cancel();
+			return;
+		}
+		marking = true;
+		error = '';
+		return async ({ result }) => {
+			marking = false;
+			if (result.type === 'success') {
+				const outcome = result.data?.paid as TicketPaidOutcome | undefined;
+				if (!outcome) return;
+				toast(paidMessage(outcome), outcome.changed ? 'success' : 'info', 7000);
+				reset({ ...outcome.ticket, code: ticket.code, codeMasked: ticket.codeMasked });
+				dispatch('saved', outcome.ticket);
+			} else if (result.type === 'failure') {
+				error =
+					(result.data as { error?: string } | undefined)?.error ??
+					`The server refused the change (${result.status}). Nothing was saved.`;
+			} else if (result.type === 'error') {
+				error = 'The server could not be reached. Nothing was saved; try again.';
+			} else {
+				await applyAction(result);
+			}
+		};
+	};
+
 	const submit: SubmitFunction = ({ cancel, formElement }) => {
 		if (!dirty) {
 			cancel();
@@ -151,6 +202,14 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 			{#if ticket.codeMasked}<span class="hidden-note">code hidden</span>{/if}
 		</div>
 		<ul class="chips" aria-label="Ticket state">
+			{#if ticket.unpaid}
+				<li
+					class="bad"
+					title="The ticket shop lists the order as not paid yet: the code can't sign in until a later ticket list shows it as paid, or an admin marks it paid."
+				>
+					💳 Unpaid
+				</li>
+			{/if}
 			<li class:good={ticket.signedIn}>{ticket.signedIn ? '✓ Signed in' : 'Never signed in'}</li>
 			{#if ticket.spot}
 				<li class="good">
@@ -181,6 +240,44 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 			{#if ticket.telegram}<li>💬 Telegram</li>{/if}
 		</ul>
 	</header>
+
+	{#if ticket.unpaid || ticket.paidByHand}
+		<form
+			class="payment"
+			class:unpaid={ticket.unpaid}
+			method="POST"
+			action="?/markPaid"
+			use:enhance={submitPaid}
+		>
+			<input type="hidden" name="id" value={ticket.id} />
+			<input type="hidden" name="paid" value={ticket.unpaid ? '1' : '0'} />
+			<p>
+				{#if ticket.unpaid}
+					<strong>💳 Not paid yet</strong>
+					<small
+						>The ticket shop lists the order as pending: the code can't sign in. Did the Membership
+						Team confirm the payment? Then mark it paid.</small
+					>
+				{:else if ticket.paidByHand}
+					<strong>✋ Paid by hand</strong>
+					<small
+						>Marked paid {formatBerlin(ticket.paidByHand.at, { year: false })}{ticket.paidByHand.by
+							? ` by ${ticket.paidByHand.by}`
+							: ''}. Until the ticket shop says paid too, the ticket list asks before it sets it
+						back.</small
+					>
+				{/if}
+			</p>
+			<button
+				type="submit"
+				class={ticket.unpaid ? 'btn-paid' : 'btn-ghost'}
+				disabled={dirty || marking}
+				title={dirty ? 'Save or undo the changes below first' : ''}
+			>
+				{marking ? 'Saving…' : ticket.unpaid ? '✓ Mark as paid' : 'Set back to unpaid'}
+			</button>
+		</form>
+	{/if}
 
 	<form method="POST" action="?/update" use:enhance={submit} novalidate>
 		<input type="hidden" name="id" value={ticket.id} />
@@ -317,6 +414,10 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 		border-color: rgba(74, 222, 128, 0.4);
 		color: #86efac;
 	}
+	.chips li.bad {
+		border-color: rgba(248, 113, 113, 0.5);
+		color: #fca5a5;
+	}
 	.chips a {
 		color: inherit;
 		text-decoration: none;
@@ -422,6 +523,59 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 		gap: 0.2rem;
 	}
 
+	/* A form too: row here, not the column of the address form below. */
+	.payment {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.8rem;
+		padding: 0.7rem 0.8rem;
+		border: 1px solid rgba(74, 222, 128, 0.35);
+		border-radius: 12px;
+		background: #0a0a0a;
+	}
+	.payment.unpaid {
+		border-color: rgba(248, 113, 113, 0.5);
+		background: rgba(248, 113, 113, 0.06);
+	}
+	.payment p {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		margin: 0;
+		min-width: 0;
+	}
+	.payment strong {
+		font-size: 0.85rem;
+		color: #fff;
+	}
+	.payment small {
+		font-size: 0.75rem;
+		color: #999;
+		overflow-wrap: anywhere;
+	}
+	.payment button {
+		flex-shrink: 0;
+	}
+	.btn-paid {
+		min-height: 44px;
+		padding: 0 1.3rem;
+		border-radius: 10px;
+		font-weight: 900;
+		letter-spacing: 0.5px;
+		cursor: pointer;
+		font-size: 0.85rem;
+		background: #4ade80;
+		color: #000;
+		border: none;
+	}
+	.btn-paid:disabled,
+	.payment .btn-ghost:disabled {
+		opacity: 0.35;
+		cursor: not-allowed;
+	}
+
 	.buttons {
 		display: flex;
 		justify-content: flex-end;
@@ -465,6 +619,10 @@ through ?/update of the ticket page and fires `saved` with the fresh ticket.
 		}
 		.fields {
 			grid-template-columns: 1fr;
+		}
+		.payment {
+			flex-direction: column;
+			align-items: stretch;
 		}
 		.buttons {
 			position: sticky;

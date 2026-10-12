@@ -7,13 +7,8 @@ import type {
 } from '$lib/pocketbase-types';
 import { createLookupHash, encrypt } from '$lib/server/crypto';
 import { CHECKED_IN_NOTE } from '$lib/check-in';
-import { APP_SETTINGS_ID } from '$lib/server/constants';
-import {
-	bookingRefusal,
-	effectivePhase,
-	windowFromRecord,
-	type BookingPhase
-} from '$lib/booking-phase';
+import { bookingRefusal, type BookingPhase } from '$lib/booking-phase';
+import { HELD_MESSAGE, heldByOther, settleHolds } from '$lib/server/spot-holds';
 
 /**
  * Thrown when a bed can no longer be booked (already taken by someone else,
@@ -21,8 +16,21 @@ import {
  * from real infrastructure/DB errors so callers can show the right message.
  */
 export class BedUnavailableError extends Error {}
-/** The new spot was claimed, but the previous one could not be released: the claim was undone. */
+/**
+ * A booking whose previous spot couldn't be released. Bookings are one
+ * PocketBase transaction now (POST /api/cozy/book), so nothing throws it any
+ * more; the routes still name it in their error handling.
+ */
 export class ReleaseFailedError extends Error {}
+
+/** What POST /api/cozy/book answers (pb_hooks/lib/book.js REFUSALS). */
+type BookOutcome =
+	| { ok: true; reason?: undefined; phase?: undefined }
+	| {
+			ok: false;
+			reason: 'gone' | 'taken' | 'unavailable' | 'closed' | 'checked_in';
+			phase?: BookingPhase;
+	  };
 /**
  * The guest confirmed deleting one spot, but the ticket holds another one by
  * now (booked in a second tab): nothing was released.
@@ -93,18 +101,37 @@ const locks = new Map<string, Promise<unknown>>();
 export function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
 	const prior = locks.get(key) ?? Promise.resolve();
 	const run = prior.then(fn, fn);
-	// Key space is bounded by the number of beds and orders, so entries are
-	// simply overwritten on reuse rather than explicitly cleaned up.
-	locks.set(
-		key,
-		run.catch(() => {})
-	);
+	const tail = run.catch(() => {});
+	locks.set(key, tail);
+	// Once the last holder is done the key goes, so the map only holds keys in
+	// use: ids come from guests' forms, and kept keys would add up for good.
+	void tail.then(() => {
+		if (locks.get(key) === tail) locks.delete(key);
+	});
 	return run;
 }
 
+/** How many keys are held or waited for right now (tests). */
+export function lockCount(): number {
+	return locks.size;
+}
+
 /** Several locks, taken in the order given. */
-function withLocks<T>(keys: string[], fn: () => Promise<T>): Promise<T> {
+export function withLocks<T>(keys: string[], fn: () => Promise<T>): Promise<T> {
 	return keys.reduceRight<() => Promise<T>>((inner, key) => () => withLock(key, inner), fn)();
+}
+
+/**
+ * The locks of these spots, sorted: the admin's spot actions take the same
+ * ones, so a release or check-in and a 🔒/♿/bed-type change never write one
+ * spot at the same time (PocketBase saves the whole record, the later write
+ * would undo the other). Taken inside the ticket's lock, like everywhere.
+ */
+function withBedLocks<T>(bedIds: string[], fn: () => Promise<T>): Promise<T> {
+	return withLocks(
+		[...new Set(bedIds)].sort().map((id) => `bed:${id}`),
+		fn
+	);
 }
 
 function isNotFound(err: unknown): boolean {
@@ -115,7 +142,7 @@ function isNotFound(err: unknown): boolean {
  * Whether a guest may book this bed at all (independent of occupancy).
  * Locked spots and special-needs spots are for the crew to hand out: guests
  * see both as "Blocked by admin".
- * @param options.allowLocked an admin with a ticket may book a locked 🔒 spot
+ * @param options.allowLocked a crew ticket ($lib/server/crew-ticket) or the crew on /admin/requests may book a locked 🔒 spot
  * @param options.allowSpecial only the crew's request flow books a ♿ spot
  *   (assignSpot, src/lib/server/special-requests.ts) — on the guest pages it
  *   stays closed for admins with a ticket too, so it is still free when a
@@ -177,41 +204,19 @@ export class BookingService {
 					this.adminPb.filter('order_number = {:orderNumber}', { orderNumber })
 				);
 
-			// 3. Auto-migrate to the hash lookup
-			await this.adminPb
-				.collection('orders')
-				.update(order.id, { order_hash: orderHash })
-				.catch((e) => {
-					console.error(
-						`[BookingService] Hash migration failed for order ${order.id}: ${e.message}`
-					);
-				});
+			// 3. Auto-migrate to the hash lookup — in the ticket's queue, like
+			// every write of a ticket: PocketBase saves the whole record, so an
+			// admin marking it paid at the same moment would lose one of the two.
+			// No caller holds this lock here (it is not re-entrant).
+			await withLock(`order:${order.id}`, () =>
+				this.adminPb.collection('orders').update(order.id, { order_hash: orderHash })
+			).catch((e) => {
+				console.error(`[BookingService] Hash migration failed for order ${order.id}: ${e.message}`);
+			});
 			return order;
 		} catch (err) {
 			if (isNotFound(err)) return null;
 			throw err;
-		}
-	}
-
-	/**
-	 * The booking phase straight from app_settings, or null when the record
-	 * can't be read. Deliberately not getBookingSettings: that answers
-	 * "staging" for a failed read, and a database hiccup must never undo a
-	 * booking that is perfectly fine. Only a phase it actually read counts.
-	 */
-	private async readPhase(): Promise<BookingPhase | null> {
-		try {
-			const settings = await this.adminPb
-				.collection('app_settings')
-				// requestKey null: a parallel booking reads this too, never cancel it.
-				.getOne(APP_SETTINGS_ID, { requestKey: null });
-			return effectivePhase(windowFromRecord(settings));
-		} catch (err) {
-			console.error(
-				'[Booking] Could not re-read the booking phase after the claim, letting it stand:',
-				(err as Error)?.message
-			);
-			return null;
 		}
 	}
 
@@ -237,7 +242,7 @@ export class BookingService {
 	 * @param order The order record of the user making the booking.
 	 * @param bedId The ID of the bed to be claimed.
 	 * @param guestName The burner name chosen by the user.
-	 * @param options.allowLocked Admins may book locked beds.
+	 * @param options.allowLocked Locked beds too: a crew ticket ($lib/server/crew-ticket), or the crew booking for a request.
 	 * @param options.allowSpecial Only the crew's request flow books ♿ beds
 	 *   (special-needs spots).
 	 * @param options.allowCheckedIn The crew may move a guest who is checked in
@@ -248,7 +253,7 @@ export class BookingService {
 	 * @throws {CheckedInError} if the ticket's current spot is checked in and
 	 *   `allowCheckedIn` isn't set.
 	 * @throws {BookingClosedError} if `requireLivePhase` is set and booking is
-	 *   no longer open; the claim is undone first.
+	 *   not open when PocketBase writes the booking; nothing changed.
 	 */
 	async bookBed(
 		order: OrdersResponse,
@@ -272,8 +277,15 @@ export class BookingService {
 				// Availability is about claiming a spot. Renaming the one the ticket
 				// already holds stays possible, e.g. a special-needs spot the crew
 				// booked for the guest.
-				if (bed.order !== order.id && !isBedBookable(bed, options)) {
+				const renaming = bed.order === order.id;
+				if (!renaming && !isBedBookable(bed, options)) {
 					throw new BedUnavailableError('This spot is not available.');
+				}
+				// A spot another guest started booking is theirs for a few minutes
+				// ($lib/server/spot-holds). Only a guest's own booking waits for
+				// that; the crew books past it.
+				if (!renaming && options.requireLivePhase && heldByOther(bedId, order.id)) {
+					throw new BedUnavailableError(HELD_MESSAGE);
 				}
 
 				// The ticket's other spots, released below once the new one is claimed.
@@ -289,66 +301,52 @@ export class BookingService {
 				const arrived = previousBeds.find((prev) => !!prev.checked_in_at);
 				if (arrived && !options.allowCheckedIn) throw new CheckedInError();
 
-				// Claim the new spot first: if that fails, the guest keeps the old one.
-				await this.adminPb.collection('beds').update(bedId, {
-					occupied: true,
-					order: order.id,
-					...(arrived
-						? { checked_in_at: arrived.checked_in_at, checked_in_by: arrived.checked_in_by ?? '' }
-						: {})
-				});
-
-				// The route checked the phase before this request queued up behind
-				// the locks. Switching back to Staging writes app_settings first and
-				// releases the bookings right after (src/routes/admin/+page.server.ts),
-				// so a guest who was waiting here could otherwise slip a booking in
-				// behind the release and keep it in an empty camp.
-				if (options.requireLivePhase) {
-					const phase = await this.readPhase();
-					if (phase && phase !== 'live') {
-						await this.adminPb
-							.collection('beds')
-							.update(bedId, { occupied: false, order: null })
-							.catch((undoErr) =>
-								console.error(
-									`[Booking] Booking closed mid-claim and undoing spot ${bedId} of order ${order.id} failed too — it may still look booked:`,
-									(undoErr as Error)?.message
-								)
-							);
-						throw new BookingClosedError(bookingRefusal(phase));
-					}
-				}
-
-				await this.adminPb.collection('orders').update(order.id, {
-					burner_name: encrypt(guestName)
-				});
-
-				// Release any other bed of this order. If that fails, the ticket
-				// would hold two beds: undo the new claim instead, so the guest
-				// keeps the old spot and nothing has changed.
+				// Release, claim and name in ONE PocketBase transaction
+				// (pb_hooks/lib/book.js): a crash or a failed write never leaves the
+				// ticket with two spots, none, or a spot without its name. PocketBase
+				// checks again, with the phase as it is at that moment: switching back
+				// to Staging writes app_settings first and releases the bookings right
+				// after (src/routes/admin/+page.server.ts), so a guest who waited here
+				// can't slip a booking in behind the release. A new name for the spot
+				// the ticket already holds is no claim and works in every phase but
+				// Closed (the route refuses that).
+				let outcome: BookOutcome;
 				try {
-					for (const prevBed of previousBeds) {
-						await this.adminPb
-							.collection('beds')
-							.update(prevBed.id, { occupied: false, order: null });
-					}
+					outcome = await this.adminPb.send<BookOutcome>('/api/cozy/book', {
+						method: 'POST',
+						body: {
+							order: order.id,
+							bed: bedId,
+							name: encrypt(guestName),
+							requireLive: !!options.requireLivePhase,
+							allowLocked: !!options.allowLocked,
+							allowSpecial: !!options.allowSpecial,
+							allowCheckedIn: !!options.allowCheckedIn
+						},
+						requestKey: null
+					});
 				} catch (err) {
-					console.error(
-						`[Booking] Could not release the previous spot of order ${order.id}, undoing the new claim:`,
-						(err as Error)?.message
-					);
-					await this.adminPb
-						.collection('beds')
-						.update(bedId, { occupied: false, order: null })
-						.catch((undoErr) =>
-							console.error(
-								`[Booking] Undo failed too — order ${order.id} may hold two spots (${bedId} and ${previousBeds.map((b) => b.id).join(', ')}):`,
-								(undoErr as Error)?.message
-							)
-						);
-					throw new ReleaseFailedError(
-						'Your previous spot could not be released, so nothing was changed. Try again in a moment.'
-					);
+					const refused = (err as ClientResponseError | undefined)?.response as
+						BookOutcome | undefined;
+					if ((err as ClientResponseError)?.status !== 409 || !refused?.reason) throw err;
+					outcome = refused;
+				}
+				if (outcome.ok) {
+					// Booked: the ticket's hold, and any hold on this spot, are done.
+					settleHolds(order.id, bedId);
+					return;
+				}
+				switch (outcome.reason) {
+					case 'closed':
+						throw new BookingClosedError(bookingRefusal(outcome.phase ?? 'staging'));
+					case 'checked_in':
+						throw new CheckedInError();
+					case 'gone':
+						throw Object.assign(new Error('This spot or ticket does not exist.'), { status: 404 });
+					case 'taken':
+						throw new BedUnavailableError('This spot is already claimed.');
+					default:
+						throw new BedUnavailableError('This spot is not available.');
 				}
 			})
 		);
@@ -420,9 +418,14 @@ export class BookingService {
 				);
 			}
 
-			for (const bed of beds) {
-				await this.adminPb.collection('beds').update(bed.id, { occupied: false, order: null });
-			}
+			await withBedLocks(
+				beds.map((bed) => bed.id),
+				async () => {
+					for (const bed of beds) {
+						await this.adminPb.collection('beds').update(bed.id, { occupied: false, order: null });
+					}
+				}
+			);
 			return beds.length;
 		});
 	}
@@ -441,10 +444,12 @@ export class BookingService {
 			const bed = await this.getBedForOrder(orderId);
 			if (!bed) return { status: 'nospot', bed: null };
 			if (bed.checked_in_at) return { status: 'already', bed };
-			const updated = await this.adminPb.collection('beds').update<BedsResponse>(bed.id, {
-				checked_in_at: new Date().toISOString(),
-				checked_in_by: by
-			});
+			const updated = await withBedLocks([bed.id], () =>
+				this.adminPb.collection('beds').update<BedsResponse>(bed.id, {
+					checked_in_at: new Date().toISOString(),
+					checked_in_by: by
+				})
+			);
 			return { status: 'checkedin', bed: updated };
 		});
 	}
@@ -458,9 +463,11 @@ export class BookingService {
 			const bed = await this.getBedForOrder(orderId);
 			if (!bed) return { status: 'nospot', bed: null };
 			if (!bed.checked_in_at) return { status: 'booked', bed };
-			const updated = await this.adminPb
-				.collection('beds')
-				.update<BedsResponse>(bed.id, { checked_in_at: '', checked_in_by: '' });
+			const updated = await withBedLocks([bed.id], () =>
+				this.adminPb
+					.collection('beds')
+					.update<BedsResponse>(bed.id, { checked_in_at: '', checked_in_by: '' })
+			);
 			return { status: 'undone', bed: updated };
 		});
 	}
@@ -475,11 +482,16 @@ export class BookingService {
 			const beds = await this.adminPb.collection('beds').getFullList<BedsResponse>({
 				filter: this.adminPb.filter('order = {:orderId} && checked_in_at != ""', { orderId })
 			});
-			for (const bed of beds) {
-				await this.adminPb
-					.collection('beds')
-					.update(bed.id, { checked_in_at: '', checked_in_by: '' });
-			}
+			await withBedLocks(
+				beds.map((bed) => bed.id),
+				async () => {
+					for (const bed of beds) {
+						await this.adminPb
+							.collection('beds')
+							.update(bed.id, { checked_in_at: '', checked_in_by: '' });
+					}
+				}
+			);
 			return beds.length > 0;
 		});
 	}

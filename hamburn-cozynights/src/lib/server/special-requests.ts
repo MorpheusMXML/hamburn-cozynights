@@ -23,8 +23,8 @@ import type {
 } from '$lib/pocketbase-types';
 import type { AdminSession } from '$lib/server/admin-auth';
 import { logAdminEvent, logGuestEvent } from '$lib/server/admin-events';
-import { BookingService, randomBurnerName } from '$lib/server/booking';
-import { APP_SETTINGS_ID } from '$lib/server/constants';
+import { BookingService, randomBurnerName, withLock } from '$lib/server/booking';
+import { APP_SETTINGS_ID, APP_SETTINGS_LOCK } from '$lib/server/constants';
 import { holderName } from '$lib/tickets';
 import { decrypt, encrypt } from '$lib/server/crypto';
 import { compareNatural } from '$lib/template';
@@ -387,25 +387,37 @@ export async function listRequests(adminPb: TypedPocketBase): Promise<AdminReque
  * - request: booked by the crew for an approved request
  * - booked: booked otherwise (by a guest, or the crew outside a request)
  * - blocked: taken without a ticket (TAKEN on the room page)
+ * - locked: locked 🔒, out of service — not counted as free; an admin can
+ *   still book it in the picker on purpose
  * - free: offered in the picker
  */
-export type SpecialSpotState = 'free' | 'request' | 'booked' | 'blocked' | 'inactive';
+export type SpecialSpotState = 'free' | 'request' | 'booked' | 'blocked' | 'locked' | 'inactive';
 
 export interface SpecialSpotView extends SpotInfo {
 	state: SpecialSpotState;
 	/** The ticket's name from the ticket list ('' for none). Admin-only, never leaves that page. */
 	holder: string;
+	/**
+	 * The holder's waiting or approved request ('' for none): on its card the
+	 * crew moves the guest or releases the spot in every phase, while the
+	 * room page frees a spot only in Staging Mode.
+	 */
+	holderRequest: string;
 }
 
 /** Every ♿ spot of the camp with its state, house by house. */
 export async function listSpecialSpots(adminPb: TypedPocketBase): Promise<SpecialSpotView[]> {
-	const [beds, crew] = await Promise.all([
+	const [beds, crew, open] = await Promise.all([
 		adminPb.collection('beds').getFullList<BedWithRoomAndOrder>({
 			filter: 'is_special = true',
 			expand: 'room,room.house,order'
 		}),
-		crewBookedBeds(adminPb)
+		crewBookedBeds(adminPb),
+		adminPb
+			.collection('special_requests')
+			.getFullList({ filter: "status != 'declined'", fields: 'id,order' })
 	]);
+	const requestOf = new Map(open.map((request) => [request.order, request.id]));
 	return beds
 		.map((bed): SpecialSpotView => {
 			const order = bed.expand?.order;
@@ -414,8 +426,14 @@ export async function listSpecialSpots(adminPb: TypedPocketBase): Promise<Specia
 			else if (bed.order && crew.get(bed.id) === bed.order) state = 'request';
 			else if (bed.order) state = 'booked';
 			else if (bed.occupied) state = 'blocked';
+			else if (bed.is_locked) state = 'locked';
 			else state = 'free';
-			return { ...toSpot(bed), state, holder: order ? ticketName(order) : '' };
+			return {
+				...toSpot(bed),
+				state,
+				holder: order ? ticketName(order) : '',
+				holderRequest: (bed.order && requestOf.get(bed.order)) || ''
+			};
 		})
 		.sort(
 			(a, b) =>
@@ -443,16 +461,24 @@ export async function listAssignableSpots(adminPb: TypedPocketBase): Promise<Spo
 }
 
 /**
- * How many active spots each room has, free or not: room id → count. The spot
- * picker says "3 of 6 free" with it.
+ * How many active spots each room has, free or not, and how many of them a
+ * guest booked: room id → count. The spot picker says "3 of 6 free" with the
+ * sizes, and that other guests sleep in a room it plans a group into with
+ * the bookings (othersBooked in $lib/group-plan).
  */
-export async function countRoomSpots(adminPb: TypedPocketBase): Promise<Record<string, number>> {
+export async function countRoomSpots(
+	adminPb: TypedPocketBase
+): Promise<{ sizes: Record<string, number>; booked: Record<string, number> }> {
 	const beds = await adminPb
 		.collection('beds')
-		.getFullList({ filter: 'enabled = true', fields: 'room' });
+		.getFullList({ filter: 'enabled = true', fields: 'room,order' });
 	const sizes: Record<string, number> = {};
-	for (const bed of beds) sizes[bed.room] = (sizes[bed.room] ?? 0) + 1;
-	return sizes;
+	const booked: Record<string, number> = {};
+	for (const bed of beds) {
+		sizes[bed.room] = (sizes[bed.room] ?? 0) + 1;
+		if (bed.order) booked[bed.room] = (booked[bed.room] ?? 0) + 1;
+	}
+	return { sizes, booked };
 }
 
 /**
@@ -491,14 +517,18 @@ export async function decideRequest(
 }
 
 /**
- * Books a spot for the request's ticket, whatever the booking phase: locked and
- * special-needs spots included — this is the only way a ♿ spot is booked.
- * Books first, so a taken spot changes nothing; then remembers the spot on the
- * request and approves a waiting request.
+ * Books a spot for the request's ticket, whatever the booking phase: ♿ spots
+ * included — this is the only way a ♿ spot is booked — and a locked 🔒 one
+ * when the crew confirmed it. Books first, so a taken spot changes nothing;
+ * then remembers the spot on the request and approves a waiting request.
  * @param opts.log false: a group booking (request-groups.ts) logs one event
  *   for the whole group instead
+ * @param opts.blockedOk the crew confirmed booking this spot although it is
+ *   locked 🔒 (blockedConfirmed in $lib/special-needs); without it a locked
+ *   spot is refused
  * @returns whether the request was approved on the way
- * @throws {RequestError} for a declined request, or a spot that is gone
+ * @throws {RequestError} for a declined request, a spot that is gone, or a
+ *   locked spot nobody confirmed
  * @throws {BedUnavailableError} when the spot is taken or deactivated
  */
 export async function assignSpot(
@@ -506,7 +536,7 @@ export async function assignSpot(
 	admin: AdminSession,
 	requestId: string,
 	bedId: string,
-	opts: { log?: boolean } = {}
+	opts: { log?: boolean; blockedOk?: boolean } = {}
 ): Promise<{ approved: boolean }> {
 	const request = await getRequest(adminPb, requestId);
 	if (request.status === 'declined') {
@@ -518,9 +548,22 @@ export async function assignSpot(
 	const name =
 		readSecret(order.burner_name) || readSecret(request.burner_name) || randomBurnerName();
 	try {
+		// A spot the crew locked 🔒 is out of service: booked only when the crew
+		// confirmed it in the dialog (opts.blockedOk). One locked after the page
+		// loaded was never confirmed, so it stops here. The ticket's own spot is
+		// no claim.
+		const bed = await adminPb
+			.collection('beds')
+			.getOne<BedWithRoom>(bedId, { expand: 'room,room.house' });
+		if (bed.is_locked && bed.order !== order.id && !opts.blockedOk) {
+			throw new RequestError(
+				`🔒 ${toSpot(bed).label} is blocked (out of service) now. Reload the page and pick again, or confirm it.`,
+				409
+			);
+		}
 		// The crew may move a guest who has already arrived: the check-in moves along.
 		await new BookingService(adminPb).bookBed(order, bedId, name, {
-			allowLocked: true,
+			allowLocked: !!opts.blockedOk,
 			allowSpecial: true,
 			allowCheckedIn: true
 		});
@@ -575,9 +618,30 @@ export async function releaseSpot(
 }
 
 /**
+ * Forgets spots on the requests the crew booked them for, once a superuser
+ * released them some other way (freed on the room page): the requests stay
+ * approved and show "No spot yet", like after Release spot. A deleted spot
+ * needs nothing: PocketBase empties the relation itself.
+ */
+export async function forgetCrewSpots(adminPb: TypedPocketBase, bedIds: string[]): Promise<void> {
+	for (const bedId of bedIds) {
+		const requests = await adminPb.collection('special_requests').getFullList({
+			filter: adminPb.filter('bed = {:bedId}', { bedId }),
+			fields: 'id'
+		});
+		for (const request of requests) {
+			await adminPb.collection('special_requests').update(request.id, { bed: '' });
+		}
+	}
+}
+
+/**
  * Opens or closes requests for guests. Uses the admin's own connection, so
- * PocketBase records who did it (pb_hooks/cozy_notify.pb.js).
+ * PocketBase records who did it (pb_hooks/cozy_notify.pb.js). In the
+ * settings' queue: another switch saved at the same moment stays saved.
  */
 export async function setRequestsOpen(pb: TypedPocketBase, open: boolean): Promise<void> {
-	await pb.collection('app_settings').update(APP_SETTINGS_ID, { special_requests_open: open });
+	await withLock(APP_SETTINGS_LOCK, () =>
+		pb.collection('app_settings').update(APP_SETTINGS_ID, { special_requests_open: open })
+	);
 }

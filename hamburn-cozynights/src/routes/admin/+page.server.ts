@@ -1,18 +1,27 @@
 import { redirect, fail, type ActionFailure } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { TypedPocketBase } from '$lib/pocketbase-types';
-import { APP_SETTINGS_ID } from '$lib/server/constants';
+import { APP_SETTINGS_ID, APP_SETTINGS_LOCK } from '$lib/server/constants';
+import { withLock } from '$lib/server/booking';
 import { bumpGuestRound } from '$lib/server/guest-session';
-import { getBookingSettings } from '$lib/server/settings';
+import { getBookingSettings, PHASE_UNREADABLE, readPhaseStrict } from '$lib/server/settings';
 import { berlinLocalToIso } from '$lib/time';
 import { readCamp } from '$lib/server/camp';
 import { readBookings } from '$lib/server/bookings';
 import { MAP_WIDTH, MAP_HEIGHT, parseMapCoordinate } from '$lib/map-geometry';
 import { parseTemplate, TEMPLATE_LIMITS, type TemplateParseResult } from '$lib/template';
 import { defaultSelection } from '$lib/template-diff';
-import { applyTemplate, compareTemplate, TemplateImportError } from '$lib/server/template';
+import {
+	applyTemplate,
+	BACKUP_PREFIX,
+	compareTemplate,
+	createSafetyBackup,
+	describeError,
+	TemplateImportError
+} from '$lib/server/template';
 import { logAdminEvent } from '$lib/server/admin-events';
-import { crewBookedBeds } from '$lib/server/special-requests';
+import { crewBookedBeds, forgetCrewSpots } from '$lib/server/special-requests';
+import { countHeld, releaseRefusal } from '$lib/server/held-spots';
 import { checkHouseName } from '$lib/server/names';
 import { setSwapsOff, swapCounts } from '$lib/server/swaps';
 
@@ -31,6 +40,7 @@ import {
 	type BookingWindow,
 	type WindowEdit
 } from '$lib/booking-phase';
+import { clearHolds } from '$lib/server/spot-holds';
 
 const isBookingPhase = (value: string): value is BookingPhase =>
 	value === 'staging' || value === 'live' || value === 'closed';
@@ -46,6 +56,29 @@ async function readWindow(pb: TypedPocketBase) {
 		});
 	return { exists: !!record, window: windowFromRecord(record) };
 }
+
+/** How close an armed opening may be before releases and template imports stop. */
+const OPENING_GUARD_MS = 5 * 60 * 1000;
+
+/**
+ * Minutes until an armed opening when it is less than OPENING_GUARD_MS away,
+ * else null. Releasing bookings or importing a template that close to the
+ * opening could still be running when guests start booking, and take their
+ * new spots away. @throws when the window can't be read (refuse then).
+ */
+async function openingTooSoon(pb: TypedPocketBase, now = Date.now()): Promise<number | null> {
+	const { window } = await readWindow(pb);
+	if (window.paused || window.basePhase !== 'staging') return null;
+	const opens = Date.parse(String(window.opensAt || '').replace(' ', 'T'));
+	if (Number.isNaN(opens) || opens <= now || opens - now >= OPENING_GUARD_MS) return null;
+	return Math.max(1, Math.ceil((opens - now) / 60000));
+}
+
+const openingSoonMessage = (minutes: number, what: string) =>
+	`Booking opens in ${minutes} minute${minutes === 1 ? '' : 's'}: ${what} now could still be running when the first guests book. Pause the timer first, or wait until booking has opened.`;
+
+/** A spot was booked after deleteHouse counted the bookings (assignSpot books in any phase). */
+class BookedMeanwhileError extends Error {}
 
 /**
  * Written with the admin's own token: PocketBase then knows who it was (crew
@@ -77,16 +110,21 @@ async function editWindow(
 	precondition: (current: BookingWindow) => string = () => ''
 ) {
 	try {
-		const { exists, window } = await readWindow(locals.pb);
-		const refused = precondition(window);
-		if (refused) return fail(400, { error: refused });
-		const check = checkWindowEdit(window, makeEdit(window), {
-			isSuperuser: !!locals.admin?.isSuperuser
+		// Read, checked and written in the settings' queue: an edit saved at the
+		// same moment by another admin is neither undone nor checked against
+		// a window that is gone.
+		return await withLock(APP_SETTINGS_LOCK, async () => {
+			const { exists, window } = await readWindow(locals.pb);
+			const refused = precondition(window);
+			if (refused) return fail(400, { error: refused });
+			const check = checkWindowEdit(window, makeEdit(window), {
+				isSuperuser: !!locals.admin?.isSuperuser
+			});
+			if (check.error) return fail(400, { error: check.error });
+			await writeWindow(locals.pb, exists, check.next);
+			console.log(`[Action:${action}] SUCCESS. Phase ${check.phaseBefore} → ${check.phaseAfter}`);
+			return { success: true, phase: check.phaseAfter, phaseBefore: check.phaseBefore };
 		});
-		if (check.error) return fail(400, { error: check.error });
-		await writeWindow(locals.pb, exists, check.next);
-		console.log(`[Action:${action}] SUCCESS. Phase ${check.phaseBefore} → ${check.phaseAfter}`);
-		return { success: true, phase: check.phaseAfter, phaseBefore: check.phaseBefore };
 	} catch (err) {
 		return phaseFailure(action, err, 'The booking window was not changed.');
 	}
@@ -210,13 +248,20 @@ async function releaseGuestBookings(
 	const keep = new Set(booked.filter((bed) => !occupiedBeds.includes(bed)).map((bed) => bed.order));
 	let released = 0;
 	try {
+		// Each spot in its queue: an admin's change of the same spot at the same
+		// moment can't bring the booking back, nor the release undo the change.
 		for (const bed of occupiedBeds) {
-			await adminPb.collection('beds').update(bed.id, { occupied: false, order: null });
+			await withLock(`bed:${bed.id}`, () =>
+				adminPb.collection('beds').update(bed.id, { occupied: false, order: null })
+			);
 			released++;
 		}
 	} catch (err) {
 		throw new ReleaseStoppedError(released, occupiedBeds.length, kept, err);
 	}
+	// A new round: nobody is in the middle of booking a spot any more
+	// ($lib/server/spot-holds).
+	clearHolds();
 	// The spots are free by now; the burner names only describe them. A name
 	// left behind is worth reporting, never a failed release.
 	const namesLeft = await clearBurnerNames(adminPb, keep);
@@ -251,7 +296,10 @@ async function clearBurnerNames(
 	for (const order of named) {
 		if (keep.has(order.id)) continue;
 		try {
-			await pb.collection('orders').update(order.id, { burner_name: '' });
+			// In the ticket's queue, like every write of a ticket.
+			await withLock(`order:${order.id}`, () =>
+				pb.collection('orders').update(order.id, { burner_name: '' })
+			);
 		} catch (err) {
 			left++;
 			console.error(`[Bookings] Burner name of order ${order.id} stays:`, (err as Error)?.message);
@@ -281,83 +329,123 @@ export const actions: Actions = {
 		// "Don't notify the guests": the release happens without a message to
 		// anyone whose spot goes (the crew alert still goes out).
 		const quiet = to === 'staging' && clearBookings && form?.get('quietRelease') === '1';
+		const releasing = to === 'staging' && clearBookings;
 
+		let muted = false;
 		try {
-			const { exists, window } = await readWindow(locals.pb);
-			const now = Date.now();
-			const phaseBefore = effectivePhase(window, now);
-			if (phaseBefore === to) return { success: true, phase: to, phaseBefore, pausedTimer: false };
+			// The phase is read, checked and written in the settings' queue: a
+			// window edit or a second switch at the same moment can't be undone by
+			// this write. The release runs after it, outside: it starts a new
+			// guest round, which writes app_settings in its own turn.
+			const switched = await withLock(APP_SETTINGS_LOCK, async () => {
+				const { exists, window } = await readWindow(locals.pb);
+				const now = Date.now();
+				const phaseBefore = effectivePhase(window, now);
+				if (phaseBefore === to) return { step: 'unchanged' as const, phaseBefore };
 
-			// Muted before anything changes: when PocketBase can't mute the guest
-			// messages, the switch doesn't happen either — a release the
-			// superuser asked to keep quiet must never go out loud.
-			if (quiet && !(await muteGuestMessages(locals.adminPb, QUIET_RELEASE_SECONDS))) {
-				return fail(503, {
-					error:
-						"The guest messages could not be muted, so nothing was changed. Try again, or untick “Don't notify the guests”."
-				});
-			}
-			try {
+				// A backup of the database before the bookings go: a superuser can
+				// restore it in the PocketBase dashboard. Without one, nothing changes.
+				let backup: string | null = null;
+				if (releasing) {
+					try {
+						backup = await createSafetyBackup(locals.adminPb, BACKUP_PREFIX.release);
+					} catch (err) {
+						console.error('[Action:setPhase] Backup before the release failed:', err);
+						return {
+							step: 'refused' as const,
+							failure: fail(503, {
+								error: `The safety backup could not be created (${describeError(err)}), so nothing was changed: the phase and every booking stay as they are. Try again in a minute, or switch and keep the bookings.`
+							})
+						};
+					}
+				}
+
+				// Muted before anything changes: when PocketBase can't mute the guest
+				// messages, the switch doesn't happen either — a release the
+				// superuser asked to keep quiet must never go out loud.
+				if (quiet) {
+					if (!(await muteGuestMessages(locals.adminPb, QUIET_RELEASE_SECONDS))) {
+						return {
+							step: 'refused' as const,
+							failure: fail(503, {
+								error:
+									"The guest messages could not be muted, so nothing was changed. Try again, or untick “Don't notify the guests”."
+							})
+						};
+					}
+					muted = true;
+				}
 				const next = switchPhase(window, to, now);
 				await writeWindow(locals.pb, exists, next);
 				console.log(`[Action:setPhase] SUCCESS: ${phaseBefore} → ${to}`);
-
-				// Editing the layout with guest bookings in it is what the dialog
-				// warns about; only a "yes, release them" gets here. Spots the crew
-				// booked for special-needs requests stay.
-				let cleared: { released: number; kept: number; namesLeft: number | null } | null = null;
-				if (to === 'staging' && clearBookings) {
-					try {
-						cleared = await releaseGuestBookings(locals.adminPb);
-						await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
-							...cleared,
-							guestsNotified: !quiet,
-							reason: 'staging'
-						});
-						console.log(
-							`[Action:setPhase] ${cleared.released} bookings released${quiet ? ' quietly' : ''}, ${cleared.kept} special-needs spots kept, ${cleared.namesLeft ?? '?'} burner names left.`
-						);
-					} catch (err) {
-						console.error(
-							'[Action:setPhase] Staging is on, but releasing the bookings failed:',
-							err
-						);
-						const stopped = err instanceof ReleaseStoppedError ? err : null;
-						const released = stopped?.released ?? 0;
-						// The crew-booked spots were never part of the release, so the
-						// count belongs in the log even when it stopped halfway.
-						if (released > 0) {
-							await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
-								released,
-								kept: stopped?.kept ?? 0,
-								namesLeft: stopped?.namesLeft ?? null,
-								guestsNotified: !quiet,
-								reason: 'staging',
-								stopped: stopped?.total
-							});
-						}
-						return fail(500, {
-							error: `Staging Mode is on, but the bookings could not all be released (${released} of ${stopped?.total ?? '?'} done).${namesNote(stopped?.namesLeft ?? null)} Use "Clear all bookings" for the rest.`
-						});
-					}
-				}
 				return {
-					success: true,
-					phase: to,
+					step: 'switched' as const,
 					phaseBefore,
 					pausedTimer: next.paused && !window.paused,
-					released: cleared?.released,
-					kept: cleared?.kept,
-					namesLeft: cleared?.namesLeft,
-					guestsNotified: cleared ? !quiet : undefined
+					backup
 				};
-			} finally {
-				// Right after the release, not at the end of the window: guest
-				// messages about anything else must not stay muted.
-				if (quiet) await muteGuestMessages(locals.adminPb, 0);
+			});
+			if (switched.step === 'refused') return switched.failure;
+			if (switched.step === 'unchanged') {
+				return { success: true, phase: to, phaseBefore: switched.phaseBefore, pausedTimer: false };
 			}
+			const { phaseBefore, pausedTimer, backup } = switched;
+
+			// Editing the layout with guest bookings in it is what the dialog
+			// warns about; only a "yes, release them" gets here. Spots the crew
+			// booked for special-needs requests stay.
+			let cleared: { released: number; kept: number; namesLeft: number | null } | null = null;
+			if (releasing) {
+				try {
+					cleared = await releaseGuestBookings(locals.adminPb);
+					await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
+						...cleared,
+						guestsNotified: !quiet,
+						reason: 'staging',
+						backup
+					});
+					console.log(
+						`[Action:setPhase] ${cleared.released} bookings released${quiet ? ' quietly' : ''}, ${cleared.kept} special-needs spots kept, ${cleared.namesLeft ?? '?'} burner names left. Backup: ${backup}.`
+					);
+				} catch (err) {
+					console.error('[Action:setPhase] Staging is on, but releasing the bookings failed:', err);
+					const stopped = err instanceof ReleaseStoppedError ? err : null;
+					const released = stopped?.released ?? 0;
+					// The crew-booked spots were never part of the release, so the
+					// count belongs in the log even when it stopped halfway.
+					if (released > 0) {
+						await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
+							released,
+							kept: stopped?.kept ?? 0,
+							namesLeft: stopped?.namesLeft ?? null,
+							guestsNotified: !quiet,
+							reason: 'staging',
+							stopped: stopped?.total,
+							backup
+						});
+					}
+					return fail(500, {
+						error: `Staging Mode is on, but the bookings could not all be released (${released} of ${stopped?.total ?? '?'} done).${namesNote(stopped?.namesLeft ?? null)} Use "Clear all bookings" for the rest.`
+					});
+				}
+			}
+			return {
+				success: true,
+				phase: to,
+				phaseBefore,
+				pausedTimer,
+				released: cleared?.released,
+				kept: cleared?.kept,
+				namesLeft: cleared?.namesLeft,
+				guestsNotified: cleared ? !quiet : undefined,
+				backup: backup ?? undefined
+			};
 		} catch (err) {
 			return phaseFailure('setPhase', err, 'The booking phase was not changed.');
+		} finally {
+			// Right after the release, not at the end of the window: guest
+			// messages about anything else must not stay muted.
+			if (muted) await muteGuestMessages(locals.adminPb, 0);
 		}
 	},
 	/** Opening and closing time of the booking window; keeps the timer armed or paused. */
@@ -421,15 +509,66 @@ export const actions: Actions = {
 			return fail(403, { error: 'Only superusers can clear all bookings.' });
 		}
 		// Only in Staging Mode: the switch back asks about the bookings itself,
-		// and a stale tab must never clear a live camp.
-		const { phase } = await getBookingSettings(locals.pb);
+		// and a stale tab must never clear a live camp. Read now or not at all:
+		// a phase that can't be read is no Staging Mode.
+		let phase: BookingPhase;
+		try {
+			phase = await readPhaseStrict(locals.pb);
+		} catch (err) {
+			console.error('[Action:clearAllBookings] The phase could not be read:', err);
+			return fail(503, { error: PHASE_UNREADABLE });
+		}
 		if (phase !== 'staging') {
 			return fail(403, {
 				error: `Bookings can only be cleared in Staging Mode, not ${lockedDuring(phase)}. Switch back to Staging first; that switch also offers to release them.`
 			});
 		}
+		// An armed opening a few minutes away: the release (and the backup before
+		// it) could still be running when guests book, and take their spots.
+		const refuseNearOpening = async (): Promise<ReturnType<typeof fail> | null> => {
+			let minutes: number | null;
+			try {
+				minutes = await openingTooSoon(locals.pb);
+			} catch (err) {
+				console.error('[Action:clearAllBookings] The window could not be read:', err);
+				return fail(503, { error: PHASE_UNREADABLE });
+			}
+			return minutes === null
+				? null
+				: fail(409, { error: openingSoonMessage(minutes, 'clearing all bookings') });
+		};
+		const tooSoon = await refuseNearOpening();
+		if (tooSoon) return tooSoon;
 
-		console.log(`[Action:clearAllBookings] INITIATED by ${locals.admin.email}`);
+		// A backup of the database first: a superuser can restore it in the
+		// PocketBase dashboard. Without one, no booking is released.
+		let backup: string;
+		try {
+			backup = await createSafetyBackup(locals.adminPb, BACKUP_PREFIX.release);
+		} catch (err) {
+			console.error('[Action:clearAllBookings] Backup failed:', err);
+			return fail(503, {
+				error: `The safety backup could not be created (${describeError(err)}), so no booking was released. Try again in a minute.`
+			});
+		}
+
+		// The backup takes seconds: check the phase (and the opening) again right
+		// before the release. Booking may have opened meanwhile.
+		try {
+			phase = await readPhaseStrict(locals.pb);
+		} catch (err) {
+			console.error('[Action:clearAllBookings] The phase could not be read again:', err);
+			return fail(503, { error: PHASE_UNREADABLE });
+		}
+		if (phase !== 'staging') {
+			return fail(409, {
+				error: `Booking changed to ${lockedDuring(phase)} while the backup ran, so no booking was released (the backup ${backup} is there).`
+			});
+		}
+		const tooSoonNow = await refuseNearOpening();
+		if (tooSoonNow) return tooSoonNow;
+
+		console.log(`[Action:clearAllBookings] INITIATED by ${locals.admin.email}, backup ${backup}`);
 		try {
 			const { released, kept, namesLeft } = await releaseGuestBookings(locals.adminPb);
 			console.log(
@@ -438,9 +577,10 @@ export const actions: Actions = {
 			await logAdminEvent(locals.adminPb, locals.admin, 'bookings_cleared', '', {
 				released,
 				kept,
-				namesLeft
+				namesLeft,
+				backup
 			});
-			return { success: true, released, kept, namesLeft };
+			return { success: true, released, kept, namesLeft, backup };
 		} catch (err) {
 			console.error('[Action:clearAllBookings] FAILED:', err);
 			if (err instanceof ReleaseStoppedError && err.released > 0) {
@@ -448,7 +588,8 @@ export const actions: Actions = {
 					released: err.released,
 					kept: err.kept,
 					namesLeft: err.namesLeft,
-					stopped: err.total
+					stopped: err.total,
+					backup
 				});
 				const stillBooked = err.total - err.released;
 				return fail(500, {
@@ -502,18 +643,37 @@ export const actions: Actions = {
 
 		let progress: { released: number; rooms: number; total: number } | null = null;
 		try {
-			const { isLayoutLocked, phase } = await getBookingSettings(locals.pb);
-			if (isLayoutLocked) {
+			// Read now or not at all: the release below is no layout change
+			// PocketBase would stop, so a phase that can't be read stops it here.
+			let phase: BookingPhase;
+			try {
+				phase = await readPhaseStrict(locals.pb);
+			} catch (err) {
+				console.error('[Action:deleteHouse] The phase could not be read:', err);
+				return fail(503, { error: PHASE_UNREADABLE });
+			}
+			if (phase !== 'staging') {
 				console.warn(`[Action:deleteHouse] BLOCKED: ${phase} — structure is locked.`);
 				return fail(403, {
 					error: `The playa says NO! 🛑 Houses cannot be vanished ${lockedDuring(phase)}.`
 				});
 			}
 
-			const occupiedBeds = await locals.pb.collection('beds').getFullList({
-				filter: locals.pb.filter('room.house = {:id} && occupied = true', { id }),
-				expand: 'room'
-			});
+			// Every spot that holds something: a guest's booking, or 🔄 TAKEN by the crew.
+			const occupiedBeds = (
+				await locals.pb.collection('beds').getFullList({
+					filter: locals.pb.filter('room.house = {:id}', { id }),
+					fields: 'id,occupied,order'
+				})
+			).filter((bed) => bed.occupied || !!bed.order);
+			// Guest bookings go only with a superuser, crew-booked ones only when
+			// the confirmation said so ($lib/server/held-spots).
+			const held = await countHeld(locals.adminPb, occupiedBeds);
+			const refused = releaseRefusal(locals.admin, held, data, 'This house');
+			if (refused) {
+				return fail(refused.status, { error: refused.message, crewBooked: refused.crewBooked });
+			}
+
 			// For the audit log / crew chat: every deleted house is recorded.
 			const houseName =
 				(
@@ -531,21 +691,35 @@ export const actions: Actions = {
 
 			if (occupiedBeds.length > 0) {
 				console.log(
-					`[Action:deleteHouse] Staging Mode: Auto-clearing ${occupiedBeds.length} test bookings for House ${id}.`
+					`[Action:deleteHouse] Staging Mode: releasing ${occupiedBeds.length} spots of House ${id} (${held.guest} guest bookings, ${held.crew} of them crew-booked).`
 				);
+				// Each spot in its queue: a booking of the same spot can't cross the release.
 				for (const bed of occupiedBeds) {
-					await locals.pb.collection('beds').update(bed.id, { occupied: false, order: null });
+					await withLock(`bed:${bed.id}`, () =>
+						locals.pb.collection('beds').update(bed.id, { occupied: false, order: null })
+					);
 					progress.released++;
 				}
+				// Their requests stay approved, with no spot yet (like Release spot).
+				if (held.crewBedIds.length > 0) await forgetCrewSpots(locals.adminPb, held.crewBedIds);
 			}
 
 			console.log(`[Action:deleteHouse] Vanishing ${rooms.length} modules...`);
 			for (const room of rooms) {
 				const beds = await locals.pb.collection('beds').getFullList({
-					filter: locals.pb.filter('room = {:id}', { id: room.id })
+					filter: locals.pb.filter('room = {:id}', { id: room.id }),
+					fields: 'id'
 				});
 				for (const bed of beds) {
-					await locals.pb.collection('beds').delete(bed.id);
+					await withLock(`bed:${bed.id}`, async () => {
+						// Read again in the spot's queue: the crew can book a spot for a
+						// request in any phase, also after the count above.
+						const now = await locals.pb
+							.collection('beds')
+							.getOne(bed.id, { fields: 'id,order', requestKey: null });
+						if (now.order) throw new BookedMeanwhileError(bed.id);
+						await locals.pb.collection('beds').delete(bed.id);
+					});
 				}
 				await locals.pb.collection('rooms').delete(room.id);
 				progress.rooms++;
@@ -554,12 +728,18 @@ export const actions: Actions = {
 			await locals.pb.collection('houses').delete(id);
 			console.log(`[Action:deleteHouse] SUCCESS. House ${id} evaporated.`);
 			await logAdminEvent(locals.adminPb, locals.admin, 'house_deleted', houseName, {
-				released: occupiedBeds.length,
+				released: held.guest,
+				crewReleased: held.crew,
 				rooms: rooms.length
 			});
 			return { success: true };
 		} catch (err) {
 			console.error(`[Action:deleteHouse] FAILED for ${id}:`, err);
+			if (err instanceof BookedMeanwhileError) {
+				return fail(409, {
+					error: `A spot of this house was booked while it was being deleted, so the deletion stopped there${progress ? ` (${progress.rooms} of ${progress.total} rooms are gone, ${progress.released} bookings released)` : ''}. Reload the page: the house now holds a booking that has to be decided first.`
+				});
+			}
 			if (progress && (progress.released > 0 || progress.rooms > 0)) {
 				return fail(500, {
 					error: `Vanish stopped halfway: ${progress.rooms} of ${progress.total} rooms are gone and ${progress.released} bookings were released, the house is still there. Reload the page and try again.`
@@ -635,13 +815,29 @@ export const actions: Actions = {
 		if (!locals.admin?.isSuperuser) {
 			return refuse(403, 'Only superusers can import a template.');
 		}
-		const { isLayoutLocked, phase } = await getBookingSettings(locals.pb);
-		if (isLayoutLocked) {
+		// Read now or not at all: a phase that can't be read is no Staging Mode.
+		let phase: BookingPhase;
+		try {
+			phase = await readPhaseStrict(locals.pb);
+		} catch (err) {
+			console.error('[Import Template] The phase could not be read:', err);
+			return refuse(503, PHASE_UNREADABLE);
+		}
+		if (phase !== 'staging') {
 			console.warn(`[Import Template] BLOCKED: layout is locked (${phase}).`);
 			return refuse(
 				403,
 				`Templates cannot be imported ${lockedDuring(phase)} — the layout is locked. Switch to Staging Mode first. 🔒`
 			);
+		}
+		try {
+			const minutes = await openingTooSoon(locals.pb);
+			if (minutes !== null) {
+				return refuse(409, openingSoonMessage(minutes, 'a template import'));
+			}
+		} catch (err) {
+			console.error('[Import Template] The window could not be read:', err);
+			return refuse(503, PHASE_UNREADABLE);
 		}
 
 		// Validates the file again: the review is only a courtesy of the UI.

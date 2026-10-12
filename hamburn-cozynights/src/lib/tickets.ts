@@ -8,8 +8,8 @@
  *
  * The server CLI (`cozy-admin tickets import` in pb_hooks/cozy_admin.pb.js)
  * reads the same files by the same rules. Keep TICKET_CODE_PATTERN,
- * GUEST_EMAIL_PATTERN, TICKET_CSV_COLUMNS and PAID_ORDER_STATUSES in sync with it;
- * tests/tickets.test.ts compares them.
+ * GUEST_EMAIL_PATTERN, TICKET_CSV_COLUMNS, PAID_ORDER_STATUSES and
+ * UNPAID_ORDER_STATUSES in sync with it; tests/tickets.test.ts compares them.
  */
 
 /** Same as the guest sign-in (src/routes/+page.server.ts): anything else can't be typed in. */
@@ -44,16 +44,35 @@ export const TICKET_CSV_COLUMNS = {
 } as const;
 
 /**
- * Order states (lower case) that make a ticket. A file with a status column
- * (pretix exports "paid", "pending", "canceled", "expired") only brings in its
- * paid orders; an empty cell counts as paid, like a file without the column.
+ * Order states (lower case) in a file's status column. pretix exports "paid",
+ * "pending", "canceled" and "expired" (or p, n, c, e); German exports say
+ * bezahlt, offen, storniert, abgelaufen.
+ *
+ * - Paid: the ticket comes in, its code signs in.
+ * - Waiting for the payment (UNPAID_ORDER_STATUSES): the ticket comes in
+ *   flagged `unpaid` (orders.unpaid); its code can't sign in until a later
+ *   list shows the order as paid, or an admin marks it paid by hand
+ *   (PaidByHand).
+ * - Anything else (cancelled, expired, refunded, …): the row is left out.
+ *
+ * An empty cell says nothing, like a file without the column: a new ticket
+ * counts as paid, a stored one keeps what it has (empty cells never change a
+ * ticket).
  */
 export const PAID_ORDER_STATUSES = ['paid', 'p', 'bezahlt'];
+export const UNPAID_ORDER_STATUSES = ['pending', 'n', 'offen', 'unpaid', 'ausstehend'];
+
+const orderStatus = (raw: unknown) => (typeof raw === 'string' ? raw : '').trim().toLowerCase();
 
 /** The order is paid, or the file doesn't say. */
 export function isPaidStatus(raw: unknown): boolean {
-	const status = (typeof raw === 'string' ? raw : '').trim().toLowerCase();
+	const status = orderStatus(raw);
 	return !status || PAID_ORDER_STATUSES.includes(status);
+}
+
+/** The order waits for its payment: the ticket comes in, but its code can't sign in yet. */
+export function isUnpaidStatus(raw: unknown): boolean {
+	return UNPAID_ORDER_STATUSES.includes(orderStatus(raw));
 }
 
 export type TicketColumn = keyof typeof TICKET_CSV_COLUMNS;
@@ -251,6 +270,12 @@ export interface RosterEntry {
 	email: string;
 	/** '' = empty cell (keeps a stored name). */
 	name: string;
+	/**
+	 * true: the shop lists the order as not paid yet; false: as paid. Missing
+	 * when the file doesn't say (empty cell, no status column): a new ticket
+	 * counts as paid, a stored one keeps what it has.
+	 */
+	unpaid?: boolean;
 }
 
 export interface RosterProblem {
@@ -259,8 +284,8 @@ export interface RosterProblem {
 	message: string;
 }
 
-/** A row the shop lists as not paid (cancelled, pending, …): left out of the import. */
-export interface RosterUnpaid {
+/** A row the shop lists as neither paid nor waiting for the payment (cancelled, expired, …): left out. */
+export interface RosterLeftOut {
 	line: number;
 	code: string;
 	/** As the file writes it, in lower case. */
@@ -345,17 +370,18 @@ export function readRosterFile(text: string, columns?: Partial<ColumnMap>): Rost
 
 /**
  * Checks the rows. Broken ones become problems: they are listed and left out,
- * the rest can still be imported. Orders the shop lists as not paid are left
- * out too, as `unpaid`.
+ * the rest can still be imported. Orders the shop lists as cancelled, expired
+ * and the like are left out too, as `leftOut`; orders that wait for their
+ * payment come in as entries with `unpaid`.
  */
 export function checkRosterRows(rows: RosterRow[]): {
 	entries: RosterEntry[];
 	problems: RosterProblem[];
-	unpaid: RosterUnpaid[];
+	leftOut: RosterLeftOut[];
 } {
 	const entries: RosterEntry[] = [];
 	const problems: RosterProblem[] = [];
-	const unpaid: RosterUnpaid[] = [];
+	const leftOut: RosterLeftOut[] = [];
 	const lineOfCode = new Map<string, number>();
 	for (const row of rows) {
 		const line = row.line;
@@ -382,8 +408,8 @@ export function checkRosterRows(rows: RosterRow[]): {
 				code,
 				message: 'invalid ticket code: only letters, digits, "-" and "_", at most 64 characters'
 			});
-		} else if (!isPaidStatus(status)) {
-			unpaid.push({ line, code, status: status.slice(0, 40) });
+		} else if (!isPaidStatus(status) && !isUnpaidStatus(status)) {
+			leftOut.push({ line, code, status: status.slice(0, 40) });
 		} else if (email && !isValidGuestEmail(email)) {
 			problems.push({ line, code, message: `invalid e-mail address "${email}"` });
 		} else if (name.length > TICKET_LIMITS.nameLength) {
@@ -400,10 +426,12 @@ export function checkRosterRows(rows: RosterRow[]): {
 			});
 		} else {
 			lineOfCode.set(code.toLowerCase(), line);
-			entries.push({ line, code, email, name });
+			const entry: RosterEntry = { line, code, email, name };
+			if (status) entry.unpaid = isUnpaidStatus(status);
+			entries.push(entry);
 		}
 	}
-	return { entries, problems, unpaid };
+	return { entries, problems, leftOut };
 }
 
 export type RosterParseResult =
@@ -413,7 +441,7 @@ export type RosterParseResult =
 			columns: ColumnMap;
 			entries: RosterEntry[];
 			problems: RosterProblem[];
-			unpaid: RosterUnpaid[];
+			leftOut: RosterLeftOut[];
 	  }
 	| { ok: false; error: string; header?: string[] };
 
@@ -438,6 +466,22 @@ export interface StoredTicket {
 	telegram: boolean;
 	/** A ♿ special-needs request belongs to it. */
 	request: boolean;
+	/** The shop's order isn't paid yet (orders.unpaid): the code can't sign in. */
+	unpaid: boolean;
+	/** An admin marked it paid by hand (and it still is). */
+	paidByHand: PaidByHand | null;
+}
+
+/**
+ * The Membership Team confirmed the payment in person and an admin marked the
+ * ticket paid on the Tickets page (orders.marked_paid_at/by), while the shop
+ * may still list the order as pending.
+ */
+export interface PaidByHand {
+	/** ISO time of the mark. */
+	at: string;
+	/** The admin's e-mail address. */
+	by: string;
 }
 
 export interface RosterChange {
@@ -455,6 +499,21 @@ export interface RosterChange {
 	before: { email: string; name: string } | null;
 	emailChanged: boolean;
 	nameChanged: boolean;
+	/** What the ticket will be afterwards: not paid yet, so its code can't sign in. */
+	unpaid: boolean;
+	/** The payment state changes (changed tickets only): paid → unpaid, or back. */
+	unpaidChanged: boolean;
+	/** The ticket was marked paid by hand (changed tickets only). */
+	paidByHand: PaidByHand | null;
+	/**
+	 * The file still lists the order as pending although an admin marked the
+	 * ticket paid by hand. The import keeps it paid — its address and name
+	 * still change — unless the review chose 💳 Set back to unpaid for it
+	 * (importRoster's `undoPaid`, its own decision like 🔁 New holder).
+	 */
+	undoesPaidByHand: boolean;
+	/** The file lists as paid what an admin marked paid by hand: the import drops the mark. */
+	confirmsPaidByHand: boolean;
 	hasSpot: boolean;
 	telegram: boolean;
 	request: boolean;
@@ -487,14 +546,29 @@ export interface RosterDiff {
 	 * the review ticks them for removal — which refers to `id`, because the
 	 * preview shortens their codes (previewRoster).
 	 */
-	notInFile: { id: string; code: string; hasSpot: boolean; status?: string }[];
+	notInFile: {
+		id: string;
+		code: string;
+		hasSpot: boolean;
+		status?: string;
+		/** Marked paid by hand: not deleted until the mark is taken back. */
+		paidByHand?: PaidByHand;
+	}[];
 	/** Addresses used by several tickets of the file (allowed, worth a look). */
 	sharedEmails: { email: string; codes: string[] }[];
 	/**
-	 * Rows the shop lists as not paid. `stored`: the ticket is in the database
-	 * (it is also under notInFile, where it can be deleted).
+	 * Rows the shop lists as cancelled, expired, …: left out. `stored`: the
+	 * ticket is in the database (it is also under notInFile, where it can be
+	 * deleted).
 	 */
-	unpaid: (RosterUnpaid & { stored: boolean })[];
+	leftOut: (RosterLeftOut & { stored: boolean })[];
+	/**
+	 * Tickets of the file that are unpaid once it is imported: new ones the shop
+	 * lists as not paid yet, and stored ones that are (or turn) unpaid. Their
+	 * codes can't sign in until a later list shows them as paid. Not the ones
+	 * marked paid by hand: the import keeps them paid unless they are ticked.
+	 */
+	unpaid: number;
 }
 
 /**
@@ -506,7 +580,7 @@ export function diffRoster(
 	entries: RosterEntry[],
 	stored: StoredTicket[],
 	problems: RosterProblem[] = [],
-	unpaid: RosterUnpaid[] = []
+	leftOut: RosterLeftOut[] = []
 ): RosterDiff {
 	const byKey = new Map<string, StoredTicket[]>();
 	for (const ticket of stored) {
@@ -520,6 +594,7 @@ export function diffRoster(
 	const unchanged: RosterDiff['unchanged'] = [];
 	const allProblems = [...problems];
 	const inFile = new Set<string>();
+	let unpaid = 0;
 
 	for (const entry of entries) {
 		const key = entry.code.toLowerCase();
@@ -545,6 +620,7 @@ export function diffRoster(
 		}
 
 		if (exact.length === 0) {
+			if (entry.unpaid) unpaid++;
 			changes.push({
 				key,
 				id: null,
@@ -556,6 +632,11 @@ export function diffRoster(
 				before: null,
 				emailChanged: !!entry.email,
 				nameChanged: false,
+				unpaid: !!entry.unpaid,
+				unpaidChanged: false,
+				paidByHand: null,
+				undoesPaidByHand: false,
+				confirmsPaidByHand: false,
 				hasSpot: false,
 				telegram: false,
 				request: false,
@@ -572,7 +653,19 @@ export function diffRoster(
 		// Stored addresses may differ in case only (typed in the dashboard): no change.
 		const emailChanged = email.toLowerCase() !== ticket.email.toLowerCase();
 		const nameChanged = name !== ticket.name;
-		if (!emailChanged && !nameChanged) {
+		// A paid order frees the code, a pending one locks it again; an empty
+		// status cell leaves the ticket as it is.
+		const isUnpaid = entry.unpaid ?? ticket.unpaid;
+		const unpaidChanged = isUnpaid !== ticket.unpaid;
+		// A payment the crew confirmed in person: a list that still says pending
+		// only locks the code again when the review ticks it on purpose; one
+		// that says paid has caught up, and the mark goes.
+		const paidByHand = ticket.unpaid ? null : ticket.paidByHand;
+		const undoesPaidByHand = !!paidByHand && isUnpaid;
+		const confirmsPaidByHand = !!paidByHand && entry.unpaid === false;
+		// Kept paid unless the review chooses otherwise: not counted.
+		if (isUnpaid && !undoesPaidByHand) unpaid++;
+		if (!emailChanged && !nameChanged && !unpaidChanged && !confirmsPaidByHand) {
 			unchanged.push({ code: entry.code, line: entry.line });
 			continue;
 		}
@@ -589,6 +682,11 @@ export function diffRoster(
 			before: { email: ticket.email, name: ticket.name },
 			emailChanged,
 			nameChanged,
+			unpaid: isUnpaid,
+			unpaidChanged,
+			paidByHand,
+			undoesPaidByHand,
+			confirmsPaidByHand,
 			hasSpot: ticket.hasSpot,
 			telegram: ticket.telegram,
 			request: ticket.request,
@@ -600,7 +698,7 @@ export function diffRoster(
 		});
 	}
 
-	const statusOf = new Map(unpaid.map((row) => [row.code.toLowerCase(), row.status]));
+	const statusOf = new Map(leftOut.map((row) => [row.code.toLowerCase(), row.status]));
 	const notInFile = stored
 		.filter((ticket) => !inFile.has(ticket.code.toLowerCase()))
 		.map((ticket) => {
@@ -611,6 +709,7 @@ export function diffRoster(
 				hasSpot: ticket.hasSpot
 			};
 			if (status) item.status = status;
+			if (ticket.paidByHand && !ticket.unpaid) item.paidByHand = ticket.paidByHand;
 			return item;
 		})
 		.sort((a, b) => a.code.localeCompare(b.code, 'en', { numeric: true }));
@@ -634,7 +733,8 @@ export function diffRoster(
 		problems: allProblems,
 		notInFile,
 		sharedEmails,
-		unpaid: unpaid.map((row) => ({ ...row, stored: storedKeys.has(row.code.toLowerCase()) }))
+		leftOut: leftOut.map((row) => ({ ...row, stored: storedKeys.has(row.code.toLowerCase()) })),
+		unpaid
 	};
 }
 
@@ -643,14 +743,24 @@ export function diffRoster(
  * new address on a ticket that carries something of its holder (a spot, a
  * Telegram link, a ♿ request), also where it had none before (needsTick). Taking that over can mean a hand-over, or undo
  * an address the crew corrected in the app, so it needs a deliberate tick.
- * Its 🔁 New holder switch is still preset, for when it is ticked.
+ * Its 🔁 New holder switch is still preset, for when it is ticked. Also left
+ * out: a ticket marked paid by hand whose only change is that the file still
+ * lists it as pending (undoesPaidByHand) — the shop may just not know about
+ * the payment yet. Its 💳 Set back to unpaid switch always starts off: that
+ * is a decision of its own, never part of a tick.
  */
 export function defaultRosterSelection(diff: RosterDiff): {
 	selected: string[];
 	newHolders: string[];
 } {
 	return {
-		selected: diff.changes.filter((change) => !change.needsTick).map((c) => c.key),
+		selected: diff.changes
+			.filter(
+				(change) =>
+					!change.needsTick &&
+					!(change.undoesPaidByHand && !change.emailChanged && !change.nameChanged)
+			)
+			.map((c) => c.key),
 		newHolders: diff.changes.filter((change) => change.suggestNewHolder).map((c) => c.key)
 	};
 }
@@ -677,6 +787,13 @@ export interface TicketView {
 	email: string;
 	/** The code was used to sign in at least once. */
 	signedIn: boolean;
+	/**
+	 * The shop's order isn't paid yet: the code can't sign in until a later
+	 * ticket list shows it as paid, or an admin marks it paid by hand.
+	 */
+	unpaid: boolean;
+	/** An admin marked it paid by hand (only while it is paid). */
+	paidByHand: PaidByHand | null;
 	spot: TicketSpot | null;
 	burnerName: string;
 	telegram: boolean;
@@ -714,6 +831,16 @@ export interface TicketChangeOutcome {
 	confirmation: boolean;
 }
 
+export interface TicketPaidOutcome {
+	ticket: TicketView;
+	/** Code for the audit log, masked. */
+	maskedCode: string;
+	/** What was asked: marked paid (true), or set back to unpaid (false). */
+	paid: boolean;
+	/** False when the ticket already was in that state (a second click, another admin). */
+	changed: boolean;
+}
+
 export interface RosterPreview {
 	diff: RosterDiff;
 	/** Tickets in the database now. */
@@ -731,6 +858,20 @@ export interface RosterImportOutcome {
 	requestsRemoved: number;
 	/** New addresses of tickets that hold a spot: they get a confirmation. */
 	confirmations: number;
+	/** Tickets created or updated that are unpaid now: their codes can't sign in. */
+	unpaid: number;
+	/** Tickets that were unpaid and are paid now: their codes sign in again. */
+	nowPaid: number;
+	/** Tickets marked paid by hand that the list now shows as paid too: the mark went. */
+	paidConfirmed: number;
+	/**
+	 * Tickets marked paid by hand that the list still shows as pending, kept
+	 * paid (their address and name changes were taken over): the review didn't
+	 * choose 💳 Set back to unpaid for them.
+	 */
+	keptPaid: number;
+	/** Tickets marked paid by hand that the review set back to unpaid; masked codes. */
+	paidUndone: { id: string; code: string }[];
 	/** Selected, but nothing (or no longer anything) to change. */
 	skipped: number;
 	failed: { code: string; error: string }[];

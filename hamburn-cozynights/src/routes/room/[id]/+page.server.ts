@@ -20,7 +20,8 @@ import {
 	randomBurnerName
 } from '$lib/server/booking';
 import { clearGuestSession, signInUrl } from '$lib/server/guest-session';
-import { getBookingSettings } from '$lib/server/settings';
+import { isCrewTicket } from '$lib/server/crew-ticket';
+import { getBookingSettings, SETTINGS_UNREACHABLE } from '$lib/server/settings';
 import { bookingRefusal } from '$lib/booking-phase';
 import {
 	disconnectTelegram,
@@ -36,6 +37,9 @@ import type { PassSummary } from '$lib/pass';
 import { readFloorPlans } from '$lib/floor-plans';
 import { getLegalInfo } from '$lib/server/legal';
 import { BOOKING_CHECK_MISSING, bookingCheckPassed } from '$lib/booking-check';
+import { recordId } from '$lib/server/record-id';
+import { HOLD_MINUTES, roomHolds } from '$lib/server/spot-holds';
+import { dropHoldAction, holdSpotAction } from '$lib/server/spot-hold-actions';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 const SIGNED_OUT =
@@ -68,6 +72,9 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 		throw redirect(303, '/?login=expired');
 	}
 
+	// A blocked 🔒 spot is bookable only with a crew ticket ($lib/server/crew-ticket).
+	const crewTicket = await isCrewTicket(locals.adminPb, order);
+
 	try {
 		const [settings, userBed, room, beds] = await Promise.all([
 			getBookingSettings(locals.pb),
@@ -81,6 +88,10 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				expand: 'order'
 			})
 		]);
+
+		// Without a phase the page would tell the guest "booking is not open"
+		// and offer nothing: say what is really wrong.
+		if (!settings.known) throw error(503, UNAVAILABLE);
 
 		// PocketBase sorts labels as text (B1, B10, B2); the page shows and pairs
 		// them in the order people count in (B1, B2, …, B10).
@@ -106,7 +117,7 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 				id: bed.id,
 				label: bed.label,
 				occupied: !!bed.occupied,
-				bookable: !bed.occupied && isBedBookable(bed, { allowLocked: !!locals.admin }),
+				bookable: !bed.occupied && isBedBookable(bed, { allowLocked: crewTicket }),
 				blocked: !!bed.occupied && !bed.order,
 				burnerName,
 				// What kind of bed it is: the room's and the house's features are
@@ -157,7 +168,13 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			]);
 		}
 
+		// Spots other guests are booking right now, as milliseconds left: their
+		// cards say "Bed being made…" ($lib/server/spot-holds).
+		const heldSpots = settings.isBookingActive ? roomHolds(room.id, { orderId: order.id }) : {};
+
 		return {
+			heldSpots,
+			holdMinutes: HOLD_MINUTES,
 			notify,
 			pass,
 			spotFixed,
@@ -214,7 +231,10 @@ export const actions: Actions = {
 			});
 		}
 
-		const { isBookingActive, phase } = await getBookingSettings(locals.pb);
+		const settings = await getBookingSettings(locals.pb);
+		// No phase, no decision: neither a booking nor a refusal that isn't true.
+		if (!settings.reachable) return fail(503, { error: SETTINGS_UNREACHABLE });
+		const { isBookingActive, phase } = settings;
 		// Closed: nothing changes any more, not even a name. Outside Live Booking
 		// only the burner name of the spot the ticket already holds may change
 		// (decided below, once that spot is known): a handed-over ticket comes
@@ -222,7 +242,7 @@ export const actions: Actions = {
 		if (phase === 'closed') return fail(403, { error: bookingRefusal(phase) });
 
 		const formData = await request.formData();
-		const bedId = formData.get('bedId') as string;
+		const bedId = recordId(formData, 'bedId');
 		const guestName = cleanBurnerName(formData.get('guestName')) || randomBurnerName();
 
 		if (!locals.orderNumber) return fail(401, { error: SIGNED_OUT });
@@ -266,7 +286,7 @@ export const actions: Actions = {
 			// authoritatively inside bookBed, under per-order and per-bed locks —
 			// and so is the phase, which can close while this waits for them.
 			await bookingService.bookBed(order, bedId, guestName, {
-				allowLocked: !!locals.admin,
+				allowLocked: await isCrewTicket(locals.adminPb, order),
 				requireLivePhase: true
 			});
 			return { success: true };
@@ -335,6 +355,12 @@ export const actions: Actions = {
 	/** Takes an open swap request back. */
 	withdrawSwap: async ({ request, locals }) => withdrawSwapAction(locals, request),
 
+	/** The booking window opened on a free spot: it is the guest's for a few minutes. */
+	holdSpot: async ({ request, locals }) => holdSpotAction(locals, request),
+
+	/** The booking window closed (or the page went away): the spot is free again. */
+	dropHold: async ({ request, locals }) => dropHoldAction(locals, request),
+
 	unbookBed: async ({ locals }) => {
 		if (!locals.adminPb.authStore.isValid) {
 			console.error('[Security] unbookBed: Master Key (Admin Auth) is invalid.');
@@ -344,7 +370,8 @@ export const actions: Actions = {
 			});
 		}
 
-		const { isBookingActive } = await getBookingSettings(locals.pb);
+		const { isBookingActive, reachable } = await getBookingSettings(locals.pb);
+		if (!reachable) return fail(503, { error: SETTINGS_UNREACHABLE });
 		if (!isBookingActive) {
 			return fail(403, {
 				error:

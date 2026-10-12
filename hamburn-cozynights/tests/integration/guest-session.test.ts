@@ -75,7 +75,7 @@ describe('a signed-in ticket', () => {
 		const { code } = await seedTicket(su);
 		const cookies = fakeCookies();
 		setGuestSession(cookies, code, (await readGuestRound(guestPb as TypedPocketBase)) ?? 0);
-		expect(cookies.jar[GUEST_COOKIE]).toBe(code);
+		expect(cookies.jar[GUEST_COOKIE].startsWith(`${code}.`)).toBe(true);
 
 		const signedIn = await resolve(cookies);
 		expect(signedIn.code).toBe(code);

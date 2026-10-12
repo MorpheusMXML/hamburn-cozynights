@@ -200,7 +200,9 @@ export const actions: Actions = {
 		const parsed = parseRequestForm(form, { inGroup });
 		const values = typedValues(parsed, form);
 
-		const { requestsOpen } = await getBookingSettings(locals.pb);
+		const { requestsOpen, reachable } = await getBookingSettings(locals.pb);
+		// The switch could not be read: neither sent nor refused as "closed".
+		if (!reachable) return fail(503, { error: UNAVAILABLE, values });
 		if (!requestsOpen) {
 			return fail(403, {
 				error:

@@ -1,6 +1,6 @@
-import { redirect } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
-import { isPublicAdminPath } from '$lib/server/admin-auth';
+import { ADMIN_SESSION_UNCHECKED, isPublicAdminPath } from '$lib/server/admin-auth';
 import { countOpenRequests } from '$lib/server/special-requests';
 import { liveStatsSnapshot } from '$lib/server/stats';
 import type { NavCounts } from '$lib/admin-nav';
@@ -13,12 +13,20 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
 		if (locals.admin && url.pathname === '/admin/login') {
 			throw redirect(303, '/admin');
 		}
+		// Still signed in, PocketBase just didn't answer (an admin page sent the
+		// browser here): signing in with Google again would not help.
+		if (locals.adminUnchecked && url.pathname === '/admin/login') {
+			throw error(503, ADMIN_SESSION_UNCHECKED);
+		}
 		return { admin: null, isSuperuser: false, openRequests: 0, navCounts: NO_COUNTS };
 	}
 
 	// hooks.server.ts only lets page/data requests through without a session,
-	// so they can be redirected here.
+	// so they can be redirected here. A session PocketBase couldn't check is
+	// still there: the login page would only send the admin through Google
+	// again, so the page says what is wrong instead.
 	if (!locals.admin) {
+		if (locals.adminUnchecked) throw error(503, ADMIN_SESSION_UNCHECKED);
 		throw redirect(303, locals.adminSignInExpired ? '/admin/login?error=reauth' : '/admin/login');
 	}
 

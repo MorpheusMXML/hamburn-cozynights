@@ -408,7 +408,11 @@ describe("the guest's own pass on other pages", () => {
 	it('the map shows it on the Closed panel, and knows tickets without a spot', async () => {
 		const closed = campWithGuest();
 		expect(
-			await mapLoad({ url: new URL('http://test.local/'), locals: guestLocals(closed.pb) } as any)
+			await mapLoad({
+				setHeaders: () => {},
+				url: new URL('http://test.local/'),
+				locals: guestLocals(closed.pb)
+			} as any)
 		).toMatchObject({
 			phase: 'closed',
 			pass: TICKET,
@@ -416,6 +420,7 @@ describe("the guest's own pass on other pages", () => {
 		});
 		expect(
 			await mapLoad({
+				setHeaders: () => {},
 				url: new URL('http://test.local/'),
 				locals: guestLocals(closed.pb, 'HB-2002')
 			} as any)
@@ -426,6 +431,7 @@ describe("the guest's own pass on other pages", () => {
 		// the map is public: nobody signed in, nothing to show
 		expect(
 			await mapLoad({
+				setHeaders: () => {},
 				url: new URL('http://test.local/'),
 				locals: guestLocals(closed.pb, '')
 			} as any)
@@ -436,7 +442,11 @@ describe("the guest's own pass on other pages", () => {
 
 		const live = campWithGuest({ phase: 'live' });
 		expect(
-			await mapLoad({ url: new URL('http://test.local/'), locals: guestLocals(live.pb) } as any)
+			await mapLoad({
+				setHeaders: () => {},
+				url: new URL('http://test.local/'),
+				locals: guestLocals(live.pb)
+			} as any)
 		).toMatchObject({
 			phase: 'live',
 			pass: null,
@@ -558,6 +568,7 @@ describe('what a room or spot switched off (features_off)', () => {
 	it('the wish chips, the map and the roulette skip a spot that gave a feature up', async () => {
 		const c = coldCamp();
 		const map: any = await mapLoad({
+			setHeaders: () => {},
 			url: at('/map?w=heated'),
 			locals: guestLocals(c.pb, 'HB-2002')
 		} as any);

@@ -10,7 +10,7 @@ variables in the server's .env (`$lib/server/legal`).
 
 	export let data: PageData;
 
-	const UPDATED = '11 October 2026';
+	const UPDATED = '12 October 2026';
 	const GOOGLE_PRIVACY = 'https://policies.google.com/privacy?hl=en';
 	const GITHUB_PRIVACY =
 		'https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement';
@@ -86,17 +86,30 @@ variables in the server's .env (`$lib/server/legal`).
 	</p>
 	<h3>Protection against guessing ticket codes</h3>
 	<p>
-		If you enter a wrong ticket code several times, the app keeps your IP address in memory for up
-		to ten minutes and slows down further attempts. This protects every guest's ticket code (Art.
-		6(1)(f) GDPR). Ticket codes themselves never end up in log files.
+		If wrong ticket codes are entered from your connection, the app keeps your IP address (for an
+		IPv6 address only its network part) in memory for up to three hours after the last wrong code
+		and makes further attempts harder: after three it offers to email you your code, after five it
+		asks for the email address of your ticket as well, after ten it pauses sign-in for 15 minutes,
+		after thirteen for three hours. This protects every guest's ticket code (Art. 6(1)(f) GDPR). The
+		memory is gone when the app restarts. Ticket codes themselves never end up in log files.
+	</p>
+	<h3>Your ticket code by email</h3>
+	<p>
+		If you ask for your ticket code on the start page, we send it to the email address you enter,
+		but only if that address belongs to a paid ticket; the page never says whether it does. We keep
+		the address and the time of the request for two days, so that one address gets at most one such
+		email in 30 minutes and three a day, then delete them (Art. 6(1)(b) GDPR).
 	</p>
 
 	<h2>Booking a bed</h2>
 	<p>Only Indoor memberships include a bed. For them we process:</p>
 	<ul>
 		<li>
-			your <strong>ticket code</strong> and the <strong>email address</strong> of your order. We take
-			both from the ticket shop in which you bought your membership;
+			your <strong>ticket code</strong>, the <strong>email address</strong> and, if the ticket shop
+			has it, the <strong>name</strong> of your order, and whether the order is
+			<strong>paid</strong>. We take them from the ticket shop in which you bought your membership.
+			If you pay in person, the crew notes that the payment was confirmed (when, and which crew
+			member did it);
 		</li>
 		<li>the <strong>bed</strong> you choose and when you booked it;</li>
 		<li>
@@ -127,8 +140,8 @@ variables in the server's .env (`$lib/server/legal`).
 	</p>
 	<p>
 		We delete bookings, burner names, special-needs requests, request groups, swap requests and the
-		ticket list with its email addresses{#if notify.telegram}, linked Telegram chats{/if} as soon as we
-		no longer need them, {legal.deletionPeriod}.
+		ticket list with its email addresses, names and payment notes{#if notify.telegram}, linked
+			Telegram chats{/if} as soon as we no longer need them, {legal.deletionPeriod}.
 	</p>
 
 	<h2 id="special-needs">Special-needs requests and groups</h2>

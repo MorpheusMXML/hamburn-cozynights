@@ -40,6 +40,43 @@ describe('crew chat texts', () => {
 		expect(text).toBe('🎟️ Ticket H••• changed by crew@mauersegler.art: name');
 	});
 
+	it('report a ticket marked paid by hand, and set back to unpaid', () => {
+		expect(
+			eventText(event('ticket_marked_paid', 'crew@mauersegler.art', 'abc', { ticket: 'H•••' }))
+		).toBe(
+			'💳 Ticket H••• marked paid by crew@mauersegler.art: payment confirmed in person, its code signs in now'
+		);
+		expect(
+			eventText(event('ticket_marked_unpaid', 'crew@mauersegler.art', 'abc', { ticket: 'H•••' }))
+		).toBe(
+			"💳 Ticket H••• set back to unpaid by crew@mauersegler.art: its code can't sign in any more"
+		);
+		expect(
+			eventText(
+				event('ticket_marked_unpaid', 'max@mauersegler.art', 'abc', {
+					ticket: 'H•••',
+					via: 'import'
+				})
+			)
+		).toBe(
+			"💳 Ticket H••• set back to unpaid by max@mauersegler.art with the ticket list: its code can't sign in any more"
+		);
+		expect(
+			eventText(
+				event('tickets_imported', 'max@mauersegler.art', '', {
+					created: 0,
+					updated: 2,
+					paidUndone: 1,
+					keptPaid: 2,
+					paidConfirmed: 1,
+					failed: 0
+				})
+			)
+		).toBe(
+			'📥 Ticket list imported by max@mauersegler.art: 0 new, 2 updated, 1 paid by hand set back to unpaid, 2 kept paid by hand (the list says pending), 1 paid by hand now paid in the shop'
+		);
+	});
+
 	it('report a ticket list import and an applied template', () => {
 		expect(
 			eventText(
@@ -80,6 +117,56 @@ describe('crew chat texts', () => {
 			)
 		).toBe(
 			'🗺️ Layout template "Camp" imported by max@mauersegler.art: 3 houses, 4 rooms, 9 spots; 2 booking(s) released; backup b.zip'
+		);
+	});
+});
+
+describe('crew chat texts about bookings ended on the layout pages', () => {
+	it('count what a deletion or a freed spot released, never which room, spot or guest', () => {
+		expect(
+			eventText(
+				event('room_deleted', 'max@mauersegler.art', 'r1abc', { released: 2, crewReleased: 1 })
+			)
+		).toBe(
+			'🚪 Room deleted by max@mauersegler.art: 2 booking(s) released, 1 of them a special-needs spot the crew booked'
+		);
+		expect(
+			eventText(
+				event('spot_deleted', 'max@mauersegler.art', 'b1abc', { released: 1, crewReleased: 0 })
+			)
+		).toBe('🛏️ Spot deleted by max@mauersegler.art: 1 booking(s) released');
+		expect(
+			eventText(
+				event('spot_freed', 'max@mauersegler.art', 'b1abc', { released: 1, crewReleased: 1 })
+			)
+		).toBe(
+			'🛏️ Spot freed by max@mauersegler.art: 1 booking(s) released, 1 of them a special-needs spot the crew booked'
+		);
+		expect(
+			eventText(
+				event('house_deleted', 'max@mauersegler.art', 'Neon Cave', {
+					released: 3,
+					crewReleased: 2,
+					rooms: 2
+				})
+			)
+		).toBe(
+			'🏚️ House "Neon Cave" deleted by max@mauersegler.art: 3 booking(s) released, 2 of them special-needs spots the crew booked'
+		);
+	});
+
+	it('name the backup made before all bookings were cleared', () => {
+		expect(
+			eventText(
+				event('bookings_cleared', 'max@mauersegler.art', '', {
+					released: 4,
+					kept: 1,
+					reason: 'staging',
+					backup: 'pre-release-20261012-180000-000.zip'
+				})
+			)
+		).toBe(
+			'🧨 All bookings cleared by max@mauersegler.art: 4 spot(s) released, tickets kept; 1 special-needs spot(s) kept (back to Staging Mode); backup pre-release-20261012-180000-000.zip'
 		);
 	});
 });

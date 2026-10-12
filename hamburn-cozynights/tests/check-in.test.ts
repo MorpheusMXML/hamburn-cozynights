@@ -89,7 +89,8 @@ describe('the booking service', () => {
 			checked_in_at: IN,
 			checked_in_by: BY
 		});
-		expect(bedRow(c.pb, c.bed.id)).toMatchObject({ order: null, occupied: false });
+		// PocketBase stores an empty relation as '' (pb_hooks/lib/book.js releases with '')
+		expect(bedRow(c.pb, c.bed.id)).toMatchObject({ order: '', occupied: false });
 	});
 
 	it('keeps renaming the own spot possible after the check-in', async () => {

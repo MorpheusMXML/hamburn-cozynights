@@ -176,6 +176,10 @@ function acceptSwap(app, requestId, toOrderId) {
 		// The asker's spot goes to the other guest, theirs to the asker. The bed
 		// hooks run inside this transaction: booked_at is stamped anew and both
 		// tickets are marked for a "changed" message (lib/booked.js, notify.js).
+		// A ticket holds one spot (a unique index on beds.order), so the second
+		// spot lets go of its ticket first; nobody sees that step.
+		toBed.set('order', '');
+		tx.save(toBed);
 		fromBed.set('order', toOrder);
 		fromBed.set('occupied', true);
 		tx.save(fromBed);

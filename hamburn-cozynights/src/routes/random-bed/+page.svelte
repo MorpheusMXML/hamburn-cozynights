@@ -13,6 +13,7 @@ No Trace to give it up and spin again.
 	import { onMount, tick, untrack } from 'svelte';
 	import { fade, scale } from 'svelte/transition';
 	import { deserialize, enhance } from '$app/forms';
+	import { startWait } from '$lib/waiting';
 	import { invalidateAll } from '$app/navigation';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import type { SpotFilter } from '$lib/accommodation';
@@ -51,6 +52,8 @@ No Trace to give it up and spin again.
 		spinPlan,
 		type RouletteSpot
 	} from '$lib/roulette';
+	import { clock, type HoldPage } from '$lib/spot-hold';
+	import { holdRequest } from '$lib/spot-hold-request';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -82,6 +85,21 @@ No Trace to give it up and spin again.
 	let showFireworks = $state(false);
 	let fireworksOrigin = $state<Point | null>(null);
 	let cardIgnite = $state(false);
+
+	// The spot the reels picked is the guest's for a few minutes ($lib/spot-hold):
+	// asked for while the reels still spin, counted down next to "Book it", let
+	// go of on the next spin or when the guest leaves. One hold per ticket.
+	let myHold = $state<{ bedId: string; until: number } | null>(null);
+	let holdState = $state<'none' | 'pending' | 'held' | 'spent' | 'failed'>('none');
+	/** What the guest is told once the reels stop, when someone else got the spot meanwhile. */
+	let lostSpot = $state('');
+	let holdTurn = 0;
+	/** The page went away: an answer that still comes in is let go at once. */
+	let gone = false;
+	/** This page's hold actions: never the URL the browser shows after a link. */
+	const HOLD_PAGE: HoldPage = '/random-bed';
+	let now = $state(Date.now());
+	let myHoldLeft = $derived(myHold ? Math.max(0, myHold.until - now) : 0);
 
 	// ✨ Leave No Trace: the spot in the dialog, and the one given up for this
 	// spin (the page says so until a new spot is booked).
@@ -153,7 +171,9 @@ No Trace to give it up and spin again.
 		if (mode === 'soldout') {
 			return wishes.length > 0 && data.freeTotal > 0
 				? 'No spot fits your wishes'
-				: 'Every spot is taken';
+				: data.beingBooked > 0
+					? 'Beds being made'
+					: 'Every spot is taken';
 		}
 		if (isBooking) return 'Booking…';
 		if (stage === 'spinning') return 'Spinning…';
@@ -190,6 +210,7 @@ No Trace to give it up and spin again.
 		if (!spot) return;
 		bookingError = '';
 		chosen = spot;
+		void holdSpot(spot);
 		stage = 'spinning';
 		jackpot = false;
 		announce = 'Spinning…';
@@ -231,6 +252,10 @@ No Trace to give it up and spin again.
 	function land(spot: RouletteSpot) {
 		stage = 'landed';
 		hasLanded = true;
+		if (lostSpot) {
+			spotLost();
+			return;
+		}
 		announce = `Your spot: ${spot.label}, ${spot.roomName}, ${spot.houseName}. Keep or change your burner name, then book it.`;
 		sounds?.jackpot();
 		if (reduceMotion) return;
@@ -256,6 +281,78 @@ No Trace to give it up and spin again.
 		lever?.yank();
 		pulled(BUTTON_PULL);
 	}
+
+	/** Holds the spot the reels are heading for. */
+	async function holdSpot(spot: RouletteSpot) {
+		const turn = ++holdTurn;
+		holdState = 'pending';
+		lostSpot = '';
+		myHold = null;
+		const result = await holdRequest(HOLD_PAGE, 'holdSpot', spot.id);
+		if (turn !== holdTurn) {
+			// A newer spin or a booking took over: a late hold is let go again.
+			if (result?.type === 'success' && result.data?.hold && (gone || chosen?.id !== spot.id)) {
+				void holdRequest(HOLD_PAGE, 'dropHold', spot.id, true);
+			}
+			return;
+		}
+		if (result?.type === 'success') {
+			const hold = result.data?.hold as { left: number } | null | undefined;
+			if (hold) {
+				myHold = { bedId: spot.id, until: Date.now() + hold.left };
+				holdState = 'held';
+			} else {
+				holdState = result.data?.spent ? 'spent' : 'failed';
+			}
+			return;
+		}
+		holdState = 'failed';
+		const failure = result?.type === 'failure' ? (result.data ?? {}) : {};
+		if (failure.held || failure.bedTaken) {
+			// Someone else got there while the reels spun: tell them once they stop.
+			lostSpot = 'Someone else is making that bed right now. Spin again!';
+			if (stage === 'landed' && chosen?.id === spot.id) spotLost();
+		}
+	}
+
+	/** The spot the reels stopped on went to someone else meanwhile. */
+	function spotLost() {
+		bookingError = lostSpot;
+		lostSpot = '';
+		announce = bookingError;
+		void resetMachine();
+	}
+
+	/** The guest leaves the spot behind: it is free for others again. */
+	function letGoOfHold() {
+		holdTurn++;
+		if (myHold) void holdRequest(HOLD_PAGE, 'dropHold', myHold.bedId, true);
+		myHold = null;
+		holdState = 'none';
+		lostSpot = '';
+	}
+
+	onMount(() => {
+		const ticker = setInterval(() => {
+			if (myHold) now = Date.now();
+		}, 1000);
+		const leave = () => {
+			gone = true;
+			holdTurn++;
+			if (myHold) void holdRequest(HOLD_PAGE, 'dropHold', myHold.bedId, true);
+			myHold = null;
+		};
+		// Back from the browser's page cache: the page is here again.
+		const back = () => (gone = false);
+		window.addEventListener('pagehide', leave);
+		window.addEventListener('pageshow', back);
+		return () => {
+			clearInterval(ticker);
+			window.removeEventListener('pagehide', leave);
+			window.removeEventListener('pageshow', back);
+			leave();
+		};
+	});
 
 	/** Back to the start with a fresh list of free spots; the name stays. */
 	async function resetMachine() {
@@ -302,11 +399,17 @@ No Trace to give it up and spin again.
 		bookingError = '';
 		isBooking = true;
 		const origin = centerOf(submitter) ?? centerOf(glassEl);
+		const waited = startWait('booking');
 
 		return async ({ result }) => {
 			isBooking = false;
+			waited();
 			checkOpen = false;
 			if (result.type === 'success') {
+				// Booked: the server ended the hold already.
+				holdTurn++;
+				myHold = null;
+				holdState = 'none';
 				// The check is used up: the next booking asks again.
 				useUpCheck();
 				bedMade = false;
@@ -330,6 +433,7 @@ No Trace to give it up and spin again.
 					(result.data as { error?: string } | undefined)?.error ||
 					'The booking did not go through. Please spin again.';
 				// The spot is gone or the state changed: start over with fresh data.
+				letGoOfHold();
 				await resetMachine();
 			} else if (result.type === 'error') {
 				bookingError = NO_CONNECTION;
@@ -576,6 +680,13 @@ No Trace to give it up and spin again.
 					<div class="tray-actions">
 						<a class="btn-goto" href="/random-bed">Spin without wishes</a>
 					</div>
+				{:else if data.beingBooked > 0}
+					<!-- Free spots, but other guests are booking them ($lib/spot-hold). -->
+					<p class="tray-text">
+						{data.beingBooked}
+						{data.beingBooked === 1 ? 'spot is' : 'spots are'} being booked right now. If nobody finishes,
+						they are free again within ten minutes: check back in a few minutes.
+					</p>
 				{:else}
 					<p class="tray-text">
 						Every spot is taken right now. Check back later: a spot gets free again when someone
@@ -613,6 +724,9 @@ No Trace to give it up and spin again.
 									<span aria-hidden="true">🛏️</span> Bed made ✓ · rules ticked ✓
 								</p>
 							{/if}
+							{#if stage === 'landed'}
+								{@render holdNote()}
+							{/if}
 						</div>
 					{:else}
 						<button
@@ -638,6 +752,22 @@ No Trace to give it up and spin again.
 		{/if}
 	</section>
 </div>
+
+<!-- The landed spot is the guest's for a few minutes: the clock, or why not.
+     The clock stays out of screen readers (it would be read every second). -->
+{#snippet holdNote()}
+	{#if holdState === 'held' && myHoldLeft > 0}
+		<p class="hold-note mine" class:hurry={myHoldLeft < 60_000}>
+			<span aria-hidden="true">⏳</span> Held for you{' · '}<strong
+				class="hold-clock"
+				aria-hidden="true">{clock(myHoldLeft)}</strong
+			><span class="sr-only" data-layout-ignore>for a few minutes</span>. Nobody else can book it
+			meanwhile.
+		</p>
+	{:else if holdState === 'held' || holdState === 'spent'}
+		<p class="hold-note over">Not held for you any more: book it now, first come, first served.</p>
+	{/if}
+{/snippet}
 
 {#if sweepSpot}
 	<LeaveNoTrace
@@ -672,6 +802,7 @@ No Trace to give it up and spin again.
 					aria-label="Close">✕</button
 				>
 			</div>
+			{@render holdNote()}
 			{#if !bedMade}
 				<MakeTheBed titleId="roulette-bed-title" onpacked={bedDone} />
 			{:else}
@@ -1322,6 +1453,35 @@ No Trace to give it up and spin again.
 		margin: -0.3rem 0 0;
 		font-size: 0.8rem;
 		color: #a39bb0;
+	}
+	/* The landed spot's hold: turquoise like everything that is the guest's,
+	   orange in the last minute, grey once it is over. */
+	.hold-note {
+		margin: 0 0 0.75rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: 12px;
+		border: 1px solid #333;
+		background: rgba(255, 255, 255, 0.03);
+		color: #a39bb0;
+		font-size: 0.8rem;
+		line-height: 1.35;
+	}
+	.landed .hold-note {
+		margin: 0;
+		text-align: center;
+	}
+	.hold-note.mine {
+		border-color: color-mix(in srgb, var(--state-checked-in) 45%, transparent);
+		background: var(--state-checked-in-soft);
+		color: #ccfbf1;
+	}
+	.hold-note.mine.hurry {
+		border-color: color-mix(in srgb, var(--state-filling) 55%, transparent);
+		background: var(--state-filling-soft);
+		color: #fed7aa;
+	}
+	.hold-clock {
+		font-variant-numeric: tabular-nums;
 	}
 
 	.fate-overlay {

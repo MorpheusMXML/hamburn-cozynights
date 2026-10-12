@@ -50,6 +50,7 @@
 						value: typeof tickets?.total === 'number' ? count(ticketsWithoutSpot) : '—',
 						href: '/admin/guests?show=nospot'
 					},
+					{ label: 'Unpaid', value: count(tickets?.unpaid), href: '/admin/guests?show=unpaid' },
 					{ label: 'With an e-mail address', value: count(tickets?.withEmail) },
 					{
 						label: 'Telegram linked',

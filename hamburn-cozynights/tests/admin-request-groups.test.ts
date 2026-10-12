@@ -245,6 +245,28 @@ describe('the group steps on the requests page', () => {
 		expect(row(c, 'beds', c.beds[1].id).order).toBe('');
 	});
 
+	it('book a locked spot only when the page confirmed it (blockedOk)', async () => {
+		const c = camp();
+		Object.assign(row(c, 'beds', c.beds[1].id), { is_locked: true });
+		const picks = {
+			id: c.group.id,
+			[`bed_${c.requests[0].id}`]: c.beds[0].id,
+			[`bed_${c.requests[1].id}`]: c.beds[1].id
+		};
+		const refused = await run(c, 'assignGroup', { ...picks, blockedOk: c.beds[0].id });
+		expect(refused.status).toBe(409);
+		expect(refused.data.error).toMatch(
+			/^🔒 B2 · Dorm #2 · Villa is blocked \(out of service\) now/
+		);
+		expect(row(c, 'beds', c.beds[0].id).order).toBe('');
+		const booked = await run(c, 'assignGroup', {
+			...picks,
+			blockedOk: `${c.beds[0].id},${c.beds[1].id}`
+		});
+		expect(booked).toMatchObject({ success: true, booked: 2, failed: [] });
+		expect(row(c, 'beds', c.beds[1].id).order).toBe(c.requests[1].order);
+	});
+
 	it('book nothing when a picked spot was taken since the page loaded', async () => {
 		const c = camp();
 		Object.assign(row(c, 'beds', c.beds[1].id), { occupied: true });

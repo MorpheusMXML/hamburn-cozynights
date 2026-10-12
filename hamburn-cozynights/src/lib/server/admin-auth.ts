@@ -58,7 +58,7 @@ export type AdminLoginError =
 	| 'not_recorded'
 	| 'failed';
 
-const APPROVED_ROLES: readonly string[] = ['superuser', 'admin'];
+export const APPROVED_ROLES: readonly string[] = ['superuser', 'admin'];
 const PENDING_ROLE = 'pending';
 
 export function isAdminDomainEmail(email: unknown): boolean {
@@ -126,6 +126,13 @@ export function checkGoogleIdentity(meta: Record<string, any> | undefined): Admi
 	if (String(rawUser.hd || '').toLowerCase() !== ADMIN_EMAIL_DOMAIN) return 'not_workspace';
 	return null;
 }
+
+/**
+ * What an admin reads when PocketBase didn't answer the session check
+ * (hooks.server.ts): the session is kept, only this request couldn't run.
+ */
+export const ADMIN_SESSION_UNCHECKED =
+	'PocketBase is not reachable right now, so your sign-in could not be checked. You are still signed in: try again in a moment.';
 
 /** Paths under /admin that are reachable without an admin session. */
 export function isPublicAdminPath(pathname: string): boolean {

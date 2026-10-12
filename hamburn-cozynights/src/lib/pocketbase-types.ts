@@ -23,7 +23,8 @@ export enum Collections {
 	MessageTexts = 'message_texts',
 	SpecialRequests = 'special_requests',
 	SwapRequests = 'swap_requests',
-	RequestGroups = 'request_groups'
+	RequestGroups = 'request_groups',
+	CodeMails = 'code_mails'
 }
 
 // Alias types for improved usability
@@ -182,6 +183,23 @@ export type OrdersRecord = {
 	order_number: string;
 	pass_code?: string;
 	order_hash?: string;
+	/** The ticket shop's order isn't paid yet: the code can't sign in (pb_migrations/1761000000_ticket_sign_in.js). */
+	unpaid?: boolean;
+	/** An admin marked the ticket paid by hand: when, and who (pb_migrations/1761200000_ticket_paid_by_hand.js). */
+	marked_paid_at?: IsoDateString;
+	marked_paid_by?: string;
+	updated: IsoAutoDateString;
+};
+
+/** "Send me my code" (pb_migrations/1761000000_ticket_sign_in.js); sent by pb_hooks/lib/notify.js. */
+export type CodeMailsRecord = {
+	attempts?: number;
+	created: IsoAutoDateString;
+	due?: IsoDateString;
+	email: string;
+	id: string;
+	last_error?: string;
+	sent?: IsoDateString;
 	updated: IsoAutoDateString;
 };
 
@@ -394,6 +412,8 @@ export type SwapRequestsResponse<Texpand = unknown> = Required<SwapRequestsRecor
 	BaseSystemFields<Texpand>;
 export type RequestGroupsResponse<Texpand = unknown> = Required<RequestGroupsRecord> &
 	BaseSystemFields<Texpand>;
+export type CodeMailsResponse<Texpand = unknown> = Required<CodeMailsRecord> &
+	BaseSystemFields<Texpand>;
 
 // Types containing all Records and Responses, useful for creating typing helper functions
 
@@ -416,6 +436,7 @@ export type CollectionRecords = {
 	message_texts: MessageTextsRecord;
 	swap_requests: SwapRequestsRecord;
 	request_groups: RequestGroupsRecord;
+	code_mails: CodeMailsRecord;
 };
 
 export type CollectionResponses = {
@@ -437,6 +458,7 @@ export type CollectionResponses = {
 	message_texts: MessageTextsResponse;
 	swap_requests: SwapRequestsResponse;
 	request_groups: RequestGroupsResponse;
+	code_mails: CodeMailsResponse;
 };
 
 // Utility types for create/update operations

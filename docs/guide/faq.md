@@ -14,12 +14,24 @@ Check the code for typos: it's on your ticket and contains only letters, digits,
 The code contains a character that can't be part of a ticket code, often a space or a stray punctuation mark from copy and paste. Only letters, digits, `-` and `_` are allowed.
 :::
 
-::: details "Too many wrong ticket codes from your connection. Please wait up to 10 minutes…"
-After many wrong codes from the same network, CozyNights pauses sign-in attempts for a while to stop people from guessing codes. Wait a few minutes (at most ten) and try again. Correct codes never count towards this limit.
+::: details "Can't find your code?" and "…please enter your ticket code together with the e-mail address of your ticket."
+After three wrong codes the start page offers to e-mail you your code: enter the address you bought your ticket with, and it arrives within a few minutes (check your spam folder too). The page never says whether an address belongs to a ticket, so nobody can find out who has one. After five wrong codes, sign in with your code **and** that e-mail address for the next 30 minutes. This keeps strangers from guessing ticket codes.
+:::
+
+::: details "Too many wrong ticket codes from your connection. Please try again in …"
+After ten wrong codes from the same network, CozyNights pauses sign-in for 15 minutes, after three more for three hours. Wait, then sign in with your code and the e-mail address of your ticket, or let the start page e-mail you the code. Right codes never count as wrong ones.
+:::
+
+::: details "Your ticket is still unpaid…"
+The ticket shop has your order as not paid yet, so it can't book a bed. Contact the Membership Team and settle the invoice; once the crew loads the next ticket list, or marks your ticket paid after the Membership Team confirmed the payment, your code works.
 :::
 
 ::: details "The booking system is not reachable right now. Your code was not checked…"
 CozyNights couldn't reach its database for a moment. Your code is fine. Try again shortly.
+:::
+
+::: details "The booking system is not reachable right now. Nothing was changed…"
+CozyNights couldn't check for a moment whether booking is open, so it neither booked nor released anything: your spot is as it was. Try again in a moment.
 :::
 
 ::: details What bedding do I need to bring?
@@ -48,6 +60,10 @@ Booking hasn't opened yet. Once the crew has armed the timer, a countdown shows 
 
 ::: details Where is the countdown?
 In the top bar of every booking page, fused with the phase pill: *opens in …* before booking opens, *closes in …* while it is live (red in the last hour). Tap it for the exact Berlin time. The start page shows the same countdown big, and the map counts down on its panel while booking is not open yet — there the bar shows the phase alone. No countdown anywhere means the crew hasn't armed the timer yet.
+:::
+
+::: details "Please allow us some time, we are processing your request."
+Your click reached CozyNights and is being worked on. At the opening, when hundreds of guests sign in and book in the same minute, that can take a few seconds. Stay on the page. When the card says *Please don't reload or close this page*, your sign-in, booking or release is already on its way: a reload neither stops it nor makes it faster. *Booking is opening* and *On our way* only load the page, and it continues by itself. If the card goes away with *We could not reach the server*, check your connection and open the room again: a booking that went through shows there as **Yours**.
 :::
 
 ::: details I can't book or change my spot any more ("Booking is closed")
@@ -95,7 +111,7 @@ Your ticket already holds a spot somewhere else. One ticket code = one spot: the
 :::
 
 ::: details Someone grabbed the bed I wanted at the same moment
-First come, first served. If two people click the same spot at the same time, exactly one of them gets it; the other sees _This spot is already claimed._ Pick another one.
+First come, first served, and whoever opens a spot's booking window first holds it for ten minutes, so nobody overtakes you while you make your bed. If two people tap the same spot at the same moment, exactly one of them gets it; the other sees _Someone beat you to this bed_. A spot that says **Bed being made** is someone else's for a few minutes: pick another one, or come back when its card says it is free again.
 :::
 
 ::: details I booked on another device
@@ -221,7 +237,7 @@ Structural changes only work in Staging Mode. During Live Booking and after book
 :::
 
 ::: details Guests can't book a spot
-First the phase: guests book only during 🎪 Live Booking. Then check the spot on its room page. Guests can't book **LOCKED 🔒**, **SPECIAL NEEDS ♿** or ⚪️ **INACTIVE 🧊** spots: unlock it, switch it back to normal with <kbd>♿ NORMAL</kbd>, or activate it with ⚡️ in Staging Mode. A ♿ spot stays out of reach for admins with a ticket code too: book it for a request on ♿ **Special needs**. New spots are active from the start, but a template import keeps the states stored in the file. See [Houses, rooms & spots](../admin/camp-layout#spots).
+First the phase: guests book only during 🎪 Live Booking. Then check the spot on its room page. Guests can't book **LOCKED 🔒**, **SPECIAL NEEDS ♿** or ⚪️ **INACTIVE 🧊** spots: unlock it, switch it back to normal with <kbd>♿ NORMAL</kbd>, or activate it with ⚡️ in Staging Mode. A 🔒 locked spot (a broken bed or one out of service) can still be booked with a crew ticket, a ticket whose e-mail is the address of an approved admin or superuser account; being signed in to the admin area doesn't matter, and with any other ticket it never works. A ♿ spot stays out of reach even for a crew ticket: book it for a request on ♿ **Special needs**. New spots are active from the start, but a template import keeps the states stored in the file. See [Houses, rooms & spots](../admin/camp-layout#spots).
 :::
 
 ::: details A house won't move when I drag it

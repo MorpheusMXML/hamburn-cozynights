@@ -7,6 +7,7 @@
 	import FoldPanel from '$lib/components/admin/FoldPanel.svelte';
 	import DropZone from '$lib/components/admin/DropZone.svelte';
 	import TicketCard from '$lib/components/admin/TicketCard.svelte';
+	import { formatBerlin } from '$lib/booking-phase';
 	import {
 		TICKET_LIMITS,
 		defaultRosterSelection,
@@ -114,6 +115,8 @@
 	let preview: RosterPreview | null = null;
 	let selected = new Set<string>();
 	let newHolders = new Set<string>();
+	/** Tickets marked paid by hand to set back to unpaid (💳): never preselected. */
+	let undoPaid = new Set<string>();
 	/** Ids of cancelled tickets ticked for removal (only ones without a spot). */
 	let removals = new Set<string>();
 	let imported: RosterImportOutcome | null = null;
@@ -190,8 +193,9 @@
 			const start = defaultRosterSelection(preview.diff);
 			selected = new Set(start.selected);
 			newHolders = new Set(start.newHolders);
-			// Deleting is never preselected.
+			// Deleting is never preselected, nor locking a payment confirmed by hand again.
 			removals = new Set();
+			undoPaid = new Set();
 			filter = '';
 		} else if (result.type === 'redirect') {
 			await applyAction(result);
@@ -221,9 +225,12 @@
 	$: newState = groupState(newOnes, selected);
 	$: updateState = groupState(updates, selected);
 	// Svelte trims the space at the start of an {#if} block: the note brings its own.
-	$: unpaidStoredNote = preview?.diff.unpaid.some((row) => row.stored)
+	$: leftOutStoredNote = preview?.diff.leftOut.some((row) => row.stored)
 		? ' Those marked 🗄 are still in the database — delete them under “Not in the file”.'
 		: '';
+	$: unpaidCount = preview?.diff.unpaid ?? 0;
+	$: paymentChanges = updates.some((change) => change.unpaidChanged);
+	$: paidByHandChanges = updates.some((change) => change.undoesPaidByHand);
 	$: swappable = updates.filter((change) => change.canBeNewHolder);
 	$: allHandedOver = swappable.length > 0 && swappable.every((c) => newHolders.has(c.key));
 	$: chosenHolders = chosen.filter(
@@ -233,8 +240,10 @@
 		(change) => change.kind === 'changed' && change.emailChanged && change.hasSpot && change.email
 	).length;
 	// A ticket the file no longer lists can be deleted — but only when it holds
-	// no spot. One that does stays, whatever the file says.
-	$: removable = preview ? preview.diff.notInFile.filter((ticket) => !ticket.hasSpot) : [];
+	// no spot and isn't marked paid by hand. Those stay, whatever the file says.
+	$: removable = preview
+		? preview.diff.notInFile.filter((ticket) => !ticket.hasSpot && !ticket.paidByHand)
+		: [];
 	$: chosenRemovals = removable.filter((ticket) => removals.has(ticket.id)).length;
 
 	function toggle(key: string) {
@@ -253,6 +262,12 @@
 		if (newHolders.has(key)) newHolders.delete(key);
 		else newHolders.add(key);
 		newHolders = newHolders;
+	}
+
+	function toggleUndoPaid(key: string) {
+		if (undoPaid.has(key)) undoPaid.delete(key);
+		else undoPaid.add(key);
+		undoPaid = undoPaid;
 	}
 
 	/** "All new holders" in the changed list: every ticket that can change hands, or none. */
@@ -297,6 +312,13 @@
 		form.set(
 			'remove',
 			JSON.stringify(removable.filter((t) => removals.has(t.id)).map((t) => t.id))
+		);
+		// Only rows the review showed as marked paid by hand, with 💳 Set back to unpaid.
+		form.set(
+			'undoPaid',
+			JSON.stringify(
+				chosen.filter((c) => c.undoesPaidByHand && undoPaid.has(c.key)).map((c) => c.key)
+			)
 		);
 		const result = await post('importRoster', form);
 		importing = false;
@@ -409,7 +431,7 @@
 			<DropZone
 				accept=".csv,.tsv,.txt,text/csv,text/plain"
 				label="Drop the ticket list (CSV) here"
-				hint="or tap to choose it · only code, e-mail and name leave your browser"
+				hint="or tap to choose it · only code, e-mail, name and order status leave your browser"
 				fileName={file?.name ?? ''}
 				busy={checking}
 				disabled={importing}
@@ -435,6 +457,33 @@
 						{/if}
 						{#if imported.removed}
 							{plural(imported.removed, 'cancelled ticket')} deleted.
+						{/if}
+						{#if imported.unpaid}
+							{plural(imported.unpaid, 'ticket')} unpaid: {imported.unpaid === 1
+								? "its code can't"
+								: "their codes can't"} sign in yet.
+						{/if}
+						{#if imported.nowPaid}
+							{plural(imported.nowPaid, 'ticket')} paid now: {imported.nowPaid === 1
+								? 'its code signs'
+								: 'their codes sign'} in again.
+						{/if}
+						{#if imported.paidConfirmed}
+							{plural(imported.paidConfirmed, 'ticket')} marked paid by hand {imported.paidConfirmed ===
+							1
+								? 'is'
+								: 'are'} paid in the shop too.
+						{/if}
+						{#if imported.keptPaid}
+							{plural(imported.keptPaid, 'ticket')} marked paid by hand {imported.keptPaid === 1
+								? 'stays'
+								: 'stay'} paid although the list says pending.
+						{/if}
+						{#if imported.paidUndone.length}
+							{plural(imported.paidUndone.length, 'ticket')} marked paid by hand {imported
+								.paidUndone.length === 1
+								? 'is'
+								: 'are'} unpaid again.
 						{/if}
 						{#if imported.skipped}{plural(imported.skipped, 'ticket')} needed nothing anymore.{/if}
 					</span>
@@ -511,7 +560,7 @@
 					<ul class="summary-chips" aria-label="What the file changes">
 						<li class="new">{plural(newOnes.length, 'new ticket')}</li>
 						<li class="changed">{plural(updates.length, 'change')}</li>
-						{#if diff.unpaid.length}<li>{diff.unpaid.length} not paid</li>{/if}
+						{#if diff.leftOut.length}<li>{diff.leftOut.length} cancelled or expired</li>{/if}
 						<li>{diff.unchanged.length} unchanged</li>
 						{#if diff.problems.length}<li class="bad">
 								{plural(diff.problems.length, 'problem')}
@@ -519,6 +568,14 @@
 						{#if diff.notInFile.length}<li>{diff.notInFile.length} not in the file</li>{/if}
 						{#if chosenRemovals}<li class="bad">{plural(chosenRemovals, 'to delete')}</li>{/if}
 					</ul>
+
+					{#if unpaidCount > 0}
+						<p class="unpaid-note">
+							💳 {unpaidCount === 1
+								? "1 unpaid — its code can't sign in until a later list shows it as paid."
+								: `${unpaidCount} unpaid — their codes can't sign in until a later list shows them as paid.`}
+						</p>
+					{/if}
 
 					{#if changes.length === 0}
 						<p class="all-set">
@@ -576,6 +633,11 @@
 												>{isDefaultName(change) ? 'no name' : change.name}</span
 											>
 										</label>
+										{#if change.unpaid}
+											<div class="row-extra">
+												<span class="tag unpaid">💳 unpaid: the code can't sign in yet</span>
+											</div>
+										{/if}
 									</li>
 								{/each}
 							</ul>
@@ -586,7 +648,9 @@
 						<FoldPanel
 							nested
 							tone="changed"
-							title={updates.every((c) => !c.nameChanged)
+							title={updates.every(
+								(c) => !c.nameChanged && !c.unpaidChanged && !c.confirmsPaidByHand
+							)
 								? 'Different e-mail address'
 								: 'Changed tickets'}
 							summary={`${updates.filter((c) => selected.has(c.key)).length} of ${updates.length} chosen`}
@@ -609,6 +673,17 @@
 									🔁 <b>New holder</b> also disconnects the old holder's Telegram, makes a new booking
 									pass and forgets the burner name, special-needs request and check-in; the spot stays
 									with the ticket.
+								{/if}
+								{#if paymentChanges}
+									💳 The shop's order changed between paid and unpaid: an unpaid ticket's code can't
+									sign in.
+								{/if}
+								{#if paidByHandChanges}
+									✋ A ticket an admin marked paid by hand stays paid although the file says pending
+									— the shop may not know about the payment yet. A new address or name is still
+									taken over when ticked; the code is only locked again with <b
+										>💳 Set back to unpaid</b
+									>.
 								{/if}
 							</p>
 							{#if swappable.length > 1}
@@ -649,6 +724,24 @@
 														→ <b>{change.name}</b></span
 													>
 												{/if}
+												{#if change.undoesPaidByHand}
+													{#if undoPaid.has(change.key)}
+														<span
+															>💳 <s>paid by hand</s> →
+															<b>unpaid: the code can't sign in</b></span
+														>
+													{:else}
+														<span>💳 stays paid by hand <em>(the file says pending)</em></span>
+													{/if}
+												{:else if change.unpaidChanged}
+													<span
+														>💳 <s>{change.unpaid ? 'paid' : 'unpaid'}</s> →
+														<b>{change.unpaid ? "unpaid: the code can't sign in" : 'paid'}</b></span
+													>
+												{/if}
+												{#if change.confirmsPaidByHand}
+													<span>💳 <s>paid by hand</s> → <b>paid in the shop</b></span>
+												{/if}
 											</span>
 										</label>
 										<div class="row-extra">
@@ -661,6 +754,29 @@
 											{/if}
 											{#if change.telegram}<span class="tag">💬 Telegram linked</span>{/if}
 											{#if change.request}<span class="tag">♿ special-needs request</span>{/if}
+											{#if change.unpaid && !change.unpaidChanged}
+												<span class="tag unpaid">💳 unpaid</span>
+											{/if}
+											{#if change.undoesPaidByHand && change.paidByHand}
+												<span class="tag paid-by-hand"
+													>✋ marked paid by hand {formatBerlin(change.paidByHand.at, {
+														year: false
+													})}{change.paidByHand.by ? ` by ${change.paidByHand.by}` : ''}</span
+												>
+											{/if}
+											{#if change.undoesPaidByHand}
+												<button
+													type="button"
+													class="holder"
+													class:on={undoPaid.has(change.key)}
+													aria-pressed={undoPaid.has(change.key)}
+													disabled={!selected.has(change.key)}
+													on:click={() => toggleUndoPaid(change.key)}
+													title="The crew confirmed this payment by hand. Set back to unpaid: the code can't sign in any more."
+												>
+													💳 {undoPaid.has(change.key) ? 'Set back to unpaid' : 'Keep paid'}
+												</button>
+											{/if}
 											{#if change.canBeNewHolder}
 												<button
 													type="button"
@@ -681,19 +797,20 @@
 						</FoldPanel>
 					{/if}
 
-					{#if diff.unpaid.length > 0}
+					{#if diff.leftOut.length > 0}
 						<FoldPanel
 							nested
 							tone="muted"
-							title="Not paid"
-							summary={`${diff.unpaid.length} row(s) left out`}
+							title="Cancelled or expired"
+							summary={`${diff.leftOut.length} row(s) left out`}
 							open={false}
 						>
 							<p class="hint">
-								The shop lists these orders as cancelled, pending or expired: they are not imported.{unpaidStoredNote}
+								The shop lists these orders as neither paid nor waiting for the payment (cancelled,
+								expired, …): they are not imported.{leftOutStoredNote}
 							</p>
 							<ul class="plain">
-								{#each diff.unpaid as row (row.line)}
+								{#each diff.leftOut as row (row.line)}
 									<li>
 										Row {row.line}, <code>{row.code}</code>: {row.status}{row.stored ? ' 🗄' : ''}
 									</li>
@@ -759,7 +876,8 @@
 								shop, or from another file. They stay unless you tick one: a ticked ticket is
 								deleted with the import, together with its Telegram link and its special-needs
 								request. Their codes are shown shortened, and a ticket that holds a spot 🛏 cannot be
-								deleted here — free the spot first.
+								deleted here — free the spot first. Nor can one an admin marked ✋ paid by hand: set
+								it back to unpaid on its ticket first.
 							</p>
 							<ul class="code-list">
 								{#each diff.notInFile as ticket}
@@ -767,6 +885,16 @@
 										{#if ticket.hasSpot}
 											<code>{ticket.code}</code> 🛏{#if ticket.status}
 												<span class="muted">{ticket.status}</span>{/if}
+										{:else if ticket.paidByHand}
+											<code>{ticket.code}</code>
+											<span
+												class="muted"
+												title="Set it back to unpaid on its ticket first, then it can be deleted"
+												>{ticket.status ? `${ticket.status} · ` : ''}✋ paid by hand {formatBerlin(
+													ticket.paidByHand.at,
+													{ year: false }
+												)}{ticket.paidByHand.by ? ` by ${ticket.paidByHand.by}` : ''}</span
+											>
 										{:else}
 											<label class="drop-row">
 												<input
@@ -830,9 +958,9 @@
 			{:else if !fileError && !checking}
 				<p class="hint">
 					Export the ticket list from the ticket shop as CSV, with the ticket code and the holder's
-					e-mail address (name and order status columns are optional; with a status, only paid
-					orders come in), and drop it here. Nothing changes before you press Import. Loading the
-					same file again later only shows what changed.
+					e-mail address (name and order status columns are optional; with a status, pending orders
+					come in unpaid and cancelled ones stay out), and drop it here. Nothing changes before you
+					press Import. Loading the same file again later only shows what changed.
 				</p>
 			{/if}
 		{/if}
@@ -1023,6 +1151,12 @@
 		color: #86efac;
 		font-size: 0.9rem;
 	}
+	.unpaid-note {
+		margin: 0;
+		color: #fca5a5;
+		font-size: 0.85rem;
+		line-height: 1.5;
+	}
 	.filter {
 		min-height: 42px;
 		padding: 0 0.8rem;
@@ -1129,6 +1263,17 @@
 		border: 1px solid #2a2a2a;
 		border-radius: 999px;
 		padding: 0.15rem 0.55rem;
+	}
+	.tag.unpaid {
+		border-color: rgba(248, 113, 113, 0.5);
+		color: #fca5a5;
+	}
+	/* Carries an admin's address: may break anywhere, and wraps as a box on a phone. */
+	.tag.paid-by-hand {
+		border-color: rgba(74, 222, 128, 0.4);
+		color: #86efac;
+		overflow-wrap: anywhere;
+		border-radius: 12px;
 	}
 	.holder {
 		min-height: 34px;

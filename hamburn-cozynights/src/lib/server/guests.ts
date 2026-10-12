@@ -32,6 +32,7 @@ type GuestOrder = Pick<
 	| 'email'
 	| 'burner_name'
 	| 'handed_over_at'
+	| 'unpaid'
 	| 'created'
 >;
 type GuestNotify = Pick<
@@ -99,6 +100,7 @@ export function describeGuests(records: GuestRecords): GuestRow[] {
 			email: maskEmail(order.email),
 			hasEmail: !!order.email,
 			signedIn: !!order.order_hash,
+			unpaid: !!order.unpaid,
 			imported: order.created ?? '',
 			handedOverAt: order.handed_over_at ?? '',
 			spot: booking
@@ -138,7 +140,8 @@ export async function readGuests(adminPb: TypedPocketBase): Promise<GuestRow[]> 
 	const bulk = { batch: 1000, requestKey: null } as const;
 	const [orders, beds, rooms, houses, assigned, notify, requests] = await Promise.all([
 		adminPb.collection('orders').getFullList<GuestOrder>({
-			fields: 'id,order_number,order_hash,customer_name,email,burner_name,handed_over_at,created',
+			fields:
+				'id,order_number,order_hash,customer_name,email,burner_name,handed_over_at,unpaid,created',
 			...bulk
 		}),
 		adminPb.collection('beds').getFullList<BookingRecords['beds'][number]>({

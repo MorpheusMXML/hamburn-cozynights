@@ -7,6 +7,7 @@
 	import PassTicket from '$lib/components/PassTicket.svelte';
 	import type { PageData, ActionData } from './$types';
 	import { enhance } from '$app/forms';
+	import { startWait } from '$lib/waiting';
 	import { confirmDialog, toast } from '$lib/dialogs';
 
 	export let data: PageData;
@@ -106,9 +107,11 @@
 							}
 							releaseError = '';
 							isReleasing = true;
+							const waited = startWait('releasing');
 
 							return async ({ result, update }) => {
 								isReleasing = false;
+								waited();
 								if (result.type === 'failure') {
 									releaseError =
 										(result.data as { error?: string } | undefined)?.error ||

@@ -3,10 +3,11 @@ import PocketBase from 'pocketbase';
 import { type Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { TypedPocketBase } from '$lib/pocketbase-types';
-import { getAdminPb, PB_URL } from '$lib/server/pocketbase';
+import { authTimeout, getAdminPb, limitReads, PB_URL, tokenRejected } from '$lib/server/pocketbase';
 import { assertEncryptionKey } from '$lib/server/crypto';
 import {
 	ADMIN_COLLECTION,
+	ADMIN_SESSION_UNCHECKED,
 	AUTH_COOKIE,
 	isAdminPath,
 	isAdminAccount,
@@ -22,8 +23,28 @@ import { resolveGuestSession } from '$lib/server/guest-session';
  * the health endpoint, the docs and the booking pass (its code is in the URL)
  * don't, and shouldn't pay for a ticket lookup.
  */
+/**
+ * Where a request goes, as the router sees it: the matched route (`/admin/house/[id]`),
+ * or for no match the decoded path. The router matches the decoded path, so a
+ * raw path like `/%61dmin/api/stats` reaches the admin area although it
+ * doesn't start with "/admin" — every check here must look where the router looks.
+ */
+function routedPath(event: Parameters<Handle>[0]['event']): string {
+	if (event.route?.id) return event.route.id;
+	try {
+		return decodeURI(event.url.pathname);
+	} catch {
+		return event.url.pathname; // malformed escapes: SvelteKit answers 400 itself
+	}
+}
+
 function usesGuestSession(pathname: string): boolean {
 	if (isAdminPath(pathname)) return false;
+	// The room page's poll for spots being booked ($lib/server/spot-holds)
+	// checks the cookie's signature itself: every open room page asks every
+	// few seconds, and a ticket lookup each time would load PocketBase at the
+	// opening rush. Ending a session stays with the page loads.
+	if (pathname === '/room/[id]/holds') return false;
 	return !/^\/(auth|api|docs|pass)(\/|$)/.test(pathname);
 }
 
@@ -68,7 +89,8 @@ const SECURITY_HEADERS: Record<string, string> = {
 
 export const handle: Handle = async ({ event, resolve }) => {
 	// 1. Initialize PocketBase instances
-	event.locals.pb = new PocketBase(PB_URL) as TypedPocketBase;
+	// Reads give up after 10 s ($lib/server/pocketbase, limitReads); writes never do.
+	event.locals.pb = limitReads(new PocketBase(PB_URL) as TypedPocketBase);
 	// Auto-cancellation is meant for a browser deduping its own requests. Here
 	// the layout and the page load run in parallel and both read app_settings:
 	// the SDK would cancel one of them, and that page would fall back to Staging.
@@ -83,7 +105,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 	//    Pages of the crew and endpoints that carry their own code (the booking
 	//    pass) never need it.
 	event.locals.orderNumber = null;
-	if (usesGuestSession(event.url.pathname)) {
+	// A remote-function call (/_app/remote/…) reports the page path "/": it is
+	// none, and the app has no remote functions to act for a guest.
+	const where = routedPath(event);
+	if (usesGuestSession(where) && !event.isRemoteRequest) {
 		const session = await resolveGuestSession(event.cookies, event.locals.pb, event.locals.adminPb);
 		event.locals.orderNumber = session.code;
 		event.locals.order = session.order;
@@ -98,9 +123,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 	//    Once a week the session ends anyway and Google is asked again
 	//    (ADMIN_SIGN_IN_MAX_AGE_DAYS): that's when Workspace suspensions and
 	//    2-Step Verification apply.
+	//    Only PocketBase turning the token down (revoked, expired, account
+	//    removed) ends the session. When it doesn't answer (restart, a hiccup
+	//    under load), the cookie stays as it is and only this request runs
+	//    without admin rights (adminUnchecked): the admin is still signed in a
+	//    moment later, instead of being sent through Google again.
 	event.locals.admin = null;
 	event.locals.pendingAdmin = null;
 	event.locals.adminSignInExpired = false;
+	event.locals.adminUnchecked = false;
 	const hadAuthCookie = event.cookies.get(AUTH_COOKIE) !== undefined;
 
 	if (hadAuthCookie) {
@@ -111,7 +142,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 		if (event.locals.pb.authStore.isValid && isAdminAccount(event.locals.pb.authStore.record)) {
 			try {
-				await event.locals.pb.collection(ADMIN_COLLECTION).authRefresh();
+				await event.locals.pb.collection(ADMIN_COLLECTION).authRefresh(authTimeout());
 				const record = event.locals.pb.authStore.record;
 				if (isSignInFresh(record)) {
 					event.locals.admin = toAdminSession(record);
@@ -119,31 +150,55 @@ export const handle: Handle = async ({ event, resolve }) => {
 				} else {
 					event.locals.adminSignInExpired = true;
 				}
-			} catch {
-				// revoked, expired or PocketBase unreachable
+			} catch (err) {
+				if (!tokenRejected(err)) {
+					event.locals.adminUnchecked = true;
+					console.error(
+						'[Admin] Session check failed, PocketBase did not answer; the session is kept:',
+						(err as Error)?.message
+					);
+				}
 			}
 		}
 
+		// Not signed in for this request: nothing goes to PocketBase with the token.
 		if (!event.locals.admin && !event.locals.pendingAdmin) event.locals.pb.authStore.clear();
 	}
+	// What the request itself does to the session (signing out, the Google
+	// callback) is saved in step 5, also when the check above couldn't run.
+	let sessionChanged = false;
+	event.locals.pb.authStore.onChange(() => {
+		sessionChanged = true;
+	});
 
 	// 4. The admin area requires an admin session. Page and data requests reach
 	//    the admin layout, which redirects to the login page; everything else
 	//    (form actions, API endpoints) is refused right here, so no individual
 	//    action can be forgotten.
-	const { pathname } = event.url;
-	if (isAdminPath(pathname) && !isPublicAdminPath(pathname) && !event.locals.admin) {
+	if (isAdminPath(where) && !isPublicAdminPath(where) && !event.locals.admin) {
 		const isPageRequest =
 			(event.request.method === 'GET' || event.request.method === 'HEAD') &&
-			!pathname.startsWith('/admin/api/');
+			!where.startsWith('/admin/api/');
 		if (!isPageRequest) {
+			const isAction = event.request.headers.get('x-sveltekit-action') === 'true';
+			if (event.locals.adminUnchecked) {
+				// Not a sign-in problem: the page says so where the admin is looking
+				// (an action result of type "error"), and the session stays.
+				if (isAction) {
+					return new Response(
+						JSON.stringify({ type: 'error', error: { message: ADMIN_SESSION_UNCHECKED } }),
+						{ status: 503, headers: { 'content-type': 'application/json' } }
+					);
+				}
+				return new Response(ADMIN_SESSION_UNCHECKED, { status: 503 });
+			}
 			// A form submitted with use:enhance cannot show a plain-text 403: the
 			// client deserialises every action response, so a bare body ends up as
 			// the page's generic "We could not reach the server" message, which
 			// hides the real reason (the admin session ran out, at the latest at
 			// the weekly re-sign-in). An action result of type "redirect" sends
 			// the browser to the login page instead, where the reason is visible.
-			if (event.request.headers.get('x-sveltekit-action') === 'true') {
+			if (isAction) {
 				const location = event.locals.adminSignInExpired
 					? '/admin/login?error=reauth'
 					: '/admin/login';
@@ -162,8 +217,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 		if (!response.headers.has(name)) response.headers.set(name, value);
 	}
 
-	// 5. Persist (or clear) the admin session cookie. Guests never get one.
-	if (hadAuthCookie || event.locals.pb.authStore.isValid) {
+	// 5. Persist (or clear) the admin session cookie. Guests never get one. A
+	//    session PocketBase couldn't check is left exactly as it is, unless the
+	//    request signed in or out itself.
+	const leaveCookie = event.locals.adminUnchecked && !sessionChanged;
+	if (!leaveCookie && (hadAuthCookie || event.locals.pb.authStore.isValid)) {
 		response.headers.append(
 			'set-cookie',
 			event.locals.pb.authStore.exportToCookie(

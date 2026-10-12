@@ -57,6 +57,7 @@ import { PASS_ALPHABET } from '$lib/pass';
 import {
 	GROUP_CODE_LENGTH,
 	GROUP_MAX,
+	blockedConfirmed,
 	formatGroupCode,
 	requestKinds,
 	type AdminGroupView,
@@ -431,21 +432,25 @@ export async function decideGroup(
 
 /**
  * Books the picked spots for the group's members — whatever the booking
- * phase, ♿ and locked spots included — and approves waiting requests on the
- * way, like assignSpot does for one request. Every pick is checked first
- * (members, duplicates, declined requests, free spots): one problem and
- * nothing is booked. Then it books one member after the other and doesn't
- * roll back: a member whose booking fails (the spot was taken meanwhile, the
- * request withdrawn) ends up in `failed`, the others stay booked.
+ * phase, ♿ spots included, a locked 🔒 one when the crew confirmed it — and
+ * approves waiting requests on the way, like assignSpot does for one request.
+ * Every pick is checked first (members, duplicates, declined requests, free
+ * spots, locked spots nobody confirmed): one problem and nothing is booked.
+ * Then it books one member after the other and doesn't roll back: a member
+ * whose booking fails (the spot was taken meanwhile, the request withdrawn)
+ * ends up in `failed`, the others stay booked.
  * @param picks request id → bed id; an empty bed id or the member's current
  *   spot changes nothing ("Keep as is")
+ * @param blockedOk the locked 🔒 spots the crew confirmed (the dialog's
+ *   warning, or BLOCKED_OK_ALL from the page without JavaScript)
  * @throws {RequestError} when a check fails; nothing was booked then
  */
 export async function assignGroup(
 	adminPb: TypedPocketBase,
 	admin: AdminSession,
 	groupId: string,
-	picks: { requestId: string; bedId: string }[]
+	picks: { requestId: string; bedId: string }[],
+	blockedOk: readonly string[] = []
 ): Promise<{
 	booked: number;
 	approved: number;
@@ -519,6 +524,14 @@ export async function assignGroup(
 					409
 				);
 			}
+			// Out of service: only on purpose, and a spot locked since the page
+			// loaded was never confirmed.
+			if (bed.is_locked && bed.order !== member.order && !blockedConfirmed(blockedOk, bedId)) {
+				throw new RequestError(
+					`🔒 ${toSpot(bed).label} is blocked (out of service) now, so nothing was booked. Reload the page and pick again, or confirm it.`,
+					409
+				);
+			}
 		}
 
 		let booked = 0;
@@ -526,7 +539,10 @@ export async function assignGroup(
 		const failed: { requestId: string; name: string; message: string }[] = [];
 		for (const { member, bedId } of chosen) {
 			try {
-				const outcome = await assignSpot(adminPb, admin, member.id, bedId, { log: false });
+				const outcome = await assignSpot(adminPb, admin, member.id, bedId, {
+					log: false,
+					blockedOk: blockedConfirmed(blockedOk, bedId)
+				});
 				booked++;
 				if (outcome.approved) approved++;
 			} catch (err) {

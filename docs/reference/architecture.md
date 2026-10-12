@@ -63,6 +63,10 @@ Page data is trimmed on the server to what the page shows. A guest's room page, 
 
 The app server's connection signs in as a service account and checks its token with PocketBase every five minutes. If PocketBase doesn't answer that check (a restart, a hiccup under load), the token is kept and checked again ten seconds later, so the app works again the moment PocketBase does. Only a token PocketBase turns down is dropped and replaced by a fresh sign-in. When the layout can't be read, the map says *The map could not be loaded right now. Please try again in a minute.*, never an empty camp that guests would read as sold out.
 
+Every read the app sends to PocketBase gives up after 10 seconds, the service account's sign-in and token check after 5 (`src/lib/server/pocketbase.ts`). Writes never do: a booking or a release runs to the end. The same goes for admins: only PocketBase turning a session down ends it; when it doesn't answer, the admin stays signed in and only that request runs without admin rights. When the booking phase can't be read, the guest pages say the booking system is not reachable (for 30 seconds they show the last phase they read), guest actions change nothing and say so, and what unlocks something destructive — clearing the bookings, a template import, deleting a house, freeing a spot — refuses.
+
+PocketBase saves the whole record on every update, so two writes of one record at the same moment would undo each other. Every write of a spot, a ticket or `app_settings` in the app therefore runs in that record's queue (`withLock` in `src/lib/server/booking.ts`: `bed:<id>`, `order:<id>`, `app_settings`), the queues guest bookings use too. Several are always taken in the same order — request group, ticket, spot (several spots sorted by id), `app_settings` last — so they never wait on each other in a circle. The queues live in the app's memory: they cover one app instance, not PocketBase's own hooks.
+
 ## Data model
 
 ```mermaid
@@ -202,7 +206,7 @@ sequenceDiagram
   App->>App: Phase live? Ticket code known?<br/>Bed made and rules ticked (a new spot)?
   App->>App: Queue behind other requests<br/>for this ticket and this spot
   App->>DB: Re-read the spot
-  alt taken, locked or inactive
+  alt taken, locked, inactive or held by another ticket
     App-->>Guest: "This spot is already claimed." / "not available"
   else free
     App->>DB: Claim the spot for the ticket
@@ -214,9 +218,11 @@ sequenceDiagram
 
 - **No double bookings.** Requests for the same ticket or the same spot run one after another, and availability is re-checked inside that queue. Two guests clicking the same bed at the same moment: exactly one wins.
 - **One ticket, one spot.** Even parallel requests from the same ticket end with a single booked spot.
-- **Claim first, then release.** If something fails midway, a guest keeps their old spot rather than ending up with none.
+- **All or nothing.** Releasing the old spot, claiming the new one and writing the burner name are one PocketBase transaction (`POST /api/cozy/book`), which also checks the phase at the moment it writes. If anything fails, nothing changes: a guest never ends up with two spots, none, or a spot without its name. A unique index on `beds.order` is the database's own guard for "one ticket, one spot".
 - **Every new spot comes with the check.** The booking window sends `rulesConfirmed` and `beddingConfirmed` with the booking: the guest made the bed and ticked the rules. Without both, the room page and the roulette refuse a new spot before touching it (*Before a spot is yours, make your bed…*); a new burner name for the spot the ticket holds needs neither, and so do the crew's bookings. Nothing about it is stored.
-- **Single instance.** The queue lives in the app process, which matches the deployment of exactly one app container per environment.
+- **Ten-minute holds.** Opening the booking window, or the roulette landing on a spot, holds that spot for the ticket (`src/lib/server/spot-holds.ts`, taken in the same queue): one hold per ticket and per spot, and asking for a spot that can't be held lets go of the ticket's earlier one. A guest's booking of a spot another ticket holds is refused; the crew books past holds. A hold ends with a booking, when the window closes or the page is left (the page sends its own path, never the URL a link moved on to), at sign-out, after ten minutes, or when the crew releases all bookings, and the same ticket can't hold that spot again for another ten minutes. Open room pages ask `GET /room/<id>/holds` every 15 s while Live Booking runs, the tab is visible and no booking window is open. That request costs no database read: the hook skips the ticket lookup for this one path (`hooks.server.ts`), and the endpoint knows the guest by the cookie's signature and the ticket code's lookup hash, answers from memory and never ends a session (a cookie that doesn't check out gets 401, and the page reloads, where the usual check says why). When a hold ends early, usually a booking, the page reloads its data: an ordinary room load. Holds live in memory like the queue: a restart forgets them, and the spots are first come, first served again.
+- **A sign while it's busy.** When a sign-in, booking or release, or a page change between guest pages, takes longer than 0.8 s, the wait veil (`src/lib/waiting.ts`, `WaitVeil.svelte` in the root layout) covers the page and says whether a reload would help; it ends with the answer, or after 90 s at the latest. Background requests (holds, refreshes) never show it.
+- **Single instance.** The queue lives in the app process, which matches the deployment of exactly one app container per environment. A second instance would lose the queue's order, but not the database's guarantees above.
 - **A booking window without a scheduler.** The phase is *the one set by hand, unless the armed timer's opening or closing time has passed* (`src/lib/booking-phase.ts`). It is evaluated on every request, so nothing has to run at the opening or closing moment; open pages reload their data when their countdown ends. Admins enter the times in Europe/Berlin time. PocketBase's notification loop only *announces* a reached time to the crew group.
 
 ## Repository layout

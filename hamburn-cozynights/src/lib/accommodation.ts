@@ -541,8 +541,10 @@ export type NeedFit = 'fits' | 'conflict' | 'unknown';
  * person they help: a question of who sleeps where), and what an art project
  * or a crew asks for (a room of their own, a bed close to their piece, or —
  * on old requests — spots close together). The ♿ picker shows no ✓ or ✗ for
- * them, and the capacity line on the requests page leaves them out, so
- * project and helper requests never count against the ♿ spots.
+ * them, and the per-need lines of the capacity box on the requests page
+ * leave them out. The ♿ spots are the pool for every request all the same
+ * (its ♿ line counts every open request): these needs only decide nothing
+ * about which spot fits.
  */
 export const MATCHED_BY_HAND: readonly SpecialNeed[] = [
 	'power',

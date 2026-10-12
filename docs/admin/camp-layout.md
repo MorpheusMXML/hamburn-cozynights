@@ -53,7 +53,17 @@ After IGNITE the new pin stays selected; <kbd>MANAGE ROOMS ⚙️</kbd> in its s
 | Delete | <kbd>VANISH FROM PLAYA 🌪️</kbd> in the sidebar or <kbd>VANISH 🌪️</kbd> on the card, then confirm. |
 
 > [!CAUTION] Deleting is final
-> Deleting a house deletes all its rooms and spots too. Any test bookings on them are released first, and ticket codes stay valid. Not sure? [Export a template](./templates) before you delete.
+> Deleting a house deletes all its rooms and spots too. Bookings on them are released first, and ticket codes stay valid — guest bookings only by a superuser, see [Deleting or freeing booked spots](#booked-spots). Not sure? [Export a template](./templates) before you delete.
+> If one of its spots gets booked while the house is being deleted (the crew can book special-needs spots in every phase), the deletion stops at that spot: *A spot of this house was booked while it was being deleted, so the deletion stopped there …* Reload the page and decide about that booking first.
+
+### Deleting or freeing booked spots {#booked-spots}
+
+Deleting a house, a room or a spot, and 🔄 FREE on a spot, ends the guest bookings on it. So that a misclick costs nobody their spot:
+
+- **Only superusers** end guest bookings that way. A regular admin reads *Only a superuser can release them* in the dialog, and the server refuses the same way (*This room holds 2 guest bookings — only a superuser can release them.*). Spots marked 🔄 TAKEN hold no ticket: every admin can free or delete them.
+- **A spot the crew booked for a [special-needs request](./special-needs)** goes only when the superuser ticks *Release the special-needs spot the crew booked too* in the dialog. Without the tick nothing changes and the message says how many: *This house holds 1 spot the crew booked for special-needs requests, so nothing was changed.* Their requests stay approved and show *No spot yet*. The other way is <kbd>Release spot</kbd> on the requests page first.
+- **The crew chat hears about it**, with counts only: *🚪 Room deleted by …: 2 booking(s) released, 1 of them a special-needs spot the crew booked*. Deleting rooms and spots that held no guest booking is not reported.
+- **When the booking phase can't be read** (PocketBase not answering), deleting a house and 🔄 FREE refuse: *The booking phase could not be read, so nothing was changed. Try again in a moment.*
 
 ### House details 🏷️ {#house-details}
 
@@ -108,7 +118,7 @@ A house holds up to 50 rooms, a room up to 50 spots. In a hut group the form say
 
 ### Room cards
 
-Each card under **ACTIVE ROOMS 🚪** (or *huts*, *tents*, depending on the house's kind) shows the room number, name, its kind and features, what kind of beds it holds and **SPOTS CLAIMED 📊** (taken / active). Click a card or <kbd>MANAGE SPOTS 🛌</kbd> to manage its spots. Below the cards, **🛏️ Who is here** lists the house's bookings room by room: the guest, when they booked, the check-in (see [Bookings & check-ins](./bookings)). <kbd>VANISH ROOM 🌪️</kbd> deletes the room **with all its spots and any bookings on them**; the guests get a *spot was released* message, and their ticket codes stay valid.
+Each card under **ACTIVE ROOMS 🚪** (or *huts*, *tents*, depending on the house's kind) shows the room number, name, its kind and features, what kind of beds it holds and **SPOTS CLAIMED 📊** (taken / active). Click a card or <kbd>MANAGE SPOTS 🛌</kbd> to manage its spots. Below the cards, **🛏️ Who is here** lists the house's bookings room by room: the guest, when they booked, the check-in (see [Bookings & check-ins](./bookings)). <kbd>VANISH ROOM 🌪️</kbd> deletes the room **with all its spots and any bookings on them**; the guests get a *spot was released* message, and their ticket codes stay valid. Guest bookings go only with a superuser, see [Deleting or freeing booked spots](#booked-spots).
 
 ## Spots
 
@@ -180,7 +190,7 @@ Whatever the crew holds back — 🔄 TAKEN without a ticket, 🔒 locked, ♿ k
 | 🗑 DELETE | Delete the spot (its bunk partner, if any, stays as a spot on its own) | <span class="no">✗</span> |
 
 ::: tip Lock or deactivate?
-**Lock** a spot that exists but must not be booked by guests: a broken bed, or a bed kept for the crew. Guests see it as *Blocked by admin*. An admin who is signed in can still book a locked spot during Live Booking through the normal booking pages with a ticket code. A ♿ spot is different: nobody books it there, admins included; it is booked only for a request on ♿ **Special needs**.
+**Lock** a spot that exists but must not be booked: a broken bed, or one that is out of service. Guests see it as *Blocked by admin*. On the normal booking pages it can still be booked during Live Booking with a crew ticket, a ticket whose e-mail is the address of an approved admin or superuser account; being signed in to the admin area doesn't matter, and with any other ticket it never works. For someone without an admin account, unlock the spot for them or book it through a special-needs request. Spots kept for special needs are marked ♿, not locked: nobody books those on the booking pages, not even with a crew ticket; they are booked only for a request on ♿ **Special needs**.
 
 **Deactivate** a spot that isn't in use at all (yet). It no longer counts as a spot anywhere, and not even an admin can book it.
 :::
@@ -188,5 +198,5 @@ Whatever the crew holds back — 🔄 TAKEN without a ticket, 🔒 locked, ♿ k
 ::: details Marking a spot as taken without a ticket
 🔄 TAKEN marks a free spot as taken without attaching a ticket, for example to hold a bed during testing. The admin card says **BLOCKED 🛠** (violet), the booking lists show *🛠 Blocked · Blocked by admin*, and guests see *Blocked by admin* · *Not available*, like a locked spot. **Clear all bookings** and a superuser's switch back to Staging free these spots too. For beds that should stay unavailable, locking is the better choice. A ♿ spot marked TAKEN is not offered for [special-needs requests](./special-needs) until it is free again.
 
-🔄 FREE on a spot that a guest booked cancels that booking: the dialog *Cancel this guest's booking?* asks first (<kbd>Free the spot</kbd> / <kbd>Keep booking</kbd>), the guest gets a *spot was released* message, and their ticket code stays valid.
+🔄 FREE on a spot that a guest booked cancels that booking: the dialog *Cancel this guest's booking?* asks first (<kbd>Free the spot</kbd> / <kbd>Keep booking</kbd>), the guest gets a *spot was released* message, and their ticket code stays valid. Only a superuser can do that; 🗑 DELETE on a booked spot the same. See [Deleting or freeing booked spots](#booked-spots).
 :::

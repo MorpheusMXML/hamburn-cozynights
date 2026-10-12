@@ -2,14 +2,18 @@
  * The guest session: one ticket code in a cookie, and the booking round it was
  * signed in for.
  *
- * The cookie holds nothing but the code — bookings, special-needs requests and
- * the phase are read from PocketBase on every request. Two things end a
- * session, and `hooks.server.ts` checks both before any page runs, so every
- * page sees the same answer:
+ * The cookie holds nothing but the code and the server's signature over it
+ * and the round ($lib/server/session-sig) — bookings, special-needs requests
+ * and the phase are read from PocketBase on every request. A cookie the server
+ * didn't sign ends right away, without a lookup: the cookie is no way to try
+ * out ticket codes. Three more things end a session, and `hooks.server.ts`
+ * checks them before any page runs, so every page sees the same answer:
  *
  * - **the code is gone** (test codes removed, roster replaced, the ticket list
  *   deleted after the event): the cookies go and the guest is asked for their
  *   code again, instead of the start page still saying "already signed in";
+ * - **the ticket isn't paid**: a later ticket list flags it `unpaid`
+ *   (pb_migrations/1761000000_ticket_sign_in.js); the start page says why;
  * - **a new booking round started**: `app_settings.guest_round` moved on
  *   (a superuser released every booking, see the Control Center), so every
  *   device signs in once more. Nothing else moves it — the timer opening or
@@ -22,8 +26,10 @@
 import { dev } from '$app/environment';
 import type { Cookies } from '@sveltejs/kit';
 import type { OrdersResponse, TypedPocketBase } from '$lib/pocketbase-types';
-import { APP_SETTINGS_ID } from '$lib/server/constants';
-import { BookingService } from '$lib/server/booking';
+import { APP_SETTINGS_ID, APP_SETTINGS_LOCK } from '$lib/server/constants';
+import { BookingService, withLock } from '$lib/server/booking';
+import { guestCookieKey } from '$lib/server/crypto';
+import { readSignedGuestCode, signGuestCode } from '$lib/server/session-sig';
 
 /** The guest's ticket code. */
 export const GUEST_COOKIE = 'bookingCode';
@@ -40,12 +46,15 @@ const COOKIE_OPTIONS = {
 } as const;
 
 /** Why a session ended, for the hint on the start page. */
-export type GuestSignOut = 'expired' | 'round';
+export type GuestSignOut = 'expired' | 'round' | 'unpaid';
 
 const isNotFound = (err: unknown) => (err as { status?: number })?.status === 404;
 
 export function setGuestSession(cookies: Cookies, code: string, round: number): void {
-	cookies.set(GUEST_COOKIE, code, { ...COOKIE_OPTIONS, maxAge: MAX_AGE });
+	cookies.set(GUEST_COOKIE, signGuestCode(guestCookieKey(), code, round), {
+		...COOKIE_OPTIONS,
+		maxAge: MAX_AGE
+	});
 	cookies.set(ROUND_COOKIE, String(round), { ...COOKIE_OPTIONS, maxAge: MAX_AGE });
 }
 
@@ -103,28 +112,45 @@ export async function readGuestRound(pb: TypedPocketBase): Promise<number | null
  * @returns the new round
  */
 export async function bumpGuestRound(pb: TypedPocketBase): Promise<number> {
-	let current = 0;
-	let exists = true;
-	try {
-		const settings = await pb
-			.collection('app_settings')
-			.getOne(APP_SETTINGS_ID, { requestKey: null });
-		current = Number(settings?.guest_round) || 0;
-	} catch (err) {
-		if (!isNotFound(err)) throw err;
-		exists = false;
-	}
+	// Read and written in the settings' queue: a phase switch or another
+	// switch saved at the same moment stays saved. Never call this while
+	// holding that lock (it isn't re-entrant): setPhase bumps after its write.
+	return withLock(APP_SETTINGS_LOCK, async () => {
+		let current = 0;
+		let exists = true;
+		try {
+			const settings = await pb
+				.collection('app_settings')
+				.getOne(APP_SETTINGS_ID, { requestKey: null });
+			current = Number(settings?.guest_round) || 0;
+		} catch (err) {
+			if (!isNotFound(err)) throw err;
+			exists = false;
+		}
 
-	const next = current + 1;
-	if (exists) await pb.collection('app_settings').update(APP_SETTINGS_ID, { guest_round: next });
-	else await pb.collection('app_settings').create({ id: APP_SETTINGS_ID, guest_round: next });
-	return next;
+		const next = current + 1;
+		if (exists) await pb.collection('app_settings').update(APP_SETTINGS_ID, { guest_round: next });
+		else await pb.collection('app_settings').create({ id: APP_SETTINGS_ID, guest_round: next });
+		return next;
+	});
 }
 
 /** The round the cookie was set in; cookies from before the round stamp count as 0. */
 function signedInRound(cookies: Cookies): number {
 	const round = Number(cookies.get(ROUND_COOKIE));
 	return Number.isFinite(round) && round >= 0 ? round : 0;
+}
+
+/**
+ * The ticket code of a signed guest cookie, by its signature alone: no
+ * PocketBase, no round or ticket check, and nothing is deleted. Only for a
+ * request that shows nothing personal and changes nothing (the room page's
+ * poll for spots being booked); everything else goes through
+ * resolveGuestSession.
+ */
+export function readGuestCookie(cookies: Cookies): string | null {
+	const value = cookies.get(GUEST_COOKIE);
+	return value ? readSignedGuestCode(guestCookieKey(), value, signedInRound(cookies)) : null;
 }
 
 export interface GuestSession {
@@ -145,11 +171,20 @@ export async function resolveGuestSession(
 	pb: TypedPocketBase,
 	adminPb: TypedPocketBase
 ): Promise<GuestSession> {
-	const code = cookies.get(GUEST_COOKIE) || null;
-	if (!code) return { code: null };
+	const value = cookies.get(GUEST_COOKIE) || null;
+	if (!value) return { code: null };
+
+	// Not signed by this server (made up, from before the signature, or for
+	// another key): over before anything asks PocketBase.
+	const signedIn = signedInRound(cookies);
+	const code = readSignedGuestCode(guestCookieKey(), value, signedIn);
+	if (!code) {
+		clearGuestSession(cookies);
+		return { code: null, signedOut: 'expired' };
+	}
 
 	const round = await readGuestRound(pb);
-	if (round !== null && signedInRound(cookies) !== round) {
+	if (round !== null && signedIn !== round) {
 		clearGuestSession(cookies);
 		return { code: null, signedOut: 'round' };
 	}
@@ -168,6 +203,11 @@ export async function resolveGuestSession(
 		// The code was removed from the ticket list (or was never in it).
 		clearGuestSession(cookies);
 		return { code: null, signedOut: 'expired' };
+	}
+	if (order.unpaid) {
+		// A later ticket list says the order isn't paid (any more).
+		clearGuestSession(cookies);
+		return { code: null, signedOut: 'unpaid' };
 	}
 	return { code, order };
 }

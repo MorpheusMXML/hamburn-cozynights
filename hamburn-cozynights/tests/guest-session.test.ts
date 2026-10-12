@@ -25,9 +25,13 @@ import {
 	setGuestSession,
 	signInUrl
 } from '../src/lib/server/guest-session';
+import { guestSessionKey, signGuestCode } from '../src/lib/server/session-sig';
 import type { TypedPocketBase } from '../src/lib/pocketbase-types';
 
 const CODE = 'UT-7F3K9Q';
+const KEY = guestSessionKey('00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff');
+/** The cookie the server sets when `code` signs in for `round`. */
+const signed = (code: string, round = 0) => signGuestCode(KEY, code, round);
 
 /** Just enough of SvelteKit's `cookies`: what the browser sent, and what the answer sets. */
 function fakeCookies(sent: Record<string, string> = {}) {
@@ -86,7 +90,8 @@ describe('signing in and out', () => {
 	it('stores the code and the round it was signed in for', () => {
 		const cookies = fakeCookies();
 		setGuestSession(cookies, CODE, 3);
-		expect(cookies.jar[GUEST_COOKIE]).toBe(CODE);
+		expect(cookies.jar[GUEST_COOKIE]).toBe(signed(CODE, 3));
+		expect(cookies.jar[GUEST_COOKIE]).toMatch(/^UT-7F3K9Q\.[A-Za-z0-9_-]{43}$/);
 		expect(cookies.jar[ROUND_COOKIE]).toBe('3');
 
 		clearGuestSession(cookies);
@@ -103,7 +108,7 @@ describe('signing in and out', () => {
 describe('resolveGuestSession', () => {
 	it('keeps a session whose code is in the ticket list', async () => {
 		const pb = camp();
-		const cookies = fakeCookies({ [GUEST_COOKIE]: CODE, [ROUND_COOKIE]: '0' });
+		const cookies = fakeCookies({ [GUEST_COOKIE]: signed(CODE), [ROUND_COOKIE]: '0' });
 
 		const session = await resolveGuestSession(cookies, pb, pb);
 		expect(session.code).toBe(CODE);
@@ -114,7 +119,7 @@ describe('resolveGuestSession', () => {
 
 	it('ends a session whose code was removed from the ticket list', async () => {
 		const pb = camp();
-		const cookies = fakeCookies({ [GUEST_COOKIE]: 'TEST-GONE', [ROUND_COOKIE]: '0' });
+		const cookies = fakeCookies({ [GUEST_COOKIE]: signed('TEST-GONE'), [ROUND_COOKIE]: '0' });
 
 		const session = await resolveGuestSession(cookies, pb, pb);
 		expect(session.code).toBe(null);
@@ -124,7 +129,7 @@ describe('resolveGuestSession', () => {
 
 	it('ends every session of an earlier booking round', async () => {
 		const pb = camp();
-		const cookies = fakeCookies({ [GUEST_COOKIE]: CODE, [ROUND_COOKIE]: '0' });
+		const cookies = fakeCookies({ [GUEST_COOKIE]: signed(CODE), [ROUND_COOKIE]: '0' });
 		await bumpGuestRound(pb);
 
 		const session = await resolveGuestSession(cookies, pb, pb);
@@ -140,7 +145,7 @@ describe('resolveGuestSession', () => {
 
 	it('leaves a cookie from before the round stamp alone until the first reset', async () => {
 		const pb = camp();
-		const cookies = fakeCookies({ [GUEST_COOKIE]: CODE });
+		const cookies = fakeCookies({ [GUEST_COOKIE]: signed(CODE) });
 
 		expect((await resolveGuestSession(cookies, pb, pb)).code).toBe(CODE);
 
@@ -156,13 +161,33 @@ describe('resolveGuestSession', () => {
 			}),
 			filter: (expr: string) => expr
 		} as unknown as TypedPocketBase;
-		const cookies = fakeCookies({ [GUEST_COOKIE]: CODE, [ROUND_COOKIE]: '0' });
+		const cookies = fakeCookies({ [GUEST_COOKIE]: signed(CODE), [ROUND_COOKIE]: '0' });
 
 		const session = await resolveGuestSession(cookies, down, down);
 		expect(session.code).toBe(CODE);
 		expect(session.order).toBeUndefined();
 		expect(session.signedOut).toBeUndefined();
 		expect(cookies.deleted).toEqual([]);
+	});
+
+	it('ends a cookie the server did not sign, without asking PocketBase', async () => {
+		const untouched = {
+			collection: () => {
+				throw new Error('PocketBase must not be asked');
+			},
+			filter: (expr: string) => expr
+		} as unknown as TypedPocketBase;
+		for (const value of [
+			CODE, // a raw code, like every cookie from before the signature
+			`${CODE}.${'A'.repeat(43)}`, // a made-up signature
+			signed(CODE, 1), // signed for another round than the cookie says
+			signed('UT-OTHER').replace('UT-OTHER', CODE) // another code's signature
+		]) {
+			const cookies = fakeCookies({ [GUEST_COOKIE]: value, [ROUND_COOKIE]: '0' });
+			const session = await resolveGuestSession(cookies, untouched, untouched);
+			expect(session).toEqual({ code: null, signedOut: 'expired' });
+			expect(cookies.deleted).toEqual([GUEST_COOKIE, ROUND_COOKIE]);
+		}
 	});
 
 	it('is no session at all without a cookie', async () => {

@@ -35,6 +35,7 @@ chips, unless the guest put the panel away to look around.
 	import { cubicOut } from 'svelte/easing';
 	import { browser } from '$app/environment';
 	import { invalidateAll } from '$app/navigation';
+	import { resyncOnce } from '$lib/waiting';
 	import { page } from '$app/state';
 	import CountdownDigits from './CountdownDigits.svelte';
 	import VersionBadge from './VersionBadge.svelte';
@@ -115,21 +116,22 @@ chips, unless the guest put the panel away to look around.
 	// the server's: while the phase hasn't changed yet, ask again, more slowly.
 	// Only while the bar shows the countdown: under the map's phase panel the
 	// panel's own timer asks, so the switch is fetched once, not twice.
+	// One refresh at a time, the next one a while after the last answer
+	// (resyncOnce): at the opening rush an answer can take longer than the
+	// interval, and a newer refresh would make SvelteKit drop it.
 	let waitingFor = '';
 	let attempts = 0;
-	let lastReload = 0;
 	$effect(() => {
 		if (!browser || !countdown || !next || remaining > 0) return;
 		if (waitingFor !== next.at) {
 			waitingFor = next.at;
 			attempts = 0;
-			lastReload = 0;
 		}
-		if (now - lastReload >= resyncDelay(attempts)) {
-			lastReload = now;
-			attempts += 1;
-			invalidateAll();
-		}
+		const started = resyncOnce(() => invalidateAll(), {
+			gapMs: attempts === 0 ? 0 : resyncDelay(attempts),
+			kind: kind === 'opens' ? 'opening' : null
+		});
+		if (started) attempts += 1;
 	});
 
 	let open = $state(false);
