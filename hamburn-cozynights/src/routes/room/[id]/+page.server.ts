@@ -37,6 +37,7 @@ import type { PassSummary } from '$lib/pass';
 import { readFloorPlans } from '$lib/floor-plans';
 import { getLegalInfo } from '$lib/server/legal';
 import { BOOKING_CHECK_MISSING, bookingCheckPassed } from '$lib/booking-check';
+import { recordId } from '$lib/server/record-id';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 const SIGNED_OUT =
@@ -226,7 +227,7 @@ export const actions: Actions = {
 		if (phase === 'closed') return fail(403, { error: bookingRefusal(phase) });
 
 		const formData = await request.formData();
-		const bedId = formData.get('bedId') as string;
+		const bedId = recordId(formData, 'bedId');
 		const guestName = cleanBurnerName(formData.get('guestName')) || randomBurnerName();
 
 		if (!locals.orderNumber) return fail(401, { error: SIGNED_OUT });

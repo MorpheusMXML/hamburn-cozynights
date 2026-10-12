@@ -21,6 +21,7 @@ import { readFilters, spotFacts, spotMatchesFilters, type SpotFilter } from '$li
 import { readAvailableFilters } from '$lib/server/wishes';
 import { getLegalInfo } from '$lib/server/legal';
 import { BOOKING_CHECK_MISSING, bookingCheckPassed } from '$lib/booking-check';
+import { recordId } from '$lib/server/record-id';
 
 type BedWithHouse = BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>;
 
@@ -189,7 +190,7 @@ export const actions: Actions = {
 		if (!isBookingActive) return fail(403, { error: bookingRefusal(guestPhase) });
 
 		const formData = await request.formData();
-		const bedId = formData.get('bedId') as string;
+		const bedId = recordId(formData, 'bedId');
 		const guestName = ((formData.get('guestName') as string) || '').replace(/\s+/g, ' ').trim();
 
 		if (!locals.orderNumber) return fail(401, { error: SIGNED_OUT });
@@ -267,7 +268,7 @@ export const actions: Actions = {
 		if (!locals.orderNumber) return fail(401, { error: SIGNED_OUT });
 
 		const formData = await request.formData();
-		const confirmedBedId = (formData.get('bedId') as string) || undefined;
+		const confirmedBedId = recordId(formData, 'bedId') || undefined;
 		const bookingService = new BookingService(locals.adminPb);
 
 		try {

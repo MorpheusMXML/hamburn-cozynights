@@ -17,6 +17,7 @@ import {
 	SwapError,
 	withdrawSwap
 } from '$lib/server/swaps';
+import { recordId } from '$lib/server/record-id';
 
 const SIGNED_OUT =
 	'You are not signed in anymore. Go to the start page and enter your ticket code again.';
@@ -24,12 +25,6 @@ const CODE_UNKNOWN = 'Your ticket code was not found. Go to the start page and e
 const UNAVAILABLE = 'The booking system is not reachable right now. Nothing was changed.';
 
 type Failure = ActionFailure<{ error: string }>;
-
-/** A record id from the form, or '' for anything that isn't one. */
-function recordId(form: FormData, name: string): string {
-	const value = form.get(name);
-	return typeof value === 'string' && /^[a-z0-9]{1,32}$/.test(value) ? value : '';
-}
 
 /** Runs `step` for the signed-in guest's ticket and turns what can go wrong into a failure. */
 async function forGuest<T>(

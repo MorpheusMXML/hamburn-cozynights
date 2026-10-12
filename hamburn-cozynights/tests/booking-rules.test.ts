@@ -4,8 +4,11 @@ import {
 	BookingService,
 	BedUnavailableError,
 	BookingClosedError,
-	ReleaseFailedError
+	ReleaseFailedError,
+	lockCount,
+	withLock
 } from '../src/lib/server/booking';
+import { recordId } from '../src/lib/server/record-id';
 import { APP_SETTINGS_ID } from '../src/lib/server/constants';
 import { FailureRateLimiter } from '../src/lib/server/rate-limit';
 import { berlinLocalToIso, isoToBerlinLocal } from '../src/lib/time';
@@ -208,5 +211,61 @@ describe('FailureRateLimiter', () => {
 		expect(limiter.isBlocked('1.2.3.4', 10)).toBe(true);
 		expect(limiter.isBlocked('5.6.7.8', 10)).toBe(false);
 		expect(limiter.isBlocked('1.2.3.4', 1000)).toBe(false);
+	});
+});
+
+describe('withLock', () => {
+	it('runs holders of one key one after the other', async () => {
+		const order: string[] = [];
+		const slow = withLock('bed:x', async () => {
+			await new Promise((r) => setTimeout(r, 20));
+			order.push('first');
+		});
+		const fast = withLock('bed:x', async () => {
+			order.push('second');
+		});
+		await Promise.all([slow, fast]);
+		expect(order).toEqual(['first', 'second']);
+	});
+
+	it('forgets a key once its last holder is done, also after a failure', async () => {
+		const before = lockCount();
+		await Promise.all(
+			Array.from({ length: 200 }, (_, i) =>
+				withLock(`bed:never-seen-${i}`, async () => {
+					if (i % 2) throw new Error('boom');
+				}).catch(() => {})
+			)
+		);
+		await new Promise((r) => setTimeout(r, 0));
+		expect(lockCount()).toBe(before);
+	});
+});
+
+describe('recordId', () => {
+	const form = (value: string) => {
+		const data = new FormData();
+		data.set('bedId', value);
+		return data;
+	};
+
+	it('passes a PocketBase id', () => {
+		expect(recordId(form('a1b2c3d4e5f6g7h'), 'bedId')).toBe('a1b2c3d4e5f6g7h');
+	});
+
+	it('turns down anything a lock key should never be', () => {
+		for (const value of [
+			'',
+			'x'.repeat(33),
+			'a'.repeat(500_000),
+			'ABC',
+			'a b',
+			'a/b',
+			'../x',
+			'id"'
+		]) {
+			expect(recordId(form(value), 'bedId')).toBe('');
+		}
+		expect(recordId(new FormData(), 'bedId')).toBe('');
 	});
 });

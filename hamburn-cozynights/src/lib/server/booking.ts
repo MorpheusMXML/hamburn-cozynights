@@ -93,13 +93,19 @@ const locks = new Map<string, Promise<unknown>>();
 export function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
 	const prior = locks.get(key) ?? Promise.resolve();
 	const run = prior.then(fn, fn);
-	// Key space is bounded by the number of beds and orders, so entries are
-	// simply overwritten on reuse rather than explicitly cleaned up.
-	locks.set(
-		key,
-		run.catch(() => {})
-	);
+	const tail = run.catch(() => {});
+	locks.set(key, tail);
+	// Once the last holder is done the key goes, so the map only holds keys in
+	// use: ids come from guests' forms, and kept keys would add up for good.
+	void tail.then(() => {
+		if (locks.get(key) === tail) locks.delete(key);
+	});
 	return run;
+}
+
+/** How many keys are held or waited for right now (tests). */
+export function lockCount(): number {
+	return locks.size;
 }
 
 /** Several locks, taken in the order given. */
