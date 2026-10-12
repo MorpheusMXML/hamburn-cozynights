@@ -14,8 +14,16 @@ Check the code for typos: it's on your ticket and contains only letters, digits,
 The code contains a character that can't be part of a ticket code, often a space or a stray punctuation mark from copy and paste. Only letters, digits, `-` and `_` are allowed.
 :::
 
-::: details "Too many wrong ticket codes from your connection. Please wait up to 10 minutes…"
-After many wrong codes from the same network, CozyNights pauses sign-in attempts for a while to stop people from guessing codes. Wait a few minutes (at most ten) and try again. Correct codes never count towards this limit.
+::: details "Can't find your code?" and "…please enter your ticket code together with the e-mail address of your ticket."
+After three wrong codes the start page offers to e-mail you your code: enter the address you bought your ticket with, and it arrives within a few minutes (check your spam folder too). The page never says whether an address belongs to a ticket, so nobody can find out who has one. After five wrong codes, sign in with your code **and** that e-mail address for the next 30 minutes. This keeps strangers from guessing ticket codes.
+:::
+
+::: details "Too many wrong ticket codes from your connection. Please try again in …"
+After ten wrong codes from the same network, CozyNights pauses sign-in for 15 minutes, after three more for three hours. Wait, then sign in with your code and the e-mail address of your ticket, or let the start page e-mail you the code. Right codes never count as wrong ones.
+:::
+
+::: details "Your ticket is still unpaid…"
+The ticket shop has your order as not paid yet, so it can't book a bed. Contact the Membership Team and settle the invoice; once the crew loads the next ticket list, your code works.
 :::
 
 ::: details "The booking system is not reachable right now. Your code was not checked…"

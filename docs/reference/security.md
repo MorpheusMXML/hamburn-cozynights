@@ -13,10 +13,21 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 
 - **Looked up by a keyed hash.** Sign-in compares a keyed hash (HMAC-SHA256) of the code, not the code itself.
 - **Never logged.** Neither successful nor failed codes end up in log files.
-- **Kept in a protected cookie.** The browser stores the code in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie (`bookingCode`, 30 days) that scripts on the page can't read. A second cookie next to it (`bookingRound`) holds the booking round it was signed in for.
-- **Checked on every request.** The server looks the code up before any page runs (`src/lib/server/guest-session.ts`): a code that is no longer in the ticket list, and a code from an earlier booking round, end the session then and there — both cookies go and the start page asks for the code again. A PocketBase that can't be reached signs nobody out.
+- **Kept in a protected, signed cookie.** The browser stores the code in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie (`bookingCode`, 30 days) that scripts on the page can't read. A second cookie next to it (`bookingRound`) holds the booking round it was signed in for. The server signs both together (an HMAC with a key derived from `ENCRYPTION_KEY`, `src/lib/server/session-sig.ts`): a cookie it didn't write ends before anything asks the database, so the cookie is no way to try out codes.
+- **Checked on every request.** The server looks the code up before any page runs (`src/lib/server/guest-session.ts`): a code that is no longer in the ticket list, a ticket the list marks as unpaid, and a code from an earlier booking round end the session then and there — both cookies go and the start page says why. A PocketBase that can't be reached signs nobody out.
 - **A reset ends every session.** Releasing all bookings (the switch back to Staging, 🧨 Clear all bookings) counts the round up in `app_settings.guest_round`, so a new round never starts with devices still signed in for the last one.
-- **Guessing is slowed down.** Too many wrong codes from one address pause sign-in for that address for a few minutes. Correct codes never count, so a crowd behind one festival network isn't locked out.
+- **Guessing gets harder step by step** (`src/lib/server/login-guard.ts`). Wrong codes are counted per connection — an IPv4 address, or the /64 of an IPv6 address, since one machine can use any address of its /64 — for three hours after the last one:
+
+  | Wrong codes | What the start page does |
+  |---|---|
+  | 3 | offers to e-mail the code to the ticket's address |
+  | 5 | for 30 minutes, the code only works together with the ticket's e-mail address |
+  | 10 | no sign-in for 15 minutes |
+  | 13 | no sign-in for three hours |
+
+  More than 200 wrong codes within 10 minutes over all connections is an attack, not typos: for 30 minutes every sign-in needs the e-mail address as well, and the crew chat hears about it once. A right code never counts. It doesn't reset the count either, or a guesser with a ticket of their own could reset it between guesses. The counts live in the app's memory and start over when it restarts.
+- **Your code by e-mail.** The start page sends a ticket's codes to its e-mail address on request (*Can't find your code?*). It answers the same whether the address belongs to a paid ticket or not, and one address gets at most one such e-mail in 30 minutes and three a day.
+- **Unpaid tickets can't sign in.** The ticket list brings in orders that aren't paid yet, marked unpaid; their code gets a request to settle the invoice with the Membership Team instead of a session.
 
 ### Names and visibility
 
@@ -33,7 +44,7 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 ### Messages to guests
 
 - **Addresses come from the ticket list.** Guests never type one, so nobody can make CozyNights write to a stranger. The room page shows the address shortened (`m•••@example.com`).
-- **Only about the spot.** Messages contain house, room, spot and a link — never the ticket code — and are only sent when the spot of that ticket changes.
+- **Only about the spot.** Messages contain house, room, spot and a link — never the ticket code — and are only sent when the spot of that ticket changes. The one exception is the e-mail a guest asks for on the start page (*Can't find your code?*): it goes only to the address of a paid ticket and carries that ticket's code.
 - **Telegram is opt-in** through a one-time link that works for 30 minutes; only its hash is stored. `/stop` or <kbd>Turn off</kbd> removes the link, and a blocked bot is noticed and forgotten.
 - **No inbound endpoint.** The server fetches the bot's messages itself; there is no public webhook to attack. The bot token lives in the server configuration only and never appears in logs or stored errors.
 - **The mail password** is in the server configuration, and PocketBase keeps a copy in its settings, so it is part of the database and its backups. It belongs to a send-only SMTP user of a sending service (one per environment), never to a mailbox.
@@ -64,7 +75,7 @@ Guests can ask each other to swap spots during Live Booking. Details: [Swap requ
 
 ### Booking passes
 
-- **A separate, random code.** The pass code (12 characters) can only show a booking; the ticket code, which can change bookings, never appears on a pass, in a QR code or in a message.
+- **A separate, random code.** The pass code (12 characters) can only show a booking; the ticket code, which can change bookings, never appears on a pass, in a QR code or in a message about a booking.
 - **Minimal content.** Anyone with a pass link sees the spot and the burner name (visible to other guests anyway). The name on the ticket, the shortened e-mail and the check-in only appear for signed-in admins.
 - **Check-in by admins only.** Checking a pass checks the guest in. That happens only in the admin area (`/admin/check`, also the target of the button on the pass page): requests without an approved admin session are refused centrally, the actions check again, and the check-in is written with the admin's own PocketBase session, which the beds' rules accept from approved admins and superusers only. Opening a pass never writes anything. A ticket code can't check anybody in, and guests never see who checked them in or when.
 - **Private links.** Pass pages send `Referrer-Policy: same-origin` (other sites get no referrer, so the code never leaves the app; `no-referrer` would also strip the app's own form posts of their origin, and SvelteKit refuses those as cross-site), `X-Robots-Tag: noindex` and `Cache-Control: no-store`; many unknown codes from one connection are blocked for a while. Only PocketBase creates pass codes, so two writers can't hand out different codes for one ticket. The pass's files — its QR images — go through the same check and the same limit.

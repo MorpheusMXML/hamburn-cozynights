@@ -6,12 +6,14 @@
  * and the round ($lib/server/session-sig) — bookings, special-needs requests
  * and the phase are read from PocketBase on every request. A cookie the server
  * didn't sign ends right away, without a lookup: the cookie is no way to try
- * out ticket codes. Two more things end a session, and `hooks.server.ts`
- * checks both before any page runs, so every page sees the same answer:
+ * out ticket codes. Three more things end a session, and `hooks.server.ts`
+ * checks them before any page runs, so every page sees the same answer:
  *
  * - **the code is gone** (test codes removed, roster replaced, the ticket list
  *   deleted after the event): the cookies go and the guest is asked for their
  *   code again, instead of the start page still saying "already signed in";
+ * - **the ticket isn't paid**: a later ticket list flags it `unpaid`
+ *   (pb_migrations/1761000000_ticket_sign_in.js); the start page says why;
  * - **a new booking round started**: `app_settings.guest_round` moved on
  *   (a superuser released every booking, see the Control Center), so every
  *   device signs in once more. Nothing else moves it — the timer opening or
@@ -44,7 +46,7 @@ const COOKIE_OPTIONS = {
 } as const;
 
 /** Why a session ended, for the hint on the start page. */
-export type GuestSignOut = 'expired' | 'round';
+export type GuestSignOut = 'expired' | 'round' | 'unpaid';
 
 const isNotFound = (err: unknown) => (err as { status?: number })?.status === 404;
 
@@ -184,6 +186,11 @@ export async function resolveGuestSession(
 		// The code was removed from the ticket list (or was never in it).
 		clearGuestSession(cookies);
 		return { code: null, signedOut: 'expired' };
+	}
+	if (order.unpaid) {
+		// A later ticket list says the order isn't paid (any more).
+		clearGuestSession(cookies);
+		return { code: null, signedOut: 'unpaid' };
 	}
 	return { code, order };
 }

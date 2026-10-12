@@ -23,7 +23,12 @@ export type AdminEventAction =
 	| 'request_group_member_removed';
 
 /** What guests do that the crew hears about. Never with names or what they wrote. */
-export type GuestEventAction = 'special_request_new' | 'special_request_withdrawn';
+export type GuestEventAction =
+	| 'special_request_new'
+	| 'special_request_withdrawn'
+	// The start page saw more than 200 wrong ticket codes within 10 minutes
+	// ($lib/server/login-guard): counts only.
+	| 'sign_in_guard';
 
 /** admin_events.actor and .subject (pb_migrations/1759000000_notifications.js). */
 const MAX_TEXT = 320;
