@@ -26,7 +26,8 @@ function fakeApp(events: Row[]) {
 		events,
 		store: () => ({
 			get: (key: string) => store.get(key),
-			set: (key: string, value: unknown) => store.set(key, value)
+			set: (key: string, value: unknown) => store.set(key, value),
+			setFunc: (key: string, fn: (old: unknown) => unknown) => store.set(key, fn(store.get(key)))
 		}),
 		findRecordsByFilter(_collection: string, filter: string, _sort: string, limit: number) {
 			const onlyFailed = filter.includes("action = 'guest_notice_failed'");
@@ -112,6 +113,19 @@ describe('the heartbeat', () => {
 		expect(notify.heartbeat(app, withUrl)).toBe(true);
 		expect(notify.heartbeat(app, withUrl)).toBe(false);
 		expect(posted).toEqual(['https://hc-ping.com/abc']);
+	});
+
+	it('stays silent while another run is stuck (an SMTP send that never returns)', () => {
+		const posted: string[] = [];
+		const notify = loadNotify(posted);
+		const app = fakeApp([]);
+		const withUrl = cfg({ heartbeatUrl: 'https://hc-ping.com/abc' });
+		app.store().set('cozy_runs', { stuck: Date.now() - 5 * 60 * 1000, me: Date.now() });
+		expect(notify.heartbeat(app, withUrl, 'me')).toBe(false);
+		expect(posted).toEqual([]);
+		// a run that started a moment ago is no reason to hold back
+		app.store().set('cozy_runs', { other: Date.now() - 10 * 1000, me: Date.now() });
+		expect(notify.heartbeat(app, withUrl, 'me')).toBe(true);
 	});
 
 	it('does nothing without a URL', () => {

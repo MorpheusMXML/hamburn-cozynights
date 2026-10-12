@@ -3128,6 +3128,18 @@ function runPass(app, cfg, pollSeconds, force, deadline, keepAlive) {
 
 /** At most one heartbeat ping every this many seconds. */
 const HEARTBEAT_SECONDS = 300;
+/** A run still going after this long counts as stuck (a normal run ends within ~55 s). */
+const STUCK_RUN_SECONDS = 3 * LOCK_SECONDS;
+
+/** Remembers which runs are going, for heartbeat(): added when a run starts, gone when it ends. */
+function markRun(app, owner, running) {
+	app.store().setFunc('cozy_runs', (old) => {
+		const runs = Object.assign({}, old || {});
+		if (running) runs[owner] = Date.now();
+		else delete runs[owner];
+		return runs;
+	});
+}
 
 /**
  * Tells COZY_HEARTBEAT_URL (healthchecks.io) that the loop is alive: called
@@ -3137,10 +3149,23 @@ const HEARTBEAT_SECONDS = 300;
  * whoever watches it. Nothing else would: the crew alerts come from this
  * same loop. Never throws.
  */
-function heartbeat(app, cfg) {
+function heartbeat(app, cfg, owner) {
 	if (!cfg.heartbeatUrl) return false;
 	const store = app.store();
 	const now = Date.now();
+	// A run that has hung for a while (an SMTP send that never returns) keeps
+	// its row leased; the next runs find nothing due, finish and would ping.
+	// While one is stuck, no ping: the silence is the alert.
+	const runs = store.get('cozy_runs') || {};
+	for (const other of Object.keys(runs)) {
+		if (other !== owner && now - runs[other] > STUCK_RUN_SECONDS * 1000) {
+			console.warn(
+				'[cozy-notify] heartbeat held back: a notification run has been stuck since ' +
+					new Date(runs[other]).toISOString()
+			);
+			return false;
+		}
+	}
 	if (now - (store.get('cozy_heartbeat_at') || 0) < HEARTBEAT_SECONDS * 1000) return false;
 	store.set('cozy_heartbeat_at', now);
 	try {
@@ -3161,6 +3186,7 @@ function runLoop(app) {
 	const owner = takeLock(app, LOCK_SECONDS);
 	if (!owner) return; // the previous run is still busy
 	const keepAlive = () => renewLock(app, owner, LOCK_SECONDS);
+	markRun(app, owner, true);
 	try {
 		refreshCapabilities(app, cfg);
 		const deadline = Date.now() + cfg.loopSeconds * 1000;
@@ -3174,8 +3200,9 @@ function runLoop(app) {
 				if (left > 5) sleep(5000);
 			}
 		} while (Date.now() < deadline - 1000);
-		heartbeat(app, cfg);
+		heartbeat(app, cfg, owner);
 	} finally {
+		markRun(app, owner, false);
 		releaseLock(app, owner);
 	}
 }
