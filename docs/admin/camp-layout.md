@@ -54,6 +54,7 @@ After IGNITE the new pin stays selected; <kbd>MANAGE ROOMS ⚙️</kbd> in its s
 
 > [!CAUTION] Deleting is final
 > Deleting a house deletes all its rooms and spots too. Bookings on them are released first, and ticket codes stay valid — guest bookings only by a superuser, see [Deleting or freeing booked spots](#booked-spots). Not sure? [Export a template](./templates) before you delete.
+> If one of its spots gets booked while the house is being deleted (the crew can book special-needs spots in every phase), the deletion stops at that spot: *A spot of this house was booked while it was being deleted, so the deletion stopped there …* Reload the page and decide about that booking first.
 
 ### Deleting or freeing booked spots {#booked-spots}
 

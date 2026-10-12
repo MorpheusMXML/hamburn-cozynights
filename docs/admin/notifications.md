@@ -94,7 +94,7 @@ Every message here is also kept in the audit log (collection `admin_events` in t
 
 If Telegram is down, a crew message is tried again after 1, 5, 15 and 60 minutes; after the fifth failed attempt it is marked *failed* in the audit log (`notify status` shows it). Guest messages keep being retried for about two days, see above.
 
-**Is the loop itself alive?** Every message on this page comes from PocketBase's notification loop, so none of them can report that the loop hangs (an SMTP server that accepts the connection and never answers stops it, PocketBase's mailer has no timeout). With `COZY_HEARTBEAT_URL` set in the server's `.env` (a ping URL of healthchecks.io or a similar service), the loop pings it at most every five minutes after a pass that ran to its end; when the pings stop, that service alerts whoever watches it. Give the check a period of 10 minutes and a grace time of 10 minutes.
+**Is the loop itself alive?** Every message on this page comes from PocketBase's notification loop, so none of them can report that the loop hangs (an SMTP server that accepts the connection and never answers stops it, PocketBase's mailer has no timeout). With `COZY_HEARTBEAT_URL` set in the server's `.env` (a ping URL of healthchecks.io or a similar service), the loop pings it at most every five minutes after a pass that ran to its end, and never while another pass has been hanging for more than 90 seconds (a hanging send blocks only its own pass, so the next ones would keep pinging); when the pings stop, that service alerts whoever watches it. Give the check a period of 10 minutes and a grace time of 10 minutes.
 
 ## Message texts
 

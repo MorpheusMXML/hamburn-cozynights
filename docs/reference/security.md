@@ -38,6 +38,7 @@ Whoever has a ticket code can book for that ticket, so CozyNights treats codes l
 
 - **One ticket, one spot**, enforced on the server, including under parallel requests.
 - **No double bookings.** Simultaneous clicks on the same spot are serialized; exactly one guest gets it.
+- **Spot ids are checked before anything else.** A spot id from a guest's form must look like a database id (lowercase letters and digits) before it is looked up or queued, so made-up ids can't fill the app's memory.
 - **Locked, inactive and special-needs spots** are refused by the server, not just hidden in the interface. A ♿ special-needs spot is refused on every guest page for everyone, admins signed in with a ticket code included: only the crew's request flow on `/admin/requests` books it.
 - **Booking while booking is closed** happens in exactly one place: an admin books a spot for a special-needs request, on its own or for the members of a request group. The ticket comes from the guest's signed-in session, never from a form field.
 
@@ -87,7 +88,7 @@ Guests can ask each other to swap spots during Live Booking. Details: [Swap requ
 - **Google only.** No passwords in the app, no sign-up form, no invitation or approval screens that could be abused from a browser.
 - **Workspace accounts only.** The address must end in `@mauersegler.art`, be verified by Google, and belong to the Google Workspace. This is checked by the database before a session is issued, and checked again by the app.
 - **New accounts have no rights.** A first sign-in creates an access request with the role _pending_. Nobody can approve themselves; approvals happen outside the web app.
-- **Checked on every request.** The role is re-read with each click, so removing someone takes effect immediately. Admin form actions and API calls without an approved session are refused centrally.
+- **Checked on every request.** The role is re-read with each click, so removing someone takes effect immediately. Admin form actions and API calls without an approved session are refused centrally. The gate looks at the route the router picked, not at the raw address, so an encoded path like `/%61dmin` can't slip past it.
 - **Protected sign-in flow.** The OAuth `state` is bound to the browser with a short-lived cookie and PKCE is used for the code exchange; forms are protected by SvelteKit's origin check against cross-site requests.
 - **Session cookie** is `HttpOnly`, `Secure`, `SameSite=Lax`, valid for three days and renewed while in use.
 - **Weekly Google sign-in.** However active a session is, after 7 days the app asks Google again. A suspended Workspace account or newly required 2-Step Verification reaches every admin within a week.

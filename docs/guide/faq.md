@@ -62,6 +62,10 @@ Booking hasn't opened yet. Once the crew has armed the timer, a countdown shows 
 In the top bar of every booking page, fused with the phase pill: *opens in …* before booking opens, *closes in …* while it is live (red in the last hour). Tap it for the exact Berlin time. The start page shows the same countdown big, and the map counts down on its panel while booking is not open yet — there the bar shows the phase alone. No countdown anywhere means the crew hasn't armed the timer yet.
 :::
 
+::: details "Please allow us some time, we are processing your request."
+Your click reached CozyNights and is being worked on. At the opening, when hundreds of guests sign in and book in the same minute, that can take a few seconds. Stay on the page. When the card says *Please don't reload or close this page*, your sign-in, booking or release is already on its way: a reload neither stops it nor makes it faster. *Booking is opening* and *On our way* only load the page, and it continues by itself. If the card goes away with *We could not reach the server*, check your connection and open the room again: a booking that went through shows there as **Yours**.
+:::
+
 ::: details I can't book or change my spot any more ("Booking is closed")
 The booking window is over, so spots are final: rooms say *Spots are final now: nothing can be booked, changed or released anymore.* Your spot stays yours and your booking pass keeps working. If something has to change, ask the crew. Releasing is closed too: *Booking is closed right now, so your spot cannot be released. It stays reserved for you.*
 :::

@@ -118,6 +118,10 @@ Exit 14 means that signature or pin configuration itself is broken. The older co
 
 The detached run, the trap, the image rollback and the downgrade refusal are always on. The branch rule, the signature gate and the compose pin stay off until root configures them, so an existing setup keeps working with the new script. Setup, the exit-code table and the switch-over are in the runbook, sections *Einrichtung* (step 5), *Umstieg auf das gehärtete Deploy-Skript* and *Exit-Codes*. The script has its own test harness that runs in a throwaway `debian:12` container with a stub `docker` and throwaway signing keys: `bash hamburn-cozynights/deploy/test/deploy-script.test.sh`.
 
+### Container limits
+
+Both compose files give PocketBase and the app the same runtime limits, so a crash-looping or runaway container can't take the shared host down with it: logs capped at 3 × 10 MB per container, `stop_grace_period: 30s` (a booking in flight finishes before the container is killed; Docker's default is 10 s), `mem_limit` 1 GB for PocketBase and 1.5 GB for the app, `pids_limit: 256`, and every Linux capability dropped (`cap_drop: ALL`, with `no-new-privileges`).
+
 ### nginx in front of the app
 
 The vhost in [`deploy/nginx/test-cozynights.hamburn.de.conf`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/nginx/test-cozynights.hamburn.de.conf) and the host-wide defaults in [`deploy/nginx/10-hardening.conf`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/nginx/10-hardening.conf) (installed as `/etc/nginx/conf.d/10-hardening.conf`) are applied by hand on the server; the deploy never touches them. Four things in them are load-bearing:
@@ -126,6 +130,10 @@ The vhost in [`deploy/nginx/test-cozynights.hamburn.de.conf`](https://github.com
 - `proxy_buffer_size 16k`, because a signed-in browser's response headers (session cookie, SvelteKit's `Link` preload header, the CSP headers) exceed nginx's default 4 KB buffer, which shows up as a `502 Bad Gateway` for admins only ("upstream sent too big header" in the error log). The hardening file sets it for every proxied vhost.
 - HTTP/2 on the `listen` lines. nginx 1.22 (Debian 12) takes the protocol there; the `http2 on;` directive only exists from 1.25.1.
 - The per-address request limit: `location /` allows 20 requests per second with a burst of 60 and answers `429` beyond that, using the zone `perip` declared in the hardening file. The content-hashed build assets under `/_app/` are exempt, so a page load with its roughly 25 files never trips the limit for several guests behind one address. The app's own limits for ticket-code and pass guessing are separate and stricter.
+
+- Ready for the opening rush: `gzip` for JSON, JavaScript, CSS and SVG (page data and scripts travel compressed), and a `keepalive` pool to the app, so a burst of clicks doesn't open a new connection each.
+- `/_app/remote/` answers `404` before the app sees it. CozyNights has no remote functions, but SvelteKit would still run its request handling for that path, guest cookie check included, outside the per-address limit that exempts `/_app/`.
+- A friendly page while the app is down. `error_page 502 504` serves `/var/www/cozynights/cozy-down.html` (a copy of [`deploy/nginx/cozy-down.html`](https://github.com/MorpheusMXML/hamburn-cozynights/blob/main/hamburn-cozynights/deploy/nginx/cozy-down.html)), which says the site is back in a moment and reloads itself after 15 seconds, instead of nginx's bare *Bad Gateway* during a deploy or a restart.
 
 After editing: `nginx -t && systemctl reload nginx`.
 

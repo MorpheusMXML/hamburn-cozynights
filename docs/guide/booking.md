@@ -80,6 +80,8 @@ flowchart LR
 
 That's it: fireworks go up from your new spot 🎆, and the spot now shows **Yours** in turquoise, with your burner name. Above the spots, a **Welcome Home!** box holds your [booking pass](#your-booking-pass), the address your [confirmations](#confirmations) go to and the Telegram option.
 
+**When it's busy.** At the opening many guests arrive in the same minute, and a click can take a few seconds. Whenever something takes longer than a moment, a card with a small campfire covers the page: *Please allow us some time, we are processing your request.* After you signed in, booked or released a spot it adds, in yellow, *Please don't reload or close this page*: your request is already on its way, and a reload neither stops it nor makes it faster. While a page loads, or when booking opens, the card says there is no need to reload, the page continues by itself. After about 15 seconds it adds *Still working on it.*
+
 ## What the spots mean
 
 | Spot card | Meaning |
