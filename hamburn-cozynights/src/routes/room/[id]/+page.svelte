@@ -29,6 +29,16 @@
 	import { confirmDialog, dialogQueue, toast } from '$lib/dialogs';
 	import SwapSheet from '$lib/components/swaps/SwapSheet.svelte';
 	import type { SwapSpot } from '$lib/swaps';
+	import BedBeingMade from '$lib/components/booking/BedBeingMade.svelte';
+	import {
+		HOLD_POLL_MS,
+		clock,
+		endedEarly,
+		freeAgainText,
+		heldLine,
+		untilFrom
+	} from '$lib/spot-hold';
+	import { holdRequest } from '$lib/spot-hold-request';
 
 	export let data: PageData;
 	export let form: ActionData;
@@ -148,11 +158,12 @@
 	 * A spot's state for the colours of src/routes/state.css (data-state):
 	 * 'full' someone else booked it, 'checked-in' it is mine, 'locked' the crew
 	 * holds it back (locked, ♿, inactive, or taken without a ticket: "Blocked
-	 * by admin"), 'idle' booking is not open (yet or anymore), 'open' free and
-	 * bookable. A free spot stays green while I hold another one — the spot is
-	 * free, only the button is off.
+	 * by admin"), 'idle' booking is not open (yet or anymore), 'filling'
+	 * someone else is booking it right now (a hold, $lib/spot-hold), 'open' free
+	 * and bookable. A free spot stays green while I hold another one — the spot
+	 * is free, only the button is off.
 	 */
-	type SpotState = 'open' | 'full' | 'checked-in' | 'locked' | 'idle';
+	type SpotState = 'open' | 'full' | 'checked-in' | 'locked' | 'idle' | 'filling';
 	$: spotState = (bed: Spot): SpotState =>
 		bed.blocked
 			? 'locked'
@@ -164,7 +175,9 @@
 						? 'locked'
 						: !data.isBookingActive
 							? 'idle'
-							: 'open';
+							: heldLeft(bed.id) > 0
+								? 'filling'
+								: 'open';
 	/** Whether a card has a detail line at all. */
 	const hasDetail = (bed: { bedType: string; missing: string[] }, level: BunkLevel | null) =>
 		!!level || !!bedTypeEntry(bed.bedType) || bed.missing.length > 0;
@@ -173,6 +186,118 @@
 	$: if (typeof document !== 'undefined') {
 		document.body.style.overflow = showModal ? 'hidden' : '';
 	}
+
+	// Spot holds ($lib/spot-hold): opening the booking window on a free spot
+	// holds it for the guest for a few minutes. Spots other guests hold show
+	// "Bed being made…"; the page asks for them every few seconds.
+	/** Other guests' holds: spot id → when they end, on this device's clock. */
+	let heldUntil: Record<string, number> = {};
+	$: heldUntil = untilFrom(data.heldSpots ?? {});
+	/** The clock the countdowns and the cards' lines follow. */
+	let now = Date.now();
+	/**
+	 * This guest's hold on the spot in the booking window: pending while asked,
+	 * held, spent (their minutes on it are over), taken (someone else holds or
+	 * booked it), failed (no answer: booking still works, first come first served).
+	 */
+	type HoldState = 'none' | 'pending' | 'held' | 'spent' | 'taken' | 'failed';
+	let holdState: HoldState = 'none';
+	let myHold: { bedId: string; until: number } | null = null;
+	/** Counts the booking windows, so an answer for an earlier one is ignored. */
+	let holdTurn = 0;
+	let polling = false;
+
+	/** Milliseconds left on another guest's hold of the spot (0: none). */
+	$: heldLeft = (bedId: string) =>
+		data.isBookingActive ? Math.max(0, (heldUntil[bedId] ?? 0) - now) : 0;
+	$: myHoldLeft = myHold ? Math.max(0, myHold.until - now) : 0;
+
+	/** Holds the spot of the booking window that just opened. */
+	async function holdSpot(bedId: string) {
+		const turn = ++holdTurn;
+		holdState = 'pending';
+		myHold = null;
+		const result = await holdRequest('holdSpot', bedId);
+		if (turn !== holdTurn) {
+			// The window closed meanwhile. A hold that came through anyway is let go,
+			// unless the guest opened this very spot again.
+			const stillHere = showModal && selectedBedId === bedId;
+			if (result?.type === 'success' && result.data?.hold && !stillHere) {
+				void holdRequest('dropHold', bedId, true);
+			}
+			return;
+		}
+		if (result?.type === 'success') {
+			const hold = result.data?.hold as { bedId: string; left: number } | null | undefined;
+			if (hold) {
+				myHold = { bedId: hold.bedId, until: Date.now() + hold.left };
+				holdState = 'held';
+			} else {
+				holdState = result.data?.spent ? 'spent' : 'failed';
+			}
+			return;
+		}
+		if (result?.type === 'failure') {
+			const failure = result.data ?? {};
+			if (typeof failure.left === 'number') {
+				heldUntil = { ...heldUntil, [bedId]: Date.now() + failure.left };
+			}
+			if (failure.held || failure.bedTaken) {
+				holdState = 'taken';
+				modalError = typeof failure.error === 'string' ? failure.error : '';
+				// Show the room as it is now behind the window.
+				if (failure.bedTaken) void invalidateAll();
+				return;
+			}
+			modalError = typeof failure.error === 'string' ? failure.error : '';
+		}
+		holdState = 'failed';
+	}
+
+	/** The booking window closed without a booking: the spot is free again. */
+	function letGoOfHold() {
+		holdTurn++;
+		if (myHold) void holdRequest('dropHold', myHold.bedId, true);
+		myHold = null;
+		holdState = 'none';
+	}
+
+	/** Asks which spots of the room other guests are booking (see HOLD_POLL_MS). */
+	async function pollHolds() {
+		if (!data.isBookingActive || document.hidden || showModal || polling) return;
+		polling = true;
+		try {
+			const response = await fetch(`/room/${data.room.id}/holds`, { cache: 'no-store' });
+			if (!response.ok) return;
+			const { held } = (await response.json()) as { held: Record<string, number> };
+			const next = untilFrom(held);
+			const booked = endedEarly(heldUntil, next);
+			heldUntil = next;
+			// A hold that ended early is usually a booking: show the room as it is.
+			if (booked) await invalidateAll();
+		} catch {
+			/* no answer: the next round asks again */
+		} finally {
+			polling = false;
+		}
+	}
+
+	onMount(() => {
+		const ticker = setInterval(() => (now = Date.now()), 1000);
+		const poller = setInterval(pollHolds, HOLD_POLL_MS);
+		// The guest leaves with the window open: the spot is free for others.
+		const leave = () => {
+			if (myHold) void holdRequest('dropHold', myHold.bedId, true);
+			myHold = null;
+		};
+		window.addEventListener('pagehide', leave);
+		return () => {
+			clearInterval(ticker);
+			clearInterval(poller);
+			window.removeEventListener('pagehide', leave);
+			leave();
+		};
+	});
 	onDestroy(() => {
 		if (typeof document !== 'undefined') document.body.style.overflow = '';
 	});
@@ -190,6 +315,8 @@
 		showModal = true;
 		showSlot = false;
 		rolling = false;
+		if (bedId !== data.userBedId && data.isBookingActive) void holdSpot(bedId);
+		else holdState = 'none';
 		await tick();
 		modalEl?.focus();
 	}
@@ -205,6 +332,7 @@
 	}
 
 	function closeModal() {
+		letGoOfHold();
 		showModal = false;
 		selectedBedId = null;
 		showSlot = false;
@@ -635,6 +763,26 @@
 				<small class="edit-hint">Not available</small>
 			</div>
 		</div>
+	{:else if state === 'filling'}
+		<!-- Another guest is booking this spot right now ($lib/spot-hold): it is
+		     theirs for a few minutes, and free again if they don't book it. -->
+		<div class="bed-card held {half}" data-bed-id={bed.id} data-state={state}>
+			<div class="icon held-icon"><BedBeingMade size={40} /></div>
+			<span class="label">
+				{bed.label}
+				{#if level}<span class="level-chip state-chip {level}">{LEVEL_NAME[level]}</span>{/if}
+			</span>
+			{#if hasDetail(bed, level)}
+				<span class="bed-detail">{spotLine(bed, level)}</span>
+			{/if}
+			<div class="status-box">
+				<span class="status-text"
+					><span class="state-dot" aria-hidden="true"></span>Bed being made</span
+				>
+				<span class="held-line">{heldLine(bed.id, reduceMotion ? 0 : now)}</span>
+				<small class="edit-hint">{freeAgainText(heldLeft(bed.id))}</small>
+			</div>
+		</div>
 	{:else}
 		<button
 			class="bed-card free {iHaveAnotherBooking || isLocked ? 'disabled' : ''} {half}"
@@ -673,6 +821,37 @@
 	{/if}
 {/snippet}
 
+<!-- The guest's own hold in the booking window: the minutes left, or why
+     there is none. The clock itself stays out of screen readers (it would be
+     read out every second); they hear the minutes once. -->
+{#snippet holdNote()}
+	{#if holdState === 'pending'}
+		<p class="hold-note"><span aria-hidden="true">⏳</span> Holding this spot for you…</p>
+	{:else if holdState === 'held' && myHoldLeft > 0}
+		<p class="hold-note mine" class:hurry={myHoldLeft < 60_000}>
+			<span aria-hidden="true">⏳</span> Held for you{' · '}<strong
+				class="hold-clock"
+				aria-hidden="true">{clock(myHoldLeft)}</strong
+			><span class="sr-only" data-layout-ignore>for {data.holdMinutes} minutes</span>. Nobody else
+			can book it meanwhile.
+		</p>
+	{:else if holdState === 'held'}
+		<p class="hold-note over">
+			Your {data.holdMinutes} minutes are up: the spot is free for everyone again. Book it now if nobody
+			beat you to it.
+		</p>
+	{:else if holdState === 'spent'}
+		<p class="hold-note over">
+			You had your {data.holdMinutes} minutes on this spot already, so it isn't held for you again. You
+			can still book it: first come, first served.
+		</p>
+	{:else if holdState === 'failed'}
+		<p class="hold-note over">
+			This spot couldn't be held for you. You can still book it: first come, first served.
+		</p>
+	{/if}
+{/snippet}
+
 {#if showModal}
 	<!-- svelte-ignore a11y-click-events-have-key-events -->
 	<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
@@ -684,13 +863,39 @@
 			on:click|stopPropagation
 			role="dialog"
 			aria-modal="true"
-			aria-labelledby={step === 'bed' ? 'make-bed-title' : 'booking-modal-title'}
+			aria-labelledby={holdState === 'taken'
+				? 'too-late-title'
+				: step === 'bed'
+					? 'make-bed-title'
+					: 'booking-modal-title'}
 			tabindex="-1"
 		>
-			{#if step === 'bed'}
+			{#if holdState === 'taken'}
+				<!-- Someone else holds or booked the spot: nothing to make here. -->
+				<div class="too-late">
+					{#if selectedBedId && heldLeft(selectedBedId) > 0}
+						<div class="too-late-bed" data-state="filling"><BedBeingMade size={112} /></div>
+					{/if}
+					<h2 id="too-late-title">Someone beat you to this bed</h2>
+					<p>{modalError || 'Someone else is making this bed right now.'}</p>
+					{#if selectedBedId && heldLeft(selectedBedId) > 0}
+						<p class="field-hint">
+							If they wander off without booking, it is free again in {clock(
+								heldLeft(selectedBedId)
+							)}. Plenty of other pillows in the camp, though.
+						</p>
+					{/if}
+					<div class="actions too-late-actions">
+						<button type="button" class="btn-confirm" on:click={closeModal}
+							>Pick another spot</button
+						>
+					</div>
+				</div>
+			{:else if step === 'bed'}
 				<p class="step-kicker">
 					{selectedBed ? `Step 1 of 2 · Spot ${selectedBed.label}` : 'Step 1 of 2'}
 				</p>
+				{@render holdNote()}
 				<MakeTheBed titleId="make-bed-title" onpacked={bedDone} />
 				<button type="button" class="btn-cancel btn-cancel-step" on:click={closeModal}
 					>Cancel</button
@@ -702,6 +907,7 @@
 							><span aria-hidden="true">🛏️</span> Bed made ✓</span
 						>
 					</p>
+					{@render holdNote()}
 				{/if}
 				<h2 id="booking-modal-title">
 					{selectedBedId === data.userBedId ? 'Edit Your Spot' : 'Grab This Spot'}
@@ -792,6 +998,8 @@
 								} else {
 									// The check is used up: the next booking asks again.
 									if (newBooking) useUpCheck();
+									// Booked: the server ended the hold already.
+									myHold = null;
 									fireworksOrigin = cardCenter(selectedBedId);
 									triggerFireworks = true;
 								}
@@ -1206,6 +1414,17 @@
 		opacity: 0.7;
 		cursor: not-allowed;
 	}
+	/* Someone else is booking it right now: the bed makes itself in the icon. */
+	.held-icon {
+		display: flex;
+		align-items: center;
+	}
+	.held-line {
+		font-size: 0.85rem;
+		font-style: italic;
+		line-height: 1.3;
+		color: #fed7aa;
+	}
 	.bed-card:focus-visible {
 		outline: 2px solid #fff;
 		outline-offset: 2px;
@@ -1399,6 +1618,50 @@
 	/* May wrap: kept on one line, WebKit drew it wider than it measured it. */
 	.made-chip {
 		color: #c4b5fd;
+	}
+	/* The guest's own hold: turquoise like everything that is theirs, orange
+	   in the last minute, grey once there is none. */
+	.hold-note {
+		margin: 0 0 0.9rem;
+		padding: 0.55rem 0.8rem;
+		border-radius: 12px;
+		border: 1px solid #333;
+		background: #0d0d0d;
+		color: #d4d4d4;
+		font-size: 0.85rem;
+		line-height: 1.35;
+	}
+	.hold-note.mine {
+		border-color: color-mix(in srgb, var(--state-checked-in) 45%, transparent);
+		background: var(--state-checked-in-soft);
+		color: #ccfbf1;
+	}
+	.hold-note.mine.hurry {
+		border-color: color-mix(in srgb, var(--state-filling) 55%, transparent);
+		background: var(--state-filling-soft);
+		color: #fed7aa;
+	}
+	.hold-note.over {
+		color: #a3a3a3;
+	}
+	.hold-clock {
+		font-variant-numeric: tabular-nums;
+	}
+	/* Someone beat the guest to it: the bed being made, and a way back. */
+	.too-late {
+		text-align: center;
+	}
+	.too-late-bed {
+		display: flex;
+		justify-content: center;
+		margin: 0.25rem 0 0.75rem;
+	}
+	.too-late .field-hint {
+		display: block;
+		margin: 0.5rem 0 0;
+	}
+	.too-late-actions {
+		margin-top: 1.25rem;
 	}
 	.btn-cancel-step {
 		display: block;

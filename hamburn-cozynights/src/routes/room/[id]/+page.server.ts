@@ -38,6 +38,8 @@ import { readFloorPlans } from '$lib/floor-plans';
 import { getLegalInfo } from '$lib/server/legal';
 import { BOOKING_CHECK_MISSING, bookingCheckPassed } from '$lib/booking-check';
 import { recordId } from '$lib/server/record-id';
+import { HOLD_MINUTES, roomHolds } from '$lib/server/spot-holds';
+import { dropHoldAction, holdSpotAction } from '$lib/server/spot-hold-actions';
 
 const UNAVAILABLE = 'The booking system is not reachable right now. Please try again in a minute.';
 const SIGNED_OUT =
@@ -166,7 +168,13 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 			]);
 		}
 
+		// Spots other guests are booking right now, as milliseconds left: their
+		// cards say "Bed being made…" ($lib/server/spot-holds).
+		const heldSpots = settings.isBookingActive ? roomHolds(room.id, order.id) : {};
+
 		return {
+			heldSpots,
+			holdMinutes: HOLD_MINUTES,
 			notify,
 			pass,
 			spotFixed,
@@ -346,6 +354,12 @@ export const actions: Actions = {
 
 	/** Takes an open swap request back. */
 	withdrawSwap: async ({ request, locals }) => withdrawSwapAction(locals, request),
+
+	/** The booking window opened on a free spot: it is the guest's for a few minutes. */
+	holdSpot: async ({ request, locals }) => holdSpotAction(locals, request),
+
+	/** The booking window closed (or the page went away): the spot is free again. */
+	dropHold: async ({ request, locals }) => dropHoldAction(locals, request),
 
 	unbookBed: async ({ locals }) => {
 		if (!locals.adminPb.authStore.isValid) {

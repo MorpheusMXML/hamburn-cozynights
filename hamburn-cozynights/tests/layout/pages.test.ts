@@ -130,6 +130,37 @@ async function settle(page: Page) {
  * check. Its card scales in (220 ms): measured mid-way, an SVG label inside
  * looked 3 px off its own box.
  */
+/**
+ * The group guest opens the booking window of a free spot in the page's room
+ * (it holds the spot, $lib/server/spot-holds); the page then shows it as
+ * being booked. A ticket gets ten minutes per spot, and the suite runs longer
+ * than that: a spot this ticket can't hold again just tries the next one.
+ */
+async function holdASpot(page: Page) {
+	if (await page.locator('.bed-card.held').count()) return;
+	const roomPath = new URL(page.url()).pathname;
+	const spots = await page
+		.locator('.bed-card.free')
+		.evaluateAll((cards) => cards.map((card) => card.getAttribute('data-bed-id') ?? ''));
+	for (const bedId of spots) {
+		const res = await fetch(`${BASE}${roomPath}?/holdSpot`, {
+			method: 'POST',
+			headers: {
+				accept: 'application/json',
+				'x-sveltekit-action': 'true',
+				'content-type': 'application/x-www-form-urlencoded',
+				origin: BASE,
+				cookie: `bookingCode=${camp.guestInGroup}; bookingRound=${camp.guestRound}`
+			},
+			body: new URLSearchParams({ bedId }).toString()
+		});
+		if (!res.ok) throw new Error(`holding a spot → ${res.status}: ${await res.text()}`);
+		await page.reload({ waitUntil: 'networkidle' });
+		if (await page.locator('.bed-card.held').count()) return;
+	}
+	throw new Error('No spot of the room could be held for the group guest.');
+}
+
 async function openRouletteCheck(page: Page) {
 	await page.getByRole('button', { name: /^Spin/ }).click();
 	await page.locator('#guestName').fill('Layout Owl');
@@ -191,6 +222,16 @@ const PAGES: PageCase[] = [
 		path: (c) => `/room/${c.roomId}`,
 		as: 'guestWithoutSpot',
 		phases: ALL_PHASES
+	},
+	{
+		// Another guest is booking a spot right now: its card makes its bed
+		// ("Bed being made", $lib/spot-hold) until it is booked or free again.
+		// In another house's room: the booking dialog cases need the free spots
+		// of the stress room for the guest without a spot.
+		name: 'room: a spot being booked',
+		path: (c) => `/room/${c.otherRoomIds[c.otherRoomIds.length - 1]}`,
+		as: 'guestWithSpot',
+		open: holdASpot
 	},
 	{
 		// A new spot starts with the check: make the bed (step 1).

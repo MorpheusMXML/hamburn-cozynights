@@ -8,6 +8,7 @@ import type {
 import { createLookupHash, encrypt } from '$lib/server/crypto';
 import { CHECKED_IN_NOTE } from '$lib/check-in';
 import { bookingRefusal, type BookingPhase } from '$lib/booking-phase';
+import { HELD_MESSAGE, heldByOther, settleHolds } from '$lib/server/spot-holds';
 
 /**
  * Thrown when a bed can no longer be booked (already taken by someone else,
@@ -280,6 +281,12 @@ export class BookingService {
 				if (!renaming && !isBedBookable(bed, options)) {
 					throw new BedUnavailableError('This spot is not available.');
 				}
+				// A spot another guest started booking is theirs for a few minutes
+				// ($lib/server/spot-holds). Only a guest's own booking waits for
+				// that; the crew books past it.
+				if (!renaming && options.requireLivePhase && heldByOther(bedId, order.id)) {
+					throw new BedUnavailableError(HELD_MESSAGE);
+				}
 
 				// The ticket's other spots, released below once the new one is claimed.
 				const previousBeds = await this.adminPb.collection('beds').getFullList<BedsResponse>({
@@ -324,7 +331,11 @@ export class BookingService {
 					if ((err as ClientResponseError)?.status !== 409 || !refused?.reason) throw err;
 					outcome = refused;
 				}
-				if (outcome.ok) return;
+				if (outcome.ok) {
+					// Booked: the ticket's hold, and any hold on this spot, are done.
+					settleHolds(order.id, bedId);
+					return;
+				}
 				switch (outcome.reason) {
 					case 'closed':
 						throw new BookingClosedError(bookingRefusal(outcome.phase ?? 'staging'));

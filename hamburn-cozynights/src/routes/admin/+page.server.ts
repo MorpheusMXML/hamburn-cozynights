@@ -40,6 +40,7 @@ import {
 	type BookingWindow,
 	type WindowEdit
 } from '$lib/booking-phase';
+import { clearHolds } from '$lib/server/spot-holds';
 
 const isBookingPhase = (value: string): value is BookingPhase =>
 	value === 'staging' || value === 'live' || value === 'closed';
@@ -235,6 +236,9 @@ async function releaseGuestBookings(
 	} catch (err) {
 		throw new ReleaseStoppedError(released, occupiedBeds.length, kept, err);
 	}
+	// A new round: nobody is in the middle of booking a spot any more
+	// ($lib/server/spot-holds).
+	clearHolds();
 	// The spots are free by now; the burner names only describe them. A name
 	// left behind is worth reporting, never a failed release.
 	const namesLeft = await clearBurnerNames(adminPb, keep);

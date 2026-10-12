@@ -14,6 +14,7 @@ import { requestCodeMail } from '$lib/server/code-mail';
 import { getAdminPb } from '$lib/server/pocketbase';
 import { logGuestEvent } from '$lib/server/admin-events';
 import { isValidGuestEmail, normalizeEmail } from '$lib/tickets';
+import { endHold } from '$lib/server/spot-holds';
 
 // Ticket codes are bearer secrets: guessing them gets harder step by step
 // ($lib/server/login-guard). Past 200 wrong codes overall the crew hears it.
@@ -211,7 +212,9 @@ export const actions: Actions = {
 	 * their booking (docs: Security & privacy), so a shared or borrowed phone
 	 * needs a way to give it back.
 	 */
-	signOut: async ({ cookies }) => {
+	signOut: async ({ cookies, locals }) => {
+		// A spot the guest was booking is free again ($lib/server/spot-holds).
+		if (locals.order) endHold(locals.order.id);
 		clearGuestSession(cookies);
 		throw redirect(303, '/?login=out');
 	}

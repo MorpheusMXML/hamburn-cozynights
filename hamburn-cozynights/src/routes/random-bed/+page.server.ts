@@ -22,6 +22,8 @@ import { readAvailableFilters } from '$lib/server/wishes';
 import { getLegalInfo } from '$lib/server/legal';
 import { BOOKING_CHECK_MISSING, bookingCheckPassed } from '$lib/booking-check';
 import { recordId } from '$lib/server/record-id';
+import { unheld } from '$lib/server/spot-holds';
+import { dropHoldAction, holdSpotAction } from '$lib/server/spot-hold-actions';
 
 type BedWithHouse = BedsResponse<{ room: RoomsResponse<{ house: HousesResponse }> }>;
 
@@ -172,7 +174,8 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 			: null;
 
 		return {
-			freeBeds,
+			// Spots other guests are booking right now stay out of the drum ($lib/server/spot-holds).
+			freeBeds: unheld(freeBeds, order.id),
 			wishes,
 			availableFilters,
 			wishFit,
@@ -318,5 +321,11 @@ export const actions: Actions = {
 				error: 'Your spot could not be released. It is still reserved for you. Please try again.'
 			});
 		}
-	}
+	},
+
+	/** The reels picked a spot: it is the guest's for a few minutes ($lib/server/spot-holds). */
+	holdSpot: async ({ request, locals }) => holdSpotAction(locals, request),
+
+	/** The guest left the machine: the spot is free again. */
+	dropHold: async ({ request, locals }) => dropHoldAction(locals, request)
 };
