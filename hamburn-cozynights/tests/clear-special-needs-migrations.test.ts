@@ -1,18 +1,17 @@
-// tests/clear-groups-migration.test.ts — pb_migrations/1760900000_clear_request_groups.js
-// deletes every request group made before v1.32.2 (all test data, Max
-// 2026-10-12): the requests lose their group first, then the groups go, with
-// plain SQL so no hook (and no message) runs. Loaded like the JSVM would,
-// against a stand-in app that records the queries; the real PocketBase runs
-// it on every start of the test stack (tests/integration).
+// tests/clear-special-needs-migrations.test.ts — the two migrations that delete the
+// special-needs test data before v1.32.2 (Max, 2026-10-12):
+// pb_migrations/1760900000_clear_request_groups.js (the requests lose their
+// group first, then the groups go) and 1760910000_clear_special_requests.js
+// (then every request), with plain SQL so no hook (and no message) runs.
+// Loaded like the JSVM would, against a stand-in app that records the
+// queries; the real PocketBase runs them on every start of the test stack
+// (tests/integration).
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import vm from 'vm';
 
-function loadMigration(): (app: unknown) => void {
-	const source = fs.readFileSync(
-		new URL('../pb_migrations/1760900000_clear_request_groups.js', import.meta.url),
-		'utf8'
-	);
+function loadMigration(file: string): (app: unknown) => void {
+	const source = fs.readFileSync(new URL(`../pb_migrations/${file}`, import.meta.url), 'utf8');
 	let up: ((app: unknown) => void) | undefined;
 	vm.runInNewContext(
 		source,
@@ -21,7 +20,7 @@ function loadMigration(): (app: unknown) => void {
 				up = fn;
 			}
 		},
-		{ filename: '1760900000_clear_request_groups.js' }
+		{ filename: file }
 	);
 	if (!up) throw new Error('no migration');
 	return up;
@@ -46,7 +45,7 @@ function app(collections: string[], withRelation = true) {
 }
 
 describe('the migration that deletes the test groups (1760900000)', () => {
-	const up = loadMigration();
+	const up = loadMigration('1760900000_clear_request_groups.js');
 
 	it('empties every request’s group first, then deletes every group', () => {
 		const stack = app(['special_requests', 'request_groups']);
@@ -67,5 +66,21 @@ describe('the migration that deletes the test groups (1760900000)', () => {
 		const stack = app(['special_requests', 'request_groups'], false);
 		up(stack);
 		expect(stack.queries).toEqual(['DELETE FROM {{request_groups}}']);
+	});
+});
+
+describe('the migration that deletes the test requests (1760910000)', () => {
+	const up = loadMigration('1760910000_clear_special_requests.js');
+
+	it('deletes every request in one plain query', () => {
+		const stack = app(['special_requests', 'request_groups']);
+		up(stack);
+		expect(stack.queries).toEqual(['DELETE FROM {{special_requests}}']);
+	});
+
+	it('changes nothing on a database without requests', () => {
+		const stack = app([]);
+		up(stack);
+		expect(stack.queries).toEqual([]);
 	});
 });

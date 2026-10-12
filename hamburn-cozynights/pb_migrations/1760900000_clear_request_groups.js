@@ -6,9 +6,8 @@
 //
 // - special_requests.request_group is emptied first: the relation doesn't
 //   cascade (1760550000_request_groups.js), and a request must never point
-//   at a group that is gone. The requests themselves stay, without a group,
-//   with whatever the guest ticked and wrote; the crew decides them like any
-//   other.
+//   at a group that is gone. The requests themselves were test data too:
+//   1760910000_clear_special_requests.js deletes them right after.
 // - then every request_groups row goes, with its code and the tickets the
 //   crew took out (`removed`).
 //
