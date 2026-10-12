@@ -120,6 +120,19 @@ export function withLocks<T>(keys: string[], fn: () => Promise<T>): Promise<T> {
 	return keys.reduceRight<() => Promise<T>>((inner, key) => () => withLock(key, inner), fn)();
 }
 
+/**
+ * The locks of these spots, sorted: the admin's spot actions take the same
+ * ones, so a release or check-in and a 🔒/♿/bed-type change never write one
+ * spot at the same time (PocketBase saves the whole record, the later write
+ * would undo the other). Taken inside the ticket's lock, like everywhere.
+ */
+function withBedLocks<T>(bedIds: string[], fn: () => Promise<T>): Promise<T> {
+	return withLocks(
+		[...new Set(bedIds)].sort().map((id) => `bed:${id}`),
+		fn
+	);
+}
+
 function isNotFound(err: unknown): boolean {
 	return (err as ClientResponseError | undefined)?.status === 404;
 }
@@ -394,9 +407,14 @@ export class BookingService {
 				);
 			}
 
-			for (const bed of beds) {
-				await this.adminPb.collection('beds').update(bed.id, { occupied: false, order: null });
-			}
+			await withBedLocks(
+				beds.map((bed) => bed.id),
+				async () => {
+					for (const bed of beds) {
+						await this.adminPb.collection('beds').update(bed.id, { occupied: false, order: null });
+					}
+				}
+			);
 			return beds.length;
 		});
 	}
@@ -415,10 +433,12 @@ export class BookingService {
 			const bed = await this.getBedForOrder(orderId);
 			if (!bed) return { status: 'nospot', bed: null };
 			if (bed.checked_in_at) return { status: 'already', bed };
-			const updated = await this.adminPb.collection('beds').update<BedsResponse>(bed.id, {
-				checked_in_at: new Date().toISOString(),
-				checked_in_by: by
-			});
+			const updated = await withBedLocks([bed.id], () =>
+				this.adminPb.collection('beds').update<BedsResponse>(bed.id, {
+					checked_in_at: new Date().toISOString(),
+					checked_in_by: by
+				})
+			);
 			return { status: 'checkedin', bed: updated };
 		});
 	}
@@ -432,9 +452,11 @@ export class BookingService {
 			const bed = await this.getBedForOrder(orderId);
 			if (!bed) return { status: 'nospot', bed: null };
 			if (!bed.checked_in_at) return { status: 'booked', bed };
-			const updated = await this.adminPb
-				.collection('beds')
-				.update<BedsResponse>(bed.id, { checked_in_at: '', checked_in_by: '' });
+			const updated = await withBedLocks([bed.id], () =>
+				this.adminPb
+					.collection('beds')
+					.update<BedsResponse>(bed.id, { checked_in_at: '', checked_in_by: '' })
+			);
 			return { status: 'undone', bed: updated };
 		});
 	}
@@ -449,11 +471,16 @@ export class BookingService {
 			const beds = await this.adminPb.collection('beds').getFullList<BedsResponse>({
 				filter: this.adminPb.filter('order = {:orderId} && checked_in_at != ""', { orderId })
 			});
-			for (const bed of beds) {
-				await this.adminPb
-					.collection('beds')
-					.update(bed.id, { checked_in_at: '', checked_in_by: '' });
-			}
+			await withBedLocks(
+				beds.map((bed) => bed.id),
+				async () => {
+					for (const bed of beds) {
+						await this.adminPb
+							.collection('beds')
+							.update(bed.id, { checked_in_at: '', checked_in_by: '' });
+					}
+				}
+			);
 			return beds.length > 0;
 		});
 	}
