@@ -40,6 +40,11 @@ function routedPath(event: Parameters<Handle>[0]['event']): string {
 
 function usesGuestSession(pathname: string): boolean {
 	if (isAdminPath(pathname)) return false;
+	// The room page's poll for spots being booked ($lib/server/spot-holds)
+	// checks the cookie's signature itself: every open room page asks every
+	// few seconds, and a ticket lookup each time would load PocketBase at the
+	// opening rush. Ending a session stays with the page loads.
+	if (pathname === '/room/[id]/holds') return false;
 	return !/^\/(auth|api|docs|pass)(\/|$)/.test(pathname);
 }
 

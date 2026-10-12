@@ -116,9 +116,14 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 						fields: ROULETTE_FIELDS,
 						sort: 'label'
 					});
+		// Spots other guests are booking right now ($lib/server/spot-holds) are
+		// free, but not up for grabs: they stay out of the drum and the counts,
+		// and the machine says how many there are when nothing else is left.
+		const open = unheld(allFree, order.id);
+		const beingBooked = allFree.length - open.length;
 		// The drum holds only the spots that fit the wishes (all of them without
 		// any); what a room or spot switched off (a superuser's call) never fits.
-		const freeBeds: RouletteSpot[] = allFree
+		const freeBeds: RouletteSpot[] = open
 			.filter(
 				(bed) =>
 					wishes.length === 0 ||
@@ -142,7 +147,7 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 		// What the wishes left in the drum, as the bar says it next to the chips.
 		const wishFit =
 			wishes.length > 0
-				? `${freeBeds.length} ${freeBeds.length === 1 ? 'spot' : 'spots'} in the drum of ${allFree.length} free`
+				? `${freeBeds.length} ${freeBeds.length === 1 ? 'spot' : 'spots'} in the drum of ${open.length} free`
 				: '';
 
 		// A guest with a spot sees it as the small booking pass, like on the
@@ -174,13 +179,14 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 			: null;
 
 		return {
-			// Spots other guests are booking right now stay out of the drum ($lib/server/spot-holds).
-			freeBeds: unheld(freeBeds, order.id),
+			freeBeds,
 			wishes,
 			availableFilters,
 			wishFit,
 			/** All free spots, so the page can say how many the wishes left out. */
-			freeTotal: allFree.length,
+			freeTotal: open.length,
+			/** Free spots other guests are booking right now: "check back in a few minutes". */
+			beingBooked,
 			isBookingActive,
 			spotFixed,
 			// The crew checked the guest in at arrival: only the crew changes the spot now.

@@ -170,7 +170,7 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 
 		// Spots other guests are booking right now, as milliseconds left: their
 		// cards say "Bed being made…" ($lib/server/spot-holds).
-		const heldSpots = settings.isBookingActive ? roomHolds(room.id, order.id) : {};
+		const heldSpots = settings.isBookingActive ? roomHolds(room.id, { orderId: order.id }) : {};
 
 		return {
 			heldSpots,

@@ -41,11 +41,30 @@ import {
 	freeAgainText,
 	heldLine,
 	HELD_LINES,
+	holdActionUrl,
 	untilFrom
 } from '../src/lib/spot-hold';
+import { guestCookieKey } from '../src/lib/server/crypto';
+import { signGuestCode } from '../src/lib/server/session-sig';
 
 const T0 = Date.parse('2026-10-17T18:00:00Z');
 const MINUTE = 60_000;
+
+/** A ticket as placeHold knows it: its id and its code's lookup hash. */
+const holder = (orderId: string) => ({ orderId, ticket: `ticket-${orderId}` });
+
+/** The guest cookies of a request, as the poll reads them (nothing is ever deleted). */
+function guestCookies(value: string | null, round = 0) {
+	return {
+		get: (name: string) =>
+			name === 'bookingCode'
+				? (value ?? undefined)
+				: name === 'bookingRound'
+					? String(round)
+					: undefined
+	};
+}
+const signed = (code: string, round = 0) => signGuestCode(guestCookieKey(), code, round);
 
 function form(fields: Record<string, string>): FormData {
 	const data = new FormData();
@@ -88,13 +107,19 @@ function camp(settings: Record<string, unknown> = {}) {
 	const ada = guest('HB-3001', 'Ada');
 	const bob = guest('HB-3002', 'Bob');
 	const bed = (id: string) => pb.rows('beds').find((row) => row.id === id)!;
-	return { pb, room, other, b1, b2, b3, l1, a1, ada, bob, bed };
+	return { pb, room, other, b1, b2, b3, l1, a1, ada, bob, bed, guest };
 }
 
 type Guest = ReturnType<typeof camp>['ada'];
 
 const holdSpot = (g: Guest, bedId: string) =>
 	roomActions.holdSpot({
+		request: { formData: async () => form({ bedId }) },
+		locals: g.locals
+	} as any) as Promise<any>;
+
+const spin = (g: Guest, bedId: string) =>
+	rouletteActions.holdSpot({
 		request: { formData: async () => form({ bedId }) },
 		locals: g.locals
 	} as any) as Promise<any>;
@@ -133,26 +158,26 @@ afterEach(() => {
 
 describe('the hold rules', () => {
 	it('one spot per ticket, one ticket per spot', () => {
-		expect(placeHold('ada', 'b1', 'room')).toMatchObject({ status: 'held' });
-		expect(placeHold('bob', 'b1', 'room')).toMatchObject({
+		expect(placeHold(holder('ada'), 'b1', 'room')).toMatchObject({ status: 'held' });
+		expect(placeHold(holder('bob'), 'b1', 'room')).toMatchObject({
 			status: 'taken',
 			hold: { orderId: 'ada', until: T0 + HOLD_MS }
 		});
 		// Ada moves on to B2: B1 is free again, for Bob too
-		expect(placeHold('ada', 'b2', 'room')).toMatchObject({ status: 'held' });
+		expect(placeHold(holder('ada'), 'b2', 'room')).toMatchObject({ status: 'held' });
 		expect(holdOn('b1')).toBeNull();
 		expect(holdOf('ada')).toMatchObject({ bedId: 'b2' });
-		expect(placeHold('bob', 'b1', 'room')).toMatchObject({ status: 'held' });
+		expect(placeHold(holder('bob'), 'b1', 'room')).toMatchObject({ status: 'held' });
 	});
 
 	it('runs ten minutes from the first tap, and a closed window picks the same clock up', () => {
-		placeHold('ada', 'b1', 'room');
+		placeHold(holder('ada'), 'b1', 'room');
 		vi.setSystemTime(T0 + 3 * MINUTE);
 		expect(endHold('ada')).toBe(true);
 		expect(holdOn('b1')).toBeNull();
 		// opened again: the same ten minutes, not ten new ones
 		vi.setSystemTime(T0 + 4 * MINUTE);
-		expect(placeHold('ada', 'b1', 'room')).toMatchObject({
+		expect(placeHold(holder('ada'), 'b1', 'room')).toMatchObject({
 			status: 'held',
 			hold: { until: T0 + HOLD_MS }
 		});
@@ -162,31 +187,37 @@ describe('the hold rules', () => {
 	});
 
 	it('gives a ticket no second hold on the same spot until another ten minutes passed', () => {
-		placeHold('ada', 'b1', 'room');
+		placeHold(holder('ada'), 'b1', 'room');
 		vi.setSystemTime(T0 + 11 * MINUTE);
-		expect(placeHold('ada', 'b1', 'room')).toEqual({ status: 'spent', again: T0 + 2 * HOLD_MS });
+		expect(placeHold(holder('ada'), 'b1', 'room')).toEqual({
+			status: 'spent',
+			again: T0 + 2 * HOLD_MS
+		});
 		// hopping to another spot and back doesn't reset the clock either
-		expect(placeHold('ada', 'b2', 'room')).toMatchObject({ status: 'held' });
-		expect(placeHold('ada', 'b1', 'room')).toMatchObject({ status: 'spent' });
+		expect(placeHold(holder('ada'), 'b2', 'room')).toMatchObject({ status: 'held' });
+		expect(placeHold(holder('ada'), 'b1', 'room')).toMatchObject({ status: 'spent' });
 		// everybody else can hold it right away
-		expect(placeHold('bob', 'b1', 'room')).toMatchObject({ status: 'held' });
+		expect(placeHold(holder('bob'), 'b1', 'room')).toMatchObject({ status: 'held' });
 		vi.setSystemTime(T0 + 2 * HOLD_MS + 2 * MINUTE);
-		expect(placeHold('ada', 'b1', 'room')).toMatchObject({ status: 'held' });
+		expect(placeHold(holder('ada'), 'b1', 'room')).toMatchObject({ status: 'held' });
 	});
 
 	it('a booking ends the booking ticket hold and every hold on the booked spot', () => {
-		placeHold('ada', 'b1', 'room');
-		placeHold('bob', 'b2', 'room');
+		placeHold(holder('ada'), 'b1', 'room');
+		placeHold(holder('bob'), 'b2', 'room');
 		settleHolds('bob', 'b1');
 		expect(holdOf('ada')).toBeNull();
 		expect(holdOf('bob')).toBeNull();
 	});
 
 	it('lists a room for everyone but the holder, and keeps held spots out of a drum', () => {
-		placeHold('ada', 'b1', 'room');
-		placeHold('bob', 'x1', 'elsewhere');
-		expect(roomHolds('room', 'bob')).toEqual({ b1: HOLD_MS });
-		expect(roomHolds('room', 'ada')).toEqual({});
+		placeHold(holder('ada'), 'b1', 'room');
+		placeHold(holder('bob'), 'x1', 'elsewhere');
+		expect(roomHolds('room', { orderId: 'bob' })).toEqual({ b1: HOLD_MS });
+		expect(roomHolds('room', { orderId: 'ada' })).toEqual({});
+		// the poll knows the guest by the ticket code's hash alone
+		expect(roomHolds('room', { ticket: 'ticket-ada' })).toEqual({});
+		expect(roomHolds('room', { ticket: 'ticket-bob' })).toEqual({ b1: HOLD_MS });
 		const drum = [{ id: 'b1' }, { id: 'b2' }, { id: 'x1' }];
 		expect(unheld(drum, 'carl').map((s) => s.id)).toEqual(['b2']);
 		expect(unheld(drum, 'ada').map((s) => s.id)).toEqual(['b1', 'b2']);
@@ -262,13 +293,23 @@ describe('the room page', () => {
 		expect((await loadRoom(c, c.bob)).heldSpots).toEqual({ [c.b2.id]: 6 * MINUTE });
 		expect((await loadRoom(c, c.ada)).heldSpots).toEqual({});
 
-		const answer = await roomHoldsGet({ params: { id: c.room.id }, locals: c.bob.locals } as any);
-		expect(await answer.json()).toEqual({ held: { [c.b2.id]: 6 * MINUTE } });
-		const anonymous = await roomHoldsGet({
-			params: { id: c.room.id },
-			locals: { orderNumber: null }
-		} as any);
-		expect(anonymous.status).toBe(401);
+		// The poll: the signed cookie alone, no PocketBase and no session check
+		// (the hook skips it for this path), nothing deleted.
+		const poll = (cookie: string | null, round = 0) =>
+			roomHoldsGet({
+				params: { id: c.room.id },
+				cookies: guestCookies(cookie, round),
+				locals: {}
+			} as any);
+		expect(await (await poll(signed('HB-3002'))).json()).toEqual({
+			held: { [c.b2.id]: 6 * MINUTE }
+		});
+		// Ada's own hold is hers, known by her cookie
+		expect(await (await poll(signed('HB-3001'))).json()).toEqual({ held: {} });
+		// made up, signed for another round, or none: 401, and the page reloads
+		expect((await poll('HB-3002.made-up')).status).toBe(401);
+		expect((await poll(signed('HB-3002', 3), 4)).status).toBe(401);
+		expect((await poll(null)).status).toBe(401);
 	});
 
 	it('the crew books past a hold, and the hold ends with it', async () => {
@@ -284,7 +325,7 @@ describe('the room page', () => {
 		const c = camp();
 		await book(c.ada, c.b1.id);
 		// a stray hold on Ada's spot (it can't happen through the pages)
-		placeHold(c.bob.order.id, c.b1.id, c.room.id);
+		placeHold(holder(c.bob.order.id), c.b1.id, c.room.id);
 		const renamed = await roomActions.bookBed({
 			request: { formData: async () => form({ bedId: c.b1.id, guestName: 'New Name' }) },
 			locals: c.ada.locals
@@ -319,15 +360,54 @@ describe('the roulette', () => {
 
 	it('a new spin holds the new spot and lets go of the old one', async () => {
 		const c = camp();
-		const spin = (bedId: string) =>
-			rouletteActions.holdSpot({
-				request: { formData: async () => form({ bedId }) },
-				locals: c.ada.locals
-			} as any) as Promise<any>;
-		expect(await spin(c.b2.id)).toMatchObject({ hold: { bedId: c.b2.id } });
-		expect(await spin(c.a1.id)).toMatchObject({ hold: { bedId: c.a1.id } });
+		expect(await spin(c.ada, c.b2.id)).toMatchObject({ hold: { bedId: c.b2.id } });
+		expect(await spin(c.ada, c.a1.id)).toMatchObject({ hold: { bedId: c.a1.id } });
 		expect(holdOn(c.b2.id)).toBeNull();
 		expect(holdOf(c.ada.order.id)).toMatchObject({ bedId: c.a1.id });
+	});
+
+	it('a spin onto a spot that cannot be held lets go of the old one all the same', async () => {
+		const c = camp();
+		// someone else is making B3
+		await spin(c.ada, c.b2.id);
+		await holdSpot(c.bob, c.b3.id);
+		expect((await spin(c.ada, c.b3.id)).data).toMatchObject({ held: true });
+		expect(holdOn(c.b2.id)).toBeNull();
+
+		// someone booked B1 meanwhile
+		await spin(c.ada, c.b2.id);
+		await book(c.bob, c.b1.id);
+		expect((await spin(c.ada, c.b1.id)).data).toMatchObject({ bedTaken: true });
+		expect(holdOn(c.b2.id)).toBeNull();
+
+		// the ticket's minutes on the spot are over (A1 since T0; B3, Bob's
+		// hold ran out, is new for Ada)
+		await spin(c.ada, c.a1.id);
+		vi.setSystemTime(T0 + 11 * MINUTE);
+		await spin(c.ada, c.b3.id);
+		expect(holdOf(c.ada.order.id)).toMatchObject({ bedId: c.b3.id });
+		expect(await spin(c.ada, c.a1.id)).toEqual({ hold: null, spent: true });
+		expect(holdOf(c.ada.order.id)).toBeNull();
+	});
+
+	it('says the free spots are being booked when only holds empty the drum', async () => {
+		const c = camp();
+		const load = () =>
+			rouletteLoad({
+				url: new URL('http://test.local/random-bed'),
+				locals: c.bob.locals,
+				cookies: { delete: vi.fn() }
+			} as any) as Promise<any>;
+		await holdSpot(c.ada, c.b1.id);
+		expect(await load()).toMatchObject({ freeTotal: 3, beingBooked: 1 });
+
+		const holders = ['HB-3003', 'HB-3004', 'HB-3005'].map((code, i) => c.guest(code, `G${i}`));
+		await holdSpot(holders[0], c.b2.id);
+		await holdSpot(holders[1], c.b3.id);
+		await holdSpot(holders[2], c.a1.id);
+		const page = await load();
+		expect(page.freeBeds).toEqual([]);
+		expect(page).toMatchObject({ freeTotal: 0, beingBooked: 4 });
 	});
 });
 
@@ -341,6 +421,11 @@ describe('what the pages say', () => {
 		const lines = new Set([0, 4_000, 8_000, 12_000].map((t) => heldLine('fake00000000001', t)));
 		expect(lines.size).toBe(4);
 		for (const line of lines) expect(HELD_LINES).toContain(line);
+	});
+
+	it('sends a hold action to the page that holds the spot, not to the URL shown', () => {
+		expect(holdActionUrl('/room/abc123', 'dropHold')).toBe('/room/abc123?/dropHold');
+		expect(holdActionUrl('/random-bed', 'holdSpot')).toBe('/random-bed?/holdSpot');
 	});
 
 	it('reloads the room when a hold ends well before its time', () => {

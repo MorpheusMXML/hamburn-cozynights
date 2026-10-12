@@ -63,3 +63,15 @@ export function endedEarly(
 ): boolean {
 	return Object.entries(before).some(([bedId, until]) => !(bedId in after) && until - now > 5_000);
 }
+
+/** A page with the hold actions: a room page or the roulette. */
+export type HoldPage = `/room/${string}` | '/random-bed';
+
+/**
+ * Where a hold action of `page` is sent: always that page's own path. A
+ * relative `?/dropHold` would go to whatever URL the browser shows, and after
+ * a link was followed that is the next page already.
+ */
+export function holdActionUrl(page: HoldPage, action: 'holdSpot' | 'dropHold'): string {
+	return `${page}?/${action}`;
+}

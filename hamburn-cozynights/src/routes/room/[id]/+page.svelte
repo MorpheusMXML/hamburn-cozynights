@@ -36,7 +36,8 @@
 		endedEarly,
 		freeAgainText,
 		heldLine,
-		untilFrom
+		untilFrom,
+		type HoldPage
 	} from '$lib/spot-hold';
 	import { holdRequest } from '$lib/spot-hold-request';
 
@@ -202,9 +203,12 @@
 	 */
 	type HoldState = 'none' | 'pending' | 'held' | 'spent' | 'taken' | 'failed';
 	let holdState: HoldState = 'none';
-	let myHold: { bedId: string; until: number } | null = null;
+	/** The guest's hold, with the page that holds it (its actions go there). */
+	let myHold: { bedId: string; until: number; page: HoldPage } | null = null;
 	/** Counts the booking windows, so an answer for an earlier one is ignored. */
 	let holdTurn = 0;
+	/** The page went away: an answer that still comes in is let go at once. */
+	let gone = false;
 	let polling = false;
 
 	/** Milliseconds left on another guest's hold of the spot (0: none). */
@@ -215,22 +219,23 @@
 	/** Holds the spot of the booking window that just opened. */
 	async function holdSpot(bedId: string) {
 		const turn = ++holdTurn;
+		const page: HoldPage = `/room/${data.room.id}`;
 		holdState = 'pending';
 		myHold = null;
-		const result = await holdRequest('holdSpot', bedId);
+		const result = await holdRequest(page, 'holdSpot', bedId);
 		if (turn !== holdTurn) {
 			// The window closed meanwhile. A hold that came through anyway is let go,
 			// unless the guest opened this very spot again.
-			const stillHere = showModal && selectedBedId === bedId;
+			const stillHere = !gone && showModal && selectedBedId === bedId;
 			if (result?.type === 'success' && result.data?.hold && !stillHere) {
-				void holdRequest('dropHold', bedId, true);
+				void holdRequest(page, 'dropHold', bedId, true);
 			}
 			return;
 		}
 		if (result?.type === 'success') {
 			const hold = result.data?.hold as { bedId: string; left: number } | null | undefined;
 			if (hold) {
-				myHold = { bedId: hold.bedId, until: Date.now() + hold.left };
+				myHold = { bedId: hold.bedId, until: Date.now() + hold.left, page };
 				holdState = 'held';
 			} else {
 				holdState = result.data?.spent ? 'spent' : 'failed';
@@ -257,7 +262,7 @@
 	/** The booking window closed without a booking: the spot is free again. */
 	function letGoOfHold() {
 		holdTurn++;
-		if (myHold) void holdRequest('dropHold', myHold.bedId, true);
+		if (myHold) void holdRequest(myHold.page, 'dropHold', myHold.bedId, true);
 		myHold = null;
 		holdState = 'none';
 	}
@@ -268,6 +273,11 @@
 		polling = true;
 		try {
 			const response = await fetch(`/room/${data.room.id}/holds`, { cache: 'no-store' });
+			// The cookie doesn't check out any more: the page load says why.
+			if (response.status === 401) {
+				await invalidateAll();
+				return;
+			}
 			if (!response.ok) return;
 			const { held } = (await response.json()) as { held: Record<string, number> };
 			const next = untilFrom(held);
@@ -287,14 +297,20 @@
 		const poller = setInterval(pollHolds, HOLD_POLL_MS);
 		// The guest leaves with the window open: the spot is free for others.
 		const leave = () => {
-			if (myHold) void holdRequest('dropHold', myHold.bedId, true);
+			gone = true;
+			holdTurn++;
+			if (myHold) void holdRequest(myHold.page, 'dropHold', myHold.bedId, true);
 			myHold = null;
 		};
+		// Back from the browser's page cache: the page is here again.
+		const back = () => (gone = false);
 		window.addEventListener('pagehide', leave);
+		window.addEventListener('pageshow', back);
 		return () => {
 			clearInterval(ticker);
 			clearInterval(poller);
 			window.removeEventListener('pagehide', leave);
+			window.removeEventListener('pageshow', back);
 			leave();
 		};
 	});

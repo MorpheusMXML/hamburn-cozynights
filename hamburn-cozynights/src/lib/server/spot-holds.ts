@@ -5,7 +5,8 @@
 // they see "Bed being made…" on its card instead. Then it is free again.
 //
 // The rules:
-// - One hold per ticket: holding another spot lets go of the first one.
+// - One hold per ticket: asking for another spot lets go of the first one,
+//   also when the new one can't be held (taken, someone else's, spent).
 // - One hold per spot: a spot someone holds can't be held by anyone else.
 // - Ten minutes per spot and ticket, counted from the first tap: closing the
 //   window lets go of the spot (others can book it), and opening it again
@@ -33,6 +34,12 @@ export interface SpotHold {
 	bedId: string;
 	roomId: string;
 	orderId: string;
+	/**
+	 * The ticket code's lookup hash ($lib/server/crypto createLookupHash): the
+	 * room page's poll knows the guest by the signed cookie alone and finds
+	 * their own hold by it, without asking PocketBase for the ticket.
+	 */
+	ticket: string;
 	/** When the hold ends (ms since the epoch). */
 	until: number;
 }
@@ -85,16 +92,20 @@ export function holdOf(orderId: string, now = Date.now()): SpotHold | null {
 
 /**
  * The running holds of other tickets on a room's spots, as milliseconds
- * left by spot id: what the room page shows as "Bed being made…".
+ * left by spot id: what the room page shows as "Bed being made…". The
+ * guest's own hold is left out, known by the ticket's id or its lookup hash.
  */
 export function roomHolds(
 	roomId: string,
-	orderId: string,
+	guest: { orderId?: string; ticket?: string },
 	now = Date.now()
 ): Record<string, number> {
 	const left: Record<string, number> = {};
 	for (const hold of holds.values()) {
-		if (hold.roomId === roomId && hold.orderId !== orderId && hold.until > now) {
+		const own =
+			(!!guest.orderId && hold.orderId === guest.orderId) ||
+			(!!guest.ticket && hold.ticket === guest.ticket);
+		if (hold.roomId === roomId && !own && hold.until > now) {
 			left[hold.bedId] = hold.until - now;
 		}
 	}
@@ -116,23 +127,29 @@ export function unheld<T extends { id: string }>(
  * then a booking and a hold can't cross.
  */
 export function placeHold(
-	orderId: string,
+	holder: { orderId: string; ticket: string },
 	bedId: string,
 	roomId: string,
 	now = Date.now()
 ): HoldOutcome {
+	const { orderId, ticket } = holder;
 	prune(now);
 	const other = heldByOther(bedId, orderId, now);
-	if (other) return { status: 'taken', hold: other };
+	if (other) {
+		// one hold per ticket: the spot it held before is free now
+		holds.delete(orderId);
+		return { status: 'taken', hold: other };
+	}
 
 	const key = startKey(orderId, bedId);
 	const first = started.get(key);
 	if (first !== undefined && now >= first + HOLD_MS) {
+		holds.delete(orderId);
 		return { status: 'spent', again: first + 2 * HOLD_MS };
 	}
 	const from = first ?? now;
 	started.set(key, from);
-	const hold: SpotHold = { bedId, roomId, orderId, until: from + HOLD_MS };
+	const hold: SpotHold = { bedId, roomId, orderId, ticket, until: from + HOLD_MS };
 	// one hold per ticket: this replaces any other spot the ticket held
 	holds.set(orderId, hold);
 	return { status: 'held', hold };

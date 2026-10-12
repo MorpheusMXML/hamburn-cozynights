@@ -9,7 +9,8 @@ import { fail } from '@sveltejs/kit';
 import type { BedsResponse } from '$lib/pocketbase-types';
 import { BookingService, isBedBookable, withLock } from '$lib/server/booking';
 import { isCrewTicket } from '$lib/server/crew-ticket';
-import { getBookingSettings } from '$lib/server/settings';
+import { getBookingSettings, SETTINGS_UNREACHABLE } from '$lib/server/settings';
+import { createLookupHash } from '$lib/server/crypto';
 import { bookingRefusal } from '$lib/booking-phase';
 import { recordId } from '$lib/server/record-id';
 import { endHold, HELD_MESSAGE, placeHold } from '$lib/server/spot-holds';
@@ -24,6 +25,9 @@ const CODE_UNKNOWN = 'Your ticket code was not found. Go to the start page and e
  * when the ticket's minutes on this spot are over (it can still book it).
  * A failure says why the spot can't be held: taken (`bedTaken`), held by
  * someone else (`held`, with `left`), or the ticket holds a spot already.
+ * Asking for a spot that can't be held lets go of the ticket's earlier hold
+ * all the same (one hold per ticket): a respin never leaves the last spot
+ * held behind the guest's back.
  */
 export async function holdSpotAction(locals: App.Locals, request: Request) {
 	if (!locals.orderNumber) return fail(401, { error: SIGNED_OUT });
@@ -31,14 +35,18 @@ export async function holdSpotAction(locals: App.Locals, request: Request) {
 	const bedId = recordId(form, 'bedId');
 	if (!bedId) return fail(400, { error: 'No spot was selected.' });
 
+	let orderId = '';
 	try {
-		const { isBookingActive, guestPhase } = await getBookingSettings(locals.pb);
+		const { isBookingActive, guestPhase, reachable } = await getBookingSettings(locals.pb);
+		if (!reachable) return fail(503, { error: SETTINGS_UNREACHABLE });
 		if (!isBookingActive) return fail(403, { error: bookingRefusal(guestPhase) });
 
 		const service = new BookingService(locals.adminPb);
 		const order = locals.order ?? (await service.getOrderByNumber(locals.orderNumber));
 		if (!order) return fail(404, { error: CODE_UNKNOWN });
+		orderId = order.id;
 		const crewTicket = await isCrewTicket(locals.adminPb, order);
+		const holder = { orderId: order.id, ticket: createLookupHash(locals.orderNumber) };
 
 		// The booking locks, in bookBed's order: a hold and a booking can't cross.
 		return await withLock(`order:${order.id}`, () =>
@@ -51,15 +59,18 @@ export async function holdSpotAction(locals: App.Locals, request: Request) {
 				}
 				const bed = await locals.adminPb.collection('beds').getOne<BedsResponse>(bedId);
 				if (bed.occupied) {
+					endHold(order.id);
 					return fail(409, {
 						error: 'This spot is already claimed. Please pick another spot.',
 						bedTaken: true
 					});
 				}
 				if (!isBedBookable(bed, { allowLocked: crewTicket })) {
+					endHold(order.id);
 					return fail(409, { error: 'This spot is not available.', bedTaken: true });
 				}
-				const outcome = placeHold(order.id, bedId, bed.room);
+				// taken or spent lets go of an earlier hold too (placeHold)
+				const outcome = placeHold(holder, bedId, bed.room);
 				const now = Date.now();
 				if (outcome.status === 'taken') {
 					return fail(409, {
@@ -73,6 +84,7 @@ export async function holdSpotAction(locals: App.Locals, request: Request) {
 			})
 		);
 	} catch (err) {
+		if (orderId) endHold(orderId);
 		if ((err as { status?: number })?.status === 404) {
 			return fail(404, {
 				error: "This spot doesn't exist anymore. Please pick another one.",

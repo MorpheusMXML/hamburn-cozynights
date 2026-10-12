@@ -2,13 +2,16 @@
 // for a spot hold ($lib/spot-hold, $lib/server/spot-hold-actions).
 import { deserialize } from '$app/forms';
 import type { ActionResult } from '@sveltejs/kit';
+import { holdActionUrl, type HoldPage } from '$lib/spot-hold';
 
 /**
- * Sends the page's holdSpot or dropHold action for a spot. `keepalive` lets
- * a dropHold finish while the page goes away. Resolves null when the server
- * could not be reached.
+ * Sends the holdSpot or dropHold action of `page` (the page that holds the
+ * spot, never the URL the browser shows: leaving by a link moves that on
+ * before the page lets go). `keepalive` lets a dropHold finish while the page
+ * goes away. Resolves null when the server could not be reached.
  */
 export async function holdRequest(
+	page: HoldPage,
 	action: 'holdSpot' | 'dropHold',
 	bedId: string,
 	keepalive = false
@@ -16,7 +19,7 @@ export async function holdRequest(
 	const body = new FormData();
 	body.set('bedId', bedId);
 	try {
-		const response = await fetch(`?/${action}`, {
+		const response = await fetch(holdActionUrl(page, action), {
 			method: 'POST',
 			body,
 			keepalive,

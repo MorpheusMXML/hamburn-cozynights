@@ -141,6 +141,18 @@ function signedInRound(cookies: Cookies): number {
 	return Number.isFinite(round) && round >= 0 ? round : 0;
 }
 
+/**
+ * The ticket code of a signed guest cookie, by its signature alone: no
+ * PocketBase, no round or ticket check, and nothing is deleted. Only for a
+ * request that shows nothing personal and changes nothing (the room page's
+ * poll for spots being booked); everything else goes through
+ * resolveGuestSession.
+ */
+export function readGuestCookie(cookies: Cookies): string | null {
+	const value = cookies.get(GUEST_COOKIE);
+	return value ? readSignedGuestCode(guestCookieKey(), value, signedInRound(cookies)) : null;
+}
+
 export interface GuestSession {
 	/** The ticket code this request acts for, or null when nobody is signed in. */
 	code: string | null;

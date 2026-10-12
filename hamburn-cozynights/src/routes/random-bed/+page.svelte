@@ -51,7 +51,7 @@ No Trace to give it up and spin again.
 		spinPlan,
 		type RouletteSpot
 	} from '$lib/roulette';
-	import { clock } from '$lib/spot-hold';
+	import { clock, type HoldPage } from '$lib/spot-hold';
 	import { holdRequest } from '$lib/spot-hold-request';
 	import type { PageData } from './$types';
 
@@ -93,6 +93,10 @@ No Trace to give it up and spin again.
 	/** What the guest is told once the reels stop, when someone else got the spot meanwhile. */
 	let lostSpot = $state('');
 	let holdTurn = 0;
+	/** The page went away: an answer that still comes in is let go at once. */
+	let gone = false;
+	/** This page's hold actions: never the URL the browser shows after a link. */
+	const HOLD_PAGE: HoldPage = '/random-bed';
 	let now = $state(Date.now());
 	let myHoldLeft = $derived(myHold ? Math.max(0, myHold.until - now) : 0);
 
@@ -166,7 +170,9 @@ No Trace to give it up and spin again.
 		if (mode === 'soldout') {
 			return wishes.length > 0 && data.freeTotal > 0
 				? 'No spot fits your wishes'
-				: 'Every spot is taken';
+				: data.beingBooked > 0
+					? 'Beds being made'
+					: 'Every spot is taken';
 		}
 		if (isBooking) return 'Booking…';
 		if (stage === 'spinning') return 'Spinning…';
@@ -281,11 +287,11 @@ No Trace to give it up and spin again.
 		holdState = 'pending';
 		lostSpot = '';
 		myHold = null;
-		const result = await holdRequest('holdSpot', spot.id);
+		const result = await holdRequest(HOLD_PAGE, 'holdSpot', spot.id);
 		if (turn !== holdTurn) {
 			// A newer spin or a booking took over: a late hold is let go again.
-			if (result?.type === 'success' && result.data?.hold && chosen?.id !== spot.id) {
-				void holdRequest('dropHold', spot.id, true);
+			if (result?.type === 'success' && result.data?.hold && (gone || chosen?.id !== spot.id)) {
+				void holdRequest(HOLD_PAGE, 'dropHold', spot.id, true);
 			}
 			return;
 		}
@@ -319,7 +325,7 @@ No Trace to give it up and spin again.
 	/** The guest leaves the spot behind: it is free for others again. */
 	function letGoOfHold() {
 		holdTurn++;
-		if (myHold) void holdRequest('dropHold', myHold.bedId, true);
+		if (myHold) void holdRequest(HOLD_PAGE, 'dropHold', myHold.bedId, true);
 		myHold = null;
 		holdState = 'none';
 		lostSpot = '';
@@ -330,13 +336,19 @@ No Trace to give it up and spin again.
 			if (myHold) now = Date.now();
 		}, 1000);
 		const leave = () => {
-			if (myHold) void holdRequest('dropHold', myHold.bedId, true);
+			gone = true;
+			holdTurn++;
+			if (myHold) void holdRequest(HOLD_PAGE, 'dropHold', myHold.bedId, true);
 			myHold = null;
 		};
+		// Back from the browser's page cache: the page is here again.
+		const back = () => (gone = false);
 		window.addEventListener('pagehide', leave);
+		window.addEventListener('pageshow', back);
 		return () => {
 			clearInterval(ticker);
 			window.removeEventListener('pagehide', leave);
+			window.removeEventListener('pageshow', back);
 			leave();
 		};
 	});
@@ -665,6 +677,13 @@ No Trace to give it up and spin again.
 					<div class="tray-actions">
 						<a class="btn-goto" href="/random-bed">Spin without wishes</a>
 					</div>
+				{:else if data.beingBooked > 0}
+					<!-- Free spots, but other guests are booking them ($lib/spot-hold). -->
+					<p class="tray-text">
+						{data.beingBooked}
+						{data.beingBooked === 1 ? 'spot is' : 'spots are'} being booked right now. If nobody finishes,
+						they are free again within ten minutes: check back in a few minutes.
+					</p>
 				{:else}
 					<p class="tray-text">
 						Every spot is taken right now. Check back later: a spot gets free again when someone

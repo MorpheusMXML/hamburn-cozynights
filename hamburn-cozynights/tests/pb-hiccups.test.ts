@@ -249,7 +249,10 @@ describe('guests while the booking phase cannot be read', () => {
 				locals: c.locals,
 				request: post({ bedId: c.b1.id })
 			} as any),
-			await roomActions.askSwap({ locals: c.locals, request: post({ bedId: c.b2.id }) } as any)
+			await roomActions.askSwap({ locals: c.locals, request: post({ bedId: c.b2.id }) } as any),
+			// opening the booking window, or the reels landing ($lib/server/spot-holds)
+			await roomActions.holdSpot({ locals: c.locals, request: post({ bedId: c.b2.id }) } as any),
+			await rouletteActions.holdSpot({ locals: c.locals, request: post({ bedId: c.b2.id }) } as any)
 		];
 		for (const result of results) {
 			expect(result).toMatchObject({ status: 503, data: { error: SETTINGS_UNREACHABLE } });
