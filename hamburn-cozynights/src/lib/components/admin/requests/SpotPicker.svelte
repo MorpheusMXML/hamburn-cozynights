@@ -170,6 +170,8 @@ inside. The page renders one at a time, outside every form.
 	const shownIds = $derived(new Set(shown.map((spot) => spot.bedId)));
 	const houses = $derived(buildPlaces(spots, sizes, (spot) => shownIds.has(spot.bedId)));
 	const allHouses = $derived(buildPlaces(spots, sizes));
+	/** A chip per house with a free spot: one with only locked 🔒 spots stays under All houses. */
+	const houseChips = $derived(allHouses.filter((house) => house.free > 0));
 	/** The rooms that fit everyone, best first (recommendRooms) — among those the filter shows. */
 	const suggestions = $derived.by(() => {
 		if (!groupMode) return [];
@@ -182,9 +184,9 @@ inside. The page renders one at a time, outside every form.
 	const filtered = $derived(isFiltered(filter) || roomsThatFit);
 
 	const factsList = $derived(spots.map((spot) => factsOf(spot.bedType, spot.features)));
-	/** The wishes worth a chip: those at least one free spot answers. */
+	/** The wishes worth a chip: those at least one free spot answers — not a locked 🔒 one. */
 	const wishChips = $derived.by(() => {
-		const offered = availableFilters(factsList);
+		const offered = availableFilters(factsList.filter((_, index) => plannable(spots[index])));
 		return SPOT_FILTERS.filter((entry) => offered.includes(entry.value));
 	});
 	// The counts never count a spot the crew locked 🔒: it is out of service.
@@ -553,7 +555,7 @@ inside. The page renders one at a time, outside every form.
 					>
 				{/each}
 			</div>
-			{#if allHouses.length > 1}
+			{#if houseChips.length > 1}
 				<div class="chips houses" role="group" aria-label="House" data-layout-ignore>
 					<button
 						type="button"
@@ -561,7 +563,7 @@ inside. The page renders one at a time, outside every form.
 						aria-pressed={houseId === ''}
 						onclick={() => (houseId = '')}>All houses</button
 					>
-					{#each allHouses as house (house.houseId)}
+					{#each houseChips as house (house.houseId)}
 						<button
 							type="button"
 							class="chip"
@@ -657,22 +659,31 @@ inside. The page renders one at a time, outside every form.
 								</header>
 								{#if groupMode && placing.length > 0}
 									<div class="room-action">
-										{#if roomBadge}<span class="badge {roomBadge.tone}">{roomBadge.text}</span>{/if}
-										{#if specialBadge(`room:${room.roomId}`)}<span class="badge special"
-												>{specialBadge(`room:${room.roomId}`)}</span
-											>{/if}
-										{#if roomNeeds}<span class="badge {roomNeeds.tone}">{roomNeeds.text}</span>{/if}
-										<button
-											type="button"
-											class="btn small"
-											aria-pressed={place === `room:${room.roomId}`}
-											onclick={() => (place = `room:${room.roomId}`)}
-											>{place === `room:${room.roomId}`
-												? '✓ The group goes here'
-												: room.free >= placing.length
-													? 'Put the group here'
-													: `Put ${room.free} of ${placing.length} here`}</button
-										>
+										{#if room.free === 0}
+											<!-- out of service: never planned, only picked by hand -->
+											<span class="room-note"
+												>Only 🔒 blocked spots here — pick one by hand with Change.</span
+											>
+										{:else}
+											{#if roomBadge}<span class="badge {roomBadge.tone}">{roomBadge.text}</span
+												>{/if}
+											{#if specialBadge(`room:${room.roomId}`)}<span class="badge special"
+													>{specialBadge(`room:${room.roomId}`)}</span
+												>{/if}
+											{#if roomNeeds}<span class="badge {roomNeeds.tone}">{roomNeeds.text}</span
+												>{/if}
+											<button
+												type="button"
+												class="btn small"
+												aria-pressed={place === `room:${room.roomId}`}
+												onclick={() => (place = `room:${room.roomId}`)}
+												>{place === `room:${room.roomId}`
+													? '✓ The group goes here'
+													: room.free >= placing.length
+														? 'Put the group here'
+														: `Put ${room.free} of ${placing.length} here`}</button
+											>
+										{/if}
 									</div>
 								{/if}
 								<div class="tiles" style="--tile-min: {tileMin(room.units.flatMap(unitSpots))}rem">
@@ -1177,6 +1188,13 @@ inside. The page renders one at a time, outside every form.
 	.badge.special {
 		border-color: var(--state-special);
 		color: #f9a8d4;
+	}
+	.room-note {
+		min-width: 0;
+		font-size: 0.8rem;
+		font-weight: 700;
+		color: var(--state-locked);
+		overflow-wrap: anywhere;
 	}
 	.badge.warn {
 		border-color: var(--state-filling);

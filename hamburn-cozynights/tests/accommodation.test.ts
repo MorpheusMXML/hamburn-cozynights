@@ -449,7 +449,7 @@ describe('how a spot answers a need', () => {
 		]);
 	});
 
-	it('never counts project or helper requests against the ♿ spots', () => {
+	it('gives the needs only a person can match no line of their own: project, helper, stable light', () => {
 		const open = [
 			{ needs: ['own_room'] as SpecialNeed[] },
 			{ needs: ['near_project'] as SpecialNeed[] },

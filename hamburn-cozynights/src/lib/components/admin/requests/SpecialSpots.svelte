@@ -3,9 +3,9 @@
 	 * The ♿ panel of the requests page (docs/admin/special-needs.md): every spot
 	 * marked ♿ SPECIAL on a room page and where it stands. Only the free ones
 	 * count for requests; for every other one the list says why and what can
-	 * change that, so a ♿ spot never just goes missing. TAKEN and
-	 * (de)activating are Staging-only (the layout lock); 🔒 and ♿ work in
-	 * every phase.
+	 * change that, so a ♿ spot never just goes missing. TAKEN, (de)activating
+	 * and freeing a spot on the room page are Staging-only (the layout lock);
+	 * 🔒 and ♿ work in every phase, and so does a request's card.
 	 *
 	 * The holder is the ticket's name from the ticket list: admin-only, like the
 	 * rest of this page (no-store), and nowhere else.
@@ -43,13 +43,15 @@
 			case 'request':
 				return `booked for ${holder} through their request`;
 			case 'booked':
-				return `booked by ${holder}, not through a request — it counts again once it is free (releasing it during Live Booking or after needs Staging Mode and a superuser)`;
+				return spot.holderRequest
+					? `booked by ${holder}, not through a request — it counts again once it is free: on their request's card, Choose where to move (or Release spot, once approved) frees it in every phase`
+					: `booked by ${holder}, not through a request — it counts again once it is free; the room page releases it only in Staging Mode`;
 			case 'blocked':
-				return 'blocked with TAKEN — not offered; TAKEN can only be cleared in Staging Mode (a superuser switches back)';
+				return 'blocked with TAKEN — not offered; TAKEN can only be cleared in Staging Mode';
 			case 'locked':
 				return 'locked 🔒, out of service — not offered; an admin can still book it on purpose, or unlock it on the room page';
 			case 'inactive':
-				return 'inactive — not offered; activating needs Staging Mode (a superuser switches back)';
+				return 'inactive — not offered; it can only be activated in Staging Mode';
 		}
 	}
 
@@ -74,6 +76,9 @@
 					<li data-state={held(spot.state) ? 'filling' : undefined} class:held={held(spot.state)}>
 						<a href="/admin/room/{spot.roomId}">{spot.label}</a>
 						<span class="state">{stateText(spot)}</span>
+						{#if spot.state === 'booked' && spot.holderRequest}
+							<a href="#request-{spot.holderRequest}">Their request ↓</a>
+						{/if}
 					</li>
 				{/each}
 			</ul>

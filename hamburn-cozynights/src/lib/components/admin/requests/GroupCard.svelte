@@ -42,6 +42,7 @@
 	} from '$lib/group-plan';
 	import { fitOf, pickNotes, type PickerRequest } from '$lib/spot-picker';
 	import {
+		BLOCKED_OK_ALL,
 		GROUP_MAX,
 		OTHER_NEED,
 		STATUS_LABELS,
@@ -298,7 +299,12 @@
 		return `${nameOf(member)} → ${spotText(spot)}${marks}`;
 	}
 
-	/** From what the form sends, so the dialog names exactly what gets booked. */
+	/**
+	 * From what the form sends, so the dialog names exactly what gets booked.
+	 * Also writes blockedOk: the 🔒 spots the dialog warns about, which the
+	 * server books only then (assignGroup) — so a spot locked after the page
+	 * loaded, which no dialog warned about, stops the booking.
+	 */
 	function bookConfirmation(form: FormData): Confirmation {
 		const picked = members
 			.map((member) => ({ member, bedId: String(form.get(`bed_${member.id}`) ?? '') }))
@@ -330,6 +336,8 @@
 		const blocked = picked
 			.map(({ bedId }) => spotOf(bedId))
 			.filter((spot): spot is SpotInfo => !!spot && pickNotes([], spot).blocked);
+		if (blocked.length > 0) form.set('blockedOk', blocked.map((spot) => spot.bedId).join(','));
+		else form.delete('blockedOk');
 		const blockedNote =
 			blocked.length > 0
 				? ` 🔒 ${blocked.map((spot) => spot.label).join(', ')} ${plural(blocked.length, 'is', 'are')} blocked (out of service). Book ${plural(blocked.length, 'it', 'them')} anyway?`
@@ -568,6 +576,13 @@
 					</li>
 				{/each}
 			</ul>
+			<!-- No dialog without JavaScript: the box confirms spots out of service. -->
+			{#if !mounted && spots.some((spot) => spot.locked)}
+				<label class="blocked-ok">
+					<input type="checkbox" name="blockedOk" value={BLOCKED_OK_ALL} />
+					Book 🔒 blocked spots (out of service) anyway
+				</label>
+			{/if}
 			<div class="plan-foot">
 				<button class="btn primary" disabled={!!busy || (mounted && toBook === 0)}>
 					Book {toBook}
@@ -869,6 +884,17 @@
 	.plan-foot .hint {
 		flex: 1 1 16rem;
 		min-width: 0;
+	}
+	/* without JavaScript: the box that confirms spots out of service */
+	.blocked-ok {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
+		font-size: 0.85rem;
+		font-weight: 700;
+		color: #fbbf24;
+		overflow-wrap: anywhere;
 	}
 
 	.btn {

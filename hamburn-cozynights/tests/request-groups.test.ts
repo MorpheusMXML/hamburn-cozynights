@@ -540,17 +540,48 @@ describe('booking spots for a group', () => {
 			is_special: false,
 			order: ''
 		});
-		const outcome = await assignGroup(c.pb as any, admin, group.id, [
+		const picks = [
 			{ requestId: requests[0].id, bedId: b1.id },
 			{ requestId: requests[1].id, bedId: l1.id },
 			{ requestId: requests[2].id, bedId: '' }
-		]);
+		];
+		// the dialog warned about L1, so the page confirms it (blockedOk)
+		const outcome = await assignGroup(c.pb as any, admin, group.id, picks, [l1.id]);
 		expect(outcome).toEqual({ booked: 2, approved: 1, failed: [] });
 		expect(bedOf(c, b1.id)).toBe(requests[0].order);
 		expect(bedOf(c, l1.id)).toBe(requests[1].order);
 		// the lock stays: still out of service for guests once the booking goes
 		expect(row(c, 'beds', l1.id).is_locked).toBe(true);
 		expect(await isSpotFixed(c.pb as any, requests[1].order)).toBe(true);
+	});
+
+	it('books nothing when a picked spot was locked since the page loaded', async () => {
+		const { c, group, requests, b1, b2 } = grouped();
+		// B2 broke meanwhile: no dialog warned about it, so nothing confirms it
+		row(c, 'beds', b2.id).is_locked = true;
+		const attempt = (blockedOk: string[]) =>
+			assignGroup(
+				c.pb as any,
+				admin,
+				group.id,
+				[
+					{ requestId: requests[0].id, bedId: b1.id },
+					{ requestId: requests[1].id, bedId: b2.id }
+				],
+				blockedOk
+			).catch((err) => err);
+		for (const blockedOk of [[], [b1.id]]) {
+			expect(await attempt(blockedOk)).toMatchObject({
+				status: 409,
+				message:
+					'🔒 B2 · Dorm #2 · Villa is blocked (out of service) now, so nothing was booked. Reload the page and pick again, or confirm it.'
+			});
+		}
+		expect([b1, b2].map((b) => bedOf(c, b.id))).toEqual(['', '']);
+		expect(events(c)).toHaveLength(0);
+		// the box of the page without JavaScript confirms whatever the form picked
+		expect(await attempt(['all'])).toMatchObject({ booked: 2, failed: [] });
+		expect(bedOf(c, b2.id)).toBe(requests[1].order);
 	});
 
 	it('checks every pick first, and books nothing when one is wrong', async () => {
@@ -862,6 +893,42 @@ describe('the group planner', () => {
 		});
 	});
 
+	it('repairs a clear mismatch that a swap removes: who the layout can check picks first', () => {
+		// X needs stable light (only a person can match it), Y no ladder; B1 is
+		// the ♿ lower bunk, B2 an upper bunk (♿ or not)
+		for (const upperSpecial of [false, true]) {
+			const room = [
+				spot('e1', 'r4', 'B1', { bedType: 'bunk_lower', special: true }),
+				spot('e2', 'r4', 'B2', { bedType: 'bunk_upper', special: upperSpecial })
+			];
+			for (const xNeeds of [['stable_light'], ['stable_light', 'near_toilet']] as SpecialNeed[][]) {
+				const pair = [member('x', xNeeds), member('y', ['lower_bunk'])];
+				expect(proposePlan(pair, room, 'room:r4')).toEqual({ x: 'e2', y: 'e1' });
+				expect(needsMet(pair, room, 'room:r4')).toEqual({ met: 1, of: xNeeds.length });
+			}
+		}
+	});
+
+	it('swaps when that answers more needs and keeps as many on ♿ spots', () => {
+		// S: the ♿ spot, its bed not described; P: a single bed
+		const room = [
+			spot('s', 'r4', 'S', { special: true }),
+			spot('p', 'r4', 'P', { bedType: 'single' })
+		];
+		const pair = [member('a', ['lower_bunk']), member('h', ['helper'])];
+		expect(proposePlan(pair, room, 'room:r4')).toEqual({ a: 'p', h: 's' });
+		expect(needsMet(pair, room, 'room:r4')).toEqual({ met: 1, of: 1 });
+		// the same with the ground floor switched off for the ♿ spot alone
+		const floor = [
+			spot('s', 'r4', 'S', { special: true, features: [] }),
+			spot('p', 'r4', 'P', { features: ['ground_floor'] })
+		];
+		const stepFree = [member('a', ['step_free']), member('h', ['helper'])];
+		expect(proposePlan(stepFree, floor, 'room:r4')).toEqual({ a: 'p', h: 's' });
+		// alone, the member keeps the ♿ spot: the pool comes before what a spot answers
+		expect(proposePlan([member('a', ['lower_bunk'])], room, 'room:r4')).toEqual({ a: 's' });
+	});
+
 	it('packs a whole house into the fewest rooms', () => {
 		const plan = proposePlan(three, SPOTS, 'house:h1');
 		expect(Object.values(plan).sort()).toEqual(['b1', 'b2', 'b3']);
@@ -1109,11 +1176,16 @@ describe('the group planner', () => {
 		expect(defaultPlace(placeOptions(fewer, 3), group, fewer)).toBeNull();
 		// … and the card says why — Room Z still has 3 free spots together
 		expect(noPlanNote(placeOptions(fewer, 3), group, fewer)).toBe(
-			'The room where k1 and k2 sleep is full: choose a room for the rest, or pick each with Change.'
+			'The room where k1 and k2 sleep has no space for all 3 others (2 free): choose a room for the rest, or pick each with Change.'
 		);
 		const one = [booked('k1', 'B1'), ...three];
 		expect(noPlanNote(placeOptions(fewer, 3), one, fewer)).toBe(
-			'The room where k1 sleeps is full: choose a room for the rest, or pick each with Change.'
+			'The room where k1 sleeps has no space for all 3 others (2 free): choose a room for the rest, or pick each with Change.'
+		);
+		// "full" only when Room X has no free spot at all
+		const none = spots.filter((s) => s.roomId !== 'rx');
+		expect(noPlanNote(placeOptions(none, 3), group, none)).toBe(
+			'The room where k1 and k2 sleep is full: choose a room for the rest, or pick each with Change.'
 		);
 		// no room has space for the three: that is what it says then
 		const tiny = fewer.filter((s) => s.roomId === 'rx');
@@ -1122,7 +1194,7 @@ describe('the group planner', () => {
 		);
 	});
 
-	it('names every full room when the crew booked members into more than one', () => {
+	it('names every room of members the crew booked, when they are in more than one', () => {
 		const at = (roomId: string, room: string, label: string) => ({
 			roomId,
 			room,
@@ -1146,6 +1218,11 @@ describe('the group planner', () => {
 		expect(recommendRooms(options, group, spots).map((o) => o.key)).toEqual(['room:rw']);
 		expect(defaultPlace(options, group, spots)).toBeNull();
 		expect(noPlanNote(options, group, spots)).toBe(
+			'The rooms where k1 and k2 sleep have no space for all 3 others: choose a room for the rest, or pick each with Change.'
+		);
+		// both rooms without a free spot
+		const rest = spots.filter((s) => s.roomId === 'rw');
+		expect(noPlanNote(placeOptions(rest, 3), group, rest)).toBe(
 			'The rooms where k1 and k2 sleep are full: choose a room for the rest, or pick each with Change.'
 		);
 	});

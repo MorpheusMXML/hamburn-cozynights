@@ -18,7 +18,12 @@ shown here and nowhere else.
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import type { ActionData, PageData } from './$types';
 	import { confirmDialog, toast } from '$lib/dialogs';
-	import { STATUS_LABELS, type AdminRequestView } from '$lib/special-needs';
+	import {
+		BLOCKED_OK_ALL,
+		STATUS_LABELS,
+		isOpenRequest,
+		type AdminRequestView
+	} from '$lib/special-needs';
 	import { needPill } from '$lib/need-pill';
 	import { pickNotes, type PickerRequest } from '$lib/spot-picker';
 	import GroupCard from '$lib/components/admin/requests/GroupCard.svelte';
@@ -111,12 +116,9 @@ shown here and nowhere else.
 	$: specialTotal = data.specialSpots.length;
 	$: specialFree = data.specialSpots.filter((spot) => spot.state === 'free').length;
 	$: specialSummary = summarizeSpecial(data.specialSpots.map((spot) => spot.state));
-	// Same "open" as the load: waiting, or approved without a spot from the crew.
-	// The ♿ spots are the pool for every request (Max, 2026-10-12), helpers and
-	// projects included.
-	$: specialAsked = data.requests.filter(
-		(r) => r.status === 'pending' || (r.status === 'approved' && !r.spot?.assigned)
-	).length;
+	// Same "open" as the load. The ♿ spots are the pool for every request (Max,
+	// 2026-10-12), helpers and projects included.
+	$: specialAsked = data.requests.filter(isOpenRequest).length;
 
 	/** "3 marked — 1 booked by a guest, 1 blocked with TAKEN, 1 inactive"; '' when none is marked. */
 	function summarizeSpecial(states: string[]): string {
@@ -219,6 +221,11 @@ shown here and nowhere else.
 
 	const current = (id: string) => data.requests.find((r) => r.id === id);
 
+	/**
+	 * Also writes blockedOk: the 🔒 spot the dialog warns about, which the
+	 * server books only then (assignSpot) — so a spot locked after the page
+	 * loaded, which no dialog warned about, is refused.
+	 */
 	function assignConfirmation(id: string, form: FormData): Confirmation {
 		const request = current(id);
 		const picked = data.spots.find((s) => s.bedId === form.get('bedId'));
@@ -228,6 +235,8 @@ shown here and nowhere else.
 		const approves = request?.status === 'pending' ? ' The request is approved as well.' : '';
 		// Picked by hand: a spot out of service, or one that doesn't fit, says so before it books.
 		const notes = picked && request ? pickNotes(request.needs, picked) : null;
+		if (picked && notes?.blocked) form.set('blockedOk', picked.bedId);
+		else form.delete('blockedOk');
 		const blocked = notes?.blocked
 			? `🔒 ${spot} is blocked (out of service). Book it anyway? `
 			: '';
@@ -605,6 +614,13 @@ shown here and nowhere else.
 										/>
 										<button class="btn primary" disabled={!!busy}>{bookLabel(request)}</button>
 									</div>
+									<!-- No dialog without JavaScript: the box confirms a spot out of service. -->
+									{#if data.spots.some((spot) => spot.locked)}
+										<label class="blocked-ok">
+											<input type="checkbox" name="blockedOk" value={BLOCKED_OK_ALL} />
+											Book a 🔒 blocked spot (out of service) anyway
+										</label>
+									{/if}
 								{/if}
 								{#if data.spots.length === 0}
 									<p class="hint">
@@ -1003,6 +1019,18 @@ shown here and nowhere else.
 		letter-spacing: 0.05em;
 		text-transform: uppercase;
 		color: #a3a3a3;
+	}
+	/* without JavaScript: the box that confirms a spot out of service */
+	.assign .blocked-ok {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
+		font-size: 0.85rem;
+		letter-spacing: normal;
+		text-transform: none;
+		color: #fbbf24;
+		overflow-wrap: anywhere;
 	}
 	/* the picked spot, waiting for its booking (the confirmation was cancelled) */
 	.choice {

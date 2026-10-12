@@ -186,11 +186,12 @@ export function needsOutsidePath(needs: readonly string[], path: RequestPath): S
 
 /**
  * What a request is about, from its stored needs:
- * - access: a personal need, or "Something else" (when unclear, treat it as
- *   needing a ♿ spot);
+ * - access: a personal need, or "Something else" (when unclear, it counts as
+ *   one) — among the ♿ spots, which are the pool for every request, these
+ *   members choose first (proposePlan in $lib/group-plan);
  * - project: a room or a bed for an art project or a crew;
- * - helper: the helper of someone with a personal need (never a ♿ spot of
- *   their own: the crew places them close to the person they help);
+ * - helper: the helper of someone with a personal need (the crew places them
+ *   close to the person they help);
  * - groupOnly: nothing stored, the guest asks only as part of their group.
  * The form keeps one path per request; requests from before the paths may
  * have access and project both.
@@ -207,6 +208,22 @@ export function requestKinds(needs: readonly string[]): {
 		helper: needs.includes(HELPER_NEED.value),
 		groupOnly: needs.length === 0
 	};
+}
+
+/**
+ * A spot the crew locked 🔒 is out of service: the crew books one only on
+ * purpose, and the server only when the form confirms it (field blockedOk,
+ * src/routes/admin/requests/+page.server.ts). With JavaScript the field holds
+ * the bed ids the page's dialog warned about; without, the checkbox "Book a 🔒
+ * blocked spot anyway" sends this value for whatever spot the form picked. A
+ * spot locked after the page loaded was never confirmed, so the server
+ * refuses it.
+ */
+export const BLOCKED_OK_ALL = 'all';
+
+/** Whether the form confirmed booking this 🔒 blocked spot (BLOCKED_OK_ALL). */
+export function blockedConfirmed(confirmed: readonly string[], bedId: string): boolean {
+	return confirmed.includes(bedId) || confirmed.includes(BLOCKED_OK_ALL);
 }
 
 /** Words with at least one letter or digit: a dash or an emoji alone is no word. */
@@ -315,6 +332,15 @@ export interface AdminRequestView extends GuestRequestView {
 	spot: (SpotInfo & { assigned: boolean }) | null;
 	/** The request group it is in, '' for none. */
 	groupId: string;
+}
+
+/**
+ * A request that still needs a spot from the crew: waiting, or approved
+ * without a spot the crew booked. Every one of them draws on the ♿ spots, the
+ * pool for every request (the capacity box on the requests page).
+ */
+export function isOpenRequest(request: Pick<AdminRequestView, 'status' | 'spot'>): boolean {
+	return request.status === 'pending' || (request.status === 'approved' && !request.spot?.assigned);
 }
 
 /**

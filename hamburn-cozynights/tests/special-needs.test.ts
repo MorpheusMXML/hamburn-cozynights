@@ -27,6 +27,7 @@ import {
 	countWords,
 	isAccessNeed,
 	isFormNeed,
+	isOpenRequest,
 	isProjectNeed,
 	isSpecialNeed,
 	needLabel,
@@ -837,6 +838,25 @@ describe('special-needs requests', () => {
 		expect(c.pb.rows('admin_events')).toHaveLength(0);
 	});
 
+	it('books a locked 🔒 spot only when the crew confirmed it — never one locked since the page loaded', async () => {
+		const request = c.pb.seed('special_requests', { order: c.order.id, status: 'approved' });
+		await c.pb.collection('beds').update(c.normal.id, { is_locked: true });
+		await expect(assignSpot(c.pb as any, admin, request.id, c.normal.id)).rejects.toMatchObject({
+			status: 409,
+			message:
+				'🔒 B2 · Dorm #2 · Villa is blocked (out of service) now. Reload the page and pick again, or confirm it.'
+		});
+		expect(c.pb.rows('beds').find((b) => b.id === c.normal.id)!.order).toBe('');
+		expect(c.pb.rows('admin_events')).toHaveLength(0);
+
+		await assignSpot(c.pb as any, admin, request.id, c.normal.id, { blockedOk: true });
+		// booked on purpose; the lock stays for when the booking goes
+		expect(c.pb.rows('beds').find((b) => b.id === c.normal.id)).toMatchObject({
+			order: c.order.id,
+			is_locked: true
+		});
+	});
+
 	it('only fixes the spot the crew booked, not one the guest booked themselves', async () => {
 		const request = c.pb.seed('special_requests', { order: c.order.id, status: 'pending' });
 		await c.pb.collection('beds').update(c.normal.id, { occupied: true, order: c.order.id });
@@ -1051,6 +1071,38 @@ describe('special-needs requests', () => {
 		]);
 	});
 
+	it('counts every open request against the free ♿ spots, none of them locked', async () => {
+		// whatever a request is about: isOpenRequest never looks at the needs
+		const rows = [0, 1, 2, 3].map((i) => {
+			const order = c.pb.seed('orders', { order_number: `HB-30${i}`, customer_name: `G ${i}` });
+			return c.pb.seed('special_requests', { order: order.id, status: 'pending' });
+		});
+		const status = (id: string, value: string) =>
+			(c.pb.rows('special_requests').find((r) => r.id === id)!.status = value);
+		// approved with a spot the crew booked, or declined: not open
+		await assignSpot(c.pb as any, admin, rows[0].id, c.special.id);
+		status(rows[1].id, 'declined');
+		// approved without a spot: open, like a waiting one
+		status(rows[2].id, 'approved');
+		c.pb.seed('beds', {
+			label: 'B9',
+			room: c.room.id,
+			enabled: true,
+			occupied: false,
+			is_locked: true,
+			is_special: true,
+			order: ''
+		});
+		const requests = await listRequests(c.pb as any);
+		expect(requests.filter(isOpenRequest).map((r) => r.id)).toEqual([rows[2].id, rows[3].id]);
+		// B1 is booked now and B9 is locked: no ♿ spot is free for the two
+		const spots = await listSpecialSpots(c.pb as any);
+		expect(spots.map((s) => [s.spot, s.state])).toEqual([
+			['B1', 'request'],
+			['B9', 'locked']
+		]);
+	});
+
 	it('lists every ♿ spot with its state and who holds it', async () => {
 		const room = c.room.id;
 		const spot = (label: string, data: Record<string, unknown>) =>
@@ -1065,7 +1117,11 @@ describe('special-needs requests', () => {
 				...data
 			});
 		const bea = c.pb.seed('orders', { order_number: 'HB-2002', customer_name: 'Bea Booker' });
-		spot('B3', { occupied: true, order: bea.id }); // booked by a guest
+		spot('B3', { occupied: true, order: bea.id }); // booked by a guest, who has a request too
+		const beas = c.pb.seed('special_requests', { order: bea.id, status: 'pending' });
+		const cy = c.pb.seed('orders', { order_number: 'HB-2003', customer_name: 'Cy Sleeper' });
+		spot('B7', { occupied: true, order: cy.id }); // booked by a guest whose request was declined
+		c.pb.seed('special_requests', { order: cy.id, status: 'declined' });
 		spot('B4', { occupied: true }); // TAKEN without a ticket
 		spot('B5', { enabled: false }); // deactivated
 		spot('B6', { is_locked: true }); // free, but locked 🔒: out of service
@@ -1078,8 +1134,11 @@ describe('special-needs requests', () => {
 			['B3', 'booked', 'Bea Booker', false],
 			['B4', 'blocked', '', false],
 			['B5', 'inactive', '', false],
-			['B6', 'locked', '', true]
+			['B6', 'locked', '', true],
+			['B7', 'booked', 'Cy Sleeper', false]
 		]);
+		// a holder with an open request: its card frees the spot in every phase
+		expect(spots.map((s) => s.holderRequest)).toEqual([request.id, beas.id, '', '', '', '']);
 		// the normal spot B2 is no ♿ spot
 		expect(spots.every((s) => s.special)).toBe(true);
 		expect(spots[0]).toMatchObject({
@@ -1208,6 +1267,37 @@ describe('admin request actions', () => {
 			locals
 		} as any);
 		expect(result.status).toBe(400);
+	});
+
+	it('book a locked spot only with the confirmation the page sends along', async () => {
+		const attempt = async (blockedOk: (bedId: string) => string) => {
+			const c = camp();
+			const request = c.pb.seed('special_requests', { order: c.order.id, status: 'approved' });
+			await c.pb.collection('beds').update(c.normal.id, { is_locked: true });
+			const result: any = await adminRequestActions.assign({
+				request: {
+					formData: async () =>
+						form({ id: request.id, bedId: c.normal.id, blockedOk: blockedOk(c.normal.id) })
+				},
+				locals: { pb: c.pb, adminPb: c.pb, admin }
+			} as any);
+			const booked = c.pb.rows('beds').find((b) => b.id === c.normal.id)!.order === c.order.id;
+			return { result, booked };
+		};
+		// nothing confirmed, a dialog that warned about another spot, forged values
+		const refused = [() => '', () => 'abcdefghijklmno', () => 'yes', (bed: string) => `${bed}x`];
+		for (const blockedOk of refused) {
+			const { result, booked } = await attempt(blockedOk);
+			expect(result.status).toBe(409);
+			expect(result.data.error).toMatch(/is blocked \(out of service\) now/);
+			expect(booked).toBe(false);
+		}
+		// what the dialog warned about (next to another spot), or the box without JavaScript
+		for (const blockedOk of [(bed: string) => `abcdefghijklmno,${bed}`, () => 'all']) {
+			const { result, booked } = await attempt(blockedOk);
+			expect(result).toMatchObject({ success: true });
+			expect(booked).toBe(true);
+		}
 	});
 
 	it('explains a taken spot instead of failing', async () => {
