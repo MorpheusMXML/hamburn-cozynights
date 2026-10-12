@@ -171,6 +171,75 @@ describe('crew chat texts about bookings ended on the layout pages', () => {
 	});
 });
 
+describe('the crew chat after a guest swapped away their crew spot', () => {
+	it('says so without a name, a ticket or a spot', () => {
+		expect(eventText(event('special_spot_swapped', 'guest', '', {}))).toBe(
+			'♿ A guest swapped away the spot the crew booked for their special-needs request: see Special-needs requests, move them again if needed'
+		);
+	});
+});
+
+describe('crew chat texts about bookings moved or released on the ticket page', () => {
+	const CREW = 'crew@mauersegler.art';
+	// The subject is the ticket's record id; the line names its masked code.
+	const moved = (details: object) =>
+		eventText(event('ticket_spot_moved', CREW, 'ord123456789012', details));
+	const released = (details: object) =>
+		eventText(event('ticket_spot_released', CREW, 'ord123456789012', details));
+
+	it('name the ticket by its masked code and say what moved along', () => {
+		expect(moved({ ticket: 'H•••', checkedIn: false, viaRequest: false })).toBe(
+			'🔀 Ticket H••• moved to another spot by crew@mauersegler.art'
+		);
+		expect(moved({ ticket: 'H•••', checkedIn: true, viaRequest: false })).toBe(
+			'🔀 Ticket H••• moved to another spot by crew@mauersegler.art; the check-in moved along'
+		);
+		expect(moved({ ticket: 'H•••', checkedIn: false, viaRequest: true })).toBe(
+			"🔀 Ticket H••• moved to another spot by crew@mauersegler.art; it is the crew's spot for their special-needs request now"
+		);
+		expect(moved({ ticket: 'H•••', checkedIn: true, viaRequest: true })).toBe(
+			"🔀 Ticket H••• moved to another spot by crew@mauersegler.art; the check-in moved along; it is the crew's spot for their special-needs request now"
+		);
+	});
+
+	it('name the ticket by its masked code and say what a release dropped', () => {
+		expect(released({ ticket: 'H•••', checkedIn: false, viaRequest: false })).toBe(
+			'🛏️ Ticket H••• released from its spot by crew@mauersegler.art'
+		);
+		expect(released({ ticket: 'H•••', checkedIn: true, viaRequest: false })).toBe(
+			'🛏️ Ticket H••• released from its spot by crew@mauersegler.art; the check-in was dropped'
+		);
+		expect(released({ ticket: 'H•••', checkedIn: false, viaRequest: true })).toBe(
+			'🛏️ Ticket H••• released from its spot by crew@mauersegler.art; their special-needs request needs a new spot'
+		);
+		expect(released({ ticket: 'H•••', checkedIn: true, viaRequest: true })).toBe(
+			'🛏️ Ticket H••• released from its spot by crew@mauersegler.art; the check-in was dropped; their special-needs request needs a new spot'
+		);
+	});
+
+	it('never name a spot, a room or a house, even if the details held one', () => {
+		// The page logs the masked code, checkedIn and viaRequest only: a spot
+		// next to a ticket would tie a guest to where they sleep. Even if more
+		// slipped in, it would not be printed.
+		const details = {
+			ticket: 'H•••',
+			checkedIn: true,
+			viaRequest: true,
+			from: 'B1 · Bunks #1 · Neon Cave',
+			to: 'A2 · Dorm #2 · Villa',
+			bedId: 'bed123456789012',
+			house: 'Neon Cave',
+			room: 'Bunks #1',
+			spot: 'B1',
+			code: 'HB-1001'
+		};
+		for (const text of [moved(details), released(details)]) {
+			expect(text).toContain('Ticket H•••');
+			expect(text).not.toMatch(/Neon|Villa|Bunks|Dorm|B1|A2|bed1234|ord1234|HB-1001/);
+		}
+	});
+});
+
 describe('crew chat texts about message texts', () => {
 	it('say who changed or reset which text', () => {
 		expect(

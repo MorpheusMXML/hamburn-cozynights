@@ -1,8 +1,8 @@
 # Tickets & e-mail addresses
 
-A guest's whole login is the code of their ticket, and booking confirmations go to the e-mail address stored with it. The **Tickets** page is where the crew looks a ticket up, fixes its address and hands it over when it changed hands. Superusers also load the ticket shop's list there.
+A guest's whole login is the code of their ticket, and booking confirmations go to the e-mail address stored with it. The **Tickets** page is where the crew looks a ticket up, fixes its address, moves or releases its booking and hands it over when it changed hands. Superusers also load the ticket shop's list there.
 
-Open it with <kbd>🎟️ Tickets</kbd> in the admin menu, with <kbd>Open ticket →</kbd> on a booked spot (see [Bookings & check-ins](./bookings)) or with <kbd>Ticket →</kbd> on the guest list. Both parts fold away with <kbd>+</kbd> / <kbd>−</kbd>.
+Open it with <kbd>🎟️ Tickets</kbd> in the admin menu, with <kbd>Open ticket →</kbd> on a booked spot (see [Bookings & check-ins](./bookings)) or with <kbd>Ticket →</kbd> on the guest list. These two open the ticket's card right away, where <kbd>🔀 Move…</kbd> and <kbd>Release</kbd> [move or release its booking](#move-or-release-a-booking). Both parts of the page fold away with <kbd>+</kbd> / <kbd>−</kbd>.
 
 This page finds **one** ticket (or the tickets of one address) and changes it. The list of **every** ticket — with its spot, check-in, request state and messages, and the ones without a spot or without an address — lives on [Guests: every ticket at a glance](./guests).
 
@@ -54,6 +54,20 @@ Sometimes the payment arrives before the ticket shop knows about it: the Members
 - **Mark it paid in the ticket shop too.** Until then every ticket list still says pending, but the ticket stays paid: the review shows *💳 stays paid by hand (the file says pending)* with *✋ marked paid by hand …* and a <kbd>💳 Keep paid</kbd> / <kbd>Set back to unpaid</kbd> switch that always starts on *Keep paid*. A new address or name on the same row is taken over as usual when the row is ticked; a row with nothing else starts unticked. Only <kbd>Set back to unpaid</kbd> locks the code again, and the audit log and the crew group get one entry per ticket. A ticket marked paid after you checked the file stays paid too. The server import keeps such tickets paid and says so. Once a list says paid, the review shows 💳 ~~paid by hand~~ → **paid in the shop**, ticked, and the mark goes.
 - **A mistake can be taken back.** <kbd>Set back to unpaid</kbd> on a ticket paid by hand locks the code again: a guest who is signed in is signed out, the spot stays with the ticket. Only a mark made here can be taken back; about a ticket the shop lists as paid, the ticket list decides.
 - **Save or undo the address first.** While the e-mail or name field has unsaved changes, the payment button waits.
+
+## Move or release a booking <Badge type="tip" text="all admins" />
+
+A ticket that holds a spot shows it on top of its card, *🛏 B1 · Dorm #2 · Villa*, with <kbd>🔀 Move…</kbd> and <kbd>Release</kbd>. Every admin can use them, in every phase: Staging Mode, Live Booking and after booking closed.
+
+- **Move…** opens the same [spot picker](./special-needs#the-spot-picker) as on the special-needs requests: houses, then rooms, then their free spots, with *Now: …* on top. Tap a spot, press <kbd>Move here</kbd> and confirm *🔀 Move the booking?*. The booking moves in one go: the new spot is taken and the old one is free at the same moment, a check-in moves along, the burner name stays. *🔀 Moved to … The guest gets a message shortly.*
+- **♿ spots are for special-needs requests.** The picker offers them only for a ticket whose [special-needs request](./special-needs) is approved, and every move of such a ticket goes through the request: the new spot becomes the crew's spot for it, which the guest can't change themselves, and the card says *♿ The crew booked it for their special-needs request.* For any other ticket the server refuses a ♿ spot: *♿ … is a special-needs spot: those go through special-needs requests. Pick another spot.*
+- **A locked 🔒 spot** is out of service. The picker shows it, but the dialog asks *🔀 Move to a blocked spot?* and moves only with <kbd>Move it anyway</kbd>. A spot locked after the picker opened is refused: *🔒 … is blocked (out of service) now. Search again and pick it once more to confirm it, or pick another.*
+- **Release** frees the spot once you confirm *🛏️ Release the booking?*: the ticket holds no spot any more, and a check-in goes with it. While booking is open, the guest can book again. When it was the crew's spot for a special-needs request, the request stays approved and shows *No spot yet*: book a new one on the [requests page](./special-needs#_3-decide-and-book).
+- **The guest always gets a message**, by e-mail when the ticket has an address and on Telegram when a chat is connected: **Your CozyNights spot changed**, with the new spot and the booking pass, or **Your CozyNights spot was released** — the usual [messages](./notifications#guests-booking-confirmations), with the texts on <kbd>✉️ Messages</kbd>.
+- **The crew group learns which ticket, never which spots:** *🔀 Ticket H••• moved to another spot by …* or *🛏️ Ticket H••• released from its spot by …*, with the code shortened, in the audit log and the [crew group](./notifications#crew-group). A line there must not tie a guest to where they sleep.
+- **An old card changes nothing.** The card sends the spot it shows. When the booking changed meanwhile (the guest moved, or another admin was quicker), the server refuses: *The booking changed meanwhile: the ticket holds … now. Search again, then move it.* Search again and decide on what is there now.
+- **Save or undo the address first.** While the e-mail or name field has unsaved changes, both buttons wait.
+- **Needs JavaScript.** The picker runs in the browser; without it, the card shows the spot but no <kbd>🔀 Move…</kbd> or <kbd>Release</kbd>.
 
 ## Load the ticket list <Badge type="warning" text="superusers" />
 

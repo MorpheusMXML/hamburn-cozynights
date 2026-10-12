@@ -12,6 +12,7 @@ import type PocketBase from 'pocketbase';
 import { APP_SETTINGS_ID } from '../../src/lib/server/constants';
 import { adminCookie, createAdmin, seedHouse, seedTicket, serviceAccount } from '../stack-helpers';
 import { CONFIRMED_FIELDS } from '../../src/lib/booking-check';
+import { maskTicketCode } from '../../src/lib/tickets';
 
 const BASE = (process.env.SMOKE_BASE_URL || '').replace(/\/$/, '');
 const FULL = process.env.SMOKE_FULL === '1';
@@ -135,6 +136,15 @@ describe('any deployment (read-only)', () => {
 		expect((await get('/admin/api/bookings')).status).toBe(403);
 		expect((await post('/admin/bookings?/checkin', { order: 'doesnotexist000' })).status).toBe(403);
 		expect((await post('/admin/tickets?/open', { ticket: 'doesnotexist000' })).status).toBe(403);
+		// moving or releasing a booking from the ticket page: admins only
+		for (const action of ['spots', 'move', 'release']) {
+			const refused = await post(`/admin/tickets?/${action}`, {
+				id: 'doesnotexist000',
+				from: 'doesnotexist001',
+				bedId: 'doesnotexist002'
+			});
+			expect(refused.status, action).toBe(403);
+		}
 	});
 
 	it('ignores a forged admin cookie', async () => {
@@ -737,6 +747,93 @@ describe.runIf(FULL)('full flow — writes data, test stack only (skipped on rea
 		const boss = await createAdmin(su, 'superuser');
 		const preview = await post('/admin/tickets?/previewRoster', { rows }, adminCookie(boss.client));
 		expect(preview.status).toBe(200);
+	});
+
+	it('lets an admin move a booked guest to another spot and release it from the ticket', async () => {
+		const { room, beds } = await seedHouse(su, 2);
+		const ticket = await seedTicket(su);
+		const guest = await guestLogin(ticket.code);
+		await setBookingOpen(true);
+		await post(
+			`/room/${room.id}?/bookBed`,
+			{ bedId: beds[0].id, guestName: 'Smoke Mover', ...CONFIRMED_FIELDS },
+			guest
+		);
+		expect((await su.collection('beds').getOne(beds[0].id)).order).toBe(ticket.order.id);
+		// the crew moves and releases in every phase: here back in Staging
+		await setBookingOpen(false);
+		const admin = await createAdmin(su, 'admin');
+		const cookie = adminCookie(admin.client);
+
+		// Open ticket: the card knows the spot it shows (a move's `from`)
+		const opened = await post('/admin/tickets?/open', { ticket: ticket.order.id }, cookie);
+		expect(opened.status).toBe(200);
+		expect(await opened.text()).toContain(`"${beds[0].id}"`);
+
+		// Move…: the picker's free spots (without JavaScript they ride in the page data)
+		const offer = await post('/admin/tickets?/spots', { id: ticket.order.id }, cookie);
+		expect(offer.status).toBe(200);
+		const offered = await offer.text();
+		expect(offered).toContain('moveSpots');
+		expect(offered).toContain(`"${beds[1].id}"`);
+
+		const moved = await post(
+			'/admin/tickets?/move',
+			{ id: ticket.order.id, from: beds[0].id, bedId: beds[1].id },
+			cookie
+		);
+		expect(moved.status).toBe(200);
+		expect(await su.collection('beds').getOne(beds[1].id)).toMatchObject({
+			order: ticket.order.id,
+			occupied: true
+		});
+		expect(await su.collection('beds').getOne(beds[0].id)).toMatchObject({
+			order: '',
+			occupied: false
+		});
+
+		// a card that still shows the old spot releases nothing
+		const stale = await post(
+			'/admin/tickets?/release',
+			{ id: ticket.order.id, from: beds[0].id },
+			cookie
+		);
+		expect(stale.status).toBe(409);
+		expect((await su.collection('beds').getOne(beds[1].id)).order).toBe(ticket.order.id);
+
+		const released = await post(
+			'/admin/tickets?/release',
+			{ id: ticket.order.id, from: beds[1].id },
+			cookie
+		);
+		expect(released.status).toBe(200);
+		expect(await su.collection('beds').getOne(beds[1].id)).toMatchObject({
+			order: '',
+			occupied: false
+		});
+
+		// the audit log (and the crew chat) gets the masked code, never the spots
+		const events = await su.collection('admin_events').getFullList({
+			filter: su.filter(
+				"subject = {:id} && (action = 'ticket_spot_moved' || action = 'ticket_spot_released')",
+				{ id: ticket.order.id }
+			)
+		});
+		expect(events.map((event) => event.action).sort()).toEqual([
+			'ticket_spot_moved',
+			'ticket_spot_released'
+		]);
+		for (const event of events) {
+			expect(event).toMatchObject({ actor: admin.email });
+			expect(event.details).toMatchObject({
+				ticket: maskTicketCode(ticket.code),
+				checkedIn: false,
+				viaRequest: false
+			});
+		}
+		const logged = JSON.stringify(events);
+		expect(logged).not.toContain(ticket.code);
+		for (const bed of beds) expect(logged).not.toContain(bed.label);
 	});
 
 	it('lets admins compare a layout file, and only superusers apply it in Staging Mode', async () => {

@@ -1,8 +1,9 @@
 // tests/integration/imports.test.ts — the ticket page and the template review
 // against a real PocketBase with its hooks: a ticket handed over to a new
 // holder (new pass, Telegram off, confirmation to the new address, out of its
-// request group), the ticket list import, the search, and applying chosen
-// template changes while the other bookings stay.
+// request group), a booking the crew moves or releases there (one message per
+// change, the check-in along), the ticket list import, the search, and
+// applying chosen template changes while the other bookings stay.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { spawnSync } from 'child_process';
 import path from 'path';
@@ -12,7 +13,9 @@ import {
 	changeTicket,
 	importRoster,
 	markTicketPaid,
+	moveTicketSpot,
 	previewRoster,
+	releaseTicketSpot,
 	searchTickets
 } from '../../src/lib/server/tickets';
 import { defaultRosterSelection, parseRoster, readRosterFile } from '../../src/lib/tickets';
@@ -60,6 +63,14 @@ const csv = (rows: [string, string, string][]) =>
 
 const MOCK_URL = process.env.MOCK_URL || '';
 const MAILPIT_URL = process.env.MAILPIT_URL || '';
+// The admin behind a move or release (like tests/integration/special-needs.test.ts).
+const ADMIN = {
+	id: 'a1',
+	email: 'crew-lead@mauersegler.art',
+	name: 'Crew Lead',
+	role: 'admin' as const,
+	isSuperuser: false
+};
 
 let su: PocketBase;
 let booking: BookingService;
@@ -191,6 +202,95 @@ describe('a ticket passed on to someone else', () => {
 		expect(mails).toHaveLength(1);
 		// a corrected address confirms the booking, it was not passed on
 		expect(await mailText(mails[0].ID)).toContain('your spot is booked');
+	});
+});
+
+describe('a booking moved or released on the ticket page', () => {
+	it('tells the guest once per change by e-mail and Telegram; the check-in moves along, then goes', async () => {
+		const { beds } = await seedHouse(su, 2);
+		const ticket = await seedTicket(su);
+		const email = `moved-${uid()}@example.com`;
+		await su.collection('orders').update(ticket.order.id, { email });
+		await booking.bookBed(ticket.order as any, beds[0].id, 'Night Owl');
+		// a linked chat that knows the spot already
+		const chat = String(800000 + Math.floor(Math.random() * 99999));
+		await su
+			.collection('guest_notify')
+			.update(
+				(
+					await su
+						.collection('guest_notify')
+						.getFirstListItem(su.filter('order = {:o}', { o: ticket.order.id }))
+				).id,
+				{ tg_chat: chat, tg_spot: beds[0].id, tg_label: beds[0].label }
+			);
+		await flush(); // the booking confirmation by e-mail
+		expect(await mailsTo(email)).toHaveLength(1);
+		const telegramBefore = (await telegramTo(chat)).length;
+		await booking.checkIn(ticket.order.id, 'crew@mauersegler.art');
+		const arrived = (await su.collection('beds').getOne(beds[0].id)).checked_in_at;
+		expect(arrived).not.toBe('');
+
+		const moved = await moveTicketSpot(su as any, ADMIN, ticket.order.id, beds[0].id, beds[1].id);
+		expect(moved).toMatchObject({ checkedIn: true, viaRequest: false });
+		expect(moved.from).toContain(beds[0].label);
+		expect(moved.to).toContain(beds[1].label);
+		expect(moved.ticket.spot).toMatchObject({
+			bedId: beds[1].id,
+			spot: beds[1].label,
+			viaRequest: false,
+			checkIn: { at: arrived, by: 'crew@mauersegler.art' }
+		});
+		expect(moved.ticket.burnerName).toBe('Night Owl');
+		expect(await su.collection('beds').getOne(beds[1].id)).toMatchObject({
+			order: ticket.order.id,
+			occupied: true,
+			checked_in_at: arrived,
+			checked_in_by: 'crew@mauersegler.art'
+		});
+		expect(await su.collection('beds').getOne(beds[0].id)).toMatchObject({
+			order: '',
+			occupied: false,
+			checked_in_at: ''
+		});
+
+		// one "changed" message, not "released" + "booked"
+		await flush();
+		let mails = await mailsTo(email);
+		expect(mails.map((m) => m.Subject.split(':')[0])).toEqual([
+			'[TEST] Your CozyNights spot',
+			'[TEST] Your CozyNights spot changed'
+		]);
+		expect(await mailText(mails[1].ID)).toContain(`Before: ${beds[0].label}`);
+		let messages = await telegramTo(chat);
+		expect(messages).toHaveLength(telegramBefore + 1);
+		expect(messages.at(-1)?.text).toContain('spot changed');
+		expect(messages.at(-1)?.text).toContain(`Before: ${beds[0].label}`);
+
+		// a card that still shows the old spot releases nothing
+		await expect(releaseTicketSpot(su as any, ticket.order.id, beds[0].id)).rejects.toThrow(
+			/changed meanwhile/
+		);
+		expect((await su.collection('beds').getOne(beds[1].id)).order).toBe(ticket.order.id);
+
+		const released = await releaseTicketSpot(su as any, ticket.order.id, beds[1].id);
+		expect(released).toMatchObject({ to: '', checkedIn: true, viaRequest: false });
+		expect(released.from).toContain(beds[1].label);
+		expect(released.ticket).toMatchObject({ spot: null, burnerName: 'Night Owl' });
+		expect(await su.collection('beds').getOne(beds[1].id)).toMatchObject({
+			order: '',
+			occupied: false,
+			checked_in_at: '',
+			checked_in_by: ''
+		});
+
+		await flush();
+		mails = await mailsTo(email);
+		expect(mails).toHaveLength(3);
+		expect(mails[2].Subject).toBe('[TEST] Your CozyNights spot was released');
+		messages = await telegramTo(chat);
+		expect(messages).toHaveLength(telegramBefore + 2);
+		expect(messages.at(-1)?.text).toContain('spot was released');
 	});
 });
 

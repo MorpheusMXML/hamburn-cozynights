@@ -217,6 +217,19 @@ function stressRoom(page: Page) {
 		.first();
 }
 
+/**
+ * The stress guest's booking on its ticket in the admin's ticket search: its
+ * address finds the requester's ticket too, which has no spot. The row with
+ * Move… and Release; setMySpot gave the spot its label for this case.
+ */
+async function myBookingRow(page: Page) {
+	await page.locator('#ticket-query').fill(TEXTS.emailLong);
+	await page.locator('#ticket-query').press('Enter');
+	const row = page.locator('.results article.ticket .spot-row', { hasText: MY_SPOT_LABEL });
+	await row.waitFor();
+	return row;
+}
+
 const PAGES: PageCase[] = [
 	{ name: 'start page', path: () => '/', as: 'anonymous', phases: ALL_PHASES },
 	{ name: 'booking rules', path: () => '/booking-rules', as: 'anonymous', phases: ['closing'] },
@@ -939,6 +952,34 @@ const PAGES: PageCase[] = [
 			await page.locator('#ticket-query').fill(TEXTS.emailLong);
 			await page.locator('#ticket-query').press('Enter');
 			await page.locator('.results .result-meta').waitFor();
+		}
+	},
+	// Move and Release on a booked ticket (TicketCard): the spot picker of the
+	// special-needs requests with a spot picked, and the confirmation before a
+	// release. Neither is sent: setMySpot and afterAll look the stress guest's
+	// booking up, and the run is split into shards.
+	{
+		name: 'admin tickets: move a booking',
+		path: () => '/admin/tickets',
+		as: 'admin',
+		open: async (page) => {
+			const row = await myBookingRow(page);
+			await row.getByRole('button', { name: /Move…/ }).click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.waitFor();
+			// A free spot, not a locked 🔒 one; "Move here" would move the booking.
+			await sheet.locator('button.tile:not(.blocked)').first().click();
+			await sheet.locator('.picker-foot .choice-label').waitFor();
+		}
+	},
+	{
+		name: 'admin tickets: release confirmation',
+		path: () => '/admin/tickets',
+		as: 'admin',
+		open: async (page) => {
+			const row = await myBookingRow(page);
+			await row.getByRole('button', { name: 'Release', exact: true }).click();
+			await page.getByRole('alertdialog').waitFor();
 		}
 	},
 	{

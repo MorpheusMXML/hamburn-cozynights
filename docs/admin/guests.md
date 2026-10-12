@@ -16,7 +16,7 @@ The page **changes nothing**. Every row only links to the page that does: the ti
 | **Check-in** | ✅ with the time and *by crew@…*; *not yet* while the spot waits for the guest; — without a spot. |
 | **Messages** | ✉️ *mailed to m•••@…* once a booking e-mail went to that address, else ✉️ *no e-mail sent*. 💬 *Telegram linked* when a chat is connected. ⏳ *message queued* while one waits to be sent or retried, ⚠️ *delivery failed* when the last one could not be delivered and is not retried any more. See [Notifications](./notifications#when-something-doesn-t-arrive). |
 | **Ticket** | *imported* when the ticket list brought it, *handed over 3 days ago* if it was passed on, and *signed in* or *never signed in*. |
-| **Links** | <kbd>Ticket →</kbd> opens the full ticket card on [Tickets](./tickets) (address, pass code, hand-over). <kbd>Room →</kbd> opens the spot's room page. <kbd>Requests →</kbd> leads to the [requests page](./special-needs#_3-decide-and-book) when the ticket has a request. |
+| **Links** | <kbd>Ticket →</kbd> opens the full ticket card on [Tickets](./tickets) (address, pass code, hand-over, [moving or releasing the booking](./tickets#move-or-release-a-booking)). <kbd>Room →</kbd> opens the spot's room page. <kbd>Requests →</kbd> leads to the [requests page](./special-needs#_3-decide-and-book) when the ticket has a request. |
 
 The row's left edge carries [the state colour](./index#the-state-colours): **turquoise** the guest is checked in, **red** the ticket holds a spot, **grey** it holds none — **orange** once booking has closed, because then a ticket without a spot needs the crew (an unpaid one stays grey: it can't book). A line above the tiles says what the list means in the current phase.
 
