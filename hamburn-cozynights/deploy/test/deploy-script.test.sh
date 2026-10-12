@@ -163,11 +163,12 @@ GHM="$(merge gh "$L1" "$F1")"
 GHE="$(merge gh "$L1" "$F1" "$C/evil.txt" 'hidden')"
 G1="$(commit gh "$B" 'web edit' "$C/version.txt" 'g1')"
 CC="$(commit max "$B" 'compose change' "$C/docker-compose.staging.yml" 'services: { app: { build: ., privileged: true } }')"
+MIG="$(commit max "$B" 'one spot per ticket' "$C/pb_migrations/1761100000_one_spot_per_ticket.js" 'index')"
 git push -q origin \
 	"$N2:refs/heads/integration/staging" "$M1:refs/heads/main" "$X1:refs/heads/feature/x" \
 	"$BAD:refs/heads/t/bad" "$U1:refs/heads/sig/unsigned" "$E1:refs/heads/sig/foreign" \
 	"$S2:refs/heads/sig/mixed" "$GHM:refs/heads/sig/gh-clean" "$GHE:refs/heads/sig/gh-evil" \
-	"$G1:refs/heads/sig/gh-nonmerge" "$CC:refs/heads/compose/change"
+	"$G1:refs/heads/sig/gh-nonmerge" "$CC:refs/heads/compose/change" "$MIG:refs/heads/t/migration"
 cd /
 
 # ── Per case ────────────────────────────────────────────────────────────────
@@ -204,6 +205,7 @@ reset() {
 		echo "PB_CONTAINER=fake-pb"
 		echo "HEALTH_TRIES=3"
 		echo "HEALTH_INTERVAL=0.1"
+		echo "UP_TIMEOUT=2"
 		printf '%s\n' "$@"
 	} >"$CONF"
 	chmod 644 "$CONF"
@@ -256,6 +258,19 @@ expect_tag() { # <ref> <id>
 	if [[ "$id" != "$2" ]]; then nok "tag $1 → ${id:-none}, expected $2"; fi
 }
 expect_healthy() { if [[ ! -e "$S/health" ]]; then nok "stack not healthy at the end"; fi; }
+expect_no_leftover() { # the stub's hanging `up` (sleep 3601) must be gone
+	local p
+	for p in /proc/[0-9]*; do
+		if tr '\0' ' ' <"$p/cmdline" 2>/dev/null | grep -q '^sleep 3601'; then
+			nok "a hanging compose up is still running (pid ${p#/proc/})"
+			kill -9 "${p#/proc/}" 2>/dev/null
+		fi
+	done
+}
+expect_faster() { # <seconds> <start epoch>
+	local took=$(($(date +%s) - $2))
+	if ((took > $1)); then nok "took ${took}s, expected ≤ $1s"; fi
+}
 expect_pb_running() { if [[ "$(cat "$S/pb_running")" != 1 ]]; then nok "PocketBase not running at the end"; fi; }
 expect_unchanged() { # nothing changed: checkout, running image, tag, PocketBase
 	expect_head "$1"
@@ -436,6 +451,114 @@ expect_event "up FAILED @$N1"
 expect_out "starting the new stack failed"
 expect_event "up @$B app=img0 sha=$B nobuild=1"
 expect_healthy
+end
+
+begin "compose up hangs (PocketBase never healthy) → stopped after UP_TIMEOUT, rollback by retag → exit 1"
+reset "$B"
+knob hang_up
+t0=$(date +%s)
+run "deploy $N1"
+expect_rc 1
+expect_faster 20 "$t0"
+expect_head "$B"
+expect_out "compose up did not finish within 2s"
+expect_out "starting the new stack failed"
+expect_event "up HANGS @$N1 nobuild=0"
+expect_event "up @$B app=img0 sha=$B nobuild=1"
+expect_count 1 "build "
+expect_no_event "WOKE UP"
+expect_no_leftover
+expect_healthy
+end
+
+begin "the rollback's up hangs too → bounded, manual intervention → exit 16"
+reset "$B"
+knob hang_up_always
+t0=$(date +%s)
+run "deploy $N1"
+expect_rc 16
+expect_faster 30 "$t0"
+expect_head "$B"
+expect_event "up HANGS @$N1 nobuild=0"
+expect_event "up HANGS @$B nobuild=1"
+expect_out "manual intervention needed"
+expect_out "exit 16"
+expect_no_event "WOKE UP"
+expect_no_leftover
+end
+
+begin "rollback comes up unhealthy → exit 16"
+reset "$B"
+knob all_bad
+run "deploy $N1"
+expect_rc 16
+expect_head "$B"
+expect_out "rollback to $B is ALSO unhealthy"
+end
+
+begin "kill -- -<pid> while compose up hangs → stops at once (not after UP_TIMEOUT), restored → exit 143"
+reset "$B" "UP_TIMEOUT=120"
+knob hang_up
+"${DEPLOY_RUN[@]}" SSH_ORIGINAL_COMMAND="deploy $N1" /usr/local/bin/deploy-cozynights-staging >"$T/out" 2>&1 &
+fg=$!
+if wait_for 15 "$S/events.log" "up HANGS"; then
+	pid="$(grep -oE 'pid [0-9]+' "$(latest_log)" | head -n1 | cut -d' ' -f2)"
+	t0=$(date +%s)
+	kill -TERM -- "-$pid"
+	wait "$fg"
+	rc=$?
+	expect_faster 30 "$t0"
+else
+	nok "deploy never reached compose up"
+	wait "$fg"
+	rc=$?
+fi
+expect_rc 143
+expect_head "$B"
+expect_event "up @$B app=img0 sha=$B nobuild=1"
+expect_no_event "WOKE UP"
+expect_no_leftover
+expect_healthy
+end
+
+begin "kill -- -<pid> during a long build → the build stops at once, checkout restored → exit 143"
+reset "$B"
+knob slow_build 60
+"${DEPLOY_RUN[@]}" SSH_ORIGINAL_COMMAND="deploy $N1" /usr/local/bin/deploy-cozynights-staging >"$T/out" 2>&1 &
+fg=$!
+if wait_for 15 "$T/out" "building app image"; then
+	pid="$(grep -oE 'pid [0-9]+' "$(latest_log)" | head -n1 | cut -d' ' -f2)"
+	t0=$(date +%s)
+	kill -TERM -- "-$pid"
+	wait "$fg"
+	rc=$?
+	expect_faster 10 "$t0"
+else
+	nok "deploy never reached the build"
+	wait "$fg"
+	rc=$?
+fi
+expect_rc 143
+expect_unchanged "$B"
+expect_no_event "stop pocketbase"
+end
+
+begin "rollback across 1761100000_one_spot_per_ticket.js → the index warning"
+reset "$B"
+knob bad_sha "$MIG"
+run "deploy $MIG"
+expect_rc 1
+expect_head "$B"
+expect_out "changed pb_migrations/"
+expect_out "the index idx_beds_order_unique stays"
+end
+
+begin "rollback without that migration → no index warning"
+reset "$B"
+knob bad_sha "$BAD"
+run "deploy $BAD"
+expect_rc 1
+expect_no_out "idx_beds_order_unique"
 end
 
 # ── EXIT trap ───────────────────────────────────────────────────────────────

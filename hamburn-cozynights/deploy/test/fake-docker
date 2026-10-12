@@ -15,7 +15,10 @@
 # Knobs (files the test creates):
 #   knob_fail_build, knob_slow_build (seconds), knob_bad_sha (a SHA whose image
 #   is unhealthy), knob_fail_pull, knob_fail_snapshot, knob_slow_snapshot
-#   (seconds), knob_fail_stop (stops, then fails), knob_fail_up (once)
+#   (seconds), knob_fail_stop (stops, then fails), knob_fail_up (once),
+#   knob_hang_up (once) / knob_hang_up_always: `up` never returns, like
+#   depends_on waiting for a PocketBase that crash-loops (sleep 3601, so the
+#   tests can see a left-over process), knob_all_bad: nothing gets healthy
 set -uo pipefail
 
 S="${FAKE_DOCKER_STATE:-/var/lib/fakedocker}"
@@ -108,13 +111,21 @@ if [[ "${1:-}" == compose ]]; then
 			event "up FAILED @$(head_of "$dir")"
 			exit 1
 		fi
+		if knob hang_up || knob hang_up_always; then
+			rm -f "$S/knob_hang_up" "$S/health"
+			echo 0 >"$S/pb_running"
+			event "up HANGS @$(head_of "$dir") nobuild=$nobuild"
+			sleep 3601
+			event "up WOKE UP (never killed)"
+			exit 0
+		fi
 		if ! id="$(resolve "$proj-app")"; then
 			echo "fake: no image $proj-app" >&2
 			exit 1
 		fi
 		echo "$id" >"$S/app_container"
 		echo 1 >"$S/pb_running"
-		if [[ "$(image_field "$id" 3)" == 1 ]]; then rm -f "$S/health"; else touch "$S/health"; fi
+		if [[ "$(image_field "$id" 3)" == 1 ]] || knob all_bad; then rm -f "$S/health"; else touch "$S/health"; fi
 		event "up @$(head_of "$dir") app=$id sha=$(image_field "$id" 2) nobuild=$nobuild"
 		;;
 	logs)

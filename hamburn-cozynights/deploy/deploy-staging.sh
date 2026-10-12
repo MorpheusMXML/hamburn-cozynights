@@ -22,7 +22,10 @@
 # If the health check fails, the previous commit is started again from the
 # :prev image (rebuilt only when there is none); the database is NOT rolled
 # back (see the warning below). Any other failure after the checkout puts the
-# checkout and PocketBase back as they were (EXIT trap).
+# checkout and PocketBase back as they were (EXIT trap). Every `compose up` is
+# bounded (UP_TIMEOUT): a PocketBase that never gets healthy (a migration that
+# throws, a hook that does not load, a wrong key) makes `up` wait for ever, and
+# a timed-out `up` counts as failed.
 #
 # Exit codes: 0 deployed · 1 health check failed, rolled back · 2 usage ·
 # 3 another deploy runs · 4 local changes in the checkout · 5 commit not on
@@ -30,7 +33,10 @@
 # 9 snapshot failed · 10 not on a REQUIRE_BRANCH · 11 downgrade refused ·
 # 12 commit not signed by a trusted key · 13 compose file not approved (pin) ·
 # 14 signature/pin configuration broken · 15 unexpected error (state restored) ·
+# 16 the previous state could NOT be restored either (manual intervention) ·
 # 129/130/143 stopped by a signal (state restored).
+# Stopping a running deploy: kill -- -<pid> (its process group; the pid is in
+# the second line of the log). The trap then restores the previous state.
 set -Eeuo pipefail
 
 self="$(basename "$0")"
@@ -60,6 +66,7 @@ BACKUP_KEEP="${BACKUP_KEEP:-10}"
 DEPLOY_LOG_KEEP="${DEPLOY_LOG_KEEP:-20}"
 HEALTH_TRIES="${HEALTH_TRIES:-30}"
 HEALTH_INTERVAL="${HEALTH_INTERVAL:-2}"
+UP_TIMEOUT="${UP_TIMEOUT:-300}"
 export COMPOSE_PROJECT_NAME
 
 log() { printf '[deploy %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
@@ -105,8 +112,50 @@ app_image=""     # the tag the app container runs, e.g. hamburn-cozynights-app:l
 prev_image=""    # <image>:prev, the running image saved before the build
 gnupg_tmp=""
 unexpected=""
+up_pid=""           # a running, bounded `compose up` (see compose_up)
+restore_failed=0
 
 compose() { docker compose -f "$APP_DIR/hamburn-cozynights/$COMPOSE_FILE" "$@"; }
+
+# `compose up -d`, bounded: depends_on (service_healthy) waits for ever while
+# PocketBase crash-loops. After UP_TIMEOUT `timeout` stops compose and its
+# children, and the `up` counts as failed. It runs in the background so that a
+# TERM to the deploy interrupts the `wait` at once (on_exit stops it).
+compose_up() {
+	local rc=0
+	timeout -k 15 "$UP_TIMEOUT" docker compose -f "$APP_DIR/hamburn-cozynights/$COMPOSE_FILE" up -d "$@" &
+	up_pid=$!
+	wait "$up_pid" || rc=$?
+	up_pid=""
+	if ((rc == 124 || rc == 137)); then
+		log "compose up did not finish within ${UP_TIMEOUT}s — stopped it (PocketBase not healthy?)"
+	fi
+	return "$rc"
+}
+
+# shellcheck disable=SC2329 # runs from the EXIT trap
+stop_up() {
+	if [[ -n "$up_pid" ]]; then
+		kill -TERM "$up_pid" 2>/dev/null || true
+		wait "$up_pid" 2>/dev/null || true
+		up_pid=""
+	fi
+}
+
+# What the rollback leaves behind in the database: PocketBase never runs a
+# migration's down branch, and the old code has no file for it.
+migration_warning() {
+	if [[ -z "$(git -C "$APP_DIR" diff --name-only "$prev" "$sha" -- hamburn-cozynights/pb_migrations/ 2>/dev/null)" ]]; then
+		return 0
+	fi
+	log "WARNING: $sha changed pb_migrations/ — the rollback restores the code, not the database."
+	log "If $prev fails on the new schema, restore the snapshot ${backup:-in $BACKUP_DIR} (deploy/README.md, Rollback → Daten)."
+	local added
+	added="$(git -C "$APP_DIR" diff --name-only --diff-filter=A "$prev" "$sha" -- hamburn-cozynights/pb_migrations/ 2>/dev/null || true)"
+	if [[ $'\n'"$added"$'\n' == *"/1761100000_one_spot_per_ticket.js"$'\n'* ]]; then
+		log "WARNING: $prev does not have 1761100000_one_spot_per_ticket.js: the index idx_beds_order_unique stays (if PocketBase applied it) — drop it before the old code moves bookings: see deploy/README.md Rollback."
+	fi
+}
 
 healthy() {
 	for _ in $(seq 1 "$HEALTH_TRIES"); do
@@ -127,10 +176,10 @@ rollback() {
 	if [[ -n "$prev_image" ]] && docker image inspect "$prev_image" >/dev/null 2>&1 &&
 		docker tag "$prev_image" "$app_image"; then
 		log "app image: $prev_image → $app_image (no rebuild)"
-		compose up -d --no-build --remove-orphans
+		compose_up --no-build --remove-orphans
 	else
 		log "no :prev image of this deploy — rebuilding $prev"
-		GIT_SHA="$prev" compose build app && compose up -d --remove-orphans
+		GIT_SHA="$prev" compose build app && compose_up --remove-orphans
 	fi
 }
 
@@ -141,9 +190,11 @@ rollback() {
 restore() {
 	log "deploy did not finish — restoring $prev"
 	if ((phase >= 3)); then
+		migration_warning
 		if rollback && healthy; then
 			log "restored: $prev is running and healthy"
 		else
+			restore_failed=1
 			log "restore of $prev is NOT healthy — manual intervention needed"
 		fi
 		return 0
@@ -154,6 +205,7 @@ restore() {
 		back=1
 		log "restored: checkout on $prev"
 	else
+		restore_failed=1
 		log "checkout of $prev FAILED"
 	fi
 	if [[ -n "$prev_image" ]] && docker tag "$prev_image" "$app_image"; then
@@ -164,11 +216,13 @@ restore() {
 			if compose start pocketbase; then
 				log "restored: PocketBase started again on $prev"
 			else
+				restore_failed=1
 				log "PocketBase did NOT start again — manual intervention needed"
 			fi
 		else
 			# Its hooks and migrations come from the checkout: never start it on
 			# $sha's files without a snapshot.
+			restore_failed=1
 			log "PocketBase stays stopped (checkout not on $prev) — manual intervention needed"
 		fi
 	fi
@@ -187,8 +241,10 @@ on_exit() {
 	local rc=$?
 	trap - EXIT ERR
 	set +e
+	stop_up
 	if [[ -n "$unexpected" && "$rc" -ne 0 && "$rc" -lt 128 ]]; then rc=15; fi
 	if ((phase >= 1 && phase < 9)) && [[ -n "$prev" ]]; then restore; fi
+	if ((restore_failed)); then rc=16; fi
 	cleanup_gnupg
 	log "exit $rc"
 	exit "$rc"
@@ -538,7 +594,7 @@ fi
 
 log "starting stack"
 phase=3
-if compose up -d --remove-orphans; then
+if compose_up --remove-orphans; then
 	if healthy; then
 		# Only this stack's old images: both stacks share one Docker daemon, and
 		# compose labels every image it builds with its project.
@@ -552,15 +608,14 @@ if compose up -d --remove-orphans; then
 else
 	log "starting the new stack failed — rolling back to $prev"
 fi
+compose logs --tail 40 pocketbase || true
 compose logs --tail 40 app || true
-if [[ -n "$(git diff --name-only "$prev" "$sha" -- hamburn-cozynights/pb_migrations/ 2>/dev/null)" ]]; then
-	log "WARNING: $sha changed pb_migrations/ — the rollback restores the code, not the database."
-	log "If $prev fails on the new schema, restore the snapshot ${backup:-in $BACKUP_DIR} (deploy/README.md, Restore)."
-fi
+migration_warning
 if rollback && healthy; then
 	log "rollback to $prev succeeded"
-else
-	log "rollback to $prev is ALSO unhealthy — manual intervention needed"
+	phase=9
+	exit 1
 fi
+log "rollback to $prev is ALSO unhealthy — manual intervention needed"
 phase=9
-exit 1
+exit 16
