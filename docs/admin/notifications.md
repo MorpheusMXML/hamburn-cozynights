@@ -90,9 +90,11 @@ Every message here is also kept in the audit log (collection `admin_events` in t
 | 👥 A request was taken out of its group | With the admin's e-mail address |
 | 🧡 Special-needs requests OPENED · closed | Somebody flips the requests switch, with their e-mail address |
 | ✏️ Message text changed · ↩️ reset to its default | An admin changed a [message text](#message-texts) or took it back, with their e-mail address and the text's key |
-| 📭 Could not notify ticket | A guest message failed for good. The ticket is named by its shortened code (*Ticket H•••*), never by its holder: this line can stand right next to 🧡 *New special-needs request*, and the two must not add up to a person. |
+| 📭 Could not notify ticket | A guest message failed for good. The ticket is named by its shortened code (*Ticket H•••*), never by its holder: this line can stand right next to 🧡 *New special-needs request*, and the two must not add up to a person. Three or more waiting at once (a mail provider's quota, an outage) become **one** line: *📭 N guest messages could not be delivered after all their attempts (first: …)*; the audit log keeps one entry per ticket. |
 
 If Telegram is down, a crew message is tried again after 1, 5, 15 and 60 minutes; after the fifth failed attempt it is marked *failed* in the audit log (`notify status` shows it). Guest messages keep being retried for about two days, see above.
+
+**Is the loop itself alive?** Every message on this page comes from PocketBase's notification loop, so none of them can report that the loop hangs (an SMTP server that accepts the connection and never answers stops it, PocketBase's mailer has no timeout). With `COZY_HEARTBEAT_URL` set in the server's `.env` (a ping URL of healthchecks.io or a similar service), the loop pings it at most every five minutes after a pass that ran to its end; when the pings stop, that service alerts whoever watches it. Give the check a period of 10 minutes and a grace time of 10 minutes.
 
 ## Message texts
 

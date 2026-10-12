@@ -105,6 +105,8 @@ function config(app) {
 			guests: !!token && isOn(env('TELEGRAM_GUEST_UPDATES'), true)
 		},
 		legacyWebhook: env('COZY_ADMIN_WEBHOOK_URL'),
+		// healthchecks.io-style ping URL: the loop is alive (heartbeat())
+		heartbeatUrl: env('COZY_HEARTBEAT_URL'),
 		loopSeconds: loop >= 0 && loop <= 50 ? loop : 50,
 		mailsPerMinute: perMinute > 0 ? perMinute : 20,
 		// the texts admins changed (key → text); the defaults are in texts.js
@@ -747,8 +749,63 @@ function eventText(ev, cfg) {
 	}
 }
 
+/** From this many pending "could not notify" alerts on, the crew gets one line for all. */
+const FAILED_BATCH_MIN = 3;
+
+/**
+ * Many guest messages failing for good at once — the mail provider's quota,
+ * an outage — would post one crew line per ticket, hundreds of them. From
+ * FAILED_BATCH_MIN on, one line counts them and quotes the first error; each
+ * admin_events row stays (the audit log and the Control Center list them).
+ * @returns batched: those rows are this function's (also while it waits to
+ *   retry), sent: 1 when the line went out
+ */
+function sendFailedBatch(app, cfg, force) {
+	let rows;
+	try {
+		rows = app.findRecordsByFilter(
+			'admin_events',
+			"alert_status = 'pending' && action = 'guest_notice_failed'",
+			'created',
+			1000,
+			0
+		);
+	} catch (_) {
+		return { batched: false, sent: 0 };
+	}
+	if (rows.length < FAILED_BATCH_MIN) return { batched: false, sent: 0 };
+	const attempts = rows[0].getInt('alert_attempts');
+	const wait = ALERT_RETRY_SECONDS[Math.min(attempts, ALERT_RETRY_SECONDS.length - 1)];
+	if (!force && attempts > 0 && Date.now() - toMs(rows[0].getString('updated')) < wait * 1000) {
+		return { batched: true, sent: 0 };
+	}
+	const first = eventDetails(rows[0]);
+	const r = crewSend(
+		cfg,
+		'📭 ' +
+			rows.length +
+			' guest messages could not be delivered after all their attempts' +
+			(first.error ? ' (first: ' + first.error + ')' : '') +
+			'. The Control Center lists the tickets.'
+	);
+	for (const ev of rows) {
+		if (r.ok) {
+			ev.set('alert_status', 'sent');
+			ev.set('alert_error', '');
+		} else {
+			ev.set('alert_attempts', attempts + 1);
+			ev.set('alert_error', r.error);
+			if (attempts + 1 >= ALERT_RETRY_SECONDS.length) ev.set('alert_status', 'failed');
+		}
+		app.save(ev);
+	}
+	if (!r.ok) console.warn('[cozy-notify] crew alert failed (' + (attempts + 1) + '): ' + r.error);
+	return { batched: true, sent: r.ok ? 1 : 0 };
+}
+
 function sendPendingAlerts(app, cfg, force) {
 	if (!crewConfigured(cfg)) return 0;
+	const batch = sendFailedBatch(app, cfg, force);
 	const events = app.findRecordsByFilter(
 		'admin_events',
 		"alert_status = 'pending'",
@@ -758,6 +815,8 @@ function sendPendingAlerts(app, cfg, force) {
 	);
 	let sent = 0;
 	for (const ev of events) {
+		// those go as one line (sendFailedBatch), never one by one as well
+		if (batch.batched && ev.getString('action') === 'guest_notice_failed') continue;
 		const attempts = ev.getInt('alert_attempts');
 		const wait = ALERT_RETRY_SECONDS[Math.min(attempts, ALERT_RETRY_SECONDS.length - 1)];
 		if (!force && attempts > 0 && Date.now() - toMs(ev.getString('updated')) < wait * 1000)
@@ -777,7 +836,7 @@ function sendPendingAlerts(app, cfg, force) {
 		app.save(ev);
 		if (!r.ok) break; // the channel is down: keep the order, try again later
 	}
-	return sent;
+	return sent + batch.sent;
 }
 
 // --- guest spots -------------------------------------------------------------
@@ -3067,6 +3126,35 @@ function runPass(app, cfg, pollSeconds, force, deadline, keepAlive) {
 	return result;
 }
 
+/** At most one heartbeat ping every this many seconds. */
+const HEARTBEAT_SECONDS = 300;
+
+/**
+ * Tells COZY_HEARTBEAT_URL (healthchecks.io) that the loop is alive: called
+ * after a loop ran its passes to the end. A pass that hangs — an SMTP server
+ * that accepts the connection and never answers, PocketBase's mailer has no
+ * timeout — never gets here, the pings stop, and healthchecks.io alerts
+ * whoever watches it. Nothing else would: the crew alerts come from this
+ * same loop. Never throws.
+ */
+function heartbeat(app, cfg) {
+	if (!cfg.heartbeatUrl) return false;
+	const store = app.store();
+	const now = Date.now();
+	if (now - (store.get('cozy_heartbeat_at') || 0) < HEARTBEAT_SECONDS * 1000) return false;
+	store.set('cozy_heartbeat_at', now);
+	try {
+		const res = $http.send({ url: cfg.heartbeatUrl, method: 'GET', timeout: 5 });
+		if (res.statusCode >= 300) {
+			console.warn('[cozy-notify] heartbeat answered HTTP ' + res.statusCode);
+		}
+		return true;
+	} catch (err) {
+		console.warn('[cozy-notify] heartbeat failed: ' + safeError(err));
+		return false;
+	}
+}
+
 /** The cron job: repeats short passes for up to COZY_NOTIFY_LOOP_SECONDS. */
 function runLoop(app) {
 	const cfg = config(app);
@@ -3086,6 +3174,7 @@ function runLoop(app) {
 				if (left > 5) sleep(5000);
 			}
 		} while (Date.now() < deadline - 1000);
+		heartbeat(app, cfg);
 	} finally {
 		releaseLock(app, owner);
 	}
@@ -3112,6 +3201,8 @@ function flush(app, force) {
 module.exports = {
 	TG_LINK_MINUTES: TG_LINK_MINUTES,
 	config: config,
+	heartbeat: heartbeat,
+	sendPendingAlerts: sendPendingAlerts,
 	crewConfigured: crewConfigured,
 	pbDate: pbDate,
 	toMs: toMs,
