@@ -1,29 +1,37 @@
 <!--
 @component
 One ticket in the admin's ticket search: what it holds, its e-mail address and
-name to edit in place, the hand-over to a new holder ("passed on"), and — for
-an unpaid ticket — "Mark as paid" when the payment was confirmed in person.
-Saves through ?/update and ?/markPaid of the ticket page and fires `saved`
-with the fresh ticket.
+name to edit in place, the hand-over to a new holder ("passed on"), — for
+an unpaid ticket — "Mark as paid" when the payment was confirmed in person, and
+for a booked one Move (the spot picker the page opens through `pickSpot`) and
+Release. Saves through ?/update, ?/markPaid, ?/move and ?/release of the ticket
+page and fires `saved` with the fresh ticket.
 -->
 <script lang="ts">
 	import { applyAction, enhance } from '$app/forms';
-	import { createEventDispatcher } from 'svelte';
+	import { createEventDispatcher, tick } from 'svelte';
 	import { slide } from 'svelte/transition';
-	import type { SubmitFunction } from '@sveltejs/kit';
+	import type { ActionResult, SubmitFunction } from '@sveltejs/kit';
 	import { confirmDialog, toast } from '$lib/dialogs';
 	import { revealInvalid } from '$lib/field-alert';
 	import { formatBerlin } from '$lib/booking-phase';
+	import type { SpotInfo } from '$lib/special-needs';
 	import {
 		TICKET_LIMITS,
 		isValidGuestEmail,
 		normalizeEmail,
 		type TicketChangeOutcome,
 		type TicketPaidOutcome,
+		type TicketSpotOutcome,
 		type TicketView
 	} from '$lib/tickets';
 
 	export let ticket: TicketView;
+	/**
+	 * Opens the page's spot picker for this ticket and answers with the spot
+	 * picked (null: cancelled). Unset without JavaScript: no Move or Release then.
+	 */
+	export let pickSpot: ((ticket: TicketView) => Promise<SpotInfo | null>) | null = null;
 
 	const dispatch = createEventDispatcher<{ saved: TicketView }>();
 
@@ -33,6 +41,14 @@ with the fresh ticket.
 	let saving = false;
 	let marking = false;
 	let error = '';
+	// Move and Release: loading the picker, then the two forms.
+	let choosing = false;
+	let moving = false;
+	let releasing = false;
+	let moveTo: SpotInfo | null = null;
+	let moveForm: HTMLFormElement;
+	let spotError = '';
+	$: spotBusy = choosing || moving || releasing;
 	// Punish late: half an address is not an error yet. A field turns red once
 	// it was left, or when saving was tried — and turns back the moment it's fixed.
 	let emailLeft = false;
@@ -50,6 +66,7 @@ with the fresh ticket.
 		name = fresh.name;
 		newHolder = false;
 		error = '';
+		spotError = '';
 		emailLeft = nameLeft = triedToSave = false;
 	}
 
@@ -151,6 +168,113 @@ with the fresh ticket.
 			} else {
 				await applyAction(result);
 			}
+		};
+	};
+
+	/** "B1 · Dorm #2 · Villa": the spot as everywhere in the admin area. */
+	$: spotLabel = ticket.spot
+		? [ticket.spot.spot, ticket.spot.room, ticket.spot.house].filter(Boolean).join(' · ')
+		: '';
+
+	/** Move: the page's picker first, then ?/move with the spot picked. */
+	async function chooseSpot() {
+		if (!pickSpot || spotBusy) return;
+		spotError = '';
+		choosing = true;
+		let picked: SpotInfo | null = null;
+		try {
+			picked = await pickSpot(ticket);
+		} finally {
+			choosing = false;
+		}
+		if (!picked) return;
+		moveTo = picked;
+		await tick();
+		moveForm.requestSubmit();
+	}
+
+	/** What a move or release answered: the fresh ticket, or why not. */
+	async function spotResult(result: ActionResult) {
+		if (result.type === 'success') {
+			const outcome = result.data?.spotChanged as TicketSpotOutcome | undefined;
+			if (!outcome) return;
+			toast(
+				outcome.to
+					? `🔀 Moved to ${outcome.to}. The guest gets a message shortly.`
+					: `🛏️ Released: ${outcome.from} is free. The guest gets a message shortly.`,
+				'success',
+				7000
+			);
+			reset({ ...outcome.ticket, code: ticket.code, codeMasked: ticket.codeMasked });
+			dispatch('saved', outcome.ticket);
+		} else if (result.type === 'failure') {
+			spotError =
+				(result.data as { error?: string } | undefined)?.error ??
+				`The server refused it (${result.status}). Nothing changed.`;
+		} else if (result.type === 'error') {
+			spotError = 'The server could not be reached. Nothing changed; try again.';
+		} else {
+			await applyAction(result);
+		}
+	}
+
+	const submitMove: SubmitFunction = async ({ cancel, formData }) => {
+		const spot = moveTo;
+		if (!spot || !ticket.spot) {
+			cancel();
+			return;
+		}
+		// A locked 🔒 spot is out of service: booked only when confirmed here.
+		if (spot.locked) formData.set('blockedOk', spot.bedId);
+		else formData.delete('blockedOk');
+		const ok = await confirmDialog(
+			(spot.locked ? `🔒 ${spot.label} is blocked (out of service). ` : '') +
+				`The booking moves from ${spotLabel} to ${spot.label} right away` +
+				(ticket.spot.checkIn ? ', and the check-in moves along' : '') +
+				'. The guest gets a message with the new spot and the booking pass.',
+			{
+				title: spot.locked ? '🔀 Move to a blocked spot?' : '🔀 Move the booking?',
+				tone: 'warning',
+				confirmLabel: spot.locked ? 'Move it anyway' : 'Move'
+			}
+		);
+		if (!ok) {
+			moveTo = null;
+			cancel();
+			return;
+		}
+		moving = true;
+		spotError = '';
+		return async ({ result }) => {
+			moving = false;
+			moveTo = null;
+			await spotResult(result);
+		};
+	};
+
+	const submitRelease: SubmitFunction = async ({ cancel }) => {
+		if (!ticket.spot) {
+			cancel();
+			return;
+		}
+		const ok = await confirmDialog(
+			`The ticket loses ${spotLabel} right away` +
+				(ticket.spot.checkIn ? ', and the check-in at arrival is dropped' : '') +
+				'. The guest gets a message and can book again while booking is open.' +
+				(ticket.spot.viaRequest
+					? ' Their special-needs request stays approved and needs a new spot on Special-needs requests.'
+					: ''),
+			{ title: '🛏️ Release the booking?', tone: 'danger', confirmLabel: 'Release' }
+		);
+		if (!ok) {
+			cancel();
+			return;
+		}
+		releasing = true;
+		spotError = '';
+		return async ({ result }) => {
+			releasing = false;
+			await spotResult(result);
 		};
 	};
 
@@ -277,6 +401,48 @@ with the fresh ticket.
 				{marking ? 'Saving…' : ticket.unpaid ? '✓ Mark as paid' : 'Set back to unpaid'}
 			</button>
 		</form>
+	{/if}
+
+	{#if ticket.spot && pickSpot}
+		<div class="spot-row" class:crew={ticket.spot.viaRequest}>
+			<p>
+				<strong>🛏 {spotLabel}</strong>
+				<small
+					>{ticket.spot.viaRequest
+						? '♿ The crew booked it for their special-needs request. '
+						: ''}Move it to another free spot, or release it. The guest gets a message either way.</small
+				>
+			</p>
+			<div class="spot-buttons">
+				<form method="POST" action="?/move" bind:this={moveForm} use:enhance={submitMove}>
+					<input type="hidden" name="id" value={ticket.id} />
+					<input type="hidden" name="from" value={ticket.spot.bedId} />
+					<input type="hidden" name="bedId" value={moveTo?.bedId ?? ''} />
+					<button
+						type="button"
+						class="btn-save"
+						disabled={dirty || spotBusy}
+						title={dirty ? 'Save or undo the changes below first' : ''}
+						on:click={chooseSpot}
+					>
+						{choosing ? 'Loading…' : moving ? 'Moving…' : '🔀 Move…'}
+					</button>
+				</form>
+				<form method="POST" action="?/release" use:enhance={submitRelease}>
+					<input type="hidden" name="id" value={ticket.id} />
+					<input type="hidden" name="from" value={ticket.spot.bedId} />
+					<button
+						type="submit"
+						class="btn-ghost btn-release"
+						disabled={dirty || spotBusy}
+						title={dirty ? 'Save or undo the changes below first' : ''}
+					>
+						{releasing ? 'Releasing…' : 'Release'}
+					</button>
+				</form>
+			</div>
+		</div>
+		{#if spotError}<p class="form-error" role="alert">{spotError}</p>{/if}
 	{/if}
 
 	<form method="POST" action="?/update" use:enhance={submit} novalidate>
@@ -576,6 +742,54 @@ with the fresh ticket.
 		cursor: not-allowed;
 	}
 
+	/* The booking: like the payment row, with Move and Release on the right. */
+	.spot-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.8rem;
+		padding: 0.7rem 0.8rem;
+		border: 1px solid #2a2a2a;
+		border-radius: 12px;
+		background: #0a0a0a;
+	}
+	.spot-row.crew {
+		border-color: rgba(167, 139, 250, 0.45);
+	}
+	.spot-row p {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		margin: 0;
+		min-width: 0;
+	}
+	.spot-row strong {
+		font-size: 0.85rem;
+		color: #fff;
+		overflow-wrap: anywhere;
+	}
+	.spot-row small {
+		font-size: 0.75rem;
+		color: #999;
+		overflow-wrap: anywhere;
+	}
+	.spot-buttons {
+		display: flex;
+		gap: 0.5rem;
+		flex-shrink: 0;
+	}
+	.spot-buttons form {
+		display: contents;
+	}
+	.spot-buttons button:disabled {
+		opacity: 0.35;
+		cursor: not-allowed;
+	}
+	.btn-release:hover:not(:disabled) {
+		color: #fca5a5;
+		border-color: rgba(248, 113, 113, 0.6);
+	}
+
 	.buttons {
 		display: flex;
 		justify-content: flex-end;
@@ -620,9 +834,13 @@ with the fresh ticket.
 		.fields {
 			grid-template-columns: 1fr;
 		}
-		.payment {
+		.payment,
+		.spot-row {
 			flex-direction: column;
 			align-items: stretch;
+		}
+		.spot-buttons button {
+			flex: 1;
 		}
 		.buttons {
 			position: sticky;

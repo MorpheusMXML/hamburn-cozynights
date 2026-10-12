@@ -1,7 +1,7 @@
 // src/routes/admin/tickets/+page.server.ts — the ticket roster in the admin
 // area (docs/admin/tickets.md): find a ticket, change its address, hand it over
-// to a new holder, mark it paid by hand; superusers import the ticket shop's
-// list after a review.
+// to a new holder, mark it paid by hand, move or release its booking;
+// superusers import the ticket shop's list after a review.
 // Codes and addresses travel in POST bodies only, never in URLs (logs).
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -12,10 +12,13 @@ import {
 	changeTicket,
 	importRoster,
 	markTicketPaid,
+	moveTicketSpot,
 	openTicket,
 	previewRoster,
 	readRosterRows,
-	searchTickets
+	releaseTicketSpot,
+	searchTickets,
+	ticketMoveSpots
 } from '$lib/server/tickets';
 
 const UNAVAILABLE =
@@ -132,6 +135,70 @@ export const actions: Actions = {
 			return { paid: outcome };
 		} catch (err) {
 			return refuse(err, 'Mark paid');
+		}
+	},
+
+	/** The free spots the Move button's picker offers for one ticket. */
+	spots: async ({ locals, request }) => {
+		if (!locals.admin) return fail(403, { error: 'Only admins can move bookings.' });
+		const form = await request.formData();
+		try {
+			return { moveSpots: await ticketMoveSpots(locals.adminPb, form.get('id')) };
+		} catch (err) {
+			return refuse(err, 'Spots');
+		}
+	},
+
+	/**
+	 * Moves the ticket's booking to another spot (every admin, every phase).
+	 * `from` is the spot the card showed; `blockedOk` confirms a locked 🔒 spot.
+	 */
+	move: async ({ locals, request }) => {
+		if (!locals.admin) return fail(403, { error: 'Only admins can move bookings.' });
+		const form = await request.formData();
+		const bedId = String(form.get('bedId') ?? '');
+		// The admin confirmed this very spot although it is locked 🔒 (the dialog sets it).
+		const confirmed = form.getAll('blockedOk').map(String);
+		try {
+			const outcome = await moveTicketSpot(
+				locals.adminPb,
+				locals.admin,
+				form.get('id'),
+				form.get('from'),
+				bedId,
+				{ blockedOk: confirmed.includes(bedId) }
+			);
+			console.log(
+				`[Tickets] ${locals.admin.email} moved the booking of ticket ${outcome.maskedCode}`
+			);
+			await logAdminEvent(locals.adminPb, locals.admin, 'ticket_spot_moved', outcome.ticket.id, {
+				ticket: outcome.maskedCode,
+				checkedIn: outcome.checkedIn,
+				viaRequest: outcome.viaRequest
+			});
+			return { spotChanged: outcome };
+		} catch (err) {
+			return refuse(err, 'Move');
+		}
+	},
+
+	/** Releases the ticket's booking (every admin, every phase); `from` as for a move. */
+	release: async ({ locals, request }) => {
+		if (!locals.admin) return fail(403, { error: 'Only admins can release bookings.' });
+		const form = await request.formData();
+		try {
+			const outcome = await releaseTicketSpot(locals.adminPb, form.get('id'), form.get('from'));
+			console.log(
+				`[Tickets] ${locals.admin.email} released the booking of ticket ${outcome.maskedCode}`
+			);
+			await logAdminEvent(locals.adminPb, locals.admin, 'ticket_spot_released', outcome.ticket.id, {
+				ticket: outcome.maskedCode,
+				checkedIn: outcome.checkedIn,
+				viaRequest: outcome.viaRequest
+			});
+			return { spotChanged: outcome };
+		} catch (err) {
+			return refuse(err, 'Release');
 		}
 	},
 

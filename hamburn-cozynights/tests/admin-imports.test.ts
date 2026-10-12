@@ -108,7 +108,15 @@ describe('finding tickets', () => {
 			signedIn: true,
 			unpaid: false,
 			paidByHand: null,
-			spot: { house: 'Neon Cave', room: 'Bunks #1', spot: 'B1', roomId: 'r1', checkIn: null },
+			spot: {
+				house: 'Neon Cave',
+				room: 'Bunks #1',
+				spot: 'B1',
+				roomId: 'r1',
+				bedId: 'b1',
+				viaRequest: false,
+				checkIn: null
+			},
 			burnerName: 'Sparkle',
 			telegram: true,
 			passCode: 'PASS-CODE-2345'

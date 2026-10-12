@@ -15,6 +15,10 @@ export type AdminEventAction =
 	// A ticket marked paid by hand on the Tickets page, or set back to unpaid.
 	| 'ticket_marked_paid'
 	| 'ticket_marked_unpaid'
+	// A booking moved or released on the Tickets page (every admin): the
+	// masked code only, never the spots.
+	| 'ticket_spot_moved'
+	| 'ticket_spot_released'
 	| 'tickets_imported'
 	| 'special_request_approved'
 	| 'special_request_declined'

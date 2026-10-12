@@ -10,7 +10,8 @@
  * callers check the admin's rights first.
  *
  * E-mails go out from PocketBase: a new address on a ticket that holds a spot
- * gets a confirmation (pb_hooks/cozy_notify.pb.js).
+ * gets a confirmation (pb_hooks/cozy_notify.pb.js), and a booking the crew
+ * moves or releases here tells its guest (the bed hooks mark the ticket).
  */
 import type { ClientResponseError } from 'pocketbase';
 import type {
@@ -20,11 +21,28 @@ import type {
 	RoomsResponse,
 	TypedPocketBase
 } from '$lib/pocketbase-types';
+import type { AdminSession } from '$lib/server/admin-auth';
 import { createLookupHash, decrypt } from '$lib/server/crypto';
-import { BookingService, withLock } from '$lib/server/booking';
+import {
+	BedUnavailableError,
+	BookingService,
+	SpotChangedError,
+	randomBurnerName,
+	withLock
+} from '$lib/server/booking';
 import { disconnectTelegram } from '$lib/server/notifications';
 import { checkInOf } from '$lib/server/pass';
-import { forgetRequest } from '$lib/server/special-requests';
+import {
+	RequestError,
+	assignSpot,
+	countRoomSpots,
+	findRequest,
+	forgetCrewSpots,
+	forgetRequest,
+	listAssignableSpots,
+	readSecret,
+	toSpot
+} from '$lib/server/special-requests';
 import { forgetSwaps } from '$lib/server/swaps';
 import { formatPassCode } from '$lib/pass';
 import {
@@ -47,6 +65,8 @@ import {
 	type TicketPaidOutcome,
 	type TicketSearch,
 	type TicketSpot,
+	type TicketMoveSpots,
+	type TicketSpotOutcome,
 	type TicketView
 } from '$lib/tickets';
 
@@ -85,7 +105,7 @@ async function describeTicket(
 	order: OrdersResponse,
 	maskCode: boolean
 ): Promise<TicketView> {
-	const [beds, links] = await Promise.all([
+	const [beds, links, approved] = await Promise.all([
 		adminPb.collection('beds').getFullList<BedWithRoom>({
 			filter: adminPb.filter('order = {:id}', { id: order.id }),
 			expand: 'room.house',
@@ -100,6 +120,18 @@ async function describeTicket(
 				requestKey: null
 			})
 			// Before the notifications migration there is nothing to link.
+			.catch(() => []),
+		// Which spot the crew booked for an approved special-needs request
+		// (crewBookedBeds): only whether this one is it, never the request.
+		adminPb
+			.collection('special_requests')
+			.getFullList({
+				filter: adminPb.filter("order = {:id} && status = 'approved' && bed != ''", {
+					id: order.id
+				}),
+				fields: 'bed',
+				requestKey: null
+			})
 			.catch(() => [])
 	]);
 
@@ -113,6 +145,8 @@ async function describeTicket(
 			room: room ? `${room.name}${number}` : '',
 			spot: bed.label,
 			roomId: bed.room,
+			bedId: bed.id,
+			viaRequest: approved.some((request) => request.bed === bed.id),
 			checkIn: checkInOf(bed)
 		};
 	}
@@ -440,6 +474,210 @@ export async function markTicketPaid(
 		maskedCode: maskTicketCode(order.order_number ?? ''),
 		paid,
 		changed
+	};
+}
+
+// --- moving and releasing a booking ----------------------------------------------
+
+/** A record id as PocketBase makes them. */
+const RECORD_ID = /^[a-z0-9]{15}$/;
+
+async function readOrder(adminPb: TypedPocketBase, rawId: unknown): Promise<OrdersResponse> {
+	const id = typeof rawId === 'string' ? rawId.trim() : '';
+	if (!/^[a-z0-9]{1,30}$/.test(id)) throw new TicketError('No ticket was chosen. Search again.');
+	try {
+		return await adminPb.collection('orders').getOne<OrdersResponse>(id, {
+			fields: TICKET_FIELDS,
+			requestKey: null
+		});
+	} catch (err) {
+		if (isNotFound(err)) throw new TicketError('This ticket no longer exists. Search again.', 404);
+		throw err;
+	}
+}
+
+/**
+ * The spot the ticket holds now, with its room and house, checked against the
+ * one the admin saw (`rawFrom`): a guest who moved meanwhile is never moved or
+ * released by a stale card.
+ */
+async function heldSpot(
+	adminPb: TypedPocketBase,
+	order: OrdersResponse,
+	rawFrom: unknown,
+	doing: string
+): Promise<BedWithRoom> {
+	const [bed] = await adminPb.collection('beds').getFullList<BedWithRoom>({
+		filter: adminPb.filter('order = {:id}', { id: order.id }),
+		expand: 'room,room.house',
+		sort: '-updated',
+		requestKey: null
+	});
+	if (!bed) {
+		throw new TicketError(
+			`This ticket holds no spot any more: nothing to ${doing}. Search again.`,
+			409
+		);
+	}
+	const from = typeof rawFrom === 'string' ? rawFrom.trim() : '';
+	if (from && from !== bed.id) {
+		throw new TicketError(
+			`The booking changed meanwhile: the ticket holds ${toSpot(bed).label} now. Search again, then ${doing} it.`,
+			409
+		);
+	}
+	return bed;
+}
+
+/**
+ * The spots a ticket's booking can move to. ♿ spots are booked through
+ * special-needs requests, the crew's too (Max, 2026-10-04): they are offered
+ * only for a ticket whose request is approved.
+ */
+export async function ticketMoveSpots(
+	adminPb: TypedPocketBase,
+	rawId: unknown
+): Promise<TicketMoveSpots> {
+	const order = await readOrder(adminPb, rawId);
+	const [request, spots, rooms] = await Promise.all([
+		findRequest(adminPb, order.id),
+		listAssignableSpots(adminPb),
+		countRoomSpots(adminPb)
+	]);
+	const special = request?.status === 'approved';
+	return {
+		spots: special ? spots : spots.filter((spot) => !spot.special),
+		sizes: rooms.sizes,
+		special
+	};
+}
+
+/** A booking error, in words for the admin who picked the spot. */
+function spotRefusal(err: unknown): never {
+	if (err instanceof RequestError) throw new TicketError(err.message, err.status);
+	if (err instanceof BedUnavailableError) {
+		throw new TicketError(`${err.message} Pick another spot.`, 409);
+	}
+	if (isNotFound(err)) {
+		throw new TicketError("This spot doesn't exist any more. Search again and pick another.", 409);
+	}
+	throw err;
+}
+
+/**
+ * Moves a ticket's booking to another free spot, in every phase (Max,
+ * 2026-10-13: every admin, on the ticket page). One PocketBase transaction
+ * frees the old spot and books the new one; the check-in moves along, the
+ * burner name stays, and the guest gets one "your spot changed" message. A
+ * ticket with an approved special-needs request moves through the request
+ * (assignSpot), so the new spot is the crew's spot for it; only such a ticket
+ * gets a ♿ spot. A locked 🔒 spot needs the admin's confirmation.
+ * @param rawFrom the spot the admin saw the ticket on (stale-card guard)
+ */
+export async function moveTicketSpot(
+	adminPb: TypedPocketBase,
+	admin: AdminSession,
+	rawId: unknown,
+	rawFrom: unknown,
+	rawBedId: unknown,
+	opts: { blockedOk?: boolean } = {}
+): Promise<TicketSpotOutcome> {
+	const bedId = typeof rawBedId === 'string' ? rawBedId.trim() : '';
+	if (!RECORD_ID.test(bedId)) throw new TicketError('Pick a spot first.');
+	const order = await readOrder(adminPb, rawId);
+	const current = await heldSpot(adminPb, order, rawFrom, 'move');
+	if (bedId === current.id) throw new TicketError('That is the spot the ticket holds already.');
+
+	let target: BedWithRoom;
+	try {
+		target = await adminPb
+			.collection('beds')
+			.getOne<BedWithRoom>(bedId, { expand: 'room,room.house', requestKey: null });
+	} catch (err) {
+		spotRefusal(err);
+	}
+	const request = await findRequest(adminPb, order.id);
+	const viaRequest = request?.status === 'approved';
+	const label = toSpot(target).label;
+	if (target.is_special && !viaRequest) {
+		throw new TicketError(
+			`♿ ${label} is a special-needs spot: those go through special-needs requests. Pick another spot.`,
+			409
+		);
+	}
+	if (target.is_locked && !opts.blockedOk) {
+		throw new TicketError(
+			`🔒 ${label} is blocked (out of service) now. Search again and pick it once more to confirm it, or pick another.`,
+			409
+		);
+	}
+
+	try {
+		if (viaRequest && request) {
+			await assignSpot(adminPb, admin, request.id, bedId, {
+				log: false,
+				blockedOk: !!opts.blockedOk
+			});
+		} else {
+			await new BookingService(adminPb).bookBed(
+				order,
+				bedId,
+				readSecret(order.burner_name) || randomBurnerName(),
+				{ allowLocked: !!opts.blockedOk, allowCheckedIn: true }
+			);
+		}
+	} catch (err) {
+		spotRefusal(err);
+	}
+
+	return {
+		ticket: await describeTicket(adminPb, await readOrder(adminPb, order.id), true),
+		maskedCode: maskTicketCode(order.order_number ?? ''),
+		from: toSpot(current).label,
+		to: label,
+		checkedIn: !!current.checked_in_at,
+		viaRequest
+	};
+}
+
+/**
+ * Releases a ticket's booking, in every phase (Max, 2026-10-13: every admin,
+ * on the ticket page): the spot is free, a check-in goes with it, and the
+ * guest gets a "your spot was released" message. The burner name stays. When
+ * the crew had booked it for the ticket's special-needs request, the request
+ * stays approved and needs a new spot on /admin/requests (like Release spot
+ * there).
+ * @param rawFrom the spot the admin saw the ticket on (stale-card guard)
+ */
+export async function releaseTicketSpot(
+	adminPb: TypedPocketBase,
+	rawId: unknown,
+	rawFrom: unknown
+): Promise<TicketSpotOutcome> {
+	const order = await readOrder(adminPb, rawId);
+	const current = await heldSpot(adminPb, order, rawFrom, 'release');
+	const request = await findRequest(adminPb, order.id);
+	const crewSpot = request?.status === 'approved' && request.bed === current.id;
+	try {
+		await new BookingService(adminPb).unbookOrder(order.id, {
+			allowCheckedIn: true,
+			onlyBed: current.id
+		});
+	} catch (err) {
+		if (err instanceof SpotChangedError) {
+			throw new TicketError('The booking changed meanwhile. Search again, then release it.', 409);
+		}
+		throw err;
+	}
+	if (crewSpot) await forgetCrewSpots(adminPb, [current.id]);
+
+	return {
+		ticket: await describeTicket(adminPb, order, true),
+		maskedCode: maskTicketCode(order.order_number ?? ''),
+		from: toSpot(current).label,
+		to: '',
+		checkedIn: !!current.checked_in_at,
+		viaRequest: crewSpot
 	};
 }
 
