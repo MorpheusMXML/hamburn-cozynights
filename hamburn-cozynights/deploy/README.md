@@ -1,7 +1,7 @@
 # Staging-Deploy aus Git (per Knopfdruck)
 
-Ziel: `https://test-cozynights.hamburn.de` wird **nur auf Knopfdruck** aus einem
-beliebigen Branch dieses Repos deployt. Die bestehenden PocketBase-Daten
+Ziel: `https://test-cozynights.hamburn.de` wird **nur auf Knopfdruck** aus
+`integration/staging` (oder `main`) deployt. Die bestehenden PocketBase-Daten
 bleiben erhalten, vor jedem Deploy wird automatisch ein Backup gezogen.
 
 ## Ablauf eines Deploys
@@ -13,21 +13,29 @@ GitHub Actions „Deploy staging“ → Run workflow (Branch wählen)
   1. verify: Typprüfung, Unit-, Integrations-, Smoke- und Layout-Tests (dieselbe
      Prüfung wie bei jedem Pull Request) – scheitert hier, nicht auf dem Server
   2. deploy: SSH als `deploy` → Forced Command /usr/local/bin/deploy-cozynights-staging
-     a) Commit-SHA auschecken (nur die SHA wird aus dem SSH-Befehl gelesen)
-     b) App-Image bauen — alte Container laufen weiter
-     c) PocketBase kurz stoppen, Volume nach /var/backups/cozynights-staging sichern
-     d) docker compose up -d --remove-orphans
-     e) Health-Check auf http://127.0.0.1:3001/api/health (max. 60 s; 200 nur, wenn die App bei PocketBase angemeldet ist)
-        → fehlgeschlagen: vorherigen Commit wieder bauen und starten, Job rot
+     Der Deploy läuft abgelöst von der SSH-Verbindung (eigene Session, Log in
+     /var/backups/cozynights-staging/deploy-<UTC>-<sha7>.log); die SSH-Seite zeigt
+     nur dieses Log und endet mit dem Exit-Code des Deploys.
+     a) prüfen, bevor etwas passiert (nur die SHA wird aus dem SSH-Befehl gelesen):
+        Branch (REQUIRE_BRANCH), kein Downgrade, Signaturen, Compose-Pin
+     b) laufendes App-Image als <image>:prev merken, Commit-SHA auschecken
+     c) App-Image bauen — alte Container laufen weiter
+     d) PocketBase kurz stoppen, Volume nach /var/backups/cozynights-staging sichern
+     e) docker compose up -d --remove-orphans
+     f) Health-Check auf http://127.0.0.1:3001/api/health (max. 60 s; 200 nur, wenn die App bei PocketBase angemeldet ist)
+        → fehlgeschlagen: vorherigen Commit auschecken, :prev-Image ohne Neubau starten, Job rot
   3. smoke: npm run smoke:remote gegen https://test-cozynights.hamburn.de
      (nur lesend: Seiten, Ticket-Abfrage, Admin-Login-Seite, Admin-Bereich zu)
 ```
 
 Das Skript bricht **ohne Änderung** ab, wenn der Checkout lokale Änderungen
-hat, der Build fehlschlägt (auch wenn der `.env` ein Pflichtwert wie
-`PB_ENCRYPTION_KEY` fehlt) oder kein Backup möglich ist. Das PocketBase-Image
-wird nicht automatisch aktualisiert: Es gilt die Version aus der
-Compose-Datei des deployten Commits.
+hat, eine Prüfung aus a) scheitert, der Build fehlschlägt (auch wenn der
+`.env` ein Pflichtwert wie `PB_ENCRYPTION_KEY` fehlt) oder kein Backup möglich
+ist. Bricht es nach dem Checkout ab — Fehler, `kill`, abgerissene Verbindung
+ist kein Abbruch mehr —, stellt ein Trap den alten Stand her: erst den
+Checkout (PocketBase liest `pb_hooks/` und `pb_migrations/` daraus), dann den
+Image-Tag, dann PocketBase. Das PocketBase-Image wird nicht automatisch
+aktualisiert: Es gilt die Version aus der Compose-Datei des deployten Commits.
 
 ## Einrichtung (einmalig)
 
@@ -66,7 +74,7 @@ Prüfen:
 APP_DIR=/opt/hamburn-cozynights-staging
 PROJECT=hamburn-cozynights   # ← Wert von project= aus Schritt 0
 
-apt-get install -y git curl util-linux
+apt-get install -y git curl util-linux gnupg
 usermod -aG docker deploy
 sudo -u deploy git -C "$APP_DIR" remote set-url origin https://github.com/MorpheusMXML/hamburn-cozynights.git
 sudo -u deploy git -C "$APP_DIR" fetch origin
@@ -88,7 +96,13 @@ rm /tmp/deploy-staging.sh
 Optionale Werte in `deploy-staging.conf` (Defaults in Klammern):
 `BACKUP_DIR` (`/var/backups/cozynights-staging`), `BACKUP_KEEP` (`10`),
 `HEALTH_URL` (`http://127.0.0.1:3001/api/health`), `PB_CONTAINER`
-(`cozynights-staging-pocketbase`), `COMPOSE_FILE` (`docker-compose.staging.yml`).
+(`cozynights-staging-pocketbase`), `COMPOSE_FILE` (`docker-compose.staging.yml`),
+`HEALTH_TRIES`/`HEALTH_INTERVAL` (`30`/`2` s), `DEPLOY_LOG_KEEP` (`20`
+Deploy-Logs), `HELPER_IMAGE` (`alpine:3.21`), `ALLOW_NO_BACKUP` (`0`), dazu
+`REQUIRE_BRANCH`, `ALLOW_DOWNGRADE` (`0`), `TRUSTED_GNUPGHOME`,
+`TRUSTED_SIGNERS`, `TRUSTED_MERGE_SIGNERS` und `COMPOSE_PIN` (Schritt 5 und
+Rollback). Werte mit Leerzeichen in Anführungszeichen, die Datei wird von der
+Shell gelesen: `REQUIRE_BRANCH="integration/staging main"`.
 
 ### 2. Probelauf auf dem Server
 
@@ -100,7 +114,8 @@ sudo -u deploy /usr/local/bin/deploy-cozynights-staging "deploy $(sudo -u deploy
 ls -lh /var/backups/cozynights-staging/
 ```
 
-Erwartet: `[deploy …] deployed <sha>` und eine `pb_data-*.tar.gz`.
+Erwartet: `[deploy …] deployed <sha>`, als letzte Zeile `exit 0`, und eine
+`pb_data-*.tar.gz` neben dem Log `deploy-*.log`.
 
 ### 3. Deploy-Key (auf deinem Mac)
 
@@ -147,18 +162,235 @@ Optional unter GitHub → Settings → Environments → `staging`:
 **Required reviewers** (Deploy erst nach Freigabe) und **Deployment branches**
 (z. B. nur `main` während des Live-Tests).
 
+### 5. Signatur-Schranke und Compose-Pin
+
+Zwei Sperren, die root einrichtet und die der `deploy`-User nicht ändern kann
+(alles unter `/etc/cozynights` gehört root). Beide sind aus, solange ihre
+Config fehlt. Beim Umstieg eines laufenden Stacks die Reihenfolge aus
+„Umstieg auf das gehärtete Deploy-Skript“ einhalten.
+
+**Signaturen.** Mit `TRUSTED_GNUPGHOME` in der Config prüft das Skript jeden
+neuen Commit (`git rev-list <laufend>..<ziel>`; bei einem Redeploy des
+laufenden Commits oder einem Downgrade den Ziel-Commit selbst):
+
+- normale Commits: signiert von einem Schlüssel aus `TRUSTED_SIGNERS` (deiner;
+  Haupt- und Signatur-Unterschlüssel zählen beide, die YubiKey-Signatur also auch);
+- Merge-Commits: von `TRUSTED_SIGNERS` oder von `TRUSTED_MERGE_SIGNERS`
+  (GitHubs web-flow-Schlüssel: Merges im Web und mit `gh pr merge`). Ein nur
+  von GitHub signierter Merge muss ein **sauberer** Merge sein:
+  `git merge-tree` seiner beiden Eltern ergibt genau seinen Inhalt — keine
+  Konfliktlösung, nichts zusätzlich hineingelegt.
+
+Sonst Exit 12 mit der Liste der Commits. Von GitHub signierte Einzel-Commits
+(Dependabot, Bearbeiten im Web, Squash-Merge, Konfliktlösung im Web) gehen so
+nicht durch: **Solche Commits muss Max neu signieren**, bevor sie deployt
+werden.
+
+a) Auf dem Mac den öffentlichen Schlüssel kopieren:
+
+```bash
+gpg --fingerprint --with-subkey-fingerprints   # Fingerprint des Hauptschlüssels notieren (40 Zeichen, ohne Leerzeichen)
+gpg --export --armor <fingerprint> | pbcopy
+```
+
+b) Auf dem Server als root (Inhalt der Zwischenablage zwischen die
+`KEY`-Zeilen einfügen):
+
+```bash
+cat > /root/max.asc <<'KEY'
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+…
+-----END PGP PUBLIC KEY BLOCK-----
+KEY
+curl -fsSL https://github.com/web-flow.gpg -o /root/web-flow.gpg
+install -d -o root -g root -m 755 /etc/cozynights/gnupg
+gpg --homedir /etc/cozynights/gnupg --batch --import /root/max.asc /root/web-flow.gpg
+gpgconf --homedir /etc/cozynights/gnupg --kill all
+find /etc/cozynights/gnupg -maxdepth 1 -type f -exec chmod 644 {} +
+chown -R root:root /etc/cozynights/gnupg
+gpg --homedir /etc/cozynights/gnupg --list-keys --with-subkey-fingerprints
+```
+
+Die Warnung `unsafe permissions on homedir` ist hier gewollt: Das Skript liest
+den Schlüsselbund als `deploy` und kopiert ihn bei jedem Lauf in ein eigenes
+Temp-Verzeichnis. Die Liste muss deinen Schlüssel (derselbe Fingerprint wie
+auf dem Mac) und GitHub zeigen.
+
+c) Config, je Stack ein Block. Staging bekommt dabei `REQUIRE_BRANCH` mit zwei
+Branches — **erst mit dem neuen Skript**: das alte kennt nur einen Branch und
+verweigert dann jeden Deploy (Exit 10).
+
+```bash
+# Staging
+MAX_FPR=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX   # ← dein Fingerprint aus a)
+GH_FPR=$(gpg --show-keys --with-colons /root/web-flow.gpg | awk -F: '$1 == "fpr" && $10 ~ /B5690EEEBB952194$/ { print $10 }')
+echo "Max: $MAX_FPR · GitHub: $GH_FPR"   # beide 40 Zeichen
+CONF=/etc/cozynights/deploy-staging.conf
+sed -i '/^\(TRUSTED_GNUPGHOME\|TRUSTED_SIGNERS\|TRUSTED_MERGE_SIGNERS\|REQUIRE_BRANCH\)=/d' "$CONF"
+cat >> "$CONF" <<CONF
+TRUSTED_GNUPGHOME=/etc/cozynights/gnupg
+TRUSTED_SIGNERS=$MAX_FPR
+TRUSTED_MERGE_SIGNERS=$GH_FPR
+REQUIRE_BRANCH="integration/staging main"
+CONF
+cat "$CONF"
+```
+
+```bash
+# Produktion (REQUIRE_BRANCH=main steht seit P4 drin und bleibt)
+MAX_FPR=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX   # ← dein Fingerprint aus a)
+GH_FPR=$(gpg --show-keys --with-colons /root/web-flow.gpg | awk -F: '$1 == "fpr" && $10 ~ /B5690EEEBB952194$/ { print $10 }')
+echo "Max: $MAX_FPR · GitHub: $GH_FPR"   # beide 40 Zeichen
+CONF=/etc/cozynights/deploy-production.conf
+sed -i '/^\(TRUSTED_GNUPGHOME\|TRUSTED_SIGNERS\|TRUSTED_MERGE_SIGNERS\)=/d' "$CONF"
+cat >> "$CONF" <<CONF
+TRUSTED_GNUPGHOME=/etc/cozynights/gnupg
+TRUSTED_SIGNERS=$MAX_FPR
+TRUSTED_MERGE_SIGNERS=$GH_FPR
+CONF
+cat "$CONF"   # muss REQUIRE_BRANCH=main enthalten
+```
+
+`B5690EEEBB952194` ist GitHubs aktueller web-flow-Schlüssel (seit Januar 2024;
+der zweite in der Datei ist abgelaufen). Ein Platzhalter-Fingerprint oder einer
+mit Leerzeichen lässt das Skript mit Exit 14 abbrechen, bevor etwas passiert.
+Weitere Schlüssel: mit Leerzeichen getrennt in Anführungszeichen,
+`TRUSTED_SIGNERS="FPR1 FPR2"`.
+
+**Compose-Pin.** Der `deploy`-User ist in der Gruppe `docker`, und Docker ist
+root auf diesem Server, auf dem auch Vaultwarden läuft: Eine Compose-Datei mit
+`privileged: true` oder einem Mount von `/` wäre root. Mit einem Pin deployt
+das Skript nur eine Compose-Datei, deren sha256 root freigegeben hat; jede
+Änderung daran braucht vorher root (Exit 13). Pin für das, was **gerade
+läuft**, nach dem Lesen der Datei (keine `privileged`, keine Host-Mounts außer
+`pb_hooks`/`pb_migrations`, kein `include:`/`extends:` — der Pin deckt nur
+diese eine Datei ab):
+
+```bash
+# Staging
+F=docker-compose.staging.yml
+sudo -u deploy git -C /opt/hamburn-cozynights-staging show "HEAD:hamburn-cozynights/$F" | less
+sudo -u deploy git -C /opt/hamburn-cozynights-staging show "HEAD:hamburn-cozynights/$F" | sha256sum > "/etc/cozynights/$F.sha256"
+cat "/etc/cozynights/$F.sha256"
+```
+
+```bash
+# Produktion
+F=docker-compose.production.yml
+sudo -u deploy git -C /opt/hamburn-cozynights-production show "HEAD:hamburn-cozynights/$F" | less
+sudo -u deploy git -C /opt/hamburn-cozynights-production show "HEAD:hamburn-cozynights/$F" | sha256sum > "/etc/cozynights/$F.sha256"
+cat "/etc/cozynights/$F.sha256"
+```
+
+`HEAD` ist der laufende Commit; bei einem frischen Stack derselbe Befehl mit
+`origin/<branch>` statt `HEAD`. Ändert ein späterer Commit die Datei, bricht
+der Deploy mit Exit 13 ab und nennt beide Befehle: das `git diff` zum Lesen
+und die Zeile, die den neuen Hash als root freigibt. Danach den Deploy erneut
+starten. Statt der Datei geht auch `COMPOSE_PIN=<sha256>` in der Config (die
+Config gewinnt).
+
+## Umstieg auf das gehärtete Deploy-Skript (v1.32.3)
+
+v1.32.3 bringt ein neues `deploy-staging.sh`: abgelöster Lauf mit Log, Trap,
+Rollback per `:prev`-Image, mehrere Branches in `REQUIRE_BRANCH`,
+Downgrade-Sperre, Signatur-Schranke, Compose-Pin. **Das neue Skript wird erst
+nach dem Release-Deploy installiert**; v1.32.3 selbst geht mit der alten,
+installierten Kopie raus. Danach müssen **beide** Kopien neu installiert
+werden, jede aus ihrem Branch. Reihenfolge:
+
+**Teil 1 — Staging**
+
+1. **Release deployen, altes Skript:** den Release-PR nach
+   `integration/staging` mergen, dann
+   `gh workflow run deploy-staging.yml --ref integration/staging`, freigeben,
+   grün abwarten. Am Server noch nichts ändern.
+2. **Als root** auf dem Server, in dieser Reihenfolge:
+   1. Skript-Kopie aus `origin/integration/staging` neu installieren (Block
+      „Staging“ unter „Wartung“; muss `grep -c TRUSTED_GNUPGHOME
+      /usr/local/bin/deploy-cozynights-staging` > 0 ergeben);
+   2. Schlüsselbund und Config: Schritt 5 a)–c) (inklusive
+      `REQUIRE_BRANCH="integration/staging main"`);
+   3. Compose-Pin für `docker-compose.staging.yml` aus `HEAD` (Schritt 5,
+      „Compose-Pin“) — `HEAD` ist jetzt der Release-Commit.
+3. **Trockenlauf auf Staging** = denselben, laufenden Commit noch einmal
+   deployen; er muss **beide** Sperren passieren. Vorher prüfen, dass
+   `integration/staging` noch auf dem laufenden Commit steht:
+
+   ```bash
+   sudo -u deploy git -C /opt/hamburn-cozynights-staging fetch -q origin && sudo -u deploy git -C /opt/hamburn-cozynights-staging rev-parse HEAD origin/integration/staging   # zweimal dieselbe SHA
+   ```
+
+   Dann vom Mac `gh workflow run deploy-staging.yml --ref integration/staging`
+   (oder auf dem Server, wie Schritt 2 der Einrichtung:
+   `sudo -u deploy /usr/local/bin/deploy-cozynights-staging "deploy $(sudo -u deploy git -C /opt/hamburn-cozynights-staging rev-parse HEAD)"`).
+   Im Log müssen stehen: `signatures ok: 1 commit(s)…`,
+   `compose file approved (…)`, `running app image … kept as …:prev`,
+   `deployed <sha>` und zuletzt `exit 0`.
+
+**Teil 2 — Produktion**, erst wenn der Trockenlauf auf Staging grün ist:
+
+1. **Release deployen, altes Skript:** Release-PR nach `main` mergen,
+   `gh workflow run deploy-production.yml --ref main`, freigeben, grün
+   abwarten.
+2. **Als root:** Produktions-Kopie aus `origin/main` neu installieren (Block
+   „Produktion“ unter „Wartung“); Config mit dem Produktions-Block aus
+   Schritt 5 c) (der Schlüsselbund aus 5 b) gilt für beide Stacks,
+   `REQUIRE_BRANCH=main` bleibt); Compose-Pin für
+   `docker-compose.production.yml` aus `HEAD` des Produktions-Checkouts.
+3. **Trockenlauf auf Produktion:** wie oben mit
+   `/opt/hamburn-cozynights-production`, `origin/main` und
+   `gh workflow run deploy-production.yml --ref main`.
+
+Scheitert ein Trockenlauf, ändert er nichts; das Log sagt, woran:
+
+- Exit 12 `signed by <fingerprint>, not a trusted key`: falscher Fingerprint
+  in der Config — mit dem genannten vergleichen. `not signed` oder
+  `not a merge` beim laufenden Commit: Er ist weder von dir noch als sauberer
+  GitHub-Merge signiert; Schranke bis zum nächsten sauber signierten Release
+  aus lassen (`TRUSTED_GNUPGHOME` aus der Config nehmen).
+- Exit 13: Pin nicht aus `HEAD` geschrieben — den Pin-Schritt wiederholen.
+- Exit 10: `REQUIRE_BRANCH` prüfen.
+
+Zurück zum alten Skript: die Kopie aus dem vorigen Release installieren
+(`git show <alter-commit>:hamburn-cozynights/deploy/deploy-staging.sh`) und
+`REQUIRE_BRANCH` auf einen Branch kürzen; die übrigen neuen Werte ignoriert es.
+
+## Exit-Codes
+
+| Code | Bedeutung | Stand danach |
+| --- | --- | --- |
+| 0 | deployt | neu |
+| 1 | Health-Check (oder `up -d`) gescheitert, zurückgerollt | alt, außer das Log sagt `ALSO unhealthy` |
+| 2 | Aufruf ohne 40-stellige SHA | unverändert |
+| 3 | ein anderer Deploy läuft noch | unverändert |
+| 4 | lokale Änderungen im Checkout | unverändert |
+| 5 | Commit nicht auf origin | unverändert |
+| 6 | Build gescheitert | unverändert |
+| 7 | kein PocketBase-Volume (Erst-Deploy: `ALLOW_NO_BACKUP=1`) | unverändert |
+| 8 | Snapshot-Helfer-Image nicht ladbar | unverändert |
+| 9 | Snapshot gescheitert | unverändert, PocketBase wieder gestartet |
+| 10 | Commit auf keinem Branch aus `REQUIRE_BRANCH` | unverändert |
+| 11 | Downgrade ohne `ALLOW_DOWNGRADE=1` | unverändert |
+| 12 | Commit ohne vertrauenswürdige Signatur | unverändert |
+| 13 | Compose-Datei nicht freigegeben (Pin) | unverändert |
+| 14 | Signatur- oder Pin-Config kaputt (Schlüsselbund, Fingerprints, gpg, Pin-Datei) | unverändert |
+| 15 | unerwarteter Fehler, Zeile und Befehl im Log | vom Trap wiederhergestellt |
+| 129/130/143 | durch ein Signal beendet (`kill`) | vom Trap wiederhergestellt |
+
 ## Deployen
 
 GitHub → Actions → **Deploy staging** → **Run workflow** → Branch wählen.
 Oder vom Mac:
 
 ```bash
-gh workflow run deploy-staging.yml --ref main
+gh workflow run deploy-staging.yml --ref integration/staging
 gh run watch
 ```
 
-Der Branch muss diesen Workflow enthalten, also auf einem `main` ab diesem
-Stand basieren.
+Der Branch muss diesen Workflow enthalten, und der Server nimmt nur Commits,
+die auf `integration/staging` oder `main` liegen (`REQUIRE_BRANCH`, Exit 10),
+nicht älter als der laufende sind (Exit 11) und, mit Signatur-Schranke,
+signiert sind (Exit 12).
 
 ### Vor einem Release: ein Platz pro Ticket
 
@@ -178,7 +410,23 @@ Zeile, entscheidet die Crew, welcher Platz falsch ist, und gibt ihn frei
 
 ## Rollback
 
-**Code:** Den Workflow auf einem älteren Branch oder Commit erneut starten.
+**Automatisch:** Scheitert der Health-Check, checkt das Skript den vorigen
+Commit aus und startet das Image, das vor dem Deploy lief (`<image>:prev`),
+ohne Neubau. Nur wenn es keins gibt (vorher lief keine App), baut es den
+vorigen Commit neu.
+
+**Code, absichtlich:** Am besten vorwärts: `git revert` auf einem Branch,
+signiert, PR, normal deployen. Einen älteren Commit selbst verweigert das
+Skript (Downgrade, Exit 11), bis root es für genau diesen Lauf erlaubt; mit
+Signatur-Schranke muss der alte Commit selbst signiert sein:
+
+```bash
+CONF=/etc/cozynights/deploy-staging.conf     # bzw. deploy-production.conf
+OLD=<40-stellige SHA>                        # muss auf einem REQUIRE_BRANCH liegen
+echo 'ALLOW_DOWNGRADE=1' >> "$CONF"
+sudo -u deploy /usr/local/bin/deploy-cozynights-staging "deploy $OLD"   # bzw. …-production
+sed -i '/^ALLOW_DOWNGRADE=/d' "$CONF"
+```
 
 **Daten** (nur wenn nötig, stellt den Stand vor einem Deploy wieder her):
 
@@ -288,8 +536,21 @@ sudo -u deploy git -C /opt/hamburn-cozynights-production fetch origin &&
   rm /tmp/deploy-production.sh
 ```
 
-- Logs eines Deploys: im GitHub-Actions-Run. App-Logs:
-  `docker logs --tail 100 cozynights-staging-app`.
+- Nach einer Änderung am Skript (zuletzt v1.32.3) erst deployen, dann
+  installieren, erst Staging, dann Produktion, mit Trockenlauf dazwischen:
+  Abschnitt „Umstieg auf das gehärtete Deploy-Skript“.
+- Logs eines Deploys: im GitHub-Actions-Run und auf dem Server in
+  `/var/backups/cozynights-staging/deploy-<UTC>-<sha7>.log` (die letzten 20).
+  Reißt die SSH-Verbindung ab (Netz, `command_timeout` der Action), läuft der
+  Deploy auf dem Server zu Ende, der Job wird nur rot; wie er ausging, steht
+  in der letzten Zeile des neuesten Logs (`exit <code>`, siehe Exit-Codes):
+  `tail -n 3 "$(ls -1t /var/backups/cozynights-staging/deploy-*.log | head -n1)"`.
+  Einen laufenden Deploy abbrechen: `kill <pid>` (zweite Zeile des Logs); der
+  Trap stellt den alten Stand her.
+- App-Logs: `docker logs --tail 100 cozynights-staging-app`.
+- Das Testgerüst des Skripts läuft auf dem Mac in einem Wegwerf-Container
+  (`debian:12`, Docker als Attrappe, keine Ports):
+  `bash hamburn-cozynights/deploy/test/deploy-script.test.sh`.
 
 ## Benachrichtigungen (optional)
 
@@ -374,10 +635,13 @@ auf einem Port lauscht. Staging bleibt, wie es ist.
 | Deploy-Archive | `/var/backups/cozynights-staging` | `/var/backups/cozynights-production` |
 | Workflow · Environment | „Deploy staging“ · `staging` | „Deploy production“ · `production` (nur `main`) |
 
-Produktion bekommt nur freigegebenen Code, dreifach geprüft: der Workflow
+Produktion bekommt nur freigegebenen Code, mehrfach geprüft: der Workflow
 verweigert jeden Ref außer `main`, das GitHub-Environment `production` lässt nur
 `main` zu und wartet auf die Freigabe, und das Deploy-Skript verweigert einen
-Commit, der nicht auf `origin/main` liegt (`REQUIRE_BRANCH=main`).
+Commit, der nicht auf `origin/main` liegt (`REQUIRE_BRANCH=main`), der älter
+als der laufende ist, der nicht von dir (oder als sauberer GitHub-Merge)
+signiert ist, oder dessen Compose-Datei root nicht freigegeben hat (Schritt 5
+der Einrichtung).
 
 Bis zum Livegang steht vor der ganzen Seite die **Schranke**: eine
 Google-Anmeldung, die nur Konten der Workspace `mauersegler.art` durchlässt
@@ -493,7 +757,8 @@ Command `command="/usr/local/bin/deploy-cozynights-production",restrict` und
 den Secrets `PRODUCTION_SSH_HOST`, `PRODUCTION_DEPLOY_SSH_KEY`,
 `PRODUCTION_SSH_FINGERPRINT` (derselbe ECDSA-Fingerprint) im Environment
 `production`. Das Environment: Required reviewers, Deployment branches nur
-`main`, keine Umgehung für Admins.
+`main`, keine Umgehung für Admins. Danach Signatur-Schranke und Compose-Pin
+mit den Produktions-Blöcken aus Schritt 5 der Staging-Einrichtung.
 
 **P7. Erster Deploy über GitHub:** Actions → **Deploy production** → Run
 workflow auf `main` (oder `gh workflow run deploy-production.yml --ref main`),

@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+# Stub `docker` for deploy-script.test.sh: installed as /usr/local/bin/docker
+# inside the throwaway test container. Records every call (calls.log), keeps a
+# tiny model of images, tags and containers, and writes what matters to the
+# tests into events.log (with the checkout's HEAD where it counts).
+#
+# State in $FAKE_DOCKER_STATE (default /var/lib/fakedocker):
+#   images         "<id> <GIT_SHA it was built from> <bad 0|1>"
+#   tags           "<repo:tag> <id>"
+#   app_container  id of the image the app container runs (empty: no container)
+#   pb_container   name of the PocketBase container (missing: none, no volume)
+#   pb_running     1 / 0
+#   health         exists while the running app image is healthy (HEALTH_URL
+#                  is file://…/health, so the real curl checks it)
+# Knobs (files the test creates):
+#   knob_fail_build, knob_slow_build (seconds), knob_bad_sha (a SHA whose image
+#   is unhealthy), knob_fail_pull, knob_fail_snapshot, knob_slow_snapshot
+#   (seconds), knob_fail_stop (stops, then fails), knob_fail_up (once)
+set -uo pipefail
+
+S="${FAKE_DOCKER_STATE:-/var/lib/fakedocker}"
+proj="${COMPOSE_PROJECT_NAME:-unset}"
+printf 'docker %s\n' "$*" >>"$S/calls.log"
+
+event() { printf '%s\n' "$*" >>"$S/events.log"; }
+norm() {
+	local r="$1"
+	if [[ "${r##*/}" != *:* ]]; then r="$r:latest"; fi
+	printf '%s' "$r"
+}
+tag_of() { awk -v r="$(norm "$1")" '$1 == r { id = $2 } END { if (id != "") print id }' "$S/tags"; }
+tag_set() {
+	local ref
+	ref="$(norm "$1")"
+	{
+		awk -v r="$ref" '$1 != r' "$S/tags"
+		printf '%s %s\n' "$ref" "$2"
+	} >"$S/tags.new"
+	mv "$S/tags.new" "$S/tags"
+}
+resolve() {
+	local x="$1" id
+	if [[ "$x" == sha256:* ]]; then
+		x="${x#sha256:}"
+		if awk -v i="$x" '$1 == i { f = 1 } END { exit !f }' "$S/images"; then
+			printf '%s\n' "$x"
+			return 0
+		fi
+		return 1
+	fi
+	id="$(tag_of "$x")"
+	if [[ -n "$id" ]]; then
+		printf '%s\n' "$id"
+		return 0
+	fi
+	return 1
+}
+image_field() { awk -v i="$1" -v f="$2" '$1 == i { print $f }' "$S/images"; }
+head_of() { git -C "$1" rev-parse HEAD 2>/dev/null || echo "?"; }
+knob() { [[ -e "$S/knob_$1" ]]; }
+
+if [[ "${1:-}" == compose ]]; then
+	shift
+	file=""
+	if [[ "${1:-}" == -f ]]; then
+		file="$2"
+		shift 2
+	fi
+	dir="$(dirname "$file")"
+	sub="${1:-}"
+	shift || true
+	case "$sub" in
+	build)
+		if knob slow_build; then sleep "$(cat "$S/knob_slow_build")"; fi
+		if knob fail_build; then
+			echo "fake build failed" >&2
+			event "build ${GIT_SHA:-none} FAILED"
+			exit 1
+		fi
+		n=$(($(cat "$S/counter") + 1))
+		echo "$n" >"$S/counter"
+		id="img$n"
+		bad=0
+		if knob bad_sha && [[ "$(cat "$S/knob_bad_sha")" == "${GIT_SHA:-}" ]]; then bad=1; fi
+		printf '%s %s %s\n' "$id" "${GIT_SHA:-none}" "$bad" >>"$S/images"
+		tag_set "$proj-app" "$id"
+		event "build ${GIT_SHA:-none} -> $id @$(head_of "$dir")"
+		;;
+	ps)
+		if [[ -s "$S/app_container" ]]; then echo "c0ffee-app"; fi
+		;;
+	stop)
+		echo 0 >"$S/pb_running"
+		event "stop pocketbase"
+		if knob fail_stop; then exit 1; fi
+		;;
+	start)
+		echo 1 >"$S/pb_running"
+		event "start pocketbase @$(head_of "$dir")"
+		;;
+	up)
+		nobuild=0
+		for a in "$@"; do
+			if [[ "$a" == --no-build ]]; then nobuild=1; fi
+		done
+		if knob fail_up; then
+			rm -f "$S/knob_fail_up"
+			event "up FAILED @$(head_of "$dir")"
+			exit 1
+		fi
+		if ! id="$(resolve "$proj-app")"; then
+			echo "fake: no image $proj-app" >&2
+			exit 1
+		fi
+		echo "$id" >"$S/app_container"
+		echo 1 >"$S/pb_running"
+		if [[ "$(image_field "$id" 3)" == 1 ]]; then rm -f "$S/health"; else touch "$S/health"; fi
+		event "up @$(head_of "$dir") app=$id sha=$(image_field "$id" 2) nobuild=$nobuild"
+		;;
+	logs)
+		echo "fake app log line"
+		;;
+	*)
+		echo "fake docker: unknown compose command $sub" >&2
+		exit 99
+		;;
+	esac
+	exit 0
+fi
+
+case "${1:-}" in
+inspect)
+	shift
+	fmt=""
+	if [[ "${1:-}" == -f ]]; then
+		fmt="$2"
+		shift 2
+	fi
+	name="${1:-}"
+	case "$fmt" in
+	*Mounts*)
+		if [[ -e "$S/pb_container" && "$name" == "$(cat "$S/pb_container")" ]]; then
+			echo "fake_pb_data"
+			exit 0
+		fi
+		echo "Error: No such object: $name" >&2
+		exit 1
+		;;
+	*Config.Image*)
+		if [[ "$name" == c0ffee-app && -s "$S/app_container" ]]; then
+			echo "$proj-app"
+			exit 0
+		fi
+		exit 1
+		;;
+	*.Image*)
+		if [[ "$name" == c0ffee-app && -s "$S/app_container" ]]; then
+			echo "sha256:$(cat "$S/app_container")"
+			exit 0
+		fi
+		exit 1
+		;;
+	esac
+	echo "fake docker: unknown inspect format $fmt" >&2
+	exit 99
+	;;
+image)
+	case "${2:-}" in
+	inspect)
+		resolve "${3:-}" >/dev/null
+		exit
+		;;
+	prune)
+		for a in "$@"; do
+			if [[ "$a" == -a || "$a" == --all ]]; then event "prune WITH -a"; fi
+		done
+		# Dangling = no tag and no container: exactly what `prune` without -a removes.
+		running="$(cat "$S/app_container" 2>/dev/null || true)"
+		awk -v run="$running" 'NR == FNR { t[$2] = 1; next } ($1 in t) || $1 == run' \
+			"$S/tags" "$S/images" >"$S/images.new"
+		mv "$S/images.new" "$S/images"
+		event "prune ${*:3}"
+		exit 0
+		;;
+	esac
+	;;
+tag)
+	if ! id="$(resolve "${2:-}")"; then
+		echo "fake: no such image ${2:-}" >&2
+		exit 1
+	fi
+	tag_set "$3" "$id"
+	event "tag $2 $3"
+	exit 0
+	;;
+pull)
+	if knob fail_pull; then exit 1; fi
+	exit 0
+	;;
+run)
+	# docker run --rm -v VOL:/pb_data:ro -v DIR:/backup IMAGE tar czf /backup/NAME …
+	shift
+	backup_dir=""
+	name=""
+	while (($#)); do
+		case "$1" in
+		-v)
+			if [[ "$2" == *:/backup ]]; then backup_dir="${2%:/backup}"; fi
+			shift 2
+			;;
+		czf)
+			name="${2#/backup/}"
+			shift 2
+			;;
+		*) shift ;;
+		esac
+	done
+	event "snapshot pb_running=$(cat "$S/pb_running")"
+	if knob slow_snapshot; then sleep "$(cat "$S/knob_slow_snapshot")"; fi
+	if knob fail_snapshot; then exit 1; fi
+	: >"$backup_dir/$name"
+	exit 0
+	;;
+esac
+echo "fake docker: unknown command $*" >&2
+exit 99
