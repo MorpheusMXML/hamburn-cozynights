@@ -47,6 +47,7 @@ page and fires `saved` with the fresh ticket.
 	let releasing = false;
 	let moveTo: SpotInfo | null = null;
 	let moveForm: HTMLFormElement;
+	let card: HTMLElement;
 	let spotError = '';
 	$: spotBusy = choosing || moving || releasing;
 	// Punish late: half an address is not an error yet. A field turns red once
@@ -217,6 +218,11 @@ page and fires `saved` with the fresh ticket.
 			);
 			reset({ ...outcome.ticket, code: ticket.code, codeMasked: ticket.codeMasked });
 			dispatch('saved', outcome.ticket);
+			// Release takes its button away: the focus stays on this card.
+			if (!outcome.to) {
+				await tick();
+				card?.focus();
+			}
 		} else if (result.type === 'failure') {
 			spotError =
 				(result.data as { error?: string } | undefined)?.error ??
@@ -333,7 +339,7 @@ page and fires `saved` with the fresh ticket.
 	};
 </script>
 
-<article class="ticket" class:dirty>
+<article class="ticket" class:dirty bind:this={card} tabindex="-1">
 	<header class="ticket-head">
 		<div class="code-block">
 			<span class="code" title={ticket.codeMasked ? 'Found by e-mail: the code stays hidden' : ''}>
@@ -549,6 +555,13 @@ page and fires `saved` with the fresh ticket.
 	}
 	.ticket.dirty {
 		border-color: #fb923c;
+	}
+	.ticket:focus {
+		outline: none;
+	}
+	.ticket:focus-visible {
+		outline: 2px solid #2dd4bf;
+		outline-offset: 2px;
 	}
 	.ticket-head {
 		display: flex;
