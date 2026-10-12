@@ -2,10 +2,12 @@
  * The guest session: one ticket code in a cookie, and the booking round it was
  * signed in for.
  *
- * The cookie holds nothing but the code — bookings, special-needs requests and
- * the phase are read from PocketBase on every request. Two things end a
- * session, and `hooks.server.ts` checks both before any page runs, so every
- * page sees the same answer:
+ * The cookie holds nothing but the code and the server's signature over it
+ * and the round ($lib/server/session-sig) — bookings, special-needs requests
+ * and the phase are read from PocketBase on every request. A cookie the server
+ * didn't sign ends right away, without a lookup: the cookie is no way to try
+ * out ticket codes. Two more things end a session, and `hooks.server.ts`
+ * checks both before any page runs, so every page sees the same answer:
  *
  * - **the code is gone** (test codes removed, roster replaced, the ticket list
  *   deleted after the event): the cookies go and the guest is asked for their
@@ -24,6 +26,8 @@ import type { Cookies } from '@sveltejs/kit';
 import type { OrdersResponse, TypedPocketBase } from '$lib/pocketbase-types';
 import { APP_SETTINGS_ID } from '$lib/server/constants';
 import { BookingService } from '$lib/server/booking';
+import { guestCookieKey } from '$lib/server/crypto';
+import { readSignedGuestCode, signGuestCode } from '$lib/server/session-sig';
 
 /** The guest's ticket code. */
 export const GUEST_COOKIE = 'bookingCode';
@@ -45,7 +49,10 @@ export type GuestSignOut = 'expired' | 'round';
 const isNotFound = (err: unknown) => (err as { status?: number })?.status === 404;
 
 export function setGuestSession(cookies: Cookies, code: string, round: number): void {
-	cookies.set(GUEST_COOKIE, code, { ...COOKIE_OPTIONS, maxAge: MAX_AGE });
+	cookies.set(GUEST_COOKIE, signGuestCode(guestCookieKey(), code, round), {
+		...COOKIE_OPTIONS,
+		maxAge: MAX_AGE
+	});
 	cookies.set(ROUND_COOKIE, String(round), { ...COOKIE_OPTIONS, maxAge: MAX_AGE });
 }
 
@@ -145,11 +152,20 @@ export async function resolveGuestSession(
 	pb: TypedPocketBase,
 	adminPb: TypedPocketBase
 ): Promise<GuestSession> {
-	const code = cookies.get(GUEST_COOKIE) || null;
-	if (!code) return { code: null };
+	const value = cookies.get(GUEST_COOKIE) || null;
+	if (!value) return { code: null };
+
+	// Not signed by this server (made up, from before the signature, or for
+	// another key): over before anything asks PocketBase.
+	const signedIn = signedInRound(cookies);
+	const code = readSignedGuestCode(guestCookieKey(), value, signedIn);
+	if (!code) {
+		clearGuestSession(cookies);
+		return { code: null, signedOut: 'expired' };
+	}
 
 	const round = await readGuestRound(pb);
-	if (round !== null && signedInRound(cookies) !== round) {
+	if (round !== null && signedIn !== round) {
 		clearGuestSession(cookies);
 		return { code: null, signedOut: 'round' };
 	}

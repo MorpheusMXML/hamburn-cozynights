@@ -89,7 +89,11 @@ describe('Interactions & Registration', () => {
 			expect(e.status).toBe(303);
 		}
 
-		expect(mockCookies.set).toHaveBeenCalledWith('bookingCode', 'VALID-CODE', expect.any(Object));
+		expect(mockCookies.set).toHaveBeenCalledWith(
+			'bookingCode',
+			expect.stringMatching(/^VALID-CODE\.[A-Za-z0-9_-]{43}$/),
+			expect.any(Object)
+		);
 	});
 
 	it('should fail login with an invalid booking code', async () => {

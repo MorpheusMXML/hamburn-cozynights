@@ -1,6 +1,7 @@
 // src/lib/server/crypto.ts
 import crypto from 'crypto';
 import { env } from '$env/dynamic/private';
+import { guestSessionKey } from '$lib/server/session-sig';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
@@ -31,6 +32,22 @@ function requireKeyHex(): string {
 /** Checks the key once, e.g. at startup. @throws Error if it is unusable. */
 export function assertEncryptionKey(): void {
 	requireKeyHex();
+}
+
+let sessionKeyFor = '';
+let sessionKey: Buffer | null = null;
+
+/**
+ * The key that signs guest session cookies ($lib/server/session-sig), derived
+ * from ENCRYPTION_KEY. @throws Error if ENCRYPTION_KEY is missing or invalid.
+ */
+export function guestCookieKey(): Buffer {
+	const hex = requireKeyHex();
+	if (!sessionKey || sessionKeyFor !== hex) {
+		sessionKey = guestSessionKey(hex);
+		sessionKeyFor = hex;
+	}
+	return sessionKey;
 }
 
 /**

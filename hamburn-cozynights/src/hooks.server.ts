@@ -83,7 +83,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	//    Pages of the crew and endpoints that carry their own code (the booking
 	//    pass) never need it.
 	event.locals.orderNumber = null;
-	if (usesGuestSession(event.url.pathname)) {
+	// A remote-function call (/_app/remote/…) reports the page path "/": it is
+	// none, and the app has no remote functions to act for a guest.
+	if (usesGuestSession(event.url.pathname) && !event.isRemoteRequest) {
 		const session = await resolveGuestSession(event.cookies, event.locals.pb, event.locals.adminPb);
 		event.locals.orderNumber = session.code;
 		event.locals.order = session.order;
