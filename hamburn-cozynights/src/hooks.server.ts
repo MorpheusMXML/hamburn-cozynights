@@ -23,6 +23,21 @@ import { resolveGuestSession } from '$lib/server/guest-session';
  * the health endpoint, the docs and the booking pass (its code is in the URL)
  * don't, and shouldn't pay for a ticket lookup.
  */
+/**
+ * Where a request goes, as the router sees it: the matched route (`/admin/house/[id]`),
+ * or for no match the decoded path. The router matches the decoded path, so a
+ * raw path like `/%61dmin/api/stats` reaches the admin area although it
+ * doesn't start with "/admin" — every check here must look where the router looks.
+ */
+function routedPath(event: Parameters<Handle>[0]['event']): string {
+	if (event.route?.id) return event.route.id;
+	try {
+		return decodeURI(event.url.pathname);
+	} catch {
+		return event.url.pathname; // malformed escapes: SvelteKit answers 400 itself
+	}
+}
+
 function usesGuestSession(pathname: string): boolean {
 	if (isAdminPath(pathname)) return false;
 	return !/^\/(auth|api|docs|pass)(\/|$)/.test(pathname);
@@ -87,7 +102,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.orderNumber = null;
 	// A remote-function call (/_app/remote/…) reports the page path "/": it is
 	// none, and the app has no remote functions to act for a guest.
-	if (usesGuestSession(event.url.pathname) && !event.isRemoteRequest) {
+	const where = routedPath(event);
+	if (usesGuestSession(where) && !event.isRemoteRequest) {
 		const session = await resolveGuestSession(event.cookies, event.locals.pb, event.locals.adminPb);
 		event.locals.orderNumber = session.code;
 		event.locals.order = session.order;
@@ -154,11 +170,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 	//    the admin layout, which redirects to the login page; everything else
 	//    (form actions, API endpoints) is refused right here, so no individual
 	//    action can be forgotten.
-	const { pathname } = event.url;
-	if (isAdminPath(pathname) && !isPublicAdminPath(pathname) && !event.locals.admin) {
+	if (isAdminPath(where) && !isPublicAdminPath(where) && !event.locals.admin) {
 		const isPageRequest =
 			(event.request.method === 'GET' || event.request.method === 'HEAD') &&
-			!pathname.startsWith('/admin/api/');
+			!where.startsWith('/admin/api/');
 		if (!isPageRequest) {
 			const isAction = event.request.headers.get('x-sveltekit-action') === 'true';
 			if (event.locals.adminUnchecked) {

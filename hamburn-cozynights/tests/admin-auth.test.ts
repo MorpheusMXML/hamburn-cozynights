@@ -167,8 +167,14 @@ describe('hooks.server handle', () => {
 		{
 			method = 'GET',
 			cookie = '',
-			headers = {}
-		}: { method?: string; cookie?: string; headers?: Record<string, string> } = {}
+			headers = {},
+			routeId
+		}: {
+			method?: string;
+			cookie?: string;
+			headers?: Record<string, string>;
+			routeId?: string;
+		} = {}
 	) {
 		const url = new URL(`http://localhost${path}`);
 		const cookieMap: Record<string, string> = {};
@@ -178,11 +184,33 @@ describe('hooks.server handle', () => {
 		}
 		return {
 			url,
+			route: { id: routeId ?? null },
 			request: new Request(url, { method, headers: { ...headers, ...(cookie ? { cookie } : {}) } }),
 			cookies: makeCookies(cookieMap),
 			locals: {} as any
 		} as any;
 	}
+
+	it('guards the admin area by the route it reaches, not by how the path is spelled', async () => {
+		const resolve = vi.fn(async () => new Response('ok'));
+		// The router decodes the path: /%61dmin/api/stats is /admin/api/stats.
+		for (const [path, routeId] of [
+			['/%61dmin/api/stats', '/admin/api/stats'],
+			['/%61dmin/api/stats', undefined],
+			['/%61dmin?/clearAllBookings', '/admin']
+		] as const) {
+			const response = await handle({
+				event: makeEvent(path, {
+					method: path.includes('?/') ? 'POST' : 'GET',
+					routeId,
+					headers: path.includes('?/') ? { 'x-sveltekit-action': 'true' } : {}
+				}),
+				resolve
+			});
+			expect(response.status).toBe(403);
+		}
+		expect(resolve).not.toHaveBeenCalled();
+	});
 
 	it('lets guests through without touching the admin session', async () => {
 		const event = makeEvent('/map');
