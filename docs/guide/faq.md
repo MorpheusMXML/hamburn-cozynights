@@ -107,7 +107,7 @@ Your ticket already holds a spot somewhere else. One ticket code = one spot: the
 :::
 
 ::: details Someone grabbed the bed I wanted at the same moment
-First come, first served. If two people click the same spot at the same time, exactly one of them gets it; the other sees _This spot is already claimed._ Pick another one.
+First come, first served, and whoever opens a spot's booking window first holds it for ten minutes, so nobody overtakes you while you make your bed. If two people tap the same spot at the same moment, exactly one of them gets it; the other sees _Someone beat you to this bed_. A spot that says **Bed being made** is someone else's for a few minutes: pick another one, or come back when its card says it is free again.
 :::
 
 ::: details I booked on another device

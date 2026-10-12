@@ -74,6 +74,8 @@ flowchart LR
 
    Every new spot asks for both again, also after a release or a respin. Only when a booking didn't go through (someone was faster), the next spot you pick skips the bed and keeps the tick, until you reload the page. Nothing about it is stored. Tapping your own spot later to change its name opens just the name and <kbd>Save Spot</kbd>.
 
+   **The spot is yours for ten minutes while you do all this.** As soon as the booking window opens, nobody else can book that spot; the window says *⏳ Held for you · 9:41* and turns orange in the last minute. Closing the window lets go of the spot right away, and opening it again within the ten minutes picks up the same clock, not a new one. Once the ten minutes are over, the spot is free for everyone again: you can still book it if nobody is faster, but it isn't held for you again for another ten minutes. Signing out lets go of it too. If someone else opened the spot just before you, the window shows a bed making itself and *Someone beat you to this bed*: pick another spot.
+
 </div>
 
 That's it: fireworks go up from your new spot 🎆, and the spot now shows **Yours** in turquoise, with your burner name. Above the spots, a **Welcome Home!** box holds your [booking pass](#your-booking-pass), the address your [confirmations](#confirmations) go to and the Telegram option.
@@ -86,12 +88,13 @@ That's it: fireworks go up from your new spot 🎆, and the spot now shows **You
 | 🟢 **Available** · *Release your other spot first* | Free, but you already have a spot somewhere else, so it can't be clicked. One ticket code = one spot. |
 | 💠 **Yours** · *your burner name* | That's you. Click it to rename it (any time until booking closes) or to release it (during Live Booking); the line under the name says which of the two it is right now. |
 | 🔴 **Occupied** · *a burner name* | Taken by another guest. *Mystery Burner* means the booking has no name, for example because its ticket changed hands. During Live Booking, while you hold a spot, it adds *⇄ Ask to swap*: tap it to ask its guest for a [swap](./swaps) (*⏳ Asked — waiting* once you did). |
+| 🟠 **Bed being made** · *Someone is fluffing the pillow…* | Another guest is booking this spot right now, so it is theirs for up to ten minutes. *Free again in 7 min if they wander off* says when it is free again if they don't book it. The room page checks every few seconds and shows the spot as it is once they booked or left. |
 | 🟣 **Blocked by admin** · *Not available* | Held back by the crew, for example a broken bed, a spot that isn't in use, one the crew took for itself or one kept for [guests with special needs and for projects](./special-needs): nobody books those directly, the crew hands them out. |
 | ⚪️ **Not open yet** · *Booking opens soon* | Booking hasn't opened yet. |
 | ⚪️ **Booking closed** · *Spots are final* | The booking window is over. |
 
 > [!NOTE] One colour, one meaning
-> Green, red, turquoise, violet and grey mean the same on every spot card in CozyNights, and the crew sees the same colours on their side. Pink is kept for ♿ special needs alone: the ♿ link on the map, nothing else.
+> Green, red, turquoise, violet, orange and grey mean the same on every spot card in CozyNights, and the crew sees the same colours on their side. Pink is kept for ♿ special needs alone: the ♿ link on the map, nothing else.
 
 ![A booked room: the Welcome Home box with the booking pass, the e-mail address and Telegram; your spot, other guests' burner names and spots blocked by admin](../assets/screenshots/guest-room.webp)
 
@@ -137,6 +140,8 @@ Then the burner name that goes with the spot:
 - Type your own name into **Your burner name**, or press <kbd>🎲</kbd> to roll one (something like *Cosmic Coyote #562*). A rolled name can still be changed.
 - <kbd>SPIN AGAIN 🎰</kbd> spins for another spot and keeps the name.
 - <kbd>BOOK IT 🌵</kbd> opens the same check as on the room page, over the machine: [make your bed](#make-your-bed), then *One last tick* for the rules, and <kbd>BOOK IT 🌵</kbd> in that window books the spot. With the name field empty, the first tap rolls a name; the next one opens the check.
+
+The spot the reels stop on is held for you for ten minutes, like a spot whose booking window you open: *⏳ Held for you · 9:41* stands under <kbd>BOOK IT 🌵</kbd>. <kbd>SPIN AGAIN 🎰</kbd> lets go of it and holds the next one. Spots other guests are booking right now stay out of the drum; if one of them gets the spot while your reels still spin, the machine says *Someone else is making that bed right now. Spin again!*
 
 *Destiny Fulfilled!* Fireworks go up and your [booking pass](#your-booking-pass) prints out on the card, with <kbd>Visit My Room</kbd> and <kbd>Back to Map</kbd>.
 
