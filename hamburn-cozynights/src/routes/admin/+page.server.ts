@@ -57,6 +57,29 @@ async function readWindow(pb: TypedPocketBase) {
 	return { exists: !!record, window: windowFromRecord(record) };
 }
 
+/** How close an armed opening may be before releases and template imports stop. */
+const OPENING_GUARD_MS = 5 * 60 * 1000;
+
+/**
+ * Minutes until an armed opening when it is less than OPENING_GUARD_MS away,
+ * else null. Releasing bookings or importing a template that close to the
+ * opening could still be running when guests start booking, and take their
+ * new spots away. @throws when the window can't be read (refuse then).
+ */
+async function openingTooSoon(pb: TypedPocketBase, now = Date.now()): Promise<number | null> {
+	const { window } = await readWindow(pb);
+	if (window.paused || window.basePhase !== 'staging') return null;
+	const opens = Date.parse(String(window.opensAt || '').replace(' ', 'T'));
+	if (Number.isNaN(opens) || opens <= now || opens - now >= OPENING_GUARD_MS) return null;
+	return Math.max(1, Math.ceil((opens - now) / 60000));
+}
+
+const openingSoonMessage = (minutes: number, what: string) =>
+	`Booking opens in ${minutes} minute${minutes === 1 ? '' : 's'}: ${what} now could still be running when the first guests book. Pause the timer first, or wait until booking has opened.`;
+
+/** A spot was booked after deleteHouse counted the bookings (assignSpot books in any phase). */
+class BookedMeanwhileError extends Error {}
+
 /**
  * Written with the admin's own token: PocketBase then knows who it was (crew
  * alert) and refuses a phase switch by a non-superuser (pb_hooks/cozy_phase.pb.js).
@@ -500,6 +523,22 @@ export const actions: Actions = {
 				error: `Bookings can only be cleared in Staging Mode, not ${lockedDuring(phase)}. Switch back to Staging first; that switch also offers to release them.`
 			});
 		}
+		// An armed opening a few minutes away: the release (and the backup before
+		// it) could still be running when guests book, and take their spots.
+		const refuseNearOpening = async (): Promise<ReturnType<typeof fail> | null> => {
+			let minutes: number | null;
+			try {
+				minutes = await openingTooSoon(locals.pb);
+			} catch (err) {
+				console.error('[Action:clearAllBookings] The window could not be read:', err);
+				return fail(503, { error: PHASE_UNREADABLE });
+			}
+			return minutes === null
+				? null
+				: fail(409, { error: openingSoonMessage(minutes, 'clearing all bookings') });
+		};
+		const tooSoon = await refuseNearOpening();
+		if (tooSoon) return tooSoon;
 
 		// A backup of the database first: a superuser can restore it in the
 		// PocketBase dashboard. Without one, no booking is released.
@@ -512,6 +551,22 @@ export const actions: Actions = {
 				error: `The safety backup could not be created (${describeError(err)}), so no booking was released. Try again in a minute.`
 			});
 		}
+
+		// The backup takes seconds: check the phase (and the opening) again right
+		// before the release. Booking may have opened meanwhile.
+		try {
+			phase = await readPhaseStrict(locals.pb);
+		} catch (err) {
+			console.error('[Action:clearAllBookings] The phase could not be read again:', err);
+			return fail(503, { error: PHASE_UNREADABLE });
+		}
+		if (phase !== 'staging') {
+			return fail(409, {
+				error: `Booking changed to ${lockedDuring(phase)} while the backup ran, so no booking was released (the backup ${backup} is there).`
+			});
+		}
+		const tooSoonNow = await refuseNearOpening();
+		if (tooSoonNow) return tooSoonNow;
 
 		console.log(`[Action:clearAllBookings] INITIATED by ${locals.admin.email}, backup ${backup}`);
 		try {
@@ -656,7 +711,15 @@ export const actions: Actions = {
 					fields: 'id'
 				});
 				for (const bed of beds) {
-					await withLock(`bed:${bed.id}`, () => locals.pb.collection('beds').delete(bed.id));
+					await withLock(`bed:${bed.id}`, async () => {
+						// Read again in the spot's queue: the crew can book a spot for a
+						// request in any phase, also after the count above.
+						const now = await locals.pb
+							.collection('beds')
+							.getOne(bed.id, { fields: 'id,order', requestKey: null });
+						if (now.order) throw new BookedMeanwhileError(bed.id);
+						await locals.pb.collection('beds').delete(bed.id);
+					});
 				}
 				await locals.pb.collection('rooms').delete(room.id);
 				progress.rooms++;
@@ -672,6 +735,11 @@ export const actions: Actions = {
 			return { success: true };
 		} catch (err) {
 			console.error(`[Action:deleteHouse] FAILED for ${id}:`, err);
+			if (err instanceof BookedMeanwhileError) {
+				return fail(409, {
+					error: `A spot of this house was booked while it was being deleted, so the deletion stopped there${progress ? ` (${progress.rooms} of ${progress.total} rooms are gone, ${progress.released} bookings released)` : ''}. Reload the page: the house now holds a booking that has to be decided first.`
+				});
+			}
 			if (progress && (progress.released > 0 || progress.rooms > 0)) {
 				return fail(500, {
 					error: `Vanish stopped halfway: ${progress.rooms} of ${progress.total} rooms are gone and ${progress.released} bookings were released, the house is still there. Reload the page and try again.`
@@ -761,6 +829,15 @@ export const actions: Actions = {
 				403,
 				`Templates cannot be imported ${lockedDuring(phase)} — the layout is locked. Switch to Staging Mode first. 🔒`
 			);
+		}
+		try {
+			const minutes = await openingTooSoon(locals.pb);
+			if (minutes !== null) {
+				return refuse(409, openingSoonMessage(minutes, 'a template import'));
+			}
+		} catch (err) {
+			console.error('[Import Template] The window could not be read:', err);
+			return refuse(503, PHASE_UNREADABLE);
 		}
 
 		// Validates the file again: the review is only a courtesy of the UI.

@@ -173,6 +173,95 @@ describe('Clear all bookings', () => {
 	});
 });
 
+describe('Clear all bookings and the template import near an armed opening', () => {
+	const pbDate = (ms: number) => new Date(ms).toISOString().replace('T', ' ');
+
+	it('refuses while an armed opening is less than five minutes away, and touches nothing', async () => {
+		const db = seed({ booking_unlock_at: pbDate(Date.now() + 3 * 60 * 1000) });
+		const result: any = await dashboardActions.clearAllBookings({
+			locals: localsOf(db, boss)
+		} as any);
+		expect(result.status).toBe(409);
+		expect(result.data.error).toMatch(/^Booking opens in 3 minutes: clearing all bookings now/);
+		expect(db.backups).toEqual([]);
+		expect(db.log.filter((entry) => entry.startsWith('update'))).toEqual([]);
+	});
+
+	it('clears as before when the opening is further away or the timer is paused', async () => {
+		for (const settings of [
+			{ booking_unlock_at: pbDate(Date.now() + 20 * 60 * 1000) },
+			{ booking_unlock_at: pbDate(Date.now() + 60 * 1000), booking_timer_paused: true }
+		]) {
+			const result: any = await dashboardActions.clearAllBookings({
+				locals: localsOf(seed(settings), boss)
+			} as any);
+			expect(result).toMatchObject({ success: true, released: 2 });
+		}
+	});
+
+	it('releases nothing when booking opened while the backup ran', async () => {
+		const db = seed();
+		const create = db.pb.backups.create;
+		db.pb.backups.create = async (...args: unknown[]) => {
+			const made = await create(...(args as [string]));
+			// the opening came while PocketBase wrote the backup
+			db.data.app_settings[0].is_booking_active = true;
+			return made;
+		};
+		const result: any = await dashboardActions.clearAllBookings({
+			locals: localsOf(db, boss)
+		} as any);
+		expect(result.status).toBe(409);
+		expect(result.data.error).toMatch(/while the backup ran, so no booking was released/);
+		expect(db.backups).toHaveLength(1);
+		expect(db.log.filter((entry) => entry.startsWith('update'))).toEqual([]);
+	});
+
+	it('refuses the template import as well', async () => {
+		const db = seed({ booking_unlock_at: pbDate(Date.now() + 2 * 60 * 1000) });
+		const result: any = await dashboardActions.importTemplate({
+			locals: localsOf(db, boss),
+			request: request({})
+		} as any);
+		expect(result.status).toBe(409);
+		expect(result.data.error).toMatch(/^Booking opens in 2 minutes: a template import now/);
+	});
+});
+
+describe('deleting a house that gets a booking while it is being deleted', () => {
+	it('stops at that spot instead of deleting a booking nobody counted', async () => {
+		const db = seed();
+		// A free house a regular admin may delete…
+		db.data.beds = db.data.beds.map((bed) =>
+			bed.id === 'b4' ? bed : { ...bed, occupied: false, order: '' }
+		);
+		db.data.special_requests = [];
+		// …until the crew books b4 for a request, after the count.
+		const beds = db.pb.collection('beds');
+		const pb = {
+			...db.pb,
+			collection: (name: string) =>
+				name === 'beds'
+					? {
+							...beds,
+							getOne: async (id: string, options?: unknown) => {
+								const row: any = await beds.getOne(id, options as any);
+								return id === 'b4' ? { ...row, order: 'o9' } : row;
+							}
+						}
+					: db.pb.collection(name)
+		};
+		const result: any = await dashboardActions.deleteHouse({
+			locals: { pb, adminPb: pb, admin: crew },
+			request: request({ id: 'h1' })
+		} as any);
+		expect(result.status).toBe(409);
+		expect(result.data.error).toMatch(/booked while it was being deleted, so the deletion stopped/);
+		expect(db.data.beds.some((bed) => bed.id === 'b4')).toBe(true);
+		expect(db.data.houses.some((house) => house.id === 'h1')).toBe(true);
+	});
+});
+
 describe('the switch back to Staging with "release the bookings"', () => {
 	const switchForm = () => request({ phase: 'staging', clearBookings: '1' });
 
