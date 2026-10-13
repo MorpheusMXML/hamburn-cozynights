@@ -6,7 +6,9 @@
 // what broke at which widths and attaches a screenshot with the spots outlined.
 import { test, expect, type Browser, type Page, type Route } from '@playwright/test';
 import fs from 'fs';
+import * as devalue from 'devalue';
 import type PocketBase from 'pocketbase';
+import { CODE_MAIL_OFFERED_KEY } from '../../src/lib/code-mail-offer';
 import { findLayoutProblems, type LayoutProblem } from './layout-check';
 import {
 	CAMP_FILE,
@@ -132,6 +134,22 @@ async function failHeldRequests() {
 	for (const route of heldRequests.splice(0)) await route.abort().catch(() => {});
 }
 
+/**
+ * Answers the next sign-in on the start page the way the server does after
+ * several wrong codes (src/routes/+page.server.ts), without real ones: the
+ * login guard counts them per connection, and every case comes from the same.
+ */
+async function answerSignIn(page: Page, answer: Record<string, string | boolean>) {
+	await page.route(
+		(url) => url.search.includes('/login'),
+		(route) =>
+			route.fulfill({
+				contentType: 'application/json',
+				body: JSON.stringify({ type: 'failure', status: 404, data: devalue.stringify(answer) })
+			})
+	);
+}
+
 /** Lets one-shot animations end, so the sweep measures boxes where they land. */
 async function settle(page: Page) {
 	await page.evaluate(() =>
@@ -197,6 +215,19 @@ function stressRoom(page: Page) {
 		.locator(`.picker-sheet section.house[aria-label^="${TEXTS.houseLong.slice(0, 40)}"]`)
 		.locator('article.room')
 		.first();
+}
+
+/**
+ * The stress guest's booking on its ticket in the admin's ticket search: its
+ * address finds the requester's ticket too, which has no spot. The row with
+ * Move… and Release; setMySpot gave the spot its label for this case.
+ */
+async function myBookingRow(page: Page) {
+	await page.locator('#ticket-query').fill(TEXTS.emailLong);
+	await page.locator('#ticket-query').press('Enter');
+	const row = page.locator('.results article.ticket .spot-row', { hasText: MY_SPOT_LABEL });
+	await row.waitFor();
+	return row;
 }
 
 const PAGES: PageCase[] = [
@@ -378,6 +409,57 @@ const PAGES: PageCase[] = [
 			await page.locator('#ticket-code').fill('no such code!');
 			await page.locator('#ticket-code').press('Enter');
 			await page.locator('#ticket-code-error').waitFor();
+		}
+	},
+	{
+		// Three wrong codes: the offer to e-mail the code opens by itself the
+		// first time a device gets it.
+		name: 'start page: code by e-mail',
+		path: () => '/',
+		as: 'anonymous',
+		open: async (page) => {
+			await answerSignIn(page, {
+				code: 'NO-SUCH-CODE',
+				needEmail: false,
+				offerMail: true,
+				error:
+					'We could not find this ticket code. Check it for typos (0 vs. O, 1 vs. I) and try again. If it still fails, ask the crew.'
+			});
+			await page.locator('#ticket-code').fill('NO-SUCH-CODE');
+			await page.locator('#ticket-code').press('Enter');
+			await page.locator('#code-mail-email').waitFor();
+		}
+	},
+	{
+		// Five wrong codes: the ticket's e-mail address, then the code, and the
+		// button as wide as both. The offer comes folded on a device that had it.
+		name: 'start page: e-mail and code',
+		path: () => '/',
+		as: 'anonymous',
+		open: async (page) => {
+			await page.evaluate((key) => localStorage.setItem(key, '1'), CODE_MAIL_OFFERED_KEY);
+			await answerSignIn(page, {
+				code: 'NO-SUCH-CODE',
+				needEmail: true,
+				offerMail: true,
+				error:
+					'For your security, please enter your ticket code together with the e-mail address of your ticket.'
+			});
+			await page.locator('#ticket-code').fill('NO-SUCH-CODE');
+			await page.locator('#ticket-code').press('Enter');
+			await page.locator('#ticket-email').waitFor();
+			await page.getByRole('button', { name: /Can't find your code/, expanded: false }).waitFor();
+			const fields = await page
+				.locator('form.input-group input:not([type=hidden])')
+				.evaluateAll((inputs) => inputs.map((input) => input.id));
+			expect(fields, 'e-mail first, then the code').toEqual(['ticket-email', 'ticket-code']);
+			const form = (await page.locator('form.input-group').boundingBox())!;
+			const button = (await page.getByRole('button', { name: /ENTER THE DUST/ }).boundingBox())!;
+			expect(button.height, 'the button keeps its height').toBeGreaterThanOrEqual(44);
+			expect(
+				Math.abs(button.x + button.width / 2 - (form.x + form.width / 2)),
+				'the button sits in the middle'
+			).toBeLessThan(2);
 		}
 	},
 	// The roulette's slot machine: idle while booking is live, asleep in every other phase.
@@ -870,6 +952,34 @@ const PAGES: PageCase[] = [
 			await page.locator('#ticket-query').fill(TEXTS.emailLong);
 			await page.locator('#ticket-query').press('Enter');
 			await page.locator('.results .result-meta').waitFor();
+		}
+	},
+	// Move and Release on a booked ticket (TicketCard): the spot picker of the
+	// special-needs requests with a spot picked, and the confirmation before a
+	// release. Neither is sent: setMySpot and afterAll look the stress guest's
+	// booking up, and the run is split into shards.
+	{
+		name: 'admin tickets: move a booking',
+		path: () => '/admin/tickets',
+		as: 'admin',
+		open: async (page) => {
+			const row = await myBookingRow(page);
+			await row.getByRole('button', { name: /Move…/ }).click();
+			const sheet = page.locator('.picker-sheet');
+			await sheet.waitFor();
+			// A free spot, not a locked 🔒 one; "Move here" would move the booking.
+			await sheet.locator('button.tile:not(.blocked)').first().click();
+			await sheet.locator('.picker-foot .choice-label').waitFor();
+		}
+	},
+	{
+		name: 'admin tickets: release confirmation',
+		path: () => '/admin/tickets',
+		as: 'admin',
+		open: async (page) => {
+			const row = await myBookingRow(page);
+			await row.getByRole('button', { name: 'Release', exact: true }).click();
+			await page.getByRole('alertdialog').waitFor();
 		}
 	},
 	{

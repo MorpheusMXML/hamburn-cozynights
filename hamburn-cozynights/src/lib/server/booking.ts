@@ -252,8 +252,13 @@ export class BookingService {
 	 * @throws {BedUnavailableError} if the bed is taken, locked, or deactivated.
 	 * @throws {CheckedInError} if the ticket's current spot is checked in and
 	 *   `allowCheckedIn` isn't set.
+	 * @param options.onlyFrom The crew moves the ticket off this spot only (the
+	 *   ticket page's card): checked in the ticket's queue, so a booking that
+	 *   changed since the card was shown is never moved.
 	 * @throws {BookingClosedError} if `requireLivePhase` is set and booking is
 	 *   not open when PocketBase writes the booking; nothing changed.
+	 * @throws {SpotChangedError} with `onlyFrom`, when the ticket holds another
+	 *   spot (or none) by now; nothing changed.
 	 */
 	async bookBed(
 		order: OrdersResponse,
@@ -264,6 +269,7 @@ export class BookingService {
 			allowSpecial?: boolean;
 			allowCheckedIn?: boolean;
 			requireLivePhase?: boolean;
+			onlyFrom?: string;
 		} = {}
 	): Promise<void> {
 		await withLock(`order:${order.id}`, () =>
@@ -295,6 +301,12 @@ export class BookingService {
 						bedId
 					})
 				});
+				if (
+					options.onlyFrom !== undefined &&
+					(renaming || previousBeds.length !== 1 || previousBeds[0].id !== options.onlyFrom)
+				) {
+					throw new SpotChangedError('The booking changed meanwhile.');
+				}
 				// A guest who has arrived keeps their spot: only the crew moves them,
 				// and then the check-in comes along in the same write (PocketBase
 				// drops a check-in whose booking changes, pb_hooks/lib/booked.js).
@@ -365,18 +377,20 @@ export class BookingService {
 	 */
 	async swapSpots(
 		request: Pick<SwapRequestsResponse, 'id' | 'from_order' | 'to_order' | 'from_bed' | 'to_bed'>
-	): Promise<void> {
+	): Promise<{ crewSpot: boolean }> {
 		const keys = [
 			...[request.from_order, request.to_order].map((id) => `order:${id}`).sort(),
 			...[request.from_bed, request.to_bed].map((id) => `bed:${id}`).sort()
 		];
-		await withLocks(keys, async () => {
+		return withLocks(keys, async () => {
 			try {
-				await this.adminPb.send('/api/cozy/swap', {
+				const outcome = await this.adminPb.send<{ crewSpot?: boolean }>('/api/cozy/swap', {
 					method: 'POST',
 					body: { request: request.id, order: request.to_order },
 					requestKey: null
 				});
+				// The asker gave away the spot the crew booked for their request (lib/swap.js).
+				return { crewSpot: !!outcome?.crewSpot };
 			} catch (err) {
 				const refused = err as ClientResponseError | undefined;
 				const reason = refused?.response?.reason;

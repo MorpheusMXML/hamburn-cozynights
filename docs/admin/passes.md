@@ -28,7 +28,7 @@ Locked 🔒, deactivated ❄️ and special-needs ♿ are marks on a spot, not s
 The rules that keep the states consistent:
 
 - **Checked in only while booked.** A check-in belongs to its booking: when the spot is released or gets another ticket, the check-in is gone. PocketBase enforces this, whoever does the writing.
-- **Once checked in, the guest can't release the spot.** Their room, house and roulette pages say *"The crew has checked you in, so your spot is final."* They can still change their burner name while booking is live. Only the crew changes the spot: [special-needs requests](./special-needs) can move the guest (the check-in moves along), and in Staging Mode the crew can free it.
+- **Once checked in, the guest can't release the spot.** Their room, house and roulette pages say *"The crew has checked you in, so your spot is final."* They can still change their burner name while booking is live. Only the crew changes the spot: any admin can move the booking on [Tickets](./tickets#move-or-release-a-booking) or through a [special-needs request](./special-needs) (the check-in moves along), or release it on Tickets (the check-in goes with it).
 - **A ticket handed over to a new holder** ([Tickets](./tickets#a-ticket-passed-on-to-someone-else)) keeps its spot but loses the check-in: the new holder checks in with the new pass.
 - **Releasing a booking takes its check-in with it.** Going back to Staging Mode asks a superuser whether the guest bookings are released or stay; *Clear all bookings* releases them in Staging. Both dialogs say how many spots are checked in, so nobody frees the spots of guests who are on site by accident.
 - **The check-in sends the guest nothing.** Messages only follow changes of the spot.

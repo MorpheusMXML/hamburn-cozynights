@@ -7,6 +7,10 @@
 	import FoldPanel from '$lib/components/admin/FoldPanel.svelte';
 	import DropZone from '$lib/components/admin/DropZone.svelte';
 	import TicketCard from '$lib/components/admin/TicketCard.svelte';
+	import SpotPicker from '$lib/components/admin/requests/SpotPicker.svelte';
+	import { toast } from '$lib/dialogs';
+	import type { SpotInfo } from '$lib/special-needs';
+	import type { PickerRequest } from '$lib/spot-picker';
 	import { formatBerlin } from '$lib/booking-phase';
 	import {
 		TICKET_LIMITS,
@@ -18,6 +22,7 @@
 		type RosterImportOutcome,
 		type RosterPreview,
 		type RosterRow,
+		type TicketMoveSpots,
 		type TicketSearch,
 		type TicketView
 	} from '$lib/tickets';
@@ -38,9 +43,13 @@
 	let searchError = '';
 	let search: TicketSearch | null = null;
 
+	// Move and Release on a ticket need the spot picker: JavaScript only.
+	let mounted = false;
+
 	// Ready to type a code, unless the admin is already typing somewhere else
 	// (the page can take a moment to start on a slow phone).
 	onMount(() => {
+		mounted = true;
 		const active = document.activeElement;
 		if (!active || active === document.body) searchInput?.focus();
 	});
@@ -99,7 +108,66 @@
 		// The server answers with the code hidden; keep showing what was shown.
 		const shown = search.tickets[index];
 		search.tickets[index] = { ...fresh, code: shown.code, codeMasked: shown.codeMasked };
+		// "The ticket booked on …" follows a move or release.
+		if (search.by === 'booking') {
+			search.query = fresh.spot
+				? [fresh.spot.spot, fresh.spot.room, fresh.spot.house].filter(Boolean).join(' · ')
+				: '';
+		}
 		search = search;
+	}
+
+	// --- move a booking: the spot picker of the special-needs requests ---------------
+
+	let picker: PickerRequest | null = null;
+	let moveSpots: TicketMoveSpots | null = null;
+	// One pick at a time: a Move on another card ends the one before, so its
+	// card never waits for an answer that can't come.
+	let pickCount = 0;
+	let endPick: ((spot: SpotInfo | null) => void) | null = null;
+
+	/** The free spots for this ticket, then the picker; answers with the spot picked. */
+	async function pickSpot(ticket: TicketView): Promise<SpotInfo | null> {
+		const pick = ++pickCount;
+		endPick?.(null);
+		endPick = null;
+		picker = null;
+		const form = new FormData();
+		form.set('id', ticket.id);
+		const result = await post('spots', form);
+		if (pick !== pickCount) return null;
+		if (result.type === 'redirect') {
+			await applyAction(result);
+			return null;
+		}
+		const offer =
+			result.type === 'success'
+				? (result.data?.moveSpots as TicketMoveSpots | undefined)
+				: undefined;
+		if (!offer) {
+			toast(failureText(result, 'The free spots could not be loaded. Try again.'), 'danger', 8000);
+			return null;
+		}
+		moveSpots = offer;
+		const current = ticket.spot
+			? [ticket.spot.spot, ticket.spot.room, ticket.spot.house].filter(Boolean).join(' · ')
+			: '';
+		return new Promise((resolve) => {
+			endPick = resolve;
+			picker = {
+				mode: 'spot',
+				who: ticket.name || `ticket ${ticket.code}`,
+				// The tickets page shows no special-needs details: no needs to match.
+				needs: [],
+				current,
+				action: 'Move here',
+				resolve: (bedId) => {
+					picker = null;
+					endPick = null;
+					resolve(bedId ? (offer.spots.find((spot) => spot.bedId === bedId) ?? null) : null);
+				}
+			};
+		});
 	}
 
 	// --- import the ticket list --------------------------------------------------------
@@ -409,7 +477,11 @@
 						{/if}
 					</p>
 					{#each search.tickets as ticket (ticket.id)}
-						<TicketCard {ticket} on:saved={(event) => ticketSaved(event.detail)} />
+						<TicketCard
+							{ticket}
+							pickSpot={mounted ? pickSpot : null}
+							on:saved={(event) => ticketSaved(event.detail)}
+						/>
 					{/each}
 				{/if}
 			</div>
@@ -966,6 +1038,19 @@
 		{/if}
 	</FoldPanel>
 </div>
+
+<!-- One picker at a time, outside every form (SpotPicker). -->
+{#if picker && moveSpots}
+	<SpotPicker
+		request={picker}
+		spots={moveSpots.spots}
+		sizes={moveSpots.sizes}
+		booked={{}}
+		specialFree={0}
+		specialSummary=""
+		forRequests={false}
+	/>
+{/if}
 
 <style>
 	.tickets-page {

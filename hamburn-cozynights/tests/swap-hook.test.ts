@@ -130,7 +130,7 @@ function camp(settings: Row = {}) {
 describe('a yes', () => {
 	it('swaps both spots, accepts the request and ends every other one about them', () => {
 		const c = camp();
-		expect(swap.acceptSwap(c.app, 'ask', 'bo')).toEqual({ ok: true, voided: 2 });
+		expect(swap.acceptSwap(c.app, 'ask', 'bo')).toEqual({ ok: true, voided: 2, crewSpot: false });
 		expect(c.bedOf('b1')).toMatchObject({ order: 'bo', occupied: true });
 		expect(c.bedOf('b2')).toMatchObject({ order: 'ada', occupied: true });
 		expect(c.req('ask').status).toBe('accepted');
@@ -180,6 +180,28 @@ describe('no swap, and why', () => {
 		expect(swap.acceptSwap(c.app, 'ask', 'bo').reason).toBe('moved');
 		expect(c.req('ask')).toMatchObject({ status: 'void', ended: 'moved' });
 		expect(c.bedOf('b1').order).toBe('ada');
+	});
+
+	it('for the spot the crew picked for the asker’s request, ♿ or 🔒 too (Max, 2026-10-13)', () => {
+		for (const extra of [{}, { is_special: true }, { is_locked: true }]) {
+			const c = camp();
+			c.tables.special_requests.push({ id: 'sr', order: 'ada', status: 'approved', bed: 'b1' });
+			Object.assign(c.bedOf('b1'), extra);
+			expect(swap.acceptSwap(c.app, 'ask', 'bo'), JSON.stringify(extra)).toEqual({
+				ok: true,
+				voided: 2,
+				crewSpot: true
+			});
+			expect(c.bedOf('b1').order).toBe('bo');
+			expect(c.bedOf('b2').order).toBe('ada');
+			// the request lets go of the spot: it stays approved, the spot is Bo's now
+			expect(c.tables.special_requests[0]).toMatchObject({ status: 'approved', bed: '' });
+		}
+		// …but not once the asker checked in there
+		const c = camp();
+		c.tables.special_requests.push({ id: 'sr', order: 'ada', status: 'approved', bed: 'b1' });
+		c.bedOf('b1').checked_in_at = '2026-10-29 18:00:00.000Z';
+		expect(swap.acceptSwap(c.app, 'ask', 'bo')).toEqual({ ok: false, reason: 'fixed' });
 	});
 
 	it('not for a spot that can’t be swapped — and the request stays as it is', () => {

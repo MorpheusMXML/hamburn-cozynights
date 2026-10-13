@@ -38,6 +38,7 @@ sequenceDiagram
 ```
 
 - The asker needs a spot, and both spots must be ones guests could book themselves: not 🔒 locked, not ♿ special, not deactivated, not the spot the crew booked for a [special-needs request](./special-needs), not checked in.
+- **One exception: a guest the crew placed for a special-needs request may offer that spot themselves** (♿ or 🔒 included). It is their decision, even when the new spot doesn't meet what they asked for. Nobody can ask them for it. After the swap, the request lets go of that spot: *Special-needs requests* shows the guest's new spot as *booked by the guest*, the card's spot picker moves them again whenever you need to, and the crew chat says *♿ A guest swapped away the spot the crew booked for their special-needs request* (no name, no spot). The guest who took the old spot holds a ♿ or 🔒 spot now and can't swap it on; move them by hand if that spot is needed.
 - Up to **3 open requests** per ticket, each open for **72 hours** (or until booking closes), at most 10 new ones a day. A no is final for that pair and spot.
 - The swap is one database transaction with its own last checks (both spots still held by the same two tickets, booking live, swaps on). The burner names belong to the tickets and travel along; booking passes keep their codes and show the new spot; `booked_at` is stamped anew for both spots.
 - A yes ends every other open request about either spot or either ticket (*Another swap went through first*).
