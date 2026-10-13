@@ -571,6 +571,11 @@ function eventText(ev, cfg) {
 			return '♿ Special-needs spot booked for a guest' + by;
 		case 'special_spot_released':
 			return '♿ Special-needs spot released' + by;
+		case 'special_spot_swapped':
+			return (
+				'♿ A guest swapped away the spot the crew booked for their special-needs request: ' +
+				'see Special-needs requests, move them again if needed'
+			);
 		case 'request_group_approved':
 			return '✅ Request group approved' + by + ': ' + (d.changed || 0) + ' request(s)';
 		case 'request_group_declined':
@@ -678,6 +683,26 @@ function eventText(ev, cfg) {
 				' marked paid' +
 				by +
 				': payment confirmed in person, its code signs in now'
+			);
+		// Moved or released on the Tickets page: the ticket, never the spots
+		// (a line must not tie a guest to where they sleep).
+		case 'ticket_spot_moved':
+			return (
+				'🔀 Ticket ' +
+				(d.ticket || subject) +
+				' moved to another spot' +
+				by +
+				(d.checkedIn ? '; the check-in moved along' : '') +
+				(d.viaRequest ? "; it is the crew's spot for their special-needs request now" : '')
+			);
+		case 'ticket_spot_released':
+			return (
+				'🛏️ Ticket ' +
+				(d.ticket || subject) +
+				' released from its spot' +
+				by +
+				(d.checkedIn ? '; the check-in was dropped' : '') +
+				(d.viaRequest ? '; their special-needs request needs a new spot' : '')
 			);
 		case 'ticket_marked_unpaid':
 			return (

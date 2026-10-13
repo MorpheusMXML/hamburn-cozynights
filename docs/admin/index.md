@@ -19,7 +19,7 @@ Every admin page has the same **status bar** on top and the same **menu**.
 | | <kbd>💾 Templates</kbd> | The **Burn Template Manager**: export the layout, compare a file with the camp, apply it. See [Layout templates](./templates). |
 | **Guests** | <kbd>👥 Guests</kbd> | [Every ticket at a glance](./guests): its spot, check-in, request state and messages — tickets without a spot included. |
 | | <kbd>🛏️ Bookings</kbd> | [Who booked which spot](./bookings), who is checked in, who is still to arrive. |
-| | <kbd>🎟️ Tickets</kbd> | Find a ticket, change its e-mail address, load the ticket list. See [Tickets & e-mail addresses](./tickets). |
+| | <kbd>🎟️ Tickets</kbd> | Find a ticket, change its e-mail address, move or release its booking, load the ticket list. See [Tickets & e-mail addresses](./tickets). |
 | | <kbd>♿ Special needs</kbd> | The requests. See [Special-needs requests](./special-needs). |
 | | <kbd>🎫 Check-in desk</kbd> | Check guests in with their booking pass. See [Booking passes & check-in](./passes). |
 | **Crew** | <kbd>✉️ Messages</kbd> | Every text guests get. See [Message texts](./notifications#message-texts). |
@@ -291,7 +291,7 @@ The Control Center, the camp editor and the bookings list stay fully usable for 
 
 - [Bookings & check-ins](./bookings): who booked which spot, who is still to arrive, check-in without the pass
 - [Houses, rooms & spots](./camp-layout): building the camp in detail
-- [Tickets & e-mail addresses](./tickets): find a ticket, fix its address, hand it over, load the ticket list
+- [Tickets & e-mail addresses](./tickets): find a ticket, fix its address, hand it over, move or release its booking, load the ticket list
 - [Special-needs requests](./special-needs): mark ♿ spots, decide requests, book spots for guests
 - [Layout templates](./templates): export, compare and import
 - [Notifications](./notifications): booking e-mails, Telegram for guests and the crew group, [message texts](./notifications#message-texts)

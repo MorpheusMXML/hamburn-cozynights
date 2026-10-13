@@ -15,6 +15,10 @@ export type AdminEventAction =
 	// A ticket marked paid by hand on the Tickets page, or set back to unpaid.
 	| 'ticket_marked_paid'
 	| 'ticket_marked_unpaid'
+	// A booking moved or released on the Tickets page (every admin): the
+	// masked code only, never the spots.
+	| 'ticket_spot_moved'
+	| 'ticket_spot_released'
 	| 'tickets_imported'
 	| 'special_request_approved'
 	| 'special_request_declined'
@@ -34,6 +38,9 @@ export type AdminEventAction =
 export type GuestEventAction =
 	| 'special_request_new'
 	| 'special_request_withdrawn'
+	// A guest swapped away the spot the crew booked for their special-needs
+	// request (pb_hooks/lib/swap.js): no names, no spots.
+	| 'special_spot_swapped'
 	// The start page saw more than 200 wrong ticket codes within 10 minutes
 	// ($lib/server/login-guard): counts only.
 	| 'sign_in_guard';

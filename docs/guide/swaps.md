@@ -61,7 +61,7 @@ Your other open requests end, because the spot you offered in them is no longer 
 | Rule | What it means |
 | --- | --- |
 | Only during Live Booking | Nobody can ask or say yes before booking opens or after it closes. Waiting requests stay on the page but can't be accepted then. |
-| Your spot for theirs | You need a spot to offer. A spot the crew picked for you (a special-needs spot), one the crew set aside, and a spot you have [checked in](./booking#your-booking-pass) at can't be swapped; the room page tells you so. |
+| Your spot for theirs | You need a spot to offer. A spot the crew set aside and a spot you have [checked in](./booking#your-booking-pass) at can't be swapped; the room page tells you so. A spot the crew picked for you after a special-needs request is yours to offer: you decide, even if the other spot doesn't fit what you asked for. Nobody else can ask you for it, and the crew can still move you afterwards. |
 | Up to 3 open requests | Wait for an answer, or take one back on **Swap requests**. At most 10 new requests within a day. |
 | 72 hours | A request without an answer runs out after three days, or when booking closes. You can ask again after that. |
 | A no is a no | Once a guest said no to a swap, you can't ask them for that spot again. |

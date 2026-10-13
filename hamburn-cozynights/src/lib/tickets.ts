@@ -11,6 +11,7 @@
  * GUEST_EMAIL_PATTERN, TICKET_CSV_COLUMNS, PAID_ORDER_STATUSES and
  * UNPAID_ORDER_STATUSES in sync with it; tests/tickets.test.ts compares them.
  */
+import type { SpotInfo } from '$lib/special-needs';
 
 /** Same as the guest sign-in (src/routes/+page.server.ts): anything else can't be typed in. */
 export const TICKET_CODE_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -772,6 +773,10 @@ export interface TicketSpot {
 	room: string;
 	spot: string;
 	roomId: string;
+	/** The spot's record id: a move or release names the spot the admin saw. */
+	bedId: string;
+	/** The crew booked it for the ticket's approved special-needs request. */
+	viaRequest: boolean;
 	/** The crew checked the holder in at arrival: when and by which admin. */
 	checkIn: { at: string; by: string } | null;
 }
@@ -839,6 +844,31 @@ export interface TicketPaidOutcome {
 	paid: boolean;
 	/** False when the ticket already was in that state (a second click, another admin). */
 	changed: boolean;
+}
+
+/** What the spot picker offers for a ticket's booking (the Move button on the ticket page). */
+export interface TicketMoveSpots {
+	/** Free spots: locked 🔒 ones included (picked only with a warning), ♿ ones only via a request. */
+	spots: SpotInfo[];
+	/** Room id → active spots, for "3 of 6 free". */
+	sizes: Record<string, number>;
+	/** The ticket has an approved special-needs request, so ♿ spots are offered too. */
+	special: boolean;
+}
+
+/** A booking the crew moved or released on the ticket page. */
+export interface TicketSpotOutcome {
+	/** The ticket afterwards (code masked, like after any change). */
+	ticket: TicketView;
+	maskedCode: string;
+	/** The spot it held before ("B1 · Dorm #2 · Villa"). */
+	from: string;
+	/** Where it moved to; '' for a release. */
+	to: string;
+	/** The guest had checked in: the check-in moved along, or was dropped with the release. */
+	checkedIn: boolean;
+	/** It went through the ticket's approved special-needs request (the crew's spot). */
+	viaRequest: boolean;
 }
 
 export interface RosterPreview {

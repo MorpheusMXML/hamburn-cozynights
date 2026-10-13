@@ -108,7 +108,15 @@ describe('finding tickets', () => {
 			signedIn: true,
 			unpaid: false,
 			paidByHand: null,
-			spot: { house: 'Neon Cave', room: 'Bunks #1', spot: 'B1', roomId: 'r1', checkIn: null },
+			spot: {
+				house: 'Neon Cave',
+				room: 'Bunks #1',
+				spot: 'B1',
+				roomId: 'r1',
+				bedId: 'b1',
+				viaRequest: false,
+				checkIn: null
+			},
 			burnerName: 'Sparkle',
 			telegram: true,
 			passCode: 'PASS-CODE-2345'
@@ -777,17 +785,27 @@ describe('who may do what', () => {
 	it('refuses the ticket actions without an admin session', async () => {
 		for (const action of [
 			'search',
+			'open',
 			'update',
 			'markPaid',
+			'spots',
+			'move',
+			'release',
 			'previewRoster',
 			'importRoster'
 		] as const) {
 			const refused: any = await ticketActions[action]({
 				locals: locals(null),
-				request: post({ q: 'HB-1001', id: 'o1' })
+				request: post({ q: 'HB-1001', id: 'o1', ticket: 'o1', from: 'b1', bedId: 'b2' })
 			} as any);
 			expect(refused.status).toBe(403);
 		}
+		// nothing moved, released or logged
+		expect(db.data.beds.map((b) => [b.id, b.order])).toEqual([
+			['b1', 'o1'],
+			['b2', '']
+		]);
+		expect(db.data.admin_events).toEqual([]);
 	});
 
 	const templateUpload = (template: LayoutTemplate, extra: Record<string, string> = {}) => {

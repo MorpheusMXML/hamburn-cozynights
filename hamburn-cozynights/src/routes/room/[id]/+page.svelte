@@ -476,7 +476,9 @@
 					{:else if data.spotFixed}
 						<p>
 							Your spot is in another room. The crew picked it for you because of your special-needs
-							request, so only the crew can change it.
+							request, so only the crew can move or release it{canSwap
+								? ': you can still offer it in a swap'
+								: ''}.
 						</p>
 					{:else if data.isBookingActive}
 						<p>
@@ -544,8 +546,9 @@
 							{CHECKED_IN_NOTE}
 							{#if data.phase !== 'closed'}Tap it to change your burner name.{/if}
 						{:else if data.spotFixed}
-							The crew picked it for you because of your special-needs request. To change it, please
-							contact the crew.
+							The crew picked it for you because of your special-needs request. {canSwap
+								? 'Only the crew can move or release it, but you can offer it in a swap.'
+								: 'To change it, please contact the crew.'}
 							{#if data.phase !== 'closed'}Tap it to change your burner name.{/if}
 						{:else if data.isBookingActive}Tap it to change your burner name or to release it.
 						{:else if data.phase !== 'closed'}

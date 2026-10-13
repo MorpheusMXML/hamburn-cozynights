@@ -11,8 +11,10 @@
 //
 // Only spots guests could book themselves change hands: enabled, not locked
 // (🔒), not a special-needs spot (♿), not the spot the crew booked for a
-// special-needs request, not checked in. Burner names are the tickets' own
-// (orders.burner_name), so they travel with their guests.
+// special-needs request, not checked in. One exception: the guest the crew
+// placed for a special-needs request may offer that spot themselves, on their
+// own decision (Max, 2026-10-13); nobody can ask them for it. Burner names
+// are the tickets' own (orders.burner_name), so they travel with their guests.
 //
 // A CommonJS module for PocketBase's JSVM, like notify.js.
 
@@ -55,8 +57,8 @@ function swapsOpen(app, now) {
 	return PHASE.effectivePhase(PHASE.windowOf(settings), now) === 'live';
 }
 
-/** The spot the crew booked for this ticket's approved special-needs request, or ''. */
-function crewPickedBed(app, orderId) {
+/** This ticket's approved special-needs request with a spot the crew booked, or null. */
+function crewPick(app, orderId) {
 	const rows = app.findRecordsByFilter(
 		'special_requests',
 		"order = {:order} && status = 'approved' && bed != ''",
@@ -65,20 +67,26 @@ function crewPickedBed(app, orderId) {
 		0,
 		{ order: orderId }
 	);
-	return rows.length > 0 ? rows[0].getString('bed') : '';
+	return rows.length > 0 ? rows[0] : null;
+}
+
+/** The spot the crew booked for this ticket's approved special-needs request, or ''. */
+function crewPickedBed(app, orderId) {
+	const pick = crewPick(app, orderId);
+	return pick ? pick.getString('bed') : '';
 }
 
 /**
  * Whether this spot, held by this ticket, may change hands: '' when it may,
- * else 'moved' (another ticket holds it by now) or 'fixed'.
+ * else 'moved' (another ticket holds it by now) or 'fixed'. `offered`: the
+ * asker's own spot — the one the crew picked for their request counts too.
  */
-function spotProblem(app, bed, orderId) {
+function spotProblem(app, bed, orderId, offered) {
 	if (bed.getString('order') !== orderId) return 'moved';
 	if (bed.getString('checked_in_at')) return 'fixed';
-	if (!bed.getBool('enabled') || bed.getBool('is_locked') || bed.getBool('is_special')) {
-		return 'fixed';
-	}
-	if (crewPickedBed(app, orderId) === bed.id) return 'fixed';
+	if (!bed.getBool('enabled')) return 'fixed';
+	if (crewPickedBed(app, orderId) === bed.id) return offered ? '' : 'fixed';
+	if (bed.getBool('is_locked') || bed.getBool('is_special')) return 'fixed';
 	return '';
 }
 
@@ -99,8 +107,8 @@ function requestProblem(app, request, now) {
 		return 'moved'; // a spot is gone (it would have taken the request along)
 	}
 	return (
-		spotProblem(app, fromBed, request.getString('from_order')) ||
-		spotProblem(app, toBed, request.getString('to_order'))
+		spotProblem(app, fromBed, request.getString('from_order'), true) ||
+		spotProblem(app, toBed, request.getString('to_order'), false)
 	);
 }
 
@@ -139,7 +147,10 @@ function voidOthers(app, request, now) {
  * Accepts a request for the ticket it is addressed to and swaps the two
  * spots, all in one transaction. A request that turns out to be over is
  * closed for good on the way ('expired', or 'void' when a spot moved on).
- * @returns { ok: true, voided } or { ok: false, reason } (see REFUSALS)
+ * When the asker offered the spot the crew booked for their special-needs
+ * request, the request lets go of it: it stays approved, and the crew sees
+ * the new spot as the guest's own (crewSpot, for the crew's chat line).
+ * @returns { ok: true, voided, crewSpot } or { ok: false, reason } (see REFUSALS)
  */
 function acceptSwap(app, requestId, toOrderId) {
 	let outcome = { ok: false, reason: 'answered' };
@@ -173,6 +184,13 @@ function acceptSwap(app, requestId, toOrderId) {
 		const toOrder = request.getString('to_order');
 		const fromBed = tx.findRecordById('beds', request.getString('from_bed'));
 		const toBed = tx.findRecordById('beds', request.getString('to_bed'));
+		// A spot belongs to one request: never to one whose guest swapped it away.
+		const pick = crewPick(tx, fromOrder);
+		const crewSpot = !!pick && pick.getString('bed') === fromBed.id;
+		if (crewSpot) {
+			pick.set('bed', '');
+			tx.save(pick);
+		}
 		// The asker's spot goes to the other guest, theirs to the asker. The bed
 		// hooks run inside this transaction: booked_at is stamped anew and both
 		// tickets are marked for a "changed" message (lib/booked.js, notify.js).
@@ -191,7 +209,7 @@ function acceptSwap(app, requestId, toOrderId) {
 		request.set('answered_at', pbDate(now));
 		request.set('notify_due', '');
 		tx.save(request);
-		outcome = { ok: true, voided: voidOthers(tx, request, now) };
+		outcome = { ok: true, voided: voidOthers(tx, request, now), crewSpot: crewSpot };
 	});
 	return outcome;
 }

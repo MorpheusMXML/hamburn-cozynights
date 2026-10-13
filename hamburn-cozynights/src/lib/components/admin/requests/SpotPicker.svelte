@@ -72,7 +72,8 @@ inside. The page renders one at a time, outside every form.
 		sizes,
 		booked,
 		specialFree,
-		specialSummary
+		specialSummary,
+		forRequests = true
 	}: {
 		request: PickerRequest;
 		/** The free spots an admin can book (listAssignableSpots), the locked 🔒 ones included. */
@@ -85,6 +86,11 @@ inside. The page renders one at a time, outside every form.
 		specialFree: number;
 		/** Where the ♿ spots stand ("3 marked — 1 inactive, …"); '' when none is marked. */
 		specialSummary: string;
+		/**
+		 * Placing a special-needs request (/admin/requests). false: moving a
+		 * booking on the ticket page — no hints about ♿ spots for requests.
+		 */
+		forRequests?: boolean;
 	} = $props();
 
 	// What the request is: fixed while the picker is open (the page opens a new one each time).
@@ -464,7 +470,7 @@ inside. The page renders one at a time, outside every form.
 						{/if}
 					</div>
 					{#if spotMode.current}<p class="now">Now: {spotMode.current}</p>{/if}
-					{#if specialFree === 0}
+					{#if specialFree === 0 && forRequests}
 						<p class="hint">
 							{specialSummary
 								? `♿ No special-needs spot is free right now: ${specialSummary}.`
@@ -704,7 +710,9 @@ inside. The page renders one at a time, outside every form.
 				</section>
 			{:else}
 				<p class="empty">
-					{#if spots.length === 0}
+					{#if spots.length === 0 && !forRequests}
+						No free spot left to move the booking to.
+					{:else if spots.length === 0}
 						No free spot left. During Live Booking and after it, only a superuser in Staging Mode
 						can free or add one; hold spots for requests in time with ♿ SPECIAL in the room editor.
 					{:else}
